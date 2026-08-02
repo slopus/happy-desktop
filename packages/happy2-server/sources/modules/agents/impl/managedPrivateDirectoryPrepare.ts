@@ -68,6 +68,7 @@ async function managedPathSymlinksValidate(path: string): Promise<void> {
 }
 
 async function managedPathChainValidate(path: string, userId: number | undefined): Promise<void> {
+    const privateGroupId = privateGroupIdentify(userId);
     let current = path;
     while (true) {
         const metadata = await lstat(current);
@@ -75,7 +76,9 @@ async function managedPathChainValidate(path: string, userId: number | undefined
             throw new Error(`Managed Rig path has an unsafe ancestor: ${current}`);
         if (userId !== undefined && metadata.uid !== userId && metadata.uid !== 0)
             throw new Error(`Managed Rig path has an ancestor owned by another user: ${current}`);
-        const writableByOthers = (metadata.mode & 0o022) !== 0;
+        const writableByOthers =
+            (metadata.mode & 0o002) !== 0 ||
+            ((metadata.mode & 0o020) !== 0 && metadata.gid !== privateGroupId);
         const sticky = (metadata.mode & 0o1000) !== 0;
         if (writableByOthers && !sticky)
             throw new Error(`Managed Rig path has an unprotected writable ancestor: ${current}`);
@@ -83,6 +86,16 @@ async function managedPathChainValidate(path: string, userId: number | undefined
         if (parent === current) return;
         current = parent;
     }
+}
+
+/**
+ * Returns the caller's group ID when its gid matches their uid, the convention
+ * that marks a user-private group whose only member is that user.
+ */
+function privateGroupIdentify(userId: number | undefined): number | undefined {
+    const groupId = process.getgid?.();
+    if (userId === undefined || groupId === undefined || groupId !== userId) return undefined;
+    return groupId;
 }
 
 function missingPath(error: unknown): boolean {
