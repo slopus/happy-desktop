@@ -821,20 +821,12 @@ export interface HappyAgentConnection {
 export type ServerCompatibility =
     | {
           status: "checking";
-          maximumSupportedProtocolVersion: number;
           minimumSupportedProtocolVersion: number;
-          /** The oldest Happy Agent product version this build works with. */
-          minimumSupportedVersion: string;
       }
     | {
-          status: "compatible" | "server_outdated" | "client_outdated";
-          maximumSupportedProtocolVersion: number;
+          status: "compatible" | "server_outdated";
           minimumSupportedProtocolVersion: number;
-          /** The oldest Happy Agent product version this build works with. */
-          minimumSupportedVersion: string;
           serverProtocolVersion: number;
-          /** The daemon's own product version, as its health report states it. */
-          serverVersion: string;
       };
 
 export type SessionEvent = HappyAgentEvent;

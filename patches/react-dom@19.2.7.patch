@@ -1,0 +1,152 @@
+diff --git a/cjs/react-dom-client.development.js b/cjs/react-dom-client.development.js
+index 8c860aca7db6a1ca74788209d100f10ae5f085fa..7e3468733b9ebac1e0a0e66a99e9e691bc328c58 100644
+--- a/cjs/react-dom-client.development.js
++++ b/cjs/react-dom-client.development.js
+@@ -4088,7 +4088,8 @@
+                 reusableComponentOptions
+               )
+             )
+-          : performance.measure(trigger, reusableComponentOptions));
++          : performance.measure(trigger, reusableComponentOptions),
++        performance.clearMeasures(trigger));
+     }
+     function logComponentReappeared(fiber, startTime, endTime) {
+       logComponentTrigger(fiber, startTime, endTime, "Reconnect");
+@@ -4159,7 +4160,8 @@
+                 : performance.measure(
+                     "\u200b" + name,
+                     reusableComponentOptions
+-                  )))
++                  ),
++              performance.clearMeasures("\u200b" + name)))
+           : null != selfTime
+             ? selfTime.run(
+                 console.timeStamp.bind(
+@@ -4230,6 +4232,7 @@
+                 performance.measure.bind(performance, "\u200b" + name, fiber)
+               )
+             : performance.measure("\u200b" + name, fiber);
++          performance.clearMeasures("\u200b" + name);
+         }
+       }
+     }
+@@ -4275,6 +4278,7 @@
+                   )
+                 )
+               : performance.measure("\u200b" + name, startTime);
++            performance.clearMeasures("\u200b" + name);
+           }
+         }
+       } else
+@@ -4435,6 +4439,7 @@
+               performance.measure.bind(performance, "Recovered", startTime)
+             )
+           : performance.measure("Recovered", startTime);
++        performance.clearMeasures("Recovered");
+       }
+     }
+     function logErroredRenderPhase(startTime, endTime, lanes, debugTask) {
+@@ -4518,6 +4523,7 @@
+               performance.measure.bind(performance, "Errored", startTime)
+             )
+           : performance.measure("Errored", startTime);
++        performance.clearMeasures("Errored");
+       }
+     }
+     function logAnimatingPhase(startTime, endTime, debugTask) {
+@@ -17111,7 +17117,8 @@
+                     previousRenderStartTime
+                   )
+                 )
+-              : performance.measure(isSpawnedUpdate, previousRenderStartTime));
++              : performance.measure(isSpawnedUpdate, previousRenderStartTime),
++            performance.clearMeasures(isSpawnedUpdate));
+         }
+         blockingUpdateTime = -1.1;
+         blockingUpdateType = 0;
+@@ -17248,7 +17255,8 @@
+                     previousRenderStartTime
+                   )
+                 )
+-              : performance.measure(debugTask, previousRenderStartTime))),
++              : performance.measure(debugTask, previousRenderStartTime),
++            performance.clearMeasures(debugTask))),
+         (transitionUpdateTime = transitionStartTime = -1.1),
+         (transitionUpdateType = 0),
+         (transitionSuspendedTime = -1.1),
+diff --git a/cjs/react-dom-profiling.development.js b/cjs/react-dom-profiling.development.js
+index 0df4ce8bc7ab7574e6c18fc0356d85303f4970aa..9698fb9ea8da498caa5983c65e19d12d23d3982e 100644
+--- a/cjs/react-dom-profiling.development.js
++++ b/cjs/react-dom-profiling.development.js
+@@ -4096,7 +4096,8 @@
+                 reusableComponentOptions
+               )
+             )
+-          : performance.measure(trigger, reusableComponentOptions));
++          : performance.measure(trigger, reusableComponentOptions),
++        performance.clearMeasures(trigger));
+     }
+     function logComponentReappeared(fiber, startTime, endTime) {
+       logComponentTrigger(fiber, startTime, endTime, "Reconnect");
+@@ -4167,7 +4168,8 @@
+                 : performance.measure(
+                     "\u200b" + name,
+                     reusableComponentOptions
+-                  )))
++                  ),
++              performance.clearMeasures("\u200b" + name)))
+           : null != selfTime
+             ? selfTime.run(
+                 console.timeStamp.bind(
+@@ -4238,6 +4240,7 @@
+                 performance.measure.bind(performance, "\u200b" + name, fiber)
+               )
+             : performance.measure("\u200b" + name, fiber);
++          performance.clearMeasures("\u200b" + name);
+         }
+       }
+     }
+@@ -4283,6 +4286,7 @@
+                   )
+                 )
+               : performance.measure("\u200b" + name, startTime);
++            performance.clearMeasures("\u200b" + name);
+           }
+         }
+       } else
+@@ -4443,6 +4447,7 @@
+               performance.measure.bind(performance, "Recovered", startTime)
+             )
+           : performance.measure("Recovered", startTime);
++        performance.clearMeasures("Recovered");
+       }
+     }
+     function logErroredRenderPhase(startTime, endTime, lanes, debugTask) {
+@@ -4526,6 +4531,7 @@
+               performance.measure.bind(performance, "Errored", startTime)
+             )
+           : performance.measure("Errored", startTime);
++        performance.clearMeasures("Errored");
+       }
+     }
+     function logAnimatingPhase(startTime, endTime, debugTask) {
+@@ -17119,7 +17125,8 @@
+                     previousRenderStartTime
+                   )
+                 )
+-              : performance.measure(isSpawnedUpdate, previousRenderStartTime));
++              : performance.measure(isSpawnedUpdate, previousRenderStartTime),
++            performance.clearMeasures(isSpawnedUpdate));
+         }
+         blockingUpdateTime = -1.1;
+         blockingUpdateType = 0;
+@@ -17256,7 +17263,8 @@
+                     previousRenderStartTime
+                   )
+                 )
+-              : performance.measure(debugTask, previousRenderStartTime))),
++              : performance.measure(debugTask, previousRenderStartTime),
++            performance.clearMeasures(debugTask))),
+         (transitionUpdateTime = transitionStartTime = -1.1),
+         (transitionUpdateType = 0),
+         (transitionSuspendedTime = -1.1),

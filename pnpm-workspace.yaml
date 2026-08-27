@@ -4,3 +4,6 @@ packages:
 # Electron downloads its platform binary during installation.
 onlyBuiltDependencies:
     - electron
+
+patchedDependencies:
+    react-dom@19.2.7: patches/react-dom@19.2.7.patch

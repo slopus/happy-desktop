@@ -466,7 +466,6 @@ function DesktopScreens(props: DesktopRendererProps) {
     );
     const content = (
         <DesktopProtocolGate
-            onUpdateInstall={() => desktopAction(props.bridge.updateInstall())}
             // A runtime that is still choosing, starting, or failing answers for
             // itself, and those screens are the more actionable ones: a version
             // gap learned from an earlier connection must not talk over the
@@ -475,7 +474,6 @@ function DesktopScreens(props: DesktopRendererProps) {
             ready={snapshot?.phase === "ready"}
             happyAgents={props.happyAgents}
             {...(props.daemon ? { daemon: props.daemon } : {})}
-            {...(snapshot?.update ? { update: snapshot.update } : {})}
         >
             <DesktopRuntimeContent {...props} hostedUpdate={hostedUpdate} snapshot={snapshot} />
         </DesktopProtocolGate>
@@ -635,11 +633,9 @@ function agentInstallView(install: AppHappyAgentDaemonInstall): AgentInstallView
 function DesktopProtocolGate(props: {
     children: ReactNode;
     daemon?: AppHappyAgentDaemonStore;
-    onUpdateInstall(): void;
     /** False while the runtime still owns the window with a screen of its own. */
     ready: boolean;
     happyAgents: HappyAgentDirectoryStore;
-    update?: DesktopUpdateSnapshot;
 }) {
     const directory = useSyncExternalStore(
         props.happyAgents.subscribe,
@@ -653,57 +649,6 @@ function DesktopProtocolGate(props: {
               ?.protocolMismatch
         : undefined;
     if (!mismatch) return <>{props.children}</>;
-    // Happy is behind. It downloads its own update automatically, so the screen
-    // states the version this build would need, shows the download as it runs,
-    // and offers the install the moment the bytes have landed — all drawn from
-    // the same runtime snapshot the updater publishes to.
-    if (mismatch.side === "app") {
-        const update = props.update;
-        const version = update?.availableVersion;
-        const downloaded = update?.status === "downloaded";
-        const downloading = update?.status === "available" || update?.status === "downloading";
-        const action = downloaded
-            ? {
-                  label: version ? `Install ${version} and restart` : "Install update and restart",
-                  onSelect: props.onUpdateInstall,
-                  width: 280,
-              }
-            : downloading
-              ? {
-                    busy: true,
-                    label: version ? `Downloading ${version}…` : "Downloading update…",
-                    // The download is automatic and already running; the button
-                    // is the progress read-out, not a control.
-                    onSelect: () => undefined,
-                    width: 280,
-                    progress:
-                        update.status === "downloading" && update.downloadedFraction !== undefined
-                            ? {
-                                  kind: "measured" as const,
-                                  ...(update.message ? { detail: update.message } : {}),
-                                  fraction: update.downloadedFraction,
-                              }
-                            : { kind: "waiting" as const },
-                }
-              : undefined;
-        return (
-            <SetupPage
-                {...(action ? { action } : {})}
-                copy={`Happy Agent on this machine is version ${mismatch.serverVersion}, which is newer than this build of Happy understands. ${
-                    downloaded
-                        ? `${version ? `Update ${version}` : "The update"} is downloaded and ready to install.`
-                        : downloading
-                          ? "Happy is downloading its update now and will offer the install here when it is ready."
-                          : update?.status === "error"
-                            ? `Happy could not check for its update${update.message ? `: ${update.message}` : "."} It will try again automatically.`
-                            : "Happy is looking for its own update and will offer it here as soon as it has one."
-                }`}
-                data-testid="desktop-protocol-screen"
-                scene="owl"
-                title="Happy is out of date"
-            />
-        );
-    }
     const upgrading = daemon.operation === "upgrading";
     return (
         <SetupPage
@@ -719,7 +664,7 @@ function DesktopProtocolGate(props: {
                       },
                   }
                 : {})}
-            copy={`Happy Agent on this machine is version ${mismatch.serverVersion}, and this build of Happy needs at least ${mismatch.minimumVersion}. ${
+            copy={`${mismatch.message} ${
                 !daemon.managed
                     ? "This daemon is supplied by an external development environment; update it there and reconnect."
                     : daemon.error

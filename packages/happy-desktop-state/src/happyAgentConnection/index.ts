@@ -3,9 +3,7 @@ export { connectHappyAgent } from "./connectHappyAgent.js";
 export { chatElementRequest, projectNumericIdentity } from "./projection.js";
 export {
     CHECKING_SERVER_COMPATIBILITY,
-    MAXIMUM_HAPPY_AGENT_PROTOCOL_VERSION,
     MINIMUM_HAPPY_AGENT_PROTOCOL_VERSION,
-    MINIMUM_HAPPY_AGENT_VERSION,
     describeServerCompatibility,
     happyAgentVersionAtLeast,
     serverCompatibility,

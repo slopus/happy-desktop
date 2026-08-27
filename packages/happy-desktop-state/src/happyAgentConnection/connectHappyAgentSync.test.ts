@@ -187,15 +187,16 @@ it("polls health until the daemon is ready before opening the stream", async () 
     await vi.waitFor(() => expect(groups.state.connection).toBe("live"));
 });
 
-it("refuses an incompatible protocol without opening the stream", async () => {
+it("accepts a newer additive protocol", async () => {
     const daemon = fakeHappyAgentDaemonCreate();
     daemon.healthSet({ protocol: HAPPY_AGENT_PROTOCOL_VERSION + 1 });
     const { connection } = harnessOpen(daemon);
-    groupsWatch(connection);
+    const groups = groupsWatch(connection);
 
-    await vi.waitFor(() => expect(connection.compatibility().status).toBe("client_outdated"));
-    expect(daemon.callCount("streamEvents")).toBe(0);
-    expect(daemon.callCount("getDesktopBootstrap")).toBe(0);
+    await vi.waitFor(() => expect(groups.state.connection).toBe("live"));
+    expect(connection.compatibility().status).toBe("compatible");
+    expect(daemon.callCount("streamEvents")).toBe(1);
+    expect(daemon.callCount("getDesktopBootstrap")).toBeGreaterThan(0);
 });
 
 it("close() severs the live stream and stops the reconnect loop", async () => {

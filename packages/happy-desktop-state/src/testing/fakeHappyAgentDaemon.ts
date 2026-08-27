@@ -20,7 +20,6 @@ import {
     type UserMessage,
     type Workspace,
 } from "@slopus/happy-agent-client";
-import { MINIMUM_HAPPY_AGENT_VERSION } from "../happyAgentConnection/compatibility.js";
 
 /**
  * A programmable in-memory Happy Agent daemon for state-package tests.
@@ -260,7 +259,7 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
     let nextStreamGap = false;
     let healthReady = true;
     let protocol = HAPPY_AGENT_PROTOCOL_VERSION;
-    let daemonVersion = MINIMUM_HAPPY_AGENT_VERSION;
+    let daemonVersion = "0.0.0";
 
     const historyOf = (agentId: string): { runs: HistoryRun[]; pending: UserMessage[] } => {
         let history = histories.get(agentId);

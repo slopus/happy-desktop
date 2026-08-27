@@ -4,6 +4,11 @@ settings:
   autoInstallPeers: false
   excludeLinksFromLockfile: false
 
+patchedDependencies:
+  react-dom@19.2.7:
+    hash: 14e2cfa7d72d4064e573a384fedfcdcc7589b6d08ab00ac90e41ef11f9496979
+    path: patches/react-dom@19.2.7.patch
+
 importers:
 
   .:
@@ -61,7 +66,7 @@ importers:
         version: 0.1.0
       '@tanstack/react-router':
         specifier: ^1.170.18
-        version: 1.170.18(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+        version: 1.170.18(react-dom@19.2.7(patch_hash=14e2cfa7d72d4064e573a384fedfcdcc7589b6d08ab00ac90e41ef11f9496979)(react@19.2.7))(react@19.2.7)
       happy-desktop-state:
         specifier: workspace:*
         version: link:../happy-desktop-state
@@ -73,7 +78,7 @@ importers:
         version: 19.2.7
       react-dom:
         specifier: 19.2.7
-        version: 19.2.7(react@19.2.7)
+        version: 19.2.7(patch_hash=14e2cfa7d72d4064e573a384fedfcdcc7589b6d08ab00ac90e41ef11f9496979)(react@19.2.7)
       thumbhash:
         specifier: ^0.1.1
         version: 0.1.1
@@ -95,7 +100,7 @@ importers:
         version: 10.4.1
       '@testing-library/react':
         specifier: ^16.3.2
-        version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+        version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.7(patch_hash=14e2cfa7d72d4064e573a384fedfcdcc7589b6d08ab00ac90e41ef11f9496979)(react@19.2.7))(react@19.2.7)
       '@types/react':
         specifier: 19.2.14
         version: 19.2.14
@@ -159,10 +164,10 @@ importers:
         version: 4.3.2(vite@8.1.4(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.0)(yaml@2.9.0))
       '@tanstack/react-router':
         specifier: ^1.170.18
-        version: 1.170.18(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+        version: 1.170.18(react-dom@19.2.7(patch_hash=14e2cfa7d72d4064e573a384fedfcdcc7589b6d08ab00ac90e41ef11f9496979)(react@19.2.7))(react@19.2.7)
       '@testing-library/react':
         specifier: ^16.3.2
-        version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+        version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.7(patch_hash=14e2cfa7d72d4064e573a384fedfcdcc7589b6d08ab00ac90e41ef11f9496979)(react@19.2.7))(react@19.2.7)
       '@types/node':
         specifier: ^26.1.1
         version: 26.1.1
@@ -207,7 +212,7 @@ importers:
         version: 6.1.5
       react-dom:
         specifier: 19.2.7
-        version: 19.2.7(react@19.2.7)
+        version: 19.2.7(patch_hash=14e2cfa7d72d4064e573a384fedfcdcc7589b6d08ab00ac90e41ef11f9496979)(react@19.2.7)
       tailwindcss:
         specifier: ^4.3.2
         version: 4.3.2
@@ -287,10 +292,10 @@ importers:
         version: 0.51.4(@lezer/common@1.5.2)(@lezer/highlight@1.2.3)(@types/hast@3.0.5)
       '@blocknote/mantine':
         specifier: ^0.51.4
-        version: 0.51.4(@floating-ui/dom@1.8.0)(@lezer/common@1.5.2)(@lezer/highlight@1.2.3)(@mantine/core@9.4.1(@mantine/hooks@9.4.1(react@19.2.7))(@types/react@19.2.14)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(@mantine/hooks@9.4.1(react@19.2.7))(@types/hast@3.0.5)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+        version: 0.51.4(@floating-ui/dom@1.8.0)(@lezer/common@1.5.2)(@lezer/highlight@1.2.3)(@mantine/core@9.4.1(@mantine/hooks@9.4.1(react@19.2.7))(@types/react@19.2.14)(react-dom@19.2.7(patch_hash=14e2cfa7d72d4064e573a384fedfcdcc7589b6d08ab00ac90e41ef11f9496979)(react@19.2.7))(react@19.2.7))(@mantine/hooks@9.4.1(react@19.2.7))(@types/hast@3.0.5)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.7(patch_hash=14e2cfa7d72d4064e573a384fedfcdcc7589b6d08ab00ac90e41ef11f9496979)(react@19.2.7))(react@19.2.7)
       '@blocknote/react':
         specifier: ^0.51.4
-        version: 0.51.4(@floating-ui/dom@1.8.0)(@lezer/common@1.5.2)(@lezer/highlight@1.2.3)(@types/hast@3.0.5)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+        version: 0.51.4(@floating-ui/dom@1.8.0)(@lezer/common@1.5.2)(@lezer/highlight@1.2.3)(@types/hast@3.0.5)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.7(patch_hash=14e2cfa7d72d4064e573a384fedfcdcc7589b6d08ab00ac90e41ef11f9496979)(react@19.2.7))(react@19.2.7)
       '@chenglou/pretext':
         specifier: ^0.0.8
         version: 0.0.8
@@ -323,16 +328,16 @@ importers:
         version: 0.78.2
       '@mantine/core':
         specifier: ^9.4.1
-        version: 9.4.1(@mantine/hooks@9.4.1(react@19.2.7))(@types/react@19.2.14)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+        version: 9.4.1(@mantine/hooks@9.4.1(react@19.2.7))(@types/react@19.2.14)(react-dom@19.2.7(patch_hash=14e2cfa7d72d4064e573a384fedfcdcc7589b6d08ab00ac90e41ef11f9496979)(react@19.2.7))(react@19.2.7)
       '@mantine/hooks':
         specifier: ^9.4.1
         version: 9.4.1(react@19.2.7)
       '@pierre/diffs':
         specifier: ^1.3.5
-        version: 1.3.5(@shikijs/themes@4.4.3)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+        version: 1.3.5(@shikijs/themes@4.4.3)(react-dom@19.2.7(patch_hash=14e2cfa7d72d4064e573a384fedfcdcc7589b6d08ab00ac90e41ef11f9496979)(react@19.2.7))(react@19.2.7)
       '@tanstack/react-virtual':
         specifier: ^3.14.6
-        version: 3.14.6(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+        version: 3.14.6(react-dom@19.2.7(patch_hash=14e2cfa7d72d4064e573a384fedfcdcc7589b6d08ab00ac90e41ef11f9496979)(react@19.2.7))(react@19.2.7)
       beautiful-mermaid:
         specifier: 1.1.3
         version: 1.1.3
@@ -347,7 +352,7 @@ importers:
         version: 19.2.7
       react-dom:
         specifier: 19.2.7
-        version: 19.2.7(react@19.2.7)
+        version: 19.2.7(patch_hash=14e2cfa7d72d4064e573a384fedfcdcc7589b6d08ab00ac90e41ef11f9496979)(react@19.2.7)
       react-markdown:
         specifier: ^10.1.0
         version: 10.1.0(@types/react@19.2.14)(react@19.2.7)
@@ -5844,14 +5849,14 @@ snapshots:
       - refractor
       - sugar-high
 
-  '@blocknote/mantine@0.51.4(@floating-ui/dom@1.8.0)(@lezer/common@1.5.2)(@lezer/highlight@1.2.3)(@mantine/core@9.4.1(@mantine/hooks@9.4.1(react@19.2.7))(@types/react@19.2.14)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(@mantine/hooks@9.4.1(react@19.2.7))(@types/hast@3.0.5)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)':
+  '@blocknote/mantine@0.51.4(@floating-ui/dom@1.8.0)(@lezer/common@1.5.2)(@lezer/highlight@1.2.3)(@mantine/core@9.4.1(@mantine/hooks@9.4.1(react@19.2.7))(@types/react@19.2.14)(react-dom@19.2.7(patch_hash=14e2cfa7d72d4064e573a384fedfcdcc7589b6d08ab00ac90e41ef11f9496979)(react@19.2.7))(react@19.2.7))(@mantine/hooks@9.4.1(react@19.2.7))(@types/hast@3.0.5)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.7(patch_hash=14e2cfa7d72d4064e573a384fedfcdcc7589b6d08ab00ac90e41ef11f9496979)(react@19.2.7))(react@19.2.7)':
     dependencies:
       '@blocknote/core': 0.51.4(@lezer/common@1.5.2)(@lezer/highlight@1.2.3)(@types/hast@3.0.5)
-      '@blocknote/react': 0.51.4(@floating-ui/dom@1.8.0)(@lezer/common@1.5.2)(@lezer/highlight@1.2.3)(@types/hast@3.0.5)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
-      '@mantine/core': 9.4.1(@mantine/hooks@9.4.1(react@19.2.7))(@types/react@19.2.14)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      '@blocknote/react': 0.51.4(@floating-ui/dom@1.8.0)(@lezer/common@1.5.2)(@lezer/highlight@1.2.3)(@types/hast@3.0.5)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.7(patch_hash=14e2cfa7d72d4064e573a384fedfcdcc7589b6d08ab00ac90e41ef11f9496979)(react@19.2.7))(react@19.2.7)
+      '@mantine/core': 9.4.1(@mantine/hooks@9.4.1(react@19.2.7))(@types/react@19.2.14)(react-dom@19.2.7(patch_hash=14e2cfa7d72d4064e573a384fedfcdcc7589b6d08ab00ac90e41ef11f9496979)(react@19.2.7))(react@19.2.7)
       '@mantine/hooks': 9.4.1(react@19.2.7)
       react: 19.2.7
-      react-dom: 19.2.7(react@19.2.7)
+      react-dom: 19.2.7(patch_hash=14e2cfa7d72d4064e573a384fedfcdcc7589b6d08ab00ac90e41ef11f9496979)(react@19.2.7)
       react-icons: 5.7.0(react@19.2.7)
     transitivePeerDependencies:
       - '@floating-ui/dom'
@@ -5865,22 +5870,22 @@ snapshots:
       - refractor
       - sugar-high
 
-  '@blocknote/react@0.51.4(@floating-ui/dom@1.8.0)(@lezer/common@1.5.2)(@lezer/highlight@1.2.3)(@types/hast@3.0.5)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)':
+  '@blocknote/react@0.51.4(@floating-ui/dom@1.8.0)(@lezer/common@1.5.2)(@lezer/highlight@1.2.3)(@types/hast@3.0.5)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.7(patch_hash=14e2cfa7d72d4064e573a384fedfcdcc7589b6d08ab00ac90e41ef11f9496979)(react@19.2.7))(react@19.2.7)':
     dependencies:
       '@blocknote/core': 0.51.4(@lezer/common@1.5.2)(@lezer/highlight@1.2.3)(@types/hast@3.0.5)
       '@emoji-mart/data': 1.2.1
-      '@floating-ui/react': 0.27.20(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      '@floating-ui/react': 0.27.20(react-dom@19.2.7(patch_hash=14e2cfa7d72d4064e573a384fedfcdcc7589b6d08ab00ac90e41ef11f9496979)(react@19.2.7))(react@19.2.7)
       '@floating-ui/utils': 0.2.12
-      '@tanstack/react-store': 0.7.7(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      '@tanstack/react-store': 0.7.7(react-dom@19.2.7(patch_hash=14e2cfa7d72d4064e573a384fedfcdcc7589b6d08ab00ac90e41ef11f9496979)(react@19.2.7))(react@19.2.7)
       '@tiptap/core': 3.28.0(@tiptap/pm@3.28.0)
       '@tiptap/pm': 3.28.0
-      '@tiptap/react': 3.28.0(@floating-ui/dom@1.8.0)(@tiptap/core@3.28.0(@tiptap/pm@3.28.0))(@tiptap/pm@3.28.0)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      '@tiptap/react': 3.28.0(@floating-ui/dom@1.8.0)(@tiptap/core@3.28.0(@tiptap/pm@3.28.0))(@tiptap/pm@3.28.0)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.7(patch_hash=14e2cfa7d72d4064e573a384fedfcdcc7589b6d08ab00ac90e41ef11f9496979)(react@19.2.7))(react@19.2.7)
       '@types/use-sync-external-store': 1.5.0
       emoji-mart: 5.6.0
       fast-deep-equal: 3.1.3
       lodash.merge: 4.6.2
       react: 19.2.7
-      react-dom: 19.2.7(react@19.2.7)
+      react-dom: 19.2.7(patch_hash=14e2cfa7d72d4064e573a384fedfcdcc7589b6d08ab00ac90e41ef11f9496979)(react@19.2.7)
       react-icons: 5.7.0(react@19.2.7)
       use-sync-external-store: 1.6.0(react@19.2.7)
     transitivePeerDependencies:
@@ -6439,18 +6444,18 @@ snapshots:
       '@floating-ui/core': 1.8.0
       '@floating-ui/utils': 0.2.12
 
-  '@floating-ui/react-dom@2.1.9(react-dom@19.2.7(react@19.2.7))(react@19.2.7)':
+  '@floating-ui/react-dom@2.1.9(react-dom@19.2.7(patch_hash=14e2cfa7d72d4064e573a384fedfcdcc7589b6d08ab00ac90e41ef11f9496979)(react@19.2.7))(react@19.2.7)':
     dependencies:
       '@floating-ui/dom': 1.8.0
       react: 19.2.7
-      react-dom: 19.2.7(react@19.2.7)
+      react-dom: 19.2.7(patch_hash=14e2cfa7d72d4064e573a384fedfcdcc7589b6d08ab00ac90e41ef11f9496979)(react@19.2.7)
 
-  '@floating-ui/react@0.27.20(react-dom@19.2.7(react@19.2.7))(react@19.2.7)':
+  '@floating-ui/react@0.27.20(react-dom@19.2.7(patch_hash=14e2cfa7d72d4064e573a384fedfcdcc7589b6d08ab00ac90e41ef11f9496979)(react@19.2.7))(react@19.2.7)':
     dependencies:
-      '@floating-ui/react-dom': 2.1.9(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      '@floating-ui/react-dom': 2.1.9(react-dom@19.2.7(patch_hash=14e2cfa7d72d4064e573a384fedfcdcc7589b6d08ab00ac90e41ef11f9496979)(react@19.2.7))(react@19.2.7)
       '@floating-ui/utils': 0.2.12
       react: 19.2.7
-      react-dom: 19.2.7(react@19.2.7)
+      react-dom: 19.2.7(patch_hash=14e2cfa7d72d4064e573a384fedfcdcc7589b6d08ab00ac90e41ef11f9496979)(react@19.2.7)
       tabbable: 6.5.0
 
   '@floating-ui/utils@0.2.12': {}
@@ -6736,14 +6741,14 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@mantine/core@9.4.1(@mantine/hooks@9.4.1(react@19.2.7))(@types/react@19.2.14)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)':
+  '@mantine/core@9.4.1(@mantine/hooks@9.4.1(react@19.2.7))(@types/react@19.2.14)(react-dom@19.2.7(patch_hash=14e2cfa7d72d4064e573a384fedfcdcc7589b6d08ab00ac90e41ef11f9496979)(react@19.2.7))(react@19.2.7)':
     dependencies:
-      '@floating-ui/react': 0.27.20(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      '@floating-ui/react': 0.27.20(react-dom@19.2.7(patch_hash=14e2cfa7d72d4064e573a384fedfcdcc7589b6d08ab00ac90e41ef11f9496979)(react@19.2.7))(react@19.2.7)
       '@mantine/hooks': 9.4.1(react@19.2.7)
       clsx: 2.1.1
       react: 19.2.7
-      react-dom: 19.2.7(react@19.2.7)
-      react-number-format: 5.4.5(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      react-dom: 19.2.7(patch_hash=14e2cfa7d72d4064e573a384fedfcdcc7589b6d08ab00ac90e41ef11f9496979)(react@19.2.7)
+      react-number-format: 5.4.5(react-dom@19.2.7(patch_hash=14e2cfa7d72d4064e573a384fedfcdcc7589b6d08ab00ac90e41ef11f9496979)(react@19.2.7))(react@19.2.7)
       react-remove-scroll: 2.7.2(@types/react@19.2.14)(react@19.2.7)
       type-fest: 5.8.0
     transitivePeerDependencies:
@@ -6977,28 +6982,28 @@ snapshots:
       tslib: 2.8.1
       webcrypto-core: 1.9.2
 
-  '@pierre/diffs@1.3.5(@shikijs/themes@4.4.3)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)':
+  '@pierre/diffs@1.3.5(@shikijs/themes@4.4.3)(react-dom@19.2.7(patch_hash=14e2cfa7d72d4064e573a384fedfcdcc7589b6d08ab00ac90e41ef11f9496979)(react@19.2.7))(react@19.2.7)':
     dependencies:
       '@pierre/theme': 2.0.0
-      '@pierre/theming': 1.0.1(@pierre/theme@2.0.0)(@shikijs/themes@4.4.3)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(shiki@4.4.3)
+      '@pierre/theming': 1.0.1(@pierre/theme@2.0.0)(@shikijs/themes@4.4.3)(react-dom@19.2.7(patch_hash=14e2cfa7d72d4064e573a384fedfcdcc7589b6d08ab00ac90e41ef11f9496979)(react@19.2.7))(react@19.2.7)(shiki@4.4.3)
       '@shikijs/transformers': 4.4.3
       diff: 9.0.0
       hast-util-to-html: 9.0.5
       lru_map: 0.4.1
       react: 19.2.7
-      react-dom: 19.2.7(react@19.2.7)
+      react-dom: 19.2.7(patch_hash=14e2cfa7d72d4064e573a384fedfcdcc7589b6d08ab00ac90e41ef11f9496979)(react@19.2.7)
       shiki: 4.4.3
     transitivePeerDependencies:
       - '@shikijs/themes'
 
   '@pierre/theme@2.0.0': {}
 
-  '@pierre/theming@1.0.1(@pierre/theme@2.0.0)(@shikijs/themes@4.4.3)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(shiki@4.4.3)':
+  '@pierre/theming@1.0.1(@pierre/theme@2.0.0)(@shikijs/themes@4.4.3)(react-dom@19.2.7(patch_hash=14e2cfa7d72d4064e573a384fedfcdcc7589b6d08ab00ac90e41ef11f9496979)(react@19.2.7))(react@19.2.7)(shiki@4.4.3)':
     optionalDependencies:
       '@pierre/theme': 2.0.0
       '@shikijs/themes': 4.4.3
       react: 19.2.7
-      react-dom: 19.2.7(react@19.2.7)
+      react-dom: 19.2.7(patch_hash=14e2cfa7d72d4064e573a384fedfcdcc7589b6d08ab00ac90e41ef11f9496979)(react@19.2.7)
       shiki: 4.4.3
 
   '@polka/url@1.0.0-next.29': {}
@@ -7217,34 +7222,34 @@ snapshots:
 
   '@tanstack/history@1.162.0': {}
 
-  '@tanstack/react-router@1.170.18(react-dom@19.2.7(react@19.2.7))(react@19.2.7)':
+  '@tanstack/react-router@1.170.18(react-dom@19.2.7(patch_hash=14e2cfa7d72d4064e573a384fedfcdcc7589b6d08ab00ac90e41ef11f9496979)(react@19.2.7))(react@19.2.7)':
     dependencies:
       '@tanstack/history': 1.162.0
-      '@tanstack/react-store': 0.9.3(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      '@tanstack/react-store': 0.9.3(react-dom@19.2.7(patch_hash=14e2cfa7d72d4064e573a384fedfcdcc7589b6d08ab00ac90e41ef11f9496979)(react@19.2.7))(react@19.2.7)
       '@tanstack/router-core': 1.171.15
       isbot: 5.2.1
       react: 19.2.7
-      react-dom: 19.2.7(react@19.2.7)
+      react-dom: 19.2.7(patch_hash=14e2cfa7d72d4064e573a384fedfcdcc7589b6d08ab00ac90e41ef11f9496979)(react@19.2.7)
 
-  '@tanstack/react-store@0.7.7(react-dom@19.2.7(react@19.2.7))(react@19.2.7)':
+  '@tanstack/react-store@0.7.7(react-dom@19.2.7(patch_hash=14e2cfa7d72d4064e573a384fedfcdcc7589b6d08ab00ac90e41ef11f9496979)(react@19.2.7))(react@19.2.7)':
     dependencies:
       '@tanstack/store': 0.7.7
       react: 19.2.7
-      react-dom: 19.2.7(react@19.2.7)
+      react-dom: 19.2.7(patch_hash=14e2cfa7d72d4064e573a384fedfcdcc7589b6d08ab00ac90e41ef11f9496979)(react@19.2.7)
       use-sync-external-store: 1.6.0(react@19.2.7)
 
-  '@tanstack/react-store@0.9.3(react-dom@19.2.7(react@19.2.7))(react@19.2.7)':
+  '@tanstack/react-store@0.9.3(react-dom@19.2.7(patch_hash=14e2cfa7d72d4064e573a384fedfcdcc7589b6d08ab00ac90e41ef11f9496979)(react@19.2.7))(react@19.2.7)':
     dependencies:
       '@tanstack/store': 0.9.3
       react: 19.2.7
-      react-dom: 19.2.7(react@19.2.7)
+      react-dom: 19.2.7(patch_hash=14e2cfa7d72d4064e573a384fedfcdcc7589b6d08ab00ac90e41ef11f9496979)(react@19.2.7)
       use-sync-external-store: 1.6.0(react@19.2.7)
 
-  '@tanstack/react-virtual@3.14.6(react-dom@19.2.7(react@19.2.7))(react@19.2.7)':
+  '@tanstack/react-virtual@3.14.6(react-dom@19.2.7(patch_hash=14e2cfa7d72d4064e573a384fedfcdcc7589b6d08ab00ac90e41ef11f9496979)(react@19.2.7))(react@19.2.7)':
     dependencies:
       '@tanstack/virtual-core': 3.17.4
       react: 19.2.7
-      react-dom: 19.2.7(react@19.2.7)
+      react-dom: 19.2.7(patch_hash=14e2cfa7d72d4064e573a384fedfcdcc7589b6d08ab00ac90e41ef11f9496979)(react@19.2.7)
 
   '@tanstack/router-core@1.171.15':
     dependencies:
@@ -7270,12 +7275,12 @@ snapshots:
       picocolors: 1.1.1
       pretty-format: 27.5.1
 
-  '@testing-library/react@16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)':
+  '@testing-library/react@16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.7(patch_hash=14e2cfa7d72d4064e573a384fedfcdcc7589b6d08ab00ac90e41ef11f9496979)(react@19.2.7))(react@19.2.7)':
     dependencies:
       '@babel/runtime': 7.29.7
       '@testing-library/dom': 10.4.1
       react: 19.2.7
-      react-dom: 19.2.7(react@19.2.7)
+      react-dom: 19.2.7(patch_hash=14e2cfa7d72d4064e573a384fedfcdcc7589b6d08ab00ac90e41ef11f9496979)(react@19.2.7)
     optionalDependencies:
       '@types/react': 19.2.14
       '@types/react-dom': 19.2.3(@types/react@19.2.14)
@@ -7352,7 +7357,7 @@ snapshots:
       prosemirror-transform: 1.12.0
       prosemirror-view: 1.42.1
 
-  '@tiptap/react@3.28.0(@floating-ui/dom@1.8.0)(@tiptap/core@3.28.0(@tiptap/pm@3.28.0))(@tiptap/pm@3.28.0)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)':
+  '@tiptap/react@3.28.0(@floating-ui/dom@1.8.0)(@tiptap/core@3.28.0(@tiptap/pm@3.28.0))(@tiptap/pm@3.28.0)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.7(patch_hash=14e2cfa7d72d4064e573a384fedfcdcc7589b6d08ab00ac90e41ef11f9496979)(react@19.2.7))(react@19.2.7)':
     dependencies:
       '@tiptap/core': 3.28.0(@tiptap/pm@3.28.0)
       '@tiptap/pm': 3.28.0
@@ -7361,7 +7366,7 @@ snapshots:
       '@types/use-sync-external-store': 0.0.6
       fast-equals: 5.4.1
       react: 19.2.7
-      react-dom: 19.2.7(react@19.2.7)
+      react-dom: 19.2.7(patch_hash=14e2cfa7d72d4064e573a384fedfcdcc7589b6d08ab00ac90e41ef11f9496979)(react@19.2.7)
       use-sync-external-store: 1.6.0(react@19.2.7)
     optionalDependencies:
       '@tiptap/extension-bubble-menu': 3.28.0(@tiptap/core@3.28.0(@tiptap/pm@3.28.0))(@tiptap/pm@3.28.0)
@@ -10358,7 +10363,7 @@ snapshots:
       - bufferutil
       - utf-8-validate
 
-  react-dom@19.2.7(react@19.2.7):
+  react-dom@19.2.7(patch_hash=14e2cfa7d72d4064e573a384fedfcdcc7589b6d08ab00ac90e41ef11f9496979)(react@19.2.7):
     dependencies:
       react: 19.2.7
       scheduler: 0.27.0
@@ -10389,10 +10394,10 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  react-number-format@5.4.5(react-dom@19.2.7(react@19.2.7))(react@19.2.7):
+  react-number-format@5.4.5(react-dom@19.2.7(patch_hash=14e2cfa7d72d4064e573a384fedfcdcc7589b6d08ab00ac90e41ef11f9496979)(react@19.2.7))(react@19.2.7):
     dependencies:
       react: 19.2.7
-      react-dom: 19.2.7(react@19.2.7)
+      react-dom: 19.2.7(patch_hash=14e2cfa7d72d4064e573a384fedfcdcc7589b6d08ab00ac90e41ef11f9496979)(react@19.2.7)
 
   react-remove-scroll-bar@2.3.8(@types/react@19.2.14)(react@19.2.7):
     dependencies:
