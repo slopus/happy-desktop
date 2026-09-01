@@ -8,6 +8,32 @@
  * `color-scheme`, which the theme sets and the shadow tree inherits.
  */
 
+.happy-code-block-frame {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    max-width: 100%;
+    padding-top: 28px;
+    overflow: hidden;
+    border-radius: var(--happy-radius-sm);
+    background: var(--surface-pressed);
+}
+
+.happy-code-block-frame__copy {
+    /* The copy control overlays only the frame's reserved top strip, outside
+       the code and scrollbar flow. */
+    position: absolute;
+    z-index: 1;
+    top: 4px;
+    right: 8px;
+    opacity: 1;
+}
+
+.happy-code-block-frame__copy:hover {
+    background: var(--surface-selected);
+}
+
 .happy-code-block {
     display: block;
     min-width: 0;

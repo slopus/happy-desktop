@@ -1,6 +1,7 @@
 import { EXTENSION_TO_FILE_FORMAT } from "@pierre/diffs";
 import { File } from "@pierre/diffs/react";
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
+import { CopyButton } from "./CopyButton";
 import { PIERRE_PANE_CSS, pierreCodeSurfacePhase } from "./pierreCodeSurface";
 
 /** Do not retain Pierre ASTs for unusually large documents. */
@@ -59,6 +60,39 @@ export type CodeBlockProps = {
     /** Numbers the lines. On for a file, off for a snippet inside prose. */
     lineNumbers?: boolean;
 };
+
+export type CodeBlockFrameProps = {
+    readonly children: ReactNode;
+    readonly className?: string;
+    readonly "data-happy-desktop-ui"?: string;
+    readonly "data-testid"?: string;
+    readonly style?: CSSProperties;
+    /** Exact displayed code copied by the frame action. */
+    readonly text: string;
+};
+
+/**
+ * The shared Markdown code-block frame: a reserved action strip above any code
+ * renderer, with one quiet copy action that never covers code or its scrollbar.
+ */
+export function CodeBlockFrame(props: CodeBlockFrameProps) {
+    return (
+        <div
+            className={["happy-code-block-frame", props.className].filter(Boolean).join(" ")}
+            data-happy-desktop-ui={props["data-happy-desktop-ui"] ?? "code-block-frame"}
+            data-testid={props["data-testid"]}
+            style={props.style}
+        >
+            <CopyButton
+                className="happy-code-block-frame__copy"
+                data-happy-desktop-ui="code-block-copy"
+                label="Copy code"
+                text={props.text}
+            />
+            {props.children}
+        </div>
+    );
+}
 
 /**
  * C-174 CodeBlock — code with syntax highlighting, wherever code is read.

@@ -1,5 +1,5 @@
 import { type ReactNode } from "react";
-import { CodeBlock, codeBlockLanguage } from "../../src/CodeBlock";
+import { CodeBlock, CodeBlockFrame, codeBlockLanguage } from "../../src/CodeBlock";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
 /** The component plan this page documents. The selector and the page header read the same value. */
@@ -42,7 +42,7 @@ export function CodeBlockPage() {
     return (
         <ComponentPage
             number={componentNumber}
-            summary="Code with syntax highlighting, wherever code is read: the source face of the file viewer and every fenced block in a document. Colors follow the surrounding theme through color-scheme, so there is no appearance prop to thread."
+            summary="Code with syntax highlighting, wherever code is read: the source face of the file viewer and every fenced block in a document. A Markdown frame adds one top-right copy action without covering the code or its scrollbar. Colors follow the surrounding theme through color-scheme, so there is no appearance prop to thread."
             title="CodeBlock"
         >
             <Specimen
@@ -63,7 +63,11 @@ export function CodeBlockPage() {
                 number="02"
                 stage="surface"
             >
-                {frame(<CodeBlock lang={codeBlockLanguage("bash")} text={shell} />)}
+                {frame(
+                    <CodeBlockFrame text={shell}>
+                        <CodeBlock lang={codeBlockLanguage("bash")} text={shell} />
+                    </CodeBlockFrame>,
+                )}
             </Specimen>
 
             <Specimen

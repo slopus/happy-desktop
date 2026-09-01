@@ -772,8 +772,12 @@
 .happy-message__code-block {
     margin: 12px 0;
     max-width: 100%;
+}
+
+/* Chat code is a content card at the existing 8px radius; the shared frame's
+   smaller document/control default must not change that established geometry. */
+.happy-message__code-block.happy-code-block-frame {
     border-radius: 8px;
-    background: var(--surface-pressed);
 }
 
 .happy-message__code-block-viewport {

@@ -4,7 +4,13 @@ export { happyLogoBlackUrl, happyLogoWhiteUrl } from "./assets";
 export { ChangedFileDiff, type ChangedFileDiffProps } from "./ChangedFileDiff";
 export { CompactActivityRow, type CompactActivityRowProps } from "./CompactActivityRow";
 export { compactCount } from "./countText";
-export { CodeBlock, codeBlockLanguage, type CodeBlockProps } from "./CodeBlock";
+export {
+    CodeBlock,
+    CodeBlockFrame,
+    codeBlockLanguage,
+    type CodeBlockFrameProps,
+    type CodeBlockProps,
+} from "./CodeBlock";
 export { CodeEditor, type CodeEditorProps } from "./CodeEditor";
 export {
     ScrollArea,
