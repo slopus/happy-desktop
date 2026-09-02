@@ -1,8 +1,17 @@
 import { partitionComponentProps } from "./componentProps";
-import { useCallback, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
+import {
+    useCallback,
+    useRef,
+    useState,
+    type CSSProperties,
+    type KeyboardEvent,
+    type MouseEvent,
+} from "react";
 import { defaultRangeExtractor, useVirtualizer } from "@tanstack/react-virtual";
 import { compactCount, changeCountLabel } from "./countText";
+import { ContextMenu, type ContextMenuSelectionResult } from "./ContextMenu";
 import { Icon } from "./Icon";
+import { type MenuItem } from "./Menu";
 import { fileTreeRowModel, type FileTreeRow } from "./fileTreeRows";
 import { ScrollArea } from "./Scrollbar";
 import { Ionicon, type IoniconName } from "./vectorIcons/VectorIcon";
@@ -56,6 +65,15 @@ export type FileTreeSelectModifiers = {
     /** Shift: take the run of rows from the last one picked through this one. */
     readonly extend: boolean;
 };
+/**
+ * The exact row that opened a context menu and the entries its action covers.
+ * Right-clicking inside the current picked set keeps that set; right-clicking
+ * anywhere else addresses only that row without selecting or opening it first.
+ */
+export interface FileTreeContextSelection {
+    readonly anchor: FileTreeNode;
+    readonly entries: readonly FileTreeNode[];
+}
 export type FileTreeProps = {
     className?: string;
     "data-testid"?: string;
@@ -86,6 +104,13 @@ export type FileTreeProps = {
     onFilePrefetch?: (id: string) => void;
     /** Directory paging request (the "Show more" affordance). */
     onLoadMore?: (id: string) => void;
+    /** Returns the replacement menu for one row/selection. Empty keeps the native menu. */
+    rowMenuItems?: (selection: FileTreeContextSelection) => readonly MenuItem[];
+    /** Runs one row-menu command; feedback keeps the menu open long enough to confirm it. */
+    onRowMenuSelect?: (
+        selection: FileTreeContextSelection,
+        actionId: string,
+    ) => ContextMenuSelectionResult | Promise<ContextMenuSelectionResult>;
     /** Why file-row selection/opening is unavailable while directory disclosure remains local. */
     filesUnavailable?: string;
     /** Per-depth indentation step. Defaults to 16px. */
@@ -464,6 +489,7 @@ interface FileTreeRowViewProps {
     onDirectoryPrefetch?: (id: string) => void;
     onFilePrefetch?: (id: string) => void;
     onLoadMore?: (id: string) => void;
+    onContextMenu?: (node: FileTreeNode, event: MouseEvent<HTMLDivElement>) => void;
     filesUnavailable?: string;
     onFocusRow: (id: string) => void;
     onKeyDown: (event: KeyboardEvent<HTMLDivElement>) => void;
@@ -571,6 +597,9 @@ function FileTreeRowView(props: FileTreeRowViewProps) {
                 if (row.kind === "entry" && !directory && props.filesUnavailable === undefined)
                     onOpen?.(node.id);
             }}
+            onContextMenu={(event) => {
+                if (row.kind === "entry") props.onContextMenu?.(node, event);
+            }}
             onFocus={() => {
                 onFocusRow(row.id);
                 if (row.kind === "entry" && directory) onDirectoryPrefetch?.(node.id);
@@ -675,6 +704,8 @@ export function FileTree(props: FileTreeProps) {
         "onDirectoryPrefetch",
         "onFilePrefetch",
         "onLoadMore",
+        "rowMenuItems",
+        "onRowMenuSelect",
         "filesUnavailable",
         "indent",
         "virtualize",
@@ -695,6 +726,43 @@ export function FileTree(props: FileTreeProps) {
      * one, or every notification would drag the focus somewhere.
      */
     const [focusedRow, focusedRowSet] = useState<string | undefined>(undefined);
+    /** One transient menu, kept outside the virtualized scrollport that opened it. */
+    const [rowMenu, rowMenuSet] = useState<
+        | {
+              readonly selection: FileTreeContextSelection;
+              readonly items: readonly MenuItem[];
+              readonly opener: HTMLDivElement;
+              readonly x: number;
+              readonly y: number;
+          }
+        | undefined
+    >(undefined);
+    const contextSelection = (anchor: FileTreeNode): FileTreeContextSelection => {
+        if (local.selectedIds?.has(anchor.id) !== true) return { anchor, entries: [anchor] };
+        const entries = model.rows.flatMap((row) =>
+            row.kind === "entry" && local.selectedIds?.has(row.node.id) === true ? [row.node] : [],
+        );
+        return { anchor, entries: entries.length === 0 ? [anchor] : entries };
+    };
+    const rowMenuOpen = (
+        node: FileTreeNode,
+        opener: HTMLDivElement,
+        pointer?: { readonly x: number; readonly y: number },
+    ): boolean => {
+        const selection = contextSelection(node);
+        const items = local.rowMenuItems?.(selection) ?? [];
+        // With no usable replacement, leave the platform menu in place.
+        if (!items.some((item) => item.kind === "item" && item.disabled !== true)) return false;
+        const bounds = opener.getBoundingClientRect();
+        const x = pointer && (pointer.x !== 0 || pointer.y !== 0) ? pointer.x : bounds.left + 24;
+        const y =
+            pointer && (pointer.x !== 0 || pointer.y !== 0)
+                ? pointer.y
+                : bounds.top + Math.min(bounds.height, 28);
+        opener.focus({ preventScroll: true });
+        rowMenuSet({ selection, items, opener, x, y });
+        return true;
+    };
     /**
      * A row that has been asked for but is not drawn yet. Moving to a row a
      * long way down a virtualized listing has to scroll it into existence
@@ -787,6 +855,13 @@ export function FileTree(props: FileTreeProps) {
     };
     const keyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
         if (event.altKey || event.ctrlKey || event.metaKey) return;
+        if ((event.shiftKey && event.key === "F10") || event.key === "ContextMenu") {
+            const contextIndex = model.indexById.get(event.currentTarget.dataset.row ?? "");
+            const contextRow = contextIndex === undefined ? undefined : model.rows[contextIndex];
+            if (contextRow?.kind === "entry" && rowMenuOpen(contextRow.node, event.currentTarget))
+                event.preventDefault();
+            return;
+        }
         if (activeRow === undefined) return;
         const index = model.indexById.get(activeRow);
         if (index === undefined) return;
@@ -864,6 +939,10 @@ export function FileTree(props: FileTreeProps) {
             onFocusRow={focusedRowSet}
             filesUnavailable={local.filesUnavailable}
             onKeyDown={keyDown}
+            onContextMenu={(node, event) => {
+                if (rowMenuOpen(node, event.currentTarget, { x: event.clientX, y: event.clientY }))
+                    event.preventDefault();
+            }}
             onDirectoryPrefetch={local.onDirectoryPrefetch}
             onFilePrefetch={local.onFilePrefetch}
             onLoadMore={local.onLoadMore}
@@ -878,67 +957,86 @@ export function FileTree(props: FileTreeProps) {
         />
     );
     return (
-        <ScrollArea
-            className={["happy-file-tree", local.className].filter(Boolean).join(" ")}
-            data-happy-desktop-ui="file-tree"
-            data-testid={local["data-testid"]}
-            data-virtualized={virtualized ? "" : undefined}
-            // Virtualized is exactly when this element owns the scrolling, so it
-            // is exactly when it needs the bar beside its rows rather than over
-            // them. Unvirtualized, the panel around it scrolls and marks itself.
-            data-scrollbar-rows={virtualized ? "" : undefined}
-            style={local.style}
-            viewportClassName="happy-file-tree__viewport"
-            viewportProps={{
-                "aria-label": local.label ?? "Files",
-                "aria-multiselectable": local.selectedIds ? true : undefined,
-                role: "tree",
-                // The rows carry the tab stop between them; the tree itself is
-                // reachable on purpose, never by tabbing past the listing.
-                tabIndex: -1,
-            }}
-            viewportRef={scrollElement}
-        >
-            {local.loading ? (
-                <div
-                    className="happy-file-tree__status-line"
-                    data-happy-desktop-ui="file-tree-status-line"
-                >
-                    {local.loadingLabel ?? "Loading files…"}
-                </div>
-            ) : model.rows.length === 0 ? (
-                <div
-                    className="happy-file-tree__status-line"
-                    data-happy-desktop-ui="file-tree-empty"
-                >
-                    {local.emptyLabel ?? "No files to show."}
-                </div>
-            ) : virtualized ? (
-                <div className="happy-file-tree__virtual" data-happy-desktop-ui="file-tree-virtual">
-                    {/* The rows leave the flow so the listing can be as tall as
+        <>
+            <ScrollArea
+                className={["happy-file-tree", local.className].filter(Boolean).join(" ")}
+                data-happy-desktop-ui="file-tree"
+                data-testid={local["data-testid"]}
+                data-virtualized={virtualized ? "" : undefined}
+                // Virtualized is exactly when this element owns the scrolling, so it
+                // is exactly when it needs the bar beside its rows rather than over
+                // them. Unvirtualized, the panel around it scrolls and marks itself.
+                data-scrollbar-rows={virtualized ? "" : undefined}
+                style={local.style}
+                viewportClassName="happy-file-tree__viewport"
+                viewportProps={{
+                    "aria-label": local.label ?? "Files",
+                    "aria-multiselectable": local.selectedIds ? true : undefined,
+                    role: "tree",
+                    // The rows carry the tab stop between them; the tree itself is
+                    // reachable on purpose, never by tabbing past the listing.
+                    tabIndex: -1,
+                }}
+                viewportRef={scrollElement}
+            >
+                {local.loading ? (
+                    <div
+                        className="happy-file-tree__status-line"
+                        data-happy-desktop-ui="file-tree-status-line"
+                    >
+                        {local.loadingLabel ?? "Loading files…"}
+                    </div>
+                ) : model.rows.length === 0 ? (
+                    <div
+                        className="happy-file-tree__status-line"
+                        data-happy-desktop-ui="file-tree-empty"
+                    >
+                        {local.emptyLabel ?? "No files to show."}
+                    </div>
+                ) : virtualized ? (
+                    <div
+                        className="happy-file-tree__virtual"
+                        data-happy-desktop-ui="file-tree-virtual"
+                    >
+                        {/* The rows leave the flow so the listing can be as tall as
                         all of them while only the drawn ones exist; this box is
                         what holds that height open. */}
-                    <div
-                        className="happy-file-tree__virtual-sizer"
-                        style={{ height: `${String(virtualizer.getTotalSize())}px` }}
-                    >
-                        {virtualizer.getVirtualItems().map((item) => {
-                            const row = model.rows[item.index];
-                            return row ? (
-                                <div
-                                    className="happy-file-tree__virtual-row"
-                                    key={item.key}
-                                    style={{ transform: `translateY(${String(item.start)}px)` }}
-                                >
-                                    {rowView(row)}
-                                </div>
-                            ) : null;
-                        })}
+                        <div
+                            className="happy-file-tree__virtual-sizer"
+                            style={{ height: `${String(virtualizer.getTotalSize())}px` }}
+                        >
+                            {virtualizer.getVirtualItems().map((item) => {
+                                const row = model.rows[item.index];
+                                return row ? (
+                                    <div
+                                        className="happy-file-tree__virtual-row"
+                                        key={item.key}
+                                        style={{ transform: `translateY(${String(item.start)}px)` }}
+                                    >
+                                        {rowView(row)}
+                                    </div>
+                                ) : null;
+                            })}
+                        </div>
                     </div>
-                </div>
-            ) : (
-                model.rows.map(rowView)
-            )}
-        </ScrollArea>
+                ) : (
+                    model.rows.map(rowView)
+                )}
+            </ScrollArea>
+            {rowMenu && model.indexById.has(rowMenu.selection.anchor.id) ? (
+                <ContextMenu
+                    items={rowMenu.items}
+                    key={`${rowMenu.selection.anchor.id}:${String(rowMenu.x)}:${String(rowMenu.y)}`}
+                    onDismiss={(reason) => {
+                        const opener = rowMenu.opener;
+                        rowMenuSet(undefined);
+                        if (reason === "escape" && opener.isConnected)
+                            opener.focus({ preventScroll: true });
+                    }}
+                    onSelect={(actionId) => local.onRowMenuSelect?.(rowMenu.selection, actionId)}
+                    placement={{ x: rowMenu.x, y: rowMenu.y }}
+                />
+            ) : null}
+        </>
     );
 }

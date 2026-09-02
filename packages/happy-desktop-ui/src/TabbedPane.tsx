@@ -1,6 +1,7 @@
 import { partitionComponentProps } from "./componentProps";
 import { useLayoutEffect, useRef, type CSSProperties, type ReactNode } from "react";
 import type { KeyboardShortcut } from "./keyboardShortcut";
+import type { ContextMenuSelectionResult } from "./ContextMenu";
 import { type MenuItem } from "./Menu";
 import { Tabs, type TabItem, type TabsSize } from "./Tabs";
 import type { TabTransferTarget } from "./tabTransfer";
@@ -26,7 +27,10 @@ export type TabbedPaneProps = {
     onReorder?: (ids: readonly string[]) => void;
     /** Returns the context-menu actions available for one tab. Empty means no menu. */
     tabMenuItems?: (tab: TabItem) => MenuItem[];
-    onTabMenuSelect?: (tab: TabItem, actionId: string) => void;
+    onTabMenuSelect?: (
+        tab: TabItem,
+        actionId: string,
+    ) => ContextMenuSelectionResult | Promise<ContextMenuSelectionResult>;
     /** Where a tab from this pane may be moved to; see `Tabs`. */
     transferTargets?: readonly TabTransferTarget[];
     /** Whether one tab may leave this pane at all. Default: all may. */

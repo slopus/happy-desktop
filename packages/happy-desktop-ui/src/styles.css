@@ -69,6 +69,7 @@
 @import "./styles/command-palette.css";
 @import "./styles/command-palette-results.css";
 @import "./styles/command-picker.css";
+@import "./styles/context-menu.css";
 @import "./styles/quick-actions.css";
 @import "./styles/lightbox.css";
 @import "./styles/form-row.css";

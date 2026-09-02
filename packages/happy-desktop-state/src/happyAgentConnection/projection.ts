@@ -405,6 +405,7 @@ export function projectGroups(
                     : { branch: project.git.branch }),
                 orderKey: project.orderKey,
                 path: computePath(project.compute),
+                ...(project.compute.type === "host" ? { hostPath: project.compute.path } : {}),
                 presence: "present",
                 ...(project.initialization.error === null
                     ? {}
@@ -487,6 +488,7 @@ export function projectBots(
                 username: bot.username,
                 orderKey: bot.orderKey,
                 path: computePath(bot.compute),
+                ...(bot.compute.type === "host" ? { hostPath: bot.compute.path } : {}),
                 ...(bot.avatar === null
                     ? {}
                     : {
@@ -533,6 +535,7 @@ function projectWorkspace(
         name: workspace.name,
         orderKey: workspace.orderKey,
         path: computePath(workspace.compute),
+        ...(workspace.compute.type === "host" ? { hostPath: workspace.compute.path } : {}),
         presence: "present",
         projectId,
         status: workspace.initialization.status,

@@ -1,0 +1,12 @@
+/* A context menu rides the viewport rather than its clipped row or tab strip. */
+.happy-context-menu {
+    position: fixed;
+    z-index: 40;
+}
+
+/* The rows already scroll inside Menu; cap the card so every command remains
+   reachable even when many installed applications are offered. */
+.happy-context-menu > .happy-menu {
+    max-width: calc(100vw - 16px);
+    max-height: calc(100vh - 16px);
+}

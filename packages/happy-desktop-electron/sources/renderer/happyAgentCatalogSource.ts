@@ -136,6 +136,7 @@ function catalogProject(
                 orderKey: workspace.orderKey,
                 path: workspace.path,
                 displayPath: workspace.path,
+                ...(workspace.hostPath === undefined ? {} : { hostPath: workspace.hostPath }),
                 status: workspace.status,
                 presence: workspace.presence,
                 // The host's own sentence about a failed checkout, carried
@@ -171,6 +172,7 @@ function catalogProject(
         orderKey: bot.orderKey,
         path: bot.path,
         displayPath: bot.path,
+        ...(bot.hostPath === undefined ? {} : { hostPath: bot.hostPath }),
         ...(bot.avatar === undefined ? {} : { avatar: bot.avatar }),
     }));
     const catalog: HappyAgentProjectCatalog = { bots, projects, worktrees };
@@ -185,6 +187,7 @@ function projectProject(group: ProjectGroup, baseUrl: string): HappyAgentProject
         orderKey: group.orderKey,
         path: group.path,
         displayPath: group.path,
+        ...(group.hostPath === undefined ? {} : { hostPath: group.hostPath }),
         kind: group.kind,
         status: group.initializationStatus,
         presence: group.presence,

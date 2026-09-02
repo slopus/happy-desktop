@@ -1,4 +1,6 @@
-import { FileTree, type FileTreeNode } from "../../src/FileTree";
+import type { ContextMenuSelectionResult } from "../../src/ContextMenu";
+import { FileTree, type FileTreeContextSelection, type FileTreeNode } from "../../src/FileTree";
+import type { MenuItem } from "../../src/Menu";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
 /** The component plan this page documents. The selector and the page header read the same value. */
@@ -65,6 +67,8 @@ const collapsedNodes: FileTreeNode[] = [
     { id: "package.json", name: "package.json", kind: "file" },
 ];
 
+const sampleSelectedIds = new Set(["src/index.ts", "src/theme.css"]);
+
 /** Enough rows that drawing all of them would be the wrong thing to do. */
 const manyNodes: FileTreeNode[] = Array.from({ length: 2000 }, (_, index) => ({
     id: `src/module-${String(index)}.ts`,
@@ -88,11 +92,35 @@ function frame(children: ReturnType<typeof FileTree>, width = 320) {
     );
 }
 
+function rowMenuItems(selection: FileTreeContextSelection): readonly MenuItem[] {
+    return [
+        { kind: "item", id: "open", label: "Open", icon: "doc" },
+        { kind: "item", id: "reveal", label: "Show in Finder", icon: "eye" },
+        { kind: "separator" },
+        {
+            kind: "item",
+            id: "copy-relative-path",
+            label: selection.entries.length > 1 ? "Copy relative paths" : "Copy relative path",
+            icon: "copy",
+        },
+    ];
+}
+
+function rowMenuSelect(
+    selection: FileTreeContextSelection,
+    actionId: string,
+): Promise<ContextMenuSelectionResult> | undefined {
+    if (actionId !== "copy-relative-path") return undefined;
+    return navigator.clipboard
+        .writeText(selection.entries.map((entry) => entry.id).join("\n"))
+        .then(() => ({ feedback: "Relative path copied" }));
+}
+
 export function FileTreePage() {
     return (
         <ComponentPage
             number={componentNumber}
-            summary="A props-only file/folder explorer: 28px rows, chevron disclosure for directories, 16px-per-level indentation, file-type icons resolved from each name, git-status decorations, selection, and a 'Show more' paging affordance."
+            summary="A props-only file/folder explorer: 28px rows, chevron disclosure for directories, 16px-per-level indentation, file-type icons resolved from each name, git-status decorations, selection, right-click actions, and a 'Show more' paging affordance."
             title="FileTree"
         >
             <Specimen
@@ -108,7 +136,10 @@ export function FileTreePage() {
                             onLoadMore={() => {}}
                             onSelect={() => {}}
                             onToggle={() => {}}
+                            onRowMenuSelect={rowMenuSelect}
+                            rowMenuItems={rowMenuItems}
                             selectedId="src/index.ts"
+                            selectedIds={sampleSelectedIds}
                         />,
                     )}
                     <DimensionRule label="320 px panel · 28 px row · 16 px indent per level" />

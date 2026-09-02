@@ -15,6 +15,8 @@ export type MenuItem =
           iconUrl?: string;
           danger?: boolean;
           disabled?: boolean;
+          /** Why a visible command cannot run, announced and shown as its tooltip. */
+          disabledReason?: string;
           shortcut?: string;
       }
     | {
@@ -92,6 +94,11 @@ export function Menu(props: MenuProps) {
                         }
                         return (
                             <button
+                                aria-label={
+                                    item.disabled && item.disabledReason
+                                        ? `${item.label}. ${item.disabledReason}`
+                                        : undefined
+                                }
                                 aria-disabled={item.disabled ? "true" : undefined}
                                 className="happy-menu__item"
                                 data-danger={item.danger ? "" : undefined}
@@ -103,6 +110,7 @@ export function Menu(props: MenuProps) {
                                     if (!item.disabled) onSelect?.(item.id);
                                 }}
                                 role="menuitem"
+                                title={item.disabled ? item.disabledReason : undefined}
                                 type="button"
                             >
                                 {hasIcons ? (

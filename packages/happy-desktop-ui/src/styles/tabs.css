@@ -15,14 +15,6 @@
     font-family: var(--happy-font-ui);
 }
 
-/* The context menu rides the viewport, not the strip: the bar clips and
-   scrolls horizontally, and a popover inside that scrollport would be cut off
-   at its edge. */
-.happy-tabs__menu {
-    position: fixed;
-    z-index: 40;
-}
-
 .happy-tabs__tab {
     position: relative;
     display: inline-flex;

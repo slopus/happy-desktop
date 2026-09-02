@@ -544,6 +544,8 @@ export interface WorkspaceGroup {
     name: string;
     orderKey: string;
     path: string;
+    /** Canonical path on this Happy Agent's host, absent for Docker compute. */
+    hostPath?: string;
     presence: "present" | "missing";
     projectId: string;
     status: "initializing" | "ready" | "failed";
@@ -561,6 +563,8 @@ export interface ProjectGroup {
     branch?: string;
     orderKey: string;
     path: string;
+    /** Canonical path on this Happy Agent's host, absent for Docker compute. */
+    hostPath?: string;
     presence: "present" | "missing";
     initializationError?: string;
     initializationStatus: "initializing" | "ready" | "failed";
@@ -594,6 +598,8 @@ export interface BotGroup {
     username: string;
     orderKey: string;
     path: string;
+    /** Canonical path on this Happy Agent's host, absent for Docker compute. */
+    hostPath?: string;
     /** Present when the bot has a picture; the bytes are fetched separately. */
     avatar?: { url: string; thumbhash: string };
     /** The bot's one permanent conversation. */

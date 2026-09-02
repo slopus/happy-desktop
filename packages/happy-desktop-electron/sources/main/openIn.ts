@@ -9,7 +9,7 @@ import { promisify } from "node:util";
 const execFileAsync = promisify(execFile);
 
 /**
- * The applications a project directory can be handed to. The renderer only ever
+ * The applications workspace items can be handed to. The renderer only ever
  * names one of these ids: it never sends a bundle id, an executable, a flag, or
  * an argument, so nothing it says can become part of a command line. Everything
  * that does reach the command line is the fixed data below.
@@ -398,27 +398,50 @@ export async function openInTargetsRead(): Promise<readonly OpenInTarget[]> {
 }
 
 /**
- * Opens `directory` in the named application.
+ * Opens the selected local items in the named application.
  *
  * The bundle is addressed by the path detection found and confirmed, not by a
  * display name `open -a` would have to match and not by a LaunchServices id that
  * may resolve to a copy the reader cannot see. The argument array is passed to
  * `execFile` directly: there is no shell, so there is no quoting to get wrong.
  *
- * The caller is responsible for `directory` being a project root it has
- * independently authorized; this function does not take the renderer's word for
- * a path any more than it takes its word for an application.
+ * The caller is responsible for every item path being independently authorized;
+ * this function does not take the renderer's word for a path any more than it
+ * takes its word for an application.
  */
-export async function openInRun(targetId: string, directory: string): Promise<void> {
+export async function openInRun(
+    targetId: string,
+    itemPaths: string | readonly string[],
+): Promise<void> {
     if (process.platform !== "darwin")
-        throw new Error("Opening a project in another application is only supported on macOS.");
+        throw new Error(
+            "Opening workspace items in another application is only supported on macOS.",
+        );
+    const paths = typeof itemPaths === "string" ? [itemPaths] : itemPaths;
+    if (paths.length === 0) throw new Error("Nothing was supplied to open.");
     const target = OPEN_IN_APPS.find((candidate) => candidate.id === targetId);
-    if (!target) throw new Error("That application is not one this app can open projects in.");
+    if (!target)
+        throw new Error("That application is not one this app can open workspace items in.");
     const path = (await detectedRead()).get(target.id)?.path;
     if (path === undefined) throw new Error(`${target.label} does not appear to be installed.`);
     try {
-        await execFileAsync("/usr/bin/open", ["-a", path, directory], { timeout: 10_000 });
+        await execFileAsync("/usr/bin/open", ["-a", path, ...paths], { timeout: 10_000 });
     } catch {
-        throw new Error(`${target.label} could not open this project.`);
+        throw new Error(`${target.label} could not open the selected item.`);
+    }
+}
+
+/**
+ * Reveals each selected local item in Finder. `-R` selects the item rather than
+ * opening it, which gives files and directories the same familiar result.
+ */
+export async function revealInFileManager(paths: readonly string[]): Promise<void> {
+    if (process.platform !== "darwin")
+        throw new Error("Revealing a workspace item is only supported on macOS.");
+    if (paths.length === 0) throw new Error("Nothing was supplied to reveal.");
+    try {
+        await execFileAsync("/usr/bin/open", ["-R", ...paths], { timeout: 10_000 });
+    } catch {
+        throw new Error("Finder could not reveal the selected item.");
     }
 }

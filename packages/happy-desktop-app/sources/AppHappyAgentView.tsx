@@ -30,6 +30,7 @@ import type {
     HappyAgentModelStore,
     HappyAgentModelSelection,
     HappyAgentNavigationOrderStore,
+    HappyAgentOpenInTarget,
     HappyAgentSidebarCollapseStore,
     HappyAgentPanelSnapshot,
     HappyAgentProjectAddSnapshot,
@@ -119,6 +120,7 @@ import {
     FilePreview,
     FormRow,
     type FilePreviewKind,
+    type ContextMenuSelectionResult,
     filePreviewKind,
     Lightbox,
     MarkdownDocument,
@@ -134,6 +136,7 @@ import {
     fileNameCompare,
     type FileTreeExpansion,
     type FileTreeBuildEntry,
+    type FileTreeContextSelection,
     HappyAgentCreateSessionPage,
     HappySocialPage,
     HappyAgentProjectCloneDialog,
@@ -532,6 +535,8 @@ interface OpenGroup {
     readonly lifecycle?: HappyAgentGroupLifecycle;
     /** The checkout's path, so a notice about it can name the directory. */
     readonly path: string;
+    /** Canonical path on this Happy Agent's host, absent for Docker compute. */
+    readonly hostPath?: string;
 }
 
 const PANEL_TOGGLE_HINT = {
@@ -931,8 +936,142 @@ const TAB_MENU_CLOSE_OTHERS = "close-others";
 const TAB_MENU_CLOSE_LEFT = "close-left";
 const TAB_MENU_CLOSE_RIGHT = "close-right";
 const TAB_MENU_CLOSE_ALL = "close-all";
+const FILE_MENU_OPEN = "file-open";
+const FILE_MENU_REVEAL = "file-reveal";
+const FILE_MENU_COPY_PATH = "file-copy-path";
+const FILE_MENU_COPY_RELATIVE_PATH = "file-copy-relative-path";
+const FILE_MENU_OPEN_IN_PREFIX = "file-open-in:";
 const fileDocumentIdentities = new WeakMap<object, number>();
 let fileDocumentIdentityNext = 0;
+
+interface FileContextTarget {
+    readonly kind: "directory" | "file";
+    readonly path: string;
+    /** The change list says this item no longer exists in the working tree. */
+    readonly missing?: boolean;
+}
+
+interface FileContextMenuOptions {
+    readonly canonicalRoot?: string;
+    readonly includeOpen: boolean;
+    readonly nativeActions: boolean;
+    readonly openInTargets: readonly HappyAgentOpenInTarget[];
+    readonly unavailableReason?: string;
+}
+
+function fileContextTargets(selection: FileTreeContextSelection): readonly FileContextTarget[] {
+    return selection.entries.map((entry) => ({
+        kind: entry.kind,
+        path: entry.id,
+        ...(entry.gitStatus === "deleted" ? { missing: true } : {}),
+    }));
+}
+
+function fileContextAction(actionId: string): boolean {
+    return (
+        actionId === FILE_MENU_OPEN ||
+        actionId === FILE_MENU_REVEAL ||
+        actionId === FILE_MENU_COPY_PATH ||
+        actionId === FILE_MENU_COPY_RELATIVE_PATH ||
+        actionId.startsWith(FILE_MENU_OPEN_IN_PREFIX)
+    );
+}
+
+/** Joins a daemon-canonical root while preserving the separator that root uses. */
+function workspaceItemPath(root: string, relativePath: string): string {
+    const windowsRoot = /^[A-Za-z]:[\\/]/u.test(root) || root.startsWith("\\\\");
+    const base = windowsRoot ? root.replace(/[\\/]+$/u, "") : root.replace(/\/+$/u, "");
+    const path = windowsRoot
+        ? relativePath.replace(/^[\\/]+/u, "").replaceAll("/", "\\")
+        : relativePath.replace(/^\/+/u, "");
+    if (path.length === 0) return root;
+    const separator = windowsRoot ? "\\" : "/";
+    return `${base}${separator}${path}`;
+}
+
+function fileContextMenuItems(
+    targets: readonly FileContextTarget[],
+    options: FileContextMenuOptions,
+): MenuItem[] {
+    if (targets.length === 0) return [];
+    const multiple = targets.length > 1;
+    const allFiles = targets.every((target) => target.kind === "file");
+    const missing = targets.some((target) => target.missing === true);
+    const nativeRefusal =
+        options.unavailableReason ??
+        (missing
+            ? multiple
+                ? "A selected item no longer exists in the workspace."
+                : "This item no longer exists in the workspace."
+            : undefined);
+    const open: MenuItem[] =
+        options.includeOpen && allFiles
+            ? [
+                  {
+                      kind: "item",
+                      id: FILE_MENU_OPEN,
+                      label: multiple ? `Open ${String(targets.length)} files` : "Open",
+                      icon: "doc",
+                      disabled: nativeRefusal !== undefined,
+                      ...(nativeRefusal ? { disabledReason: nativeRefusal } : {}),
+                  },
+              ]
+            : [];
+    const native: MenuItem[] = options.nativeActions
+        ? [
+              {
+                  kind: "item",
+                  id: FILE_MENU_REVEAL,
+                  label: multiple
+                      ? `Show ${String(targets.length)} items in Finder`
+                      : "Show in Finder",
+                  icon: "eye",
+                  disabled: nativeRefusal !== undefined,
+                  ...(nativeRefusal ? { disabledReason: nativeRefusal } : {}),
+              },
+              ...options.openInTargets
+                  .filter((target) => target.id !== "finder")
+                  .map(
+                      (target): MenuItem => ({
+                          kind: "item",
+                          id: `${FILE_MENU_OPEN_IN_PREFIX}${target.id}`,
+                          label: multiple
+                              ? `Open ${String(targets.length)} items in ${target.label}`
+                              : `Open in ${target.label}`,
+                          ...(target.iconUrl ? { iconUrl: target.iconUrl } : {}),
+                          disabled: nativeRefusal !== undefined,
+                          ...(nativeRefusal ? { disabledReason: nativeRefusal } : {}),
+                      }),
+                  ),
+          ]
+        : [];
+    const copy: MenuItem[] = [
+        ...(options.canonicalRoot
+            ? [
+                  {
+                      kind: "item" as const,
+                      id: FILE_MENU_COPY_PATH,
+                      label: multiple ? "Copy paths" : "Copy path",
+                      icon: "copy" as const,
+                  },
+              ]
+            : []),
+        {
+            kind: "item",
+            id: FILE_MENU_COPY_RELATIVE_PATH,
+            label: multiple ? "Copy relative paths" : "Copy relative path",
+            icon: "copy",
+        },
+    ];
+    const actions = [...open, ...native];
+    return actions.length === 0 ? copy : [...actions, { kind: "separator" }, ...copy];
+}
+
+function clipboardWrite(text: string, feedback: string): Promise<ContextMenuSelectionResult> {
+    if (!navigator.clipboard)
+        return Promise.reject(new Error("Clipboard access is unavailable in this window."));
+    return navigator.clipboard.writeText(text).then(() => ({ feedback }));
+}
 
 /**
  * The context menu one tab offers: the usual sweeps — this tab, the others,
@@ -1127,6 +1266,7 @@ function openGroupFind(
             // one, and `sessionCreateAvailable` is what withholds that control.
             create: { cwd: bot.path, worktreeId: bot.workspaceId },
             path: bot.displayPath,
+            ...(bot.hostPath === undefined ? {} : { hostPath: bot.hostPath }),
         };
     for (const project of projects) {
         if (project.id === groupId)
@@ -1139,6 +1279,7 @@ function openGroupFind(
                 create: { cwd: project.path },
                 lifecycle: project.lifecycle,
                 path: project.displayPath,
+                ...(project.hostPath === undefined ? {} : { hostPath: project.hostPath }),
             };
         for (const worktree of project.worktrees)
             if (worktree.id === groupId)
@@ -1151,6 +1292,7 @@ function openGroupFind(
                     create: { cwd: worktree.path, worktreeId: worktree.id },
                     lifecycle: worktree.lifecycle,
                     path: worktree.displayPath,
+                    ...(worktree.hostPath === undefined ? {} : { hostPath: worktree.hostPath }),
                 };
     }
     return undefined;
@@ -3005,6 +3147,74 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
     const activeMainTool = mainTools.find((tab) => tab.id === workspace.activeMainViewId);
     const displayedMainTool = mainTools.find((tab) => tab.id === workspace.displayedMainViewId);
     const openInRecent = workspace.openInRecent;
+    const pathUnavailableReason =
+        connectionRefusal ??
+        (openGroupPhase === "creating"
+            ? "This workspace is still being created."
+            : openGroupPhase === "missing"
+              ? "This workspace is missing from its machine."
+              : openGroupPhase === "failed"
+                ? "This workspace could not be created."
+                : undefined);
+    const fileTarget = (path: string): FileContextTarget => ({
+        kind: "file",
+        path,
+        ...(openGroup?.changes.some(
+            (change) => change.path === path && change.status === "deleted",
+        ) === true
+            ? { missing: true }
+            : {}),
+    });
+    const fileMenuItems = (
+        targets: readonly FileContextTarget[],
+        includeOpen: boolean,
+    ): MenuItem[] =>
+        fileContextMenuItems(targets, {
+            ...(openGroup?.hostPath ? { canonicalRoot: openGroup.hostPath } : {}),
+            includeOpen,
+            nativeActions: workspace.nativeWorkspaceActions && openGroup?.hostPath !== undefined,
+            openInTargets: workspace.openInTargets,
+            ...(pathUnavailableReason ? { unavailableReason: pathUnavailableReason } : {}),
+        });
+    const fileMenuSelect = (
+        targets: readonly FileContextTarget[],
+        actionId: string,
+    ): ContextMenuSelectionResult | Promise<ContextMenuSelectionResult> => {
+        const group = openGroup;
+        if (!group || targets.length === 0) return;
+        const paths = targets.map((target) => target.path);
+        if (actionId === FILE_MENU_COPY_RELATIVE_PATH)
+            return clipboardWrite(
+                paths.join("\n"),
+                paths.length === 1 ? "Relative path copied" : "Relative paths copied",
+            );
+        if (actionId === FILE_MENU_COPY_PATH) {
+            const root = group.hostPath;
+            if (!root) return;
+            return clipboardWrite(
+                paths.map((path) => workspaceItemPath(root, path)).join("\n"),
+                paths.length === 1 ? "Path copied" : "Paths copied",
+            );
+        }
+        if (!happyAgentOnline())
+            return Promise.reject(new Error(connectionRefusal ?? "Happy Agent is unavailable."));
+        if (actionId === FILE_MENU_OPEN) {
+            for (const target of targets) {
+                if (target.kind !== "file") continue;
+                const kind = fileTabKind(target.path);
+                props.workspace.fileOpen(group.id, target.path, kind);
+                props.onFileSelect(group.id, props.chatId, target.path, kind);
+            }
+            return;
+        }
+        if (actionId === FILE_MENU_REVEAL)
+            return props.workspace.workspacePathsReveal(group.id, paths);
+        if (actionId.startsWith(FILE_MENU_OPEN_IN_PREFIX)) {
+            const targetId = actionId.slice(FILE_MENU_OPEN_IN_PREFIX.length);
+            const target = workspace.openInTargets.find((candidate) => candidate.id === targetId);
+            if (target) return props.workspace.workspacePathsOpenIn(group.id, paths, target);
+        }
+    };
     const conversation = workspace.conversation;
     // A chat that belongs to another session rather than to this group's strip.
     // The state says so outright — the host gives such a session no place in an
@@ -3362,6 +3572,8 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                         mediaWindow={props.mediaWindow}
                         sessionId={props.chatId}
                         changes={openGroup?.changes ?? []}
+                        fileMenuItems={fileMenuItems}
+                        onFileMenuSelect={fileMenuSelect}
                         expanded={workspace.fileTreeExpanded}
                         collapsed={workspace.fileTreeCollapsed}
                         layout={workspace.fileLayout}
@@ -3825,9 +4037,22 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                                     mainTools.some((entry) => entry.id === tab.id)
                                         ? "Close"
                                         : "Archive";
-                                return tabStripMenu(verb, index, sweepableTabs.length - index - 1);
+                                const strip = tabStripMenu(
+                                    verb,
+                                    index,
+                                    sweepableTabs.length - index - 1,
+                                );
+                                const file = groupFileTabs.find((entry) => entry.id === tab.id);
+                                if (!file) return strip;
+                                const path = fileMenuItems([fileTarget(file.path)], false);
+                                return path.length === 0
+                                    ? strip
+                                    : [...path, { kind: "separator" }, ...strip];
                             }}
                             onTabMenuSelect={(tab, actionId) => {
+                                const file = groupFileTabs.find((entry) => entry.id === tab.id);
+                                if (file && fileContextAction(actionId))
+                                    return fileMenuSelect([fileTarget(file.path)], actionId);
                                 const ids = sweepableTabs.map((entry) => entry.id);
                                 const index = ids.indexOf(tab.id);
                                 if (index < 0) return;
@@ -5369,6 +5594,14 @@ function HappyAgentPanelBody(props: {
     mediaWindow?: MediaWindowOpener;
     canStartTerminal: boolean;
     changes: OpenGroup["changes"];
+    fileMenuItems: (
+        targets: readonly FileContextTarget[],
+        includeOpen: boolean,
+    ) => readonly MenuItem[];
+    onFileMenuSelect: (
+        targets: readonly FileContextTarget[],
+        actionId: string,
+    ) => ContextMenuSelectionResult | Promise<ContextMenuSelectionResult>;
     closeShortcut?: KeyboardShortcut;
     expanded: ReadonlySet<string>;
     collapsed: ReadonlySet<string>;
@@ -5455,6 +5688,17 @@ function HappyAgentPanelBody(props: {
     const panelTools = toolTabsPlaced(props.panel, "panel");
     const activeToolTab = panelTools.find((tab) => tab.id === props.panel.activeViewId);
     const panelFile = props.panelFile;
+    const panelFileTarget: FileContextTarget | undefined = panelFile
+        ? {
+              kind: "file",
+              path: panelFile.path,
+              ...(props.changes.some(
+                  (change) => change.path === panelFile.path && change.status === "deleted",
+              )
+                  ? { missing: true }
+                  : {}),
+          }
+        : undefined;
     const activityTabShown =
         props.panel.activityViewOpen ||
         (props.activity?.activityAvailable === true && !props.panel.activityViewDismissed);
@@ -5576,6 +5820,20 @@ function HappyAgentPanelBody(props: {
                             props.store.fileViewOpen();
                         else props.store.tabSelect(tabId as HappyAgentPanelTabId);
                     }}
+                    tabMenuItems={(tab) => {
+                        if (tab.id !== HAPPY_AGENT_PANEL_FILE_VIEW_ID || !panelFileTarget)
+                            return [];
+                        return [
+                            ...props.fileMenuItems([panelFileTarget], false),
+                            { kind: "separator" },
+                            { kind: "item", id: TAB_MENU_CLOSE, label: "Close tab" },
+                        ];
+                    }}
+                    onTabMenuSelect={(tab, actionId) => {
+                        if (panelFileTarget && fileContextAction(actionId))
+                            return props.onFileMenuSelect([panelFileTarget], actionId);
+                        if (actionId === TAB_MENU_CLOSE) props.onViewClose(tab.id);
+                    }}
                     onTransfer={(tabId) => props.onViewTransfer(tabId)}
                     tabs={tabs}
                     // The listing opens content rather than being content, and a
@@ -5617,6 +5875,12 @@ function HappyAgentPanelBody(props: {
                             layout={props.layout}
                             loading={loading}
                             nodes={nodes}
+                            rowMenuItems={(selection) =>
+                                props.fileMenuItems(fileContextTargets(selection), true)
+                            }
+                            onRowMenuSelect={(selection, actionId) =>
+                                props.onFileMenuSelect(fileContextTargets(selection), actionId)
+                            }
                             {...(props.happyAgentAvailability !== undefined && all
                                 ? {
                                       fileActionsUnavailable:

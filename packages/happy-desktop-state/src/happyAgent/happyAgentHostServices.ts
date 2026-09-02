@@ -17,14 +17,25 @@ import type {
  * attaching the terminal's binary WebSocket protocol.
  */
 export interface HappyAgentHostServices {
+    /**
+     * Whether native path actions address the same machine as this connection.
+     * A node connection must answer false even when that node reports host paths.
+     */
+    readonly nativeWorkspaceActions: boolean;
     openInTargetsRead(): Promise<HappyAgentOpenInTargets>;
     /**
-     * Hands the group's directory to that application, and records it as the one
-     * this machine opened a project in most recently. The whole target is passed
-     * because the host is what remembers the choice across a reload, and the
-     * control that wears it needs the label and the icon, not only the id.
+     * Hands the group's directory, or selected workspace-relative items, to
+     * that application and records it as the one most recently chosen. The full
+     * target travels through this boundary because the host remembers the
+     * choice across a reload, and its control needs the label and icon too.
      */
-    openIn(groupId: HappyAgentGroupId, target: HappyAgentOpenInTarget): Promise<void>;
+    openIn(
+        groupId: HappyAgentGroupId,
+        target: HappyAgentOpenInTarget,
+        paths?: readonly string[],
+    ): Promise<void>;
+    /** Reveals workspace-relative items in this machine's file manager. */
+    workspacePathsReveal(groupId: HappyAgentGroupId, paths: readonly string[]): Promise<void>;
     workspaceFileBytesRead(
         groupId: HappyAgentGroupId,
         path: string,

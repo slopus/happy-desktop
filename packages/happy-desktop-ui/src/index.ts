@@ -36,6 +36,14 @@ export {
 export { TurnSummary, type TurnSummaryProps } from "./TurnSummary";
 export { Tooltip, type TooltipPlacement, type TooltipProps } from "./Tooltip";
 export { CopyButton, type CopyButtonProps } from "./CopyButton";
+export {
+    ContextMenu,
+    type ContextMenuDismissReason,
+    type ContextMenuPlacement,
+    type ContextMenuProps,
+    type ContextMenuSelectionFeedback,
+    type ContextMenuSelectionResult,
+} from "./ContextMenu";
 export { ScrollingText, type ScrollingTextProps } from "./ScrollingText";
 export { TypedText, type TypedTextProps } from "./TypedText";
 export {
@@ -141,6 +149,7 @@ export {
     FileTreeFamilyIcon,
     fileTreeFamily,
     type FileTreeFamily,
+    type FileTreeContextSelection,
     type FileTreeGitStatus,
     type FileTreeNode,
     type FileTreeProps,

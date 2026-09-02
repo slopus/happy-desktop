@@ -120,6 +120,8 @@ export interface HappyAgentWorkspaceFilesChanged {
 }
 
 export interface HappyAgentWorkspaceClient {
+    /** Whether native path actions address the same machine as this connection. */
+    readonly nativeWorkspaceActions: boolean;
     /** One model/capability/default/last-used authority for this daemon connection. */
     readonly models: HappyAgentModelStore;
     /**
@@ -259,11 +261,14 @@ export interface HappyAgentWorkspaceClient {
     projectAdd(path: string): Promise<HappyAgentProjectId>;
     /** Applications this host can open a project or worktree directory in. */
     openInTargetsRead(): Promise<HappyAgentOpenInTargets>;
-    /**
-     * Opens one project or worktree root in one of those applications, and makes
-     * it the one this machine opened most recently.
-     */
-    openIn(groupId: HappyAgentGroupId, target: HappyAgentOpenInTarget): Promise<void>;
+    /** Opens a group root or selected relative items in an installed application. */
+    openIn(
+        groupId: HappyAgentGroupId,
+        target: HappyAgentOpenInTarget,
+        paths?: readonly string[],
+    ): Promise<void>;
+    /** Reveals workspace-relative items in this machine's file manager. */
+    workspacePathsReveal(groupId: HappyAgentGroupId, paths: readonly string[]): Promise<void>;
     /** Reads one changed text file from a project/worktree checkout. */
     changedFileRead(
         groupId: HappyAgentGroupId,
@@ -478,6 +483,7 @@ export function happyAgentWorkspaceClientCreate(
     };
 
     return {
+        nativeWorkspaceActions: deps.hostServices.nativeWorkspaceActions,
         models,
         memory,
         catalogRead: () => models.load().then((snapshot) => snapshot.catalog),
@@ -539,7 +545,9 @@ export function happyAgentWorkspaceClientCreate(
             }
         },
         openInTargetsRead: () => deps.hostServices.openInTargetsRead(),
-        openIn: (groupId, target) => deps.hostServices.openIn(groupId, target),
+        openIn: (groupId, target, paths) => deps.hostServices.openIn(groupId, target, paths),
+        workspacePathsReveal: (groupId, paths) =>
+            deps.hostServices.workspacePathsReveal(groupId, paths),
         sessionList() {
             if (disposed) throw new Error("The Happy Agent client is disposed.");
             if (!sessionListStore) {

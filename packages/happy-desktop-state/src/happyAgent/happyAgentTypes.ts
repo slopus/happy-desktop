@@ -69,6 +69,8 @@ export interface HappyAgentBot {
     readonly orderKey: string;
     readonly path: string;
     readonly displayPath: string;
+    /** Canonical path on this Happy Agent's host, absent for Docker compute. */
+    readonly hostPath?: string;
     /**
      * The bot's picture. Unlike a project avatar it has no intrinsic size: the
      * daemon serves the bytes and a thumbhash to stand in until they arrive,
@@ -391,6 +393,8 @@ export interface HappyAgentProject {
     readonly path: string;
     /** Presentation path (home-relative when the daemon's host supplied one). */
     readonly displayPath: string;
+    /** Canonical path on this Happy Agent's host, absent for Docker compute. */
+    readonly hostPath?: string;
     /** `home` is the catch-all project for sessions started outside any repository. */
     readonly kind: "regular" | "home";
     /** Whether the daemon has finished deriving the project's name and picture. */
@@ -459,6 +463,8 @@ export interface HappyAgentWorktree {
     readonly orderKey: string;
     readonly path: string;
     readonly displayPath: string;
+    /** Canonical path on this Happy Agent's host, absent for Docker compute. */
+    readonly hostPath?: string;
     readonly status: "initializing" | "ready" | "failed" | "archiving" | "archived";
     /**
      * Whether the checkout this worktree names is still on disk. The host

@@ -269,6 +269,8 @@ export function happyAgentConnectionOpen(input: {
      * the catalog, and the desktop-local host routes alike.
      */
     readonly happyAgentHttpUrl: string;
+    /** Whether this connection's host paths belong to the desktop running this renderer. */
+    readonly nativeWorkspaceActions: boolean;
     /**
      * The window's appearance right now, read again for every terminal this
      * connection opens. A terminal is started in it and keeps it afterwards.
@@ -313,7 +315,10 @@ export function happyAgentConnectionOpen(input: {
         onTopLevelSessionFinished: () => completionChimePlay(),
     });
     const catalogSource = happyAgentCatalogSourceCreate(agentConnection, input.happyAgentHttpUrl);
-    const hostServices = happyAgentHostServicesCreate(input.happyAgentHttpUrl);
+    const hostServices = happyAgentHostServicesCreate(
+        input.happyAgentHttpUrl,
+        input.nativeWorkspaceActions,
+    );
     const client: HappyAgentWorkspaceClient = happyAgentWorkspaceClientCreate({
         client: directClient,
         cloudHost: input.cloudHost,

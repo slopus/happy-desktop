@@ -10,10 +10,11 @@ import {
 } from "react";
 import { AvatarBrutalist } from "./AvatarBrutalist";
 import { CountBadge } from "./Badge";
+import { ContextMenu, type ContextMenuSelectionResult } from "./ContextMenu";
 import { haptic } from "./haptics";
 import { Icon, type IconName } from "./Icon";
 import type { KeyboardShortcut } from "./keyboardShortcut";
-import { Menu, type MenuItem } from "./Menu";
+import { type MenuItem } from "./Menu";
 import { ShimmerText } from "./ShimmerText";
 import { Spinner } from "./Spinner";
 import {
@@ -177,7 +178,10 @@ export type TabsProps = {
     onReorder?: (ids: readonly string[]) => void;
     /** Returns the context-menu actions available for one tab. Empty means no menu. */
     tabMenuItems?: (tab: TabItem) => MenuItem[];
-    onTabMenuSelect?: (tab: TabItem, actionId: string) => void;
+    onTabMenuSelect?: (
+        tab: TabItem,
+        actionId: string,
+    ) => ContextMenuSelectionResult | Promise<ContextMenuSelectionResult>;
     /**
      * The other places in the window a tab from this strip may be moved to.
      * Supplying them is what makes a tab leave the strip at all: it can be
@@ -311,41 +315,13 @@ export function Tabs(props: TabsProps) {
     // The context menu is local UI state: it exists between the right click
     // that opened it and the dismissal or selection that closes it, and never
     // becomes product state.
-    const menuRoot = useRef<HTMLDivElement>(null);
     const [tabMenu, setTabMenu] = useState<{
         tab: TabItem;
         items: MenuItem[];
+        opener: HTMLButtonElement;
         x: number;
         y: number;
     }>();
-    // eslint-disable-next-line happy-react/no-layout-effect -- the context menu must measure its rendered height before clamping the fixed popover to the viewport, and global dismissal listeners require imperative cleanup
-    useLayoutEffect(() => {
-        if (!tabMenu) return;
-        const bounds = menuRoot.current?.getBoundingClientRect();
-        if (bounds) {
-            const x = Math.max(8, Math.min(tabMenu.x, window.innerWidth - bounds.width - 8));
-            const y = Math.max(8, Math.min(tabMenu.y, window.innerHeight - bounds.height - 8));
-            if (x !== tabMenu.x || y !== tabMenu.y) {
-                setTabMenu({ ...tabMenu, x, y });
-                return;
-            }
-        }
-        const close = (event: Event) => {
-            if (!menuRoot.current?.contains(event.target as Node)) setTabMenu(undefined);
-        };
-        const closeOnEscape = (event: KeyboardEvent) => {
-            if (event.key === "Escape") setTabMenu(undefined);
-        };
-        const dismiss = () => setTabMenu(undefined);
-        document.addEventListener("pointerdown", close);
-        document.addEventListener("keydown", closeOnEscape);
-        window.addEventListener("resize", dismiss);
-        return () => {
-            document.removeEventListener("pointerdown", close);
-            document.removeEventListener("keydown", closeOnEscape);
-            window.removeEventListener("resize", dismiss);
-        };
-    }, [tabMenu]);
     const openTabMenu = (tab: TabItem, event: MouseEvent<HTMLButtonElement>) => {
         const owned = local.tabMenuItems?.(tab) ?? [];
         // Moving the tab is this component's own act, so it offers it itself
@@ -370,11 +346,15 @@ export function Tabs(props: TabsProps) {
             return;
         }
         event.preventDefault();
+        const bounds = event.currentTarget.getBoundingClientRect();
+        const pointer = event.clientX !== 0 || event.clientY !== 0;
+        event.currentTarget.focus({ preventScroll: true });
         setTabMenu({
             items,
+            opener: event.currentTarget,
             tab,
-            x: event.clientX,
-            y: event.clientY,
+            x: pointer ? event.clientX : bounds.left + 24,
+            y: pointer ? event.clientY : bounds.bottom,
         });
     };
     // The drag is local UI state: it exists only between pointer-down and
@@ -780,30 +760,28 @@ export function Tabs(props: TabsProps) {
                 </span>
             ))}
             {tabMenu ? (
-                <div
-                    className="happy-tabs__menu"
-                    data-happy-desktop-ui="tabs-menu"
-                    ref={menuRoot}
-                    style={{ left: tabMenu.x, top: tabMenu.y }}
-                >
-                    <Menu
-                        items={tabMenu.items}
-                        onSelect={(actionId) => {
-                            const tab = tabMenu.tab;
-                            setTabMenu(undefined);
-                            if (actionId.startsWith(TRANSFER_MENU_PREFIX)) {
-                                const zone = actionId.slice(TRANSFER_MENU_PREFIX.length);
-                                const target = targets().find(
-                                    (candidate) => candidate.zone === zone,
-                                );
-                                if (target) transferRun(tab, target, true);
-                                return;
-                            }
-                            local.onTabMenuSelect?.(tab, actionId);
-                        }}
-                        width={216}
-                    />
-                </div>
+                <ContextMenu
+                    items={tabMenu.items}
+                    key={`${tabMenu.tab.id}:${String(tabMenu.x)}:${String(tabMenu.y)}`}
+                    onDismiss={(reason) => {
+                        const opener = tabMenu.opener;
+                        setTabMenu(undefined);
+                        if (reason === "escape" && opener.isConnected)
+                            opener.focus({ preventScroll: true });
+                    }}
+                    onSelect={(actionId) => {
+                        const tab = tabMenu.tab;
+                        if (actionId.startsWith(TRANSFER_MENU_PREFIX)) {
+                            const zone = actionId.slice(TRANSFER_MENU_PREFIX.length);
+                            const target = targets().find((candidate) => candidate.zone === zone);
+                            if (target) transferRun(tab, target, true);
+                            return;
+                        }
+                        return local.onTabMenuSelect?.(tab, actionId);
+                    }}
+                    placement={{ x: tabMenu.x, y: tabMenu.y }}
+                    width={216}
+                />
             ) : null}
         </div>
     );

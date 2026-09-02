@@ -124,6 +124,7 @@ export function browserLocalHappyAgentPlugin(options: BrowserLocalHappyAgentOpti
                         const handled = await happyAgentProxyHandle({
                             client: active.connection.client,
                             method: request.method ?? "GET",
+                            nativeWorkspaceOwner: true,
                             path: bridgePath,
                             query: url.searchParams,
                             request,

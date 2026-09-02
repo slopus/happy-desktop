@@ -1,5 +1,6 @@
 import { stat } from "node:fs/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { isAbsolute, relative, resolve, sep } from "node:path";
 import { pipeline } from "node:stream/promises";
 import { HappyAgentApiError } from "@slopus/happy-agent-client";
 import {
@@ -7,7 +8,7 @@ import {
     HappyAgentDaemonHttpError,
     type HappyAgentDaemonClient,
 } from "./happyAgentDaemonClient";
-import { openInRun, openInTargetsRead } from "./openIn";
+import { openInRun, openInTargetsRead, revealInFileManager } from "./openIn";
 import { happyAgentDaemonHealthProject } from "./happyAgentHttpProxy";
 
 /** The minimal Happy Agent surface used by the loopback bridge. */
@@ -23,6 +24,12 @@ export interface HappyAgentProxyHandleOptions {
     readonly query: URLSearchParams;
     readonly request: IncomingMessage;
     readonly response: ServerResponse;
+    /**
+     * Whether this proxy's daemon owns workspaces on this exact desktop.
+     * Native actions are refused unless the caller states that ownership; a
+     * future peer proxy therefore cannot accidentally reveal its paths here.
+     */
+    readonly nativeWorkspaceOwner: boolean;
     readonly onConnectionError?: (error: unknown) => void;
     /** Publishes one workspace file as an isolated local preview site. */
     readonly htmlPreviewUrl?: (workspaceId: string, filePath: string) => string;
@@ -81,10 +88,31 @@ export async function happyAgentProxyHandle(
             const body = await bodyReadJson(request);
             const workspaceId = requiredString(body.workspaceId, "workspaceId");
             const target = requiredString(body.target, "target");
-            const { workspace } = await client.getWorkspace(workspaceId);
-            if (workspace.compute.type !== "host")
-                throw new Error("A container workspace cannot be opened as a local folder.");
-            await openInRun(target, workspace.compute.path);
+            const paths = optionalStringArray(body.paths, "paths");
+            await openInRun(
+                target,
+                await nativeWorkspacePaths(
+                    client,
+                    workspaceId,
+                    paths,
+                    options.nativeWorkspaceOwner,
+                ),
+            );
+            writeJson(response, 200, {});
+            return true;
+        }
+        if (method === "POST" && path === "/workspace-paths-reveal") {
+            const body = await bodyReadJson(request);
+            const workspaceId = requiredString(body.workspaceId, "workspaceId");
+            const paths = requiredStringArray(body.paths, "paths");
+            await revealInFileManager(
+                await nativeWorkspacePaths(
+                    client,
+                    workspaceId,
+                    paths,
+                    options.nativeWorkspaceOwner,
+                ),
+            );
             writeJson(response, 200, {});
             return true;
         }
@@ -189,6 +217,38 @@ function attachmentNameSafe(name: string): string {
         .filter((character) => (character.codePointAt(0) ?? 0) >= 0x20)
         .join("");
     return printable.replace(/^\.+/u, "").trim().slice(0, 120) || "attachment";
+}
+
+/** Maximum items one context-menu action may hand to the operating system. */
+const NATIVE_PATH_LIMIT = 64;
+
+export function workspaceNativePathResolve(root: string, path: string): string {
+    if (isAbsolute(path)) throw new Error("Workspace item paths must be relative.");
+    const target = resolve(root, path);
+    const within = relative(root, target);
+    if (within === ".." || within.startsWith(`..${sep}`) || isAbsolute(within))
+        throw new Error("A workspace item path cannot leave its workspace.");
+    return target;
+}
+
+/**
+ * Resolves renderer-supplied relative paths only after the daemon has named the
+ * checkout root, and only when that checkout belongs to this desktop.
+ */
+async function nativeWorkspacePaths(
+    client: HappyAgentProxyClient,
+    workspaceId: string,
+    paths: readonly string[] | undefined,
+    nativeWorkspaceOwner: boolean,
+): Promise<readonly string[]> {
+    if (!nativeWorkspaceOwner) throw new Error("This workspace belongs to another machine.");
+    const { workspace } = await client.getWorkspace(workspaceId);
+    if (workspace.compute.type !== "host")
+        throw new Error("A Docker workspace has no path the local desktop can open.");
+    const root = workspace.compute.path;
+    return paths === undefined
+        ? [root]
+        : paths.map((path) => workspaceNativePathResolve(root, path));
 }
 
 function attachmentNameNumbered(name: string, attempt: number): string {
@@ -513,6 +573,16 @@ function requiredString(value: unknown, name: string): string {
 function stringValue(value: unknown, name: string): string {
     if (typeof value !== "string") throw new Error(`${name} is required.`);
     return value;
+}
+
+function optionalStringArray(value: unknown, name: string): readonly string[] | undefined {
+    return value === undefined ? undefined : requiredStringArray(value, name);
+}
+
+function requiredStringArray(value: unknown, name: string): readonly string[] {
+    if (!Array.isArray(value) || value.length === 0 || value.length > NATIVE_PATH_LIMIT)
+        throw new Error(`${name} must contain between 1 and ${String(NATIVE_PATH_LIMIT)} paths.`);
+    return value.map((entry, index) => stringValue(entry, `${name}[${String(index)}]`));
 }
 
 function writeJson(response: ServerResponse, status: number, body: unknown): void {

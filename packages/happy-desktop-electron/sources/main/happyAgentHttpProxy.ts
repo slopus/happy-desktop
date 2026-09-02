@@ -164,6 +164,7 @@ export function happyAgentHttpProxyCreate(
         void happyAgentProxyHandle({
             client,
             method: request.method ?? "GET",
+            nativeWorkspaceOwner: true,
             path: requestPath,
             query: url.searchParams,
             request,

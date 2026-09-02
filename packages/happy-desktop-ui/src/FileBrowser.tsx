@@ -21,12 +21,15 @@ export type FileBrowserProps = {
     /** Rows to list. Passed straight through to FileTree. */
     nodes: readonly FileTreeNode[];
     selectedId?: FileTreeProps["selectedId"];
+    selectedIds?: FileTreeProps["selectedIds"];
     onSelect?: FileTreeProps["onSelect"];
     onOpen?: FileTreeProps["onOpen"];
     onToggle?: FileTreeProps["onToggle"];
     onDirectoryPrefetch?: FileTreeProps["onDirectoryPrefetch"];
     onFilePrefetch?: FileTreeProps["onFilePrefetch"];
     onLoadMore?: FileTreeProps["onLoadMore"];
+    rowMenuItems?: FileTreeProps["rowMenuItems"];
+    onRowMenuSelect?: FileTreeProps["onRowMenuSelect"];
     loading?: boolean;
     loadingLabel?: string;
     emptyLabel?: string;
@@ -72,12 +75,15 @@ export function FileBrowser(props: FileBrowserProps) {
         "onLayoutChange",
         "nodes",
         "selectedId",
+        "selectedIds",
         "onSelect",
         "onOpen",
         "onToggle",
         "onDirectoryPrefetch",
         "onFilePrefetch",
         "onLoadMore",
+        "rowMenuItems",
+        "onRowMenuSelect",
         "loading",
         "loadingLabel",
         "emptyLabel",
@@ -197,9 +203,12 @@ export function FileBrowser(props: FileBrowserProps) {
                     onFilePrefetch={local.onFilePrefetch}
                     onLoadMore={local.onLoadMore}
                     onOpen={local.onOpen}
+                    onRowMenuSelect={local.onRowMenuSelect}
                     onSelect={local.onSelect}
                     onToggle={local.onToggle}
+                    rowMenuItems={local.rowMenuItems}
                     selectedId={local.selectedId}
+                    selectedIds={local.selectedIds}
                     virtualize
                 />
             </div>

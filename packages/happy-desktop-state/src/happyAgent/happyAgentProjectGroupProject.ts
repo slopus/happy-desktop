@@ -62,6 +62,8 @@ export interface HappyAgentWorktreeGroup {
     readonly orderKey: string;
     readonly path: string;
     readonly displayPath: string;
+    /** Canonical path on this Happy Agent's host, absent for Docker compute. */
+    readonly hostPath?: string;
     /**
      * Whether this worktree's checkout is being prepared, usable, gone, or was
      * never made at all. Every row carries one: a worktree that exists is always
@@ -101,6 +103,8 @@ export interface HappyAgentProjectGroup {
     readonly orderKey: string;
     readonly path: string;
     readonly displayPath: string;
+    /** Canonical path on this Happy Agent's host, absent for Docker compute. */
+    readonly hostPath?: string;
     /** `home` is the catch-all project for sessions started outside any repository. */
     readonly kind: "regular" | "home";
     /** Whether this project's checkout is being prepared, usable, gone, or failed. */
@@ -183,6 +187,7 @@ export function happyAgentProjectGroupsProject(
             orderKey: worktree.orderKey,
             path: worktree.path,
             displayPath: worktree.displayPath,
+            ...(worktree.hostPath === undefined ? {} : { hostPath: worktree.hostPath }),
             lifecycle: happyAgentWorktreeLifecycleOf(worktree),
             ...(worktreeRefusal === undefined ? {} : { writeRefusal: worktreeRefusal }),
             conversations,
@@ -279,6 +284,7 @@ function projectGroup(
         orderKey: project.orderKey,
         path: project.path,
         displayPath: project.displayPath,
+        ...(project.hostPath === undefined ? {} : { hostPath: project.hostPath }),
         kind: project.kind,
         lifecycle: happyAgentProjectLifecycleOf(project),
         conversations,

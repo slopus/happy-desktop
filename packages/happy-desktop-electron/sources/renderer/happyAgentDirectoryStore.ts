@@ -208,6 +208,7 @@ export function happyAgentDirectoryStoreCreate(
             host,
             happyAgentId: LOCAL_HAPPY_AGENT_ID,
             happyAgentHttpUrl,
+            nativeWorkspaceActions: true,
             modelPreferencePersistence: deps.modelPreferencePersistence,
             terminalColorScheme: deps.terminalColorScheme,
             deps: {

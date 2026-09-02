@@ -571,6 +571,11 @@ export interface HappyAgentWorkspaceSnapshot {
      */
     readonly groupSessionDraft?: HappyAgentSessionDraftSnapshot;
     /**
+     * Whether native path actions address the same machine as this connection.
+     * A host path alone is not enough: a remote Happy Agent also reports host paths.
+     */
+    readonly nativeWorkspaceActions: boolean;
+    /**
      * Applications the host can open the addressed group's directory in, read
      * once per workspace and empty until then. Empty is also the honest answer
      * on a host that offers none, and the surface shows no menu rather than an
@@ -1223,6 +1228,14 @@ export interface HappyAgentWorkspaceStore {
      * has answered.
      */
     openIn(groupId: HappyAgentGroupId, target: HappyAgentOpenInTarget): Promise<void>;
+    /** Opens workspace-relative items in one installed application. */
+    workspacePathsOpenIn(
+        groupId: HappyAgentGroupId,
+        paths: readonly string[],
+        target: HappyAgentOpenInTarget,
+    ): Promise<void>;
+    /** Reveals workspace-relative items in this machine's file manager. */
+    workspacePathsReveal(groupId: HappyAgentGroupId, paths: readonly string[]): Promise<void>;
     /**
      * Materializes the Create surface, on the group last created in — or the one
      * given, when it is asked for from somewhere that already knows where. A task
@@ -1790,6 +1803,7 @@ export function happyAgentWorkspaceStoreCreate(
         recentTabs: client.memory.recentTabsRead(),
         tabOrder,
         groupResume,
+        nativeWorkspaceActions: client.nativeWorkspaceActions,
         openInTargets,
         fileViewMode,
         fileViewWrap,
@@ -2176,6 +2190,7 @@ export function happyAgentWorkspaceStoreCreate(
                 snapshot.displayedMainViewId === displayedMainViewId &&
                 snapshot.panelFile === panelFile &&
                 snapshot.groupResume === groupResume &&
+                snapshot.nativeWorkspaceActions === client.nativeWorkspaceActions &&
                 snapshot.openInTargets === openInTargets &&
                 snapshot.openInRecent === openInRecent &&
                 snapshot.rename === rename &&
@@ -2205,6 +2220,7 @@ export function happyAgentWorkspaceStoreCreate(
                           recentTabs,
                           tabOrder,
                           groupResume,
+                          nativeWorkspaceActions: client.nativeWorkspaceActions,
                           openInTargets,
                           fileViewMode,
                           fileViewWrap,
@@ -4169,6 +4185,7 @@ export function happyAgentWorkspaceStoreCreate(
                     recentTabs: client.memory.recentTabsRead(),
                     tabOrder,
                     groupResume,
+                    nativeWorkspaceActions: client.nativeWorkspaceActions,
                     openInTargets,
                     fileViewMode,
                     fileViewWrap,
@@ -5083,6 +5100,14 @@ export function happyAgentWorkspaceStoreCreate(
             }
             return client.openIn(groupId, target);
         },
+        workspacePathsOpenIn: (groupId, paths, target) => {
+            if (openInRecent?.id !== target.id) {
+                openInRecent = target;
+                recompute();
+            }
+            return client.openIn(groupId, target, paths);
+        },
+        workspacePathsReveal: (groupId, paths) => client.workspacePathsReveal(groupId, paths),
         createOpen(groupId) {
             // Asking for the surface while it is already materialized — coming
             // back to it, or the row action behind it — must not throw away what
