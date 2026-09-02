@@ -32,6 +32,7 @@ export * from "./happyAgent/happyAgentIntegrationStore.js";
 export * from "./happyAgent/happyAgentCloudStore.js";
 export * from "./happyAgent/happyAgentCloudDevicesStore.js";
 export * from "./happyAgent/happyAgentSocialStore.js";
+export * from "./happyAgent/happyAgentTeamsStore.js";
 export * from "./happyAgent/happyAgentSocialJoinStore.js";
 export * from "./happyAgent/happyAgentInboxStore.js";
 export * from "./happyAgent/happyAgentInstructionsStore.js";

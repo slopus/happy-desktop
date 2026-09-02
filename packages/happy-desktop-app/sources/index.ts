@@ -10,6 +10,13 @@ export {
     type AppHappyAgentViewProps,
 } from "./AppHappyAgentView";
 export {
+    HappyAgentVersionContext,
+    HappyAgentVersionProvider,
+    useHappyAgentVersion,
+    useHappyAgentVersionAtLeast,
+    type HappyAgentVersionProviderProps,
+} from "./HappyAgentVersionProvider";
+export {
     type AppHappyAgentDaemonInstall,
     type AppHappyAgentDaemonRestartReason,
     type AppHappyAgentDaemonSnapshot,

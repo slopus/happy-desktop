@@ -70,8 +70,15 @@ export function happyAgentProfileSourceCreate(client: HappyAgentClient): HappyAg
                     reconcile = true;
                     break;
                 }
-                if (update.kind === "event" && update.event.type === "profile.updated")
-                    profileAdopt(update.event.payload.profile);
+                if (update.kind === "event" && update.event.type === "profile.updated") {
+                    const profile = update.event.payload.profile;
+                    if (profile) profileAdopt(profile);
+                    else {
+                        const response = await client.getProfile({ signal: controller.signal });
+                        if (controller.signal.aborted) return;
+                        profileAdopt(response.profile);
+                    }
+                }
             }
             if (controller.signal.aborted) return;
             if (!reconcile) throw new Error("Happy Agent profile updates stopped.");

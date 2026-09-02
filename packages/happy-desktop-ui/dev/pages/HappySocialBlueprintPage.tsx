@@ -24,13 +24,17 @@ const actions = {
     onFriendRequestReject: () => undefined,
     onFriendRequestSend: () => undefined,
     onFriendUsernameChange: () => undefined,
+    onTeamCreate: () => undefined,
+    onTeamCreateClose: () => undefined,
+    onTeamCreateOpen: () => undefined,
+    onTeamNameChange: () => undefined,
 };
 
 export function HappySocialBlueprintPage() {
     return (
         <ComponentPage
             number={componentNumber}
-            summary="Happy Social friends, incoming and outgoing requests, and the username request form."
+            summary="Happy Social teams, friends, requests, and their create and username forms."
             title="HappySocialPage"
         >
             <FullScreenSpecimen
@@ -47,6 +51,14 @@ export function HappySocialBlueprintPage() {
                         { firstName: "Katherine", lastName: "Johnson", username: "katherine" },
                     ]}
                     status="ready"
+                    teamCreateOpen={false}
+                    teamName=""
+                    teams={[
+                        { id: "org_analytical", name: "Analytical Engines" },
+                        { id: "org_compilers", name: "Compiler Guild" },
+                    ]}
+                    teamsAvailable
+                    teamsStatus="ready"
                 />
             </FullScreenSpecimen>
             <FullScreenSpecimen
@@ -61,7 +73,39 @@ export function HappySocialBlueprintPage() {
                     incomingRequests={[]}
                     outgoingRequests={[]}
                     status="ready"
+                    teamCreateOpen={false}
+                    teamName=""
+                    teams={[]}
+                    teamsAvailable
+                    teamsStatus="ready"
                 />
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="720 × 480 minimum window · create team dialog"
+                label="New team"
+                number={componentNumber}
+            >
+                <div
+                    style={{
+                        display: "flex",
+                        position: "relative",
+                        transform: "translateZ(0)",
+                    }}
+                >
+                    <HappySocialPage
+                        {...actions}
+                        friendUsername=""
+                        friends={[ada]}
+                        incomingRequests={[]}
+                        outgoingRequests={[]}
+                        status="ready"
+                        teamCreateOpen
+                        teamName="Research"
+                        teams={[{ id: "org_analytical", name: "Analytical Engines" }]}
+                        teamsAvailable
+                        teamsStatus="ready"
+                    />
+                </div>
             </FullScreenSpecimen>
         </ComponentPage>
     );

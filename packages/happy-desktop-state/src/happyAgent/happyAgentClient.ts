@@ -104,6 +104,7 @@ import {
     happyAgentSocialJoinStoreCreate,
     type HappyAgentSocialJoinStore,
 } from "./happyAgentSocialJoinStore.js";
+import { happyAgentTeamsStoreCreate, type HappyAgentTeamsStore } from "./happyAgentTeamsStore.js";
 
 /** A disposable view lease on one retained session chat store. */
 export interface HappyAgentChatHandle {
@@ -156,6 +157,8 @@ export interface HappyAgentWorkspaceClient {
     cloudDevices(): HappyAgentCloudDevicesStore;
     /** Friends and requests for the enrolled Happy Social account. */
     social(): HappyAgentSocialStore;
+    /** WorkOS organizations shown as teams, on agents that support the organization API. */
+    teams(): HappyAgentTeamsStore;
     /** The ordered errand that carries this account from signed out to live. */
     socialJoin(): HappyAgentSocialJoinStore;
     /** The one host-owned identity work is authored as. */
@@ -432,6 +435,7 @@ export function happyAgentWorkspaceClientCreate(
     let cloudStore: HappyAgentCloudStore | undefined;
     let cloudDevicesStore: HappyAgentCloudDevicesStore | undefined;
     let socialStore: HappyAgentSocialStore | undefined;
+    let teamsStore: HappyAgentTeamsStore | undefined;
     let socialJoinStore: HappyAgentSocialJoinStore | undefined;
     let profileStore: HappyAgentProfileStore | undefined;
     let providersStore: HappyAgentProvidersStore | undefined;
@@ -596,6 +600,11 @@ export function happyAgentWorkspaceClientCreate(
             socialStore ??= happyAgentSocialStoreCreate({ client: deps.client });
             return socialStore;
         },
+        teams() {
+            if (disposed) throw new Error("The Happy Agent client is disposed.");
+            teamsStore ??= happyAgentTeamsStoreCreate({ client: deps.client });
+            return teamsStore;
+        },
         socialJoin() {
             if (disposed) throw new Error("The Happy Agent client is disposed.");
             cloudStore ??= happyAgentCloudStoreCreate({
@@ -735,11 +744,13 @@ export function happyAgentWorkspaceClientCreate(
             cloudStore?.[Symbol.dispose]();
             cloudDevicesStore?.[Symbol.dispose]();
             socialStore?.[Symbol.dispose]();
+            teamsStore?.[Symbol.dispose]();
             socialJoinStore?.[Symbol.dispose]();
             happyIntegrationStore = undefined;
             cloudStore = undefined;
             cloudDevicesStore = undefined;
             socialStore = undefined;
+            teamsStore = undefined;
             socialJoinStore = undefined;
             profileStore?.[Symbol.dispose]();
             profileStore = undefined;

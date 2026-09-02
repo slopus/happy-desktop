@@ -136,10 +136,20 @@
     width: 100%;
 }
 
+.happy-social-page__section-heading {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 28px;
+    width: 100%;
+}
+
 .happy-social-page__section-title {
     display: flex;
+    flex: 1 1 auto;
     align-items: baseline;
     gap: 8px;
+    min-width: 0;
     margin: 0;
     font-family: var(--happy-font-mono);
     font-size: 11px;
@@ -218,6 +228,20 @@
     padding: 12px 0;
     border-top: 1px solid var(--divider);
     border-bottom: 1px solid var(--divider);
+    font-size: 13px;
+    line-height: 20px;
+    color: var(--text-secondary);
+}
+
+.happy-social-page__team-create {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    width: 100%;
+}
+
+.happy-social-page__team-create p {
+    margin: 0;
     font-size: 13px;
     line-height: 20px;
     color: var(--text-secondary);

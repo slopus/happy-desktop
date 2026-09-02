@@ -12,6 +12,8 @@ import type {
     HappyAgentSocialSnapshot,
     HappyAgentSocialJoinStore,
     HappyAgentSocialStore,
+    HappyAgentTeamsSnapshot,
+    HappyAgentTeamsStore,
     HappyAgentFileTabKind,
     HappyAgentFileTabSnapshot,
     HappyAgentConnectionStore,
@@ -73,14 +75,17 @@ import {
     happyAgentInboxStoreNoop,
     happyAgentCloudStoreNoop,
     happyAgentSocialStoreNoop,
+    happyAgentTeamsStoreNoop,
     happyAgentNavigationOrderApply,
     happyAgentAvailabilityProject,
+    happyAgentVersionAtLeast,
     happyAgentNavigationOrderStoreNoop,
     happyAgentSidebarCollapseStoreNoop,
     happyAgentHumanMessageAuthor,
     happyAgentSessionGroupIdOf,
     happyAgentOwnerAuthor,
     happyAgentWindowStoreNoop,
+    MINIMUM_HAPPY_AGENT_TEAMS_VERSION,
     titleShimmerStoreNoop,
 } from "happy-desktop-state";
 import {
@@ -168,6 +173,10 @@ import {
     type WorkspaceLifecyclePhase,
 } from "happy-desktop-ui";
 import { APP_SHORTCUTS } from "./appShortcuts";
+import {
+    HappyAgentVersionProvider,
+    useHappyAgentVersionAtLeast,
+} from "./HappyAgentVersionProvider";
 import {
     COMMAND_PALETTE_PREVIEW_LIMIT,
     commandPaletteIndexMove,
@@ -279,6 +288,8 @@ export interface AppHappyAgentSession {
     readonly cloudDevices?: () => HappyAgentCloudDevicesStore;
     /** Friends and requests for this installation's enrolled Social account. */
     readonly social?: () => HappyAgentSocialStore;
+    /** WorkOS organizations, available on agents with the Teams API. */
+    readonly teams?: () => HappyAgentTeamsStore;
     /** The ordered errand that carries this account from signed out to live. */
     readonly socialJoin?: () => HappyAgentSocialJoinStore;
     /** This Happy Agent's retained connection, reconciliation, and SSE diagnostics. */
@@ -1577,6 +1588,15 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
             ? (active?.session?.social?.() ?? happyAgentSocialStoreNoop)
             : happyAgentSocialStoreNoop;
     const social = useSyncExternalStore(socialStore.subscribe, socialStore.get, socialStore.get);
+    const teamsSupported = happyAgentVersionAtLeast(
+        active?.version,
+        MINIMUM_HAPPY_AGENT_TEAMS_VERSION,
+    );
+    const teamsStore =
+        props.socialOpen && sociallyEnrolled && teamsSupported
+            ? (active?.session?.teams?.() ?? happyAgentTeamsStoreNoop)
+            : happyAgentTeamsStoreNoop;
+    const teams = useSyncExternalStore(teamsStore.subscribe, teamsStore.get, teamsStore.get);
     const daemonStore = props.daemon ?? sidebarDaemonStoreNoop;
     const daemon = useSyncExternalStore(daemonStore.subscribe, daemonStore.get, daemonStore.get);
     const inboxPending = inbox.pending.length;
@@ -1999,6 +2019,8 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                         happyAgentOnline={activeHappyAgentOnline}
                         snapshot={social}
                         store={socialStore}
+                        teamsSnapshot={teams}
+                        teamsStore={teamsStore}
                         {...(activeAvailability?.refusal === undefined
                             ? {}
                             : { unavailable: activeAvailability.refusal })}
@@ -2075,7 +2097,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
     };
 
     return (
-        <>
+        <HappyAgentVersionProvider lastKnownVersion={active?.version}>
             {/* Window chrome has one lifetime. Happy Agent workspaces keep their own
                 keyed lifetimes inside its content region, so changing machines
                 resets machine-owned UI without rebuilding this sidebar's DOM,
@@ -2144,7 +2166,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                     />
                 )
             ) : null}
-        </>
+        </HappyAgentVersionProvider>
     );
 }
 
@@ -2733,8 +2755,12 @@ function HappyAgentSocialSurface(props: {
     happyAgentOnline: () => boolean;
     snapshot: HappyAgentSocialSnapshot;
     store: HappyAgentSocialStore;
+    teamsSnapshot: HappyAgentTeamsSnapshot;
+    teamsStore: HappyAgentTeamsStore;
     unavailable?: string;
 }) {
+    const teamsAvailable = useHappyAgentVersionAtLeast(MINIMUM_HAPPY_AGENT_TEAMS_VERSION);
+    const operation = props.teamsSnapshot.mutation ?? props.snapshot.mutation;
     return (
         <HappySocialPage
             {...(props.snapshot.error ? { error: props.snapshot.error.message } : {})}
@@ -2751,9 +2777,26 @@ function HappyAgentSocialSurface(props: {
                 if (props.happyAgentOnline()) props.store.friendRequestSend();
             }}
             onFriendUsernameChange={(value) => props.store.friendUsernameUpdate(value)}
-            {...(props.snapshot.mutation ? { operation: props.snapshot.mutation } : {})}
+            onTeamCreate={() => {
+                if (props.happyAgentOnline()) props.teamsStore.teamCreate();
+            }}
+            onTeamCreateClose={() => props.teamsStore.teamCreateClose()}
+            onTeamCreateOpen={() => props.teamsStore.teamCreateOpen()}
+            onTeamNameChange={(value) => props.teamsStore.teamNameUpdate(value)}
+            {...(operation ? { operation } : {})}
             outgoingRequests={props.snapshot.outgoingRequests}
             status={props.snapshot.status}
+            {...(props.teamsSnapshot.teamCreateError
+                ? { teamCreateError: props.teamsSnapshot.teamCreateError.message }
+                : {})}
+            teamCreateOpen={props.teamsSnapshot.teamCreateOpen}
+            teamName={props.teamsSnapshot.teamName}
+            teams={props.teamsSnapshot.teams}
+            teamsAvailable={teamsAvailable}
+            {...(props.teamsSnapshot.error
+                ? { teamsError: props.teamsSnapshot.error.message }
+                : {})}
+            teamsStatus={props.teamsSnapshot.status}
             {...(props.unavailable === undefined ? {} : { unavailable: props.unavailable })}
         />
     );

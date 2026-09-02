@@ -316,6 +316,7 @@ export {
     type HappySocialOperation,
     type HappySocialPageProps,
     type HappySocialPerson,
+    type HappySocialTeam,
 } from "./HappySocialPage";
 export {
     HappyAgentProjectCloneDialog,

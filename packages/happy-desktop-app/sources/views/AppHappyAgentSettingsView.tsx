@@ -69,6 +69,7 @@ import {
     type HappySocialEnrollment,
     type HappySocialJoinState,
 } from "happy-desktop-ui";
+import { HappyAgentVersionProvider } from "../HappyAgentVersionProvider";
 import type { SelectOption } from "happy-desktop-ui";
 import { hostHappyAgent, type AppHappyAgentDirectoryStore } from "../AppHappyAgentView";
 
@@ -522,7 +523,7 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
         ? [cloud.user.firstName, cloud.user.lastName].filter(Boolean).join(" ") || undefined
         : undefined;
     const socialEnrollment = socialEnrollmentProject(cloud.enrollment);
-    return (
+    const content = (
         <HappyAgentSettingsShell
             activeCategoryId={props.section}
             categories={HAPPY_AGENT_SETTINGS_CATEGORIES}
@@ -891,6 +892,11 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                 />
             )}
         </HappyAgentSettingsShell>
+    );
+    return (
+        <HappyAgentVersionProvider lastKnownVersion={host?.version}>
+            {content}
+        </HappyAgentVersionProvider>
     );
 }
 

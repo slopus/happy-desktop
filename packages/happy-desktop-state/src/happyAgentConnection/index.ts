@@ -7,6 +7,7 @@ export {
     MINIMUM_HAPPY_AGENT_PROTOCOL_VERSION,
     MINIMUM_HAPPY_AGENT_VERSION,
     describeServerCompatibility,
+    happyAgentVersionAtLeast,
     serverCompatibility,
 } from "./compatibility.js";
 export { ProjectRegistrationError, ProjectRegistrationProtocolError } from "./errors.js";

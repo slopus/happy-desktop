@@ -16,6 +16,7 @@ import {
     type HappyAgentCloudStore,
     type HappyAgentSocialJoinStore,
     type HappyAgentSocialStore,
+    type HappyAgentTeamsStore,
     type HappyAgentConnection,
     type HappyAgentConnectionSnapshot,
     type HappyAgentConnectionStore,
@@ -97,6 +98,7 @@ export interface HappyAgentSession {
     readonly cloud: () => HappyAgentCloudStore;
     readonly cloudDevices: () => HappyAgentCloudDevicesStore;
     readonly social: () => HappyAgentSocialStore;
+    readonly teams: () => HappyAgentTeamsStore;
     readonly socialJoin: () => HappyAgentSocialJoinStore;
     readonly debugLog: HappyAgentDebugLogStore;
     readonly host: HappyAgentHost;
@@ -372,6 +374,7 @@ export function happyAgentConnectionOpen(input: {
                     cloud: () => cloudStore,
                     cloudDevices: () => client.cloudDevices(),
                     social: () => client.social(),
+                    teams: () => client.teams(),
                     socialJoin: () => socialJoinStore,
                     connection: streamConnectionStoreCreate(agentConnection),
                     debugLog,

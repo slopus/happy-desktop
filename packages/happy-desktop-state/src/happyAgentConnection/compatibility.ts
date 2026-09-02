@@ -35,6 +35,14 @@ function versionCompare(left: string, right: string): number {
     return 0;
 }
 
+/** Whether the last daemon product version observed supports a versioned feature. */
+export function happyAgentVersionAtLeast(
+    version: string | undefined,
+    minimumVersion: string,
+): boolean {
+    return version !== undefined && versionCompare(version, minimumVersion) >= 0;
+}
+
 export const CHECKING_SERVER_COMPATIBILITY: ServerCompatibility = {
     status: "checking",
     minimumSupportedProtocolVersion: MINIMUM_HAPPY_AGENT_PROTOCOL_VERSION,
@@ -58,7 +66,7 @@ export function serverCompatibility(
         return { ...supported, status: "client_outdated" };
     if (
         protocol < MINIMUM_HAPPY_AGENT_PROTOCOL_VERSION ||
-        versionCompare(version.daemon, MINIMUM_HAPPY_AGENT_VERSION) < 0
+        !happyAgentVersionAtLeast(version.daemon, MINIMUM_HAPPY_AGENT_VERSION)
     )
         return { ...supported, status: "server_outdated" };
     return { ...supported, status: "compatible" };

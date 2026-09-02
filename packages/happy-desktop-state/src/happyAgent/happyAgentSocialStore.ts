@@ -129,7 +129,10 @@ export function happyAgentSocialStoreCreate(
                 after: bootstrap.cursor,
                 signal: active.signal,
             })) {
-                if (update.kind === "state_lost" || update.kind === "daemon_started") {
+                if (
+                    update.kind === "state_lost" ||
+                    (update.kind === "daemon_started" && update.replaced)
+                ) {
                     reconcile = true;
                     break;
                 }
