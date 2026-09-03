@@ -1,6 +1,7 @@
 import { partitionComponentProps } from "./componentProps";
 import { type CSSProperties } from "react";
 import { Icon, type IconName } from "./Icon";
+import { agentTraceMetaStats, agentTraceMetaTitle } from "./agentTraceMeta";
 export type AgentTraceRowKind =
     | "reasoning"
     | "response"
@@ -49,27 +50,6 @@ export function agentTraceKindIcon(kind: AgentTraceRowKind): IconName {
     return KIND_ICONS[kind];
 }
 
-function formatTokenCount(value: number): string {
-    if (value >= 1_000_000) {
-        const scaled = value / 1_000_000;
-        return `${scaled >= 10 ? Math.round(scaled) : scaled.toFixed(1).replace(/\.0$/, "")}M`;
-    }
-    if (value >= 10_000) return `${Math.round(value / 1_000)}k`;
-    if (value >= 1_000) {
-        const scaled = value / 1_000;
-        return `${scaled >= 10 ? Math.round(scaled) : scaled.toFixed(1).replace(/\.0$/, "")}k`;
-    }
-    return String(value);
-}
-
-function metaStats(toolCallCount?: number, totalTokens?: number): string | undefined {
-    const parts: string[] = [];
-    if (toolCallCount !== undefined && toolCallCount > 0)
-        parts.push(`${toolCallCount} ${toolCallCount === 1 ? "tool" : "tools"}`);
-    if (totalTokens !== undefined && totalTokens > 0)
-        parts.push(`${formatTokenCount(totalTokens)} tokens`);
-    return parts.length > 0 ? parts.join(" · ") : undefined;
-}
 /**
  * C-067 AgentTraceRow — a compact, single-line 28px button row rendered inside
  * an assistant message. While the turn runs it shows only the latest activity:
@@ -101,8 +81,8 @@ export function AgentTraceRow(props: AgentTraceRowProps) {
     ]);
     const running = () => local.status === "running";
     const meta = () => local.variant === "meta";
-    const stats = () => metaStats(local.toolCallCount, local.totalTokens);
-    const linkLabel = () => (local.toggles && local.open ? "Hide traces" : "View traces");
+    const stats = () => agentTraceMetaStats(local.toolCallCount, local.totalTokens);
+    const linkLabel = () => agentTraceMetaTitle(local.toggles && local.open);
     return (
         <button
             aria-expanded={local.open === true ? "true" : "false"}

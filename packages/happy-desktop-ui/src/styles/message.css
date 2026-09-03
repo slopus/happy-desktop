@@ -384,7 +384,7 @@
     font-size: 15px;
     line-height: 22px;
     color: var(--text);
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word;
 }
 
 .happy-message__mention {

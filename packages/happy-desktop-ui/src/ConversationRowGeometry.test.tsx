@@ -154,8 +154,24 @@ const completionText = [
     "Other ResizeObservers remain for the failed-generation marker and shared scrollbar internals; neither supplies transcript row sizes. The browser run still reports the pre-existing Scrollbar ResizeObserver-loop warning, but all geometry assertions pass. Existing image/icon worktree changes were left untouched.",
 ].join("\n");
 
+const reviewText = [
+    "## Review: callbacks, races, and branches",
+    "",
+    "1. **Modal cleanup** - remove the obsolete modal and its message case.",
+    "",
+    "2. **Permission callback** - the Claude permission-callback needed there predates this branch.",
+    "",
+    "   - The verbose block-race explanation belongs to the earlier implementation.",
+    "   - The follow-up keeps `permissionResult` and delivery ordered.",
+    "",
+    "3. ~~Old path~~ - no compatibility branch remains.",
+    "",
+    "Suggested order: delete the modal and message case, then (separately) move the callback. Want me to start on the first two?",
+].join("\n");
+
 const richLeading = message("rich-leading", "agent", richText);
 const richGrouped = message("rich-grouped", "agent", richText);
+const reviewLeading = message("review-leading", "agent", reviewText);
 const agentPrelude = message("agent-prelude", "agent", "I checked the release inputs.");
 const humanBoundary = message("human-boundary", "human", "Please verify the release.");
 const shellLeading: ConversationEntry = {
@@ -177,6 +193,39 @@ const shellPlain: ConversationEntry = {
     sequence: "shell-plain",
 };
 const completionLeading = message("completion-leading", "agent", completionText);
+const completionStreaming: ConversationMessageEntry = {
+    ...completionLeading,
+    message: {
+        ...completionLeading.message,
+        generationStatus: "streaming",
+        text: "Fixed.\n\n- Transcript sizing is being verified.",
+    },
+};
+const completionWithTrace: ConversationMessageEntry = {
+    ...completionLeading,
+    message: {
+        ...completionLeading.message,
+        agentTrace: {
+            turnId: "completion-turn",
+            agentUserId: agent.id,
+            status: "complete",
+            entryCount: 8,
+            toolCallCount: 4,
+            totalTokens: 12_345,
+            subagents: [],
+            backgroundTerminals: [],
+        },
+    },
+};
+const completionWithUntimedTrace: ConversationMessageEntry = {
+    ...completionWithTrace,
+    message: {
+        ...completionWithTrace.message,
+        createdAt: "",
+        id: "completion-untimed-trace",
+        sequence: "completion-untimed-trace",
+    },
+};
 const completionStatus: ConversationEntry = {
     kind: "turnStatus",
     id: "completion-status",
@@ -218,6 +267,21 @@ const specimens: readonly Specimen[] = [
     {
         entries: [completionLeading, completionStatus],
         name: "completion-boundary",
+        targetIndex: 0,
+    },
+    {
+        entries: [agentPrelude, completionWithTrace, completionStatus],
+        name: "traced-completion-boundary",
+        targetIndex: 1,
+    },
+    {
+        entries: [agentPrelude, completionWithUntimedTrace, completionStatus],
+        name: "untimed-traced-completion-boundary",
+        targetIndex: 1,
+    },
+    {
+        entries: [reviewLeading, completionStatus],
+        name: "review-completion-boundary",
         targetIndex: 0,
     },
     {
@@ -313,6 +377,66 @@ function GeometrySpecimen(props: Specimen & { readonly width: number }) {
         </div>
     );
 }
+
+function expectModeledRowsMatchPaint(container: Element, count: number, label: string) {
+    for (let index = 0; index < count; index += 1) {
+        const row = container.querySelector<HTMLElement>(
+            `.happy-message-list__virtual-row[data-index="${String(index)}"]`,
+        );
+        const next = container.querySelector<HTMLElement>(
+            `.happy-message-list__virtual-row[data-index="${String(index + 1)}"]`,
+        );
+        expect(row, `${label} row ${String(index)}`).not.toBeNull();
+        expect(next, `${label} successor ${String(index)}`).not.toBeNull();
+        const rowBounds = row!.getBoundingClientRect();
+        const modeledHeight = next!.getBoundingClientRect().top - rowBounds.top;
+        expect(
+            Math.abs(rowBounds.height - modeledHeight),
+            `${label} row ${String(index)}: painted ${String(rowBounds.height)}px, modeled ${String(modeledHeight)}px`,
+        ).toBeLessThanOrEqual(GEOMETRY_TOLERANCE);
+    }
+}
+
+it.skipIf(server.browser === "firefox")(
+    "keeps the completion boundary exact while a streamed turn settles",
+    async () => {
+        const view = createRenderer();
+        let entriesUpdate!: (entries: readonly ConversationEntry[]) => void;
+        function CompletionHarness() {
+            const [entries, setEntries] = useState<readonly ConversationEntry[]>([
+                completionStreaming,
+            ]);
+            entriesUpdate = setEntries;
+            return (
+                <GeometrySpecimen
+                    entries={entries}
+                    name="live-completion-boundary"
+                    targetIndex={0}
+                    width={360}
+                />
+            );
+        }
+
+        view.render(CompletionHarness, { width: 360, height: 440 });
+        await view.ready();
+        await document.fonts.ready;
+        await nextLayout();
+
+        const container = view.$('[data-testid="live-completion-boundary-container"]').element;
+        flushSync(() => entriesUpdate([completionLeading]));
+        expectModeledRowsMatchPaint(container, 1, "final agent message");
+
+        flushSync(() => entriesUpdate([completionLeading, completionStatus]));
+        expectModeledRowsMatchPaint(container, 2, "settled completion");
+        await nextFrame();
+        expectModeledRowsMatchPaint(container, 2, "first painted completion frame");
+
+        flushSync(() => entriesUpdate([agentPrelude, completionWithTrace, completionStatus]));
+        expectModeledRowsMatchPaint(container, 3, "grouped traced completion");
+        await nextFrame();
+        expectModeledRowsMatchPaint(container, 3, "first painted traced-completion frame");
+    },
+);
 
 it.skipIf(server.browser === "firefox")(
     "keeps modeled rich-message and output-row heights exact at every container width",

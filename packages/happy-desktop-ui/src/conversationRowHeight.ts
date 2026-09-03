@@ -1,4 +1,9 @@
-import { entryKey, type ConversationEntry, type ConversationRequest } from "happy-desktop-state";
+import {
+    entryKey,
+    type AgentTurnTraceSummary,
+    type ConversationEntry,
+    type ConversationRequest,
+} from "happy-desktop-state";
 import {
     conversationAgentRowStartsGroup,
     conversationEntryPrecedesActivity,
@@ -21,6 +26,7 @@ import {
     type MessageTextLayoutCache,
 } from "./messageTextLayout";
 import { SYSTEM_NOTIFICATION_HEIGHT } from "./systemNotification";
+import { agentTraceMetaStats, agentTraceMetaTitle } from "./agentTraceMeta";
 
 /**
  * Height of one conversation row, computed from the entry and the list's measure
@@ -124,8 +130,6 @@ const CONVERSATION_AGENT_PADDING_TOP = { leading: 16, grouped: 2 } as const;
 const CONTINUES_PADDING_BOTTOM = 8;
 const CLOSING_PADDING_BOTTOM = 4;
 const CONVERSATION_AGENT_PADDING_BOTTOM = { leading: 16, grouped: 2 } as const;
-/** `.happy-message__meta` — 20px row plus its 5px separation from the body. */
-const META_ROW = 25;
 /** Horizontal chrome: row padding, then the 76% bubble cap, then bubble padding. */
 const AGENT_INSET = 94;
 const INCOMING_INSET = 50;
@@ -136,6 +140,13 @@ const BUBBLE_PADDING = 24;
 const ASIDE_TIME_GAP = 8;
 /** Inline grouped-message metadata: NBSP plus `.happy-message__hover-meta` padding. */
 const GROUPED_TRAILING_META_PADDING = 8;
+/** Six-pixel flex gaps on both sides of the metadata separator. */
+const GROUPED_TRAILING_META_GAPS = 12;
+/** Two-pixel dot separating a trace accessory from the timestamp. */
+const GROUPED_TRAILING_META_SEPARATOR = 2;
+/** Gaps around the optional two-pixel separator inside trace metadata. */
+const TRACE_META_GAPS = 12;
+const TRACE_META_SEPARATOR = 2;
 /** `.happy-message__media` — top margin, inter-tile gap, and its own cap. */
 const MEDIA_GAP = 4;
 const MEDIA_MARGIN = 8;
@@ -331,7 +342,7 @@ export function messageRowHeight(input: {
     readonly bodyVisible: boolean;
     readonly grouped: boolean;
     readonly mermaidEnabled?: boolean;
-    readonly metaAccessory: boolean;
+    readonly trailingExtraWidth: number;
     readonly surface: ConversationSurface;
     readonly textCache?: MessageTextLayoutCache;
     readonly time: string;
@@ -339,31 +350,47 @@ export function messageRowHeight(input: {
     readonly width: number;
 }): number {
     const [leading, tight] = MESSAGE_CHROME[input.surface][input.treatment];
-    /* A grouped follow-up drops the identity row, unless a settled turn's trace
-       control rides it — Message keeps the meta row for the accessory alone. */
-    const chrome =
-        (input.grouped ? tight : leading) + (input.grouped && input.metaAccessory ? META_ROW : 0);
+    const chrome = input.grouped ? tight : leading;
     if (!input.bodyVisible) return chrome;
     const measure = messageBodyMeasure(input.width, input.treatment, input.time, input.textCache);
     /* Grouped incoming/agent rows append their hover time to the final word in
        one non-wrapping inline run. Include that run in the text model: at a
        narrow width it can move the final word and timestamp onto the next line. */
-    const trailingExtraWidth =
-        input.grouped && input.treatment !== "own" && input.time
-            ? GROUPED_TRAILING_META_PADDING +
-              uiTextNaturalWidth("\u00a0", 16, input.textCache) +
-              asideTimeWidth(input.time, input.textCache)
-            : 0;
     return (
         chrome +
         markdownBodyHeight(
             input.body,
             measure,
             input.textCache,
-            trailingExtraWidth,
+            input.trailingExtraWidth,
             input.mermaidEnabled,
         )
     );
+}
+
+/** Width of the one non-wrapping run Message appends to a grouped reply. */
+function groupedTrailingMetaWidth(
+    time: string,
+    trace: AgentTurnTraceSummary | undefined,
+    cache: MessageTextLayoutCache | undefined,
+): number {
+    if (!time && !trace) return 0;
+    let width = GROUPED_TRAILING_META_PADDING + uiTextNaturalWidth("\u00a0", 16, cache);
+    if (trace) {
+        width += Math.max(
+            monoTextNaturalWidth(agentTraceMetaTitle(false), 11, cache),
+            monoTextNaturalWidth(agentTraceMetaTitle(true), 11, cache),
+        );
+        const stats = agentTraceMetaStats(trace.toolCallCount, trace.totalTokens);
+        if (stats)
+            width +=
+                TRACE_META_GAPS + TRACE_META_SEPARATOR + monoTextNaturalWidth(stats, 11, cache);
+    }
+    if (time) {
+        if (trace) width += GROUPED_TRAILING_META_GAPS + GROUPED_TRAILING_META_SEPARATOR;
+        width += asideTimeWidth(time, cache);
+    }
+    return width;
 }
 
 /** Height of the structured question form or its compact answered history. */
@@ -619,15 +646,23 @@ export function conversationRowHeight(
         precedesActivity ? "continues" : closedByStatus ? "closing" : "open",
     ].join(":");
     return rowHeightCached(cache, entry, cacheKey, () => {
+        const time = messageTimeSample(message.createdAt);
         let height = messageRowHeight({
             body: message.text,
             bodyVisible: hasBody || message.generationStatus !== undefined || traceCollapsible,
             grouped,
             mermaidEnabled: message.generationStatus !== "streaming",
-            metaAccessory: !own && traceCollapsible,
             surface: context.surface,
             textCache: cache?.text,
-            time: messageTimeSample(message.createdAt),
+            time,
+            trailingExtraWidth:
+                grouped && !own
+                    ? groupedTrailingMetaWidth(
+                          time,
+                          traceCollapsible ? trace : undefined,
+                          cache?.text,
+                      )
+                    : 0,
             treatment,
             width,
         });

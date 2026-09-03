@@ -254,10 +254,16 @@ function richItemsHeight(
 ): number {
     if (measure <= 0 || items.length === 0) return lineHeight;
     const measured = preparedRichItems(items, cache);
-    return (
-        Math.max(1, measureRichInlineStats(measured, measure + INLINE_MEASURE_EPSILON).lineCount) *
-        lineHeight
-    );
+    const relaxedMeasure = measure + INLINE_MEASURE_EPSILON;
+    const relaxed = measureRichInlineStats(measured, relaxedMeasure);
+    /* Pretext can hang a token slightly beyond its supplied measure. Keep the
+       one-layout-unit tolerance only when the resulting line also stays inside
+       that contract; otherwise resolve the real, unrelaxed line break. */
+    const stats =
+        relaxed.maxLineWidth <= relaxedMeasure
+            ? relaxed
+            : measureRichInlineStats(measured, measure);
+    return Math.max(1, stats.lineCount) * lineHeight;
 }
 function richItemsNaturalWidth(
     items: readonly RichInlineItem[],
@@ -331,7 +337,7 @@ function markdownInlineFragmentItems(
     cache: MessageTextLayoutCache,
     decoratedFlow = false,
 ): RichInlineItem[] {
-    /* `overflow-wrap: anywhere` emergency-breaks the glyph run, not an intact
+    /* `overflow-wrap: break-word` emergency-breaks the glyph run, not an intact
        word whose text fits and whose inline start/end decoration alone hangs
        beyond the measure. Keep that word atomic and let its box chrome occupy
        the same slight overflow the browser paints. */
