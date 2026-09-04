@@ -275,10 +275,11 @@ export interface HappyAgentWorkspaceClient {
      * Acquires a retained chat store for one session. Concurrent and later
      * acquisitions share its messages and model state. Releasing the last lease
      * pauses this store's projection; the Happy Agent-wide SSE cache continues following
-     * the session and catches the store up when it is acquired again.
+     * the session and catches the store up when it is acquired again. A bounded
+     * recent-chat cache disposes released stores when the live-store limit is exceeded.
      */
     chat(sessionId: HappyAgentSessionId): Promise<HappyAgentChatHandle>;
-    /** Stops background synchronization for an archived chat without evicting its memory. */
+    /** Stops background synchronization for an archived chat; its store remains subject to the bounded cache. */
     chatArchive(sessionId: HappyAgentSessionId): void;
     /** Lets a restored chat resume background synchronization when it is acquired again. */
     chatRestore(sessionId: HappyAgentSessionId): void;
@@ -314,6 +315,8 @@ export interface HappyAgentWorkspaceClientDeps {
     readonly profileActions?: HappyAgentProfileActions;
     /** Opens the core transcript stream for one materialized chat. */
     readonly transcriptConnect: HappyAgentChatTranscriptConnect;
+    /** Maximum number of leased chat stores that may keep a live transcript subscription. */
+    readonly maxLiveChatSubscriptions?: number;
     /** Terminal failures emitted by the shared Happy Agent mutation authority. */
     readonly connectMutationSubscribe: (
         listener: (rejection: MutationRejectedDelta) => void,
@@ -345,6 +348,7 @@ interface ChatBinding {
     store?: HappyAgentChatStore;
     activeUnsubscribe?: () => void;
     archived: boolean;
+    lastUsedOrder: number;
     /** Ignores the archived snapshot retained until an unarchive is confirmed. */
     restoring: boolean;
 }
@@ -420,6 +424,12 @@ async function changedFileRead(
 export function happyAgentWorkspaceClientCreate(
     deps: HappyAgentWorkspaceClientDeps,
 ): HappyAgentWorkspaceClient {
+    const configuredMaxLiveChatSubscriptions = deps.maxLiveChatSubscriptions;
+    const maxLiveChatSubscriptions =
+        configuredMaxLiveChatSubscriptions === undefined ||
+        !Number.isFinite(configuredMaxLiveChatSubscriptions)
+            ? 8
+            : Math.max(1, Math.floor(configuredMaxLiveChatSubscriptions));
     const models = happyAgentModelStoreCreate({
         catalogRead: async () =>
             happyAgentModelCatalogProject((await deps.client.getConfig()).config),
@@ -444,6 +454,46 @@ export function happyAgentWorkspaceClientCreate(
     let secretsStore: HappyAgentSecretsStore | undefined;
     const chats = new Map<HappyAgentSessionId, ChatBinding>();
     let disposed = false;
+    let chatUseOrder = 0;
+
+    /**
+     * A released chat has no transcript listener, but its ChatStore used to
+     * remain in this map forever (including its mutation listener and projected
+     * entries). Keep a small recent set and dispose the oldest released stores;
+     * the connection-wide session cache remains responsible for complete
+     * inactive messages.
+     */
+    const evictReleasedChats = (protectedSessionId?: HappyAgentSessionId): void => {
+        while (chats.size > maxLiveChatSubscriptions) {
+            const candidate = [...chats.entries()]
+                .filter(
+                    ([sessionId, binding]) =>
+                        sessionId !== protectedSessionId &&
+                        binding.count === 0 &&
+                        binding.store !== undefined &&
+                        !binding.store.hasPendingMutations(),
+                )
+                .sort((left, right) => left[1].lastUsedOrder - right[1].lastUsedOrder)[0];
+            if (candidate === undefined) return;
+            const [sessionId, binding] = candidate;
+            binding.activeUnsubscribe?.();
+            binding.activeUnsubscribe = undefined;
+            binding.store?.[Symbol.dispose]();
+            chats.delete(sessionId);
+        }
+    };
+
+    const admitChat = (sessionId: HappyAgentSessionId): void => {
+        evictReleasedChats(sessionId);
+        const binding = chats.get(sessionId);
+        if (binding !== undefined && binding.count > 0) return;
+        const live = [...chats.values()].filter((candidate) => candidate.count > 0).length;
+        if (live >= maxLiveChatSubscriptions) {
+            throw new Error(
+                `The maximum of ${String(maxLiveChatSubscriptions)} live chat subscriptions is already in use.`,
+            );
+        }
+    };
 
     const chatDeactivate = (binding: ChatBinding): void => {
         binding.activeUnsubscribe?.();
@@ -652,6 +702,7 @@ export function happyAgentWorkspaceClientCreate(
         async chat(sessionId) {
             if (disposed) throw new Error("The Happy Agent client is disposed.");
             let binding = chats.get(sessionId);
+            admitChat(sessionId);
             if (!binding) {
                 const storePromise = models.load().then(({ catalog }) => {
                     const chatDeps: HappyAgentChatDeps = {
@@ -673,10 +724,17 @@ export function happyAgentWorkspaceClientCreate(
                     }
                     return store;
                 });
-                binding = { count: 0, storePromise, archived: false, restoring: false };
+                binding = {
+                    count: 0,
+                    storePromise,
+                    archived: false,
+                    lastUsedOrder: 0,
+                    restoring: false,
+                };
                 chats.set(sessionId, binding);
             }
             binding.count += 1;
+            binding.lastUsedOrder = ++chatUseOrder;
             chatActivate(binding);
             let store: HappyAgentChatStore;
             try {
@@ -686,6 +744,7 @@ export function happyAgentWorkspaceClientCreate(
                 if (current === binding) chats.delete(sessionId);
                 throw error;
             }
+            evictReleasedChats(sessionId);
             let released = false;
             return {
                 store,
@@ -698,6 +757,7 @@ export function happyAgentWorkspaceClientCreate(
                     if (current.count <= 0) {
                         current.count = 0;
                         chatDeactivate(current);
+                        evictReleasedChats(sessionId);
                     }
                 },
             };

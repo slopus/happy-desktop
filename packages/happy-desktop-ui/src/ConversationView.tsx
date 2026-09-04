@@ -310,10 +310,11 @@ export function ConversationView(props: ConversationViewProps) {
         messageTextLayoutFontGenerationGet,
     );
     /*
-     * One row-layout cache per conversation, kept for as long as this view is
-     * mounted: leaving a conversation and coming back reuses prepared text
-     * layout instead of recomputing the whole transcript. This Map and its values are component-lifetime memo caches,
-     * not product state: retaining a calculation never drives another render.
+     * One row-layout cache per recent conversation: leaving a conversation and
+     * coming back reuses prepared text layout without retaining every session
+     * ever visited by this mounted view. This Map and its values are
+     * component-lifetime memo caches, not product state: retaining a calculation
+     * never drives another render.
      * The row estimator needs the active cache while rendering, so lazy state
      * initialization gives the registry one stable owner without reading or
      * writing a ref during render.
@@ -339,6 +340,17 @@ export function ConversationView(props: ConversationViewProps) {
     const cachedRowHeights = rowHeightCaches.get(conversationCacheKey);
     const rowHeightCache = cachedRowHeights ?? conversationRowHeightCacheCreate();
     if (cachedRowHeights === undefined) rowHeightCaches.set(conversationCacheKey, rowHeightCache);
+    else {
+        // Map insertion order is the tiny LRU; the current conversation is
+        // always touched last and therefore survives a later navigation.
+        rowHeightCaches.delete(conversationCacheKey);
+        rowHeightCaches.set(conversationCacheKey, cachedRowHeights);
+    }
+    while (rowHeightCaches.size > 4) {
+        const oldest = rowHeightCaches.keys().next().value as string | undefined;
+        if (oldest === undefined || oldest === conversationCacheKey) break;
+        rowHeightCaches.delete(oldest);
+    }
     const { transcript, queued } = conversationPendingSteering(props.entries);
     const awaitingInput = transcript.some(
         (entry) =>

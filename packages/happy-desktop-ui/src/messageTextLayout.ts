@@ -99,10 +99,11 @@ export interface MessageTextLayoutCache {
     naturalWidths: Dictionary<Dictionary<number>>;
 }
 /**
- * One conversation's text-layout cache. It deliberately has no practical entry
- * cap: a transcript's immutable history is precisely the content most likely to
- * be measured again, and evicting its oldest rows turns a long-history scan into
- * cache churn. The cache lifetime is owned by the conversation surface.
+ * One conversation's text-layout cache. Settled transcript text is retained so
+ * revisiting a long history does not reparse it. Streaming text deliberately
+ * does not enter these source-keyed dictionaries: each growing prefix would
+ * otherwise retain another Markdown tree and prepared run until the view dies.
+ * The conversation surface owns the cache lifetime.
  */
 export function messageTextLayoutCacheCreate(): MessageTextLayoutCache {
     return {
@@ -173,11 +174,35 @@ export function monoOutputTextHeight(
     text: string,
     measure: number,
     cache: MessageTextLayoutCache = sharedCache,
+    streaming = false,
 ): number {
+    if (streaming) return streamingMonoOutputTextHeight(text, measure);
     const lines = text.split("\n");
     if (lines.length > 1 && lines.at(-1) === "") lines.pop();
     let height = 0;
     for (const line of lines) height += runHeight(line, `12px ${MONO_FAMILY}`, 18, measure, cache);
+    return Math.max(18, height);
+}
+/**
+ * Cheap provisional geometry for live shell output. A running command can
+ * append to its output on every event, so source-keyed monospace layout would
+ * retain every growing prefix. The settled pass switches back to exact layout.
+ */
+function streamingMonoOutputTextHeight(text: string, measure: number): number {
+    if (measure <= 0) return 18;
+    const available = Math.max(1, measure);
+    const newline = text.indexOf("\n");
+    if (newline < 0) {
+        const width = Math.max(7.2, text.length * 7.2);
+        return Math.max(18, Math.ceil(width / available) * 18);
+    }
+    const lines = text.split("\n");
+    if (lines.length > 1 && lines.at(-1) === "") lines.pop();
+    let height = 0;
+    for (const line of lines) {
+        const width = Math.max(7.2, line.length * 7.2);
+        height += Math.max(1, Math.ceil(width / available)) * 18;
+    }
     return Math.max(18, height);
 }
 function cacheReady(cache: MessageTextLayoutCache): MessageTextLayoutCache {
@@ -1032,7 +1057,9 @@ export function markdownBodyHeight(
     cache: MessageTextLayoutCache = sharedCache,
     trailingExtraWidth = 0,
     mermaidEnabled = true,
+    streaming = false,
 ): number {
+    if (streaming) return streamingMarkdownBodyHeight(text, measure, trailingExtraWidth);
     const ready = cacheReady(cache);
     let byMeasure = ready.markdownHeights[text];
     if (!byMeasure) {
@@ -1067,6 +1094,41 @@ export function markdownBodyHeight(
     const painted = height > 0 ? height : PARAGRAPH_LINE;
     byMeasure[measureKey] = painted;
     return painted;
+}
+
+/**
+ * Cheap provisional geometry for a live assistant message. A running message
+ * changes its source on every token, so parsing/laying out every prefix is both
+ * wasted work and an unbounded cache key stream. The finalized message is
+ * measured by `markdownBodyHeight` on the next settled pass.
+ */
+function streamingMarkdownBodyHeight(
+    text: string,
+    measure: number,
+    trailingExtraWidth: number,
+): number {
+    if (measure <= 0 || text.length === 0) return PARAGRAPH_LINE;
+    const newline = text.indexOf("\n");
+    if (newline < 0) {
+        const available = Math.max(1, measure - trailingExtraWidth);
+        const width = Math.max(8, text.length * 8);
+        return Math.max(PARAGRAPH_LINE, Math.ceil(width / available) * PARAGRAPH_LINE);
+    }
+    const lines = text.split("\n");
+    let height = 0;
+    for (let index = 0; index < lines.length; index += 1) {
+        const available =
+            index === lines.length - 1
+                ? Math.max(1, measure - trailingExtraWidth)
+                : Math.max(1, measure);
+        // Eight px is a deliberately conservative average for the 16px UI
+        // ramp. Overestimating while streaming avoids a second correction when
+        // Markdown punctuation becomes a wrapped line; the settled pass is
+        // exact and repairs the estimate if necessary.
+        const width = Math.max(8, lines[index]!.length * 8);
+        height += Math.max(1, Math.ceil(width / available)) * PARAGRAPH_LINE;
+    }
+    return Math.max(PARAGRAPH_LINE, height);
 }
 /** Painted height of a service line's 13px copy wrapped at `measure` px. */
 export function noticeTextHeight(

@@ -57,6 +57,8 @@ import type {
 const WORKING_LABEL_MAX = 64;
 const SENT_IMAGE_BUDGET_BYTES = 32 * 1024 * 1024;
 const PENDING_MUTATION_LIMIT = 2_048;
+/** Keep a released store alive long enough to surface a slow mutation refusal. */
+const PENDING_MUTATION_RETENTION_MS = 2 * 60_000;
 
 function transcriptSessionBusy(session: SessionState): boolean {
     return session.activeTurn !== undefined;
@@ -522,6 +524,8 @@ export type HappyAgentChatOutput =
 
 export interface HappyAgentChatStore {
     get(): HappyAgentChatSnapshot;
+    /** True while an action still needs this store to surface a rejection. */
+    hasPendingMutations(): boolean;
     subscribe(listener: () => void): () => void;
     sessionRetry(): void;
     historyLoadMore(): void;
@@ -651,7 +655,7 @@ export function happyAgentChatStoreCreate(
     let detachedBackgroundProcessIds: ReadonlySet<number> = new Set();
     let mutationRejection: MutationRejectedDelta | undefined;
     const pendingMutationIds = new Set<string>();
-    const pendingMutationOrder: string[] = [];
+    const pendingMutationOrder: { readonly id: string; readonly trackedAt: number }[] = [];
     /* Replaced rather than edited, so the transcript projection can settle
        "were these the images the last projection saw?" by identity. */
     let sentImages: ReadonlyMap<string, readonly HappyAgentImageInput[]> = new Map();
@@ -886,12 +890,21 @@ export function happyAgentChatStoreCreate(
         const rejectionWasVisible = mutationRejection !== undefined;
         mutationRejection = undefined;
         pendingMutationIds.add(mutationId);
-        pendingMutationOrder.push(mutationId);
+        pendingMutationOrder.push({ id: mutationId, trackedAt: Date.now() });
         while (pendingMutationOrder.length > PENDING_MUTATION_LIMIT) {
             const expired = pendingMutationOrder.shift();
-            if (expired !== undefined) pendingMutationIds.delete(expired);
+            if (expired !== undefined) pendingMutationIds.delete(expired.id);
         }
         if (rejectionWasVisible) commit();
+    };
+
+    const pendingMutationActive = (): boolean => {
+        const cutoff = Date.now() - PENDING_MUTATION_RETENTION_MS;
+        while (pendingMutationOrder[0]?.trackedAt < cutoff) {
+            const expired = pendingMutationOrder.shift();
+            if (expired !== undefined) pendingMutationIds.delete(expired.id);
+        }
+        return pendingMutationIds.size > 0;
     };
 
     const unsubscribeMutationRejections = deps.connectMutationSubscribe((rejection) => {
@@ -972,6 +985,7 @@ export function happyAgentChatStoreCreate(
 
     return {
         get: () => store.getState(),
+        hasPendingMutations: pendingMutationActive,
         subscribe(listener) {
             listeners.add(listener);
             if (listeners.size === 1) start();

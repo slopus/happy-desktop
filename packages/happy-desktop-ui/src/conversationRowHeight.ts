@@ -74,7 +74,7 @@ export interface ConversationRowHeightCache {
     /** Prepared text and final text-layout results owned by this conversation. */
     readonly text: MessageTextLayoutCache;
 }
-/** Creates the virtually unbounded row-layout cache owned by one conversation. */
+/** Creates the row-layout cache for one conversation; the view bounds its lifetime. */
 export function conversationRowHeightCacheCreate(): ConversationRowHeightCache {
     return {
         rows: dictionaryCreate(),
@@ -342,6 +342,7 @@ export function messageRowHeight(input: {
     readonly bodyVisible: boolean;
     readonly grouped: boolean;
     readonly mermaidEnabled?: boolean;
+    readonly streaming?: boolean;
     readonly trailingExtraWidth: number;
     readonly surface: ConversationSurface;
     readonly textCache?: MessageTextLayoutCache;
@@ -364,6 +365,7 @@ export function messageRowHeight(input: {
             input.textCache,
             input.trailingExtraWidth,
             input.mermaidEnabled,
+            input.streaming,
         )
     );
 }
@@ -521,11 +523,19 @@ export function conversationRowHeight(
                           entry.activity.output,
                           width - activityInset - SHELL_ACTIVITY_OUTPUT_INSET,
                           cache?.text,
+                          entry.activity.running,
                       )
                     : ACTIVITY_HEIGHT.reasoning
                 : entry.activity.kind === "reasoning" && expanded
                   ? REASONING_ACTIVITY_CHROME +
-                    markdownBodyHeight(entry.activity.text, width - activityInset - 16, cache?.text)
+                    markdownBodyHeight(
+                        entry.activity.text,
+                        width - activityInset - 16,
+                        cache?.text,
+                        0,
+                        true,
+                        entry.activity.streaming,
+                    )
                   : entry.activity.kind === "agentMessage" && expanded
                     ? AGENT_MESSAGE_ACTIVITY_CHROME +
                       markdownBodyHeight(
@@ -652,6 +662,7 @@ export function conversationRowHeight(
             bodyVisible: hasBody || message.generationStatus !== undefined || traceCollapsible,
             grouped,
             mermaidEnabled: message.generationStatus !== "streaming",
+            streaming: message.generationStatus === "streaming",
             surface: context.surface,
             textCache: cache?.text,
             time,

@@ -125,6 +125,8 @@ interface SessionEntry {
     activityRevision: number;
     /** A journal gap made this cached session incomplete; reconcile when it is next observed. */
     reconcileRequired: boolean;
+    /** One follow-up snapshot is queued when an inactive run changes during a load. */
+    inactiveRefreshPending: boolean;
     /** Deltas ignored until a complete message snapshot repairs their message. */
     corruptedMessageIds: Set<string>;
     questionRecovery: Promise<void> | undefined;
@@ -373,7 +375,13 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         };
     };
 
-    const publishSession = (entry: SessionEntry): void => {
+    const publishSession = (entry: SessionEntry, force = false): void => {
+        // The connection-wide cache still owns inactive sessions, but there is
+        // nobody to consume a projected ChatStore snapshot while a session is
+        // not subscribed. In particular, do not parse/project the whole
+        // transcript for every token in a background run. Authoritative loads
+        // pass `force` so a later acquisition sees the complete cached state.
+        if (!force && entry.subscribers.size === 0) return;
         const projection = projectionOf(entry);
         if (projection === undefined) return;
         let session = projectSession(projection);
@@ -699,7 +707,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
             entry.historyLoaded = true;
             entry.reconcileRequired = false;
             entry.loadCompletedRevision = entry.loadRequestedRevision;
-            publishSession(entry);
+            publishSession(entry, true);
             return Promise.resolve();
         }
         entry.hydrating = true;
@@ -764,7 +772,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                     entry.bufferedEvents.splice(0),
                 );
                 replaceAgent(bootstrap.agent);
-                publishSession(entry);
+                publishSession(entry, true);
                 for (const event of buffered) applyEventNow(event);
                 drainHydrationBroadcastEvents();
                 if (
@@ -785,6 +793,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                 scheduleSessionLoadRetry(entry, error);
             })
             .finally(() => {
+                entry.inactiveRefreshPending = false;
                 if (entry.loading === loading) {
                     entry.loading = undefined;
                     if (
@@ -811,6 +820,34 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         if (entry.loading !== undefined) return entry.loading;
         if (entry.historyLoaded && !entry.reconcileRequired) return Promise.resolve();
         return requestSessionLoad(entry);
+    };
+
+    /**
+     * An inactive session deliberately does not assemble a live assistant
+     * message. `message.updated` is a provider-segment snapshot, not a reliable
+     * cumulative transcript, so retaining it after skipping deltas would lose or
+     * duplicate text. Marking the cache stale lets the next authoritative load
+     * repair it without doing work for every streaming event.
+     */
+    const markInactiveTranscriptStale = (entry: SessionEntry): void => {
+        entry.reconcileRequired = true;
+    };
+
+    /** Refresh an inactive cache once, at a non-streaming run boundary. */
+    const refreshInactiveTranscript = (entry: SessionEntry): void => {
+        if (entry.subscribers.size > 0) return;
+        markInactiveTranscriptStale(entry);
+        if (entry.loading !== undefined) {
+            // The in-flight snapshot may have started before the run settled.
+            // Ask its finally-block for one follow-up load after buffered events
+            // have been applied, while still coalescing all intervening events.
+            if (!entry.inactiveRefreshPending) {
+                entry.inactiveRefreshPending = true;
+                entry.loadRequestedRevision += 1;
+            }
+            return;
+        }
+        background(requestSessionLoad(entry));
     };
 
     const resync = (reconcileSessions: boolean): Promise<void> => {
@@ -1270,6 +1307,11 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
             case "run.finished":
                 updateRun(event.payload.agentId, event.payload.run);
                 recoverCorruptedMessages(event.payload.agentId);
+                {
+                    const entry = sessions.get(event.payload.agentId);
+                    if (entry !== undefined && entry.subscribers.size === 0)
+                        refreshInactiveTranscript(entry);
+                }
                 if (agentOf(event.payload.agentId)?.parentAgentId === null) {
                     options.onTopLevelSessionFinished?.(event.payload.agentId);
                 }
@@ -1418,6 +1460,15 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
 
     const updateMessageSnapshot = (agentId: string, message: Message, runId: string): void => {
         const entry = sessions.get(agentId);
+        if (entry !== undefined && entry.subscribers.size === 0 && message.role === "agent") {
+            // There is no reliable wire-level distinction between a complete
+            // assistant transcript and the current provider segment. Without
+            // the deltas that precede it, merging this snapshot would silently
+            // lose or duplicate earlier segments. The run boundary refreshes
+            // the cache from authoritative history instead.
+            markInactiveTranscriptStale(entry);
+            return;
+        }
         const current = entry?.messages.get(message.id);
         if (
             current?.message.role === "agent" &&
@@ -1449,6 +1500,10 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
 
     const createMessage = (agentId: string, message: Message, runId: string | null): void => {
         const entry = sessions.get(agentId);
+        if (entry !== undefined && entry.subscribers.size === 0 && message.role === "agent") {
+            markInactiveTranscriptStale(entry);
+            return;
+        }
         const current = entry?.messages.get(message.id);
         if (current !== undefined) {
             /*
@@ -1495,6 +1550,13 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
     ): void => {
         const entry = sessions.get(payload.agentId);
         if (entry === undefined) return;
+        if (entry.subscribers.size === 0) {
+            // Token events are intentionally not assembled for a background
+            // session. A single authoritative history read at run completion
+            // gives it every message without the per-token projection cost.
+            markInactiveTranscriptStale(entry);
+            return;
+        }
         if (entry.corruptedMessageIds.has(payload.messageId)) return;
         const current = entry?.messages.get(payload.messageId);
         const blockIndex =
@@ -1531,6 +1593,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         const entry = sessions.get(agentId);
         if (entry === undefined || entry.corruptedMessageIds.size === 0) return;
         entry.reconcileRequired = true;
+        if (entry.subscribers.size === 0) return;
         background(requestSessionLoad(entry));
     };
 
@@ -2121,6 +2184,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                     activityLoading: undefined,
                     activityRevision: 0,
                     reconcileRequired: false,
+                    inactiveRefreshPending: false,
                     corruptedMessageIds: new Set(),
                     questionRecovery: undefined,
                     slashCommands: [],
@@ -2132,9 +2196,24 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                 }
                 sessions.set(subscription.sessionId, entry);
             }
+            const wasInactive = entry.subscribers.size === 0;
             const subscriber: SessionSubscriber = { ...subscription, closed: false };
             entry.subscribers.add(subscriber);
-            subscriber.onChange(entry.store.elements(), entry.store.session());
+            if (
+                wasInactive &&
+                entry.historyLoaded &&
+                !entry.reconcileRequired &&
+                entry.agent !== undefined &&
+                config !== undefined
+            ) {
+                // Metadata can change while the session has no subscribers, so
+                // the retained store may be older even when no transcript
+                // reload is required. Re-project once on reactivation before
+                // handing the snapshot to the new reader.
+                publishSession(entry, true);
+            } else {
+                subscriber.onChange(entry.store.elements(), entry.store.session());
+            }
             void ensureSessionLoaded(entry);
             const connectedEntry = entry;
             return {
