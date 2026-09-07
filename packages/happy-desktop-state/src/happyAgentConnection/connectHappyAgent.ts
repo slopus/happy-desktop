@@ -3076,13 +3076,14 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         renameGroup(target, name) {
             return renameGroup(target, name);
         },
-        async createBot(name) {
+        async createBot(name, nameConfigured = true) {
             // One id for the whole attempt: the daemon takes it as the bot's
             // own id and as the mutation key, so a request repeated after a
             // dropped answer settles on the bot that was already made.
             const botId = nextId();
+            const request = { id: botId, mutationId: botId, name, nameConfigured };
             const { bot } = await client.createBot(
-                { id: botId, mutationId: botId, name },
+                request,
                 { signal: rootController.signal },
             );
             groupsStore.setState((state) => ({ bots: replaceResource(state.bots, bot) }));

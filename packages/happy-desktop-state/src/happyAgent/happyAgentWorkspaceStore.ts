@@ -644,6 +644,8 @@ export interface HappyAgentWorkspaceSnapshot {
     readonly create?: HappyAgentCreateSnapshot;
     /** Where adding a folder to this machine as a project stands. */
     readonly projectAdd: HappyAgentProjectAddSnapshot;
+    /** Where reserving a new unnamed bot on this machine stands. */
+    readonly botAdd: HappyAgentBotAddSnapshot;
     /** GitHub project being cloned onto a peer Happy Agent, while its dialog is open. */
     readonly projectClone?: HappyAgentProjectCloneSnapshot;
 }
@@ -670,6 +672,12 @@ export interface HappyAgentProjectAddSnapshot {
      * gone back to the picker over. Cancelling that attempt reports nothing of
      * its own, since choosing nothing is a complete act with nothing to say.
      */
+    readonly error?: string;
+}
+
+/** Creating an immediately usable placeholder bot from the sidebar. */
+export interface HappyAgentBotAddSnapshot {
+    readonly pending: boolean;
     readonly error?: string;
 }
 
@@ -1231,6 +1239,8 @@ export interface HappyAgentWorkspaceStore {
      * starting clears it.
      */
     createOpen(groupId?: HappyAgentGroupId): void;
+    /** Creates an unnamed bot and opens its permanent conversation. */
+    botCreate(): void;
     /** Chooses whether the surface is making a task or a bot. */
     createKindUpdate(kind: HappyAgentCreateKind): void;
     /** Chooses which project or worktree the session will start in. */
@@ -1323,6 +1333,7 @@ function noOpenConversation(): Promise<never> {
 
 /** Nothing is being added and nothing was refused: one shared idle value. */
 const PROJECT_ADD_IDLE: HappyAgentProjectAddSnapshot = { pending: false };
+const BOT_ADD_IDLE: HappyAgentBotAddSnapshot = { pending: false };
 
 function githubRepositoryParse(
     value: string,
@@ -1529,6 +1540,7 @@ export function happyAgentWorkspaceStoreCreate(
      * which is the thing `pending` both reports and enforces.
      */
     let projectAdd: HappyAgentProjectAddSnapshot = PROJECT_ADD_IDLE;
+    let botAdd: HappyAgentBotAddSnapshot = BOT_ADD_IDLE;
     let projectClone: HappyAgentProjectCloneSnapshot | undefined;
     /** Clone requests awaiting either a durable lifecycle or a mutation refusal. */
     const pendingProjectClones = new Map<
@@ -1799,6 +1811,7 @@ export function happyAgentWorkspaceStoreCreate(
         fileTreeCollapsed,
         workspaceFilesLoading,
         projectAdd,
+        botAdd,
         ...(projectClone ? { projectClone } : {}),
     }));
 
@@ -2193,6 +2206,7 @@ export function happyAgentWorkspaceStoreCreate(
                 snapshot.workspaceFilesLoading === workspaceFilesLoading &&
                 snapshot.create === create &&
                 snapshot.projectAdd === projectAdd &&
+                snapshot.botAdd === botAdd &&
                 snapshot.projectClone === projectClone
                     ? snapshot
                     : {
@@ -2217,6 +2231,7 @@ export function happyAgentWorkspaceStoreCreate(
                           ...(openInRecent ? { openInRecent } : {}),
                           workspaceFilesLoading,
                           projectAdd,
+                          botAdd,
                           ...(projectClone ? { projectClone } : {}),
                           ...(create ? { create } : {}),
                           ...(activeMainViewId ? { activeMainViewId } : {}),
@@ -4182,6 +4197,7 @@ export function happyAgentWorkspaceStoreCreate(
                     ...(openInRecent ? { openInRecent } : {}),
                     workspaceFilesLoading,
                     projectAdd,
+                    botAdd,
                     ...(projectClone ? { projectClone } : {}),
                     ...(create ? { create } : {}),
                     ...(activeMainViewId ? { activeMainViewId } : {}),
@@ -5089,6 +5105,24 @@ export function happyAgentWorkspaceStoreCreate(
                 recompute();
             }
             return client.openIn(groupId, target);
+        },
+        botCreate() {
+            if (disposed || botAdd.pending) return;
+            botAdd = { pending: true };
+            recompute();
+            void (async () => {
+                try {
+                    const location = await list.botCreate("New Bot", false);
+                    if (disposed) return;
+                    botAdd = BOT_ADD_IDLE;
+                    recompute();
+                    output({ type: "conversationOpenRequested", location });
+                } catch (error) {
+                    if (disposed) return;
+                    botAdd = { pending: false, error: happyAgentUserError(error).message };
+                    recompute();
+                }
+            })();
         },
         createOpen(groupId) {
             // Asking for the surface while it is already materialized — coming

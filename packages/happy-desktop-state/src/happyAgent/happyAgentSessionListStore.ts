@@ -214,7 +214,7 @@ export interface HappyAgentSessionListStore {
      * reserving a row, and rejects with a displayable reason when the host
      * refuses the name.
      */
-    botCreate(name: string): Promise<HappyAgentSessionLocation>;
+    botCreate(name: string, nameConfigured?: boolean): Promise<HappyAgentSessionLocation>;
     /** Archives a bot, preserving its dedicated folder for a later restore. */
     botArchive(botId: HappyAgentBotId): Promise<void>;
     /** Moves one bot after `afterId`, or to the front of the bot list when null. */
@@ -1613,10 +1613,10 @@ export function happyAgentSessionListStoreCreate(
                 );
                 reorderMutations.set(mutationId, { kind: "project", order });
             }),
-        botCreate: async (name) => {
+        botCreate: async (name, nameConfigured = true) => {
             store.setState({ ...store.getState(), mutationError: undefined });
             try {
-                const bot = await deps.connectActions.createBot(name);
+                const bot = await deps.connectActions.createBot(name, nameConfigured);
                 // A bot's workspace is its group and its one agent is its one
                 // conversation, so the bot the host answered with already holds
                 // the whole address.
