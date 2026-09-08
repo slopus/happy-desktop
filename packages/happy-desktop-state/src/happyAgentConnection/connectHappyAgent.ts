@@ -3076,14 +3076,13 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         renameGroup(target, name) {
             return renameGroup(target, name);
         },
-        async createBot(name, nameConfigured = true) {
+        async createBot(name) {
             // One id for the whole attempt: the daemon takes it as the bot's
             // own id and as the mutation key, so a request repeated after a
             // dropped answer settles on the bot that was already made.
             const botId = nextId();
-            const request = { id: botId, mutationId: botId, name, nameConfigured };
             const { bot } = await client.createBot(
-                request,
+                { id: botId, mutationId: botId, ...(name === undefined ? {} : { name }) },
                 { signal: rootController.signal },
             );
             groupsStore.setState((state) => ({ bots: replaceResource(state.bots, bot) }));
@@ -3312,6 +3311,29 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
 
     function renameGroup(target: GroupTarget, name: string): string {
         const mutationId = nextId();
+        if (target.kind === "bot") {
+            return mutation(
+                "rename_group",
+                mutationId,
+                () => {
+                    const bot = botOf(target.botId);
+                    if (bot === undefined) throw new Error("The bot is not loaded.");
+                    return client.renameBot(
+                        bot.id,
+                        { name, mutationId },
+                        { ifMatch: bot.version, signal: rootController.signal },
+                    );
+                },
+                ({ bot }) => {
+                    groupsStore.setState((state) => ({ bots: replaceResource(state.bots, bot) }));
+                    adoptAgent(bot.agent);
+                    publishGroups();
+                },
+                undefined,
+                undefined,
+                `bot:${target.botId}`,
+            );
+        }
         if (target.kind === "project") {
             const project = groupsStore
                 .getState()

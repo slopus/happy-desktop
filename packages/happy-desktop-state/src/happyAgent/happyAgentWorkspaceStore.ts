@@ -700,7 +700,7 @@ export const HAPPY_AGENT_PANEL_FILE_VIEW_ID = "file";
  *
  * A task is work in a project that ends: a session, its first message, and the
  * checkout it runs in. A bot is a colleague that does not end: one permanent
- * conversation with a folder of its own, made from a name alone. They are the
+ * conversation with a folder of its own, named from its first message. They are the
  * two things this machine can be asked for, so they are one closed choice
  * rather than two surfaces.
  */
@@ -711,15 +711,12 @@ export type HappyAgentCreateKind = "task" | "bot";
  * where to run, how it is configured, and what to say — decided in one place
  * rather than by starting a session and then correcting it.
  *
- * The bot half of the surface is held here too, for the same reason: what is
- * being written is one draft with two forms, and switching between them must
- * not throw away the other one.
+ * Switching to bot creation preserves the task draft. A bot itself needs no
+ * creation draft: it opens directly into its permanent conversation.
  */
 export interface HappyAgentCreateSnapshot {
     /** Which of the two things the surface is currently making. */
     readonly kind: HappyAgentCreateKind;
-    /** The bot's display name. A blank one is not a bot, and cannot be created. */
-    readonly botName: string;
     /** The group it will start in; the last one used, until changed. */
     readonly groupId?: HappyAgentGroupId;
     /**
@@ -776,16 +773,21 @@ export type HappyAgentFileViewMode = "preview" | "unified" | "split" | "edit";
  * than in the field so the surface stays a pure function of this snapshot, and
  * so an in-flight rename survives the row list being republished underneath it.
  */
-export interface HappyAgentRenameSnapshot {
-    readonly projectId: HappyAgentProjectId;
-    /** Absent when the project itself is being renamed rather than one of its worktrees. */
-    readonly worktreeId?: HappyAgentWorktreeId;
+export type HappyAgentRenameSnapshot = {
     /** What it is called now, for the dialog's title. */
     readonly currentName: string;
     readonly draft: string;
     /** True while the host is being told; the dialog stays up and inert. */
     readonly submitting: boolean;
-}
+} & (
+    | { readonly kind: "bot"; readonly botId: string }
+    | { readonly kind: "project"; readonly projectId: HappyAgentProjectId }
+    | {
+          readonly kind: "workspace";
+          readonly projectId: HappyAgentProjectId;
+          readonly worktreeId: HappyAgentWorktreeId;
+      }
+);
 
 /**
  * A project archive the reader has asked for and has not yet gone through with.
@@ -1247,8 +1249,6 @@ export interface HappyAgentWorkspaceStore {
     createGroupUpdate(groupId: HappyAgentGroupId): void;
     /** Edits the first message. */
     createTextUpdate(text: string): void;
-    /** Edits the name the bot will be created with. */
-    createBotNameUpdate(name: string): void;
     /** Chooses how the session will be configured. */
     createModelUpdate(input: HappyAgentModelSelection): void;
     createEffortUpdate(effort?: HappyAgentThinkingLevel): void;
@@ -1256,13 +1256,15 @@ export interface HappyAgentWorkspaceStore {
     createServiceTierUpdate(serviceTier?: HappyAgentServiceTier): void;
     /**
      * Makes whatever the surface currently is: a task starts its session and
-     * sends the first message, a bot is created from its name. Either way the
+     * sends the first message, a bot starts unnamed. Either way the
      * conversation it produced is reported through `conversationOpenRequested`,
      * so the window lands in what it just made.
      */
     createSubmit(): Promise<void>;
     /** Starts renaming a project, or one of its worktrees, from its current name. */
     renameOpen(projectId: HappyAgentProjectId, worktreeId: HappyAgentWorktreeId | undefined): void;
+    /** Opens the same name dialog for a bot's persistent identity. */
+    botRenameOpen(botId: string): void;
     /** Edits the pending name. */
     renameDraftUpdate(draft: string): void;
     /** Abandons the rename. */
@@ -5112,7 +5114,7 @@ export function happyAgentWorkspaceStoreCreate(
             recompute();
             void (async () => {
                 try {
-                    const location = await list.botCreate("New Bot", false);
+                    const location = await list.botCreate();
                     if (disposed) return;
                     botAdd = BOT_ADD_IDLE;
                     recompute();
@@ -5141,7 +5143,6 @@ export function happyAgentWorkspaceStoreCreate(
             const chosen = groupId ?? createGroupDefault(groups);
             createInstance += 1;
             create = {
-                botName: "",
                 ...(chosen ? { groupId: chosen } : {}),
                 groups,
                 groupsLoading: createGroupsLoading(),
@@ -5159,9 +5160,8 @@ export function happyAgentWorkspaceStoreCreate(
         },
         createKindUpdate(kind) {
             if (!create || create.submitting || create.kind === kind) return;
-            // Both halves of the draft are kept. Switching to look at the other
-            // one is not abandoning this one, and an error belongs to the thing
-            // that failed rather than to the surface, so it goes with the switch.
+            // Keep the task draft while switching; an error belongs only to
+            // the kind of creation that failed.
             create = { ...create, kind, error: undefined };
             recompute();
         },
@@ -5175,11 +5175,6 @@ export function happyAgentWorkspaceStoreCreate(
             create = { ...create, text };
             recompute();
         },
-        createBotNameUpdate(name) {
-            if (!create || create.submitting) return;
-            create = { ...create, botName: name };
-            recompute();
-        },
         createModelUpdate: (input) => createDraft?.modelUpdate(input),
         createEffortUpdate: (effort) => createDraft?.effortUpdate(effort),
         createPermissionModeUpdate: (mode) => createDraft?.permissionModeUpdate(mode),
@@ -5187,25 +5182,22 @@ export function happyAgentWorkspaceStoreCreate(
         async createSubmit() {
             const pending = create;
             if (!pending || pending.submitting) return;
-            const botName = pending.botName.trim();
             const text = pending.text.trim();
             const groupId = pending.groupId;
             const instance = createInstance;
             // The one act this submit performs, or nothing at all. A surface
             // with nothing to say and nowhere to run is not a session waiting to
-            // be started, and an unnamed bot is not a bot: both are unfinished
-            // forms, and an unfinished form is not a failure to report.
+            // be started. A bot needs no draft: its first message names it.
             let commit: (() => Promise<void>) | undefined;
             if (pending.kind === "bot") {
-                if (botName.length > 0)
-                    commit = async () => {
-                        // The bot's one conversation is where the reader wanted
-                        // to end up: it is what they will say the first thing to.
-                        const location = await list.botCreate(botName);
-                        if (instance !== createInstance) return;
-                        output({ type: "conversationOpenRequested", location });
-                        if (create) create = { ...create, botName: "", submitting: false };
-                    };
+                commit = async () => {
+                    // The bot's one conversation is where the reader wanted
+                    // to end up: it is what they will say the first thing to.
+                    const location = await list.botCreate();
+                    if (instance !== createInstance) return;
+                    output({ type: "conversationOpenRequested", location });
+                    if (create) create = { ...create, submitting: false };
+                };
             } else if (text.length > 0 && groupId !== undefined) {
                 commit = async () => {
                     await groupSubmit(groupId, text, [], createDraft?.get().selection);
@@ -5246,6 +5238,20 @@ export function happyAgentWorkspaceStoreCreate(
             }
             recompute();
         },
+        botRenameOpen(botId) {
+            if (projectArchive?.submitting) return;
+            const bot = list.get().bots.find((candidate) => candidate.id === botId);
+            if (!bot) return;
+            rename = {
+                kind: "bot",
+                botId,
+                currentName: bot.name,
+                draft: bot.name,
+                submitting: false,
+            };
+            projectComputeClose();
+            recompute();
+        },
         renameOpen(projectId, worktreeId) {
             // The settings dialog is where a submitting archive is being shown.
             // Opening another row's settings over it would hide a destructive
@@ -5264,8 +5270,9 @@ export function happyAgentWorkspaceStoreCreate(
             // rather than replacing, and an empty field would throw away the
             // thing most renames start from.
             rename = {
-                projectId,
-                ...(worktreeId ? { worktreeId } : {}),
+                ...(worktreeId
+                    ? { kind: "workspace" as const, projectId, worktreeId }
+                    : { kind: "project" as const, projectId }),
                 currentName,
                 draft: currentName,
                 submitting: false,
@@ -5287,7 +5294,11 @@ export function happyAgentWorkspaceStoreCreate(
             // The confirmation is reached from inside this dialog, so it is put
             // down with it. Never while the host is being told: that request is
             // already gone and still has an answer to report.
-            if (projectArchive?.projectId === rename.projectId && !projectArchive.submitting)
+            if (
+                rename.kind !== "bot" &&
+                projectArchive?.projectId === rename.projectId &&
+                !projectArchive.submitting
+            )
                 projectArchive = undefined;
             rename = undefined;
             // The compute block belongs to this dialog and goes with it, which
@@ -5300,24 +5311,27 @@ export function happyAgentWorkspaceStoreCreate(
             const pending = rename;
             if (!pending || pending.submitting) return;
             const name = pending.draft.trim();
-            // A blank name is not a rename, and neither is the name it already
-            // has; both just close, rather than making the host answer for it.
-            if (name.length === 0 || name === pending.currentName) {
+            // Explicitly saving a bot name, even its current placeholder, ends
+            // auto-naming eligibility on the daemon.
+            if (name.length === 0 || (pending.kind !== "bot" && name === pending.currentName)) {
                 rename = undefined;
                 recompute();
                 return;
             }
-            rename = { ...pending, submitting: true };
+            const submitting = { ...pending, submitting: true };
+            rename = submitting;
             recompute();
             try {
-                await (pending.worktreeId
-                    ? list.worktreeRename(pending.projectId, pending.worktreeId, name)
-                    : list.projectRename(pending.projectId, name));
+                await (pending.kind === "bot"
+                    ? list.botRename(pending.botId, name)
+                    : pending.kind === "workspace"
+                      ? list.worktreeRename(pending.projectId, pending.worktreeId, name)
+                      : list.projectRename(pending.projectId, name));
             } finally {
                 // Closed either way: the list store reports a failed rename by
                 // reconciling the old name back, which says more than a dialog
                 // stuck open over a row that already shows the answer.
-                if (rename === undefined || rename.projectId === pending.projectId) {
+                if (rename === submitting) {
                     rename = undefined;
                     projectComputeClose();
                 }
@@ -5435,7 +5449,7 @@ export function happyAgentWorkspaceStoreCreate(
                 // this confirmation is describing a project that no longer
                 // exists, so it closes with it.
                 projectArchive = undefined;
-                if (rename?.projectId === pending.projectId) {
+                if (rename && rename.kind !== "bot" && rename.projectId === pending.projectId) {
                     rename = undefined;
                     projectComputeClose();
                 }

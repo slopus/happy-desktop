@@ -15,7 +15,6 @@ import { LottieScene } from "./LottieScene";
 import { ScrollArea, ScrollbarTracks, useScrollbarController } from "./Scrollbar";
 import { SegmentedControl } from "./SegmentedControl";
 import { Select, type SelectOption } from "./Select";
-import { TextField } from "./TextField";
 
 /** What the surface is titled, by what it is currently making. */
 const KIND_TITLE: Record<HappyAgentCreateKind, string> = {
@@ -48,8 +47,6 @@ export interface HappyAgentCreateSessionDestination {
 export type HappyAgentCreateSessionPageProps = {
     /** Which of the two things this surface is currently making. */
     kind: HappyAgentCreateKind;
-    /** The bot's name. Owned by the caller, like the task, and kept beside it. */
-    botName: string;
     /** Every project and worktree offered, in the order the sidebar lists them. */
     destinations: readonly HappyAgentCreateSessionDestination[];
     /** The one chosen; absent while the machine has offered nothing to choose. */
@@ -67,7 +64,6 @@ export type HappyAgentCreateSessionPageProps = {
     /** Why the draft cannot currently be submitted to its Happy Agent. */
     submitDisabledReason?: string;
     onKindSelect: (kind: HappyAgentCreateKind) => void;
-    onBotNameChange: (name: string) => void;
     onDestinationSelect: (id: string) => void;
     onTextChange: (text: string) => void;
     onModelChange: (selection: HappyAgentModelSelection) => void;
@@ -106,9 +102,9 @@ function destinationDetail(
  *
  * The column opens with the mark and the title, because arriving somewhere
  * should say where you are, and then a two-way choice of what to make. A task is
- * work in a project that ends; a bot is a colleague that does not, made from a
- * name alone. They are two forms of one draft, so switching between them keeps
- * both — the tabs pick which one is on screen, never which one survives.
+ * work in a project that ends; a bot is a colleague whose name comes from its
+ * first message. Switching between them preserves the task draft; the bot
+ * opens an empty conversation without a naming form.
  *
  * Beyond that the surface stays empty on purpose: no toolbar, no list of what
  * the window was showing a moment ago. The column is capped at 640px, because a
@@ -120,9 +116,8 @@ function destinationDetail(
  *
  * Props only, and every state is directly renderable: either tab, empty,
  * written, a task too long for the field, a machine still reading its projects,
- * a machine with none, a start in flight, and a start that failed. Both drafts
- * belong to the caller, so navigating away and back finds them where they were
- * left.
+ * a machine with none, a start in flight, and a start that failed. The task draft
+ * belongs to the caller, so navigating away and back preserves it.
  */
 export function HappyAgentCreateSessionPage(props: HappyAgentCreateSessionPageProps) {
     const scrollbarController = useScrollbarController("vertical");
@@ -148,13 +143,9 @@ export function HappyAgentCreateSessionPage(props: HappyAgentCreateSessionPagePr
     const menus = props.menus;
     const bot = props.kind === "bot";
     const chosen = props.destinations.find((destination) => destination.id === props.destinationId);
-    // A task with nothing written and nowhere to run is not a session waiting to
-    // start, and an unnamed bot is not a bot. The commit says so by staying
-    // inert rather than failing when used.
+    // A bot starts empty; its first message supplies the naming context.
     const submittable =
-        (bot
-            ? props.botName.trim().length > 0
-            : props.text.trim().length > 0 && chosen !== undefined) &&
+        (bot || (props.text.trim().length > 0 && chosen !== undefined)) &&
         !submitting &&
         props.submitDisabledReason === undefined;
     const destinationOptions: SelectOption[] = props.destinations.map((destination) => ({
@@ -256,10 +247,7 @@ export function HappyAgentCreateSessionPage(props: HappyAgentCreateSessionPagePr
                         {props.submitDisabledReason}
                     </Banner>
                 ) : null}
-                {/* Both drafts are drawn into one box that keeps the taller
-                    one's height. The tabs change what is being written, not
-                    where the page is: the mark, the title, the pick, and the
-                    commit hold their places across the switch. */}
+                {/* Keep the page's frame stable when switching creation kinds. */}
                 <div
                     className="happy-agent-create-session__body"
                     data-happy-desktop-ui="happy-agent-create-session-body"
@@ -269,26 +257,12 @@ export function HappyAgentCreateSessionPage(props: HappyAgentCreateSessionPagePr
                             className="happy-agent-create-session__bot"
                             data-happy-desktop-ui="happy-agent-create-session-bot"
                         >
-                            <TextField
-                                autoFocus
-                                data-testid="happy-agent-create-session-bot-name"
-                                disabled={submitting}
-                                fullWidth
-                                label="Name"
-                                onSubmit={() => {
-                                    if (submittable) props.onSubmit();
-                                }}
-                                onValueChange={(value) => props.onBotNameChange(value)}
-                                placeholder="What should it be called?"
-                                value={props.botName}
-                            />
                             <p
                                 className="happy-agent-create-session__note"
                                 data-happy-desktop-ui="happy-agent-create-session-note"
                             >
-                                A bot is one permanent conversation with a folder of its own. The
-                                name is how you will call it; Happy Agent gives it a matching folder
-                                and keeps both.
+                                A bot is one permanent conversation with a folder of its own. Tell
+                                it what to do in your first message and it will name itself.
                             </p>
                         </div>
                     ) : (

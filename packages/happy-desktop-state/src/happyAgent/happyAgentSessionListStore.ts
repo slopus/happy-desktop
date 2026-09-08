@@ -206,15 +206,16 @@ export interface HappyAgentSessionListStore {
     ): Promise<void>;
 
     /**
-     * Creates a bot with this display name and answers with the address of the
+     * Creates a bot with an optional display name and answers with the address of the
      * one conversation it is made of, so the caller can open what it just made.
      *
      * Nothing about a bot can be named locally — the daemon derives its folder
      * name and makes its agent — so this waits on the host rather than
      * reserving a row, and rejects with a displayable reason when the host
-     * refuses the name.
+     * refuses creation.
      */
-    botCreate(name: string, nameConfigured?: boolean): Promise<HappyAgentSessionLocation>;
+    botCreate(name?: string): Promise<HappyAgentSessionLocation>;
+    botRename(botId: string, name: string): Promise<void>;
     /** Archives a bot, preserving its dedicated folder for a later restore. */
     botArchive(botId: HappyAgentBotId): Promise<void>;
     /** Moves one bot after `afterId`, or to the front of the bot list when null. */
@@ -1613,10 +1614,10 @@ export function happyAgentSessionListStoreCreate(
                 );
                 reorderMutations.set(mutationId, { kind: "project", order });
             }),
-        botCreate: async (name, nameConfigured = true) => {
+        botCreate: async (name) => {
             store.setState({ ...store.getState(), mutationError: undefined });
             try {
-                const bot = await deps.connectActions.createBot(name, nameConfigured);
+                const bot = await deps.connectActions.createBot(name);
                 // A bot's workspace is its group and its one agent is its one
                 // conversation, so the bot the host answered with already holds
                 // the whole address.
@@ -1625,14 +1626,26 @@ export function happyAgentSessionListStoreCreate(
                     sessionId: bot.agent.id as HappyAgentSessionId,
                 };
             } catch (error) {
-                // Recorded like every other refused act, and re-thrown: this one
-                // was asked for by a surface that is still on screen holding the
-                // name, and it has to be able to say why nothing was made.
+                // The creation surface reports why nothing was made.
                 const failure = happyAgentUserError(error);
                 if (!disposed) store.setState({ ...store.getState(), mutationError: failure });
                 throw failure;
             }
         },
+        botRename: (botId, name) =>
+            mutate(async () => {
+                if (!internal.getState().catalog.bots.some((bot) => bot.id === botId)) return;
+                internal.setState((state) => ({
+                    catalog: {
+                        ...state.catalog,
+                        bots: state.catalog.bots.map((bot) =>
+                            bot.id === botId ? { ...bot, name } : bot,
+                        ),
+                    },
+                }));
+                publish();
+                connectMutationTrack(deps.connectActions.renameGroup({ kind: "bot", botId }, name));
+            }),
         botArchive: (botId) =>
             mutate(async () => {
                 if (!internal.getState().catalog.bots.some((bot) => bot.id === botId)) return;

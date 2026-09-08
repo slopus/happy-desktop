@@ -102,9 +102,7 @@ const LONG_TASK = [
 ].join("\n");
 
 const HANDLERS = {
-    botName: "",
     kind: "task",
-    onBotNameChange: () => {},
     onDestinationSelect: () => {},
     onKindSelect: () => {},
     onEffortChange: () => {},
@@ -271,7 +269,7 @@ export function HappyAgentCreateSessionBlueprintPage() {
                 )}
             </Specimen>
             <Specimen
-                detail="the other tab · a bot is made from a name alone, so the project and the model choices are not asked for · Enter alone commits it"
+                detail="the other tab · a bot starts without a name, project, or model form"
                 label="Bot · empty"
                 number="10"
                 stage="app"
@@ -279,7 +277,6 @@ export function HappyAgentCreateSessionBlueprintPage() {
                 {region(
                     <HappyAgentCreateSessionPage
                         {...HANDLERS}
-                        botName=""
                         destinationId="prj_happy"
                         destinations={DESTINATIONS}
                         kind="bot"
@@ -287,18 +284,17 @@ export function HappyAgentCreateSessionBlueprintPage() {
                         text=""
                     />,
                 )}
-                <DimensionRule label="name field 36px · note 12px/18px" />
+                <DimensionRule label="note 12px/18px" />
             </Specimen>
             <Specimen
-                detail="a named bot · the commit is live · the task written on the other tab is still there, untouched"
-                label="Bot · named"
+                detail="the commit is live without a name · the task written on the other tab is still there, untouched"
+                label="Bot · ready"
                 number="11"
                 stage="app"
             >
                 {region(
                     <HappyAgentCreateSessionPage
                         {...HANDLERS}
-                        botName="Nova"
                         destinationId="prj_happy"
                         destinations={DESTINATIONS}
                         kind="bot"
@@ -308,7 +304,7 @@ export function HappyAgentCreateSessionBlueprintPage() {
                 )}
             </Specimen>
             <Specimen
-                detail="the bot is being made · the name goes inert and the commit says so · and beside it, a name the machine refused"
+                detail="the bot is being made · the commit is busy · and beside it, a creation the machine refused"
                 label="Bot · creating and refused"
                 number="12"
                 stage="app"
@@ -317,7 +313,6 @@ export function HappyAgentCreateSessionBlueprintPage() {
                     {region(
                         <HappyAgentCreateSessionPage
                             {...HANDLERS}
-                            botName="Nova"
                             destinations={DESTINATIONS}
                             kind="bot"
                             menus={MENUS}
@@ -329,9 +324,8 @@ export function HappyAgentCreateSessionBlueprintPage() {
                     {region(
                         <HappyAgentCreateSessionPage
                             {...HANDLERS}
-                            botName="Nova"
                             destinations={DESTINATIONS}
-                            error="A bot called Nova already lives on this machine."
+                            error="The bot's folder could not be created."
                             kind="bot"
                             menus={MENUS}
                             text=""

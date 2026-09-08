@@ -746,6 +746,7 @@ export interface CreateRemoteProjectInput {
 }
 
 export type GroupTarget =
+    | { kind: "bot"; botId: string }
     | { kind: "project"; projectId: string }
     | { kind: "workspace"; projectId: string; workspaceId: string };
 
@@ -822,7 +823,7 @@ export interface HappyAgentConnection {
      * asked for needs both. The id is supplied so a repeated attempt creates
      * the same bot rather than a second one.
      */
-    createBot(name: string, nameConfigured?: boolean): Promise<Bot>;
+    createBot(name?: string): Promise<Bot>;
     archiveBot(botId: string): MutationId;
     reorderBot(botId: string, afterId: string | null): MutationId;
     reorderProject(projectId: string, afterId: string | null): MutationId;

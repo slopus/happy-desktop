@@ -1,6 +1,10 @@
 packages:
     - packages/*
 
+# Local bot-naming integration only. Replace with the published SDK before release.
+overrides:
+    "@slopus/happy-agent-client": link:/Users/kirilldubovitskiy/Happy/Workspaces/happy-agent/bot-identity-naming/packages/happy-agent-client
+
 # Electron downloads its platform binary during installation.
 onlyBuiltDependencies:
     - electron

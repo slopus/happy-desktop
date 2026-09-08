@@ -29,6 +29,7 @@ import type {
     HappyAgentSidebarVisibilityStore,
     HappyAgentPanelSnapshot,
     HappyAgentProjectAddSnapshot,
+    HappyAgentBotAddSnapshot,
     HappyAgentPanelStore,
     HappyAgentPanelTabId,
     HappyAgentPanelTabSnapshot,
@@ -264,6 +265,7 @@ export interface AppHappyAgentEntry {
      * a host with no live stores supplies no `session`.
      */
     readonly projectAdd?: HappyAgentProjectAddSnapshot;
+    readonly botAdd?: HappyAgentBotAddSnapshot;
     /** The live stores for this Happy Agent, present once its connection is up. */
     readonly session?: AppHappyAgentSession;
     /** Authenticated setup is available before protected product stores load. */
@@ -751,6 +753,8 @@ function rowMenuItems(
 ): MenuItem[] {
     if (bots.some((bot) => bot.workspaceId === item.id))
         return [
+            { kind: "item", id: ROW_MENU_RENAME, label: "Rename bot", icon: "edit" },
+            { kind: "separator" },
             {
                 kind: "item",
                 id: ROW_MENU_ARCHIVE,
@@ -1312,23 +1316,28 @@ function happyAgentSections(
     shortcutProject?: { readonly projectId: HappyAgentProjectId; readonly happyAgentId: string },
 ): SidebarSection[] {
     return directory.happyAgents.flatMap((happyAgent) => [
-        // The bots head the machine's part of the sidebar, under a heading of
-        // their own. They are the assistants the reader keeps around rather
-        // than places work happens, and a machine with none says nothing at
-        // all: an empty heading would announce a kind of thing this reader has
-        // never made.
-        ...(happyAgent.bots.length === 0
-            ? []
-            : [
-                  {
-                      id: happyAgentBotsSectionId(happyAgent.id),
-                      label: "Bots",
-                      items: happyAgent.bots.map((bot) => {
-                          const item = botSidebarItem(bot, titleShimmerEnabled);
-                          return { ...item, id: happyAgentItemId(happyAgent.id, item.id) };
-                      }),
-                  },
-              ]),
+        // Keep the heading even with no bots: its action creates the first one.
+        {
+            id: happyAgentBotsSectionId(happyAgent.id),
+            label: "Bots",
+            items: happyAgent.bots.map((bot) => {
+                const item = botSidebarItem(bot, titleShimmerEnabled);
+                return { ...item, id: happyAgentItemId(happyAgent.id, item.id) };
+            }),
+            ...(happyAgent.status === "connected" && happyAgent.session
+                ? {
+                      action: {
+                          busy: happyAgent.botAdd?.pending === true,
+                          icon: "plus" as const,
+                          label: "Add bot",
+                          reveal: "always" as const,
+                      },
+                      ...(happyAgent.botAdd?.error !== undefined
+                          ? { error: happyAgent.botAdd.error }
+                          : {}),
+                  }
+                : {}),
+        },
         happyAgentProjectsSection(happyAgent, titleShimmerEnabled, shortcutProject),
     ]);
 }
@@ -1659,8 +1668,6 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
             // top-left corner empty. Beside a connection rail the mark stands
             // down again: the rail's tiles already identify the window.
             brand={desktop ? windowState.fullScreen && !windowState.connectionRail : true}
-            composeActive={props.createOpen === true}
-            composeLabel="Create"
             footer={
                 <SidebarFooter
                     actions={sidebarUpdate}
@@ -1717,23 +1724,10 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                     id: row.id,
                 });
             }}
-            // Create is a place this window goes rather than a card thrown over
-            // wherever it already was: the row addresses it, the content region
-            // becomes it, and the row stays lit while it is showing. It is
-            // offered only while there is a machine to start a session on and
-            // somewhere to address, because a Create that opened nothing would
-            // be worse than no row.
-            {...(activeAvailability?.online === true &&
-            active?.session?.workspace &&
-            props.onCreateOpen
-                ? { onCompose: props.onCreateOpen }
-                : {})}
-            // The section action adds a project to the Happy Agent named by that
-            // section. Only a projects section offers one — a bots heading has
-            // nothing to add, because a bot is made by the agent rather than here.
+            // Each section creates its own entity on the Happy Agent it names.
             onSectionAction={(sectionId) => {
                 const section = happyAgentSectionParse(sectionId);
-                if (section?.kind !== "projects") return;
+                if (!section) return;
                 const happyAgent = happyAgentOf(section.happyAgentId);
                 if (happyAgent?.status !== "connected") {
                     props.onSettingsOpen();
@@ -1741,7 +1735,8 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                 }
                 const workspace = happyAgent.session?.workspace;
                 if (!workspace) return;
-                workspace.projectAdd();
+                if (section.kind === "bots") workspace.botCreate();
+                else workspace.projectAdd();
             }}
             onItemMenuSelect={(item, actionId) => {
                 const row = happyAgentItemParse(item.id);
@@ -1752,6 +1747,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                 if (!workspace) return;
                 const bot = happyAgent.bots.find((candidate) => candidate.workspaceId === row.id);
                 if (bot) {
+                    if (actionId === ROW_MENU_RENAME) workspace.botRenameOpen(bot.id);
                     if (actionId === ROW_MENU_ARCHIVE)
                         void workspace.botArchive(bot.id).catch(() => undefined);
                     return;
@@ -5052,7 +5048,7 @@ function happyAgentNamingDialog(
     unavailable?: string,
 ): ReactNode {
     if (!rename) return null;
-    if (rename.worktreeId)
+    if (rename.kind !== "project")
         return (
             <ModalOverlay onDismiss={() => store.renameCancel()}>
                 <Modal
@@ -5206,7 +5202,6 @@ function HappyAgentCreateSurface(props: {
     const store = props.workspace;
     return (
         <HappyAgentCreateSessionPage
-            botName={create.botName}
             destinations={create.groups.map((group) => ({
                 displayPath: group.displayPath,
                 id: group.id,
@@ -5218,10 +5213,6 @@ function HappyAgentCreateSurface(props: {
             {...(create.draft ? { menus: create.draft.menus } : {})}
             {...(create.error === undefined ? {} : { error: create.error })}
             kind={create.kind}
-            // The name is a controlled field for the same reason the task is.
-            onBotNameChange={(name) =>
-                reactFrameInputUpdate(store, () => store.createBotNameUpdate(name))
-            }
             onKindSelect={(kind) => store.createKindUpdate(kind)}
             onDestinationSelect={(id) => store.createGroupUpdate(id as HappyAgentGroupId)}
             onEffortChange={(effort) => store.createEffortUpdate(effort)}

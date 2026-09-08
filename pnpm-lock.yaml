@@ -4,6 +4,9 @@ settings:
   autoInstallPeers: false
   excludeLinksFromLockfile: false
 
+overrides:
+  '@slopus/happy-agent-client': link:/Users/kirilldubovitskiy/Happy/Workspaces/happy-agent/bot-identity-naming/packages/happy-agent-client
+
 patchedDependencies:
   react-dom@19.2.7:
     hash: 14e2cfa7d72d4064e573a384fedfcdcc7589b6d08ab00ac90e41ef11f9496979
@@ -144,8 +147,8 @@ importers:
   packages/happy-desktop-electron:
     dependencies:
       '@slopus/happy-agent-client':
-        specifier: 0.0.63
-        version: 0.0.63
+        specifier: link:/Users/kirilldubovitskiy/Happy/Workspaces/happy-agent/bot-identity-naming/packages/happy-agent-client
+        version: link:../../../../happy-agent/bot-identity-naming/packages/happy-agent-client
       electron-updater:
         specifier: ^6.8.9
         version: 6.8.9
@@ -232,8 +235,8 @@ importers:
   packages/happy-desktop-gym:
     dependencies:
       '@slopus/happy-agent-client':
-        specifier: 0.0.63
-        version: 0.0.63
+        specifier: link:/Users/kirilldubovitskiy/Happy/Workspaces/happy-agent/bot-identity-naming/packages/happy-agent-client
+        version: link:../../../../happy-agent/bot-identity-naming/packages/happy-agent-client
     devDependencies:
       '@fontsource-variable/jetbrains-mono':
         specifier: ^5.2.8
@@ -266,8 +269,8 @@ importers:
   packages/happy-desktop-state:
     dependencies:
       '@slopus/happy-agent-client':
-        specifier: 0.0.63
-        version: 0.0.63
+        specifier: link:/Users/kirilldubovitskiy/Happy/Workspaces/happy-agent/bot-identity-naming/packages/happy-agent-client
+        version: link:../../../../happy-agent/bot-identity-naming/packages/happy-agent-client
       yjs:
         specifier: ^13.6.31
         version: 13.6.31
@@ -1935,9 +1938,6 @@ packages:
   '@shikijs/vscode-textmate@10.0.2':
     resolution: {integrity: sha512-83yeghZ2xxin3Nj8z1NMd/NCuca+gsYXswywDy5bHvwlWL8tpTQmzGeUuHd9FC3E/SBEMvzJRwWEOz5gGes9Qg==}
 
-  '@sinclair/typebox@0.34.52':
-    resolution: {integrity: sha512-XiMQh7qqVlxZzcVD+kkGMNGMzcTrDMLWI7S4x7z1MkCkbDPrekpZXEUK0eZqZFMuHQg2a2DZOcDIh9o5v3Gonw==}
-
   '@sindresorhus/is@4.6.0':
     resolution: {integrity: sha512-t09vSN3MdfsyCHoFcTRCH/iUtG7OJ0CsjzB8cjAmKc/va/kIgeDI/TxsigdncE/4be734m0cvIYwNaV4i2XqAw==}
     engines: {node: '>=10'}
@@ -1947,10 +1947,6 @@ packages:
 
   '@slopus/ghostty-web@0.1.0':
     resolution: {integrity: sha512-aSM7BH/SjdX0hHK7ryggmg0ytHmrVgjN8H4yP502jTRUeiNQvP4BzRdv5Oc8K+gH5MV+eaVEZ92bNApYr13amg==}
-
-  '@slopus/happy-agent-client@0.0.63':
-    resolution: {integrity: sha512-31bXDrFOGD9ycfNtk1jlbjTeDnuVMU6h5wm9MkGVev3VCtg/+ml44YHOla4gdZ3q+JUhxly2UlBA0+rstnRSSg==}
-    engines: {node: '>=20'}
 
   '@standard-schema/spec@1.1.0':
     resolution: {integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==}
@@ -7126,17 +7122,11 @@ snapshots:
 
   '@shikijs/vscode-textmate@10.0.2': {}
 
-  '@sinclair/typebox@0.34.52': {}
-
   '@sindresorhus/is@4.6.0': {}
 
   '@slopus/ghostty-wasm@1.3.4': {}
 
   '@slopus/ghostty-web@0.1.0': {}
-
-  '@slopus/happy-agent-client@0.0.63':
-    dependencies:
-      '@sinclair/typebox': 0.34.52
 
   '@standard-schema/spec@1.1.0': {}
 
