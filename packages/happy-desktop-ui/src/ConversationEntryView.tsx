@@ -1,5 +1,5 @@
 import { type CSSProperties, type ReactNode } from "react";
-import { thumbHashToDataURL } from "thumbhash";
+import { thumbhashDataUrl } from "./thumbhashDataUrl";
 import type {
     AgentTurnTraceSummary,
     ConversationAttachment,
@@ -508,16 +508,6 @@ function fileSizeFormat(bytes: number): string {
     if (bytes < 1024) return `${String(bytes)} B`;
     if (bytes < 1024 * 1024) return `${String(Math.round(bytes / 102.4) / 10)} KB`;
     return `${String(Math.round(bytes / (102.4 * 1024)) / 10)} MB`;
-}
-
-function thumbhashDataUrl(hash: string): string | undefined {
-    try {
-        const normalized = hash.replace(/-/gu, "+").replace(/_/gu, "/");
-        const binary = atob(normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "="));
-        return thumbHashToDataURL(Uint8Array.from(binary, (character) => character.charCodeAt(0)));
-    } catch {
-        return undefined;
-    }
 }
 
 /**

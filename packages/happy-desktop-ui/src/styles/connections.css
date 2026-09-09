@@ -99,6 +99,16 @@
 .happy-connections__item[data-local] {
     background: var(--surface);
 }
+.happy-connections__image {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border-radius: inherit;
+    object-fit: cover;
+    /* The thumbhash placeholder, painted under the picture until it loads. */
+    background-size: cover;
+    background-position: center;
+}
 .happy-connections__item:hover {
     color: var(--text);
 }

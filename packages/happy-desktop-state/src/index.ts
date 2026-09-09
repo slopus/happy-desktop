@@ -24,6 +24,7 @@ export * from "./happyAgent/happyAgentClient.js";
 export * from "./happyAgent/happyAgentClock.js";
 export * from "./happyAgent/happyAgentConnection.js";
 export * from "./happyAgent/happyAgentConnectionsStore.js";
+export * from "./happyAgent/happyAgentNodeStore.js";
 export * from "./happyAgent/happyAgentOnboardingStore.js";
 export * from "./happyAgent/happyAgentDebugLogStore.js";
 export * from "./happyAgent/happyAgentConversationAuthors.js";

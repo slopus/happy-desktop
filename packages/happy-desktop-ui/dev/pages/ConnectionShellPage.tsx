@@ -6,9 +6,14 @@ import { SplashScreen } from "../../src/SplashScreen";
 import { ComponentPage, Specimen } from "../kit";
 
 export const componentNumber = "C-280";
+/** An 8 × 8 fixture picture and a ThumbHash placeholder, so nothing loads over the network. */
+const FIXTURE_AVATAR = {
+    url: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAT0lEQVR4nGPorvk+ufrTrOp3i6perqx8srHiwY6K2wfKrzNgFT1edokBq+j5srMMWEWvlZ5kwCp6r+QIA1bRp8X7GbCKvi3ezYBV9EvRNgD7aoNVazUeBQAAAABJRU5ErkJggg==",
+    thumbhash: "HAgGXxBVauaQSKZWmNmKFmhmhjAoCYMC",
+};
 const items: readonly ConnectionShellItem[] = [
     { id: "local", label: "This Mac", local: true, status: "connected" },
-    { id: "work", label: "Work", local: false, status: "connected" },
+    { id: "work", label: "Work", local: false, status: "connected", avatar: FIXTURE_AVATAR },
     { id: "offline", label: "Offline server", local: false, status: "disconnected" },
     { id: "starting", label: "Starting", local: false, status: "connecting" },
     { id: "failed", label: "Unavailable", local: false, status: "error" },

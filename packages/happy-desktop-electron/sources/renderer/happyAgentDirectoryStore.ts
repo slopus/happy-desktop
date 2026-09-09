@@ -1,7 +1,10 @@
 import {
     HappyAgentClient,
     happyAgentConnectionsStoreCreate,
+    happyAgentNodeStoreCreate,
     type HappyAgentConnectionsStore,
+    type HappyAgentNodeIdentity,
+    type HappyAgentNodeStore,
 } from "happy-desktop-state";
 import type {
     HappyAgentBot,
@@ -30,6 +33,8 @@ export interface HappyAgentDirectoryEntry {
     readonly id: string;
     readonly remoteId?: string;
     readonly label: string;
+    /** What this Happy Agent's own daemon says it is called and looks like, once known. */
+    readonly node?: HappyAgentNodeIdentity;
     readonly status: "connecting" | "connected" | "disconnected" | "error";
     readonly protocolMismatch?: HappyAgentProtocolMismatch;
     readonly message?: string;
@@ -88,6 +93,8 @@ interface LocalHappyAgent {
     connection?: HappyAgentConnectionHandle;
     connectionUnsubscribe?: () => void;
     workspaceUnsubscribe?: () => void;
+    node?: HappyAgentNodeStore;
+    nodeUnsubscribe?: () => void;
     protocolMismatch?: HappyAgentProtocolMismatch;
     url?: string;
     entry: HappyAgentDirectoryEntry;
@@ -204,9 +211,15 @@ export function happyAgentDirectoryStoreCreate(
         happyAgent.connectionUnsubscribe = undefined;
         happyAgent.workspaceUnsubscribe?.();
         happyAgent.workspaceUnsubscribe = undefined;
+        happyAgent.nodeUnsubscribe?.();
+        happyAgent.nodeUnsubscribe = undefined;
+        happyAgent.node?.[Symbol.dispose]();
+        happyAgent.node = undefined;
         happyAgent.connection?.dispose();
         happyAgent.connection = undefined;
         happyAgent.url = undefined;
+        // The last known name and picture stay: a machine that dropped off is
+        // still the same machine, and its tile must not go blank.
         happyAgent.entry = {
             ...happyAgent.entry,
             bots: [],
@@ -331,6 +344,19 @@ export function happyAgentDirectoryStoreCreate(
                     publish();
                 },
             },
+        });
+        // The installation's own name and picture ride the same sync feed as
+        // the rest of this connection, so the rail tile follows a rename or a
+        // new picture as soon as the daemon announces it.
+        const node = happyAgentNodeStoreCreate(client, happyAgent.connection.sync);
+        happyAgent.node = node;
+        happyAgent.nodeUnsubscribe = node.subscribe(() => {
+            if (happyAgent.node !== node) return;
+            const { node: identity } = node.get();
+            if (identity === happyAgent.entry.node) return;
+            const { node: _node, ...entry } = happyAgent.entry;
+            happyAgent.entry = identity === undefined ? entry : { ...entry, node: identity };
+            publish();
         });
     };
 

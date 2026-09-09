@@ -2,12 +2,39 @@ import type { ReactNode } from "react";
 import { AvatarBrutalist } from "./AvatarBrutalist";
 import { Icon } from "./Icon";
 import { ScrollArea } from "./Scrollbar";
+import { thumbhashDataUrl } from "./thumbhashDataUrl";
 
 export interface ConnectionShellItem {
     readonly id: string;
     readonly label: string;
     readonly local: boolean;
     readonly status: "connecting" | "connected" | "disconnected" | "error";
+    /**
+     * The picture the Happy Agent itself wears. It outranks the home glyph and
+     * the generated tile alike; the thumbhash stands in until the bytes arrive.
+     */
+    readonly avatar?: { readonly url: string; readonly thumbhash: string };
+}
+
+function ConnectionShellTile(props: { readonly item: ConnectionShellItem }) {
+    const { item } = props;
+    if (item.avatar) {
+        const placeholder = thumbhashDataUrl(item.avatar.thumbhash);
+        return (
+            <img
+                // A new picture is a new element, so the browser fetches it
+                // rather than keeping the old bytes under an unchanged address.
+                key={item.avatar.thumbhash}
+                className="happy-connections__image"
+                src={item.avatar.url}
+                alt=""
+                draggable={false}
+                style={placeholder ? { backgroundImage: `url(${placeholder})` } : undefined}
+            />
+        );
+    }
+    if (item.local) return <Icon name="home" size={20} />;
+    return <AvatarBrutalist id={item.id} size={36} style={{ borderRadius: "10px" }} />;
 }
 
 /** The connection switcher stays outside every connection's workspace and setup. */
@@ -47,15 +74,7 @@ export function ConnectionShell(props: {
                                     data-local={item.local || undefined}
                                     data-status={item.status}
                                 >
-                                    {item.local ? (
-                                        <Icon name="home" size={20} />
-                                    ) : (
-                                        <AvatarBrutalist
-                                            id={item.id}
-                                            size={36}
-                                            style={{ borderRadius: "10px" }}
-                                        />
-                                    )}
+                                    <ConnectionShellTile item={item} />
                                 </button>
                             ))}
                         </div>

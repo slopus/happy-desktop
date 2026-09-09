@@ -482,9 +482,12 @@ function DesktopScreens(props: DesktopRendererProps) {
         <ConnectionShell
             items={directory.happyAgents.map((entry) => ({
                 id: entry.id,
-                label: entry.label,
+                // The rail names a machine the way its own daemon does. The
+                // host's roster name stands in until that daemon has answered.
+                label: entry.node?.name ?? entry.label,
                 local: entry.id === LOCAL_HAPPY_AGENT_ID,
                 status: entry.status,
+                ...(entry.node?.avatar ? { avatar: entry.node.avatar } : {}),
             }))}
             selectedId={directory.activeHappyAgentId ?? LOCAL_HAPPY_AGENT_ID}
             onSelect={props.happyAgents.happyAgentActivate}
