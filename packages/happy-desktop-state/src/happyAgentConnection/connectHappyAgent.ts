@@ -2065,9 +2065,11 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                 }
             } catch (error) {
                 if (rootController.signal.aborted) break;
-                sync.writer.errorReceived(error);
                 publishConnection(config === undefined ? "connecting" : "reconnecting");
                 if (!retryRequested) {
+                    // An intentional restart (including a just-saved profile)
+                    // is not a failed request to display on the setup form.
+                    sync.writer.errorReceived(error);
                     reportDebug({
                         detail: errorDetail(error),
                         level: "error",

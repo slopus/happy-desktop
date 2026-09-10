@@ -317,6 +317,12 @@ export function happyAgentDirectoryStoreCreate(
                         return;
                     }
                     if (!session) {
+                        happyAgent.entry = {
+                            ...happyAgent.entry,
+                            status: "connecting",
+                            message: "Connecting to this Happy Agent.",
+                            projectsStatus: "loading",
+                        };
                         publish();
                         return;
                     }

@@ -314,7 +314,9 @@ export function happyAgentConnectionOpen(input: {
         },
         onTopLevelSessionFinished: () => completionChimePlay(),
     });
-    const profile = happyAgentProfileSourceCreate(directClient, agentConnection.sync);
+    const profile = happyAgentProfileSourceCreate(directClient, agentConnection.sync, () => {
+        if (!session) agentConnection.retry();
+    });
     const catalogSource = happyAgentCatalogSourceCreate(agentConnection, input.happyAgentHttpUrl);
     const hostServices = happyAgentHostServicesCreate(
         input.hostServicesUrl ?? input.happyAgentHttpUrl,
@@ -469,7 +471,7 @@ export function happyAgentConnectionOpen(input: {
     accountKeepWarm.push(
         onboarding.subscribe(() => {
             if (!retry) modelsLoad();
-            input.deps.changed();
+            if (!session) input.deps.changed();
         }),
         ...(profileStore ? [profileStore.subscribe(() => undefined)] : []),
     );
@@ -478,7 +480,9 @@ export function happyAgentConnectionOpen(input: {
         setup,
         get: () => session,
         sync: agentConnection.sync,
-        failure: () => compatibilityFailure ?? (session ? undefined : catalogFailure),
+        failure: () =>
+            compatibilityFailure ??
+            (session ? undefined : (catalogFailure ?? onboarding.get().error)),
         starting: () => !session && catalogStarting,
         dispose() {
             if (disposed) return;

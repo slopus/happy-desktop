@@ -19,6 +19,10 @@ export type HappyAgentSyncInput =
     | { readonly kind: "update"; readonly update: HappyAgentUpdate }
     | { readonly kind: "error"; readonly error: Error };
 
+type QueuedSyncInput =
+    | HappyAgentSyncInput
+    | { readonly kind: "onboarding"; readonly input: HappyAgentOnboardingInput | undefined };
+
 /** One connection's transport input. Following it never opens another request or SSE stream. */
 export interface HappyAgentSync {
     follow(options: {
@@ -38,31 +42,31 @@ export interface HappyAgentSync {
  * surfaces remain parked until protected synchronization is initialized.
  */
 export function happyAgentSyncCreate() {
-    const listeners = new Set<(input: HappyAgentSyncInput) => void>();
+    const listeners = new Set<(input: QueuedSyncInput) => void>();
     let initialized = false;
     let closed = false;
     let connectionUpdate: HappyAgentUpdate | undefined;
     let onboarding: HappyAgentOnboardingInput | undefined;
-    const onboardingListeners = new Set<(input: HappyAgentOnboardingInput | undefined) => void>();
     const onboardingPublish = (input: HappyAgentOnboardingInput | undefined): void => {
         if (closed) return;
         onboarding = input;
-        for (const listener of onboardingListeners) listener(input);
+        publish({ kind: "onboarding", input });
     };
-    const publish = (input: HappyAgentSyncInput): void => {
+    const publish = (input: QueuedSyncInput): void => {
         if (closed) return;
         for (const listener of listeners) listener(input);
     };
     const source: HappyAgentSync = {
         async *follow({ signal, events, onOnboarding }) {
             if (closed || signal.aborted) return;
-            const queue: HappyAgentSyncInput[] = [];
+            const queue: QueuedSyncInput[] = [];
             let wake: (() => void) | undefined;
             const notify = (): void => {
                 wake?.();
                 wake = undefined;
             };
-            const receive = (input: HappyAgentSyncInput): void => {
+            const receive = (input: QueuedSyncInput): void => {
+                if (input.kind === "onboarding" && !onOnboarding) return;
                 if (
                     input.kind === "update" &&
                     input.update.kind === "event" &&
@@ -74,7 +78,10 @@ export function happyAgentSyncCreate() {
                 // authoritative narrow read repairs discarded delivery hints.
                 if (queue.length >= 64) {
                     queue.length = 0;
-                    queue.push({ kind: "reconcile" });
+                    // Before bootstrap there is no authorized reconciliation
+                    // route for ordinary surfaces. Only replay narrow input.
+                    if (initialized) queue.push({ kind: "reconcile" });
+                    else if (onOnboarding) queue.push({ kind: "onboarding", input: onboarding });
                 }
                 queue.push(input);
                 notify();
@@ -82,17 +89,17 @@ export function happyAgentSyncCreate() {
             listeners.add(receive);
             signal.addEventListener("abort", notify, { once: true });
             try {
-                if (onOnboarding) {
-                    onboardingListeners.add(onOnboarding);
-                    if (onboarding) onOnboarding(onboarding);
-                }
+                if (onOnboarding && onboarding) receive({ kind: "onboarding", input: onboarding });
                 if (initialized) {
                     receive({ kind: "reconcile" });
                     if (connectionUpdate) receive({ kind: "update", update: connectionUpdate });
                 }
                 while (!closed && !signal.aborted) {
                     const next = queue.shift();
-                    if (next) yield next;
+                    // Consumer callbacks run in their follower, never inside
+                    // the connection loop, and retain ordering with errors.
+                    if (next?.kind === "onboarding") onOnboarding?.(next.input);
+                    else if (next) yield next;
                     else
                         await new Promise<void>((resolve) => {
                             wake = resolve;
@@ -100,7 +107,6 @@ export function happyAgentSyncCreate() {
                 }
             } finally {
                 listeners.delete(receive);
-                if (onOnboarding) onboardingListeners.delete(onOnboarding);
                 signal.removeEventListener("abort", notify);
                 queue.length = 0;
             }
@@ -141,7 +147,6 @@ export function happyAgentSyncCreate() {
                 // Wake parked iterators so their finally blocks release listeners.
                 for (const listener of listeners) listener({ kind: "reconcile" });
                 listeners.clear();
-                onboardingListeners.clear();
                 onboarding = undefined;
             },
         },

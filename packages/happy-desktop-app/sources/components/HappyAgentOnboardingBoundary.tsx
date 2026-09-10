@@ -39,8 +39,8 @@ export function HappyAgentOnboardingBoundary(props: {
         props.store.mobile.get,
     );
     const profileAvailable = props.online || snapshot.available === true;
-    if (snapshot.state?.completed) return props.children;
-    if (snapshot.state && !welcome.welcomeAcknowledged)
+    if (!snapshot.state || snapshot.state.completed) return props.children;
+    if (!welcome.welcomeAcknowledged)
         return (
             <WelcomeScreen
                 appearance={appearance.mode}
@@ -54,8 +54,6 @@ export function HappyAgentOnboardingBoundary(props: {
             />
         );
     const view = ((): LocalOnboardingView => {
-        if (!snapshot.state)
-            return { kind: "checking", ...(snapshot.error ? { message: snapshot.error } : {}) };
         if (!snapshot.state.steps.profile.done)
             return {
                 kind: "profile-required",

@@ -29,6 +29,24 @@ export interface HappyAgentOnboardingStore {
     [Symbol.dispose](): void;
 }
 
+function onboardingStatesEqual(
+    left: HappyAgentOnboardingSnapshot["state"],
+    right: HappyAgentOnboardingSnapshot["state"],
+): boolean {
+    if (left === right) return true;
+    if (!left || !right) return false;
+    return (
+        left.completed === right.completed &&
+        left.steps.profile.done === right.steps.profile.done &&
+        left.steps.project.done === right.steps.project.done &&
+        left.steps.providers.done === right.steps.providers.done &&
+        left.steps.providers.signedIn.length === right.steps.providers.signedIn.length &&
+        left.steps.providers.signedIn.every(
+            (provider, index) => provider === right.steps.providers.signedIn[index],
+        )
+    );
+}
+
 /** Remote onboarding follows the daemon's state without scanning providers or requiring a project. */
 export function happyAgentOnboardingStoreCreate(
     client: HappyAgentClient,
@@ -59,7 +77,17 @@ export function happyAgentOnboardingStoreCreate(
         onOutput: options.onMobileSkip,
     });
     const publish = (next: HappyAgentOnboardingSnapshot): void => {
-        snapshot = next;
+        const state = onboardingStatesEqual(snapshot.state, next.state)
+            ? snapshot.state
+            : next.state;
+        if (
+            state === snapshot.state &&
+            next.available === snapshot.available &&
+            next.pending === snapshot.pending &&
+            next.error === snapshot.error
+        )
+            return;
+        snapshot = { ...next, state };
         for (const listener of listeners) listener();
     };
     const reconcile = async (signal: AbortSignal): Promise<void> => {
@@ -145,7 +173,7 @@ export function happyAgentOnboardingStoreCreate(
                 onOnboarding: (input) => {
                     ++readRequest;
                     if (!input) {
-                        publish({ ...snapshot, available: false });
+                        publish({ ...snapshot, available: false, error: undefined });
                         return;
                     }
                     publish({

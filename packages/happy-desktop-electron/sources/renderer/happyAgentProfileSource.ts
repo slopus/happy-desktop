@@ -24,6 +24,7 @@ export interface HappyAgentProfileAdapter {
 export function happyAgentProfileSourceCreate(
     client: HappyAgentClient,
     sync: HappyAgentSync,
+    onSaved: () => void = () => undefined,
 ): HappyAgentProfileAdapter {
     const subscribers = new Map<
         (profile: HappyAgentProfile | undefined) => void,
@@ -143,6 +144,7 @@ export function happyAgentProfileSourceCreate(
                     throw new UserError(
                         "Happy Agent saved an empty profile. Add a name and email, then try again.",
                     );
+                onSaved();
                 return projected;
             },
         },
