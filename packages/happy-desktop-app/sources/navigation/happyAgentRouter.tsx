@@ -144,23 +144,24 @@ function HappyAgentRootContent({ context }: { readonly context: HappyAgentRouter
     const entry = directory.happyAgents[0];
     // Sessions survive reconnects. Only the first connection gets a splash;
     // an already materialized workspace must keep its mounted UI and drafts.
-    if (context.connectionOnboarding && !entry?.session)
-        return <SplashScreen note={`Connecting to ${entry?.label ?? "Happy Agent"}…`} />;
-    const onboarding = entry?.session?.onboarding;
-    const welcome = entry?.session?.welcome;
-    const profile = entry?.session?.profile?.();
-    if (!context.connectionOnboarding || !onboarding || !welcome || !profile || !entry?.session)
-        return <Outlet />;
+    const setup = entry?.setup;
+    if (!context.connectionOnboarding) return <Outlet />;
+    const content = entry?.session ? (
+        <Outlet />
+    ) : (
+        <SplashScreen note={entry?.message ?? `Connecting to ${entry?.label ?? "Happy Agent"}…`} />
+    );
+    if (!setup) return content;
     return (
         <HappyAgentOnboardingBoundary
-            store={onboarding}
-            welcome={welcome}
+            store={setup.onboarding}
+            welcome={setup.welcome}
             appearance={context.appearance}
-            profile={profile}
-            online={entry.status === "connected"}
-            onRetry={entry.session.connection.retry}
+            profile={setup.profile}
+            online={entry?.status === "connected"}
+            onRetry={setup.retry}
         >
-            <Outlet />
+            {content}
         </HappyAgentOnboardingBoundary>
     );
 }

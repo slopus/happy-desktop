@@ -1917,6 +1917,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                     const nextCompatibility = serverCompatibility(health.version);
                     reportCompatibility(nextCompatibility);
                     if (nextCompatibility.status !== "compatible" || !health.ready) {
+                        sync.writer.onboardingUnavailable();
                         publishConnection("connecting");
                         reportDebug({
                             detail: debugDetail({ delayMs: reconnectMs }),
@@ -1926,6 +1927,26 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                         });
                         await reconnectPause(reconnectMs);
                         reconnectMs = Math.min(reconnectMs * 2, MAXIMUM_RECONNECT_MS);
+                        continue;
+                    }
+                    // Team members without a profile can read these endpoints,
+                    // but cannot read config/bootstrap or open the event stream.
+                    // Keep that authorization boundary identical for every route.
+                    const signal = AbortSignal.any([
+                        attemptSignal,
+                        AbortSignal.timeout(SNAPSHOT_RESPONSE_TIMEOUT_MS),
+                    ]);
+                    const [onboarding, profile] = await Promise.all([
+                        client.getOnboarding({ signal }),
+                        client.getProfile({ signal }),
+                    ]);
+                    if (attemptSignal.aborted) continue;
+                    sync.writer.onboardingReceived({ onboarding, profile: profile.profile });
+                    if (!onboarding.completed && !onboarding.steps.profile.done) {
+                        // There is no authorized SSE channel yet. Reconcile
+                        // narrow startup state until this member can bootstrap.
+                        reconnectMs = INITIAL_RECONNECT_MS;
+                        await reconnectPause(2_000);
                         continue;
                     }
                 }

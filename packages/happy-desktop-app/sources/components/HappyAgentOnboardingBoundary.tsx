@@ -38,6 +38,7 @@ export function HappyAgentOnboardingBoundary(props: {
         props.store.mobile.get,
         props.store.mobile.get,
     );
+    const profileAvailable = props.online || snapshot.available === true;
     if (snapshot.state?.completed) return props.children;
     if (snapshot.state && !welcome.welcomeAcknowledged)
         return (
@@ -58,7 +59,7 @@ export function HappyAgentOnboardingBoundary(props: {
         if (!snapshot.state.steps.profile.done)
             return {
                 kind: "profile-required",
-                busy: profile.saving || !props.online,
+                busy: profile.loading || profile.saving || !profileAvailable,
                 name: profile.name,
                 email: profile.email,
                 ...(profile.saveError || snapshot.error
@@ -103,7 +104,12 @@ export function HappyAgentOnboardingBoundary(props: {
             onProfileNameChange={props.profile.displayNameUpdate}
             onProfileEmailChange={props.profile.emailUpdate}
             onProfileCreate={() => {
-                if (props.online && profile.name.trim() && profile.email.trim())
+                if (
+                    profileAvailable &&
+                    !profile.loading &&
+                    profile.name.trim() &&
+                    profile.email.trim()
+                )
                     void props.profile.profileSave().catch(() => undefined);
             }}
             onProjectChoose={() => undefined}

@@ -16,6 +16,8 @@ export interface HappyAgentOnboardingSnapshot {
         };
     };
     readonly pending: boolean;
+    /** Authenticated setup endpoints are ready even before protected sync starts. */
+    readonly available: boolean;
     readonly error?: string;
 }
 
@@ -38,6 +40,7 @@ export function happyAgentOnboardingStoreCreate(
     } = {},
 ): HappyAgentOnboardingStore {
     let snapshot: HappyAgentOnboardingSnapshot = {
+        available: false,
         pending: false,
     };
     const listeners = new Set<() => void>();
@@ -68,12 +71,13 @@ export function happyAgentOnboardingStoreCreate(
                 if (request === readRequest)
                     publish({
                         ...snapshot,
+                        available: false,
                         error: error instanceof Error ? error.message : String(error),
                     });
             },
         );
         if (!disposed && !signal.aborted && request === readRequest) {
-            publish({ ...snapshot, state, error: undefined });
+            publish({ ...snapshot, state, available: true, error: undefined });
             setupSynchronize();
         }
     };
@@ -138,6 +142,20 @@ export function happyAgentOnboardingStoreCreate(
             for await (const input of sync.follow({
                 signal: active.signal,
                 events: ["config.updated", "profile.updated", "project.created", "project.updated"],
+                onOnboarding: (input) => {
+                    ++readRequest;
+                    if (!input) {
+                        publish({ ...snapshot, available: false });
+                        return;
+                    }
+                    publish({
+                        ...snapshot,
+                        state: input.onboarding,
+                        available: true,
+                        error: undefined,
+                    });
+                    setupSynchronize();
+                },
             })) {
                 try {
                     if (input.kind === "error") throw input.error;
@@ -146,19 +164,25 @@ export function happyAgentOnboardingStoreCreate(
                         publish({
                             ...snapshot,
                             state: input.bootstrap.onboarding,
+                            available: true,
                             error: undefined,
                         });
                         setupSynchronize();
+                    } else if (input.kind === "update" && input.update.kind === "connected") {
+                        publish({ ...snapshot, available: true });
+                        if (snapshot.error) await reconcile(active.signal);
                     } else if (
-                        input.kind === "reconcile" ||
-                        (input.update.kind === "connected" && snapshot.error) ||
-                        input.update.kind === "event"
-                    )
+                        input.kind === "update" &&
+                        (input.update.kind === "disconnected" || input.update.kind === "draining")
+                    ) {
+                        publish({ ...snapshot, available: false });
+                    } else if (input.kind === "reconcile" || input.update.kind === "event")
                         await reconcile(active.signal);
                 } catch (error) {
                     if (!active.signal.aborted)
                         publish({
                             ...snapshot,
+                            available: false,
                             error: error instanceof Error ? error.message : String(error),
                         });
                 }
@@ -168,6 +192,7 @@ export function happyAgentOnboardingStoreCreate(
                 if (!active.signal.aborted)
                     publish({
                         ...snapshot,
+                        available: false,
                         error: error instanceof Error ? error.message : String(error),
                     });
             })
@@ -184,7 +209,7 @@ export function happyAgentOnboardingStoreCreate(
         completion = undefined;
         if (completionRetry) clearTimeout(completionRetry);
         completionRetry = undefined;
-        snapshot = { ...snapshot, pending: false };
+        snapshot = { ...snapshot, available: false, pending: false };
         mobileUnsubscribe?.();
         mobileUnsubscribe = undefined;
         if (retry) clearTimeout(retry);

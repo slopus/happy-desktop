@@ -45,6 +45,7 @@ export interface HappyAgentDirectoryEntry {
     readonly projectsStatus: "loading" | "ready" | "error";
     readonly projectAdd: HappyAgentProjectAddSnapshot;
     readonly session?: HappyAgentSession;
+    readonly setup?: HappyAgentConnectionHandle["setup"];
 }
 
 export interface HappyAgentDirectorySnapshot {
@@ -227,6 +228,7 @@ export function happyAgentDirectoryStoreCreate(
             projectsStatus: "loading",
             projectAdd: PROJECT_ADD_IDLE,
             session: undefined,
+            setup: undefined,
         };
     };
 
@@ -285,6 +287,10 @@ export function happyAgentDirectoryStoreCreate(
                 },
                 changed: () => {
                     const session = happyAgent.connection?.get();
+                    happyAgent.entry = {
+                        ...happyAgent.entry,
+                        setup: happyAgent.connection?.setup,
+                    };
                     // A daemon that has not finished starting is a machine on
                     // its way up, so it holds the connecting state it was
                     // already in rather than becoming a failure the window has
@@ -310,7 +316,10 @@ export function happyAgentDirectoryStoreCreate(
                         publish();
                         return;
                     }
-                    if (!session) return;
+                    if (!session) {
+                        publish();
+                        return;
+                    }
                     const sessionChanged = happyAgent.entry.session !== session;
                     if (sessionChanged) {
                         happyAgent.connectionUnsubscribe?.();

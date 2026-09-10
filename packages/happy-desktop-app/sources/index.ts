@@ -5,6 +5,7 @@ export {
     type AppHappyAgentDirectorySnapshot,
     type AppHappyAgentDirectoryStore,
     type AppHappyAgentEntry,
+    type AppHappyAgentSetup,
     type AppHappyAgentSession,
     type AppHappyAgentUpdate,
     type AppHappyAgentViewProps,

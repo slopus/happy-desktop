@@ -1,4 +1,4 @@
-import { terminalDriverCreate } from "happy-desktop-app";
+import { terminalDriverCreate, type AppHappyAgentSetup } from "happy-desktop-app";
 import {
     connectHappyAgent,
     describeServerCompatibility,
@@ -127,6 +127,7 @@ export interface HappyAgentSessionDeps {
 }
 
 export interface HappyAgentConnectionHandle {
+    readonly setup: AppHappyAgentSetup | undefined;
     readonly sync: import("happy-desktop-state").HappyAgentSync;
     get(): HappyAgentSession | undefined;
     /**
@@ -348,13 +349,25 @@ export function happyAgentConnectionOpen(input: {
     // browser callbacks are handled even when Settings is closed or reloading.
     const cloudStore = client.cloud();
     const profileStore = client.profile();
-    const accountKeepWarm = [
-        onboarding.subscribe(() => undefined),
-        cloudStore.subscribe(() => undefined),
-        ...(profileStore ? [profileStore.subscribe(() => undefined)] : []),
-    ];
+    const accountKeepWarm: (() => void)[] = [];
+    const setup: AppHappyAgentSetup | undefined = profileStore
+        ? { welcome, onboarding, profile: profileStore, retry: () => agentConnection.retry() }
+        : undefined;
 
+    let modelsLoading = false;
     const modelsLoad = (): void => {
+        retry = undefined;
+        const startup = onboarding.get();
+        if (
+            disposed ||
+            session ||
+            modelsLoading ||
+            !startup.available ||
+            !(startup.state?.completed || startup.state?.steps.profile.done) ||
+            startup.error
+        )
+            return;
+        modelsLoading = true;
         debugEntry({
             level: "info",
             message: "Loading model catalog",
@@ -362,7 +375,9 @@ export function happyAgentConnectionOpen(input: {
         });
         void client.models.load().then(
             (modelSnapshot) => {
+                modelsLoading = false;
                 if (disposed) return;
+                accountKeepWarm.push(cloudStore.subscribe(() => undefined));
                 debugEntry({
                     detail: JSON.stringify(
                         {
@@ -424,6 +439,7 @@ export function happyAgentConnectionOpen(input: {
                 input.deps.changed();
             },
             (error: unknown) => {
+                modelsLoading = false;
                 if (disposed) return;
                 // A daemon that is still starting is the ordinary first seconds
                 // of a cold machine, not a fault: it is reported as the wait it
@@ -450,9 +466,16 @@ export function happyAgentConnectionOpen(input: {
             },
         );
     };
-    modelsLoad();
+    accountKeepWarm.push(
+        onboarding.subscribe(() => {
+            if (!retry) modelsLoad();
+            input.deps.changed();
+        }),
+        ...(profileStore ? [profileStore.subscribe(() => undefined)] : []),
+    );
 
     return {
+        setup,
         get: () => session,
         sync: agentConnection.sync,
         failure: () => compatibilityFailure ?? (session ? undefined : catalogFailure),

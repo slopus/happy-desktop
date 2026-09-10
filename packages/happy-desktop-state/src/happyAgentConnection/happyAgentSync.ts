@@ -6,6 +6,12 @@ import type {
 
 type DesktopBootstrap = Awaited<ReturnType<HappyAgentClient["getDesktopBootstrap"]>>;
 
+/** The only authenticated state available before a team member has a profile. */
+export interface HappyAgentOnboardingInput {
+    readonly onboarding: Awaited<ReturnType<HappyAgentClient["getOnboarding"]>>;
+    readonly profile: DesktopBootstrap["profile"];
+}
+
 /** Private authoritative input to feature stores, never a product/UI snapshot. */
 export type HappyAgentSyncInput =
     | { readonly kind: "bootstrap"; readonly bootstrap: DesktopBootstrap }
@@ -18,6 +24,8 @@ export interface HappyAgentSync {
     follow(options: {
         readonly signal: AbortSignal;
         readonly events: readonly HappyAgentEvent["type"][];
+        /** Opts into narrow startup reads, without releasing protected surface reads. */
+        readonly onOnboarding?: (input: HappyAgentOnboardingInput | undefined) => void;
     }): AsyncIterable<HappyAgentSyncInput>;
 }
 
@@ -25,18 +33,28 @@ export interface HappyAgentSync {
  * The connection privately writes its bootstrap and ordered transport updates.
  * No aggregate product state or historical bootstrap is retained here. A late
  * surface reconciles its own endpoint with its subscription already installed.
+ * Before bootstrap, only the narrow onboarding input is replayed to opted-in
+ * consumers. It is discarded on bootstrap or failed reachability; ordinary
+ * surfaces remain parked until protected synchronization is initialized.
  */
 export function happyAgentSyncCreate() {
     const listeners = new Set<(input: HappyAgentSyncInput) => void>();
     let initialized = false;
     let closed = false;
     let connectionUpdate: HappyAgentUpdate | undefined;
+    let onboarding: HappyAgentOnboardingInput | undefined;
+    const onboardingListeners = new Set<(input: HappyAgentOnboardingInput | undefined) => void>();
+    const onboardingPublish = (input: HappyAgentOnboardingInput | undefined): void => {
+        if (closed) return;
+        onboarding = input;
+        for (const listener of onboardingListeners) listener(input);
+    };
     const publish = (input: HappyAgentSyncInput): void => {
         if (closed) return;
         for (const listener of listeners) listener(input);
     };
     const source: HappyAgentSync = {
-        async *follow({ signal, events }) {
+        async *follow({ signal, events, onOnboarding }) {
             if (closed || signal.aborted) return;
             const queue: HappyAgentSyncInput[] = [];
             let wake: (() => void) | undefined;
@@ -63,11 +81,15 @@ export function happyAgentSyncCreate() {
             };
             listeners.add(receive);
             signal.addEventListener("abort", notify, { once: true });
-            if (initialized) {
-                receive({ kind: "reconcile" });
-                if (connectionUpdate) receive({ kind: "update", update: connectionUpdate });
-            }
             try {
+                if (onOnboarding) {
+                    onboardingListeners.add(onOnboarding);
+                    if (onboarding) onOnboarding(onboarding);
+                }
+                if (initialized) {
+                    receive({ kind: "reconcile" });
+                    if (connectionUpdate) receive({ kind: "update", update: connectionUpdate });
+                }
                 while (!closed && !signal.aborted) {
                     const next = queue.shift();
                     if (next) yield next;
@@ -78,6 +100,7 @@ export function happyAgentSyncCreate() {
                 }
             } finally {
                 listeners.delete(receive);
+                if (onOnboarding) onboardingListeners.delete(onOnboarding);
                 signal.removeEventListener("abort", notify);
                 queue.length = 0;
             }
@@ -86,7 +109,14 @@ export function happyAgentSyncCreate() {
     return {
         source,
         writer: {
+            onboardingReceived(input: HappyAgentOnboardingInput): void {
+                onboardingPublish(input);
+            },
+            onboardingUnavailable(): void {
+                onboardingPublish(undefined);
+            },
             bootstrapReceived(bootstrap: DesktopBootstrap): void {
+                onboarding = undefined;
                 initialized = true;
                 publish({ kind: "bootstrap", bootstrap });
             },
@@ -100,6 +130,7 @@ export function happyAgentSyncCreate() {
                 publish({ kind: "update", update });
             },
             errorReceived(error: unknown): void {
+                onboardingPublish(undefined);
                 publish({
                     kind: "error",
                     error: error instanceof Error ? error : new Error(String(error)),
@@ -110,6 +141,8 @@ export function happyAgentSyncCreate() {
                 // Wake parked iterators so their finally blocks release listeners.
                 for (const listener of listeners) listener({ kind: "reconcile" });
                 listeners.clear();
+                onboardingListeners.clear();
+                onboarding = undefined;
             },
         },
     };

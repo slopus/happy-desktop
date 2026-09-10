@@ -242,6 +242,15 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
     let latestCursor = cursorOf((cursorCounter += 1));
 
     const config = configDefault();
+    const onboarding = {
+        completed: true,
+        steps: {
+            profile: { done: true },
+            project: { done: true },
+            providers: { done: true, signedIn: [] },
+        },
+    };
+    const profile = { email: null, name: null, photo: null, updatedAt: 1, version: "v1" };
     const projects: Project[] = [];
     const workspaces: Workspace[] = [];
     const agents = new Map<string, Agent>();
@@ -331,20 +340,21 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
                 version: { daemon: daemonVersion, protocol },
             };
         },
+        async getOnboarding(...args: unknown[]) {
+            await record("getOnboarding", args);
+            return onboarding;
+        },
+        async getProfile(...args: unknown[]) {
+            await record("getProfile", args);
+            return { profile };
+        },
         async getDesktopBootstrap(...args: unknown[]) {
             await record("getDesktopBootstrap", args);
             return {
                 config,
                 cursor: latestCursor,
-                onboarding: {
-                    completed: true,
-                    steps: {
-                        profile: { done: true },
-                        project: { done: true },
-                        providers: { done: true, signedIn: [] },
-                    },
-                },
-                profile: { email: null, name: null, photo: null, updatedAt: 1, version: "v1" },
+                onboarding,
+                profile,
                 projects: projectsWithAgents(),
                 workspaces: workspacesWithAgents(),
             };

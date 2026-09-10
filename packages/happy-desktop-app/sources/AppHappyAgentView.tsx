@@ -266,6 +266,15 @@ export interface AppHappyAgentEntry {
     readonly projectAdd?: HappyAgentProjectAddSnapshot;
     /** The live stores for this Happy Agent, present once its connection is up. */
     readonly session?: AppHappyAgentSession;
+    /** Authenticated setup is available before protected product stores load. */
+    readonly setup?: AppHappyAgentSetup;
+}
+
+export interface AppHappyAgentSetup {
+    readonly welcome: import("happy-desktop-state").WelcomeStore;
+    readonly onboarding: import("happy-desktop-state").HappyAgentOnboardingStore;
+    readonly profile: HappyAgentProfileStore;
+    readonly retry: () => void;
 }
 
 export interface AppHappyAgentSession {

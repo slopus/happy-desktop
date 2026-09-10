@@ -17,8 +17,8 @@ export interface HappyAgentProfileAdapter {
 }
 
 /**
- * Adapts the daemon's installation profile to the profile surface. One
- * bootstrap establishes the authoritative value, then the daemon's complete
+ * Adapts the daemon's current member profile to the profile surface. Narrow
+ * onboarding reads establish it before protected bootstrap, then the daemon's complete
  * `profile.updated` replacements keep it current.
  */
 export function happyAgentProfileSourceCreate(
@@ -67,6 +67,11 @@ export function happyAgentProfileSourceCreate(
         for await (const input of sync.follow({
             signal: controller.signal,
             events: ["profile.updated"],
+            onOnboarding: (input) => {
+                if (!input) return;
+                profileAdopt(input.profile);
+                failed = false;
+            },
         })) {
             try {
                 if (input.kind === "error") throw input.error;
