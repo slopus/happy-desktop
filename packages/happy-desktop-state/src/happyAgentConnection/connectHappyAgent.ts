@@ -14,6 +14,7 @@ import {
     type Message,
     type MessageBlock,
     type MessageMode,
+    type Profile,
     type Project,
     type Question,
     type Run,
@@ -26,7 +27,9 @@ import {
 import { createStore } from "zustand/vanilla";
 import { happyAgentServiceTierToWire } from "../happyAgentServiceTier.js";
 import { ChatStore } from "./ChatStore.js";
+import { userProfilesCreate } from "./userProfiles.js";
 import { happyAgentSyncCreate } from "./happyAgentSync.js";
+import { happyAgentSyncRead } from "./happyAgentSyncRead.js";
 import { CHECKING_SERVER_COMPATIBILITY, serverCompatibility } from "./compatibility.js";
 import { projectRegistrationError } from "./errors.js";
 import { deepEqual } from "../happyAgent/happyAgentSupport.js";
@@ -104,6 +107,7 @@ interface SessionEntry {
     store: ChatStore;
     subscribers: Set<SessionSubscriber>;
     messages: Map<string, TranscriptMessage>;
+    userIds: Set<string>;
     /** Cumulative block offset of the provider segment currently streaming per agent message. */
     messageBlockOffsets: Map<string, number>;
     runs: Map<string, Run>;
@@ -173,6 +177,52 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
     const reportDebug = (entry: HappyAgentDebugLogInput): void => options.onDebugEntry?.(entry);
     const nextId = createCuid2(now);
     const sessions = new Map<string, SessionEntry>();
+    const userSessions = new Map<string, Set<SessionEntry>>();
+    const users = userProfilesCreate({
+        client,
+        signal: rootController.signal,
+        changed: (id) => {
+            // Version/timestamp-only changes never reach here. Only conversations
+            // referencing this identity need their denormalized rows reconciled.
+            for (const entry of userSessions.get(id) ?? []) {
+                if (!entry.hydrating) publishSession(entry, true);
+            }
+        },
+    });
+    const ensureMessageUsers = (messages: readonly Message[]): Promise<void> =>
+        users.ensure(
+            messages.flatMap((message) =>
+                message.role === "user" && message.metadata.userId !== undefined
+                    ? [message.metadata.userId]
+                    : [],
+            ),
+        );
+    const indexMessageUser = (entry: SessionEntry, message: Message): void => {
+        if (message.role !== "user" || message.metadata.userId === undefined) return;
+        const id = message.metadata.userId;
+        entry.userIds.add(id);
+        let references = userSessions.get(id);
+        if (!references) userSessions.set(id, (references = new Set()));
+        references.add(entry);
+    };
+    const clearUserIndex = (entry: SessionEntry): void => {
+        for (const id of entry.userIds) {
+            const references = userSessions.get(id);
+            references?.delete(entry);
+            if (references?.size === 0) userSessions.delete(id);
+        }
+        entry.userIds.clear();
+    };
+    const ingestSessionHistory = (
+        entry: SessionEntry,
+        runs: readonly (Run & { messages: Message[] })[],
+        pending: readonly Message[],
+    ): void => {
+        ingestHistory(entry, runs, pending);
+        for (const run of runs)
+            for (const message of run.messages) indexMessageUser(entry, message);
+        for (const message of pending) indexMessageUser(entry, message);
+    };
     const groupSubscribers = new Set<GroupsSubscriber>();
     const intendedModes = new Map<string, MessageMode>();
     const agentDrafts = new Map<string, AgentDraftSnapshot>();
@@ -199,6 +249,8 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
     const gitStates = new Map<string, GitState>();
     const processOwners = new Map<string, string>();
     let config: DaemonConfig | undefined;
+    let currentUserId: string | undefined;
+    let viewerProfileLoading: Promise<void> | undefined;
     let cursor: string | undefined;
     let resyncTask: Promise<void> | undefined;
     const resyncBufferedEvents: HappyAgentEvent[] = [];
@@ -363,6 +415,8 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
             endpoint,
             hasMore: entry.hasMore,
             messages: [...entry.messages.values()],
+            userProfiles: users.profiles,
+            currentUserId,
             intendedMode: intendedModes.get(entry.id),
             ...(entry.mode === undefined ? {} : { mode: entry.mode }),
             ...(entry.draft === undefined ? {} : { draft: entry.draft }),
@@ -401,6 +455,45 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
             subscriber.onChange(elements, session);
             for (const delta of deltas) subscriber.onDelta?.(delta);
         }
+    };
+
+    /** Ownership is scoped to this authenticated connection, never the host's account. */
+    const viewerIdentityUpdate = (profile: Profile): void => {
+        const next = profile.userId ?? undefined;
+        if (next === currentUserId) return;
+        const previous = currentUserId;
+        currentUserId = next;
+        const affected = new Set<SessionEntry>();
+        for (const id of [previous, next]) {
+            if (id === undefined) continue;
+            for (const entry of userSessions.get(id) ?? []) affected.add(entry);
+        }
+        for (const entry of affected) {
+            if (!entry.hydrating) publishSession(entry, true);
+        }
+    };
+
+    const reloadViewerProfile = (): Promise<void> => {
+        if (viewerProfileLoading !== undefined) return viewerProfileLoading;
+        const loading = happyAgentSyncRead(
+            rootController.signal,
+            () => client.getProfile({ signal: deadlineSignal(SNAPSHOT_RESPONSE_TIMEOUT_MS) }),
+            (error) =>
+                reportDebug({
+                    detail: errorDetail(error),
+                    level: "warning",
+                    message: "Current user profile read failed; retrying",
+                    source: "sync",
+                }),
+        )
+            .then(({ profile }) => {
+                if (!closed) viewerIdentityUpdate(profile);
+            })
+            .finally(() => {
+                if (viewerProfileLoading === loading) viewerProfileLoading = undefined;
+            });
+        viewerProfileLoading = loading;
+        return loading;
     };
 
     /** Preserve the context measurement that belongs to a concrete settled run. */
@@ -725,7 +818,11 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
             optional(() => client.getAgentActivity(entry.id, { signal })),
             optional(() => client.getPendingQuestion(entry.id, { signal })),
         ])
-            .then(([history, bootstrap, activity, question]) => {
+            .then(async ([history, bootstrap, activity, question]) => {
+                await ensureMessageUsers([
+                    ...history.runs.flatMap((run) => run.messages),
+                    ...bootstrap.pending,
+                ]);
                 if (closed) return;
                 entry.agent = bootstrap.agent;
                 entry.workspace = workspaceOf(bootstrap.agent.workspaceId);
@@ -740,17 +837,19 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                     (message) => message.pendingSend,
                 );
                 entry.messages.clear();
+                clearUserIndex(entry);
                 entry.messageBlockOffsets.clear();
                 entry.runs.clear();
                 entry.runsOrdered = undefined;
                 entry.corruptedMessageIds.clear();
-                ingestHistory(entry, history.runs, bootstrap.pending);
+                ingestSessionHistory(entry, history.runs, bootstrap.pending);
                 captureLatestIdleRunFinalContext(entry);
                 for (const message of pendingSends) {
                     if (entry.messages.has(message.message.id)) {
                         sendConfirmations.get(message.message.id)?.();
                     } else {
                         entry.messages.set(message.message.id, message);
+                        indexMessageUser(entry, message.message);
                     }
                 }
                 entry.hasMore = history.hasMore;
@@ -865,6 +964,8 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                 signal: deadlineSignal(SNAPSHOT_RESPONSE_TIMEOUT_MS),
             });
             if (rootController.signal.aborted) return;
+            viewerIdentityUpdate(bootstrap.profile);
+            if (reconcileSessions) await users.refresh();
             sync.writer.bootstrapReceived(bootstrap);
             const watchedGit = await optional(() =>
                 client.watchGit(
@@ -1336,6 +1437,11 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
             case "message.deleted": {
                 const entry = sessions.get(event.payload.agentId);
                 entry?.messages.delete(event.payload.messageId);
+                if (entry !== undefined) {
+                    clearUserIndex(entry);
+                    for (const message of entry.messages.values())
+                        indexMessageUser(entry, message.message);
+                }
                 entry?.messageBlockOffsets.delete(event.payload.messageId);
                 entry?.corruptedMessageIds.delete(event.payload.messageId);
                 if (entry !== undefined) publishSession(entry);
@@ -1421,6 +1527,15 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                 return;
             }
             case "profile.updated":
+                if (event.payload.userId !== undefined) {
+                    background(users.refresh([event.payload.userId]));
+                    if (currentUserId === undefined || event.payload.userId === currentUserId) {
+                        background(reloadViewerProfile());
+                    }
+                } else {
+                    background(reloadViewerProfile());
+                }
+                return;
             case "secret.created":
             case "secret.updated":
             case "secret.attached":
@@ -1450,6 +1565,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         const entry = sessions.get(agentId);
         if (entry === undefined) return;
         entry.messages.set(message.id, { message, runId });
+        indexMessageUser(entry, message);
         if (message.role === "user") {
             entry.mode = message.mode;
             agentModes.set(agentId, message.mode);
@@ -1825,6 +1941,14 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                     after: cursor,
                     signal: attemptSignal,
                 })) {
+                    if (
+                        update.kind === "event" &&
+                        (update.event.type === "message.created" ||
+                            update.event.type === "message.updated")
+                    ) {
+                        await ensureMessageUsers([update.event.payload.message]);
+                    }
+                    if (rootController.signal.aborted) return;
                     sync.writer.updateReceived(update);
                     if (update.kind === "connected") {
                         reportDebug({
@@ -2175,6 +2299,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                     store: new ChatStore(subscription.sessionId),
                     subscribers: new Set(),
                     messages: new Map(),
+                    userIds: new Set(),
                     messageBlockOffsets: new Map(),
                     runs: new Map(),
                     runFinalContextTokens: new Map(),
@@ -2648,8 +2773,8 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
             return mutation(
                 "send_message",
                 mutationId,
-                () =>
-                    sendMessageWithRetry(
+                async () => {
+                    const response = await sendMessageWithRetry(
                         sessionId,
                         {
                             id: mutationId,
@@ -2659,7 +2784,10 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                             mode,
                         },
                         confirmed,
-                    ),
+                    );
+                    if (response !== undefined) await ensureMessageUsers([response.message]);
+                    return response;
+                },
                 (response) => {
                     sendConfirmations.delete(mutationId);
                     if (response !== undefined) {
@@ -2778,12 +2906,15 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
             return mutation(
                 "compact_session",
                 mutationId,
-                () =>
-                    client.compactAgent(
+                async () => {
+                    const response = await client.compactAgent(
                         sessionId,
                         { mutationId },
                         { signal: rootController.signal },
-                    ),
+                    );
+                    await ensureMessageUsers([response.message]);
+                    return response;
+                },
                 ({ agent, message, run }) => {
                     adoptAgent(agent);
                     const entry = sessions.get(sessionId);
@@ -3115,6 +3246,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
             groupSubscribers.clear();
             for (const entry of sessions.values()) entry.subscribers.clear();
             sessions.clear();
+            userSessions.clear();
             intendedModes.clear();
             agentModes.clear();
             agentDrafts.clear();
@@ -3142,7 +3274,9 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                 { before: token, limit: DEFAULT_HISTORY_LIMIT, omitToolData: false },
                 { signal: deadlineSignal(SNAPSHOT_RESPONSE_TIMEOUT_MS) },
             );
-            ingestHistory(entry, page.runs, []);
+            await ensureMessageUsers(page.runs.flatMap((run) => run.messages));
+            if (closed) return;
+            ingestSessionHistory(entry, page.runs, []);
             entry.hasMore = page.hasMore;
         } catch (error) {
             entry.loadMoreError = error instanceof Error ? error.message : String(error);

@@ -21,6 +21,7 @@ import {
     happyAgentServiceTierFromWire,
     happyAgentServiceTiersFromWire,
 } from "../happyAgentServiceTier.js";
+import type { UserProfile } from "./userProfiles.js";
 import type {
     BotGroup,
     ChatElement,
@@ -48,6 +49,8 @@ export interface SessionProjectionInput {
     endpoint: string;
     hasMore: boolean;
     messages: readonly TranscriptMessage[];
+    userProfiles?: ReadonlyMap<string, UserProfile>;
+    currentUserId?: string;
     intendedMode?: MessageMode;
     mode?: MessageMode | null;
     draft?: AgentDraftSnapshot;
@@ -268,6 +271,8 @@ export function projectElements(input: SessionProjectionInput): readonly ChatEle
     const reader: TranscriptReader = {
         agentId: input.agent.id,
         parentAgentId: input.agent.parentAgentId,
+        userProfiles: input.userProfiles,
+        currentUserId: input.currentUserId,
     };
     const messagesByRun = new Map<string, TranscriptMessage[]>();
     const pending: TranscriptMessage[] = [];
@@ -672,8 +677,12 @@ function projectSubagents(
  * The run is part of the key because the same message projects differently
  * inside a run that is still going: an agent's text is `complete` only once its
  * run has stopped.
+ * The minimal profile and ownership match are keys too: changing the viewer
+ * updates affected user rows without invalidating every other message.
  */
 interface MessageElements {
+    readonly profile: UserProfile | undefined;
+    readonly own: boolean;
     readonly runId: string;
     readonly runStatus: Run["status"];
     readonly reader: TranscriptReader;
@@ -688,6 +697,8 @@ interface MessageElements {
  * and would defeat the memory below.
  */
 interface TranscriptReader {
+    readonly userProfiles?: ReadonlyMap<string, UserProfile>;
+    readonly currentUserId?: string;
     readonly agentId: string;
     readonly parentAgentId: string | null;
 }
@@ -701,8 +712,13 @@ function projectMessage(
     reader: TranscriptReader,
 ): readonly ChatElement[] {
     const cached = messageElements.get(entry.message);
+    const userId = entry.message.role === "user" ? entry.message.metadata.userId : undefined;
+    const profile = userId === undefined ? undefined : reader.userProfiles?.get(userId);
+    const own = userId !== undefined && userId === reader.currentUserId;
     if (
         cached !== undefined &&
+        cached.profile === profile &&
+        cached.own === own &&
         cached.runId === runId &&
         cached.runStatus === runStatus &&
         cached.reader.agentId === reader.agentId &&
@@ -710,7 +726,7 @@ function projectMessage(
     )
         return cached.elements;
     const elements = messageElementsProject(entry, runId, runStatus, reader);
-    messageElements.set(entry.message, { runId, runStatus, reader, elements });
+    messageElements.set(entry.message, { runId, runStatus, reader, elements, profile, own });
     return elements;
 }
 
@@ -761,6 +777,16 @@ function messageElementsProject(
                 kind: "user_message",
                 messageId: message.id,
                 identity: null,
+                ...(message.metadata.userId === undefined
+                    ? {}
+                    : {
+                          userId: message.metadata.userId,
+                          identity:
+                              message.metadata.userId === reader.currentUserId
+                                  ? null
+                                  : message.metadata.userId,
+                          profile: reader.userProfiles?.get(message.metadata.userId),
+                      }),
                 ...(senderAgent === undefined ? {} : { senderAgent }),
                 delivery:
                     message.status === "pending" && message.delivery === "steer"

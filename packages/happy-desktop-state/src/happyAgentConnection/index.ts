@@ -14,3 +14,4 @@ export {
 export { ProjectRegistrationError, ProjectRegistrationProtocolError } from "./errors.js";
 export type { ProjectRegistrationErrorCode } from "./errors.js";
 export type * from "./types.js";
+export type { UserProfile } from "./userProfiles.js";

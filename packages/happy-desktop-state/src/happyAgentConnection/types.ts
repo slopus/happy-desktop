@@ -12,17 +12,11 @@ import type {
 import type { HappyAgentDebugLogInput } from "../happyAgent/happyAgentDebugLogStore.js";
 import type { HappyAgentServiceTier } from "../happyAgentServiceTier.js";
 import type { HappyAgentSync } from "./happyAgentSync.js";
+import type { UserProfile } from "./userProfiles.js";
 
 export type { MutationId };
 
 export type ConnectionState = "connecting" | "live" | "reconnecting" | "closed";
-
-interface HappyAgentProfile {
-    id: string;
-    name: string;
-    photo?: { data: string; mediaType: string };
-    version?: number;
-}
 
 export type ToolPresentation =
     | {
@@ -86,8 +80,10 @@ interface BaseChatElement {
 export interface UserMessageElement extends BaseChatElement {
     kind: "user_message";
     messageId: string;
+    /** Rendering identity: null is the local viewer; userId retains the real account ID. */
     identity: string | null;
-    profile?: HappyAgentProfile;
+    userId?: string;
+    profile?: UserProfile;
     delivery: "pending_steering" | "sent";
     text: string;
     attachments?: readonly { data: string; mediaType: string }[];

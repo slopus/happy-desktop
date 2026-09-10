@@ -8,6 +8,8 @@
 export interface ConversationAuthor {
     readonly agentRole?: "default";
     readonly id: string;
+    readonly userId?: string;
+    readonly avatar?: { readonly thumbhash: string };
     readonly displayName: string;
     readonly username: string;
     readonly kind: "human" | "agent";

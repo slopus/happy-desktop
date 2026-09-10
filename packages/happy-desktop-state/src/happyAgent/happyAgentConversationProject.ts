@@ -121,18 +121,27 @@ function profileAuthor(
     profile: HappyAgentProfile | undefined,
     identity: string | null,
 ): ConversationAuthor {
-    if (identity === null) return happyAgentOwnerAuthor;
-    if (!profile) return { ...happyAgentOwnerAuthor, id: identity };
-    return {
-        id: identity,
+    if (!profile)
+        return identity === null
+            ? happyAgentOwnerAuthor
+            : { ...happyAgentOwnerAuthor, id: identity };
+    const id = identity ?? happyAgentOwnerAuthor.id;
+    const cached = profileAuthors.get(profile);
+    if (cached?.id === id) return cached;
+    const author: ConversationAuthor = {
+        id,
+        userId: profile.id,
         displayName: profile.name,
         username: profile.name,
         kind: "human",
-        ...(profile.photo === undefined
-            ? {}
-            : { imageUrl: `data:${profile.photo.mediaType};base64,${profile.photo.data}` }),
+        ...(profile.avatar === null ? {} : { avatar: profile.avatar }),
     };
+    profileAuthors.set(profile, author);
+    return author;
 }
+
+/** One minimal profile object gives every occurrence the same author identity. */
+const profileAuthors = new WeakMap<HappyAgentProfile, ConversationAuthor>();
 
 /**
  * Projects Happy Agent's flat application transcript into Happy's shared
