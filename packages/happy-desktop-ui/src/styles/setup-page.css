@@ -166,9 +166,8 @@
     background: var(--button-primary-tint);
 }
 
-/* The same progress mark can sit directly on another dark photographic
-   surface, such as the Happy Social setup modal, without inheriting the page
-   shell that normally supplies this treatment. */
+/* The same progress mark can sit directly on a dark photographic surface
+   without inheriting the page shell that normally supplies this treatment. */
 .happy-setup-page__progress[data-tone="inverse"] .happy-setup-page__progress-line,
 .happy-setup-page__progress[data-tone="inverse"] .happy-setup-page__progress-label,
 .happy-setup-page__progress[data-tone="inverse"] .happy-setup-page__progress-detail {

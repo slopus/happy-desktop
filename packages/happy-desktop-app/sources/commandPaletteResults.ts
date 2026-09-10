@@ -264,7 +264,7 @@ const SETTINGS_JUMPS: readonly {
         section: "account",
         sectionLabel: "Account",
         icon: "users",
-        keywords: "profile name email photo happy social encryption secret key devices",
+        keywords: "profile name email photo happy account connect disconnect workos",
     },
     {
         id: "settings:instructions",

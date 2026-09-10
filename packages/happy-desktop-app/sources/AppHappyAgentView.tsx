@@ -7,12 +7,7 @@ import type {
     ExperimentsStore,
     ConversationToolCall,
     HappyAgentClockStore,
-    HappyAgentCloudDevicesStore,
     HappyAgentCloudStore,
-    HappyAgentSocialSnapshot,
-    HappyAgentSocialJoinStore,
-    HappyAgentSocialStore,
-    HappyAgentTeamsSnapshot,
     HappyAgentTeamsStore,
     HappyAgentFileTabKind,
     HappyAgentFileTabSnapshot,
@@ -74,12 +69,8 @@ import {
     commandPaletteStoreNoop,
     experimentsStoreNoop,
     happyAgentInboxStoreNoop,
-    happyAgentCloudStoreNoop,
-    happyAgentSocialStoreNoop,
-    happyAgentTeamsStoreNoop,
     happyAgentNavigationOrderApply,
     happyAgentAvailabilityProject,
-    happyAgentVersionAtLeast,
     happyAgentNavigationOrderStoreNoop,
     happyAgentSidebarCollapseStoreNoop,
     happyAgentSidebarVisibilityStoreNoop,
@@ -87,7 +78,6 @@ import {
     happyAgentSessionGroupIdOf,
     happyAgentOwnerAuthor,
     happyAgentWindowStoreNoop,
-    MINIMUM_HAPPY_AGENT_TEAMS_VERSION,
     titleShimmerStoreNoop,
 } from "happy-desktop-state";
 import {
@@ -138,7 +128,6 @@ import {
     type FileTreeExpansion,
     type FileTreeBuildEntry,
     HappyAgentCreateSessionPage,
-    HappySocialPage,
     HappyAgentProjectCloneDialog,
     HappyAgentProjectSettingsDialog,
     HappyAgentSessionControls,
@@ -176,10 +165,7 @@ import {
     type WorkspaceLifecyclePhase,
 } from "happy-desktop-ui";
 import { APP_SHORTCUTS } from "./appShortcuts";
-import {
-    HappyAgentVersionProvider,
-    useHappyAgentVersionAtLeast,
-} from "./HappyAgentVersionProvider";
+import { HappyAgentVersionProvider } from "./HappyAgentVersionProvider";
 import {
     COMMAND_PALETTE_PREVIEW_LIMIT,
     commandPaletteIndexMove,
@@ -287,16 +273,10 @@ export interface AppHappyAgentSession {
     readonly onboarding?: import("happy-desktop-state").HappyAgentOnboardingStore;
     readonly clock: HappyAgentClockStore;
     readonly connection: HappyAgentConnectionStore;
-    /** This Happy Agent installation's Happy Social account. */
+    /** This Happy Agent installation's WorkOS account. */
     readonly cloud?: () => HappyAgentCloudStore;
-    /** Every installation signed into that account. */
-    readonly cloudDevices?: () => HappyAgentCloudDevicesStore;
-    /** Friends and requests for this installation's enrolled Social account. */
-    readonly social?: () => HappyAgentSocialStore;
     /** WorkOS organizations, available on agents with the Teams API. */
     readonly teams?: () => HappyAgentTeamsStore;
-    /** The ordered errand that carries this account from signed out to live. */
-    readonly socialJoin?: () => HappyAgentSocialJoinStore;
     /** This Happy Agent's retained connection, reconciliation, and SSE diagnostics. */
     readonly debugLog?: HappyAgentDebugLogStore;
     readonly host: HappyAgentHost;
@@ -512,9 +492,7 @@ export interface AppHappyAgentViewProps {
     /** Addresses that inbox. */
     onInboxOpen?(): void;
     /** Whether the URL addresses the enrolled account's friends surface. */
-    socialOpen?: boolean;
     /** Addresses that friends surface. */
-    onSocialOpen?(): void;
     /** Whether the URL addresses the component workbench, in a development build. */
     blueprintOpen?: boolean;
     /** Addresses the workbench. */
@@ -1500,7 +1478,6 @@ function happyAgentStatusLabel(happyAgent: AppHappyAgentEntry): string {
  * working through a queue rather than visiting a repository.
  */
 const INBOX_ITEM = "inbox";
-const SOCIAL_ITEM = "social";
 
 /**
  * The workspace window. It owns no product state: it subscribes to the directory
@@ -1603,23 +1580,6 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
     // the count is to be seen while the reader is doing something else.
     const inboxStore = active?.session?.inbox ?? happyAgentInboxStoreNoop;
     const inbox = useSyncExternalStore(inboxStore.subscribe, inboxStore.get, inboxStore.get);
-    const cloudStore = active?.session?.cloud?.() ?? happyAgentCloudStoreNoop;
-    const cloud = useSyncExternalStore(cloudStore.subscribe, cloudStore.get, cloudStore.get);
-    const sociallyEnrolled = cloud.socialEnrollment === "enrolled";
-    const socialStore =
-        props.socialOpen && sociallyEnrolled
-            ? (active?.session?.social?.() ?? happyAgentSocialStoreNoop)
-            : happyAgentSocialStoreNoop;
-    const social = useSyncExternalStore(socialStore.subscribe, socialStore.get, socialStore.get);
-    const teamsSupported = happyAgentVersionAtLeast(
-        active?.version,
-        MINIMUM_HAPPY_AGENT_TEAMS_VERSION,
-    );
-    const teamsStore =
-        props.socialOpen && sociallyEnrolled && teamsSupported
-            ? (active?.session?.teams?.() ?? happyAgentTeamsStoreNoop)
-            : happyAgentTeamsStoreNoop;
-    const teams = useSyncExternalStore(teamsStore.subscribe, teamsStore.get, teamsStore.get);
     const daemonStore = props.daemon ?? sidebarDaemonStoreNoop;
     const daemon = useSyncExternalStore(daemonStore.subscribe, daemonStore.get, daemonStore.get);
     const inboxPending = inbox.pending.length;
@@ -1653,29 +1613,18 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
     // The inbox belongs to the addressed machine, so it appears only while that
     // machine is reachable: a queue of questions is meaningless from a Happy Agent that
     // cannot say what it is waiting on.
-    const pinnedOffered: SidebarItem[] = [
-        ...(sociallyEnrolled && props.onSocialOpen
-            ? [
-                  {
-                      icon: "users" as const,
-                      id: SOCIAL_ITEM,
-                      kind: "action" as const,
-                      label: "Social",
-                  },
-              ]
-            : []),
-        ...(experimental && active?.session?.inbox
+    const pinnedOffered: SidebarItem[] =
+        experimental && active?.session?.inbox
             ? [
                   {
                       badge: inboxPending,
-                      icon: "bell" as const,
+                      icon: "bell",
                       id: INBOX_ITEM,
-                      kind: "action" as const,
+                      kind: "action",
                       label: "Inbox",
                   },
               ]
-            : []),
-    ];
+            : [];
     const pinned = pinnedArrange(pinnedOffered, navigationOrder.order);
     const sidebar = (
         <Sidebar
@@ -1687,13 +1636,11 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                 addressedProject?.id,
             )}
             activeItemId={
-                props.socialOpen && sociallyEnrolled
-                    ? SOCIAL_ITEM
-                    : experimental && props.inboxOpen
-                      ? INBOX_ITEM
-                      : props.groupId
-                        ? happyAgentItemId(props.happyAgentId, props.groupId)
-                        : ""
+                experimental && props.inboxOpen
+                    ? INBOX_ITEM
+                    : props.groupId
+                      ? happyAgentItemId(props.happyAgentId, props.groupId)
+                      : ""
             }
             // The desktop window puts the traffic lights and the sidebar
             // toggle in this heading, so the product mark stands down and the
@@ -1824,10 +1771,6 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
             // Once every remembered tab is gone, its first session is what the
             // group still has to show.
             onItemSelect={(id) => {
-                if (id === SOCIAL_ITEM) {
-                    props.onSocialOpen?.();
-                    return;
-                }
                 if (id === INBOX_ITEM) {
                     props.onInboxOpen?.();
                     return;
@@ -2029,23 +1972,6 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                         happyAgentOnline={activeHappyAgentOnline}
                         snapshot={inbox}
                         store={active.session.inbox}
-                        {...(activeAvailability?.refusal === undefined
-                            ? {}
-                            : { unavailable: activeAvailability.refusal })}
-                    />
-                </>
-            );
-
-        if (props.socialOpen && sociallyEnrolled)
-            return (
-                <>
-                    {desktop ? <WindowDragRegion /> : null}
-                    <HappyAgentSocialSurface
-                        happyAgentOnline={activeHappyAgentOnline}
-                        snapshot={social}
-                        store={socialStore}
-                        teamsSnapshot={teams}
-                        teamsStore={teamsStore}
                         {...(activeAvailability?.refusal === undefined
                             ? {}
                             : { unavailable: activeAvailability.refusal })}
@@ -2777,58 +2703,6 @@ function HappyAgentInboxSurface(props: {
             }}
             pending={props.snapshot.pending}
             submissions={props.snapshot.submissions}
-            {...(props.unavailable === undefined ? {} : { unavailable: props.unavailable })}
-        />
-    );
-}
-
-/** The enrolled account's social store projected into the reusable friends page. */
-function HappyAgentSocialSurface(props: {
-    happyAgentOnline: () => boolean;
-    snapshot: HappyAgentSocialSnapshot;
-    store: HappyAgentSocialStore;
-    teamsSnapshot: HappyAgentTeamsSnapshot;
-    teamsStore: HappyAgentTeamsStore;
-    unavailable?: string;
-}) {
-    const teamsAvailable = useHappyAgentVersionAtLeast(MINIMUM_HAPPY_AGENT_TEAMS_VERSION);
-    const operation = props.teamsSnapshot.mutation ?? props.snapshot.mutation;
-    return (
-        <HappySocialPage
-            {...(props.snapshot.error ? { error: props.snapshot.error.message } : {})}
-            friendUsername={props.snapshot.friendUsername}
-            friends={props.snapshot.friends}
-            incomingRequests={props.snapshot.incomingRequests}
-            onFriendRequestAccept={(username) => {
-                if (props.happyAgentOnline()) props.store.friendRequestAccept(username);
-            }}
-            onFriendRequestReject={(username) => {
-                if (props.happyAgentOnline()) props.store.friendRequestReject(username);
-            }}
-            onFriendRequestSend={() => {
-                if (props.happyAgentOnline()) props.store.friendRequestSend();
-            }}
-            onFriendUsernameChange={(value) => props.store.friendUsernameUpdate(value)}
-            onTeamCreate={() => {
-                if (props.happyAgentOnline()) props.teamsStore.teamCreate();
-            }}
-            onTeamCreateClose={() => props.teamsStore.teamCreateClose()}
-            onTeamCreateOpen={() => props.teamsStore.teamCreateOpen()}
-            onTeamNameChange={(value) => props.teamsStore.teamNameUpdate(value)}
-            {...(operation ? { operation } : {})}
-            outgoingRequests={props.snapshot.outgoingRequests}
-            status={props.snapshot.status}
-            {...(props.teamsSnapshot.teamCreateError
-                ? { teamCreateError: props.teamsSnapshot.teamCreateError.message }
-                : {})}
-            teamCreateOpen={props.teamsSnapshot.teamCreateOpen}
-            teamName={props.teamsSnapshot.teamName}
-            teams={props.teamsSnapshot.teams}
-            teamsAvailable={teamsAvailable}
-            {...(props.teamsSnapshot.error
-                ? { teamsError: props.teamsSnapshot.error.message }
-                : {})}
-            teamsStatus={props.teamsSnapshot.status}
             {...(props.unavailable === undefined ? {} : { unavailable: props.unavailable })}
         />
     );

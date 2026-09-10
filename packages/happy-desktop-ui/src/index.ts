@@ -317,13 +317,6 @@ export {
     type HappyAgentCreateSessionPageProps,
 } from "./HappyAgentCreateSessionPage";
 export {
-    HappySocialPage,
-    type HappySocialOperation,
-    type HappySocialPageProps,
-    type HappySocialPerson,
-    type HappySocialTeam,
-} from "./HappySocialPage";
-export {
     HappyAgentProjectCloneDialog,
     type HappyAgentProjectCloneDialogProps,
 } from "./HappyAgentProjectCloneDialog";
@@ -575,26 +568,9 @@ export {
     type HappyAgentScrollbarVisibilityChoice,
 } from "./pages/settings/HappyAgentGeneralSettings";
 export {
-    HappySocialSetupModal,
-    type HappySocialSetupModalProps,
-} from "./pages/settings/HappySocialSetupModal";
-export {
-    HappySocialJoin,
-    happySocialJoinDescription,
-    happySocialJoinPresentation,
-    happySocialJoinTitle,
-    type HappySocialJoinPasswordRule,
-    type HappySocialJoinProps,
-    type HappySocialJoinStage,
-    type HappySocialJoinState,
-} from "./pages/settings/HappySocialJoin";
-export {
-    HappySocialSettings,
-    type HappySocialEnrollment,
-    type HappySocialKeysStatus,
-    type HappySocialSettingsProps,
-    type HappySocialStatus,
-} from "./pages/settings/HappySocialSettings";
+    HappyAgentAccountSettings,
+    type HappyAgentAccountSettingsProps,
+} from "./pages/settings/HappyAgentAccountSettings";
 export {
     HappyAgentMobileSettings,
     type HappyAgentMobileSettingsProps,
@@ -644,19 +620,6 @@ export {
     HappyAgentProfileSettings,
     type HappyAgentProfileSettingsProps,
 } from "./pages/settings/HappyAgentProfileSettings";
-export {
-    HappyAgentEncryptionSettings,
-    type HappyAgentEncryption,
-    type HappyAgentEncryptionSecret,
-    type HappyAgentEncryptionSettingsProps,
-} from "./pages/settings/HappyAgentEncryptionSettings";
-export {
-    HappyAgentDeviceSettings,
-    type HappyAgentDevice,
-    type HappyAgentDevicePlatform,
-    type HappyAgentDeviceRead,
-    type HappyAgentDeviceSettingsProps,
-} from "./pages/settings/HappyAgentDeviceSettings";
 export {
     HappyAgentStateSettings,
     type HappyAgentStateDocument,

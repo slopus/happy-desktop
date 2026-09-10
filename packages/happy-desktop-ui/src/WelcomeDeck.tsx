@@ -52,8 +52,8 @@ const ART_SIZE = 160;
 
 /**
  * C-276 WelcomeDeck — big art, a title, a slogan, and a row of dots. It is what
- * introduces the product on first run and what explains Happy Social on the
- * join surface; the words are the caller's, the layout and the timing are ours.
+ * introduces the product on first run; the words are the caller's, the layout
+ * and the timing are ours.
  *
  * The deck advances on its own every fifteen seconds and wraps, which is the
  * whole argument for the layout. Two things must not move while it does. The

@@ -37,8 +37,9 @@ const EXIT_POLL_MS = 100;
  */
 const KILL_GRACE_MS = 5_000;
 /** How long either side of a restart may spend becoming ready. */
-const START_TIMEOUT_MS = 15 * 60_000;
+const START_TIMEOUT_MS = 5 * 60_000;
 const START_POLL_MS = 250;
+const HEALTH_TIMEOUT_MS = 5_000;
 const MAXIMUM_COMMAND_OUTPUT_BYTES = 1024 * 1024;
 
 export interface HappyAgentRestartOptions {
@@ -101,8 +102,26 @@ export async function happyAgentRestartRun(options: HappyAgentRestartOptions): P
         }
     }
     options.onStep({ phase: "starting", reason, version });
-    await daemonCommandRun(options.binary.path, "reload", options.environment);
-    await readyAwait(options.paths);
+    const deadline = Date.now() + START_TIMEOUT_MS;
+    try {
+        // The old daemon is already stopped. Reload would drain again and can
+        // fail if another local client has started the selected version first.
+        await daemonStartRun(options.binary.path, options.environment);
+    } catch (error) {
+        // The command's exit is not the daemon's readiness. Continue waiting
+        // only when health confirms the selected version is actually running;
+        // never classify failures by parsing the CLI's human-readable stderr.
+        const health = await startupHealthRead(options.paths, deadline);
+        if (
+            health === undefined ||
+            health.version.daemon !== version ||
+            health.draining === true ||
+            health.shuttingDown === true
+        ) {
+            throw error;
+        }
+    }
+    await readyAwait(options.paths, version, deadline);
     options.onStep({ phase: "reconnecting", reason, version });
 }
 
@@ -187,7 +206,7 @@ async function drainBeginAwait(
         }
         onStarting(Date.now() - started >= KILLABLE_AFTER_MS);
         if (Date.now() >= deadline) {
-            throw new Error("Happy Agent was still starting after 15 minutes.");
+            throw new Error("Happy Agent was still starting after 5 minutes.");
         }
         await killableDelay(START_POLL_MS, killSignal);
     }
@@ -277,20 +296,37 @@ async function processExitAwait(pid: number, timeoutMs: number): Promise<void> {
 }
 
 /** Waits until a daemon is answering and has finished loading. */
-async function readyAwait(paths: HappyDaemonPaths): Promise<void> {
-    const deadline = Date.now() + START_TIMEOUT_MS;
+async function readyAwait(
+    paths: HappyDaemonPaths,
+    version: string,
+    deadline: number,
+): Promise<void> {
     for (;;) {
-        const token = await happyAgentDaemonTokenRead(paths.tokenPath);
-        if (token) {
-            const client = new HappyAgentDaemonClient({ socketPath: paths.socketPath, token });
-            const health = await client.health().catch(() => undefined);
-            if (health?.ready === true && health.draining !== true) return;
-        }
         if (Date.now() >= deadline) {
-            throw new Error("The new Happy Agent did not answer after starting.");
+            throw new Error("The new Happy Agent was not ready after 5 minutes.");
         }
-        await delay(START_POLL_MS);
+        const health = await startupHealthRead(paths, deadline);
+        if (
+            health?.ready === true &&
+            health.version.daemon === version &&
+            health.draining !== true &&
+            health.shuttingDown !== true
+        ) {
+            return;
+        }
+        await delay(Math.max(0, Math.min(START_POLL_MS, deadline - Date.now())));
     }
+}
+
+/** Rereads credentials and bounds each probe by the remaining startup budget. */
+async function startupHealthRead(paths: HappyDaemonPaths, deadline: number) {
+    const token = await happyAgentDaemonTokenRead(paths.tokenPath);
+    const remaining = deadline - Date.now();
+    if (!token || remaining <= 0) return undefined;
+    const client = new HappyAgentDaemonClient({ socketPath: paths.socketPath, token });
+    return client
+        .health(AbortSignal.timeout(Math.min(HEALTH_TIMEOUT_MS, remaining)))
+        .catch(() => undefined);
 }
 
 function processExists(pid: number): boolean {
@@ -302,15 +338,11 @@ function processExists(pid: number): boolean {
     }
 }
 
-function daemonCommandRun(
-    executable: string,
-    command: "reload",
-    environment: NodeJS.ProcessEnv,
-): Promise<void> {
+function daemonStartRun(executable: string, environment: NodeJS.ProcessEnv): Promise<void> {
     return new Promise((resolve, reject) => {
         execFile(
             executable,
-            [command],
+            ["start"],
             {
                 encoding: "utf8",
                 env: environment,

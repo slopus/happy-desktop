@@ -333,13 +333,6 @@ const inboxRoute = createRoute({
     path: "/inbox/$happyAgentId",
 });
 
-/** One machine's enrolled Happy Social friends and requests. */
-const socialRoute = createRoute({
-    component: HappyAgentSocialRoute,
-    getParentRoute: () => rootRoute,
-    path: "/social/$happyAgentId",
-});
-
 /**
  * The component workbench, addressed without a Happy Agent because it renders component
  * pages rather than anything a machine holds. The route is registered only in a
@@ -393,7 +386,6 @@ const routeTree = rootRoute.addChildren([
         chatFileRoute,
     ]),
     inboxRoute,
-    socialRoute,
     sessionCreateRoute,
     ...(import.meta.env.DEV ? [blueprintRoute] : []),
     settingsIndexRoute,
@@ -407,10 +399,6 @@ const routeTree = rootRoute.addChildren([
  */
 function HappyAgentInboxRoute() {
     return <HappyAgentWorkspaceLayout inbox />;
-}
-
-function HappyAgentSocialRoute() {
-    return <HappyAgentWorkspaceLayout social />;
 }
 
 /**
@@ -435,7 +423,6 @@ function HappyAgentWorkspaceLayout(
         blueprint?: boolean;
         create?: boolean;
         inbox?: boolean;
-        social?: boolean;
     } = {},
 ) {
     // Read loosely because this component renders under several routes, which
@@ -470,7 +457,6 @@ function HappyAgentWorkspaceLayout(
             {...(context.sidebarVisibility ? { sidebarVisibility: context.sidebarVisibility } : {})}
             createOpen={props.create}
             inboxOpen={props.inbox}
-            socialOpen={props.social}
             blueprintOpen={props.blueprint}
             // Offered only where the route exists, which is what puts the
             // workbench row in a development sidebar and nowhere else.
@@ -487,12 +473,6 @@ function HappyAgentWorkspaceLayout(
                 void navigate({
                     params: { happyAgentId: params.happyAgentId ?? happyAgentDefaultId(context) },
                     to: "/inbox/$happyAgentId",
-                })
-            }
-            onSocialOpen={() =>
-                void navigate({
-                    params: { happyAgentId: params.happyAgentId ?? happyAgentDefaultId(context) },
-                    to: "/social/$happyAgentId",
                 })
             }
             onUpdateApply={context.onUpdateApply}

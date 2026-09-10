@@ -15,15 +15,7 @@ const cloud = JSON.stringify(
         authorizationCompleting: false,
         authorizationStarting: false,
         disconnecting: false,
-        enrollment: { status: "enrolled", username: "steve" },
         environment: "production",
-        keyBackup: { status: "hidden" },
-        keys: {
-            identityKey: "TTYFvS8PBRw760IXOVgI24YAx8qiV9Zxmb9HdZ5F2Ss",
-            status: "ready",
-        },
-        socialConnection: "connected",
-        socialEnrollment: "enrolled",
         status: "connected",
         user: { email: "steve@korshakov.com", id: "user_01M0VHKVABK55EDXXTTN41FS28" },
     },
@@ -60,7 +52,7 @@ const instructions = JSON.stringify(
 
 const documents: readonly HappyAgentStateDocument[] = [
     {
-        description: "Happy Social account, enrollment, and encryption keys",
+        description: "WorkOS account authentication",
         id: "cloud",
         label: "Cloud",
         value: cloud,

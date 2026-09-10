@@ -485,18 +485,6 @@
     white-space: nowrap;
 }
 
-/* Quieter than the name and set in the mono face, because it is an exact
-   handle someone will read character by character rather than a display name. */
-.happy-agent-profile__username {
-    flex: none;
-    color: var(--text-secondary);
-    font-family: var(--happy-font-mono);
-    font-size: 12px;
-    font-synthesis: none;
-    line-height: 16px;
-    white-space: nowrap;
-}
-
 .happy-agent-profile__status {
     overflow: hidden;
     color: var(--text-secondary);

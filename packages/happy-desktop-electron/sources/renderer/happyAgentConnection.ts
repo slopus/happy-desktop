@@ -16,10 +16,7 @@ import {
     type HappyAgentWorkspaceClient,
     type HappyAgentClockStore,
     type HappyAgentCloudHost,
-    type HappyAgentCloudDevicesStore,
     type HappyAgentCloudStore,
-    type HappyAgentSocialJoinStore,
-    type HappyAgentSocialStore,
     type HappyAgentTeamsStore,
     type HappyAgentConnection,
     type HappyAgentConnectionSnapshot,
@@ -99,10 +96,7 @@ export interface HappyAgentSession {
     readonly onboarding: HappyAgentOnboardingStore;
     readonly connection: HappyAgentConnectionStore;
     readonly cloud: () => HappyAgentCloudStore;
-    readonly cloudDevices: () => HappyAgentCloudDevicesStore;
-    readonly social: () => HappyAgentSocialStore;
     readonly teams: () => HappyAgentTeamsStore;
-    readonly socialJoin: () => HappyAgentSocialJoinStore;
     readonly debugLog: HappyAgentDebugLogStore;
     readonly host: HappyAgentHost;
     readonly models: HappyAgentModelStore;
@@ -350,16 +344,13 @@ export function happyAgentConnectionOpen(input: {
         terminalDriverCreate,
         terminalColorScheme: input.terminalColorScheme,
     });
-    // Identity and an in-flight join are connection state, not Settings state.
-    // Keep all three stores alive so the browser callback cannot finish in the
-    // gap before Account mounts its join surface. The join snapshot then owns
-    // whether that surface must reopen when Account appears.
+    // Keep account authentication subscribed for this connection's lifetime so
+    // browser callbacks are handled even when Settings is closed or reloading.
     const cloudStore = client.cloud();
-    const socialJoinStore = client.socialJoin();
     const profileStore = client.profile();
     const accountKeepWarm = [
         onboarding.subscribe(() => undefined),
-        socialJoinStore.subscribe(() => undefined),
+        cloudStore.subscribe(() => undefined),
         ...(profileStore ? [profileStore.subscribe(() => undefined)] : []),
     ];
 
@@ -392,10 +383,7 @@ export function happyAgentConnectionOpen(input: {
                     welcome,
                     onboarding,
                     cloud: () => cloudStore,
-                    cloudDevices: () => client.cloudDevices(),
-                    social: () => client.social(),
                     teams: () => client.teams(),
-                    socialJoin: () => socialJoinStore,
                     connection: streamConnectionStoreCreate(agentConnection),
                     debugLog,
                     host: input.host,

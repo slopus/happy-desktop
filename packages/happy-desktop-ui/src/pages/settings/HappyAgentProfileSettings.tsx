@@ -12,12 +12,6 @@ export interface HappyAgentProfileSettingsProps {
     readonly name: string;
     readonly email: string;
     readonly imageUrl?: string;
-    /**
-     * The public Happy Social handle, when this machine's account has claimed
-     * one. It is shown beside the name because it is part of the same identity,
-     * and it is not editable here: it is claimed once, during joining.
-     */
-    readonly username?: string;
     /** True while the fields differ from what this machine has stored. */
     readonly dirty?: boolean;
     readonly loading?: boolean;
@@ -52,7 +46,7 @@ const initials = (name: string): string =>
  * category in this window is a block of hairline-separated rows, and a card here
  * made the profile look like an object sitting inside settings instead of a part
  * of them. What remains above the rows is the identity itself — the avatar, the
- * name, the social handle beside it, the email — which is a summary of who this
+ * name, and the email — which is a summary of who this
  * machine is, not a control.
  *
  * The block carries no title of its own. The category header directly above it
@@ -94,14 +88,6 @@ export function HappyAgentProfileSettings(props: HappyAgentProfileSettingsProps)
                                 <span className="happy-agent-profile__name">
                                     {props.name.trim() === "" ? "Unnamed" : props.name}
                                 </span>
-                                {props.username ? (
-                                    <span
-                                        className="happy-agent-profile__username"
-                                        data-happy-desktop-ui="happy-agent-profile-username"
-                                    >
-                                        @{props.username}
-                                    </span>
-                                ) : null}
                             </Box>
                             <span className="happy-agent-profile__status">
                                 {props.email.trim() === "" ? "No Git email yet" : props.email}

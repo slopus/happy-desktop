@@ -131,13 +131,10 @@
 @import "./styles/happy-agent-activity.css";
 @import "./styles/happy-agent-settings.css";
 @import "./styles/happy-agent-secret-settings.css";
-@import "./styles/happy-social-setup-modal.css";
-@import "./styles/happy-social-join.css";
 @import "./styles/happy-agent-debug-log.css";
 @import "./styles/happy-agent-raw-state.css";
 @import "./styles/happy-agent-usage-settings.css";
 @import "./styles/happy-agent-inbox.css";
-@import "./styles/happy-social-page.css";
 @import "./styles/happy-agent-project-settings.css";
 @import "./styles/happy-agent-create-session.css";
 @import "./styles/happy-agent-project-clone-dialog.css";

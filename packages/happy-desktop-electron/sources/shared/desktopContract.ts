@@ -631,7 +631,7 @@ export interface HappyDesktopBridge {
     browserProxyApply(target: DesktopBrowserProxyTarget): Promise<void>;
     browserOpenSubscribe(listener: (url: string) => void): () => void;
     browserStatusSubscribe(listener: (status: DesktopBrowserStatus) => void): () => void;
-    /** Announces that the shell received a Happy Social OAuth callback. */
+    /** Announces that the shell received a WorkOS OAuth callback. */
     cloudAuthCallbackSubscribe(listener: () => void): () => void;
     /** Whether a callback is waiting, without consuming its one-shot URL. */
     cloudAuthCallbackPending(): Promise<boolean>;

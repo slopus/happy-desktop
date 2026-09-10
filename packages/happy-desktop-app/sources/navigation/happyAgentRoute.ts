@@ -40,7 +40,6 @@ export type HappyAgentRoute =
     | { readonly kind: "group"; readonly happyAgentId: string; readonly groupId: string }
     | { readonly kind: "home" }
     | { readonly kind: "inbox"; readonly happyAgentId: string }
-    | { readonly kind: "social"; readonly happyAgentId: string }
     | { readonly kind: "happyAgent"; readonly happyAgentId: string }
     | { readonly kind: "settings" }
     | { readonly kind: "settingsSection"; readonly section: string };
@@ -74,8 +73,6 @@ export function happyAgentRoutePath(route: HappyAgentRoute): string {
             return "/";
         case "inbox":
             return `/inbox/${part(route.happyAgentId)}`;
-        case "social":
-            return `/social/${part(route.happyAgentId)}`;
         case "happyAgent":
             return `/chats/${part(route.happyAgentId)}`;
         case "settings":
@@ -159,10 +156,6 @@ export function happyAgentRoutePathParse(pathname: string): HappyAgentRoute | un
             return first !== undefined && segments.length === 2
                 ? { kind: "inbox", happyAgentId: first }
                 : undefined;
-        case "social":
-            return first !== undefined && segments.length === 2
-                ? { kind: "social", happyAgentId: first }
-                : undefined;
         case "settings":
             if (first === undefined) return { kind: "settings" };
             return segments.length === 2 ? { kind: "settingsSection", section: first } : undefined;
@@ -229,10 +222,6 @@ export function happyAgentRouteParse(value: unknown): HappyAgentRoute | undefine
         case "inbox": {
             const happyAgentId = fieldOf(record, "happyAgentId");
             return happyAgentId ? { kind: "inbox", happyAgentId } : undefined;
-        }
-        case "social": {
-            const happyAgentId = fieldOf(record, "happyAgentId");
-            return happyAgentId ? { kind: "social", happyAgentId } : undefined;
         }
         case "happyAgent": {
             const happyAgentId = fieldOf(record, "happyAgentId");

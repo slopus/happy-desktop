@@ -3,11 +3,6 @@ import type {
     AppearanceStore,
     ExperimentsStore,
     HappyAgentInstructionsSnapshot,
-    HappyAgentCloudDevice,
-    HappyAgentCloudDevicesRead,
-    HappyAgentCloudEnrollment,
-    HappyAgentCloudKeyBackup,
-    HappyAgentCloudSnapshot,
     HappyAgentDebugLogSnapshot,
     HappyAgentSecurityPolicySnapshot,
     HappyAgentSecret,
@@ -17,7 +12,6 @@ import type {
     HappyAgentProviderEntry,
     HappyAgentSettingsSnapshot,
     HappyAgentSettingsStore,
-    HappyAgentSocialJoinFlow,
     HappyAgentThinkingLevel,
     HappyAgentWindowStore,
     TitleShimmerStore,
@@ -29,12 +23,10 @@ import {
     happyAgentPermissionLabel,
     happyAgentThinkingLabel,
     experimentsStoreNoop,
-    happyAgentCloudDevicesStoreNoop,
     happyAgentCloudStoreNoop,
     happyAgentAvailabilityProject,
     happyAgentIntegrationStoreNoop,
     happyAgentProfileStoreNoop,
-    happyAgentSocialJoinStoreNoop,
     happyAgentProviderUsageStoreNoop,
     happyAgentProvidersStoreNoop,
     happyAgentSecretsStoreNoop,
@@ -42,32 +34,24 @@ import {
     titleShimmerStoreNoop,
 } from "happy-desktop-state";
 import {
-    HappySocialSettings,
+    HappyAgentAccountSettings,
     HappyAgentGeneralSettings,
     HappyAgentDebugLogPanel,
     HappyAgentDebugSettings,
-    HappyAgentDeviceSettings,
     HappyAgentInstructionsSettings,
     HappyAgentMobileSettings,
     HappyAgentProviderSettings,
     HappyAgentProfilerSettings,
-    HappyAgentEncryptionSettings,
     HappyAgentProfileSettings,
     HappyAgentSecretSettings,
     HappyAgentSettingsShell,
     HappyAgentStateSettings,
     HappyAgentUsageSettings,
     providerAccountName,
-    type HappyAgentDevice,
-    type HappyAgentDeviceRead,
-    type HappyAgentEncryption,
-    type HappyAgentEncryptionSecret,
     type HappyAgentProviderRow,
     type HappyAgentSecretRow,
     type HappyAgentSettingsCategory,
     type HappyAgentStateDocument,
-    type HappySocialEnrollment,
-    type HappySocialJoinState,
 } from "happy-desktop-ui";
 import { HappyAgentVersionProvider } from "../HappyAgentVersionProvider";
 import type { SelectOption } from "happy-desktop-ui";
@@ -76,11 +60,7 @@ import { hostHappyAgent, type AppHappyAgentDirectoryStore } from "../AppHappyAge
 /** The categories the local settings window offers, in the order they are listed. */
 export const HAPPY_AGENT_SETTINGS_CATEGORIES: readonly HappyAgentSettingsCategory[] = [
     { icon: "settings", id: "general", label: "General" },
-    // One category for the account: who this machine is when it authors work,
-    // the Happy Social account that identity signs into, its encryption, and
-    // every device signed in with it. Those were separate categories saying the
-    // same thing about one person. Pairing a phone is a device belonging to
-    // Happy Mobile rather than to this account, so it stays its own.
+    // Local author identity and the optional WorkOS account share one category.
     { icon: "users", id: "account", label: "Account" },
     { icon: "doc", id: "instructions", label: "Instructions" },
     { icon: "lock", id: "secrets", label: "Secrets" },
@@ -273,7 +253,7 @@ const CATEGORY_DESCRIPTIONS: Record<string, string> = {
     debug: "Inspect live state, Happy and Happy Agent debugger endpoints, and renderer profiles",
     general: "How this window looks and what a new session starts with",
     "mobile-access": "This Happy Agent's connection to Happy Mobile",
-    account: "Who this machine is when it authors work, and the devices signed in with it",
+    account: "Local author identity and Happy account connection",
     instructions: "Machine-wide agent guidance and permission-review policy",
     secrets: "Write-only environment bundles this Happy Agent can provide to agents",
     providers: "Every model provider this Happy Agent daemon knows about",
@@ -392,26 +372,6 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
         (props.section === "account" || stateOpen ? host?.session?.cloud?.() : undefined) ??
         happyAgentCloudStoreNoop;
     const cloud = useSyncExternalStore(cloudStore.subscribe, cloudStore.get, cloudStore.get);
-    // The roster has no event of its own, so subscribing is what starts the
-    // repeating read and leaving this category is what stops it. It is asked
-    // for only once the account is live enough to have one.
-    const cloudDevicesStore =
-        ((props.section === "account" || stateOpen) && cloud.keys.status === "ready"
-            ? host?.session?.cloudDevices?.()
-            : undefined) ?? happyAgentCloudDevicesStoreNoop;
-    const cloudDevices = useSyncExternalStore(
-        cloudDevicesStore.subscribe,
-        cloudDevicesStore.get,
-        cloudDevicesStore.get,
-    );
-    const socialJoinStore =
-        (props.section === "account" || stateOpen ? host?.session?.socialJoin?.() : undefined) ??
-        happyAgentSocialJoinStoreNoop;
-    const socialJoin = useSyncExternalStore(
-        socialJoinStore.subscribe,
-        socialJoinStore.get,
-        socialJoinStore.get,
-    );
     const happyIntegrationStore =
         (props.section === "mobile-access" || stateOpen
             ? host?.session?.happyIntegration?.()
@@ -519,10 +479,6 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
         model?.model && !model.model.thinkingLevels.includes(settings.defaultEffort)
             ? model.model.defaultThinkingLevel
             : settings.defaultEffort;
-    const cloudDisplayName = cloud.user
-        ? [cloud.user.firstName, cloud.user.lastName].filter(Boolean).join(" ") || undefined
-        : undefined;
-    const socialEnrollment = socialEnrollmentProject(cloud.enrollment);
     const content = (
         <HappyAgentSettingsShell
             activeCategoryId={props.section}
@@ -573,7 +529,6 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                         documents={stateDocuments({
                             appearance,
                             cloud,
-                            cloudDevices,
                             experiments,
                             happyIntegration,
                             instructions,
@@ -583,7 +538,6 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                             secrets,
                             securityPolicy,
                             settings,
-                            socialJoin,
                             titleShimmer,
                             usage,
                             windowState,
@@ -622,8 +576,7 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                     />
                 </>
             ) : props.section === "account" ? (
-                // Who this machine is, the account that identity signs into,
-                // and every machine signed in with it.
+                // The local author identity and optional WorkOS connection.
                 <>
                     <HappyAgentProfileSettings
                         dirty={profile.dirty}
@@ -637,9 +590,6 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                             if (happyAgentOnline()) void profileStore.profileSave();
                         }}
                         saving={profile.saving}
-                        {...(socialEnrollment.status === "enrolled"
-                            ? { username: socialEnrollment.username }
-                            : {})}
                         {...(profile.photo === undefined
                             ? {}
                             : { imageUrl: profile.photo.imageUrl })}
@@ -647,86 +597,21 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                         {...(profile.saveError ? { saveError: profile.saveError } : {})}
                         {...(unavailable === undefined ? {} : { unavailable })}
                     />
-                    <HappySocialSettings
-                        appearance={appearance.mode}
+                    <HappyAgentAccountSettings
                         authorizationCompleting={cloud.authorizationCompleting}
                         authorizationStarting={cloud.authorizationStarting}
                         disconnecting={cloud.disconnecting}
-                        enrollment={socialEnrollment}
-                        join={socialJoinFlow(socialJoin.flow)}
-                        joinActions={{
-                            onAccountConnect: () => {
-                                if (happyAgentOnline()) socialJoinStore.accountConnect();
-                            },
-                            onAcknowledgementChange: (value) =>
-                                socialJoinStore.acknowledgementUpdate(value),
-                            onConfirmationChange: (value) =>
-                                socialJoinStore.confirmationUpdate(value),
-                            onConfirmationSubmit: () => socialJoinStore.confirmationSubmit(),
-                            onPasswordChange: (value) => socialJoinStore.passwordUpdate(value),
-                            onPasswordSubmit: () => socialJoinStore.passwordSubmit(),
-                            onRestorePasswordChange: (value) =>
-                                socialJoinStore.restorePasswordUpdate(value),
-                            onRestoreSecretChange: (value) =>
-                                socialJoinStore.restoreSecretUpdate(value),
-                            onRestoreSubmit: () => {
-                                if (happyAgentOnline()) socialJoinStore.restoreSubmit();
-                            },
-                            onSecretSubmit: () => {
-                                if (happyAgentOnline()) socialJoinStore.secretSubmit();
-                            },
-                            onUsernameChange: (value) => socialJoinStore.usernameUpdate(value),
-                            onUsernameSubmit: () => {
-                                if (happyAgentOnline()) socialJoinStore.usernameSubmit();
-                            },
-                            onVaultDeleteCancel: () => socialJoinStore.vaultDeleteCancel(),
-                            onVaultDeleteConfirmationChange: (value) =>
-                                socialJoinStore.vaultDeleteConfirmationUpdate(value),
-                            onVaultDeleteOpen: () => socialJoinStore.vaultDeleteOpen(),
-                            onVaultDeleteSubmit: () => {
-                                if (happyAgentOnline()) socialJoinStore.vaultDeleteSubmit();
-                            },
+                        onConnect={() => {
+                            if (happyAgentOnline()) cloudStore.cloudAccountConnect();
                         }}
-                        joinable={experiments.experimentalFeaturesEnabled}
-                        joinOpen={socialJoin.open}
                         onDisconnect={() => {
                             if (happyAgentOnline()) cloudStore.cloudAccountDisconnect();
                         }}
-                        onJoinClose={() => socialJoinStore.joinClose()}
-                        onJoinOpen={() => socialJoinStore.joinOpen()}
-                        keys={cloud.keys.status}
                         status={cloud.status}
                         {...(cloud.error ? { error: cloud.error.message } : {})}
-                        {...(cloud.user
-                            ? {
-                                  email: cloud.user.email,
-                                  ...(cloudDisplayName ? { displayName: cloudDisplayName } : {}),
-                              }
-                            : {})}
+                        {...(cloud.user ? { email: cloud.user.email } : {})}
                         {...(unavailable === undefined ? {} : { unavailable })}
                     />
-                    <HappyAgentEncryptionSettings
-                        encryption={encryptionProject(cloud)}
-                        onKeysContinue={() => socialJoinStore.joinOpen()}
-                        onSecretHide={() => cloudStore.cloudKeyBackupHide()}
-                        onSecretReveal={() => {
-                            if (happyAgentOnline()) cloudStore.cloudKeyBackupReveal();
-                        }}
-                    />
-                    {/* The roster only means anything once the account can
-                        actually be reached, which is what ready keys say. */}
-                    {cloud.keys.status === "ready" ? (
-                        <HappyAgentDeviceSettings
-                            devices={deviceRows(cloudDevices.devices)}
-                            onDeviceRemove={(id) => {
-                                if (happyAgentOnline()) cloudDevicesStore.deviceRemove(id);
-                            }}
-                            read={deviceRead(cloudDevices.read)}
-                            {...(cloudDevices.removeError
-                                ? { removeError: cloudDevices.removeError.message }
-                                : {})}
-                        />
-                    ) : null}
                 </>
             ) : props.section === "instructions" ? (
                 <HappyAgentInstructionsSettings
@@ -901,47 +786,10 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
     );
 }
 
-/**
- * The roster with each entry's timestamp written the way it is shown. The list
- * surface takes an already-formatted string, because when a device was last
- * seen is a locale decision and not something a layout should be making.
- */
-function deviceRows(devices: readonly HappyAgentCloudDevice[]): readonly HappyAgentDevice[] {
-    return devices.map((device) => ({
-        current: device.current,
-        id: device.id,
-        lastAccessed: deviceLastAccessed(device.lastAccessedAt),
-        removing: device.removing,
-        ...(device.agentVersion === undefined ? {} : { agentVersion: device.agentVersion }),
-        ...(device.architecture === undefined ? {} : { architecture: device.architecture }),
-        ...(device.name === undefined ? {} : { name: device.name }),
-        ...(device.osVersion === undefined ? {} : { osVersion: device.osVersion }),
-        ...(device.platform === undefined ? {} : { platform: device.platform }),
-    }));
-}
-
-/** The read state with its error, if any, written the way it is shown. */
-function deviceRead(read: HappyAgentCloudDevicesRead): HappyAgentDeviceRead {
-    return read.status === "failed" ? { error: read.error.message, status: "failed" } : read;
-}
-
-/**
- * When a device was last here, as an absolute local date and time. It is not
- * written as "two hours ago" because nothing on this page ticks: a relative
- * phrase would be quietly wrong for as long as the window stays open.
- */
-function deviceLastAccessed(at: number): string {
-    return new Intl.DateTimeFormat(undefined, {
-        dateStyle: "medium",
-        timeStyle: "short",
-    }).format(new Date(at));
-}
-
 /** Every store snapshot Dev Tools prints, in the order the window reads them. */
 function stateDocuments(snapshots: {
     readonly appearance: unknown;
     readonly cloud: unknown;
-    readonly cloudDevices: unknown;
     readonly experiments: unknown;
     readonly happyIntegration: unknown;
     readonly instructions: unknown;
@@ -951,29 +799,16 @@ function stateDocuments(snapshots: {
     readonly secrets: unknown;
     readonly securityPolicy: unknown;
     readonly settings: unknown;
-    readonly socialJoin: unknown;
     readonly titleShimmer: unknown;
     readonly usage: unknown;
     readonly windowState: unknown;
 }): readonly HappyAgentStateDocument[] {
     return [
         {
-            description: "Happy Social account, enrollment, and encryption keys",
+            description: "WorkOS account authentication",
             id: "cloud",
             label: "Cloud",
             value: stateText(snapshots.cloud),
-        },
-        {
-            description: "Every installation signed into that account",
-            id: "cloud-devices",
-            label: "Devices",
-            value: stateText(snapshots.cloudDevices),
-        },
-        {
-            description: "The join errand and whether its surface is open",
-            id: "social-join",
-            label: "Social join",
-            value: stateText(snapshots.socialJoin),
         },
         {
             description: "The identity this machine authors work as",
@@ -1072,117 +907,6 @@ function stateReplacer(_key: string, value: unknown): unknown {
     if (value instanceof Map) return Object.fromEntries(value);
     if (value instanceof Error) return { message: value.message, name: value.name };
     return value;
-}
-
-/**
- * The account's encryption as the Profile screen states it. The key states are
- * carried across unchanged; only the on-demand recovery material is folded in,
- * because it belongs to the one state that can have it.
- */
-function encryptionProject(cloud: HappyAgentCloudSnapshot): HappyAgentEncryption {
-    if (cloud.keys.status !== "ready") return cloud.keys;
-    return {
-        identityKey: cloud.keys.identityKey,
-        secret: encryptionSecretProject(cloud.keyBackup),
-        status: "ready",
-    };
-}
-
-function encryptionSecretProject(backup: HappyAgentCloudKeyBackup): HappyAgentEncryptionSecret {
-    switch (backup.status) {
-        case "hidden":
-        case "reading":
-            return backup;
-        case "failed":
-            return { error: backup.error.message, status: "failed" };
-        case "revealed":
-            return { secret: backup.generatedSecret, status: "revealed" };
-    }
-}
-
-function socialEnrollmentProject(enrollment: HappyAgentCloudEnrollment): HappySocialEnrollment {
-    switch (enrollment.status) {
-        case "inactive":
-            return { status: "inactive" };
-        case "checking":
-            return { status: "loading" };
-        case "required":
-            return {
-                enrolling: enrollment.submitting,
-                ...(enrollment.error ? { error: enrollment.error.message } : {}),
-                status: "unenrolled",
-                username: enrollment.username,
-            };
-        case "enrolling":
-            return {
-                enrolling: true,
-                status: "unenrolled",
-                username: enrollment.username,
-            };
-        case "enrolled":
-            return enrollment;
-    }
-}
-
-/** The join flow, with every error rendered as the sentence the surface shows. */
-function socialJoinFlow(flow: HappyAgentSocialJoinFlow): HappySocialJoinState {
-    const error = "error" in flow && flow.error ? { error: flow.error.message } : {};
-    switch (flow.step) {
-        case "checking":
-            return flow;
-        case "unavailable":
-            return { step: "unavailable", ...error };
-        case "account":
-            return {
-                awaitingBrowser: flow.awaitingBrowser,
-                starting: flow.starting,
-                step: "account",
-                ...error,
-            };
-        case "username":
-            return {
-                step: "username",
-                submitting: flow.submitting,
-                username: flow.username,
-                ...error,
-            };
-        case "password":
-            return {
-                password: flow.password,
-                rules: flow.rules,
-                satisfied: flow.satisfied,
-                step: "password",
-            };
-        case "confirmation":
-            return { confirmation: flow.confirmation, step: "confirmation", ...error };
-        case "secret":
-            return {
-                acknowledged: flow.acknowledged,
-                saving: flow.saving,
-                secret: flow.secret,
-                step: "secret",
-                ...error,
-            };
-        case "restore":
-            return {
-                password: flow.password,
-                secret: flow.secret,
-                step: "restore",
-                submitting: flow.submitting,
-                valid: flow.valid,
-                ...error,
-            };
-        case "vault-delete":
-            return {
-                confirmation: flow.confirmation,
-                step: "vault-delete",
-                submitting: flow.submitting,
-                valid: flow.valid,
-                ...error,
-            };
-        case "connecting":
-            return { stages: flow.stages, step: "connecting" };
-    }
 }
 
 /**
