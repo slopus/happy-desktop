@@ -1,6 +1,6 @@
 {
     "name": "happy-desktop-workspace",
-    "version": "0.0.78",
+    "version": "0.0.79",
     "private": true,
     "description": "Happy local desktop client for Happy Agent",
     "license": "MIT",
