@@ -491,6 +491,15 @@ function DesktopScreens(props: DesktopRendererProps) {
             }))}
             selectedId={directory.activeHappyAgentId ?? LOCAL_HAPPY_AGENT_ID}
             onSelect={props.happyAgents.happyAgentActivate}
+            onReorder={
+                directory.happyAgents.some(
+                    (entry) => entry.id === LOCAL_HAPPY_AGENT_ID && entry.status === "connected",
+                )
+                    ? props.happyAgents.happyAgentReorder
+                    : undefined
+            }
+            reordering={directory.reordering}
+            reorderError={directory.reorderError}
             windowControls={props.platform === "desktop" && !windowState.fullScreen}
             collapsed={sidebarVisibility.hidden}
             error={directory.error}

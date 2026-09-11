@@ -21,20 +21,36 @@ const items: readonly ConnectionShellItem[] = [
 export function ConnectionShellPage() {
     const [selected, select] = useState("local");
     const [connectingSelected, connectingSelect] = useState("starting");
+    const [orderedItems, setOrderedItems] = useState(items);
+    const reorder = (id: string, afterId: string | null) => {
+        setOrderedItems((current) => {
+            const moved = current.find((item) => item.id === id);
+            if (!moved || moved.local) return current;
+            const next = current.filter((item) => item.id !== id);
+            const index = afterId === null ? 1 : next.findIndex((item) => item.id === afterId) + 1;
+            next.splice(index, 0, moved);
+            return next;
+        });
+    };
     return (
         <ComponentPage
             number={componentNumber}
             title="Connections"
-            summary="A 64px connection rail outside each independent workspace. Hidden for a single connection; offline machines remain selectable."
+            summary="A 56px connection rail outside each independent workspace. Home stays first above a separator; remote order is controlled without remounting workspaces."
         >
             <Specimen
                 number="01"
-                label="Multiple connections"
-                detail="Switch without losing each connection's draft."
+                label="Full-screen · reorderable connections"
+                detail="12px top padding. Drag remotes or use Alt+↑/↓; Home stays pinned and drafts survive."
                 stage="surface"
             >
                 <div style={{ display: "flex", width: 900, height: 600 }}>
-                    <ConnectionShell items={items} selectedId={selected} onSelect={select}>
+                    <ConnectionShell
+                        items={orderedItems}
+                        selectedId={selected}
+                        onSelect={select}
+                        onReorder={reorder}
+                    >
                         {items.map((item) => (
                             <ConnectionSurface key={item.id} active={item.id === selected}>
                                 <div
@@ -56,6 +72,42 @@ export function ConnectionShellPage() {
                                 </div>
                             </ConnectionSurface>
                         ))}
+                    </ConnectionShell>
+                </div>
+            </Specimen>
+            <Specimen
+                number="06"
+                label="Windowed · saving order"
+                detail="40px traffic-light lane plus 8px padding. Navigation stays available while reordering is pending."
+                stage="surface"
+            >
+                <div style={{ display: "flex", width: 900, height: 300 }}>
+                    <ConnectionShell
+                        items={items}
+                        selectedId="local"
+                        onSelect={() => undefined}
+                        onReorder={() => undefined}
+                        reordering
+                        windowControls
+                    >
+                        <p>Saving the remote connection order.</p>
+                    </ConnectionShell>
+                </div>
+            </Specimen>
+            <Specimen
+                number="07"
+                label="Reorder failed"
+                detail="A failed save leaves the confirmed order and all workspaces available."
+                stage="surface"
+            >
+                <div style={{ display: "flex", width: 900, height: 300 }}>
+                    <ConnectionShell
+                        items={items}
+                        selectedId="local"
+                        onSelect={() => undefined}
+                        reorderError="Could not reorder connections. The host is offline."
+                    >
+                        <p>Work remains available.</p>
                     </ConnectionShell>
                 </div>
             </Specimen>

@@ -71,15 +71,15 @@
     flex-direction: column;
     align-items: flex-start;
     gap: 8px;
-    /* Without a title bar above, the first 36px tile centres at 22px: the same
-       line as the sidebar's Create row (6px inset, 32px row) and its toggle. */
-    padding: 4px 6px 8px 14px;
+    /* Full-screen windows have no traffic-light lane; keep clear ground above Home. */
+    padding: 12px 6px 8px 14px;
 }
 .happy-connections__rail[data-window-controls] .happy-connections__items {
     padding-top: 8px;
 }
 .happy-connections__item {
     display: flex;
+    flex: none;
     align-items: center;
     justify-content: center;
     position: relative;
@@ -94,7 +94,42 @@
     color: var(--text-secondary);
     font: inherit;
     cursor: pointer;
+    user-select: none;
+    touch-action: none;
+    transition:
+        background-color 120ms ease,
+        box-shadow 120ms ease,
+        color 120ms ease;
     -webkit-app-region: no-drag;
+}
+.happy-connections__separator {
+    flex: none;
+    width: 36px;
+    height: 1px;
+    background: var(--divider);
+}
+.happy-connections__items[data-reordering] .happy-connections__item {
+    transition:
+        background-color 120ms ease,
+        box-shadow 120ms ease,
+        color 120ms ease,
+        transform 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.happy-connections__items[data-reordering] .happy-connections__item[data-dragging] {
+    z-index: 3;
+    cursor: grabbing;
+    background: var(--surface-ripple);
+    box-shadow: 0 4px 12px var(--shadow-subtle);
+    /* Exactly like a project row: only neighbours ease; the held tile follows the hand. */
+    transition:
+        background-color 120ms ease,
+        box-shadow 120ms ease,
+        color 120ms ease;
+}
+@media (prefers-reduced-motion: reduce) {
+    .happy-connections__items[data-reordering] .happy-connections__item {
+        transition: none;
+    }
 }
 .happy-connections__item[data-local] {
     background: var(--surface);

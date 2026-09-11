@@ -52,12 +52,15 @@ export interface HappyAgentDirectorySnapshot {
     readonly activeHappyAgentId?: string;
     readonly happyAgents: readonly HappyAgentDirectoryEntry[];
     readonly error?: string;
+    readonly reordering?: boolean;
+    readonly reorderError?: string;
 }
 
 export interface HappyAgentDirectoryStore {
     get(): HappyAgentDirectorySnapshot;
     subscribe(listener: () => void): () => void;
     happyAgentActivate(id: string): void;
+    happyAgentReorder(id: string, afterId: string | null): void;
 }
 
 export interface HappyAgentDirectoryDeps {
@@ -199,9 +202,28 @@ export function happyAgentDirectoryStoreCreate(
     };
 
     const publish = (): void => {
+        const membership = roster?.get();
+        const orderedRemotes =
+            membership?.items.flatMap((item) => {
+                const remote = remotes.get(item.id);
+                return remote ? [remote.entry] : [];
+            }) ?? [];
+        // Retain remotes held through a local restart, in their last visible order.
+        const orderedIds = new Set(orderedRemotes.map((entry) => entry.id));
+        for (const entry of snapshot.happyAgents) {
+            const remote = remotes.get(entry.id);
+            if (remote && !orderedIds.has(entry.id)) {
+                orderedRemotes.push(remote.entry);
+                orderedIds.add(entry.id);
+            }
+        }
+        for (const remote of remotes.values())
+            if (!orderedIds.has(remote.entry.id)) orderedRemotes.push(remote.entry);
         snapshot = {
             activeHappyAgentId: roster?.get().selectedId ?? LOCAL_HAPPY_AGENT_ID,
-            happyAgents: [happyAgent.entry, ...[...remotes.values()].map((remote) => remote.entry)],
+            happyAgents: [happyAgent.entry, ...orderedRemotes],
+            reordering: membership?.reordering,
+            reorderError: membership?.reorderError,
             ...(roster?.get().error ? { error: roster.get().error } : {}),
         };
         for (const listener of listeners) listener();
@@ -502,6 +524,9 @@ export function happyAgentDirectoryStoreCreate(
         },
         happyAgentActivate(id) {
             roster?.connectionSelect(id);
+        },
+        happyAgentReorder(id, afterId) {
+            roster?.connectionReorder(id, afterId);
         },
     };
 }
