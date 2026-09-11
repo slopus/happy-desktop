@@ -32,6 +32,7 @@ import {
     type HappyAgentDaemonInspectorStopResponse,
 } from "./happyAgentDaemonClient";
 import type { HtmlPreviewProxyHandle } from "./htmlPreviewProxy";
+import { happyAgentRendererOrigin, type HappyAgentRendererProxy } from "./happyAgentRendererProxy";
 import { happyAgentHttpProxyCreate, type HappyAgentHttpProxyHandle } from "./happyAgentHttpProxy";
 import type { Duplex } from "node:stream";
 
@@ -59,6 +60,7 @@ export interface DesktopRuntimePaths {
 }
 
 export interface DesktopRuntimeOptions {
+    readonly rendererProxy?: HappyAgentRendererProxy;
     readonly localHappyAgentConnector?: LocalHappyAgentConnector;
     readonly happyAgentHttpProxyStart?: HappyAgentHttpProxyStart;
     /**
@@ -92,6 +94,7 @@ export class DesktopRuntime implements AsyncDisposable {
     private snapshotValue: DesktopRuntimeSnapshot;
     private readonly connector: LocalHappyAgentConnector;
     private readonly proxyStart: HappyAgentHttpProxyStart;
+    private readonly rendererHttpUrl: string | undefined;
 
     private constructor(
         private readonly paths: DesktopRuntimePaths,
@@ -99,6 +102,7 @@ export class DesktopRuntime implements AsyncDisposable {
         options: DesktopRuntimeOptions,
     ) {
         this.settings = settings;
+        this.rendererHttpUrl = options.rendererProxy ? happyAgentRendererOrigin : undefined;
         this.connector = options.localHappyAgentConnector ?? localHappyAgentConnectorCreate();
         this.proxyStart =
             options.happyAgentHttpProxyStart ??
@@ -106,6 +110,7 @@ export class DesktopRuntime implements AsyncDisposable {
                 happyAgentHttpProxyCreate({
                     client: connection.client,
                     onConnectionError,
+                    ...(options.rendererProxy ? { rendererProxy: options.rendererProxy } : {}),
                     ...(options.rendererOrigin ? { allowedOrigin: options.rendererOrigin } : {}),
                     ...(options.htmlPreview ? { htmlPreview: options.htmlPreview } : {}),
                 }));
@@ -484,7 +489,7 @@ export class DesktopRuntime implements AsyncDisposable {
             }
             this.happyAgentProxy = proxy;
             const happyAgentVersion = connection.version;
-            const happyAgentHttpUrl = proxy.url;
+            const happyAgentHttpUrl = this.rendererHttpUrl ?? proxy.url;
             if (this.persistOnSuccess) {
                 const settings = desktopSettingsActivate(this.settings, topology);
                 await desktopSettingsWrite(

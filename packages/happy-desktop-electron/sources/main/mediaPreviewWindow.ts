@@ -39,7 +39,7 @@ export function mediaPreviewAddressAllowed(
         }
         if (root.origin !== address.origin) return false;
         const prefix = root.pathname.replace(/\/$/, "");
-        if (prefix === "" || !address.pathname.startsWith(`${prefix}/`)) return false;
+        if (!address.pathname.startsWith(`${prefix}/`)) return false;
         const route = address.pathname.slice(prefix.length);
         return (
             route === MEDIA_ROUTE ||

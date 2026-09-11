@@ -75,7 +75,7 @@ export type DesktopActiveTarget = DesktopTopologyTarget & {
     mode: "local";
     happyAgentVersion: string;
     /**
-     * Loopback base URL of the main process's Happy Agent HTTP proxy. The renderer's
+     * Renderer-facing base URL (`http://happy-agent` in Electron). The renderer's
      * connection loader probes `${happyAgentHttpUrl}/health` directly; this is the
      * only channel the renderer uses to reach the local daemon.
      */

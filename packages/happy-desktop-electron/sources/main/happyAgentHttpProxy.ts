@@ -3,6 +3,7 @@ import { randomBytes } from "node:crypto";
 import type { AddressInfo } from "node:net";
 import type { happyAgentProtocol, HappyAgentDaemonHealth } from "happy-desktop-state";
 import type { HtmlPreviewProxyHandle } from "./htmlPreviewProxy";
+import type { HappyAgentRendererProxy } from "./happyAgentRendererProxy";
 import { happyAgentProxyHandle, type HappyAgentProxyClient } from "./happyAgentProxyHandle";
 import {
     happyAgentTerminalBridgeCreate,
@@ -27,6 +28,8 @@ export interface HappyAgentHttpProxyBacking {
 }
 
 export interface HappyAgentHttpProxyOptions extends HappyAgentHttpProxyBacking {
+    /** Electron's stable, authenticated renderer route; absent in browser development. */
+    readonly rendererProxy?: HappyAgentRendererProxy;
     /**
      * Invoked when a health request fails at the transport level (the daemon is
      * unreachable), so the runtime can restart the connection. Daemon-reported
@@ -216,9 +219,14 @@ export function happyAgentHttpProxyCreate(
                 return;
             }
             expectedHost = `127.0.0.1:${address.port}`;
+            const url = `http://${expectedHost}${capabilityPrefix}`;
+            const rendererDetach = options.rendererProxy?.targetSet({
+                url,
+                terminalCapability: capability,
+            });
             let closed = false;
             resolvePromise({
-                url: `http://${expectedHost}${capabilityPrefix}`,
+                url,
                 replace: (next) => {
                     if (closed) throw new Error("The Happy Agent HTTP proxy is closed.");
                     backing = backingCreate(next);
@@ -226,6 +234,7 @@ export function happyAgentHttpProxyCreate(
                 close: () => {
                     if (closed) return;
                     closed = true;
+                    rendererDetach?.();
                     terminals.close();
                     server.close();
                 },

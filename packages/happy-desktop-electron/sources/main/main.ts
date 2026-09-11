@@ -68,6 +68,11 @@ import { localHappyAgentConnectorCreate, localRuntimeProbe } from "./localHappyA
 import { LocalOnboarding } from "./localOnboarding";
 import { desktopBrowserProxyTargetValidate } from "./happyAgentIpcValidation";
 import { htmlPreviewProxyCreate, type HtmlPreviewProxyHandle } from "./htmlPreviewProxy";
+import { happyAgentRendererOrigin } from "./happyAgentRendererProxy";
+import {
+    happyAgentRendererSessionCreate,
+    type HappyAgentRendererSession,
+} from "./happyAgentRendererSession";
 import {
     happyAgentBrowserProxyCreate,
     type HappyAgentBrowserProxyHandle,
@@ -237,7 +242,16 @@ const platformWindowChrome: Electron.BrowserWindowConstructorOptions =
 nativeTheme.themeSource = "system";
 // Independent Happy Agent realtime streams share the loopback HTTP proxy.
 // Keep them from exhausting Chromium's per-host sockets and starving API requests.
-app.commandLine.appendSwitch("ignore-connections-limit", "127.0.0.1");
+app.commandLine.appendSwitch("ignore-connections-limit", "127.0.0.1,happy-agent");
+// The exact virtual origin is local to Electron's authenticated proxy. Unlike
+// localhost, this requested hostname is not inherently trustworthy to Chromium;
+// mark only this origin local so the hosted HTTPS renderer can also consume it.
+app.commandLine.appendSwitch(
+    "unsafely-treat-insecure-origin-as-secure",
+    `${happyAgentRendererOrigin},ws://happy-agent`,
+);
+// Never resolve this private origin through DNS, including if proxy setup fails.
+app.commandLine.appendSwitch("host-resolver-rules", "MAP happy-agent ~NOTFOUND");
 app.commandLine.appendSwitch("disable-quic");
 app.commandLine.appendSwitch("force-webrtc-ip-handling-policy", "disable_non_proxied_udp");
 if (desktopDebugEnabled) {
@@ -321,6 +335,7 @@ app.on("open-url", (event, candidate) => {
     window.focus();
 });
 const unavailableBrowserProxy = "http://127.0.0.1:9";
+let happyAgentRendererSession: HappyAgentRendererSession | undefined;
 /*
  * The one window a file is shown in outside the application. There is exactly
  * one because a reader looking at a file is looking at a file: opening another
@@ -906,6 +921,11 @@ function localWindowCreate(bounds?: DesktopWindowBounds) {
             webviewTag: true,
         }),
     });
+    happyAgentRendererSession?.windowRegister(
+        window.webContents,
+        rendererUrl,
+        developmentUrl !== undefined || hostedOrigin !== undefined,
+    );
     if (desktopDebugEnabled) {
         desktopDebugLog(`renderer window created; loading ${rendererUrl}`);
         window.webContents.on("dom-ready", () =>
@@ -1108,6 +1128,12 @@ function mediaPreviewWindowCreate(): BrowserWindow {
         },
     });
     mediaPreviewNameHold(window);
+    happyAgentRendererSession?.windowRegister(
+        window.webContents,
+        rendererUrl,
+        developmentUrl !== undefined || hostedOrigin !== undefined,
+        true,
+    );
     // A preview window opens no windows and goes nowhere: a link inside it
     // would be a link inside a picture or a recording, which does not exist.
     window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
@@ -1338,6 +1364,9 @@ void app
     .then(async () => {
         if (desktopGymActive) app.dock?.hide();
         else if (!app.isPackaged && applicationIconPath) app.dock?.setIcon(applicationIconPath);
+        happyAgentRendererSession = await happyAgentRendererSessionCreate(
+            electronSession.defaultSession,
+        );
         await browserSessionConfigure();
         htmlPreviewProxy = await htmlPreviewProxyCreate();
         await htmlPreviewSessionConfigure();
@@ -1382,6 +1411,9 @@ void app
             },
             {
                 localHappyAgentConnector: connector,
+                ...(happyAgentRendererSession
+                    ? { rendererProxy: happyAgentRendererSession.proxy }
+                    : {}),
                 // A hosted local renderer and the Vite development renderer both
                 // call the loopback proxy cross-origin. Only their exact,
                 // build-owned origin receives CORS access.
@@ -1752,6 +1784,8 @@ app.on("before-quit", (event) => {
         browserProxy = undefined;
         htmlPreviewProxy?.close();
         htmlPreviewProxy = undefined;
+        happyAgentRendererSession?.close();
+        happyAgentRendererSession = undefined;
         onboarding?.[Symbol.dispose]();
         // The preview window belongs to this application, not to the desktop, so
         // it goes when the application does rather than keeping it alive.
