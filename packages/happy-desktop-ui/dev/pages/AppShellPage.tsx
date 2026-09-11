@@ -1,6 +1,7 @@
 import { type ReactNode } from "react";
 import { AppShell } from "../../src/AppShell";
 import { Button } from "../../src/Button";
+import { Sidebar } from "../../src/Sidebar";
 import { commandShortcut } from "../../src/keyboardShortcut";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
@@ -222,6 +223,52 @@ export function AppShellPage() {
                         <Slot label="children" note="workspace spans the freed space" />
                     </AppShell>,
                 )}
+            </Specimen>
+
+            <Specimen
+                detail="The collapse control keeps its header lane when Bots is first, leaving the section's create action clear. A leading Create row can share the compact fullscreen lane."
+                label="Fullscreen sidebar actions"
+                number="05b"
+                stage="chrome"
+            >
+                {[false, true].map((compose) => (
+                    <div key={String(compose)}>
+                        {window1024(
+                            <AppShell
+                                connectionRail
+                                rail={railSlot()}
+                                sidebar={
+                                    <Sidebar
+                                        activeItemId=""
+                                        onCompose={compose ? () => {} : undefined}
+                                        onItemSelect={() => {}}
+                                        onSectionAction={() => {}}
+                                        sections={[
+                                            {
+                                                action: { icon: "plus", label: "Create bot" },
+                                                id: "bots",
+                                                label: "Bots",
+                                                items: [
+                                                    {
+                                                        id: "chief-of-staff",
+                                                        kind: "agent",
+                                                        label: "Chief of Staff",
+                                                        icon: "chat",
+                                                    },
+                                                ],
+                                            },
+                                        ]}
+                                    />
+                                }
+                                sidebarCollapsible
+                                windowControls
+                                windowFullScreen
+                            >
+                                <Slot label="workspace" />
+                            </AppShell>,
+                        )}
+                    </div>
+                ))}
             </Specimen>
 
             <Specimen

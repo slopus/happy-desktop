@@ -219,21 +219,28 @@
 
 /* Beside a connection rail in full screen, a heading with nothing in it — the
    product mark stands down there — has no traffic lights to hold a band for
-   either, so it folds away and the list starts at the top. In a window the
-   band stays: it is still the lights' line, and the list starts under it.
+   either, so it can fold away when the list starts with a Create row. Without
+   that row the band stays, keeping the collapse toggle clear of the first
+   section's actions. In a window the band stays for the lights as well.
    The collapse toggle then shares the Create row's line: the row is 32px
    behind the body's 6px inset, so the 28px toggle hangs at 8px to centre on
    it, and the row leaves the toggle's 40px lane (12px edge plus 28px box,
    less the body's own 6px) clear. */
 .happy-desktop-app-shell[data-window-controls][data-connection-rail][data-window-full-screen]
     .happy-desktop-app-shell__sidebar
-    > .happy-sidebar[data-heading-empty]
+    > .happy-sidebar[data-heading-empty]:has(
+        .happy-sidebar__body-content > .happy-sidebar__compose:first-child
+    )
     > .happy-sidebar__header {
     display: none;
 }
 
 .happy-desktop-app-shell[data-window-controls][data-connection-rail][data-window-full-screen]
-    .happy-desktop-app-shell__sidebar:has(> .happy-sidebar[data-heading-empty])
+    .happy-desktop-app-shell__sidebar:has(
+        > .happy-sidebar[data-heading-empty]
+            .happy-sidebar__body-content
+            > .happy-sidebar__compose:first-child
+    )
     > .happy-desktop-app-shell__sidebar-collapse {
     top: 8px;
 }
