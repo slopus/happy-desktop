@@ -25,6 +25,10 @@ env:
     RELEASE_VERSION: ${{ inputs.version }}
 
 jobs:
+    windows:
+        needs: verify
+        uses: ./.github/workflows/build-windows.yml
+
     verify:
         name: Verify release inputs and source
         runs-on: macos-14
@@ -194,6 +198,7 @@ jobs:
         needs:
             - verify
             - build
+            - windows
         runs-on: ubuntu-latest
         timeout-minutes: 15
         permissions:
@@ -211,6 +216,12 @@ jobs:
                   pattern: happy-desktop-macos-*
                   path: packages/happy-desktop-electron/release
                   merge-multiple: true
+
+            - name: Download unsigned Windows artifacts
+              uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+              with:
+                  name: happy-desktop-windows-unsigned
+                  path: packages/happy-desktop-electron/release/windows
 
             - name: Confirm the release target
               shell: bash
@@ -255,7 +266,10 @@ jobs:
                     packages/happy-desktop-electron/release/local-web/*.dmg \
                     packages/happy-desktop-electron/release/local-web/*.zip \
                     packages/happy-desktop-electron/release/local-web/*.blockmap \
-                    packages/happy-desktop-electron/release/local-web/*-mac.yml
+                    packages/happy-desktop-electron/release/local-web/*-mac.yml \
+                    packages/happy-desktop-electron/release/windows/*.exe \
+                    packages/happy-desktop-electron/release/windows/*.blockmap \
+                    packages/happy-desktop-electron/release/windows/latest.yml
                   gh release edit "$RELEASE_TAG" --draft=false --latest
                   RELEASE_URL="$(gh release view "$RELEASE_TAG" --json url --jq .url)"
                   printf 'Published [Happy %s](%s).\n' "$RELEASE_TAG" "$RELEASE_URL" >> "$GITHUB_STEP_SUMMARY"

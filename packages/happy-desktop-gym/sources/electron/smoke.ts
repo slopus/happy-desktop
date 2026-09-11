@@ -6,6 +6,7 @@ import { _electron as electron } from "playwright";
 import { electronEntrypointResolve } from "./paths.js";
 
 export interface GymSmokeResult {
+    readonly packaged: boolean;
     readonly platform: NodeJS.Platform;
     readonly arch: NodeJS.Architecture;
     readonly welcomeVisible: boolean;
@@ -26,13 +27,21 @@ export async function gymSmokeRun(): Promise<GymSmokeResult> {
     const home = join(root, "home");
     await Promise.all([mkdir(userData), mkdir(home)]);
     const entrypoint = electronEntrypointResolve();
+    const expectPackaged = process.env.HAPPY_DESKTOP_GYM_PACKAGED === "1";
+    if (expectPackaged && !process.env.HAPPY_DESKTOP_ELECTRON_EXECUTABLE) {
+        throw new Error("Packaged smoke requires HAPPY_DESKTOP_ELECTRON_EXECUTABLE.");
+    }
     const app = await electron.launch({
-        args: [`--user-data-dir=${userData}`, entrypoint.main],
+        args: [`--user-data-dir=${userData}`, ...(expectPackaged ? [] : [entrypoint.main])],
         env: smokeEnvironment(home),
         executablePath: entrypoint.executable,
         timeout: 60_000,
     });
     try {
+        const packaged = await app.evaluate(({ app }) => app.isPackaged);
+        if (expectPackaged && !packaged) {
+            throw new Error("The installer smoke launched a development Electron entrypoint.");
+        }
         const page = await app.firstWindow();
         await page.waitForLoadState("domcontentloaded");
         await page.waitForSelector("body", { timeout: 30_000 });
@@ -41,7 +50,11 @@ export async function gymSmokeRun(): Promise<GymSmokeResult> {
         await page
             .locator('[data-happy-desktop-ui="welcome-screen"]')
             .waitFor({ state: "visible", timeout: 30_000 });
+        if (process.env.HAPPY_DESKTOP_GYM_SCREENSHOT) {
+            await page.screenshot({ path: process.env.HAPPY_DESKTOP_GYM_SCREENSHOT });
+        }
         return {
+            packaged,
             platform: process.platform,
             arch: process.arch,
             welcomeVisible: true,
