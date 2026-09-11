@@ -10,6 +10,8 @@ export interface ConnectionShellItem {
     readonly label: string;
     readonly local: boolean;
     readonly status: "connecting" | "connected" | "disconnected" | "error";
+    /** Unread conversations on this connection, independent of selection and connectivity. */
+    readonly unread?: boolean;
     /**
      * The picture the Happy Agent itself wears. It outranks the home glyph and
      * the generated tile alike; the thumbhash stands in until the bytes arrive.
@@ -95,7 +97,7 @@ export function ConnectionShell(props: {
                                     <button
                                         className="happy-connections__item"
                                         type="button"
-                                        aria-label={`${item.label}, ${item.status}`}
+                                        aria-label={`${item.label}, ${item.status}${item.unread ? ", unread activity" : ""}`}
                                         aria-current={
                                             props.selectedId === item.id ? "page" : undefined
                                         }
@@ -143,6 +145,13 @@ export function ConnectionShell(props: {
                                         data-status={item.status}
                                     >
                                         <ConnectionShellTile item={item} />
+                                        {item.unread ? (
+                                            <span
+                                                aria-hidden="true"
+                                                className="happy-connections__unread"
+                                                data-happy-desktop-ui="connection-unread"
+                                            />
+                                        ) : null}
                                     </button>
                                     {item === local.at(-1) && remotes.length > 0 ? (
                                         <div

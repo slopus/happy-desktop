@@ -108,6 +108,18 @@
     height: 1px;
     background: var(--divider);
 }
+
+.happy-connections__unread {
+    /* The notification intentionally overlaps the tile's top-right corner. */
+    position: absolute;
+    top: -2px;
+    right: -2px;
+    width: 8px;
+    height: 8px;
+    border-radius: var(--happy-radius-pill);
+    background: var(--status-error);
+    box-shadow: 0 0 0 2px var(--rail-background);
+}
 .happy-connections__items[data-reordering] .happy-connections__item {
     transition:
         background-color 120ms ease,

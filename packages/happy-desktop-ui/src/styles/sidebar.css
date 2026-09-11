@@ -791,7 +791,7 @@
     height: 6px;
     border: 1px solid var(--surface);
     border-radius: var(--happy-radius-pill);
-    background: var(--text-link);
+    background: var(--status-error);
 }
 
 /* The compose pencil's ink is bottom-heavy; lift it to the row's optical center. */
@@ -982,7 +982,7 @@
     height: 6px;
     margin: 0 6px;
     border-radius: var(--happy-radius-pill);
-    background: var(--text-link);
+    background: var(--status-error);
 }
 
 /* Meta never claims free space, but it must give space back and it must never

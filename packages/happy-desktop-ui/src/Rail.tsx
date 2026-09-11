@@ -15,6 +15,8 @@ export type RailItem = {
     icon: IconName;
     id: string;
     label: string;
+    /** Shows a top-right notification dot when no count badge is supplied. */
+    unread?: boolean;
 };
 export type RailPrimaryAction =
     | {
@@ -124,6 +126,7 @@ export function Rail(props: RailProps) {
                 {items.map((item) => (
                     <button
                         aria-current={item.id === activeItemId ? "page" : undefined}
+                        aria-label={item.unread ? `${item.label}, unread activity` : undefined}
                         className="happy-rail__item"
                         data-active={item.id === activeItemId ? "" : undefined}
                         data-item-id={item.id}
@@ -137,16 +140,22 @@ export function Rail(props: RailProps) {
                             data-happy-desktop-ui="rail-item-icon"
                         >
                             <Icon name={item.icon} size={20} />
-                            {item.badge
-                                ? ((count) => (
-                                      <span
-                                          className="happy-rail__item-badge"
-                                          data-happy-desktop-ui="rail-item-badge"
-                                      >
-                                          <CountBadge count={count} />
-                                      </span>
-                                  ))(item.badge)
-                                : null}
+                            {item.badge ? (
+                                ((count) => (
+                                    <span
+                                        className="happy-rail__item-badge"
+                                        data-happy-desktop-ui="rail-item-badge"
+                                    >
+                                        <CountBadge count={count} />
+                                    </span>
+                                ))(item.badge)
+                            ) : item.unread ? (
+                                <span
+                                    aria-hidden="true"
+                                    className="happy-rail__item-unread"
+                                    data-happy-desktop-ui="rail-item-unread"
+                                />
+                            ) : null}
                         </span>
                         <span
                             className="happy-rail__item-label"

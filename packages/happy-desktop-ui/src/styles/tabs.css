@@ -129,7 +129,7 @@
     width: 6px;
     height: 6px;
     border-radius: var(--happy-radius-pill);
-    background: var(--text-link);
+    background: var(--status-error);
 }
 
 /*

@@ -8,8 +8,8 @@ import { ComponentPage, DimensionRule, Specimen } from "../kit";
 export const componentNumber = "C-008";
 const items: RailItem[] = [
     { badge: 12, icon: "inbox", id: "inbox", label: "Inbox" },
-    { icon: "chat", id: "chat", label: "Chat" },
-    { icon: "spark", id: "agents", label: "Agents" },
+    { icon: "chat", id: "chat", label: "Chat", unread: true },
+    { icon: "spark", id: "agents", label: "Agents", unread: true },
     { icon: "tasks", id: "tasks", label: "Tasks" },
     { icon: "files", id: "files", label: "Files" },
 ];
@@ -64,7 +64,7 @@ export function RailPage() {
             </Specimen>
 
             <Specimen
-                detail="Inactive muted · active selected bg + full-contrast icon and label · unread CountBadge overlaps icon top-right"
+                detail="Active and inactive unread destinations carry an 8px red top-right dot · explicit counts use CountBadge"
                 label="Item states"
                 number="02"
                 stage="chrome"

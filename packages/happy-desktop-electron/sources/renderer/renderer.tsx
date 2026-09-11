@@ -487,6 +487,15 @@ function DesktopScreens(props: DesktopRendererProps) {
                 label: entry.node?.name ?? entry.label,
                 local: entry.id === LOCAL_HAPPY_AGENT_ID,
                 status: entry.status,
+                unread:
+                    entry.bots.some((bot) => bot.conversation.unread) ||
+                    entry.projects.some(
+                        (project) =>
+                            project.conversations.some((conversation) => conversation.unread) ||
+                            project.worktrees.some((worktree) =>
+                                worktree.conversations.some((conversation) => conversation.unread),
+                            ),
+                    ),
                 ...(entry.node?.avatar ? { avatar: entry.node.avatar } : {}),
             }))}
             selectedId={directory.activeHappyAgentId ?? LOCAL_HAPPY_AGENT_ID}

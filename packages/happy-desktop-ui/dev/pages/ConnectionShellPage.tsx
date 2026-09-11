@@ -3,6 +3,7 @@ import { ConnectionShell, type ConnectionShellItem } from "../../src/ConnectionS
 import { ConnectionSurface } from "../../src/ConnectionSurface";
 import { LocalOnboardingScreen } from "../../src/LocalOnboardingScreen";
 import { SplashScreen } from "../../src/SplashScreen";
+import { Sidebar } from "../../src/Sidebar";
 import { ComponentPage, Specimen } from "../kit";
 
 export const componentNumber = "C-280";
@@ -12,9 +13,16 @@ const FIXTURE_AVATAR = {
     thumbhash: "HAgGXxBVauaQSKZWmNmKFmhmhjAoCYMC",
 };
 const items: readonly ConnectionShellItem[] = [
-    { id: "local", label: "This Mac", local: true, status: "connected" },
-    { id: "work", label: "Work", local: false, status: "connected", avatar: FIXTURE_AVATAR },
-    { id: "offline", label: "Offline server", local: false, status: "disconnected" },
+    { id: "local", label: "This Mac", local: true, status: "connected", unread: true },
+    {
+        id: "work",
+        label: "Work",
+        local: false,
+        status: "connected",
+        avatar: FIXTURE_AVATAR,
+        unread: true,
+    },
+    { id: "offline", label: "Offline server", local: false, status: "disconnected", unread: true },
     { id: "starting", label: "Starting", local: false, status: "connecting" },
     { id: "failed", label: "Unavailable", local: false, status: "error" },
 ];
@@ -39,9 +47,68 @@ export function ConnectionShellPage() {
             summary="A 56px connection rail outside each independent workspace. Home stays first above a separator; remote order is controlled without remounting workspaces."
         >
             <Specimen
+                number="08"
+                label="Unread activity · rail and sidebar"
+                detail="Red dots show unread work. Connection badges sit at the tile's top-right; read items stay unmarked."
+                stage="surface"
+            >
+                <div style={{ display: "flex", width: 416, height: 440 }}>
+                    <ConnectionShell items={items} selectedId="local" onSelect={() => undefined}>
+                        <Sidebar
+                            title="This Mac"
+                            style={{ width: 360 }}
+                            activeItemId="windhoek"
+                            onItemSelect={() => undefined}
+                            sections={[
+                                {
+                                    id: "projects",
+                                    label: "Projects",
+                                    items: [
+                                        {
+                                            id: "happy",
+                                            kind: "project",
+                                            label: "Happy Desktop",
+                                            initials: "H",
+                                            unread: true,
+                                        },
+                                        {
+                                            id: "windhoek",
+                                            kind: "workspace",
+                                            label: "windhoek",
+                                            depth: 1,
+                                            unread: true,
+                                        },
+                                        {
+                                            id: "indicators",
+                                            kind: "agent",
+                                            label: "Unread indicators",
+                                            depth: 2,
+                                            unread: true,
+                                        },
+                                        {
+                                            id: "layout",
+                                            kind: "agent",
+                                            label: "Sidebar layout",
+                                            depth: 2,
+                                        },
+                                        { id: "main", kind: "workspace", label: "main", depth: 1 },
+                                        {
+                                            id: "website",
+                                            kind: "project",
+                                            label: "Website",
+                                            initials: "W",
+                                        },
+                                    ],
+                                },
+                            ]}
+                        />
+                    </ConnectionShell>
+                </div>
+            </Specimen>
+            <Specimen
                 number="01"
                 label="Full-screen · reorderable connections"
-                detail="12px top padding. Drag remotes or use Alt+↑/↓; Home stays pinned and drafts survive."
+                detail="8px red unread dots at the top-right of selected, image, and offline tiles. Drag remotes or use Alt+↑/↓; drafts survive."
                 stage="surface"
             >
                 <div style={{ display: "flex", width: 900, height: 600 }}>
