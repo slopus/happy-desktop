@@ -4,6 +4,12 @@ on:
     push:
         branches: [main]
     workflow_dispatch:
+        inputs:
+            platform:
+                description: Platforms to validate
+                type: choice
+                options: [all, windows, linux]
+                default: all
 
 permissions:
     contents: read
@@ -14,6 +20,7 @@ concurrency:
 
 jobs:
     linux:
+        if: ${{ inputs.platform != 'windows' }}
         name: Linux build, tests, and gym
         runs-on: ubuntu-latest
         timeout-minutes: 60
@@ -94,55 +101,5 @@ jobs:
                   if-no-files-found: error
 
     windows:
-        name: Windows build, tests, and launch smoke
-        runs-on: windows-latest
-        timeout-minutes: 60
-        defaults:
-            run:
-                shell: bash
-
-        steps:
-            - name: Check out source
-              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-
-            - name: Set up pnpm
-              uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
-
-            - name: Set up Node.js
-              uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-              with:
-                  node-version: "24"
-                  cache: pnpm
-
-            - name: Run package scripts through Git Bash
-              # The repository's package scripts use POSIX environment
-              # assignments and utilities; cmd.exe cannot run them.
-              run: pnpm config set script-shell "C:\Program Files\Git\bin\bash.exe"
-
-            - name: Install dependencies
-              run: pnpm install --frozen-lockfile
-
-            - name: Typecheck desktop source
-              run: |
-                  pnpm --dir packages/happy-desktop-electron typecheck
-                  pnpm --dir packages/happy-desktop-app typecheck
-                  pnpm --dir packages/happy-desktop-gym typecheck
-
-            - name: Test application
-              run: pnpm test
-
-            - name: Build the optimized desktop profile
-              run: pnpm --dir packages/happy-desktop-electron build:profile:optimized
-
-            - name: Launch the desktop shell smoke
-              run: pnpm --dir packages/happy-desktop-gym gym:electron smoke
-
-            - name: Package unsigned Windows build
-              run: pnpm --dir packages/happy-desktop-electron dist:win
-
-            - name: Upload Windows package
-              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-              with:
-                  name: happy-desktop-windows-unsigned
-                  path: packages/happy-desktop-electron/release/*.exe
-                  if-no-files-found: error
+        if: ${{ inputs.platform != 'linux' }}
+        uses: ./.github/workflows/build-windows.yml
