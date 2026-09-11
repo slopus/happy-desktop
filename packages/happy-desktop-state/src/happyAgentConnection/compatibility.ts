@@ -67,6 +67,8 @@ export function serverCompatibility(
 
 export function describeServerCompatibility(compatibility: ServerCompatibility): string {
     if (compatibility.status === "server_outdated") {
+        if (compatibility.serverProtocolVersion < compatibility.minimumSupportedProtocolVersion)
+            return `Happy Agent on this machine is version ${compatibility.serverVersion}, but this build of Happy requires a more recent version.`;
         return `Happy Agent on this machine is version ${compatibility.serverVersion}, but this build of Happy needs at least version ${compatibility.minimumSupportedVersion}.`;
     }
     return compatibility.status === "compatible"
