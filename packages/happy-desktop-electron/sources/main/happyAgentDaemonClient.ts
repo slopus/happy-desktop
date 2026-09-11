@@ -1,3 +1,5 @@
+import { connect as connectLocalSocket } from "node:net";
+import { localAgentSocketPath } from "./localAgentSocketPath.js";
 import { readFile } from "node:fs/promises";
 import { request as httpRequest, type IncomingHttpHeaders, type IncomingMessage } from "node:http";
 import { homedir } from "node:os";
@@ -212,6 +214,8 @@ export class HappyAgentDaemonClient {
         const path = `${prefix}/v0/workspaces/${encodeURIComponent(workspaceId)}/proxy`;
         return new Promise((resolvePromise, reject) => {
             const request = httpRequest({
+                // CONNECT must enter the daemon's tunnel router on a fresh connection.
+                agent: false,
                 headers: { authorization: `Bearer ${this.#token}` },
                 method: "CONNECT",
                 path,
@@ -280,7 +284,8 @@ export class HappyAgentDaemonClient {
             workspaceId,
         )}/terminals/${encodeURIComponent(terminalId)}/attach`;
         return new Promise((resolvePromise, reject) => {
-            const socket = new WebSocket(`ws+unix://${this.socketPath}:${path}`, {
+            const socket = new WebSocket(`ws://happy-agent${path}`, {
+                createConnection: () => connectLocalSocket(this.socketPath),
                 handshakeTimeout: 10_000,
                 headers: { authorization: `Bearer ${this.#token}` },
                 maxPayload: HAPPY_AGENT_TERMINAL_MAX_WIRE_BYTES,
@@ -331,7 +336,7 @@ export function happyAgentDaemonPathsResolve(
     const directory = join(happyHome, "agent");
     return {
         socketPath:
-            environment.HAPPY_AGENT_SERVER_SOCKET_PATH?.trim() || join(directory, "server.sock"),
+            environment.HAPPY_AGENT_SERVER_SOCKET_PATH?.trim() || localAgentSocketPath(directory),
         tokenPath: environment.HAPPY_AGENT_SERVER_TOKEN_PATH?.trim() || join(directory, "token"),
     };
 }

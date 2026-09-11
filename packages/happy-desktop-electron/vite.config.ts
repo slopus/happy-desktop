@@ -61,6 +61,7 @@ export default defineConfig({
     // runtime or reporting attribution that never attached.
     ...(profileBuild ? { server: { hmr: false } } : {}),
     define: {
+        __HAPPY_ALLOW_SOURCE_AGENT__: JSON.stringify(process.env.HAPPY_ALLOW_SOURCE_AGENT === "1"),
         __HAPPY_DESKTOP_PROFILE__: JSON.stringify(profileBuild),
         __HAPPY_LOCAL_WEB_BUILD_ID__: JSON.stringify(localWebBuild?.buildId ?? null),
         __HAPPY_LOCAL_WEB_VERSION__: JSON.stringify(localWebBuild?.version ?? null),

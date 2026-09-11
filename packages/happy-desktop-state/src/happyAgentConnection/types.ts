@@ -476,6 +476,7 @@ export type ChatDelta =
     | MutationRejectedDelta;
 
 export interface GitChangeSnapshot {
+    comparison: "ready" | "stale" | "unavailable";
     changedFiles: number;
     insertions: number;
     deletions: number;

@@ -329,7 +329,8 @@ async function releaseInstall(options: {
             throw new Error("The Happy Agent release did not contain a binary.");
         await chmod(stagedBinaryPath, 0o700);
         await rename(stagedBinaryPath, normalizedBinaryPath);
-        const binary = await open(normalizedBinaryPath, "r");
+        // Windows FlushFileBuffers requires a handle opened with write access.
+        const binary = await open(normalizedBinaryPath, "r+");
         try {
             await binary.sync();
         } finally {
@@ -430,7 +431,7 @@ function fileRun(executable: string, arguments_: readonly string[]): Promise<str
         execFile(
             executable,
             [...arguments_],
-            { encoding: "utf8", maxBuffer: 64 * 1024 },
+            { encoding: "utf8", maxBuffer: 64 * 1024, windowsHide: true },
             (error, stdout) => {
                 if (error === null) resolve(stdout);
                 else reject(error);

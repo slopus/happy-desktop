@@ -81,6 +81,7 @@ export interface HappyAgentWorktreeGroup {
     readonly activity: "running" | "awaitingInput" | "waiting" | "idle";
     /** Epoch milliseconds of the newest content in any of its sessions. */
     readonly updatedAt: number;
+    readonly changesStatus?: "loading" | "ready" | "stale" | "unavailable";
     readonly changedFiles?: number;
     readonly addedLines?: number;
     readonly deletedLines?: number;
@@ -119,6 +120,7 @@ export interface HappyAgentProjectGroup {
     readonly activity: "running" | "awaitingInput" | "waiting" | "idle";
     /** Epoch milliseconds of the newest content anywhere under the project. */
     readonly updatedAt: number;
+    readonly changesStatus?: "loading" | "ready" | "stale" | "unavailable";
     readonly changedFiles?: number;
     readonly addedLines?: number;
     readonly deletedLines?: number;
@@ -188,6 +190,9 @@ export function happyAgentProjectGroupsProject(
             conversations,
             activity: activityOf(conversations),
             updatedAt: newestOf(conversations),
+            ...(worktree.changesStatus === undefined
+                ? {}
+                : { changesStatus: worktree.changesStatus }),
             ...(worktree.changedFiles === undefined ? {} : { changedFiles: worktree.changedFiles }),
             ...(worktree.addedLines === undefined ? {} : { addedLines: worktree.addedLines }),
             ...(worktree.deletedLines === undefined ? {} : { deletedLines: worktree.deletedLines }),
@@ -297,6 +302,7 @@ function projectGroup(
             0,
         ),
         ...(project.avatar ? { avatar: project.avatar } : {}),
+        ...(project.changesStatus === undefined ? {} : { changesStatus: project.changesStatus }),
         ...(project.changedFiles === undefined ? {} : { changedFiles: project.changedFiles }),
         ...(project.addedLines === undefined ? {} : { addedLines: project.addedLines }),
         ...(project.deletedLines === undefined ? {} : { deletedLines: project.deletedLines }),

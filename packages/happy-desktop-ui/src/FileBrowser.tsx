@@ -31,7 +31,7 @@ export type FileBrowserProps = {
     loadingLabel?: string;
     emptyLabel?: string;
     /** Rows the listing holds, stated beside the controls rather than over them. */
-    count: number;
+    count: number | undefined;
     /** Total lines the listed files gained and lost, when the scope has a diff. */
     addedLines?: number;
     deletedLines?: number;
@@ -124,7 +124,9 @@ export function FileBrowser(props: FileBrowserProps) {
                             data-happy-desktop-ui="file-browser-summary"
                         >
                             <span className="happy-file-browser__count">
-                                {`${compactCount(local.count)} ${local.count === 1 ? "file" : "files"}`}
+                                {local.count === undefined
+                                    ? undefined
+                                    : `${compactCount(local.count)} ${local.count === 1 ? "file" : "files"}`}
                             </span>
                             {added || deleted ? (
                                 <span className="happy-file-browser__lines">

@@ -1,3 +1,5 @@
+declare const __HAPPY_ALLOW_SOURCE_AGENT__: boolean | undefined;
+
 import { HAPPY_AGENT_PROTOCOL_VERSION, type DaemonVersion } from "@slopus/happy-agent-client";
 import type { ServerCompatibility } from "./types.js";
 
@@ -57,9 +59,15 @@ export function serverCompatibility(
         serverProtocolVersion: protocol,
         serverVersion: version.daemon,
     };
+    // Opt-in source builds retain their honest 0.0.0 identity. The wire protocol
+    // remains mandatory, and ordinary builds still require the released version.
+    const sourceBuild =
+        typeof __HAPPY_ALLOW_SOURCE_AGENT__ !== "undefined" &&
+        __HAPPY_ALLOW_SOURCE_AGENT__ === true &&
+        version.daemon === "0.0.0";
     if (
         protocol < MINIMUM_HAPPY_AGENT_PROTOCOL_VERSION ||
-        !happyAgentVersionAtLeast(version.daemon, MINIMUM_HAPPY_AGENT_VERSION)
+        (!sourceBuild && !happyAgentVersionAtLeast(version.daemon, MINIMUM_HAPPY_AGENT_VERSION))
     )
         return { ...supported, status: "server_outdated" };
     return { ...supported, status: "compatible" };

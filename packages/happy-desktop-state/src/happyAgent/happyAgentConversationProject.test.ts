@@ -227,3 +227,104 @@ it("appends a pending request with no element of its own and drops an answered o
         }),
     ).toEqual([]);
 });
+
+it("keeps a completed file edit visible while command traces are folded", () => {
+    const base = { groupId: "edit-turn", runId: "edit-run", createdAt: 1000 };
+    const elements: ChatElement[] = [
+        {
+            ...base,
+            id: "command",
+            kind: "tool_call",
+            toolCallId: "command",
+            name: "exec_command",
+            arguments: {},
+            argumentsComplete: true,
+            status: "succeeded",
+            presentation: { kind: "command", command: "git status", output: "" },
+        },
+        {
+            ...base,
+            id: "edit",
+            kind: "tool_call",
+            toolCallId: "edit",
+            name: "apply_patch",
+            arguments: {},
+            argumentsComplete: true,
+            status: "succeeded",
+            presentation: {
+                kind: "file_edit",
+                files: [
+                    {
+                        path: "lol.txt",
+                        kind: "add",
+                        added: 1,
+                        deleted: 0,
+                        hunks: [
+                            {
+                                oldStart: 0,
+                                newStart: 1,
+                                lines: [{ kind: "add", text: "Hello : D" }],
+                            },
+                        ],
+                    },
+                ],
+            },
+        },
+        { ...base, id: "answer", kind: "agent_text", text: "Created lol.txt.", complete: true },
+        {
+            ...base,
+            id: "end",
+            kind: "group_end",
+            outcome: "success",
+            reason: "completed",
+            startedAt: 1000,
+            endedAt: 2000,
+            elapsedMs: 1000,
+            turnStartedAt: 1000,
+            turnElapsedMs: 1000,
+        },
+    ];
+    const input = {
+        elements,
+        sessionId: "s1",
+        showReasoning: false,
+        ephemeral: [],
+        pendingUserInputs: [],
+        answeredUserInputs: [],
+        subagents: [],
+    };
+    const collapsed = happyAgentConversationProject({ ...input, expandedGroupIds: new Set() });
+    const expanded = happyAgentConversationProject({
+        ...input,
+        expandedGroupIds: new Set(["edit-turn"]),
+    });
+    const edits = (entries: typeof collapsed) =>
+        entries.filter(
+            (entry): entry is Extract<(typeof collapsed)[number], { kind: "agentActivity" }> =>
+                entry.kind === "agentActivity" &&
+                entry.activity.kind === "tool" &&
+                entry.activity.tool.presentation?.type === "fileDiff",
+        );
+    expect(edits(collapsed)).toHaveLength(1);
+    expect(edits(expanded)).toHaveLength(1);
+    expect(edits(collapsed)[0]).toMatchObject({
+        id: edits(expanded)[0]!.id,
+        activity: { tool: { presentation: { files: [{ path: "lol.txt", added: 1 }] } } },
+    });
+    expect(
+        collapsed.some(
+            (entry) =>
+                entry.kind === "agentActivity" &&
+                entry.activity.kind === "tool" &&
+                entry.activity.tool.presentation?.type === "execCommand",
+        ),
+    ).toBe(false);
+    expect(
+        expanded.some(
+            (entry) =>
+                entry.kind === "agentActivity" &&
+                entry.activity.kind === "tool" &&
+                entry.activity.tool.presentation?.type === "execCommand",
+        ),
+    ).toBe(true);
+});

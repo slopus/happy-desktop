@@ -982,3 +982,183 @@ it("resumes the stream from the newest applied event cursor after events advance
     await vi.waitFor(() => expect(daemon.streamOpens).toHaveLength(2));
     expect(daemon.streamOpens[1]).toBe(newest.cursor);
 });
+
+it("preserves unavailable Git scans and recovers from the next live snapshot", async () => {
+    const { daemon, connection } = harnessOpen();
+    daemon.projectSeed({ id: "project-git" });
+    const groups = groupsWatch(connection);
+    await vi.waitFor(() => expect(groups.state.connection).toBe("live"));
+    const git = {
+        facts: {
+            branch: null,
+            detached: false,
+            head: "abc123",
+            upstream: null,
+            ahead: 0,
+            behind: 0,
+        },
+        comparison: "unavailable" as const,
+        base: null,
+        changedFiles: 0,
+        insertions: 0,
+        deletions: 0,
+        countsExact: false,
+        conflicted: false,
+        files: [],
+        filesTruncated: false,
+        scannedAt: 1000,
+    };
+    daemon.eventEmit("git.updated", { workspaceId: "project-git", git });
+    await vi.waitFor(() => expect(groups.projects[0]?.git?.comparison).toBe("unavailable"));
+    daemon.eventEmit("git.updated", {
+        workspaceId: "project-git",
+        git: {
+            ...git,
+            comparison: "ready",
+            base: "abc123",
+            changedFiles: 1,
+            insertions: 1,
+            countsExact: true,
+            scannedAt: 2000,
+            files: [
+                {
+                    path: "lol.txt",
+                    status: "untracked",
+                    staged: false,
+                    unstaged: true,
+                    binary: false,
+                    insertions: 1,
+                    deletions: 0,
+                },
+            ],
+        },
+    });
+    await vi.waitFor(() =>
+        expect(groups.projects[0]?.git).toMatchObject({
+            comparison: "ready",
+            changedFiles: 1,
+            files: [{ path: "lol.txt" }],
+        }),
+    );
+});
+
+it("retains the last successful Git comparison through failed scans and clears it after a real clean scan", async () => {
+    const { daemon, connection } = harnessOpen();
+    daemon.projectSeed({ id: "project-git-stale" });
+    const groups = groupsWatch(connection);
+    await vi.waitFor(() => expect(groups.state.connection).toBe("live"));
+    const git = {
+        facts: {
+            branch: "main",
+            detached: false,
+            head: "head1",
+            upstream: null,
+            ahead: 0,
+            behind: 0,
+        },
+        comparison: "ready" as const,
+        base: "base1",
+        changedFiles: 1,
+        insertions: 1,
+        deletions: 0,
+        countsExact: true,
+        conflicted: false,
+        files: [
+            {
+                path: "lol.txt",
+                status: "untracked" as const,
+                staged: false,
+                unstaged: true,
+                binary: false,
+                insertions: 1,
+                deletions: 0,
+            },
+        ],
+        filesTruncated: false,
+        scannedAt: 1000,
+    };
+    daemon.eventEmit("git.updated", { workspaceId: "project-git-stale", git });
+    await vi.waitFor(() => expect(groups.projects[0]?.git?.comparison).toBe("ready"));
+    const files = groups.projects[0]!.git!.files;
+    daemon.eventEmit("git.updated", {
+        workspaceId: "project-git-stale",
+        git: {
+            ...git,
+            comparison: "unavailable",
+            base: null,
+            files: [],
+            changedFiles: 0,
+            insertions: 0,
+            countsExact: false,
+            scannedAt: 2000,
+        },
+    });
+    await vi.waitFor(() => expect(groups.projects[0]?.git?.comparison).toBe("stale"));
+    expect(groups.projects[0]!.git).toMatchObject({
+        changedFiles: 1,
+        insertions: 1,
+        baseRevision: "base1",
+        version: 1000,
+    });
+    expect(groups.projects[0]!.git!.files).toBe(files);
+
+    // Reconnect hydration must preserve the same cache when the new scan fails.
+    vi.spyOn(daemon.client, "watchGit").mockResolvedValueOnce({
+        snapshots: {
+            "project-git-stale": {
+                ...git,
+                comparison: "unavailable",
+                files: [],
+                changedFiles: 0,
+                insertions: 0,
+                scannedAt: 2500,
+            },
+        },
+    });
+    daemon.gapOnNextStream();
+    daemon.streamDropAll();
+    await vi.waitFor(() => {
+        expect(daemon.callCount("getDesktopBootstrap")).toBe(2);
+        expect(groups.state.connection).toBe("live");
+    });
+    expect(groups.projects[0]!.git).toMatchObject({ comparison: "stale", changedFiles: 1 });
+    expect(groups.projects[0]!.git!.files).toBe(files);
+
+    // Losing the watch response entirely must not erase the list either.
+    vi.spyOn(daemon.client, "watchGit").mockRejectedValueOnce(new Error("watch unavailable"));
+    daemon.gapOnNextStream();
+    daemon.streamDropAll();
+    await vi.waitFor(() => {
+        expect(daemon.callCount("getDesktopBootstrap")).toBe(3);
+        expect(groups.state.connection).toBe("live");
+    });
+    expect(groups.projects[0]!.git).toMatchObject({ comparison: "stale", changedFiles: 1 });
+    expect(groups.projects[0]!.git!.files).toBe(files);
+    daemon.eventEmit("git.updated", {
+        workspaceId: "project-git-stale",
+        git: { ...git, files: [], changedFiles: 0, insertions: 0, scannedAt: 3000 },
+    });
+    await vi.waitFor(() =>
+        expect(groups.projects[0]?.git).toMatchObject({
+            comparison: "ready",
+            changedFiles: 0,
+            files: [],
+            version: 3000,
+        }),
+    );
+
+    vi.spyOn(daemon.client, "watchGit").mockRejectedValueOnce(new Error("watch unavailable"));
+    daemon.gapOnNextStream();
+    daemon.streamDropAll();
+    await vi.waitFor(() => {
+        expect(daemon.callCount("getDesktopBootstrap")).toBe(4);
+        expect(groups.state.connection).toBe("live");
+    });
+    expect(groups.projects[0]!.git).toMatchObject({ comparison: "stale", changedFiles: 0 });
+    // A successful refresh of the same scan restores freshness, even at the same timestamp.
+    daemon.eventEmit("git.updated", {
+        workspaceId: "project-git-stale",
+        git: { ...git, files: [], changedFiles: 0, insertions: 0, scannedAt: 3000 },
+    });
+    await vi.waitFor(() => expect(groups.projects[0]?.git?.comparison).toBe("ready"));
+});

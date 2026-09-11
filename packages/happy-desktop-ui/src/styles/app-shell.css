@@ -159,7 +159,7 @@
    16px trailing clearance. In full screen the controls disappear and content
    returns to the window's ordinary 12px inset. */
 .happy-desktop-app-shell[data-window-controls] {
-    --happy-desktop-app-shell-chrome-inset: 84px;
+    --happy-desktop-app-shell-chrome-inset: calc(env(titlebar-area-x, 72px) + 12px);
 }
 
 .happy-desktop-app-shell[data-window-controls]:is(

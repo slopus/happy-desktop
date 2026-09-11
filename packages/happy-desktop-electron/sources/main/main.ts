@@ -222,8 +222,8 @@ const macosTrafficLightSize = 14;
  * with no overlay mechanism, a hidden title bar would leave the window without
  * close/minimize controls entirely.
  */
-const platformWindowChrome: Electron.BrowserWindowConstructorOptions =
-    process.platform === "darwin"
+function platformWindowChrome(): Electron.BrowserWindowConstructorOptions {
+    return process.platform === "darwin"
         ? {
               titleBarStyle: "hidden",
               trafficLightPosition: {
@@ -234,9 +234,27 @@ const platformWindowChrome: Electron.BrowserWindowConstructorOptions =
         : process.platform === "win32"
           ? {
                 titleBarStyle: "hidden",
-                titleBarOverlay: { height: titleBarHeight },
+                titleBarOverlay: windowsTitleBarOverlay(),
             }
           : {};
+}
+
+function windowsTitleBarOverlay(): Electron.TitleBarOverlay {
+    // Match happy-desktop-ui/src/theme.css's header-background/header-tint.
+    return {
+        height: titleBarHeight,
+        color: nativeTheme.shouldUseDarkColors ? "#212121" : "#ffffff",
+        symbolColor: nativeTheme.shouldUseDarkColors ? "#ffffff" : "#18171c",
+    };
+}
+
+function windowAppearanceApply(): void {
+    for (const window of BrowserWindow.getAllWindows()) {
+        if (window.isDestroyed()) continue;
+        window.setBackgroundColor(windowBackgroundColor());
+        if (process.platform === "win32") window.setTitleBarOverlay(windowsTitleBarOverlay());
+    }
+}
 
 nativeTheme.themeSource = "system";
 // Independent Happy Agent realtime streams share the loopback HTTP proxy.
@@ -823,7 +841,7 @@ function windowOptions(
         minHeight: 480,
         ...(applicationIconPath ? { icon: applicationIconPath } : {}),
         show: false,
-        ...platformWindowChrome,
+        ...platformWindowChrome(),
         webPreferences,
     };
 }
@@ -1347,6 +1365,7 @@ void app
         // Apply the remembered source before the first window is created, so
         // its native background and Chromium guests start in the chosen theme.
         nativeTheme.themeSource = desktopConfigStore.get().appearance;
+        nativeTheme.on("updated", windowAppearanceApply);
         const launchEnvironment = await localRuntimeProbe().then(
             (probe) => probe.environment,
             () => process.env,
@@ -1615,10 +1634,7 @@ void app
             if (!presenting || presenting.webContents !== event.sender) return;
             if (raw !== "dark" && raw !== "light" && raw !== "system") return;
             nativeTheme.themeSource = raw;
-            const background = windowBackgroundColor();
-            presenting.setBackgroundColor(background);
-            if (mediaPreviewWindow && !mediaPreviewWindow.isDestroyed())
-                mediaPreviewWindow.setBackgroundColor(background);
+            windowAppearanceApply();
         });
         // One-way: the window states what is waiting and the shell marks the
         // icon. Only the window this shell is currently presenting may do so, so
