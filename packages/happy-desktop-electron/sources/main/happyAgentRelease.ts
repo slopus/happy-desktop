@@ -418,12 +418,18 @@ async function archiveExtract(
     destination: string,
     archivedBinaryName: string,
 ): Promise<void> {
-    const listing = await fileRun("tar", ["-tzf", archivePath]);
+    // Git Bash can put GNU tar ahead of Windows tar; GNU tar interprets a
+    // drive-letter archive path as a remote host. Use the OS tool on Windows.
+    const tar =
+        process.platform === "win32"
+            ? join(process.env.SystemRoot ?? "C:\\Windows", "System32", "tar.exe")
+            : "tar";
+    const listing = await fileRun(tar, ["-tzf", archivePath]);
     const entries = listing.trim().split("\n");
     if (entries.length !== 1 || entries[0] !== archivedBinaryName) {
         throw new Error("The Happy Agent release archive has unexpected contents.");
     }
-    await fileRun("tar", ["-xzf", archivePath, "-C", destination, archivedBinaryName]);
+    await fileRun(tar, ["-xzf", archivePath, "-C", destination, archivedBinaryName]);
 }
 
 function fileRun(executable: string, arguments_: readonly string[]): Promise<string> {

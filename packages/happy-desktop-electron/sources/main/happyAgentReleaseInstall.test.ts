@@ -68,7 +68,11 @@ async function createRelease() {
     const contents = "verified executable fixture\n";
     await writeFile(join(source, archivedBinaryName), contents);
     const archivePath = join(root, "release.tar.gz");
-    await promisify(execFile)("tar", ["-czf", archivePath, "-C", source, archivedBinaryName], {
+    const tar =
+        process.platform === "win32"
+            ? join(process.env.SystemRoot ?? "C:\\Windows", "System32", "tar.exe")
+            : "tar";
+    await promisify(execFile)(tar, ["-czf", archivePath, "-C", source, archivedBinaryName], {
         windowsHide: true,
     });
     const bytes = await readFile(archivePath);
