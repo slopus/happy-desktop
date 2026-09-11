@@ -487,6 +487,7 @@ export function happyAgentDirectoryStoreCreate(
                                 projects: [],
                                 projectsStatus: "loading",
                                 projectAdd: PROJECT_ADD_IDLE,
+                                botAdd: BOT_ADD_IDLE,
                                 status: "connecting",
                             },
                         };
