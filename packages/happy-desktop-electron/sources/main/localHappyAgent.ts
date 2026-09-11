@@ -100,9 +100,12 @@ const defaultProcessHost: HappyAgentProcessHost = {
                 [...arguments_],
                 {
                     encoding: "utf8",
+                    windowsHide: true,
                     env: options.env,
                     maxBuffer: maximumOutputBytes,
-                    timeout: 30_000,
+                    // The launcher supervises a new daemon for up to 60 seconds.
+                    // Let it finish startup or report its own bounded failure.
+                    timeout: 75_000,
                 },
                 (error, stdout, stderr) => {
                     if (error) reject(error);

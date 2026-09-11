@@ -683,6 +683,7 @@ function daemonCommandRun(
             [command],
             {
                 encoding: "utf8",
+                windowsHide: true,
                 env: environment,
                 maxBuffer: MAXIMUM_COMMAND_OUTPUT_BYTES,
                 timeout: DAEMON_COMMAND_TIMEOUT_MS,

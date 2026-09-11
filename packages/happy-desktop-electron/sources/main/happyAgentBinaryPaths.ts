@@ -1,3 +1,4 @@
+import { localAgentSocketPath } from "./localAgentSocketPath.js";
 import { homedir } from "node:os";
 import { isAbsolute, join } from "node:path";
 
@@ -28,7 +29,7 @@ export function happyDaemonPaths(
         happyHome,
         installLockPath: join(distDirectory, "install.lock"),
         logPath: join(agentDirectory, "daemon.log"),
-        socketPath: join(agentDirectory, "server.sock"),
+        socketPath: localAgentSocketPath(agentDirectory),
         tokenPath: join(agentDirectory, "token"),
         versionsDirectory: join(distDirectory, "version"),
     };

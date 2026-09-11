@@ -1,3 +1,4 @@
+import { gitSnapshotProject, type GitSnapshotState } from "./gitSnapshotState.js";
 import type {
     Agent,
     AgentActivityResponse,
@@ -5,7 +6,6 @@ import type {
     AgentDraftSnapshot,
     Bot,
     DaemonConfig,
-    GitState,
     Message,
     MessageBlock,
     MessageMode,
@@ -25,7 +25,6 @@ import type { UserProfile } from "./userProfiles.js";
 import type {
     BotGroup,
     ChatElement,
-    GitChangeSnapshot,
     GroupSession,
     ProjectGroup,
     SessionState,
@@ -361,7 +360,7 @@ export function projectGroups(
     workspaces: readonly Workspace[],
     endpoint: string,
     config: DaemonConfig,
-    gitStates: ReadonlyMap<string, GitState> = new Map(),
+    gitStates: ReadonlyMap<string, GitSnapshotState> = new Map(),
     drafts: ReadonlyMap<string, AgentDraftSnapshot> = new Map(),
     modes: ReadonlyMap<string, MessageMode | null> = new Map(),
 ): readonly ProjectGroup[] {
@@ -400,7 +399,7 @@ export function projectGroups(
             // filter on the explicit `archived` field; unread counts do not.
             const agents = root?.agents ?? project.agents;
             const activeAgents = agents.filter((agent) => agent.archivedAt === null);
-            const git = projectGit(gitStates.get(project.id));
+            const git = gitSnapshotProject(gitStates.get(project.id));
             return {
                 id: project.id,
                 kind: project.avatar?.kind === "home" ? "home" : "regular",
@@ -525,7 +524,7 @@ function projectWorkspace(
     projectId: string,
     endpoint: string,
     config: DaemonConfig,
-    gitState: GitState | undefined,
+    gitState: GitSnapshotState | undefined,
     drafts: ReadonlyMap<string, AgentDraftSnapshot> = new Map(),
     modes: ReadonlyMap<string, MessageMode | null> = new Map(),
 ): WorkspaceGroup {
@@ -533,7 +532,7 @@ function projectWorkspace(
     // this owned connection contract. Consumers decide which set they need.
     const agents = workspace.agents;
     const activeAgents = agents.filter((agent) => agent.archivedAt === null);
-    const git = workspaceGit(gitState);
+    const git = gitSnapshotProject(gitState);
     return {
         id: workspace.id,
         name: workspace.name,
@@ -1120,26 +1119,6 @@ function unreadOf(agents: readonly Agent[]): ProjectGroup["unread"] {
         attentionCount: unread.filter((entry) => entry.reason.includes("question")).length,
         reason: unread[0]?.reason,
         since,
-    };
-}
-
-function projectGit(git: GitState | undefined): GitChangeSnapshot | undefined {
-    return git === undefined ? undefined : gitSnapshot(git);
-}
-
-function workspaceGit(git: GitState | undefined): GitChangeSnapshot | undefined {
-    return git === undefined ? undefined : gitSnapshot(git);
-}
-
-function gitSnapshot(git: GitState): GitChangeSnapshot {
-    return {
-        changedFiles: git.changedFiles,
-        insertions: git.insertions,
-        deletions: git.deletions,
-        files: git.files,
-        generation: `${git.facts.head}:${String(git.scannedAt)}`,
-        version: git.scannedAt,
-        ...(git.comparison === "ready" && git.base !== null ? { baseRevision: git.base } : {}),
     };
 }
 

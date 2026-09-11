@@ -1,3 +1,4 @@
+import { localAgentSocketPath } from "./localAgentSocketPath";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -14,7 +15,7 @@ describe("happyAgentDaemonPathsResolve", () => {
         const homeDirectory =
             process.platform === "win32" ? join("C:\\Users", "steve") : "/Users/steve";
         expect(happyAgentDaemonPathsResolve({}, homeDirectory)).toEqual({
-            socketPath: join(homeDirectory, ".happy", "agent", "server.sock"),
+            socketPath: localAgentSocketPath(join(homeDirectory, ".happy", "agent")),
             tokenPath: join(homeDirectory, ".happy", "agent", "token"),
         });
         const configuredHome =
@@ -22,7 +23,7 @@ describe("happyAgentDaemonPathsResolve", () => {
         expect(
             happyAgentDaemonPathsResolve({ HAPPY_HOME_DIR: configuredHome }, homeDirectory),
         ).toEqual({
-            socketPath: join(configuredHome, "agent", "server.sock"),
+            socketPath: localAgentSocketPath(join(configuredHome, "agent")),
             tokenPath: join(configuredHome, "agent", "token"),
         });
         expect(

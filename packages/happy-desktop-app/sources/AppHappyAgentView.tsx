@@ -524,6 +524,7 @@ interface OpenGroup {
     readonly home: boolean;
     readonly conversations: HappyAgentProjectGroup["conversations"];
     readonly changes: NonNullable<HappyAgentProjectGroup["changes"]>;
+    readonly changesStatus?: HappyAgentProjectGroup["changesStatus"];
     readonly create?: HappyAgentSessionCreateInput;
     /**
      * Where the open group's checkout is in its own life, for a worktree. A
@@ -1137,6 +1138,9 @@ function openGroupFind(
                 home: project.kind === "home",
                 conversations: project.conversations,
                 changes: project.changes ?? [],
+                ...(project.changesStatus === undefined
+                    ? {}
+                    : { changesStatus: project.changesStatus }),
                 create: { cwd: project.path },
                 lifecycle: project.lifecycle,
                 path: project.displayPath,
@@ -1149,6 +1153,9 @@ function openGroupFind(
                     home: false,
                     conversations: worktree.conversations,
                     changes: worktree.changes ?? [],
+                    ...(worktree.changesStatus === undefined
+                        ? {}
+                        : { changesStatus: worktree.changesStatus }),
                     create: { cwd: worktree.path, worktreeId: worktree.id },
                     lifecycle: worktree.lifecycle,
                     path: worktree.displayPath,
@@ -3293,6 +3300,9 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                         mediaWindow={props.mediaWindow}
                         sessionId={props.chatId}
                         changes={openGroup?.changes ?? []}
+                        {...(openGroup?.changesStatus === undefined
+                            ? {}
+                            : { changesStatus: openGroup.changesStatus })}
                         expanded={workspace.fileTreeExpanded}
                         collapsed={workspace.fileTreeCollapsed}
                         layout={workspace.fileLayout}
@@ -5319,6 +5329,7 @@ function HappyAgentPanelBody(props: {
     mediaWindow?: MediaWindowOpener;
     canStartTerminal: boolean;
     changes: OpenGroup["changes"];
+    changesStatus?: OpenGroup["changesStatus"];
     closeShortcut?: KeyboardShortcut;
     expanded: ReadonlySet<string>;
     collapsed: ReadonlySet<string>;
@@ -5396,10 +5407,12 @@ function HappyAgentPanelBody(props: {
                   : fileTreeFlatten(entries),
         [all, changesByPath, entries, expansion, props.layout, props.workspaceFiles],
     );
-    const loading = all && props.workspaceFilesLoading;
+    const loading = all ? props.workspaceFilesLoading : props.changesStatus === "loading";
+    const changesUnavailable = props.changesStatus === "unavailable";
+    const changesStale = !all && props.changesStatus === "stale";
     const addedLines = props.changes.reduce((sum, change) => sum + (change.addedLines ?? 0), 0);
     const deletedLines = props.changes.reduce((sum, change) => sum + (change.deletedLines ?? 0), 0);
-    const count = entries.length;
+    const count = !all && (changesUnavailable || loading) ? undefined : entries.length;
     // Only the tabs this side is holding: one the reader moved into the main
     // content is drawn there, and the panel neither lists it nor renders it.
     const panelTools = toolTabsPlaced(props.panel, "panel");
@@ -5561,12 +5574,25 @@ function HappyAgentPanelBody(props: {
                         <FileBrowser
                             // Only Changes has a complete total and line delta;
                             // All Files stays visually focused on its lazy tree.
-                            {...(all ? {} : { addedLines, deletedLines })}
+                            {...(all || changesUnavailable || loading
+                                ? {}
+                                : { addedLines, deletedLines })}
                             count={count}
-                            emptyLabel={all ? "No files." : "No changed files."}
+                            emptyLabel={
+                                all
+                                    ? "No files."
+                                    : changesUnavailable
+                                      ? "Git changes are temporarily unavailable."
+                                      : "No changed files."
+                            }
                             layout={props.layout}
                             loading={loading}
                             nodes={nodes}
+                            {...(changesStale
+                                ? {
+                                      note: "Showing the last successful Git scan. Retrying automatically…",
+                                  }
+                                : {})}
                             {...(props.happyAgentAvailability !== undefined && all
                                 ? {
                                       fileActionsUnavailable:

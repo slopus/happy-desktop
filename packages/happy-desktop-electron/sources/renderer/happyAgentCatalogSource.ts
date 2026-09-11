@@ -225,9 +225,14 @@ function avatarProject(
 
 function gitProject(
     git: GitChangeSnapshot | undefined,
-): Pick<HappyAgentProject, "changedFiles" | "addedLines" | "deletedLines" | "changes"> {
-    if (git === undefined) return {};
+): Pick<
+    HappyAgentProject,
+    "changesStatus" | "changedFiles" | "addedLines" | "deletedLines" | "changes"
+> {
+    if (git === undefined) return { changesStatus: "loading" };
+    if (git.comparison === "unavailable") return { changesStatus: "unavailable" };
     return {
+        changesStatus: git.comparison,
         changedFiles: git.changedFiles,
         addedLines: git.insertions,
         deletedLines: git.deletions,

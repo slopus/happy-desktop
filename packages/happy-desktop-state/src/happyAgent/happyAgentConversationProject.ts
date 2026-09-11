@@ -961,6 +961,10 @@ function happyAgentConnectGroupProject(
             // reader's own message does: folding it away would leave the answer
             // standing over nothing.
             (entry.kind === "agentActivity" && entry.activity.kind === "agentMessage") ||
+            // File edits are a result the reader can open, even when execution traces are folded.
+            (entry.kind === "agentActivity" &&
+                entry.activity.kind === "tool" &&
+                entry.activity.tool.presentation?.type === "fileDiff") ||
             (entry.kind === "notice" && !noticeInformational(entry)),
     );
     const hiddenCount = entries.length - visibleCollapsed.length;

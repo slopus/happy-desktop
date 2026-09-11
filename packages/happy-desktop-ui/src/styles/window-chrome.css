@@ -1,0 +1,61 @@
+/* Electron supplies the caption geometry in CSS pixels, including display
+   scaling and maximized/full-screen changes. Browsers without an overlay keep
+   the existing layout. Only the column touching the window's right edge needs
+   the reservation; rows below the title bar keep their full width. */
+:root {
+    --happy-window-caption-right: max(
+        0px,
+        calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw))
+    );
+}
+
+.happy-desktop-app-shell[data-window-controls] {
+    --happy-desktop-app-shell-caption-inset: var(--happy-window-caption-right);
+}
+
+.happy-desktop-app-shell__main:has(+ .happy-desktop-app-shell__panel) {
+    --happy-desktop-app-shell-caption-inset: 0px;
+}
+
+.happy-desktop-app-shell__panel {
+    --happy-desktop-app-shell-caption-inset: var(--happy-window-caption-right);
+}
+
+.happy-desktop-app-shell[data-window-controls]
+    .happy-desktop-app-shell__workspace
+    > .happy-channel-header:first-child,
+.happy-desktop-app-shell[data-window-controls]
+    .happy-desktop-app-shell__panel-content
+    > .happy-panel-header:first-child {
+    padding-right: calc(16px + var(--happy-desktop-app-shell-caption-inset, 0px));
+}
+
+.happy-desktop-app-shell[data-window-controls]
+    .happy-desktop-app-shell__panel-content
+    > .happy-panel-header[data-edge-control]:first-child {
+    padding-right: calc(12px + var(--happy-desktop-app-shell-caption-inset, 0px));
+}
+
+.happy-desktop-app-shell[data-window-controls]
+    .happy-desktop-app-shell__workspace
+    > .happy-tabbed-pane:first-child
+    > .happy-tabbed-pane__bar {
+    padding-right: var(--happy-desktop-app-shell-caption-inset, 0px);
+}
+
+/* Full-window headers and overlays own the whole native caption reservation. */
+.happy-desktop-app-shell[data-window-controls] .happy-lightbox__header {
+    padding-right: calc(16px + var(--happy-window-caption-right));
+}
+
+.happy-title-bar[data-window-controls] {
+    padding-right: calc(12px + var(--happy-window-caption-right));
+}
+
+.happy-title-bar__controls {
+    width: env(titlebar-area-x, 78px);
+}
+
+.happy-connection-header[data-window-controls]:not([data-window-full-screen]) {
+    padding-inline: max(78px, calc(12px + var(--happy-window-caption-right)));
+}

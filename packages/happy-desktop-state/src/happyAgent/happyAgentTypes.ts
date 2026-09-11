@@ -407,6 +407,8 @@ export interface HappyAgentProject {
     readonly requiredSecretKind?: "github";
     readonly avatar?: HappyAgentProjectAvatar;
     /** Current changed-file total for this checkout, omitted until Git state is available. */
+    /** Explicit scan state; unavailable totals must not look like a clean checkout. */
+    readonly changesStatus?: "loading" | "ready" | "stale" | "unavailable";
     readonly changedFiles?: number;
     /** Aggregate textual diff against HEAD, omitted until Git state is available. */
     readonly addedLines?: number;
@@ -475,6 +477,8 @@ export interface HappyAgentWorktree {
      */
     readonly error?: string;
     /** Current changed-file total for this checkout, omitted until Git state is available. */
+    /** Explicit scan state; unavailable totals must not look like a clean checkout. */
+    readonly changesStatus?: "loading" | "ready" | "stale" | "unavailable";
     readonly changedFiles?: number;
     /** Aggregate textual diff against HEAD, omitted until Git state is available. */
     readonly addedLines?: number;

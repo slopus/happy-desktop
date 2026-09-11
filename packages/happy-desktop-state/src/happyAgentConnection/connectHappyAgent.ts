@@ -9,7 +9,6 @@ import {
     type Bot,
     type BackgroundProcess,
     type DaemonConfig,
-    type GitState,
     type HappyAgentEvent,
     type Message,
     type MessageBlock,
@@ -30,6 +29,7 @@ import { ChatStore } from "./ChatStore.js";
 import { userProfilesCreate } from "./userProfiles.js";
 import { happyAgentSyncCreate } from "./happyAgentSync.js";
 import { happyAgentSyncRead } from "./happyAgentSyncRead.js";
+import { gitSnapshotStateUpdate, type GitSnapshotState } from "./gitSnapshotState.js";
 import { CHECKING_SERVER_COMPATIBILITY, serverCompatibility } from "./compatibility.js";
 import { projectRegistrationError } from "./errors.js";
 import { deepEqual } from "../happyAgent/happyAgentSupport.js";
@@ -246,7 +246,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
     const sendConfirmations = new Map<string, () => void>();
     const mutationQueues = new Map<string, Promise<void>>();
     const sessionMutationCounts = new Map<string, number>();
-    const gitStates = new Map<string, GitState>();
+    const gitStates = new Map<string, GitSnapshotState>();
     const processOwners = new Map<string, string>();
     let config: DaemonConfig | undefined;
     let currentUserId: string | undefined;
@@ -986,9 +986,21 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                 projects: bootstrap.projects,
                 workspaces: bootstrap.workspaces,
             });
-            gitStates.clear();
-            for (const [workspaceId, git] of Object.entries(watchedGit?.snapshots ?? {})) {
-                gitStates.set(workspaceId, git);
+            const gitWorkspaceIds = new Set(
+                activeGitWorkspaceIds(bootstrap.projects, bootstrap.workspaces),
+            );
+            for (const workspaceId of gitStates.keys()) {
+                if (!gitWorkspaceIds.has(workspaceId)) gitStates.delete(workspaceId);
+            }
+            for (const workspaceId of gitWorkspaceIds) {
+                const previous = gitStates.get(workspaceId);
+                const git = watchedGit?.snapshots[workspaceId];
+                if (git !== undefined) {
+                    gitStates.set(workspaceId, gitSnapshotStateUpdate(previous, git));
+                } else if (previous !== undefined) {
+                    // A reconnecting watch can fail before the daemon has a fresh scan.
+                    gitStates.set(workspaceId, { ...previous, invalidated: true });
+                }
             }
             advanceCursor(bootstrap.cursor);
             for (const entry of sessions.values()) {
@@ -1097,8 +1109,13 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         let changed = false;
         for (const [workspaceId, git] of Object.entries(watchedGit.snapshots)) {
             const current = gitStates.get(workspaceId);
-            if (current !== undefined && current.scannedAt >= git.scannedAt) continue;
-            gitStates.set(workspaceId, git);
+            if (
+                current !== undefined &&
+                !current.invalidated &&
+                current.current.scannedAt >= git.scannedAt
+            )
+                continue;
+            gitStates.set(workspaceId, gitSnapshotStateUpdate(gitStates.get(workspaceId), git));
             groupsStore.setState((state) => ({
                 workspaces: state.workspaces.map((workspace) =>
                     workspace.id === workspaceId ? { ...workspace, git: git.facts } : workspace,
@@ -1505,7 +1522,10 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                 return;
             case "git.updated": {
                 const { git, workspaceId } = event.payload;
-                gitStates.set(workspaceId, git);
+                const current = gitStates.get(workspaceId);
+                if (current && !current.invalidated && current.current.scannedAt >= git.scannedAt)
+                    return;
+                gitStates.set(workspaceId, gitSnapshotStateUpdate(gitStates.get(workspaceId), git));
                 groupsStore.setState((state) => ({
                     workspaces: state.workspaces.map((workspace) =>
                         workspace.id === workspaceId ? { ...workspace, git: git.facts } : workspace,
