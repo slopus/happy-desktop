@@ -1085,9 +1085,10 @@ function workspacePathRelative(path: string, root: string | undefined): string {
     const normalized = path.replaceAll("\\", "/").replace(/^(?:\.\/)+/u, "");
     if (root === undefined) return normalized;
     const base = root.replaceAll("\\", "/").replace(/\/+$/u, "");
-    return base.length > 0 && normalized.startsWith(`${base}/`)
-        ? normalized.slice(base.length + 1)
-        : normalized;
+    const contained = /^[a-z]:\//iu.test(base)
+        ? normalized.toLowerCase().startsWith(`${base.toLowerCase()}/`)
+        : normalized.startsWith(`${base}/`);
+    return base.length > 0 && contained ? normalized.slice(base.length + 1) : normalized;
 }
 
 /**
@@ -1096,7 +1097,7 @@ function workspacePathRelative(path: string, root: string | undefined): string {
  * asked for; an absolute path names itself.
  */
 function documentLinkResolve(from: string, href: string): string {
-    if (href.startsWith("/")) return href;
+    if (href.startsWith("/") || /^[a-z]:\//iu.test(href)) return href;
     const segments = from.split("/").slice(0, -1);
     for (const segment of href.split("/")) {
         if (segment === "" || segment === ".") continue;

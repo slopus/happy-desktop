@@ -10,7 +10,7 @@ import {
 import Markdown, { type Components, type ExtraProps } from "react-markdown";
 import { filePreviewKind } from "./FilePreview";
 import { markdownFence, markdownFenceIsMermaid } from "./markdownFence";
-import { markdownDocumentLinkPath } from "./MarkdownDocument";
+import { markdownDocumentLinkPath, markdownFileUrlTransform } from "./MarkdownDocument";
 import { MermaidDiagram } from "./MermaidDiagram";
 import { MESSAGE_MARKDOWN_REMARK_PLUGINS } from "./messageMarkdownAst";
 import { ScrollArea } from "./Scrollbar";
@@ -295,6 +295,7 @@ export function renderMessageMarkdown(
                 <MarkdownFileOpenContext.Provider value={onFileOpen}>
                     <MemoMarkdown
                         components={markdownComponents}
+                        urlTransform={markdownFileUrlTransform}
                         remarkPlugins={MESSAGE_MARKDOWN_REMARK_PLUGINS}
                         skipHtml
                     >

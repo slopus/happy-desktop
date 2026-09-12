@@ -8,7 +8,12 @@ import {
     type CSSProperties,
     type ReactNode,
 } from "react";
-import Markdown, { type Components, type ExtraProps } from "react-markdown";
+import Markdown, {
+    defaultUrlTransform,
+    type Components,
+    type ExtraProps,
+    type UrlTransform,
+} from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { CodeBlock } from "./CodeBlock";
 import { markdownFence, markdownFenceIsMermaid } from "./markdownFence";
@@ -86,7 +91,12 @@ export function markdownDocumentLinkPath(value: unknown): string | undefined {
     const scheme = /^([a-z][a-z0-9+.-]*):/iu.exec(trimmed);
     if (scheme && scheme[1]!.toLowerCase() === "file") {
         try {
-            const file = withoutPosition(decodeURIComponent(new URL(trimmed).pathname));
+            const url = new URL(trimmed);
+            if (url.hostname !== "" && url.hostname !== "localhost") return undefined;
+            const file = withoutPosition(decodeURIComponent(url.pathname)).replace(
+                /^\/([a-z]:\/)/iu,
+                "$1",
+            );
             return file.length > 0 && !file.endsWith("/") ? file : undefined;
         } catch {
             return undefined;
@@ -94,15 +104,33 @@ export function markdownDocumentLinkPath(value: unknown): string | undefined {
     }
     // A link's own fragment and query are addressing within the target
     // document; the file itself is what a viewer can open.
-    const path = withoutPosition(trimmed.split(/[#?]/u)[0] ?? "");
+    let path: string;
+    try {
+        path = withoutPosition(decodeURIComponent(trimmed.split(/[#?]/u)[0] ?? "")).replaceAll(
+            "\\",
+            "/",
+        );
+    } catch {
+        return undefined;
+    }
+    if (path.startsWith("//") || /[\u0000-\u001f]/u.test(path)) return undefined;
     // A colon before a line number is not a scheme separator, so the position
     // comes off before anything decides this is a protocol: `Message.tsx:42`
     // read as a scheme was a file reference the reader could not open. What is
     // still prefixed by a scheme after that really is one, and no viewer here
     // opens it.
-    if (/^[a-z][a-z0-9+.-]*:/iu.test(path)) return undefined;
+    if (!/^[a-z]:\//iu.test(path) && /^[a-z][a-z0-9+.-]*:/iu.test(path)) return undefined;
     return path.length > 0 && !path.endsWith("/") ? path : undefined;
 }
+
+// Preserve file targets for our explicit viewer callback. react-markdown's
+// default filter otherwise removes file: URLs, Windows drives and file:line
+// references before the link component can handle them. All other URLs keep
+// its default filter, and images never gain filesystem navigation.
+export const markdownFileUrlTransform: UrlTransform = (url, key, node) =>
+    key === "href" && node.tagName === "a" && markdownDocumentLinkPath(url) !== undefined
+        ? url
+        : defaultUrlTransform(url);
 
 const FileOpenContext = createContext<((path: string) => void) | undefined>(undefined);
 const MarkdownCacheKeyContext = createContext<string | undefined>(undefined);
@@ -288,6 +316,7 @@ export function MarkdownDocument(props: MarkdownDocumentProps) {
                     <FileOpenContext.Provider value={local.onFileOpen}>
                         <MemoMarkdown
                             components={documentComponents}
+                            urlTransform={markdownFileUrlTransform}
                             remarkPlugins={MARKDOWN_REMARK_PLUGINS}
                         >
                             {local.text}
