@@ -121,7 +121,7 @@ function serverGrid(text: string) {
             ? [{ cells: [{ styleId: 0, text, width: 1 as const, x: 0 }], wrapped: false }]
             : [],
         startRow: 0,
-        styles: [{}],
+        styles: [{ hyperlink: null }],
         title: "Terminal",
         totalRows: 24,
     };

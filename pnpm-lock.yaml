@@ -59,11 +59,11 @@ importers:
   packages/happy-desktop-app:
     dependencies:
       '@slopus/ghostty-wasm':
-        specifier: 1.3.4
-        version: 1.3.4
+        specifier: 1.3.6
+        version: 1.3.6
       '@slopus/ghostty-web':
-        specifier: 0.1.0
-        version: 0.1.0
+        specifier: 0.1.3
+        version: 0.1.3
       '@tanstack/react-router':
         specifier: ^1.170.18
         version: 1.170.18(react-dom@19.2.7(patch_hash=14e2cfa7d72d4064e573a384fedfcdcc7589b6d08ab00ac90e41ef11f9496979)(react@19.2.7))(react@19.2.7)
@@ -157,8 +157,8 @@ importers:
         version: 13.6.31
     devDependencies:
       '@slopus/ghostty-web':
-        specifier: 0.1.0
-        version: 0.1.0
+        specifier: 0.1.3
+        version: 0.1.3
       '@tailwindcss/vite':
         specifier: ^4.3.2
         version: 4.3.2(vite@8.1.4(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.0)(yaml@2.9.0))
@@ -1942,11 +1942,11 @@ packages:
     resolution: {integrity: sha512-t09vSN3MdfsyCHoFcTRCH/iUtG7OJ0CsjzB8cjAmKc/va/kIgeDI/TxsigdncE/4be734m0cvIYwNaV4i2XqAw==}
     engines: {node: '>=10'}
 
-  '@slopus/ghostty-wasm@1.3.4':
-    resolution: {integrity: sha512-AUQDomo7jnBFiMRb7ljYgPYAfNQowB7YTO/EVXqDCDc9CGaj8a8LZOUHXqvfwy3XMXHW/oIvHVl9U7Mng29KbQ==}
+  '@slopus/ghostty-wasm@1.3.6':
+    resolution: {integrity: sha512-S8KS9VyGgv451D8ZrRoS5vAg1Eqk8dZJWzM28HrjXVmD1B8g3Ec1QsjUWAIVqReuZyZqLFxZfjH6rU0N/f7n2Q==}
 
-  '@slopus/ghostty-web@0.1.0':
-    resolution: {integrity: sha512-aSM7BH/SjdX0hHK7ryggmg0ytHmrVgjN8H4yP502jTRUeiNQvP4BzRdv5Oc8K+gH5MV+eaVEZ92bNApYr13amg==}
+  '@slopus/ghostty-web@0.1.3':
+    resolution: {integrity: sha512-z6t+XKBqUWQPM2tjBbOL6EjuKtD12gqtuLKUjMT4Pn74DjuGNHDw5tEdzn5hA0MTvXPW2w1rQTX089QDa892Xw==}
 
   '@slopus/happy-agent-client@0.0.63':
     resolution: {integrity: sha512-31bXDrFOGD9ycfNtk1jlbjTeDnuVMU6h5wm9MkGVev3VCtg/+ml44YHOla4gdZ3q+JUhxly2UlBA0+rstnRSSg==}
@@ -7130,9 +7130,9 @@ snapshots:
 
   '@sindresorhus/is@4.6.0': {}
 
-  '@slopus/ghostty-wasm@1.3.4': {}
+  '@slopus/ghostty-wasm@1.3.6': {}
 
-  '@slopus/ghostty-web@0.1.0': {}
+  '@slopus/ghostty-web@0.1.3': {}
 
   '@slopus/happy-agent-client@0.0.63':
     dependencies:
