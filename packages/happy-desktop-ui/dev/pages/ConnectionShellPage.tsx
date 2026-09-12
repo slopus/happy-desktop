@@ -4,6 +4,7 @@ import { ConnectionSurface } from "../../src/ConnectionSurface";
 import { LocalOnboardingScreen } from "../../src/LocalOnboardingScreen";
 import { SplashScreen } from "../../src/SplashScreen";
 import { Sidebar } from "../../src/Sidebar";
+import { Button } from "../../src/Button";
 import { ComponentPage, Specimen } from "../kit";
 
 export const componentNumber = "C-280";
@@ -26,10 +27,18 @@ const items: readonly ConnectionShellItem[] = [
     { id: "starting", label: "Starting", local: false, status: "connecting" },
     { id: "failed", label: "Unavailable", local: false, status: "error" },
 ];
+const workingItems: readonly ConnectionShellItem[] = [
+    { ...items[0]!, working: true },
+    { ...items[1]!, working: true },
+    { id: "running", label: "Working server", local: false, status: "connected", working: true },
+    { id: "idle", label: "Idle server", local: false, status: "connected" },
+    { ...items[2]!, working: true },
+];
 export function ConnectionShellPage() {
     const [selected, select] = useState("local");
     const [connectingSelected, connectingSelect] = useState("starting");
     const [orderedItems, setOrderedItems] = useState(items);
+    const [working, setWorking] = useState(false);
     const reorder = (id: string, afterId: string | null) => {
         setOrderedItems((current) => {
             const moved = current.find((item) => item.id === id);
@@ -46,6 +55,44 @@ export function ConnectionShellPage() {
             title="Connections"
             summary="A 56px connection rail outside each independent workspace. Home stays first above a separator; remote order is controlled without remounting workspaces."
         >
+            <Specimen
+                number="09"
+                label="Working connections · frozen shimmer"
+                detail="The sheen crosses home, image, and generated tiles. Unread and selection dots stay clear; idle and offline tiles do not shimmer. Reduced motion uses a static outline."
+                stage="surface"
+            >
+                <div style={{ display: "flex", width: 600, height: 300 }}>
+                    <ConnectionShell
+                        items={workingItems}
+                        selectedId="local"
+                        onSelect={() => undefined}
+                        workingShimmerPhase={0.5}
+                    >
+                        <p>The working sheen is frozen halfway through its sweep.</p>
+                    </ConnectionShell>
+                </div>
+            </Specimen>
+            <Specimen
+                number="10"
+                label="Working connections · live transition"
+                detail="Start and stop simulated work without changing the selected connection or remounting its tile."
+                stage="surface"
+            >
+                <div style={{ display: "flex", width: 600, height: 300 }}>
+                    <ConnectionShell
+                        items={workingItems.map((item) => ({
+                            ...item,
+                            working: working && item.working === true,
+                        }))}
+                        selectedId="local"
+                        onSelect={() => undefined}
+                    >
+                        <Button onClick={() => setWorking(!working)}>
+                            {working ? "Stop work" : "Start work"}
+                        </Button>
+                    </ConnectionShell>
+                </div>
+            </Specimen>
             <Specimen
                 number="08"
                 label="Unread activity · rail and sidebar"

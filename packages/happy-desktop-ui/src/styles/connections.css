@@ -109,9 +109,49 @@
     background: var(--divider);
 }
 
+/* The sheen overlays the tile without clipping its unread or selection dots.
+   Only its paint moves, so pointer reordering keeps owning the tile's transform. */
+.happy-connections__item[data-working]::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    border-radius: inherit;
+    pointer-events: none;
+    background-image: linear-gradient(
+        110deg,
+        transparent 35%,
+        color-mix(in srgb, var(--text) 28%, transparent) 50%,
+        transparent 65%
+    );
+    background-size: 300% 100%;
+    background-repeat: no-repeat;
+    animation: happy-connections-working-sweep 1800ms linear infinite;
+    animation-delay: calc(-1800ms * var(--happy-connections-shimmer-offset, 0));
+}
+.happy-connections__rail[data-shimmer-paused] .happy-connections__item[data-working]::before {
+    animation-play-state: paused;
+}
+@keyframes happy-connections-working-sweep {
+    from {
+        background-position: 100% 0;
+    }
+    to {
+        background-position: 0% 0;
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .happy-connections__item[data-working]::before {
+        animation: none;
+        background-image: none;
+        box-shadow: inset 0 0 0 1px var(--text-secondary);
+    }
+}
+
 .happy-connections__unread {
     /* The notification intentionally overlaps the tile's top-right corner. */
     position: absolute;
+    z-index: 2;
     top: -2px;
     right: -2px;
     width: 8px;

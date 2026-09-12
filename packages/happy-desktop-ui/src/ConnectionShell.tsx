@@ -1,4 +1,4 @@
-import { Fragment, type ReactNode } from "react";
+import { Fragment, type CSSProperties, type ReactNode } from "react";
 import { AvatarBrutalist } from "./AvatarBrutalist";
 import { Icon } from "./Icon";
 import { ScrollArea } from "./Scrollbar";
@@ -12,6 +12,8 @@ export interface ConnectionShellItem {
     readonly status: "connecting" | "connected" | "disconnected" | "error";
     /** Unread conversations on this connection, independent of selection and connectivity. */
     readonly unread?: boolean;
+    /** At least one conversation on this connection is running. */
+    readonly working?: boolean;
     /**
      * The picture the Happy Agent itself wears. It outranks the home glyph and
      * the generated tile alike; the thumbhash stands in until the bytes arrive.
@@ -51,6 +53,8 @@ export function ConnectionShell(props: {
     readonly reorderError?: string;
     readonly children: ReactNode;
     readonly windowControls?: boolean;
+    /** Freeze the working shimmer at a loop fraction for deterministic previews. */
+    readonly workingShimmerPhase?: number;
     /**
      * The window's left side is folded away. The rail stands beside the
      * sidebar and goes with it, so the active connection takes the whole
@@ -85,6 +89,14 @@ export function ConnectionShell(props: {
                     className="happy-connections__rail"
                     aria-label="Connections"
                     data-window-controls={props.windowControls || undefined}
+                    data-shimmer-paused={props.workingShimmerPhase !== undefined || undefined}
+                    style={
+                        props.workingShimmerPhase === undefined
+                            ? undefined
+                            : ({
+                                  "--happy-connections-shimmer-offset": props.workingShimmerPhase,
+                              } as CSSProperties)
+                    }
                 >
                     <ScrollArea placement="overlay">
                         <div
@@ -97,11 +109,11 @@ export function ConnectionShell(props: {
                                     <button
                                         className="happy-connections__item"
                                         type="button"
-                                        aria-label={`${item.label}, ${item.status}${item.unread ? ", unread activity" : ""}`}
+                                        aria-label={`${item.label}, ${item.status}${item.working && item.status === "connected" ? ", agents working" : ""}${item.unread ? ", unread activity" : ""}`}
                                         aria-current={
                                             props.selectedId === item.id ? "page" : undefined
                                         }
-                                        title={`${item.label} · ${item.status}${!item.local && reorderable ? " · Drag or use Alt+↑/↓ to reorder" : ""}`}
+                                        title={`${item.label} · ${item.status}${item.working && item.status === "connected" ? " · Agents working" : ""}${!item.local && reorderable ? " · Drag or use Alt+↑/↓ to reorder" : ""}`}
                                         aria-description={
                                             !item.local && reorderable
                                                 ? "Drag or use Alt+Arrow Up or Alt+Arrow Down to reorder."
@@ -143,6 +155,10 @@ export function ConnectionShell(props: {
                                         }
                                         data-local={item.local || undefined}
                                         data-status={item.status}
+                                        data-working={
+                                            (item.working && item.status === "connected") ||
+                                            undefined
+                                        }
                                     >
                                         <ConnectionShellTile item={item} />
                                         {item.unread ? (

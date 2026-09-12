@@ -487,6 +487,19 @@ function DesktopScreens(props: DesktopRendererProps) {
                 label: entry.node?.name ?? entry.label,
                 local: entry.id === LOCAL_HAPPY_AGENT_ID,
                 status: entry.status,
+                working:
+                    entry.bots.some((bot) => bot.conversation.activity === "running") ||
+                    entry.projects.some(
+                        (project) =>
+                            project.conversations.some(
+                                (conversation) => conversation.activity === "running",
+                            ) ||
+                            project.worktrees.some((worktree) =>
+                                worktree.conversations.some(
+                                    (conversation) => conversation.activity === "running",
+                                ),
+                            ),
+                    ),
                 unread:
                     entry.bots.some((bot) => bot.conversation.unread) ||
                     entry.projects.some(
