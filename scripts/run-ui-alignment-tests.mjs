@@ -37,6 +37,11 @@ reviewed Full-access execution for the browser test command.`);
 }
 
 function run(command, args) {
+    if (process.platform === "win32" && command === "pnpm") {
+        if (!process.env.npm_execpath) throw new Error("Run UI checks through pnpm.");
+        args = [process.env.npm_execpath, ...args];
+        command = process.execPath;
+    }
     const result = spawnSync(command, args, { stdio: "inherit" });
     if (result.error) {
         throw result.error;

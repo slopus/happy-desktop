@@ -1,6 +1,6 @@
 {
     "name": "happy-desktop-workspace",
-    "version": "0.0.81",
+    "version": "0.0.82",
     "private": true,
     "description": "Happy local desktop client for Happy Agent",
     "license": "MIT",
@@ -20,6 +20,7 @@
         "desktop:assets": "node scripts/create-mac-icon.mjs",
         "desktop:update-manifest": "node scripts/create-mac-update-manifest.mjs standard",
         "desktop:mac:release": "node scripts/build-mac-apps.mjs",
+        "desktop:win:release": "node scripts/build-windows-app.mjs",
         "desktop:local:web": "pnpm --dir packages/happy-desktop-electron build:local-web-ui",
         "blueprint": "PORTLESS_LAN=0 PORTLESS_LAN_IP= PORTLESS_TLD=localhost pnpm exec portless run --name happy-desktop-blueprint node scripts/dev-blueprint.mjs",
         "build": "pnpm -r --if-present build",

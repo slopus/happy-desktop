@@ -2,6 +2,10 @@ name: Build and install unsigned Windows Desktop
 
 on:
     workflow_call:
+        inputs:
+            verify_agent_release:
+                type: boolean
+                default: false
 
 permissions:
     contents: read
@@ -10,6 +14,10 @@ jobs:
     windows:
         runs-on: windows-2025
         timeout-minutes: 60
+        strategy:
+            fail-fast: false
+            matrix:
+                flavor: [standard, local-web]
         defaults:
             run:
                 shell: bash
@@ -37,11 +45,14 @@ jobs:
                   pnpm --dir packages/happy-desktop-gym typecheck
             - name: Test application
               run: pnpm test
+            - name: Download and boot the published Windows Agent through Desktop's installer
+              if: inputs.verify_agent_release && matrix.flavor == 'standard'
+              run: pnpm exec tsx scripts/verify-released-windows-agent.ts
             - name: Build unsigned NSIS installer and update metadata
-              run: pnpm --dir packages/happy-desktop-electron dist:win
+              run: pnpm desktop:win:release ${{ matrix.flavor }}
             - name: Install the actual release package
               shell: pwsh
-              run: ./scripts/verify-windows-installer.ps1
+              run: ./scripts/verify-windows-installer.ps1 -Flavor '${{ matrix.flavor }}'
             - name: Launch the installed application and verify its renderer
               env:
                   HAPPY_DESKTOP_GYM_PACKAGED: "1"
@@ -50,15 +61,15 @@ jobs:
             - name: Upload Windows release files
               uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
               with:
-                  name: happy-desktop-windows-unsigned
+                  name: happy-desktop-windows-${{ matrix.flavor }}-unsigned
                   path: |
-                      packages/happy-desktop-electron/release/*.exe
-                      packages/happy-desktop-electron/release/*.blockmap
-                      packages/happy-desktop-electron/release/latest.yml
+                      packages/happy-desktop-electron/release/${{ matrix.flavor }}/*.exe
+                      packages/happy-desktop-electron/release/${{ matrix.flavor }}/*.blockmap
+                      packages/happy-desktop-electron/release/${{ matrix.flavor }}/*.yml
                   if-no-files-found: error
             - name: Upload installed-app screenshot
               uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
               with:
-                  name: happy-desktop-windows-launch
+                  name: happy-desktop-windows-${{ matrix.flavor }}-launch
                   path: ${{ runner.temp }}/happy-installed.png
                   if-no-files-found: error
