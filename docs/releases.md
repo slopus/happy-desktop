@@ -35,7 +35,9 @@ Do not create native release tags locally, push, restart an app, or deploy merel
 because release tooling was changed.
 
 Production needs no prior preview. Native production uses the same workflow with
-`prerelease=false` and stable `X.Y.Z`, shipping both app flavors. Preserve its existing
+`prerelease=false` and stable `X.Y.Z`, shipping both app flavors on macOS and Windows.
+Windows installers remain unsigned and retain their installed-app and Agent checks;
+native previews currently ship macOS Nightly only. Preserve the existing
 requirement that root and Electron manifests match that stable version: update them
 before dispatch under normal Git authorization. Standard bundles its renderer, so
 production renderer delivery requires explicit native-release scope.
