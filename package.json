@@ -22,6 +22,7 @@
         "desktop:mac:release": "node scripts/build-mac-apps.mjs",
         "desktop:win:release": "node scripts/build-windows-app.mjs",
         "desktop:local:web": "pnpm --dir packages/happy-desktop-electron build:local-web-ui",
+        "demo": "node --import tsx scripts/demo/record.mjs",
         "blueprint": "PORTLESS_LAN=0 PORTLESS_LAN_IP= PORTLESS_TLD=localhost pnpm exec portless run --name happy-desktop-blueprint node scripts/dev-blueprint.mjs",
         "build": "pnpm -r --if-present build",
         "test": "pnpm -r --if-present test",

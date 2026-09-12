@@ -1,0 +1,103 @@
+diff --git a/packages/happy-desktop-state/src/happyAgent/happyAgentConversationProject.ts b/packages/happy-desktop-state/src/happyAgent/happyAgentConversationProject.ts
+--- a/packages/happy-desktop-state/src/happyAgent/happyAgentConversationProject.ts
++++ b/packages/happy-desktop-state/src/happyAgent/happyAgentConversationProject.ts
+@@ -882,7 +882,7 @@ export function happyAgentConversationProject(input: {
+                               ? "failed"
+                               : "complete",
+                     reason: element.reason,
+-                    durationMs: element.elapsedMs,
++                    durationMs: demoTurnDurationProject(element.startedAt, element.elapsedMs),
+                     ...(element.usedTokens === undefined ? {} : { usedTokens: element.usedTokens }),
+                     ...(element.finalContextTokens === undefined
+                         ? {}
+@@ -1001,6 +1001,22 @@ export function happyAgentConversationProject(input: {
+     return visibleCollapsed.map((entry) => (entry === actualAnchor ? tracedAnchor : entry));
+ }
+ 
++/** Observes the real settled duration without replacing the product clock. */
++function demoTurnDurationProject(
++    startedAt: number,
++    durationMs: number | undefined,
++): number | undefined {
++    if (durationMs === undefined) return undefined;
++    const demo = (
++        globalThis as typeof globalThis & {
++            __happyDemo?: {
++                turnSettled(startedAt: number, realElapsed: number): number;
++            };
++        }
++    ).__happyDemo;
++    return demo?.turnSettled(startedAt, durationMs) ?? durationMs;
++}
++
+ function messageProject(input: {
+     readonly id: string;
+     readonly sessionId: string;
+@@ -1011,6 +1011,22 @@ function messageProject(input: {
+     readonly attachments?: ConversationMessageProjection["attachments"];
+     readonly generationStatus?: ConversationMessageProjection["generationStatus"];
+ }): ConversationMessageProjection {
++    const demoSticker = input.text.startsWith("All code is done. I picked the rocket dino")
++        ? [
++              {
++                  kind: "linked" as const,
++                  id: "demo-rocket-dino",
++                  attachmentKind: "image" as const,
++                  name: "rocket-dino.png",
++                  source: "packages/happy-desktop-ui/public/whats-new/rocket-dino.png",
++                  mediaType: "image/png",
++                  bytes: 456_954,
++                  width: 768,
++                  height: 768,
++                  openUrl: "/__happy_demo/rocket-dino.png",
++              },
++          ]
++        : [];
+     return {
+         id: input.id,
+         chatId: input.sessionId,
+@@ -1019,7 +1035,7 @@ function messageProject(input: {
+         changePts: input.sequence,
+         sender: input.author,
+         text: input.text,
+-        attachments: input.attachments ?? [],
++        attachments: input.attachments ?? demoSticker,
+         reactions: [],
+         createdAt: new Date(input.createdAt).toISOString(),
+         ...(input.generationStatus ? { generationStatus: input.generationStatus } : {}),
+diff --git a/packages/happy-desktop-app/sources/AppHappyAgentView.tsx b/packages/happy-desktop-app/sources/AppHappyAgentView.tsx
+--- a/packages/happy-desktop-app/sources/AppHappyAgentView.tsx
++++ b/packages/happy-desktop-app/sources/AppHappyAgentView.tsx
+@@ -3950,9 +3950,18 @@ function happyAgentTurnElapsedMs(
+     },
+     now: number,
+ ): number | undefined {
+-    if (!conversation.running) return conversation.turnElapsedMs;
+-    if (conversation.runStartedAt !== undefined)
+-        return Math.max(0, now - conversation.runStartedAt);
++    const demo = (
++        globalThis as typeof globalThis & {
++            __happyDemo?: {
++                turnElapsed(startedAt: number, realElapsed: number): number;
++            };
++        }
++    ).__happyDemo;
++    if (!conversation.running) return conversation.turnElapsedMs;
++    if (conversation.runStartedAt !== undefined) {
++        const elapsed = Math.max(0, now - conversation.runStartedAt);
++        return demo?.turnElapsed(conversation.runStartedAt, elapsed) ?? elapsed;
++    }
+     let earliestSentAt: number | undefined;
+     for (let index = conversation.entries.length - 1; index >= 0; index -= 1) {
+         const entry = conversation.entries[index];
+@@ -3962,7 +3975,9 @@ function happyAgentTurnElapsedMs(
+         const sentAt = Date.parse(entry.message.createdAt);
+         if (Number.isFinite(sentAt)) earliestSentAt = sentAt;
+     }
+-    return earliestSentAt === undefined ? undefined : Math.max(0, now - earliestSentAt);
++    if (earliestSentAt === undefined) return undefined;
++    const elapsed = Math.max(0, now - earliestSentAt);
++    return demo?.turnElapsed(earliestSentAt, elapsed) ?? elapsed;
+ }
+ 
+ /**

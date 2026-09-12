@@ -51,6 +51,15 @@ export interface HappyAgentStreamHandle {
     close(): void;
 }
 
+/** Creates the typed Agent client over one isolated daemon's Unix socket. */
+export function happyAgentClientCreate(socketPath: string, token: string): HappyAgentClient {
+    return new HappyAgentClient({
+        endpoint: "http://happy-agent.local/",
+        fetch: unixSocketFetch(socketPath),
+        token,
+    });
+}
+
 /**
  * The Gym runs the actual local daemon over its Unix socket. This adapter
  * supplies that one runtime concern while the vendored Happy Agent client owns
@@ -60,11 +69,7 @@ export class GymHappyAgentClient {
     readonly #client: HappyAgentClient;
 
     constructor(socketPath: string, token: string) {
-        this.#client = new HappyAgentClient({
-            endpoint: "http://happy-agent.local/",
-            fetch: unixSocketFetch(socketPath),
-            token,
-        });
+        this.#client = happyAgentClientCreate(socketPath, token);
     }
 
     async health(): Promise<happyAgentProtocol.HealthResponse> {

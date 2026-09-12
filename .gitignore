@@ -22,3 +22,4 @@ packages/happy-desktop-electron/release
 # local drafts, 3d party repos we pull in for research etc
 .local/
 .context/
+.d/
