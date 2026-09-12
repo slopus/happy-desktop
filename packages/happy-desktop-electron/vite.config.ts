@@ -18,7 +18,7 @@ const localWebSite = process.env.HAPPY_LOCAL_WEB_SITE === "1";
 const localWebBuild = localWebSite
     ? {
           buildId: process.env.HAPPY_LOCAL_WEB_BUILD_ID ?? "development",
-          version: packageJson.version,
+          version: process.env.RELEASE_VERSION ?? packageJson.version,
       }
     : undefined;
 

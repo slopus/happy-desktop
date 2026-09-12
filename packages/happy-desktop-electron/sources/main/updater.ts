@@ -1,5 +1,6 @@
 import { createRequire } from "node:module";
 import type { DesktopUpdateSnapshot } from "../shared/desktopContract";
+import { desktopPreviewFeedResolve } from "./desktopPreviewFeed";
 
 const { autoUpdater } = createRequire(import.meta.url)(
     "electron-updater",
@@ -11,6 +12,7 @@ export interface DesktopUpdater {
 }
 
 export function desktopUpdaterCreate(input: {
+    preview?: boolean;
     packaged: boolean;
     update: (snapshot: DesktopUpdateSnapshot) => void;
 }): DesktopUpdater {
@@ -19,6 +21,8 @@ export function desktopUpdaterCreate(input: {
     let updateReady = false;
     autoUpdater.autoDownload = true;
     autoUpdater.autoInstallOnAppQuit = true;
+    autoUpdater.allowPrerelease = input.preview === true;
+    autoUpdater.allowDowngrade = false;
     autoUpdater.on("checking-for-update", () => {
         updateActive = true;
         input.update({ status: "checking" });
@@ -55,9 +59,22 @@ export function desktopUpdaterCreate(input: {
             if (!input.packaged || updateActive || updateReady) return;
             updateActive = true;
             try {
+                if (input.preview) {
+                    input.update({ status: "checking" });
+                    autoUpdater.setFeedURL({
+                        provider: "generic",
+                        url: await desktopPreviewFeedResolve(),
+                        channel: "nightly",
+                    });
+                }
                 await autoUpdater.checkForUpdates();
             } catch (error) {
                 updateActive = false;
+                input.update({
+                    status: "error",
+                    message:
+                        error instanceof Error ? error.message : "Desktop update lookup failed.",
+                });
                 throw error;
             }
         },

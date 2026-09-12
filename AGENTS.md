@@ -18,6 +18,14 @@ unless the user explicitly asks for that change in the current task. When the
 code contradicts a master plan, report the contradiction instead of revising the
 plan.
 
+## Releases
+
+Read `docs/releases.md` before release work. Desktop and renderer releases default
+to previews; production must be explicit. Use the existing main-dispatched,
+single-run workflows with version and notes, preserving signing and source checks.
+Renderer-only requests never implicitly ship a native app. Do not release, deploy,
+restart, or push as a side effect of implementing release tooling.
+
 ## Project
 
 Happy (2) is a desktop work and coding app that evolves by adopting itself. It is

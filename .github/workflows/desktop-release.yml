@@ -5,13 +5,18 @@ on:
     workflow_dispatch:
         inputs:
             version:
-                description: Stable semantic version without the leading v
+                description: Semantic version without v; previews use X.Y.Z-preview.N
                 required: true
                 type: string
             release_notes:
                 description: Markdown changelog to include in the GitHub Release
                 required: true
                 type: string
+            prerelease:
+                description: Preview (Nightly only); disable for a stable release of both apps
+                required: true
+                default: true
+                type: boolean
 
 permissions:
     contents: read
@@ -23,10 +28,12 @@ concurrency:
 env:
     RELEASE_TAG: v${{ inputs.version }}
     RELEASE_VERSION: ${{ inputs.version }}
+    RELEASE_PRERELEASE: ${{ inputs.prerelease }}
 
 jobs:
     windows:
         needs: verify
+        if: ${{ !inputs.prerelease }}
         uses: ./.github/workflows/build-windows.yml
         with:
             verify_agent_release: true
@@ -61,8 +68,12 @@ jobs:
                     echo "Desktop releases must be dispatched from main." >&2
                     exit 1
                   fi
-                  if [[ ! "$RELEASE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-                    echo "Version must be stable semantic and must not include the leading v." >&2
+                  pattern='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
+                  if [[ "$RELEASE_PRERELEASE" == true ]]; then
+                    pattern='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)-preview\.(0|[1-9][0-9]*)$'
+                  fi
+                  if [[ ! "$RELEASE_VERSION" =~ $pattern ]]; then
+                    echo "Use X.Y.Z-preview.N for previews, or X.Y.Z with prerelease=false for production." >&2
                     exit 1
                   fi
                   if [[ -z "${RELEASE_NOTES//[[:space:]]/}" ]]; then
@@ -76,7 +87,7 @@ jobs:
                   fi
                   ROOT_VERSION="$(node -p "require('./package.json').version")"
                   DESKTOP_VERSION="$(node -p "require('./packages/happy-desktop-electron/package.json').version")"
-                  if [[ "$RELEASE_VERSION" != "$ROOT_VERSION" ]]; then
+                  if [[ "$RELEASE_PRERELEASE" != true && "$RELEASE_VERSION" != "$ROOT_VERSION" ]]; then
                     echo "Requested version $RELEASE_VERSION does not match root package version $ROOT_VERSION." >&2
                     exit 1
                   fi
@@ -161,8 +172,13 @@ jobs:
                   pnpm --dir packages/happy-desktop-electron typecheck
                   pnpm --dir packages/happy-desktop-app typecheck
 
-            - name: Build, sign, notarize, and verify both desktop distributions
-              run: pnpm desktop:mac:release -- --arch ${{ matrix.arch }} --flavor all
+            - name: Build, sign, notarize, and verify desktop distributions
+              env:
+                  RELEASE_ARCH: ${{ matrix.arch }}
+              run: |
+                  FLAVOR=all
+                  if [[ "$RELEASE_PRERELEASE" == true ]]; then FLAVOR=local-web; fi
+                  pnpm desktop:mac:release -- --arch "$RELEASE_ARCH" --flavor "$FLAVOR"
 
             - name: Remove App Store Connect API key
               if: always()
@@ -172,6 +188,7 @@ jobs:
               uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
               with:
                   name: happy-desktop-macos-${{ matrix.arch }}
+                  retention-days: 7
                   path: |
                       packages/happy-desktop-electron/release/standard/*.dmg
                       packages/happy-desktop-electron/release/standard/*.zip
@@ -184,7 +201,7 @@ jobs:
             - name: Build hosted local renderer
               if: matrix.arch == 'arm64'
               env:
-                  HAPPY_LOCAL_WEB_BUILD_ID: ${{ github.sha }}
+                  HAPPY_LOCAL_WEB_BUILD_ID: ${{ inputs.version }}-${{ github.sha }}
               run: pnpm desktop:local:web
 
             - name: Upload hosted local renderer
@@ -197,6 +214,7 @@ jobs:
 
     publish:
         name: Publish GitHub Release
+        if: ${{ !cancelled() && needs.verify.result == 'success' && needs.build.result == 'success' && (needs.windows.result == 'success' || (inputs.prerelease && needs.windows.result == 'skipped')) }}
         needs:
             - verify
             - build
@@ -220,6 +238,7 @@ jobs:
                   merge-multiple: true
 
             - name: Download unsigned Windows artifacts
+              if: ${{ !inputs.prerelease }}
               uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
               with:
                   pattern: happy-desktop-windows-*-unsigned
@@ -247,7 +266,7 @@ jobs:
 
             - name: Create architecture-aware updater manifests
               run: |
-                  node scripts/create-mac-update-manifest.mjs standard
+                  if [[ "$RELEASE_PRERELEASE" != true ]]; then node scripts/create-mac-update-manifest.mjs standard; fi
                   node scripts/create-mac-update-manifest.mjs local-web
 
             - name: Create tag and GitHub release
@@ -257,23 +276,46 @@ jobs:
               run: |
                   mkdir -p .release
                   printf '%s\n' "$RELEASE_NOTES" > .release/notes.md
-                  gh release create "$RELEASE_TAG" \
-                    --draft \
-                    --target "$GITHUB_SHA" \
-                    --title "Happy $RELEASE_TAG" \
-                    --notes-file .release/notes.md \
-                    packages/happy-desktop-electron/release/standard/*.dmg \
-                    packages/happy-desktop-electron/release/standard/*.zip \
-                    packages/happy-desktop-electron/release/standard/*.blockmap \
-                    packages/happy-desktop-electron/release/standard/*-mac.yml \
-                    packages/happy-desktop-electron/release/local-web/*.dmg \
-                    packages/happy-desktop-electron/release/local-web/*.zip \
-                    packages/happy-desktop-electron/release/local-web/*.blockmap \
-                    packages/happy-desktop-electron/release/local-web/*-mac.yml \
-                    packages/happy-desktop-electron/release/windows/*.exe \
-                    packages/happy-desktop-electron/release/windows/*.blockmap \
-                    packages/happy-desktop-electron/release/windows/latest.yml \
-                    packages/happy-desktop-electron/release/windows/nightly.yml
-                  gh release edit "$RELEASE_TAG" --draft=false --latest
+                  node --input-type=module <<'NODE'
+                  import { stat } from 'node:fs/promises';
+                  import { desktopFlavorNames, desktopFlavorRead } from './scripts/desktopFlavors.mjs';
+                  const flavors = process.env.RELEASE_PRERELEASE === 'true' ? ['local-web'] : desktopFlavorNames;
+                  for (const name of flavors) {
+                    const flavor = desktopFlavorRead(name);
+                    const directory = `packages/happy-desktop-electron/release/${flavor.output}`;
+                    const files = [`${flavor.channel}-mac.yml`, ...['arm64', 'x64'].flatMap(arch =>
+                      ['dmg', 'zip', 'dmg.blockmap', 'zip.blockmap'].map(ext =>
+                        `${flavor.artifactPrefix}-${process.env.RELEASE_VERSION}-${arch}.${ext}`))];
+                    for (const file of files) {
+                      const path = `${directory}/${file}`;
+                      const info = await stat(path);
+                      if (!info.isFile() || info.size === 0) throw new Error(`Missing or empty release asset: ${path}`);
+                    }
+                  }
+                  if (process.env.RELEASE_PRERELEASE !== 'true') {
+                    for (const name of desktopFlavorNames) {
+                      const flavor = desktopFlavorRead(name);
+                      const installer = `${flavor.artifactPrefix}-${process.env.RELEASE_VERSION}-x64.exe`;
+                      for (const file of [installer, `${installer}.blockmap`, `${flavor.channel}.yml`]) {
+                        const path = `packages/happy-desktop-electron/release/windows/${file}`;
+                        const info = await stat(path);
+                        if (!info.isFile() || info.size === 0) throw new Error(`Missing or empty release asset: ${path}`);
+                      }
+                    }
+                  }
+                  NODE
+                  shopt -s nullglob
+                  assets=(packages/happy-desktop-electron/release/{standard,local-web}/*.{dmg,zip,blockmap} packages/happy-desktop-electron/release/{standard,local-web}/*-mac.yml)
+                  if [[ "$RELEASE_PRERELEASE" != true ]]; then
+                    assets+=(packages/happy-desktop-electron/release/windows/*.{exe,blockmap} packages/happy-desktop-electron/release/windows/{latest,nightly}.yml)
+                  fi
+                  arguments=("$RELEASE_TAG" --draft --target "$GITHUB_SHA" --title "Happy $RELEASE_TAG" --notes-file .release/notes.md)
+                  if [[ "$RELEASE_PRERELEASE" == true ]]; then arguments+=(--prerelease --latest=false); fi
+                  gh release create "${arguments[@]}" "${assets[@]}"
+                  if [[ "$RELEASE_PRERELEASE" == true ]]; then
+                    gh release edit "$RELEASE_TAG" --draft=false --latest=false
+                  else
+                    gh release edit "$RELEASE_TAG" --draft=false --latest
+                  fi
                   RELEASE_URL="$(gh release view "$RELEASE_TAG" --json url --jq .url)"
                   printf 'Published [Happy %s](%s).\n' "$RELEASE_TAG" "$RELEASE_URL" >> "$GITHUB_STEP_SUMMARY"

@@ -1375,6 +1375,7 @@ void app
             launchEnvironment.HAPPY_AGENT_SERVER_TOKEN_PATH?.trim()
         );
         daemonController = await DesktopDaemonController.create({
+            channel: desktopFlavor.kind === "local-web" ? "preview" : "stable",
             environment: launchEnvironment,
             launchEnvironment: async () => launchEnvironment,
             managed: managedDaemon,
@@ -1469,6 +1470,7 @@ void app
                 window.webContents.send(desktopIpc.onboardingChanged, snapshot);
         });
         const updater = desktopUpdaterCreate({
+            preview: desktopFlavor.kind === "local-web",
             // Releases publish macOS update manifests only; a packaged Linux or
             // Windows build has nothing to check against yet.
             packaged: app.isPackaged && process.platform === "darwin",

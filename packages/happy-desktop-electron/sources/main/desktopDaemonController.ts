@@ -10,6 +10,12 @@ import type {
 } from "../shared/desktopContract";
 import { happyAgentRestartRun } from "./happyAgentRestart";
 import {
+    happyAgentVersionAllowed,
+    happyAgentVersionKind,
+    happyAgentVersionNewer as versionNewer,
+    type HappyAgentUpdateChannel,
+} from "./happyAgentVersion";
+import {
     happyAgentBinaryDownloaded,
     happyAgentBinarySelect,
     happyAgentBinarySelected,
@@ -26,7 +32,6 @@ import {
     happyAgentReleasesList,
     happyAgentReleaseVersion,
     type HappyAgentRelease,
-    type HappyAgentReleaseSummary,
 } from "./happyAgentRelease";
 
 const DAEMON_COMMAND_TIMEOUT_MS = 75_000;
@@ -35,6 +40,7 @@ const MAXIMUM_COMMAND_OUTPUT_BYTES = 1024 * 1024;
 const RECONNECT_TIMEOUT_MS = 60_000;
 
 export interface DesktopDaemonControllerOptions {
+    readonly channel?: HappyAgentUpdateChannel;
     readonly environment?: NodeJS.ProcessEnv;
     readonly launchEnvironment?: () => Promise<NodeJS.ProcessEnv>;
     readonly managed?: boolean;
@@ -48,13 +54,14 @@ export class DesktopDaemonController {
     private latestRelease?: HappyAgentRelease;
     private readonly listeners = new Set<(snapshot: DesktopDaemonSnapshot) => void>();
     private operation = Promise.resolve();
-    private publishedCatalog: readonly HappyAgentReleaseSummary[] = [];
+    private publishedCatalog: readonly HappyAgentRelease[] = [];
     private snapshotValue: DesktopDaemonSnapshot;
 
     private constructor(
         private readonly paths: HappyDaemonPaths,
         private readonly launchEnvironmentRead: () => Promise<NodeJS.ProcessEnv>,
         private readonly managed: boolean,
+        private readonly channel: HappyAgentUpdateChannel,
         selected: HappyAgentBinary | undefined,
     ) {
         this.snapshotValue = {
@@ -78,6 +85,7 @@ export class DesktopDaemonController {
             paths,
             options.launchEnvironment ?? (async () => options.environment ?? process.env),
             options.managed ?? true,
+            options.channel ?? "stable",
             selected,
         );
     }
@@ -110,10 +118,8 @@ export class DesktopDaemonController {
                 operation: "checking",
             });
             try {
-                const [release, catalog] = await Promise.all([
-                    happyAgentReleaseLatest(),
-                    happyAgentReleasesList(),
-                ]);
+                const catalog = await happyAgentReleasesList({ channel: this.channel });
+                const release = catalog[0]!;
                 this.latestRelease = release;
                 this.publishedCatalog = catalog;
                 const installedVersion = selected?.version;
@@ -219,8 +225,13 @@ export class DesktopDaemonController {
      * the earlier ones.
      */
     private async stageVersion(version: string): Promise<void> {
+        if (!happyAgentVersionAllowed(version, this.channel)) {
+            const selected = await happyAgentBinarySelected(this.paths);
+            if (selected?.version === version) return;
+            throw new Error("This Happy Agent version is not available on this update channel.");
+        }
         if ((await happyAgentBinaryDownloaded(this.paths)).includes(version)) return;
-        await this.stage(await happyAgentReleaseVersion(version));
+        await this.stage(await happyAgentReleaseVersion(version, { channel: this.channel }));
     }
 
     /**
@@ -442,10 +453,13 @@ export class DesktopDaemonController {
     private async readyVersionRead(): Promise<{ readonly readyVersion: string | undefined }> {
         const selected = await happyAgentBinarySelected(this.paths).catch(() => undefined);
         const downloaded = await happyAgentBinaryDownloaded(this.paths).catch((): string[] => []);
-        const newest = downloaded.reduce<string | undefined>(
-            (best, version) => (best === undefined || versionNewer(version, best) ? version : best),
-            undefined,
-        );
+        const newest = downloaded
+            .filter((version) => happyAgentVersionAllowed(version, this.channel))
+            .reduce<string | undefined>(
+                (best, version) =>
+                    best === undefined || versionNewer(version, best) ? version : best,
+                undefined,
+            );
         if (newest === undefined) return { readyVersion: undefined };
         if (selected !== undefined && !versionNewer(newest, selected.version))
             return { readyVersion: undefined };
@@ -459,7 +473,9 @@ export class DesktopDaemonController {
             if (this.snapshotValue.installation !== "missing")
                 throw new Error("Happy Agent is already installed.");
             const release = await this.stageOrFail(async () => {
-                const found = this.latestRelease ?? (await happyAgentReleaseLatest());
+                const found =
+                    this.latestRelease ??
+                    (await happyAgentReleaseLatest({ channel: this.channel }));
                 this.latestRelease = found;
                 await this.stage(found);
                 return found;
@@ -584,7 +600,9 @@ export class DesktopDaemonController {
             // Happy does not manage is not one to fetch bytes for either.
             if (!this.managed) throw new Error("This Happy Agent is managed outside Happy.");
             const release = await this.stageOrFail(async () => {
-                const found = this.latestRelease ?? (await happyAgentReleaseLatest());
+                const found =
+                    this.latestRelease ??
+                    (await happyAgentReleaseLatest({ channel: this.channel }));
                 this.latestRelease = found;
                 await this.stage(found);
                 return found;
@@ -626,17 +644,24 @@ export class DesktopDaemonController {
      */
     private async versionsProject(): Promise<readonly DesktopDaemonVersion[]> {
         const downloaded = await happyAgentBinaryDownloaded(this.paths).catch((): string[] => []);
+        const selected = await happyAgentBinarySelected(this.paths).catch(() => undefined);
         const rows = new Map<string, DesktopDaemonVersion>();
         for (const summary of this.publishedCatalog) {
             rows.set(summary.version, {
                 downloaded: downloaded.includes(summary.version),
-                prerelease: summary.prerelease,
+                prerelease: happyAgentVersionKind(summary.version) === "preview",
                 version: summary.version,
             });
         }
         for (const version of downloaded) {
+            if (!happyAgentVersionAllowed(version, this.channel) && version !== selected?.version)
+                continue;
             if (!rows.has(version))
-                rows.set(version, { downloaded: true, prerelease: false, version });
+                rows.set(version, {
+                    downloaded: true,
+                    prerelease: happyAgentVersionKind(version) === "preview",
+                    version,
+                });
         }
         return [...rows.values()].sort((left, right) =>
             versionNewer(left.version, right.version)
@@ -694,50 +719,6 @@ function daemonCommandRun(
             },
         );
     });
-}
-
-function versionNewer(candidate: string, current: string): boolean {
-    const left = versionParse(candidate);
-    const right = versionParse(current);
-    for (let index = 0; index < 3; index += 1) {
-        const comparison = compareBigInt(left.core[index]!, right.core[index]!);
-        if (comparison !== 0) return comparison > 0;
-    }
-    if (left.prerelease.length === 0 || right.prerelease.length === 0) {
-        return left.prerelease.length === 0 && right.prerelease.length > 0;
-    }
-    const length = Math.max(left.prerelease.length, right.prerelease.length);
-    for (let index = 0; index < length; index += 1) {
-        const leftIdentifier = left.prerelease[index];
-        const rightIdentifier = right.prerelease[index];
-        if (leftIdentifier === undefined) return false;
-        if (rightIdentifier === undefined) return true;
-        if (leftIdentifier === rightIdentifier) continue;
-        const leftNumeric = /^\d+$/u.test(leftIdentifier);
-        const rightNumeric = /^\d+$/u.test(rightIdentifier);
-        if (leftNumeric && rightNumeric) {
-            return compareBigInt(BigInt(leftIdentifier), BigInt(rightIdentifier)) > 0;
-        }
-        if (leftNumeric !== rightNumeric) return !leftNumeric;
-        return leftIdentifier > rightIdentifier;
-    }
-    return false;
-}
-
-function versionParse(version: string): {
-    readonly core: readonly [bigint, bigint, bigint];
-    readonly prerelease: readonly string[];
-} {
-    const match = /^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/u.exec(version);
-    if (!match) throw new Error(`Happy Agent version is invalid: ${version}`);
-    return {
-        core: [BigInt(match[1]!), BigInt(match[2]!), BigInt(match[3]!)],
-        prerelease: match[4]?.split(".") ?? [],
-    };
-}
-
-function compareBigInt(left: bigint, right: bigint): number {
-    return left < right ? -1 : left > right ? 1 : 0;
 }
 
 function displayError(error: unknown): string {

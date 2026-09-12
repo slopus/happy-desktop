@@ -11,6 +11,10 @@ const desktopDirectory = join(workspace, "packages", "happy-desktop-electron");
 const require = createRequire(join(desktopDirectory, "package.json"));
 const { Arch, Platform, build } = require("electron-builder");
 const packageJson = JSON.parse(await readFile(join(desktopDirectory, "package.json"), "utf8"));
+const releaseVersion = process.env.RELEASE_VERSION ?? packageJson.version;
+if (!/^\d+\.\d+\.\d+(?:-preview\.(?:0|[1-9]\d*))?$/u.test(releaseVersion))
+    throw new Error("RELEASE_VERSION must be a stable or numbered preview version.");
+packageJson.version = releaseVersion;
 const localWebOrigin = "https://local.app.happy.engineering";
 const flavor = argument("--flavor", ["all", ...desktopFlavorNames], "all");
 const architecture = argument("--arch", ["all", "arm64", "x64"], "all");
@@ -209,6 +213,7 @@ async function releaseVerify(selectedFlavor, output) {
 
 async function stagedPackagePrepare(path, selectedFlavor) {
     const metadata = JSON.parse(await readFile(path, "utf8"));
+    metadata.version = releaseVersion;
     delete metadata.build;
     delete metadata.devDependencies;
     const updaterSuffix = "-updater";

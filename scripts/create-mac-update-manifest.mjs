@@ -20,7 +20,9 @@ if (!version) throw new Error("Set RELEASE_VERSION or run from a v* GitHub tag."
 const channel = flavor.channel;
 const names = (await readdir(releaseDirectory))
     .filter(
-        (name) => name.startsWith(`${flavor.artifactPrefix}-`) && /-(arm64|x64)\.zip$/u.test(name),
+        (name) =>
+            name === `${flavor.artifactPrefix}-${version}-arm64.zip` ||
+            name === `${flavor.artifactPrefix}-${version}-x64.zip`,
     )
     .sort();
 if (names.length !== 2)

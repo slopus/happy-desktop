@@ -17,6 +17,13 @@ import { join } from "node:path";
 import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import type { DesktopDaemonDownload } from "../shared/desktopContract";
+import { githubReleaseJsonFetch } from "./githubReleaseJsonFetch";
+import {
+    happyAgentVersionAllowed,
+    happyAgentVersionKind,
+    happyAgentVersionNewer,
+    type HappyAgentUpdateChannel,
+} from "./happyAgentVersion";
 import {
     executableFile,
     happyAgentBinarySelect,
@@ -31,11 +38,7 @@ import {
 
 const HAPPY_AGENT_RELEASES_URL = "https://api.github.com/repos/slopus/happy-agent/releases";
 const HAPPY_AGENT_LATEST_RELEASE_URL = `${HAPPY_AGENT_RELEASES_URL}/latest`;
-/**
- * How far back the version picker can reach. GitHub returns releases newest
- * first, so this is the most recent page rather than an arbitrary slice.
- */
-const LISTED_RELEASE_COUNT = 30;
+const RELEASE_PAGE_SIZE = 100;
 const MAXIMUM_ARCHIVE_BYTES = 512 * 1024 * 1024;
 const MAXIMUM_BINARY_BYTES = 2 * 1024 * 1024 * 1024;
 const INSTALL_LOCK_TIMEOUT_MS = 15 * 60_000;
@@ -67,13 +70,8 @@ export interface HappyAgentRelease {
     readonly version: string;
 }
 
-/** One published release this machine could install, without its download detail. */
-export interface HappyAgentReleaseSummary {
-    readonly prerelease: boolean;
-    readonly version: string;
-}
-
 export interface HappyAgentReleaseOptions {
+    readonly channel?: HappyAgentUpdateChannel;
     readonly arch?: NodeJS.Architecture;
     readonly fetch?: typeof globalThis.fetch;
     readonly platform?: NodeJS.Platform;
@@ -82,14 +80,13 @@ export interface HappyAgentReleaseOptions {
 export async function happyAgentReleaseLatest(
     options: HappyAgentReleaseOptions = {},
 ): Promise<HappyAgentRelease> {
-    const target = releaseTarget(
-        options.platform ?? process.platform,
-        options.arch ?? process.arch,
-    );
-    return releaseResolve(
-        await releaseFetch(options.fetch ?? globalThis.fetch, HAPPY_AGENT_LATEST_RELEASE_URL),
-        target,
-    );
+    if (options.channel !== "preview")
+        return releaseResolve(
+            await releaseFetch(options.fetch ?? globalThis.fetch, HAPPY_AGENT_LATEST_RELEASE_URL),
+            releaseTarget(options.platform ?? process.platform, options.arch ?? process.arch),
+            "stable",
+        );
+    return (await happyAgentReleasesList(options))[0]!;
 }
 
 /**
@@ -112,7 +109,7 @@ export async function happyAgentReleaseVersion(
         options.fetch ?? globalThis.fetch,
         `${HAPPY_AGENT_RELEASES_URL}/tags/v${encodeURIComponent(version)}`,
     );
-    const resolved = releaseResolve(release, target);
+    const resolved = releaseResolve(release, target, options.channel ?? "stable");
     if (resolved.version !== version) {
         throw new Error(`GitHub returned Happy Agent ${resolved.version} for ${version}.`);
     }
@@ -120,29 +117,49 @@ export async function happyAgentReleaseVersion(
 }
 
 /**
- * Every recently published release that has a binary for this machine, newest
- * first as GitHub ordered them. A release without an asset for this platform is
- * left out rather than offered and then refused at install time.
+ * A nonempty, version-ordered catalog shared by discovery and the picker.
+ * Latest stable remains reachable when previews fill the recent page;
+ * an unavailable stable endpoint must not block an otherwise usable preview.
  */
 export async function happyAgentReleasesList(
     options: HappyAgentReleaseOptions = {},
-): Promise<HappyAgentReleaseSummary[]> {
+): Promise<HappyAgentRelease[]> {
     const target = releaseTarget(
         options.platform ?? process.platform,
         options.arch ?? process.arch,
     );
-    const releases = await releasesFetch(options.fetch ?? globalThis.fetch);
-    const summaries: HappyAgentReleaseSummary[] = [];
+    const fetch_ = options.fetch ?? globalThis.fetch;
+    const signal = AbortSignal.timeout(RELEASE_LOOKUP_TIMEOUT_MS);
+    const [latest, recent] = await Promise.allSettled([
+        releaseFetch(fetch_, HAPPY_AGENT_LATEST_RELEASE_URL, signal),
+        releasesFetch(fetch_, signal),
+    ]);
+    const releases = [
+        ...(recent.status === "fulfilled" ? recent.value : []),
+        ...(latest.status === "fulfilled" ? [latest.value] : []),
+    ];
+    const candidates = new Map<string, HappyAgentRelease>();
     for (const release of releases) {
         let resolved: HappyAgentRelease;
         try {
-            resolved = releaseResolve(release, target);
+            resolved = releaseResolve(release, target, options.channel ?? "stable");
         } catch {
             continue;
         }
-        summaries.push({ prerelease: release.prerelease, version: resolved.version });
+        candidates.set(resolved.version, resolved);
     }
-    return summaries;
+    if (candidates.size === 0) {
+        if (recent.status === "rejected") throw recent.reason;
+        if (latest.status === "rejected") throw latest.reason;
+        throw new Error("No supported Happy Agent releases are available for this machine.");
+    }
+    return [...candidates.values()].sort((left, right) =>
+        happyAgentVersionNewer(left.version, right.version)
+            ? -1
+            : happyAgentVersionNewer(right.version, left.version)
+              ? 1
+              : 0,
+    );
 }
 
 /**
@@ -220,8 +237,17 @@ function releaseTarget(platform: NodeJS.Platform, arch: NodeJS.Architecture): st
     return `${platform}-${arch}`;
 }
 
-function releaseResolve(release: Release, target: string): HappyAgentRelease {
+function releaseResolve(
+    release: Release,
+    target: string,
+    channel: HappyAgentUpdateChannel,
+): HappyAgentRelease {
     const version = releaseVersion(release);
+    if (
+        !happyAgentVersionAllowed(version, channel) ||
+        release.prerelease !== (happyAgentVersionKind(version) === "preview")
+    )
+        throw new Error(`Happy Agent ${version} is not available on this update channel.`);
     const assetName = `happy-agent-${version}-${target}.tar.gz`;
     const asset = release.assets.find((candidate) => candidate.name === assetName);
     if (asset === undefined)
@@ -237,8 +263,12 @@ function releaseResolve(release: Release, target: string): HappyAgentRelease {
     return { asset, archivedBinaryName, version };
 }
 
-async function releaseFetch(fetch_: typeof globalThis.fetch, url: string): Promise<Release> {
-    const value = await githubJsonFetch(fetch_, url);
+async function releaseFetch(
+    fetch_: typeof globalThis.fetch,
+    url: string,
+    signal?: AbortSignal,
+): Promise<Release> {
+    const value = await githubReleaseJsonFetch(url, fetch_, signal);
     if (!releaseValid(value) || value.draft) {
         throw new Error("GitHub returned an invalid Happy Agent release.");
     }
@@ -246,14 +276,17 @@ async function releaseFetch(fetch_: typeof globalThis.fetch, url: string): Promi
     return value;
 }
 
-async function releasesFetch(fetch_: typeof globalThis.fetch): Promise<Release[]> {
-    const value = await githubJsonFetch(
+async function releasesFetch(
+    fetch_: typeof globalThis.fetch,
+    signal: AbortSignal,
+): Promise<Release[]> {
+    const value = await githubReleaseJsonFetch(
+        `${HAPPY_AGENT_RELEASES_URL}?per_page=${RELEASE_PAGE_SIZE}`,
         fetch_,
-        `${HAPPY_AGENT_RELEASES_URL}?per_page=${String(LISTED_RELEASE_COUNT)}`,
+        signal,
     );
-    if (!Array.isArray(value) || value.length > LISTED_RELEASE_COUNT) {
+    if (!Array.isArray(value) || value.length > RELEASE_PAGE_SIZE)
         throw new Error("GitHub returned an invalid Happy Agent release list.");
-    }
     const releases: Release[] = [];
     for (const entry of value) {
         if (!releaseValid(entry) || entry.draft) continue;
@@ -265,24 +298,6 @@ async function releasesFetch(fetch_: typeof globalThis.fetch): Promise<Release[]
         releases.push(entry);
     }
     return releases;
-}
-
-async function githubJsonFetch(fetch_: typeof globalThis.fetch, url: string): Promise<unknown> {
-    const response = await fetch_(url, {
-        headers: {
-            accept: "application/vnd.github+json",
-            "user-agent": "Happy Desktop Happy Agent downloader",
-            "x-github-api-version": "2022-11-28",
-        },
-        signal: AbortSignal.timeout(RELEASE_LOOKUP_TIMEOUT_MS),
-    });
-    responseHttpsRequire(response, "Happy Agent release lookup");
-    if (!response.ok) {
-        throw new Error(
-            `GitHub returned HTTP ${String(response.status)} while checking for Happy Agent.`,
-        );
-    }
-    return response.json();
 }
 
 function releaseAssetUrlsRequireHttps(release: Release): void {
