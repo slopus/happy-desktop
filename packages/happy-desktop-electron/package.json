@@ -90,6 +90,7 @@
         },
         "files": [
             "dist/**/*",
+            "assets/app-icon/generated/app-icon.png",
             "package.json"
         ],
         "protocols": [
@@ -141,6 +142,7 @@
             ]
         },
         "win": {
+            "icon": "assets/app-icon/generated/app-icon.png",
             "target": [
                 {
                     "target": "nsis",

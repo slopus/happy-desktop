@@ -47,7 +47,14 @@ await build({
         extraMetadata: { name: flavor.updaterCacheDirName.replace(/-updater$/u, "") },
         directories: { ...metadata.build.directories, output },
         ...(flavorName === "local-web"
-            ? { files: ["dist/main.js", "dist/preload.cjs", "package.json"] }
+            ? {
+                  files: [
+                      "dist/main.js",
+                      "dist/preload.cjs",
+                      "assets/app-icon/generated/app-icon.png",
+                      "package.json",
+                  ],
+              }
             : {}),
         publish: { ...metadata.build.publish, channel: flavor.channel },
     },
