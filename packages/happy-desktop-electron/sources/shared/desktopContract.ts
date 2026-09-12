@@ -531,9 +531,11 @@ export interface DesktopBrowserStatus {
     readonly statusText: string;
 }
 
-/** Which local session's network a browser guest browses through. */
+/** The owning Happy Agent route and workspace whose network the guest uses. */
 export interface DesktopBrowserProxyTarget {
-    readonly sessionId: string;
+    /** Null names the host; otherwise the host-published connection identity. */
+    readonly connectionId: string | null;
+    readonly workspaceId: string;
 }
 
 /**
@@ -628,7 +630,8 @@ export interface HappyDesktopBridge {
      */
     attachmentSourcePath(file: File): string | undefined;
     /** Points this window's browser guests at one local Happy Agent session's network boundary. */
-    browserProxyApply(target: DesktopBrowserProxyTarget): Promise<void>;
+    /** Returns the guest partition only after its workspace proxy is configured. */
+    browserProxyApply(target: DesktopBrowserProxyTarget): Promise<string>;
     browserOpenSubscribe(listener: (url: string) => void): () => void;
     browserStatusSubscribe(listener: (status: DesktopBrowserStatus) => void): () => void;
     /** Announces that the shell received a WorkOS OAuth callback. */
@@ -838,9 +841,6 @@ export const desktopIpc = {
     windowStateChanged: "happy:window-state:changed",
     windowStateGet: "happy:window-state:get",
 } as const;
-
-/** Persistent, capability-isolated Chromium profile used only by embedded browser tabs. */
-export const happyBrowserPartition = "persist:happy-browser";
 
 /**
  * In-memory Chromium profile used only by rendered HTML file previews. It is

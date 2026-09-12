@@ -13,19 +13,18 @@ import type { Duplex } from "node:stream";
 export interface HappyAgentBrowserProxyHandle {
     readonly password: string;
     readonly port: number;
-    readonly sessionId: string;
     readonly username: string;
+    connectionsClose(): void;
     close(): void;
 }
 
 export interface HappyAgentBrowserProxyOptions {
     readonly openHttpProxy: () => Promise<Duplex>;
-    readonly sessionId: string;
 }
 
 /**
  * Gives Chromium an ordinary authenticated loopback HTTP proxy and carries every
- * accepted request through one session-scoped Happy Agent proxy tunnel.
+ * accepted request through one workspace-scoped Happy Agent proxy tunnel.
  */
 export function happyAgentBrowserProxyCreate(
     options: HappyAgentBrowserProxyOptions,
@@ -34,12 +33,29 @@ export function happyAgentBrowserProxyCreate(
     const password = randomBytes(32).toString("base64url");
     const authorization = `Basic ${Buffer.from(`${username}:${password}`).toString("base64")}`;
     const sockets = new Set<Duplex>();
+    let closed = false;
+    let generation = 0;
+    const connectionsClose = () => {
+        generation += 1;
+        for (const socket of sockets) socket.destroy();
+        sockets.clear();
+    };
+    const openHttpProxy = async () => {
+        const openingGeneration = generation;
+        if (closed) throw new Error("The Happy Agent browser proxy is closed.");
+        const tunnel = await options.openHttpProxy();
+        if (closed || openingGeneration !== generation) {
+            tunnel.destroy();
+            throw new Error("The Happy Agent connection changed while opening the browser tunnel.");
+        }
+        return tunnel;
+    };
     const server = createServer((request, response) => {
         if (!proxyAuthorized(request, authorization)) {
             proxyAuthenticationRequired(response);
             return;
         }
-        void proxyRequest(options.openHttpProxy, request, response, sockets);
+        void proxyRequest(openHttpProxy, request, response, sockets);
     });
     server.on("connect", (request, client, head) => {
         // An upgraded socket has left the HTTP server's own error handling, so it
@@ -53,7 +69,7 @@ export function happyAgentBrowserProxyCreate(
             );
             return;
         }
-        void proxyConnect(options.openHttpProxy, request, client, head, sockets);
+        void proxyConnect(openHttpProxy, request, client, head, sockets);
     });
     server.on("connection", (socket) => {
         sockets.add(socket);
@@ -69,11 +85,11 @@ export function happyAgentBrowserProxyCreate(
             resolve({
                 password,
                 port: address.port,
-                sessionId: options.sessionId,
                 username,
+                connectionsClose,
                 close() {
-                    for (const socket of sockets) socket.destroy();
-                    sockets.clear();
+                    closed = true;
+                    connectionsClose();
                     server.close();
                 },
             });

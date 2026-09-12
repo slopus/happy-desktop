@@ -76,7 +76,7 @@ export function BrowserPanelPage() {
                 </div>
             </Specimen>
             <Specimen
-                detail="no native content renderer · honest desktop-only fallback"
+                detail="no content renderer connected · unavailable host"
                 label="Unavailable host"
                 number="02"
                 stage="app"

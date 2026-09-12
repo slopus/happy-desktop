@@ -204,18 +204,12 @@ export class HappyAgentDaemonClient {
         });
     }
 
-    /**
-     * Resolves the product's agent identity through Happy Agent, then opens the
-     * browser tunnel owned by that agent's workspace.
-     */
-    async openHttpProxy(agentId: string): Promise<Duplex> {
-        const { agent } = await this.getAgent(agentId);
-        return this.openWorkspaceHttpProxy(agent.workspaceId);
-    }
-
     /** Opens `CONNECT /v0/workspaces/:workspaceId/proxy`. */
     openWorkspaceHttpProxy(workspaceId: string): Promise<Duplex> {
-        const path = `/v0/workspaces/${encodeURIComponent(workspaceId)}/proxy`;
+        // The SDK owns and validates the host-published connection prefix, just
+        // as it does for ordinary HTTP requests and terminal attachments.
+        const prefix = new URL(this.#client.endpoint).pathname.replace(/\/$/u, "");
+        const path = `${prefix}/v0/workspaces/${encodeURIComponent(workspaceId)}/proxy`;
         return new Promise((resolvePromise, reject) => {
             const request = httpRequest({
                 headers: { authorization: `Bearer ${this.#token}` },

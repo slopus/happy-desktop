@@ -1,5 +1,6 @@
 import { join } from "node:path";
 import type {
+    DesktopBrowserProxyTarget,
     DesktopRuntimeSnapshot,
     DesktopStartRequest,
     DesktopTopology,
@@ -275,15 +276,17 @@ export class DesktopRuntime implements AsyncDisposable {
         return endpoint ? endpoint.replace(/\/$/u, "") : undefined;
     }
 
-    /** Opens one authenticated browser-proxy tunnel for a local session. */
-    openHttpProxy(sessionId: string): Promise<Duplex> {
+    /** Opens a workspace tunnel through its owning host-published connection. */
+    openHttpProxy(target: DesktopBrowserProxyTarget): Promise<Duplex> {
         if (
             this.snapshotValue.phase !== "ready" ||
             this.snapshotValue.mode !== "local" ||
             !this.happyAgentConnection
         )
             throw new Error("The local Happy Agent daemon is unavailable.");
-        return this.happyAgentConnection.client.openHttpProxy(sessionId);
+        const host = this.happyAgentConnection.client;
+        const client = target.connectionId === null ? host : host.connection(target.connectionId);
+        return client.openWorkspaceHttpProxy(target.workspaceId);
     }
 
     start(request: DesktopStartRequest): Promise<void> {

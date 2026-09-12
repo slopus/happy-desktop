@@ -82,7 +82,9 @@ export function browserDevBridgeCreate(): HappyDesktopBridge {
         // A browser tab is told nothing about where a dropped file came from,
         // so every attachment here travels by value.
         attachmentSourcePath: () => undefined,
-        browserProxyApply: async () => undefined,
+        browserProxyApply: async () => {
+            throw new Error("The browser content renderer is not connected.");
+        },
         browserOpenSubscribe: () => () => undefined,
         browserStatusSubscribe: () => () => undefined,
         cloudAuthCallbackSubscribe: () => () => undefined,

@@ -1,6 +1,6 @@
 import { Component, createElement } from "react";
 import type { BrowserContentProps, BrowserController } from "happy-desktop-ui";
-import { happyBrowserPartition, type DesktopBrowserStatus } from "../shared/desktopContract";
+import type { DesktopBrowserStatus } from "../shared/desktopContract";
 
 interface BrowserWebViewEvent extends Event {
     readonly canGoBack?: boolean;
@@ -58,7 +58,7 @@ const browserBodyProbe = `(() => {
  * it owns no visual state or styling.
  */
 export class DesktopBrowserView extends Component<BrowserContentProps> {
-    state = { ready: false };
+    state: { partition?: string } = {};
     private element?: BrowserWebViewElement;
     private proxyGeneration = 0;
     private statusUnsubscribe?: () => void;
@@ -149,7 +149,11 @@ export class DesktopBrowserView extends Component<BrowserContentProps> {
     }
 
     componentDidUpdate(before: BrowserContentProps): void {
-        if (before.sessionId !== this.props.sessionId) this.proxyApply();
+        if (
+            before.target?.workspaceId !== this.props.target?.workspaceId ||
+            before.target?.connectionId !== this.props.target?.connectionId
+        )
+            this.proxyApply();
     }
 
     componentWillUnmount(): void {
@@ -194,18 +198,18 @@ export class DesktopBrowserView extends Component<BrowserContentProps> {
     };
 
     private proxyApply(): void {
-        const sessionId = this.props.sessionId;
+        const target = this.props.target;
         const desktop = window.happyDesktop;
         const generation = (this.proxyGeneration += 1);
         this.elementApply(undefined);
-        if (this.state.ready) this.setState({ ready: false });
-        if (!sessionId || !desktop) {
-            this.props.browserFailed({ message: "The browser has no Happy Agent session." });
+        if (this.state.partition) this.setState({ partition: undefined });
+        if (!target || !desktop) {
+            this.props.browserFailed({ message: "The browser has no Happy Agent workspace." });
             return;
         }
-        void desktop.browserProxyApply({ sessionId }).then(
-            () => {
-                if (generation === this.proxyGeneration) this.setState({ ready: true });
+        void desktop.browserProxyApply(target).then(
+            (partition) => {
+                if (generation === this.proxyGeneration) this.setState({ partition });
             },
             (error: unknown) => {
                 if (generation !== this.proxyGeneration) return;
@@ -228,14 +232,14 @@ export class DesktopBrowserView extends Component<BrowserContentProps> {
     }
 
     render() {
-        if (!this.state.ready)
+        if (!this.state.partition)
             return createElement("div", {
                 "data-happy-browser-proxy-loading": "",
             });
         return createElement("webview", {
             allowpopups: "",
             "data-happy-browser-guest": "",
-            partition: happyBrowserPartition,
+            partition: this.state.partition,
             ref: this.elementApply,
             src: this.props.source,
             webpreferences: "contextIsolation=yes,nodeIntegration=no,sandbox=yes",

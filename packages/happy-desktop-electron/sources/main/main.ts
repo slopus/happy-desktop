@@ -14,8 +14,8 @@ import {
     type WebContents,
 } from "electron";
 import { existsSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { join } from "node:path";
-import type { Duplex } from "node:stream";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { DesktopRuntime } from "./desktopRuntime";
 import { desktopInstanceMenuTargets } from "./applicationMenu";
@@ -37,7 +37,6 @@ import {
     buildIdentityArgument,
     debugMetricsArgument,
     desktopIpc,
-    happyBrowserPartition,
     happyHtmlPreviewPartition,
     mediaPreviewArgument,
     mediaPreviewView,
@@ -282,12 +281,10 @@ let desktopProfilerController: DesktopProfilerController;
 let desktopWindowStateStore: DesktopWindowStateStore;
 let onboarding: LocalOnboarding;
 let quitting = false;
-let happyBrowserUserAgent = "";
-let browserProxy: HappyAgentBrowserProxyHandle | undefined;
+/** Each workspace keeps its own network profile, including while its tabs are hidden. */
+const browserProxies = new Map<string, HappyAgentBrowserProxyHandle>();
 let htmlPreviewProxy: HtmlPreviewProxyHandle | undefined;
 let browserProxyConnectionId: number | undefined;
-/** Which local session the live tunnel was built for. */
-let browserProxyTarget: DesktopBrowserProxyTarget | undefined;
 let browserProxyOperation = Promise.resolve();
 // Automation needs a real laid-out window without taking focus from the work
 // happening beside it.
@@ -490,16 +487,7 @@ function onboardingSenderRequire(sender: Electron.WebContents): void {
         throw new Error("First-run setup is not being presented by this window.");
 }
 
-function browserSessionGet() {
-    return electronSession.fromPartition(happyBrowserPartition, { cache: true });
-}
-
-async function browserProxyFailClosed(): Promise<void> {
-    browserProxy?.close();
-    browserProxy = undefined;
-    browserProxyConnectionId = undefined;
-    browserProxyTarget = undefined;
-    const browserSession = browserSessionGet();
+async function browserProxyFailClosed(browserSession: Electron.Session): Promise<void> {
     await browserSession.setProxy({
         mode: "fixed_servers",
         proxyBypassRules: "<-loopback>",
@@ -517,51 +505,34 @@ function browserProxySerial<T>(work: () => Promise<T>): Promise<T> {
     return next;
 }
 
-/** Opens the daemon tunnel a browser tab's traffic goes through. */
-function browserProxyOpen(target: DesktopBrowserProxyTarget): Promise<Duplex> {
-    return runtime.openHttpProxy(target.sessionId);
-}
-
-function browserProxyApply(target: DesktopBrowserProxyTarget): Promise<void> {
+function browserProxyApply(target: DesktopBrowserProxyTarget): Promise<string> {
     return browserProxySerial(async () => {
-        const snapshot = runtime.get();
-        if (snapshot.phase !== "ready" || snapshot.mode !== "local")
-            throw new Error("The local Happy Agent daemon is unavailable.");
-        if (
-            browserProxyTarget?.sessionId === target.sessionId &&
-            browserProxyConnectionId === snapshot.connectionId
-        )
-            return;
-
-        await browserProxyFailClosed();
-        const connectionId = snapshot.connectionId;
-        const candidate = await happyAgentBrowserProxyCreate({
-            sessionId: target.sessionId,
-            openHttpProxy: () => browserProxyOpen(target),
-        });
-        const current = runtime.get();
-        if (
-            current.phase !== "ready" ||
-            current.mode !== "local" ||
-            current.connectionId !== connectionId
-        ) {
-            candidate.close();
-            throw new Error("The local Happy Agent connection changed while opening the browser.");
-        }
+        const identity = createHash("sha256")
+            .update(JSON.stringify([target.connectionId, target.workspaceId]))
+            .digest("hex");
+        const partition = `persist:happy-browser-${identity}`;
+        if (browserProxies.has(partition)) return partition;
+        const browserSession = electronSession.fromPartition(partition, { cache: true });
+        await browserSessionConfigure(browserSession);
+        let candidate: HappyAgentBrowserProxyHandle | undefined;
         try {
-            const browserSession = browserSessionGet();
+            candidate = await happyAgentBrowserProxyCreate({
+                // Resolve through the current runtime on every request, so a
+                // reconnect resumes this profile without remounting its guests.
+                // An unavailable route rejects; it never falls back to direct.
+                openHttpProxy: () => runtime.openHttpProxy(target),
+            });
             await browserSession.setProxy({
                 mode: "fixed_servers",
                 proxyBypassRules: "<-loopback>",
                 proxyRules: `http://127.0.0.1:${String(candidate.port)}`,
             });
             await browserSession.closeAllConnections();
-            browserProxy = candidate;
-            browserProxyConnectionId = connectionId;
-            browserProxyTarget = target;
+            browserProxies.set(partition, candidate);
+            return partition;
         } catch (error) {
-            candidate.close();
-            await browserProxyFailClosed();
+            candidate?.close();
+            await browserProxyFailClosed(browserSession);
             throw error;
         }
     });
@@ -597,11 +568,9 @@ function browserUserAgent(defaultUserAgent: string): string {
         .trim();
 }
 
-async function browserSessionConfigure(): Promise<void> {
-    const browserSession = browserSessionGet();
-    happyBrowserUserAgent = browserUserAgent(browserSession.getUserAgent());
-    browserSession.setUserAgent(happyBrowserUserAgent, app.getLocale());
-    await browserProxyFailClosed();
+async function browserSessionConfigure(browserSession: Electron.Session): Promise<void> {
+    browserSession.setUserAgent(browserUserAgent(browserSession.getUserAgent()), app.getLocale());
+    await browserProxyFailClosed(browserSession);
 
     const permissionLabels = new Map<string, string>([
         ["clipboard-read", "read the clipboard"],
@@ -692,11 +661,12 @@ app.on("login", (event, _webContents, _details, authInfo, callback) => {
     if (!authInfo.isProxy || authInfo.host !== "127.0.0.1") return;
     // Both loopback proxies this process runs are credentialed, and the
     // credentials never leave it: the port says which one is asking.
-    if (authInfo.port === browserProxy?.port) {
-        event.preventDefault();
-        callback(browserProxy.username, browserProxy.password);
-        return;
-    }
+    for (const proxy of browserProxies.values())
+        if (authInfo.port === proxy.port) {
+            event.preventDefault();
+            callback(proxy.username, proxy.password);
+            return;
+        }
     if (authInfo.port === htmlPreviewProxy?.port) {
         event.preventDefault();
         callback(htmlPreviewProxy.username, htmlPreviewProxy.password);
@@ -708,7 +678,7 @@ function browserGuestAttach(window: BrowserWindow): void {
         const previewGuest = params.partition === happyHtmlPreviewPartition;
         const allowed = previewGuest
             ? htmlPreviewUrl(params.src) !== undefined
-            : params.partition === happyBrowserPartition && browserWebUrl(params.src, true);
+            : browserProxies.has(params.partition) && browserWebUrl(params.src, true);
         if (!allowed) {
             event.preventDefault();
             return;
@@ -764,7 +734,7 @@ function browserGuestAttach(window: BrowserWindow): void {
             htmlPreviewLifecyclePublish(window, guest);
             return;
         }
-        guest.setUserAgent(happyBrowserUserAgent);
+        guest.setUserAgent(guest.session.getUserAgent());
         guest.setWindowOpenHandler(({ url }) => {
             browserOpenPublish(window, url);
             return { action: "deny" };
@@ -1367,7 +1337,6 @@ void app
         happyAgentRendererSession = await happyAgentRendererSessionCreate(
             electronSession.defaultSession,
         );
-        await browserSessionConfigure();
         htmlPreviewProxy = await htmlPreviewProxyCreate();
         await htmlPreviewSessionConfigure();
         const desktopRoot = join(app.getPath("userData"), "desktop");
@@ -1489,13 +1458,11 @@ void app
         runtime.subscribe((snapshot) => {
             daemonController.runtimeSet(snapshot);
             desktopDebugRuntimeLog(snapshot);
-            if (
-                browserProxyConnectionId !== undefined &&
-                (snapshot.phase !== "ready" ||
-                    snapshot.mode !== "local" ||
-                    snapshot.connectionId !== browserProxyConnectionId)
-            )
-                void browserProxySerial(browserProxyFailClosed);
+            const connectionId = snapshot.phase === "ready" ? snapshot.connectionId : undefined;
+            if (connectionId !== browserProxyConnectionId) {
+                for (const proxy of browserProxies.values()) proxy.connectionsClose();
+                browserProxyConnectionId = connectionId;
+            }
             mediaPreviewRevalidate();
             const previous = windowLifecycle.get();
             const window = windowSynchronize(snapshot);
@@ -1780,8 +1747,8 @@ app.on("before-quit", (event) => {
         desktopWindowStateStore?.flush(),
         desktopProfilerController?.close(),
     ]).finally(() => {
-        browserProxy?.close();
-        browserProxy = undefined;
+        for (const proxy of browserProxies.values()) proxy.close();
+        browserProxies.clear();
         htmlPreviewProxy?.close();
         htmlPreviewProxy = undefined;
         happyAgentRendererSession?.close();

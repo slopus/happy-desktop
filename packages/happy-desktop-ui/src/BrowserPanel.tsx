@@ -31,8 +31,11 @@ export interface BrowserFailure {
 }
 
 export interface BrowserContentProps {
-    /** Happy Agent session whose network boundary owns this browser guest. */
-    readonly sessionId?: string;
+    /** Owning workspace and host-published Happy Agent route. No chat is required. */
+    readonly target?: {
+        readonly connectionId: string | null;
+        readonly workspaceId: string;
+    };
     /** Initial location for the Chromium guest. Further navigation uses the controller. */
     readonly source: string;
     browserControllerReady(controller: BrowserController | undefined): void;
@@ -215,7 +218,7 @@ export function BrowserPanel(props: BrowserPanelProps) {
                     })
                 ) : (
                     <EmptyState
-                        description="Embedded browsing is available in the Happy desktop app."
+                        description="The browser content renderer is not connected."
                         icon="globe"
                         size="panel"
                         title="Browser unavailable"

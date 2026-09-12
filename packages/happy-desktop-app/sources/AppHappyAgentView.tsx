@@ -246,6 +246,8 @@ export interface AppHappyAgentUpdate {
 /** One Happy Agent this window can address, with its own catalog and surface stores. */
 export interface AppHappyAgentEntry {
     readonly id: string;
+    /** Host-published connection identity; absent only for the host itself. */
+    readonly remoteId?: string;
     readonly label: string;
     readonly status: "connecting" | "connected" | "disconnected" | "error";
     readonly message?: string;
@@ -1992,6 +1994,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                     }
                     appearance={props.appearance}
                     browserContent={props.browserContent}
+                    browserConnectionId={active.remoteId ?? null}
                     htmlPreview={props.htmlPreview}
                     mediaWindow={props.mediaWindow}
                     chatId={props.chatId}
@@ -2718,6 +2721,7 @@ function inboxItemTime(value: number | undefined): string | undefined {
 }
 
 interface HappyAgentWorkspaceSurfaceProps {
+    browserConnectionId: string | null;
     /** Unified outer route and daemon health for this already materialized Happy Agent. */
     availability: HappyAgentAvailabilitySnapshot;
     /** Re-reads unified availability when a retained network handler fires. */
@@ -3279,11 +3283,12 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                     <HappyAgentPanelBody
                         {...(panelCloseTarget ? { closeShortcut: APP_SHORTCUTS.tabClose } : {})}
                         activity={conversation.type === "ready" ? conversation.value : undefined}
+                        canStartBrowser={availability.online && openGroup !== undefined}
                         canStartTerminal={availability.online && props.chatId !== undefined}
                         browserContent={props.browserContent}
+                        browserConnectionId={props.browserConnectionId}
                         htmlPreview={props.htmlPreview}
                         mediaWindow={props.mediaWindow}
-                        sessionId={props.chatId}
                         changes={openGroup?.changes ?? []}
                         expanded={workspace.fileTreeExpanded}
                         collapsed={workspace.fileTreeCollapsed}
@@ -3824,10 +3829,10 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                                     persistent={
                                         <HappyAgentToolBodies
                                             activeId={workspace.displayedMainViewId}
+                                            browserConnectionId={props.browserConnectionId}
                                             {...(props.browserContent
                                                 ? { browserContent: props.browserContent }
                                                 : {})}
-                                            {...(props.chatId ? { sessionId: props.chatId } : {})}
                                             store={props.workspace.panel}
                                             tabs={mainTools}
                                             {...(terminalHappyAgentAvailability === undefined
@@ -5306,8 +5311,10 @@ function workspaceFileTreeNodes(
 function HappyAgentPanelBody(props: {
     activity?: HappyAgentConversationSnapshot;
     browserContent?: BrowserContentRenderer;
+    browserConnectionId: string | null;
     htmlPreview?: HtmlPreviewRenderer;
     mediaWindow?: MediaWindowOpener;
+    canStartBrowser: boolean;
     canStartTerminal: boolean;
     changes: OpenGroup["changes"];
     closeShortcut?: KeyboardShortcut;
@@ -5353,7 +5360,6 @@ function HappyAgentPanelBody(props: {
     happyAgentAvailability?: "reconnecting" | "unavailable";
     happyAgentAvailabilityReason?: string;
     scope: HappyAgentFileScope;
-    sessionId?: string;
     selectedPath?: string;
     store: HappyAgentPanelStore;
     workspaceFiles?: HappyAgentWorkspaceFiles;
@@ -5475,9 +5481,10 @@ function HappyAgentPanelBody(props: {
             >
                 <TabbedPane
                     actions={
-                        props.canStartTerminal ? (
+                        props.canStartTerminal ||
+                        (props.browserContent && props.canStartBrowser) ? (
                             <>
-                                {props.browserContent ? (
+                                {props.browserContent && props.canStartBrowser ? (
                                     <Button
                                         aria-label="New browser"
                                         icon="globe"
@@ -5488,18 +5495,20 @@ function HappyAgentPanelBody(props: {
                                     />
                                 ) : null}
                                 {/* A shell runs in the checkout, so a checkout
-                                    that cannot take work cannot host one. The
-                                    panel carries the reason with its scope. */}
-                                <Button
-                                    aria-label="New terminal"
-                                    disabled={props.panel.terminalRefusal !== undefined}
-                                    icon="terminal"
-                                    iconOnly
-                                    onClick={() => props.store.terminalAdd()}
-                                    size="small"
-                                    title={props.panel.terminalRefusal ?? "New terminal"}
-                                    variant="ghost"
-                                />
+                                that cannot take work cannot host one. The
+                                panel carries the reason with its scope. */}
+                                {props.canStartTerminal ? (
+                                    <Button
+                                        aria-label="New terminal"
+                                        disabled={props.panel.terminalRefusal !== undefined}
+                                        icon="terminal"
+                                        iconOnly
+                                        onClick={() => props.store.terminalAdd()}
+                                        size="small"
+                                        title={props.panel.terminalRefusal ?? "New terminal"}
+                                        variant="ghost"
+                                    />
+                                ) : null}
                             </>
                         ) : undefined
                     }
@@ -5532,8 +5541,8 @@ function HappyAgentPanelBody(props: {
                 >
                     <HappyAgentToolBodies
                         activeId={props.panel.activeViewId}
+                        browserConnectionId={props.browserConnectionId}
                         {...(props.browserContent ? { browserContent: props.browserContent } : {})}
-                        {...(props.sessionId ? { sessionId: props.sessionId } : {})}
                         store={props.store}
                         tabs={panelTools}
                         {...(props.happyAgentAvailability === undefined
@@ -5700,10 +5709,10 @@ function HappyAgentToolBodies(props: {
     activeId: string | undefined;
     store: HappyAgentPanelStore;
     browserContent?: BrowserContentRenderer;
+    browserConnectionId: string | null;
     /** Owning Happy Agent availability applied to retained terminal tabs. */
     happyAgentAvailability?: "reconnecting" | "unavailable";
     happyAgentAvailabilityReason?: string;
-    sessionId?: string;
 }) {
     const active = props.tabs.find((tab) => tab.id === props.activeId);
     return (
@@ -5725,11 +5734,14 @@ function HappyAgentToolBodies(props: {
                                       "This Happy Agent is reconnecting. Browser navigation is paused.",
                               })}
                         renderContent={
-                            props.browserContent && props.sessionId
+                            props.browserContent
                                 ? (browserProps) =>
                                       props.browserContent!({
                                           ...browserProps,
-                                          sessionId: props.sessionId,
+                                          target: {
+                                              connectionId: props.browserConnectionId,
+                                              workspaceId: tab.workspaceId,
+                                          },
                                       })
                                 : undefined
                         }

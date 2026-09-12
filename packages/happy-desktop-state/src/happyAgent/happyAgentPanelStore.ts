@@ -38,6 +38,8 @@ export type HappyAgentPanelTabSnapshot =
       })
     | (HappyAgentPanelTabSnapshotBase & {
           readonly kind: "browser";
+          /** Authoritative workspace network boundary, independent of the open chat. */
+          readonly workspaceId: HappyAgentGroupId;
           /** Last committed main-frame location, restored if the surface remounts. */
           readonly url: string;
       });
@@ -221,7 +223,10 @@ function tabSame(
         before.kind === next.kind &&
         before.label === next.label &&
         before.placement === next.placement &&
-        (before.kind === "terminal" || (next.kind !== "terminal" && before.url === next.url))
+        (before.kind === "terminal" ||
+            (next.kind !== "terminal" &&
+                before.url === next.url &&
+                before.workspaceId === next.workspaceId))
     );
 }
 
@@ -290,6 +295,7 @@ export function happyAgentPanelStoreCreate(deps: HappyAgentPanelDeps): HappyAgen
                               label: tab.label,
                               placement: tab.placement,
                               url: tab.url ?? "about:blank",
+                              workspaceId: tab.groupId,
                           }
                         : {
                               id: tab.id,
