@@ -102,7 +102,9 @@ const LONG_TASK = [
 ].join("\n");
 
 const HANDLERS = {
+    botName: "",
     kind: "task",
+    onBotNameChange: () => {},
     onDestinationSelect: () => {},
     onKindSelect: () => {},
     onEffortChange: () => {},
@@ -269,7 +271,7 @@ export function HappyAgentCreateSessionBlueprintPage() {
                 )}
             </Specimen>
             <Specimen
-                detail="the other tab · a bot starts without a name, project, or model form"
+                detail="the other tab · a bot needs a name, but no project or model form"
                 label="Bot · empty"
                 number="10"
                 stage="app"
@@ -284,10 +286,10 @@ export function HappyAgentCreateSessionBlueprintPage() {
                         text=""
                     />,
                 )}
-                <DimensionRule label="note 12px/18px" />
+                <DimensionRule label="name field 36px · note 12px/18px" />
             </Specimen>
             <Specimen
-                detail="the commit is live without a name · the task written on the other tab is still there, untouched"
+                detail="the chosen name enables creation · the task written on the other tab is still there, untouched"
                 label="Bot · ready"
                 number="11"
                 stage="app"
@@ -299,6 +301,7 @@ export function HappyAgentCreateSessionBlueprintPage() {
                         destinations={DESTINATIONS}
                         kind="bot"
                         menus={MENUS}
+                        botName="Release helper"
                         text="Rebase onto origin/main and rerun the focused checks."
                     />,
                 )}
@@ -316,6 +319,7 @@ export function HappyAgentCreateSessionBlueprintPage() {
                             destinations={DESTINATIONS}
                             kind="bot"
                             menus={MENUS}
+                            botName="Release helper"
                             submitting
                             text=""
                         />,
@@ -328,6 +332,7 @@ export function HappyAgentCreateSessionBlueprintPage() {
                             error="The bot's folder could not be created."
                             kind="bot"
                             menus={MENUS}
+                            botName="Release helper"
                             text=""
                         />,
                         MINIMUM_REGION,

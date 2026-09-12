@@ -1316,28 +1316,19 @@ function happyAgentSections(
     shortcutProject?: { readonly projectId: HappyAgentProjectId; readonly happyAgentId: string },
 ): SidebarSection[] {
     return directory.happyAgents.flatMap((happyAgent) => [
-        // Keep the heading even with no bots: its action creates the first one.
-        {
-            id: happyAgentBotsSectionId(happyAgent.id),
-            label: "Bots",
-            items: happyAgent.bots.map((bot) => {
-                const item = botSidebarItem(bot, titleShimmerEnabled);
-                return { ...item, id: happyAgentItemId(happyAgent.id, item.id) };
-            }),
-            ...(happyAgent.status === "connected" && happyAgent.session
-                ? {
-                      action: {
-                          busy: happyAgent.botAdd?.pending === true,
-                          icon: "plus" as const,
-                          label: "Add bot",
-                          reveal: "always" as const,
-                      },
-                      ...(happyAgent.botAdd?.error !== undefined
-                          ? { error: happyAgent.botAdd.error }
-                          : {}),
-                  }
-                : {}),
-        },
+        // Creation lives on the Create page; the heading only groups existing bots.
+        ...(happyAgent.bots.length === 0
+            ? []
+            : [
+                  {
+                      id: happyAgentBotsSectionId(happyAgent.id),
+                      label: "Bots",
+                      items: happyAgent.bots.map((bot) => {
+                          const item = botSidebarItem(bot, titleShimmerEnabled);
+                          return { ...item, id: happyAgentItemId(happyAgent.id, item.id) };
+                      }),
+                  },
+              ]),
         happyAgentProjectsSection(happyAgent, titleShimmerEnabled, shortcutProject),
     ]);
 }
@@ -1668,6 +1659,8 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
             // top-left corner empty. Beside a connection rail the mark stands
             // down again: the rail's tiles already identify the window.
             brand={desktop ? windowState.fullScreen && !windowState.connectionRail : true}
+            composeActive={props.createOpen === true}
+            composeLabel="Create"
             footer={
                 <SidebarFooter
                     actions={sidebarUpdate}
@@ -1724,10 +1717,14 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                     id: row.id,
                 });
             }}
-            // Each section creates its own entity on the Happy Agent it names.
+            // Drafting remains available offline once this machine has a workspace.
+            {...(active?.session?.workspace && props.onCreateOpen
+                ? { onCompose: props.onCreateOpen }
+                : {})}
+            // Only project headings offer an inline creation action.
             onSectionAction={(sectionId) => {
                 const section = happyAgentSectionParse(sectionId);
-                if (!section) return;
+                if (section?.kind !== "projects") return;
                 const happyAgent = happyAgentOf(section.happyAgentId);
                 if (happyAgent?.status !== "connected") {
                     props.onSettingsOpen();
@@ -1735,8 +1732,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                 }
                 const workspace = happyAgent.session?.workspace;
                 if (!workspace) return;
-                if (section.kind === "bots") workspace.botCreate();
-                else workspace.projectAdd();
+                workspace.projectAdd();
             }}
             onItemMenuSelect={(item, actionId) => {
                 const row = happyAgentItemParse(item.id);
@@ -5202,6 +5198,7 @@ function HappyAgentCreateSurface(props: {
     const store = props.workspace;
     return (
         <HappyAgentCreateSessionPage
+            botName={create.botName}
             destinations={create.groups.map((group) => ({
                 displayPath: group.displayPath,
                 id: group.id,
@@ -5213,6 +5210,9 @@ function HappyAgentCreateSurface(props: {
             {...(create.draft ? { menus: create.draft.menus } : {})}
             {...(create.error === undefined ? {} : { error: create.error })}
             kind={create.kind}
+            onBotNameChange={(name) =>
+                reactFrameInputUpdate(store, () => store.createBotNameUpdate(name))
+            }
             onKindSelect={(kind) => store.createKindUpdate(kind)}
             onDestinationSelect={(id) => store.createGroupUpdate(id as HappyAgentGroupId)}
             onEffortChange={(effort) => store.createEffortUpdate(effort)}

@@ -711,12 +711,14 @@ export type HappyAgentCreateKind = "task" | "bot";
  * where to run, how it is configured, and what to say — decided in one place
  * rather than by starting a session and then correcting it.
  *
- * Switching to bot creation preserves the task draft. A bot itself needs no
- * creation draft: it opens directly into its permanent conversation.
+ * Switching between task and bot creation preserves both drafts. A bot starts
+ * with the chosen name and opens directly into its permanent conversation.
  */
 export interface HappyAgentCreateSnapshot {
     /** Which of the two things the surface is currently making. */
     readonly kind: HappyAgentCreateKind;
+    /** The bot's chosen display name, kept independently of the task draft. */
+    readonly botName: string;
     /** The group it will start in; the last one used, until changed. */
     readonly groupId?: HappyAgentGroupId;
     /**
@@ -1245,6 +1247,8 @@ export interface HappyAgentWorkspaceStore {
     botCreate(): void;
     /** Chooses whether the surface is making a task or a bot. */
     createKindUpdate(kind: HappyAgentCreateKind): void;
+    /** Edits the name of the bot being created. */
+    createBotNameUpdate(name: string): void;
     /** Chooses which project or worktree the session will start in. */
     createGroupUpdate(groupId: HappyAgentGroupId): void;
     /** Edits the first message. */
@@ -1256,7 +1260,7 @@ export interface HappyAgentWorkspaceStore {
     createServiceTierUpdate(serviceTier?: HappyAgentServiceTier): void;
     /**
      * Makes whatever the surface currently is: a task starts its session and
-     * sends the first message, a bot starts unnamed. Either way the
+     * sends the first message, a bot starts with its chosen name. Either way the
      * conversation it produced is reported through `conversationOpenRequested`,
      * so the window lands in what it just made.
      */
@@ -5149,6 +5153,7 @@ export function happyAgentWorkspaceStoreCreate(
                 // A task is what this surface is for nearly every time it is
                 // reached; a bot is the deliberate other choice.
                 kind: "task",
+                botName: "",
                 // What was written the last time this was put down without
                 // starting anything. Usually empty; only a session actually
                 // starting clears it.
@@ -5160,9 +5165,14 @@ export function happyAgentWorkspaceStoreCreate(
         },
         createKindUpdate(kind) {
             if (!create || create.submitting || create.kind === kind) return;
-            // Keep the task draft while switching; an error belongs only to
+            // Keep both drafts while switching; an error belongs only to
             // the kind of creation that failed.
             create = { ...create, kind, error: undefined };
+            recompute();
+        },
+        createBotNameUpdate(botName) {
+            if (!create || create.submitting) return;
+            create = { ...create, botName };
             recompute();
         },
         createGroupUpdate(groupId) {
@@ -5183,20 +5193,22 @@ export function happyAgentWorkspaceStoreCreate(
             const pending = create;
             if (!pending || pending.submitting) return;
             const text = pending.text.trim();
+            const botName = pending.botName.trim();
             const groupId = pending.groupId;
             const instance = createInstance;
             // The one act this submit performs, or nothing at all. A surface
             // with nothing to say and nowhere to run is not a session waiting to
-            // be started. A bot needs no draft: its first message names it.
+            // be started. A bot requires a deliberate name.
             let commit: (() => Promise<void>) | undefined;
             if (pending.kind === "bot") {
+                if (botName.length === 0) return;
                 commit = async () => {
                     // The bot's one conversation is where the reader wanted
                     // to end up: it is what they will say the first thing to.
-                    const location = await list.botCreate();
+                    const location = await list.botCreate(botName);
                     if (instance !== createInstance) return;
                     output({ type: "conversationOpenRequested", location });
-                    if (create) create = { ...create, submitting: false };
+                    if (create) create = { ...create, botName: "", submitting: false };
                 };
             } else if (text.length > 0 && groupId !== undefined) {
                 commit = async () => {

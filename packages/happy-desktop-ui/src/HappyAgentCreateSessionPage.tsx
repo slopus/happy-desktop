@@ -15,6 +15,7 @@ import { LottieScene } from "./LottieScene";
 import { ScrollArea, ScrollbarTracks, useScrollbarController } from "./Scrollbar";
 import { SegmentedControl } from "./SegmentedControl";
 import { Select, type SelectOption } from "./Select";
+import { TextField } from "./TextField";
 
 /** What the surface is titled, by what it is currently making. */
 const KIND_TITLE: Record<HappyAgentCreateKind, string> = {
@@ -47,6 +48,8 @@ export interface HappyAgentCreateSessionDestination {
 export type HappyAgentCreateSessionPageProps = {
     /** Which of the two things this surface is currently making. */
     kind: HappyAgentCreateKind;
+    /** The chosen bot name. Owned by the caller and kept beside the task draft. */
+    botName: string;
     /** Every project and worktree offered, in the order the sidebar lists them. */
     destinations: readonly HappyAgentCreateSessionDestination[];
     /** The one chosen; absent while the machine has offered nothing to choose. */
@@ -64,6 +67,7 @@ export type HappyAgentCreateSessionPageProps = {
     /** Why the draft cannot currently be submitted to its Happy Agent. */
     submitDisabledReason?: string;
     onKindSelect: (kind: HappyAgentCreateKind) => void;
+    onBotNameChange: (name: string) => void;
     onDestinationSelect: (id: string) => void;
     onTextChange: (text: string) => void;
     onModelChange: (selection: HappyAgentModelSelection) => void;
@@ -102,9 +106,9 @@ function destinationDetail(
  *
  * The column opens with the mark and the title, because arriving somewhere
  * should say where you are, and then a two-way choice of what to make. A task is
- * work in a project that ends; a bot is a colleague whose name comes from its
- * first message. Switching between them preserves the task draft; the bot
- * opens an empty conversation without a naming form.
+ * work in a project that ends; a bot is a colleague with a chosen name.
+ * Switching between them preserves both drafts; the bot opens an empty
+ * conversation with that name.
  *
  * Beyond that the surface stays empty on purpose: no toolbar, no list of what
  * the window was showing a moment ago. The column is capped at 640px, because a
@@ -116,8 +120,8 @@ function destinationDetail(
  *
  * Props only, and every state is directly renderable: either tab, empty,
  * written, a task too long for the field, a machine still reading its projects,
- * a machine with none, a start in flight, and a start that failed. The task draft
- * belongs to the caller, so navigating away and back preserves it.
+ * a machine with none, a start in flight, and a start that failed. Both drafts
+ * belong to the caller, so navigating away and back preserves them.
  */
 export function HappyAgentCreateSessionPage(props: HappyAgentCreateSessionPageProps) {
     const scrollbarController = useScrollbarController("vertical");
@@ -143,9 +147,11 @@ export function HappyAgentCreateSessionPage(props: HappyAgentCreateSessionPagePr
     const menus = props.menus;
     const bot = props.kind === "bot";
     const chosen = props.destinations.find((destination) => destination.id === props.destinationId);
-    // A bot starts empty; its first message supplies the naming context.
+    // A bot needs a name; a task needs a first message and a destination.
     const submittable =
-        (bot || (props.text.trim().length > 0 && chosen !== undefined)) &&
+        (bot
+            ? props.botName.trim().length > 0
+            : props.text.trim().length > 0 && chosen !== undefined) &&
         !submitting &&
         props.submitDisabledReason === undefined;
     const destinationOptions: SelectOption[] = props.destinations.map((destination) => ({
@@ -257,12 +263,25 @@ export function HappyAgentCreateSessionPage(props: HappyAgentCreateSessionPagePr
                             className="happy-agent-create-session__bot"
                             data-happy-desktop-ui="happy-agent-create-session-bot"
                         >
+                            <TextField
+                                autoFocus
+                                data-testid="happy-agent-create-session-bot-name"
+                                disabled={submitting}
+                                fullWidth
+                                label="Name"
+                                onSubmit={() => {
+                                    if (submittable) props.onSubmit();
+                                }}
+                                onValueChange={props.onBotNameChange}
+                                placeholder="What should it be called?"
+                                value={props.botName}
+                            />
                             <p
                                 className="happy-agent-create-session__note"
                                 data-happy-desktop-ui="happy-agent-create-session-note"
                             >
-                                A bot is one permanent conversation with a folder of its own. Tell
-                                it what to do in your first message and it will name itself.
+                                A bot is one permanent conversation with a folder of its own. Choose
+                                a name, then tell it what to do in your first message.
                             </p>
                         </div>
                     ) : (
