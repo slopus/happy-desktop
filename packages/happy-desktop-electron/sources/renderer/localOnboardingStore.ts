@@ -32,7 +32,7 @@ export interface LocalOnboardingViewSnapshot {
     readonly onboarding?: LocalOnboardingSnapshot;
     readonly daemon?: DesktopDaemonSnapshot;
     readonly runtime?: DesktopRuntimeSnapshot;
-    /** Successful inference and current credential discovery for the installed CLIs. */
+    /** Successful inference and current discovery of system provider credentials. */
     readonly providerAuthentication: ProviderAuthenticationSnapshot;
     /** The renderer has asked the verified first release to start. */
     readonly agentStarting: boolean;
@@ -470,15 +470,11 @@ export function localOnboardingStoreCreate(
             verificationRunning = false;
         }
         const assistants = snapshot.onboarding?.assistants ?? [];
-        const binaries = assistants.filter((assistant) => assistant.status === "found");
         const first = snapshot.providerAuthentication.key !== key;
         const connectionChanged = verificationConnectionId !== runtime.connectionId;
         if (connectionChanged) {
             verificationConnectionId = runtime.connectionId;
             verificationRetryAt.clear();
-        }
-        for (const assistant of assistants) {
-            if (assistant.status === "missing") verificationRetryAt.delete(assistant.id);
         }
         const previous = connectionChanged ? { complete: false } : snapshot.providerAuthentication;
         const generation = ++verificationGeneration;
@@ -490,16 +486,16 @@ export function localOnboardingStoreCreate(
             publish({
                 ...snapshot,
                 providerAuthentication: {
-                    claude: binaryAuthenticationInitial(assistants, "claude", previous),
-                    codex: binaryAuthenticationInitial(assistants, "codex", previous),
-                    complete: binaries.length === 0,
-                    grok: binaryAuthenticationInitial(assistants, "grok", previous),
+                    claude: assistantAuthenticationInitial(assistants, "claude", previous),
+                    codex: assistantAuthenticationInitial(assistants, "codex", previous),
+                    complete: assistants.length === 0,
+                    grok: assistantAuthenticationInitial(assistants, "grok", previous),
                     key,
                 },
             });
-        // There is no asynchronous provider check to wait for when every CLI
-        // is missing, so the automatic pass finishes in this same call.
-        if (binaries.length === 0) return;
+        // A GUI process may not have a native CLI's install directory on PATH.
+        // The daemon can still reuse its credentials, so probe every provider.
+        if (assistants.length === 0) return;
 
         const client = new HappyAgentClient({
             endpoint: runtime.activeTarget.happyAgentHttpUrl,
@@ -532,7 +528,7 @@ export function localOnboardingStoreCreate(
             .catch(() => undefined)
             .then((scan) =>
                 Promise.all(
-                    binaries.map(async (assistant) => {
+                    assistants.map(async (assistant) => {
                         if (!current()) return;
                         const credentials = scan?.providers.find(
                             (provider) => provider.providerId === assistant.id,
@@ -923,24 +919,24 @@ function assistantsProject(
     assistants: readonly LocalAssistantState[] | undefined,
     authentication: ProviderAuthenticationSnapshot,
 ): readonly LocalOnboardingAssistant[] {
-    return (assistants ?? []).map((assistant) => ({
-        authentication:
-            assistant.status === "missing"
-                ? "unavailable"
-                : (authenticationFor(authentication, assistant.id) ?? "checking"),
-        ...(assistant.command ? { command: assistant.command } : {}),
-        id: assistant.id,
-        status: assistant.status,
-    }));
+    return (assistants ?? []).map((assistant) => {
+        const result = authenticationFor(authentication, assistant.id) ?? "checking";
+        return {
+            authentication:
+                result === "invalid" && assistant.status === "missing" ? "unavailable" : result,
+            ...(assistant.command ? { command: assistant.command } : {}),
+            id: assistant.id,
+            status: assistant.status,
+        };
+    });
 }
 
-function binaryAuthenticationInitial(
+function assistantAuthenticationInitial(
     assistants: readonly LocalAssistantState[],
     id: LocalAssistantState["id"],
     previous: ProviderAuthenticationSnapshot,
 ): ProviderAuthenticationResult | undefined {
-    if (!assistants.some((assistant) => assistant.id === id && assistant.status === "found"))
-        return undefined;
+    if (!assistants.some((assistant) => assistant.id === id)) return undefined;
     return authenticationFor(previous, id) === "valid" ? "valid" : "checking";
 }
 
