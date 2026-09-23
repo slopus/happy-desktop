@@ -50,6 +50,7 @@
 @import "./styles/segmented-control.css";
 @import "./styles/audience-toggle.css";
 @import "./styles/dev-build-menu.css";
+@import "./styles/sidebar-keep-awake-menu.css";
 @import "./styles/live-performance.css";
 @import "./styles/banner.css";
 @import "./styles/empty-state.css";

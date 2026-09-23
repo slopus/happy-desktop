@@ -75,6 +75,8 @@ import type {
     HappyAgentWorktreeId,
     HappyAgentLinkOpenPlacement,
     HappyAgentSettingsStore,
+    KeepAwakeMode,
+    KeepAwakeStore,
 } from "happy-desktop-state";
 import {
     HAPPY_AGENT_PANEL_FILE_VIEW_ID,
@@ -92,6 +94,7 @@ import {
     happyAgentOwnerAuthor,
     happyAgentWindowStoreNoop,
     happyAgentSettingsStoreCreate,
+    keepAwakeStoreCreate,
     titleShimmerStoreNoop,
     type HappyAgentConversationSource,
 } from "happy-desktop-state";
@@ -424,6 +427,12 @@ export interface AppHappyAgentViewProps {
      */
     settings?: HappyAgentSettingsStore;
     /**
+     * Whether this computer is held out of sleep, behind the footer's
+     * keep-awake control. A host that cannot hold the machine awake supplies
+     * none, and the footer shows no control rather than one wired to nothing.
+     */
+    keepAwake?: KeepAwakeStore;
+    /**
      * Where this surface is running. In the Electron shell the window has no
      * native title bar, so the shell owns the traffic-light inset and the drag
      * lanes and the sidebar heading gives its space up to them; the browser
@@ -597,6 +606,12 @@ interface OpenGroup {
 
 /** What the window reads when the host supplies no settings store: the product defaults, unchanging. */
 const settingsStoreNone = happyAgentSettingsStoreCreate();
+/**
+ * What the footer reads when the host supplies no keep-awake store: a choice of
+ * `off` that never changes. The constructor opens nothing, so one shared
+ * instance costs nothing and keeps the hook order the same either way.
+ */
+const keepAwakeStoreNone = keepAwakeStoreCreate({ mode: "off" });
 
 const PANEL_TOGGLE_HINT = {
     aria: `${APP_SHORTCUTS.panelToggle.aria} ${APP_SHORTCUTS.panelToggleAlternate.aria}`,
@@ -1802,6 +1817,14 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
         settingsStore.get,
         settingsStore.get,
     );
+    // Likewise for the footer's keep-awake control, which can be absent
+    // without the hook order depending on it.
+    const keepAwakeStore = props.keepAwake ?? keepAwakeStoreNone;
+    const keepAwake = useSyncExternalStore(
+        keepAwakeStore.subscribe,
+        keepAwakeStore.get,
+        keepAwakeStore.get,
+    );
     const titleShimmerStore = props.titleShimmer ?? titleShimmerStoreNoop;
     const titleShimmerEnabled = useSyncExternalStore(
         titleShimmerStore.subscribe,
@@ -1987,6 +2010,16 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                         ) : undefined
                     }
                     onAppearanceToggle={() => props.appearance.appearanceToggle()}
+                    {...(props.keepAwake
+                        ? {
+                              keepAwake: {
+                                  active: keepAwake.active,
+                                  mode: keepAwake.mode,
+                                  onModeSelect: (mode: KeepAwakeMode) =>
+                                      props.keepAwake?.modeSelect(mode),
+                              },
+                          }
+                        : {})}
                     onSettingsOpen={props.onSettingsOpen}
                 />
             }

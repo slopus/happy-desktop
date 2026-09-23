@@ -64,6 +64,7 @@ export type IconName =
     | "edit"
     | "sun"
     | "moon"
+    | "coffee"
     | "sidebar-collapse"
     | "sidebar-expand"
     | "panel-collapse"
@@ -204,6 +205,9 @@ const glyphs: Record<IconName, IconGlyph> = {
     edit: { set: "ionicons", name: "create-outline" },
     sun: { set: "ionicons", name: "sunny-outline" },
     moon: { set: "ionicons", name: "moon-outline" },
+    // A cup of coffee: the sign every keep-awake utility has used for keeping a
+    // machine up, so the footer control reads without a label.
+    coffee: { set: "ionicons", name: "cafe-outline" },
     // The panel and its column, with no arrow in it: the control says what the
     // window is made of, and the button's label says which way it goes. The
     // collapse name shows the column open, because that is the state you are in

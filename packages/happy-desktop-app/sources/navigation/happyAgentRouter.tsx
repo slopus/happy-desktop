@@ -20,6 +20,7 @@ import type {
     GptLiveStore,
     HappyAgentGroupId,
     UsageAnalyticsStore,
+    KeepAwakeStore,
     HappyAgentFileTabKind,
     HappyAgentNavigationOrderStore,
     HappyAgentSidebarCollapseStore,
@@ -114,6 +115,12 @@ export interface HappyAgentRouterContext {
     readonly usageAnalytics?: UsageAnalyticsStore;
     /** Window-owned GPT-Live opt-in; unrelated to coding-provider settings. */
     readonly gptLive?: GptLiveStore;
+    /**
+     * Whether this computer is held out of sleep, and the choice behind it.
+     * Absent in a host that cannot hold the machine awake, which leaves the
+     * footer without the control rather than with one wired to nothing.
+     */
+    readonly keepAwake?: KeepAwakeStore;
     /** Window-local preference for animated activity titles. */
     readonly titleShimmer?: TitleShimmerStore;
     /**
@@ -473,6 +480,7 @@ function HappyAgentWorkspaceLayout(
             {...(context.daemon ? { daemon: context.daemon } : {})}
             {...(context.experiments ? { experiments: context.experiments } : {})}
             {...(context.gptLive ? { gptLive: context.gptLive } : {})}
+            {...(context.keepAwake ? { keepAwake: context.keepAwake } : {})}
             {...(context.titleShimmer ? { titleShimmer: context.titleShimmer } : {})}
             {...(context.commandPalette ? { commandPalette: context.commandPalette } : {})}
             {...(context.navigationOrder ? { navigationOrder: context.navigationOrder } : {})}
@@ -594,6 +602,7 @@ function HappyAgentSettingsRoute() {
             {...(context.experiments ? { experiments: context.experiments } : {})}
             {...(context.usageAnalytics ? { usageAnalytics: context.usageAnalytics } : {})}
             {...(context.gptLive ? { gptLive: context.gptLive } : {})}
+            {...(context.keepAwake ? { keepAwake: context.keepAwake } : {})}
             onCategorySelect={(section) =>
                 void navigate({ params: { section }, to: "/settings/$section" })
             }

@@ -4,6 +4,7 @@ import { Box } from "./Box";
 import { Button } from "./Button";
 import { Icon } from "./Icon";
 import { Spinner } from "./Spinner";
+import { SidebarKeepAwakeMenu, type SidebarKeepAwakeMode } from "./SidebarKeepAwakeMenu";
 
 export type SidebarFooterProps = {
     /**
@@ -46,6 +47,16 @@ export type SidebarFooterProps = {
     /** The appearance currently rendered; picks the toggle's icon and label. */
     appearance: "dark" | "light";
     onAppearanceToggle: () => void;
+    /**
+     * The keep-awake control, pinned after the appearance toggle. Omit it on a
+     * host that cannot hold the machine out of sleep — a browser tab, say — and
+     * the control is genuinely absent rather than wired to nothing.
+     */
+    keepAwake?: {
+        readonly mode: SidebarKeepAwakeMode;
+        readonly active: boolean;
+        readonly onModeSelect: (mode: SidebarKeepAwakeMode) => void;
+    };
     /** Extra trailing controls, placed before the appearance toggle. */
     actions?: ReactNode;
     /** Window voice control, immediately beside Settings. */
@@ -198,6 +209,13 @@ export function SidebarFooter(props: SidebarFooterProps) {
                 size="small"
                 variant="ghost"
             />
+            {props.keepAwake ? (
+                <SidebarKeepAwakeMenu
+                    active={props.keepAwake.active}
+                    mode={props.keepAwake.mode}
+                    onModeSelect={props.keepAwake.onModeSelect}
+                />
+            ) : null}
         </Box>
     );
 }

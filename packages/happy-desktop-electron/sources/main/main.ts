@@ -5,6 +5,7 @@ import {
     ipcMain,
     Menu,
     nativeTheme,
+    powerSaveBlocker,
     screen,
     session as electronSession,
     shell,
@@ -1750,6 +1751,25 @@ void app
             if (!presenting || presenting.webContents !== event.sender) return;
             const count = dockUnreadCountRead(raw);
             if (count !== undefined) dockBadgeApply(count);
+        });
+        // One-way like the Dock mark: the window says whether the machine should
+        // stay up and the shell holds or releases the sleep assertion. Only the
+        // presented window may say so, and a non-boolean is dropped rather than
+        // guessed. `prevent-app-suspension` keeps the system running while
+        // letting the display sleep, which is what "keep the computer awake"
+        // means on every platform Electron runs on; the assertion dies with the
+        // process, so quitting never leaves a machine that cannot sleep.
+        let keepAwakeBlocker: number | undefined;
+        ipcMain.on(desktopIpc.keepAwakeSet, (event, raw: unknown) => {
+            const presenting = windowLifecycle.get();
+            if (!presenting || presenting.webContents !== event.sender) return;
+            if (typeof raw !== "boolean") return;
+            if (raw && keepAwakeBlocker === undefined)
+                keepAwakeBlocker = powerSaveBlocker.start("prevent-app-suspension");
+            else if (!raw && keepAwakeBlocker !== undefined) {
+                powerSaveBlocker.stop(keepAwakeBlocker);
+                keepAwakeBlocker = undefined;
+            }
         });
         ipcMain.handle(desktopIpc.mediaPreviewOpen, (event, raw: unknown) => {
             // Only the window this shell is presenting opens a preview window, so

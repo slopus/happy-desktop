@@ -7,6 +7,7 @@ import type {
     DesktopConfig,
     DesktopDefaultModel,
     DesktopLinkOpenPlacement,
+    DesktopKeepAwakeMode,
     DesktopModelIdentity,
     DesktopModelPreference,
     DesktopPermissionMode,
@@ -116,6 +117,7 @@ export function desktopConfigValidate(candidate: unknown): DesktopConfig {
         "defaultEffort",
         "defaultModel",
         "defaultPermissionMode",
+        "keepAwake",
         "lastPickedModel",
         "linkOpen",
         "modelPreferences",
@@ -152,6 +154,8 @@ export function desktopConfigValidate(candidate: unknown): DesktopConfig {
         candidate.defaultPermissionMode === undefined
             ? "auto"
             : permissionModeParse(candidate.defaultPermissionMode);
+    const keepAwake =
+        candidate.keepAwake === undefined ? undefined : keepAwakeModeParse(candidate.keepAwake);
     const lastPickedModel =
         candidate.lastPickedModel === undefined
             ? undefined
@@ -171,6 +175,7 @@ export function desktopConfigValidate(candidate: unknown): DesktopConfig {
         (candidate.defaultModel !== undefined && !defaultModel) ||
         !defaultEffort ||
         !defaultPermissionMode ||
+        (candidate.keepAwake !== undefined && !keepAwake) ||
         (candidate.lastPickedModel !== undefined && !lastPickedModel) ||
         (candidate.linkOpen !== undefined && !linkOpen) ||
         !scrollbarVisibility
@@ -192,6 +197,7 @@ export function desktopConfigValidate(candidate: unknown): DesktopConfig {
         defaultEffort,
         ...(defaultModel ? { defaultModel } : {}),
         defaultPermissionMode,
+        ...(keepAwake ? { keepAwake } : {}),
         ...(lastPickedModel ? { lastPickedModel } : {}),
         ...(linkOpen ? { linkOpen } : {}),
         modelPreferences,
@@ -210,6 +216,10 @@ function appearanceModeParse(value: unknown): DesktopAppearanceMode | undefined 
 
 function linkOpenPlacementParse(value: unknown): DesktopLinkOpenPlacement | undefined {
     return value === "panel" || value === "browser" ? value : undefined;
+}
+
+function keepAwakeModeParse(value: unknown): DesktopKeepAwakeMode | undefined {
+    return value === "on" || value === "agent" || value === "off" ? value : undefined;
 }
 
 function scrollbarVisibilityParse(value: unknown): DesktopScrollbarVisibility | undefined {
