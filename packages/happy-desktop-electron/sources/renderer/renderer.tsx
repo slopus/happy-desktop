@@ -18,6 +18,8 @@ import {
 import {
     HAPPY_AGENT_DEFAULT_THINKING_LEVEL,
     appearanceStoreCreate,
+    keepAwakeStoreCreate,
+    type KeepAwakeStore,
     commandPaletteStoreCreate,
     experimentsStoreCreate,
     titleShimmerStoreCreate,
@@ -67,6 +69,7 @@ import {
 } from "../shared/desktopContract";
 import { desktopStartRequestFromValues, desktopStartupValues } from "./desktopStartupModel";
 import { dockUnreadPublish } from "./dockUnread";
+import { happyAgentDirectoryAgentWorking, keepAwakePublish } from "./keepAwake";
 import { desktopRuntimeStoreCreate, type DesktopRuntimeStore } from "./runtimeStore";
 import {
     localOnboardingReachedStage,
@@ -279,6 +282,7 @@ function HappyAgentBoundary(props: {
     htmlPreview?: HtmlPreviewRenderer;
     mediaWindow?: MediaWindowOpener;
     experiments: ExperimentsStore;
+    keepAwake: KeepAwakeStore;
     platform: "desktop" | "web";
     router: HappyAgentRouter;
     navigationOrder: HappyAgentNavigationOrderStore;
@@ -323,6 +327,7 @@ function HappyAgentBoundary(props: {
                       }
                     : {}),
                 experiments: props.experiments,
+                keepAwake: props.keepAwake,
                 navigationOrder: props.navigationOrder,
                 sidebarCollapse: props.sidebarCollapse,
                 sidebarVisibility: props.sidebarVisibility,
@@ -467,6 +472,7 @@ interface DesktopRendererProps {
     mediaWindow?: MediaWindowOpener;
     bridge: HappyDesktopBridge;
     experiments: ExperimentsStore;
+    keepAwake: KeepAwakeStore;
     navigationOrder: HappyAgentNavigationOrderStore;
     sidebarCollapse: HappyAgentSidebarCollapseStore;
     sidebarVisibility: HappyAgentSidebarVisibilityStore;
@@ -624,6 +630,7 @@ function DesktopScreens(props: DesktopRendererProps) {
                                 commandPalette={ui.commandPalette}
                                 connectionOnboarding
                                 experiments={props.experiments}
+                                keepAwake={props.keepAwake}
                                 htmlPreview={props.htmlPreview}
                                 mediaWindow={props.mediaWindow}
                                 navigationOrder={ui.navigationOrder}
@@ -945,6 +952,7 @@ function DesktopRuntimeContent(
                     htmlPreview={props.htmlPreview}
                     mediaWindow={props.mediaWindow}
                     experiments={props.experiments}
+                    keepAwake={props.keepAwake}
                     navigationOrder={props.navigationOrder}
                     sidebarCollapse={props.sidebarCollapse}
                     sidebarVisibility={props.sidebarVisibility}
@@ -1309,6 +1317,24 @@ if (mediaPreviewBridge) {
         appDisposers.push(
             dockUnreadPublish(happyAgents, (count) => desktopBridge.dockUnreadSet(count)),
         );
+        // Whether this computer is held out of sleep is likewise a fact about
+        // the whole window: the choice is the window's, and what the agents are
+        // doing is read from the same directory. The choice is remembered in the
+        // desktop document beside the appearance; the resolved answer goes to
+        // the shell, which is the only thing that can act on it.
+        const keepAwake = keepAwakeStoreCreate({
+            ...(preferences.initialKeepAwake === undefined
+                ? {}
+                : { mode: preferences.initialKeepAwake }),
+            agentWorking: {
+                get: () => happyAgentDirectoryAgentWorking(happyAgents.get()),
+                subscribe: happyAgents.subscribe,
+            },
+        });
+        appDisposers.push(
+            keepAwake.subscribe(() => preferences.keepAwakeChanged(keepAwake.get().mode)),
+        );
+        appDisposers.push(keepAwakePublish(keepAwake, desktopBridge));
         // This window renders the Happy Agent tree directly rather than through `App`, so
         // it has to start the highlighting pool itself: without this the file
         // viewer and every diff in the primary desktop surface tokenize on the
@@ -1333,6 +1359,7 @@ if (mediaPreviewBridge) {
                             browserLocal ? undefined : desktopMediaWindowOpen(desktopBridge)
                         }
                         experiments={experiments}
+                        keepAwake={keepAwake}
                         navigationOrder={navigationOrder}
                         sidebarCollapse={sidebarCollapse}
                         sidebarVisibility={sidebarVisibility}

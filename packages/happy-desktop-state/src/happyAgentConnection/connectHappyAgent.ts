@@ -45,6 +45,7 @@ import {
     projectGroups,
     projectNumericIdentity,
     projectSession,
+    projectSlice,
     replaceResource,
     type SessionProjectionInput,
     type TranscriptMessage,
@@ -61,7 +62,9 @@ import type {
     HappyAgentConnection,
     HappyAgentGroupsSubscriptionOptions,
     HappyAgentSessionSubscriptionOptions,
+    HappyAgentSlicesSubscriptionOptions,
     ServerCompatibility,
+    WorkspaceSlice,
 } from "./types.js";
 
 const INITIAL_RECONNECT_MS = 250;
@@ -150,6 +153,24 @@ interface SessionEntry {
 interface GroupsSubscriber extends HappyAgentGroupsSubscriptionOptions {
     closed: boolean;
 }
+
+interface SlicesSubscriber extends HappyAgentSlicesSubscriptionOptions {
+    closed: boolean;
+}
+
+/**
+ * One workspace's slices as this connection knows them. `slices` stays absent
+ * until the daemon has answered once, so a subscriber can tell "none" from
+ * "not read yet"; `loading` is the read in flight, shared by everyone asking.
+ */
+interface SlicesEntry {
+    slices: readonly WorkspaceSlice[] | undefined;
+    loading: Promise<void> | undefined;
+    readonly subscribers: Set<SlicesSubscriber>;
+}
+
+/** How many slices one workspace keeps, matching the daemon's own retention. */
+const SLICES_PER_WORKSPACE_MAX = 100;
 
 interface RecentEvent {
     event: HappyAgentEvent;
@@ -249,6 +270,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
     const sessionCreations = new Map<string, Promise<void>>();
     const sessionMutationCounts = new Map<string, number>();
     const gitStates = new Map<string, GitSnapshotState>();
+    const slicesEntries = new Map<string, SlicesEntry>();
     const processOwners = new Map<string, string>();
     let config: DaemonConfig | undefined;
     let currentUserId: string | undefined;
@@ -368,6 +390,71 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         for (const subscriber of groupSubscribers) {
             if (subscriber.closed) continue;
             for (const delta of deltas) subscriber.onDelta?.(delta);
+        }
+    };
+
+    const publishSlices = (entry: SlicesEntry): void => {
+        if (entry.slices === undefined) return;
+        for (const subscriber of entry.subscribers) {
+            if (!subscriber.closed) subscriber.onChange(entry.slices);
+        }
+    };
+
+    /**
+     * Drops one slice from what a workspace is known to hold. The daemon's
+     * answer to a removal and the `slice.deleted` that follows both land here,
+     * so whichever comes second finds nothing to do.
+     */
+    const slicesForget = (workspaceId: string, sliceId: string): void => {
+        const entry = slicesEntries.get(workspaceId);
+        if (entry?.slices === undefined) return;
+        if (!entry.slices.some((known) => known.id === sliceId)) return;
+        entry.slices = entry.slices.filter((known) => known.id !== sliceId);
+        publishSlices(entry);
+    };
+
+    /**
+     * Reads one workspace's slices once, sharing the read among everyone
+     * asking. A daemon that cannot answer — one too old to know slices, or a
+     * workspace it has none for — is a workspace with no slices, which is
+     * published as such rather than left unanswered: nothing downstream can
+     * offer a slice it has not been told about, and "none" is the honest state
+     * of a checkout no agent has sliced yet.
+     */
+    const slicesLoad = (workspaceId: string, entry: SlicesEntry): Promise<void> => {
+        if (entry.loading !== undefined) return entry.loading;
+        const loading = (async (): Promise<void> => {
+            const response = await optional(() =>
+                client.listSlices(workspaceId, {
+                    signal: deadlineSignal(SNAPSHOT_RESPONSE_TIMEOUT_MS),
+                }),
+            );
+            if (rootController.signal.aborted) return;
+            if (slicesEntries.get(workspaceId) !== entry) return;
+            entry.slices = (response?.slices ?? [])
+                .map(projectSlice)
+                .sort((left, right) => right.createdAt - left.createdAt)
+                .slice(0, SLICES_PER_WORKSPACE_MAX);
+            publishSlices(entry);
+        })().finally(() => {
+            if (entry.loading === loading) entry.loading = undefined;
+        });
+        entry.loading = loading;
+        return loading;
+    };
+
+    /**
+     * After a reconciliation the journal may have skipped a `slice.created`,
+     * so every workspace somebody is still following is read again, and the
+     * ones nobody follows are forgotten rather than kept stale.
+     */
+    const slicesReconcile = (): void => {
+        for (const [workspaceId, entry] of slicesEntries) {
+            if (entry.subscribers.size === 0) {
+                slicesEntries.delete(workspaceId);
+                continue;
+            }
+            background(slicesLoad(workspaceId, entry));
         }
     };
 
@@ -1059,6 +1146,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                 }
             }
             await Promise.all(activeReconciliations);
+            slicesReconcile();
             const buffered = resyncBufferedEvents.splice(0);
             // The bootstrap snapshot already contains every change at or before
             // its cursor, and the buffer may hold redeliveries; replay only
@@ -1575,6 +1663,22 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                     paths: event.payload.paths,
                 };
                 publishGroupDeltas([delta]);
+                return;
+            }
+            case "slice.created": {
+                const slice = projectSlice(event.payload.slice);
+                const entry = slicesEntries.get(slice.workspaceId);
+                // A workspace nobody has asked about is read whole when somebody
+                // does; one still being read is caught up by that read, which
+                // the daemon answers from after this event was journaled.
+                if (entry === undefined || entry.slices === undefined) return;
+                if (entry.slices.some((known) => known.id === slice.id)) return;
+                entry.slices = [slice, ...entry.slices].slice(0, SLICES_PER_WORKSPACE_MAX);
+                publishSlices(entry);
+                return;
+            }
+            case "slice.deleted": {
+                slicesForget(event.payload.workspaceId, event.payload.sliceId);
                 return;
             }
             case "profile.updated":
@@ -2406,6 +2510,27 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                 },
             };
         },
+        connectSlices(subscription) {
+            if (closed) throw new Error("This Happy Agent connection is closed.");
+            const { workspaceId } = subscription;
+            let entry = slicesEntries.get(workspaceId);
+            if (entry === undefined) {
+                entry = { slices: undefined, loading: undefined, subscribers: new Set() };
+                slicesEntries.set(workspaceId, entry);
+            }
+            const known = entry;
+            const subscriber: SlicesSubscriber = { ...subscription, closed: false };
+            known.subscribers.add(subscriber);
+            if (known.slices === undefined) background(slicesLoad(workspaceId, known));
+            else subscriber.onChange(known.slices);
+            return {
+                slices: () => known.slices,
+                close: () => {
+                    subscriber.closed = true;
+                    known.subscribers.delete(subscriber);
+                },
+            };
+        },
         connectSession(subscription) {
             if (closed) throw new Error("This Happy Agent connection is closed.");
             let entry = sessions.get(subscription.sessionId);
@@ -2636,6 +2761,18 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                 },
                 undefined,
                 `workspace:${workspaceId}`,
+            );
+        },
+        deleteSlice(workspaceId, sliceId) {
+            const mutationId = nextId();
+            return mutation(
+                "delete_slice",
+                mutationId,
+                () => client.deleteSlice(workspaceId, sliceId, { signal: rootController.signal }),
+                () => slicesForget(workspaceId, sliceId),
+                undefined,
+                undefined,
+                `slice:${sliceId}`,
             );
         },
         archiveWorkspace(_projectId, workspaceId) {
@@ -3412,6 +3549,8 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
             pendingDraftSaves.clear();
             publishConnection("closed");
             groupSubscribers.clear();
+            for (const entry of slicesEntries.values()) entry.subscribers.clear();
+            slicesEntries.clear();
             for (const entry of sessions.values()) entry.subscribers.clear();
             sessions.clear();
             userSessions.clear();

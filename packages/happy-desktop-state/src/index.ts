@@ -12,6 +12,7 @@ export * from "./conversation/conversationSummary.js";
 export * from "./conversation/inlineImageSize.js";
 export * from "./conversation/loadable.js";
 export * from "./appearance/appearanceStore.js";
+export * from "./keepAwake/keepAwakeStore.js";
 export * from "./commandPalette/commandPaletteStore.js";
 export * from "./experiments/experimentsStore.js";
 export * from "./titleShimmer/titleShimmerStore.js";

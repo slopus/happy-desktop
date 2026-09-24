@@ -1,14 +1,29 @@
 import { type CSSProperties } from "react";
 import { ComposerAttachmentRemoveButton } from "./ComposerAttachmentRemoveButton";
+import { FilePathLabel } from "./FilePathLabel";
 import { Icon } from "./Icon";
+import { Octicon } from "./vectorIcons/VectorIcon";
 
-export type ComposerAttachmentPreviewKind = "file" | "image" | "video";
+export type ComposerAttachmentPreviewKind = "comments" | "file" | "image" | "video";
+
+/** One review note behind a `comments` chip, already said the way it reads. */
+export type ComposerAttachmentNote = {
+    id: string;
+    /** Where the note is attached, such as `line R16` or `this file`. */
+    place: string;
+    path: string;
+    /** Written before the file changed again, so its line has moved. */
+    stale?: boolean;
+    text: string;
+};
 
 export type ComposerAttachmentPreview = {
     detail?: string;
     id: string;
     kind: ComposerAttachmentPreviewKind;
     name: string;
+    /** What a `comments` chip is carrying, revealed under the pointer. */
+    notes?: readonly ComposerAttachmentNote[];
     url?: string;
 };
 
@@ -26,7 +41,8 @@ export type ComposerAttachmentPreviewsProps = {
 /**
  * Compact draft attachments shown above the composer's text. Media owns the
  * square when a preview URL exists; other files use the same footprint with a
- * document glyph and a bounded name.
+ * document glyph and a bounded name. Review notes have nothing to look at, so
+ * they take a pill that says how many are going rather than a preview square.
  */
 export function ComposerAttachmentPreviews(props: ComposerAttachmentPreviewsProps) {
     return (
@@ -44,9 +60,27 @@ export function ComposerAttachmentPreviews(props: ComposerAttachmentPreviewsProp
                     data-kind={item.kind}
                     key={item.id}
                     role="group"
-                    title={item.detail ? `${item.name} · ${item.detail}` : item.name}
+                    // A chip that shows its notes under the pointer has no use
+                    // for a native bubble arriving over them a moment later.
+                    title={
+                        item.kind === "comments"
+                            ? undefined
+                            : item.detail
+                              ? `${item.name} · ${item.detail}`
+                              : item.name
+                    }
                 >
-                    {item.kind === "image" && item.url ? (
+                    {item.kind === "comments" ? (
+                        <span
+                            className="happy-composer-attachments__comments"
+                            data-happy-desktop-ui="composer-attachment-comments"
+                        >
+                            <Octicon name="comment" size={14} />
+                            <span className="happy-composer-attachments__comments-label">
+                                {item.name}
+                            </span>
+                        </span>
+                    ) : item.kind === "image" && item.url ? (
                         <img
                             alt=""
                             className="happy-composer-attachments__media"
@@ -73,6 +107,33 @@ export function ComposerAttachmentPreviews(props: ComposerAttachmentPreviewsProp
                             <span className="happy-composer-attachments__name">{item.name}</span>
                         </span>
                     )}
+                    {item.kind === "comments" && item.notes && item.notes.length > 0 ? (
+                        <div
+                            className="happy-composer-attachments__notes"
+                            data-happy-desktop-ui="composer-attachment-notes"
+                            role="tooltip"
+                        >
+                            <div className="happy-composer-attachments__note-list">
+                                {item.notes.map((note) => (
+                                    <div className="happy-composer-attachments__note" key={note.id}>
+                                        <div className="happy-composer-attachments__note-where">
+                                            <Octicon name="file" size={12} />
+                                            <FilePathLabel
+                                                className="happy-composer-attachments__note-path"
+                                                path={note.path}
+                                            />
+                                            <span className="happy-composer-attachments__note-place">
+                                                {note.stale ? `${note.place} · moved` : note.place}
+                                            </span>
+                                        </div>
+                                        <div className="happy-composer-attachments__note-text">
+                                            {note.text}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    ) : null}
                     {item.kind === "video" ? (
                         <span
                             aria-hidden="true"

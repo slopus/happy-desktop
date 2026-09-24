@@ -1,0 +1,89 @@
+/*
+ * C-282 ReviewComment — one review note under the diff line it is about.
+ *
+ * It is slotted into the renderer's shadow tree but authored in the page, so
+ * these are ordinary rules and the theme reaches it like any other surface.
+ */
+
+.happy-review-comment,
+.happy-review-comment * {
+    box-sizing: border-box;
+}
+
+.happy-review-comment {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 6px 12px;
+    padding: 10px 12px;
+    border: 1px solid var(--divider);
+    border-radius: var(--happy-radius-md);
+    background: var(--surface-high);
+    color: var(--text);
+    font-family: var(--happy-font-ui);
+    font-synthesis: none;
+}
+
+/* A note written against text that has moved is still worth reading and still
+   worth sending, so it is dimmed rather than removed or recoloured as an
+   error: nothing went wrong, the file simply moved on. */
+.happy-review-comment[data-stale] {
+    border-style: dashed;
+}
+
+.happy-review-comment[data-stale] .happy-review-comment__place {
+    color: var(--warning);
+}
+
+.happy-review-comment__header {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 8px;
+}
+
+.happy-review-comment__author {
+    flex: none;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 16px;
+}
+
+/* Pushed to the trailing edge so the identity and the address sit at opposite
+   ends of one line, which is how every review tool states them. */
+.happy-review-comment__place {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 16px;
+    text-align: right;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-review-comment__field {
+    width: 100%;
+}
+
+.happy-review-comment__actions {
+    display: flex;
+    flex: none;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.happy-review-comment__text {
+    margin: 0;
+    font-size: 12px;
+    line-height: 18px;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+/* The gutter affordance has no rule here on purpose: the renderer draws its own
+   button, a filled chip with a plus sitting over the line number, and reports
+   where it was pressed. Restyling it from out here would only put a second
+   answer beside the one the diff already gives. */

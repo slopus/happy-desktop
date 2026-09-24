@@ -8,6 +8,7 @@ import {
     composerStoreCreate,
     type ComposerAttachment,
     type ComposerCommand,
+    type ComposerReviewComment,
     type ComposerSnapshot,
     type ComposerStore,
 } from "../modules/composer/composerState.js";
@@ -34,6 +35,7 @@ import type {
 } from "./happyAgentChatStore.js";
 import {
     happyAgentAttachmentTextAppend,
+    happyAgentCommentsTextAppend,
     happyAgentComposerAttachmentCreate,
     happyAgentComposerAttachmentPreviewRelease,
     happyAgentComposerAttachmentsValidate,
@@ -97,6 +99,8 @@ import type {
     HappyAgentSessionCreateInput,
     HappyAgentSessionId,
     HappyAgentSessionUsage,
+    HappyAgentSlice,
+    HappyAgentSliceId,
     SubagentSummary,
     HappyAgentTask,
     HappyAgentThinkingLevel,
@@ -250,6 +254,31 @@ export interface HappyAgentConversationSnapshot {
  */
 export type HappyAgentFileTabKind = "file" | "diff" | "media" | "document";
 
+/**
+ * A run of lines in one file, counted from 1 and including both ends — the way
+ * every editor, every review, and every agent writing `Store.ts:120-148` counts
+ * them. A single line is a range whose ends are equal, so nothing downstream
+ * has to tell one line apart from several.
+ */
+export interface HappyAgentFileLineRange {
+    readonly startLine: number;
+    readonly endLine: number;
+}
+
+/**
+ * A region of an open file that something asked to be shown, and which asking
+ * it was.
+ *
+ * The region alone cannot say "show me this again": clicking the same reference
+ * twice, or following it back after scrolling away, hands the viewer the lines
+ * it is already holding and nothing happens. `requestId` is what makes each ask
+ * a distinct event, so the viewer scrolls every time it is asked to and never
+ * between times.
+ */
+export interface HappyAgentFileReveal extends HappyAgentFileLineRange {
+    readonly requestId: number;
+}
+
 /** One workspace text file opened as a main-content document tab. */
 export interface HappyAgentFileTabSnapshot {
     readonly id: string;
@@ -275,6 +304,12 @@ export interface HappyAgentFileTabSnapshot {
      * group. Opening it permanently or editing it clears this flag.
      */
     readonly preview: boolean;
+    /**
+     * The region this tab was last asked to show, for a file reached through a
+     * reference that named one. Absent for a file opened whole, which is every
+     * file opened from the listing.
+     */
+    readonly reveal?: HappyAgentFileReveal;
     readonly revision: string;
     readonly document: Loadable<
         | HappyAgentWorkspaceFileDocument
@@ -328,6 +363,13 @@ export interface HappyAgentFileTabSnapshot {
      * revision.
      */
     readonly revalidationError?: UserError;
+    /**
+     * Why the last attempt to write this tab's edit back failed. The draft is
+     * still here and still the only copy of what was typed; this is what says
+     * so, because a save that reports nothing is indistinguishable from one
+     * that worked.
+     */
+    readonly saveError?: UserError;
 }
 
 type HappyAgentFileDocument =
@@ -430,6 +472,28 @@ function happyAgentFileDocumentCanonical(document: HappyAgentFileDocument): Happ
         happyAgentChangedDocumentFallbackHashAllowed(document)
     )
         return { ...document, oldHash: happyAgentCompactContentHash(document.oldContent) };
+    return document;
+}
+
+/**
+ * The same document, as an accepted write leaves it: the bytes that were
+ * written and the identity the checkout gave them.
+ *
+ * A write is first-hand knowledge of what a file says, so the tab that made it
+ * is told directly rather than shown the bytes read before it while a reload
+ * catches up. A document of a kind a write cannot describe — a picture, a
+ * recording — is left exactly as it was.
+ */
+function fileDocumentSaved(
+    document: Loadable<HappyAgentFileDocument>,
+    content: string,
+    hash: string,
+): Loadable<HappyAgentFileDocument> {
+    if (document.type !== "ready") return document;
+    const value = document.value;
+    if ("oldContent" in value)
+        return { type: "ready", value: { ...value, newContent: content, hash } };
+    if ("content" in value) return { type: "ready", value: { ...value, content, hash } };
     return document;
 }
 
@@ -616,10 +680,32 @@ export interface HappyAgentWorkspaceSnapshot {
      * long lines, not a fact about any one file.
      */
     readonly fileViewWrap: boolean;
-    /** Whether the panel lists only changed files or every file in the checkout. */
+    /** Whether the panel lists changed files, every file in the checkout, or a slice of it. */
     readonly fileScope: HappyAgentFileScope;
+    /**
+     * The slices agents have built over the addressed checkout, newest first.
+     * Empty until they are known and empty when there are none: the panel
+     * offers the slice scope only while this holds something.
+     */
+    readonly slices: readonly HappyAgentSlice[];
+    /**
+     * The slice the panel lists under the slice scope: the one the reader last
+     * chose in this checkout, or the newest when they never chose or their
+     * choice has since been dropped. Absent exactly when `slices` is empty.
+     */
+    readonly slice?: HappyAgentSlice;
     /** Whether Changes nests paths into folders or lists them whole. All Files is always lazy. */
     readonly fileLayout: HappyAgentFileLayout;
+    /** What the reader is looking for in the file listing, and what was found. */
+    readonly fileSearch: HappyAgentFileSearch;
+    /** Review notes left on this checkout's files, and the one being written. */
+    readonly fileComments: HappyAgentFileComments;
+    /**
+     * The open review streams, by the group whose changes each is. One per
+     * checkout, because a review is about a working tree rather than about a
+     * session, and it stays open across the sessions read beside it.
+     */
+    readonly reviews: ReadonlyMap<HappyAgentGroupId, HappyAgentReview>;
     /**
      * How wide the right panel is in the addressed checkout, in CSS pixels, or
      * nothing where this reader has never sized it and the product's own default
@@ -748,8 +834,13 @@ export interface HappyAgentBotCreateSnapshot {
  */
 export type HappyAgentBotFacePaint = (seed: string) => Promise<HappyAgentAvatarImage>;
 
-/** Which files the panel lists. */
-export type HappyAgentFileScope = "changed" | "all";
+/**
+ * Which files the panel lists: the checkout's changes, every file in it, or
+ * one slice an agent built over it. A slice is offered only while the
+ * checkout has one, and a remembered slice scope over a checkout that has
+ * none reads as changes rather than as an empty listing.
+ */
+export type HappyAgentFileScope = "changed" | "all" | "slice";
 
 /**
  * How the panel arranges them. Flat suits a handful of changed files, where a
@@ -758,8 +849,277 @@ export type HappyAgentFileScope = "changed" | "all";
  */
 export type HappyAgentFileLayout = "tree" | "flat";
 
-/** How a changed file is displayed. Mirrors the UI's `ChangedFileDiffMode`. */
-export type HappyAgentFileViewMode = "preview" | "unified" | "split" | "edit";
+/**
+ * How Changes arranges itself before the reader says otherwise.
+ *
+ * A tree, because a change is read as "what did this touch", and the folders
+ * are the answer's shape: a flat run of paths makes the reader rebuild that
+ * shape by comparing prefixes down the column. Someone working through a
+ * handful of files can still ask for the list, and that choice is remembered
+ * per checkout.
+ */
+const HAPPY_AGENT_FILE_LAYOUT_DEFAULT: HappyAgentFileLayout = "tree";
+
+/**
+ * What the reader typed into the file listing, and what the checkout answered.
+ *
+ * The two scopes answer it from different places, which is why the results are
+ * optional rather than always present. Changes is already complete in memory,
+ * so a query there is filtered where the rows are built and needs nothing from
+ * the daemon. All Files is a lazy directory tree, so filtering the part of it
+ * that happens to be loaded would quietly hide most of the checkout; the daemon
+ * ranks the whole thing instead, and `results` is its answer.
+ */
+export interface HappyAgentFileSearch {
+    readonly query: string;
+    /** Ranked whole-checkout matches, absent until the daemon has answered one. */
+    readonly results?: readonly HappyAgentFileSearchResult[];
+    /** True while an answer for the current query is still outstanding. */
+    readonly searching: boolean;
+}
+
+/**
+ * Which column of a diff a comment is attached to. The same line number means
+ * two different lines on the two sides, so the side is part of the address
+ * rather than a detail of how it is drawn.
+ */
+export type HappyAgentCommentSide = "deletions" | "additions";
+
+export type HappyAgentCommentId = string & { readonly __brand: "HappyAgentCommentId" };
+
+/**
+ * Where a comment is attached, and to which text.
+ *
+ * The hash is what makes the anchor honest. A line number alone is a claim
+ * about a file that an agent may already have rewritten: it would still point
+ * somewhere, just not at the line that was being talked about. Recording the
+ * content the comment was written against lets the surface say "this was left
+ * on an older version of this file" instead of silently pointing at whatever
+ * now occupies that row.
+ *
+ * `lineNumber: 0` addresses the file rather than a line in it, which is the
+ * renderer's own convention for a file-level annotation.
+ */
+export interface HappyAgentCommentAnchor {
+    readonly path: string;
+    readonly lineNumber: number;
+    readonly side: HappyAgentCommentSide;
+    /** The file's content hash when the comment was written, when one was known. */
+    readonly hash?: string;
+}
+
+export interface HappyAgentFileComment {
+    readonly id: HappyAgentCommentId;
+    readonly anchor: HappyAgentCommentAnchor;
+    readonly text: string;
+    /**
+     * The file has changed since this was written, so the anchor no longer
+     * describes the text on screen. Stated rather than repaired: guessing where
+     * the line went is exactly the kind of reconstruction that produces a
+     * comment confidently attached to the wrong code.
+     */
+    readonly stale: boolean;
+}
+
+/** A comment being written, before it becomes one. */
+export interface HappyAgentCommentDraft {
+    readonly anchor: HappyAgentCommentAnchor;
+    readonly text: string;
+}
+
+/**
+ * The review notes left on this checkout's changed files.
+ *
+ * Memory-only and deliberately so: a note here exists to become a request to
+ * the agent, and it is spent when it does. Nothing about it is worth surviving
+ * a restart, and persisting it would make an unsent remark look like a record.
+ */
+export interface HappyAgentFileComments {
+    readonly comments: readonly HappyAgentFileComment[];
+    readonly draft?: HappyAgentCommentDraft;
+}
+
+const FILE_COMMENTS_IDLE: HappyAgentFileComments = { comments: [] };
+
+/** One changed file in the review stream: its address and both of its sides. */
+export interface HappyAgentReviewFile {
+    readonly path: string;
+    /** The path before a rename, when Git reports one. */
+    readonly oldPath?: string;
+    readonly status: HappyAgentGitChangedFile["status"];
+    /** Disk identity the loaded document answers for, so a stale read is known. */
+    readonly revision: string;
+    readonly document: Loadable<HappyAgentChangedFileDocument>;
+    /**
+     * True when this file's bytes have moved since the document here was read
+     * and a fresh read is due. The document it replaces stays until the new one
+     * lands: taking the file out of the stream while it is re-read moves every
+     * line below it, and the agent writes while the reader is reading.
+     */
+    readonly stale?: boolean;
+}
+
+/**
+ * How a change is shown: as one scroll, or one file at a time.
+ *
+ * Reading a change is reading it in order, so a change that can be drawn at
+ * once is drawn at once. A change that cannot — hundreds of files, or hundreds
+ * of thousands of lines — is not made readable by arriving in pieces while the
+ * reader scrolls: the ground moves under them and every address they were
+ * travelling to moves with it. Such a change is read a file at a time instead,
+ * which is a whole file with a next and a previous rather than a moving floor.
+ */
+export type HappyAgentReviewPresentation = "stream" | "one-file";
+
+/**
+ * Every changed file in one checkout, read in the order they will be read in.
+ *
+ * A change is rarely about one file, so the review is the unit: this exists
+ * while the reader has the stream open. Everything it will draw is read before
+ * it is drawn — the stream's height, its file order, and the addresses its
+ * steps travel to are all settled from the first frame — and a change too large
+ * for that is shown one file at a time, where the same is true of the file on
+ * screen.
+ *
+ * It is memory-only — it is a read of the working tree, and the working tree is
+ * the durable thing.
+ */
+export interface HappyAgentReview {
+    readonly id: string;
+    readonly groupId: HappyAgentGroupId;
+    readonly files: readonly HappyAgentReviewFile[];
+    /** Whether this change is drawn as one scroll or a file at a time. */
+    readonly presentation: HappyAgentReviewPresentation;
+    /**
+     * Which file is on screen while the change is read one file at a time.
+     * A stream has every file on screen and names none of them here.
+     */
+    readonly activePath?: string;
+    /**
+     * Files shown as a header only, by path. A reviewer closes a file they have
+     * finished with so the ones they have not stay together.
+     */
+    readonly collapsed: ReadonlySet<string>;
+    /**
+     * Files the reviewer has said they are done with, by path. Marking one
+     * closes it; unmarking only takes the mark off, because a reviewer who
+     * changes their mind about a file is not asking to read it again this
+     * second.
+     */
+    readonly viewed: ReadonlySet<string>;
+    /** True while a file this review is meant to be showing has no document. */
+    readonly loading: boolean;
+    /**
+     * True once everything the review was showing had been read at the same
+     * time — the change has been drawn whole at least once.
+     *
+     * Until then the surface waits rather than drawing a stream that grows
+     * under the reader. After it, a file the agent has just added arrives on
+     * its own when it is read, which moves one file's worth of the stream
+     * instead of taking the whole change off the screen and putting it back.
+     */
+    readonly drawn: boolean;
+}
+
+/** The strip id a checkout's review stream occupies. */
+const reviewIdOf = (groupId: HappyAgentGroupId): string => `review:${groupId}`;
+
+/**
+ * How much change one scroll holds.
+ *
+ * Both limits are about the same thing from two directions: a stream is read
+ * whole, so everything in it is read before any of it is drawn. Beyond this the
+ * wait to open it stops being a wait and the change is shown a file at a time
+ * instead. Git already counts the lines for every changed file, so which it is
+ * is known before a single file has been read.
+ */
+const REVIEW_STREAM_FILE_LIMIT = 40;
+const REVIEW_STREAM_LINE_LIMIT = 20000;
+
+/** Which of the two ways this change is read, from the counts Git gives us. */
+const reviewPresentationOf = (
+    changes: readonly HappyAgentGitChangedFile[],
+): HappyAgentReviewPresentation => {
+    if (changes.length > REVIEW_STREAM_FILE_LIMIT) return "one-file";
+    const lines = changes.reduce(
+        (sum, change) => sum + (change.addedLines ?? 0) + (change.deletedLines ?? 0),
+        0,
+    );
+    return lines > REVIEW_STREAM_LINE_LIMIT ? "one-file" : "stream";
+};
+
+/** The files on screen: all of them in a stream, the current one otherwise. */
+const reviewShown = (review: HappyAgentReview): readonly HappyAgentReviewFile[] => {
+    if (review.presentation === "stream") return review.files;
+    const at = review.files.findIndex((file) => file.path === review.activePath);
+    return at < 0 ? review.files.slice(0, 1) : review.files.slice(at, at + 1);
+};
+
+/**
+ * The files a review reads, which is what it shows plus, one file at a time,
+ * the files either side of it — so stepping through a change is a step rather
+ * than a round trip at every step.
+ */
+const reviewRead = (review: HappyAgentReview): readonly HappyAgentReviewFile[] => {
+    if (review.presentation === "stream") return review.files;
+    const at = review.files.findIndex((file) => file.path === review.activePath);
+    if (at < 0) return review.files.slice(0, 1);
+    return review.files.slice(Math.max(at - 1, 0), at + 2);
+};
+
+/**
+ * Whether a review is still waiting for something it is meant to be showing.
+ * A file read ahead of the reader is not one of those, and a file that failed
+ * has an answer — the wrong one, which the stream says out loud.
+ */
+const reviewWaiting = (review: HappyAgentReview): boolean =>
+    reviewShown(review).some(
+        (file) => file.document.type === "loading" || file.document.type === "unloaded",
+    );
+
+/**
+ * The same review, saying what it is waiting for and whether it has ever been
+ * whole. Every write to a review goes through this, so those two answers are
+ * never something a caller can forget to keep true.
+ */
+const reviewSettle = (review: HappyAgentReview): HappyAgentReview => {
+    const waiting = reviewWaiting(review);
+    return { ...review, loading: waiting, drawn: review.drawn || !waiting };
+};
+
+/**
+ * The one attachment a draft carries its review notes in. Fixed rather than
+ * minted, so notes added while the chip is already waiting rewrite that chip
+ * in place instead of stacking a second one beside it.
+ */
+const HAPPY_AGENT_REVIEW_COMMENTS_ATTACHMENT_ID = "review-comments";
+
+/** The notes a draft carries, flattened out of their anchors for the composer. */
+function happyAgentCommentsAttach(
+    comments: readonly HappyAgentFileComment[],
+): readonly ComposerReviewComment[] {
+    return comments.map((comment) => ({
+        path: comment.anchor.path,
+        lineNumber: comment.anchor.lineNumber,
+        side: comment.anchor.side,
+        text: comment.text,
+        stale: comment.stale,
+    }));
+}
+
+/** How many ranked matches the file listing asks the daemon for. */
+const FILE_SEARCH_LIMIT = 50;
+
+/** Nothing typed, nothing found — the listing's resting state. */
+const FILE_SEARCH_IDLE: HappyAgentFileSearch = { query: "", searching: false };
+
+/**
+ * How a changed file is displayed. Mirrors the UI's `ChangedFileDiffMode`.
+ *
+ * `file` is the file itself rather than the change to it — read or written, one
+ * face. Reading a file and writing it are not two places to be.
+ */
+export type HappyAgentFileViewMode = "file" | "unified" | "split";
 
 /**
  * A rename the reader has opened but not committed. The draft lives here rather
@@ -1065,8 +1425,19 @@ export interface HappyAgentWorkspaceStore {
      * replaces this group's previous preview without disturbing permanent tabs.
      */
     filePreview(groupId: HappyAgentGroupId, path: string, kind: HappyAgentFileTabKind): void;
-    /** Opens one workspace file permanently, promoting its preview when present. */
-    fileOpen(groupId: HappyAgentGroupId, path: string, kind: HappyAgentFileTabKind): void;
+    /**
+     * Opens one workspace file permanently, promoting its preview when present.
+     *
+     * `selection` is the region a reference named — the lines behind a
+     * `Store.ts:120-148` in a message. The tab scrolls to them and marks them;
+     * opening the same file with no region named puts the mark away.
+     */
+    fileOpen(
+        groupId: HappyAgentGroupId,
+        path: string,
+        kind: HappyAgentFileTabKind,
+        selection?: HappyAgentFileLineRange,
+    ): void;
     /** Warms one file after pointer or keyboard intent without opening a tab. */
     filePreprocess(groupId: HappyAgentGroupId, path: string, kind: HappyAgentFileTabKind): void;
     /**
@@ -1092,7 +1463,12 @@ export interface HappyAgentWorkspaceStore {
      * the same way, into the same editor. The panel holds one file at a time,
      * so this replaces whichever file was in it.
      */
-    filePanelOpen(groupId: HappyAgentGroupId, path: string, kind: HappyAgentFileTabKind): void;
+    filePanelOpen(
+        groupId: HappyAgentGroupId,
+        path: string,
+        kind: HappyAgentFileTabKind,
+        selection?: HappyAgentFileLineRange,
+    ): void;
     /** Closes the panel's file viewer and stops its pending read. */
     filePanelClose(): void;
     /**
@@ -1124,6 +1500,32 @@ export interface HappyAgentWorkspaceStore {
     mainViewDisplay(presentationId: string): void;
     fileClose(tabId: string): void;
     fileRetry(tabId: string): void;
+    /**
+     * Opens the checkout's whole change as one stream, in the main content.
+     *
+     * One per checkout, and selecting it again brings the one already open
+     * forward rather than starting a second read of the same working tree.
+     */
+    reviewOpen(groupId: HappyAgentGroupId): void;
+    reviewClose(groupId: HappyAgentGroupId): void;
+    /**
+     * Shows the next or the previous file of a change being read one file at a
+     * time. Saying it about a stream, or past either end of the change, does
+     * nothing.
+     */
+    reviewFileNext(groupId: HappyAgentGroupId): void;
+    reviewFilePrevious(groupId: HappyAgentGroupId): void;
+    /** Reads the files in a review whose last read failed, again. */
+    reviewRetry(groupId: HappyAgentGroupId): void;
+    /** Shows one file in a review as a header only, or opens it again. */
+    reviewFileCollapsedToggle(groupId: HappyAgentGroupId, path: string): void;
+    /** Shows every file in a review as a header only, or opens them all. */
+    reviewFilesCollapsedSet(groupId: HappyAgentGroupId, collapsed: boolean): void;
+    /**
+     * Marks one file in a review as reviewed, or takes the mark off. Marking
+     * closes the file; unmarking leaves it as it is.
+     */
+    reviewFileViewedToggle(groupId: HappyAgentGroupId, path: string): void;
     /** Chooses how changed files are displayed, for every tab. */
     fileViewModeUpdate(mode: HappyAgentFileViewMode): void;
     /** Chooses whether long diff lines wrap or scroll, for every tab. */
@@ -1134,8 +1536,44 @@ export interface HappyAgentWorkspaceStore {
      * a reader who only ever looks at their own changes.
      */
     fileScopeUpdate(groupId: HappyAgentGroupId, scope: HappyAgentFileScope): void;
+    /**
+     * Looks through one slice of a checkout: makes it the slice the panel
+     * lists by and puts the panel's listing under the slice scope. The choice
+     * is remembered per checkout, like the scope itself.
+     */
+    sliceSelect(groupId: HappyAgentGroupId, sliceId: HappyAgentSliceId): void;
+    /**
+     * Opens one slice from where it was named — the card in a transcript —
+     * bringing the panel to its file listing under that slice. It is the one
+     * act that moves the panel's own tab: the reader asked to see the slice,
+     * and the slice is shown in exactly one place.
+     */
+    sliceOpen(groupId: HappyAgentGroupId, sliceId: HappyAgentSliceId): void;
+    /**
+     * Removes one slice the reader no longer needs. It leaves the listing at
+     * once; if it was the slice being listed by, the panel moves to the newest
+     * remaining one, or back to the changed files when none remain.
+     */
+    sliceDelete(groupId: HappyAgentGroupId, sliceId: HappyAgentSliceId): void;
     /** Chooses whether the panel nests paths into folders, for this checkout. */
     fileLayoutUpdate(groupId: HappyAgentGroupId, layout: HappyAgentFileLayout): void;
+    /**
+     * Records what the reader is looking for in the file listing. Under All
+     * Files this asks the daemon to rank the whole checkout, because the tree
+     * on screen is only the part of it that has been opened.
+     */
+    fileSearchUpdate(query: string): void;
+    /**
+     * Starts a review note on one line of a file, or on the file itself with
+     * `lineNumber: 0`. One note is written at a time, so opening a second
+     * replaces an untouched first rather than leaving two composers open.
+     */
+    commentDraftOpen(anchor: HappyAgentCommentAnchor): void;
+    commentDraftUpdate(text: string): void;
+    commentDraftCancel(): void;
+    /** Keeps the written note. An empty one is a cancel, not an empty comment. */
+    commentDraftSubmit(): void;
+    commentRemove(commentId: HappyAgentCommentId): void;
     /** Records how wide the reader left the right panel in this checkout. */
     panelWidthUpdate(groupId: HappyAgentGroupId, width: number): void;
     /**
@@ -1355,6 +1793,26 @@ function noOpenConversation(): Promise<never> {
 /** Nothing is being added and nothing was refused: one shared idle value. */
 const PROJECT_ADD_IDLE: HappyAgentProjectAddSnapshot = { pending: false };
 
+/** No slices known, or none built: one shared value so the snapshot keeps its identity. */
+const SLICES_NONE: readonly HappyAgentSlice[] = [];
+
+/**
+ * The slice the panel lists by: the remembered one while it still exists, and
+ * otherwise the newest. Retention drops old slices on the daemon, so a choice
+ * made weeks ago can name a slice that is gone; the newest is what the reader
+ * would have reached for anyway.
+ */
+function sliceResolve(
+    slices: readonly HappyAgentSlice[],
+    sliceId: string | undefined,
+): HappyAgentSlice | undefined {
+    if (sliceId !== undefined) {
+        const chosen = slices.find((slice) => slice.id === sliceId);
+        if (chosen !== undefined) return chosen;
+    }
+    return slices[0];
+}
+
 function githubRepositoryParse(
     value: string,
 ): { readonly repository: string; readonly name: string } | undefined {
@@ -1444,6 +1902,14 @@ export function happyAgentWorkspaceStoreCreate(
     let draftsCatalogApplying = false;
     /** Ready bytes may have changed while this store had no live file-hint subscription. */
     let fileDocumentsReconcileOnStart = false;
+    /**
+     * The addressed checkout's slices, as last reported, and which checkout
+     * they are of. Absent until the first report, so a checkout whose slices
+     * have not arrived is not mistaken for one that has none.
+     */
+    let slices: readonly HappyAgentSlice[] | undefined;
+    let slicesGroupId: HappyAgentGroupId | undefined;
+    let unsubscribeSlices: (() => void) | undefined;
 
     // Open conversation lease. `acquisitionGeneration` invalidates an in-flight
     // acquisition when the addressed conversation changes or the store stops.
@@ -1525,6 +1991,26 @@ export function happyAgentWorkspaceStoreCreate(
     let fileViewMode: HappyAgentFileViewMode = "unified";
     let fileViewWrap = false;
     /**
+     * Looking for a file is not a preference, so it is neither written to the
+     * view preferences nor carried to the next checkout: it is what this reader
+     * is doing right now, and moving to another project ends it.
+     */
+    let fileSearch: HappyAgentFileSearch = FILE_SEARCH_IDLE;
+    /** Which search request is still wanted; a later query retires an earlier one. */
+    let fileSearchGeneration = 0;
+    /**
+     * Review notes on this checkout. Like the search, this is what the reader is
+     * doing rather than how they like things, so it is neither persisted nor
+     * carried to another checkout.
+     */
+    let fileComments: HappyAgentFileComments = FILE_COMMENTS_IDLE;
+    let reviews: ReadonlyMap<HappyAgentGroupId, HappyAgentReview> = new Map();
+    /** Retires reads belonging to a review that has since been rebuilt or closed. */
+    const reviewGenerations = new Map<string, number>();
+    let commentSequence = 0;
+    /** True while the chip is being written from the notes; see `commentsWrite`. */
+    let commentsProjecting = false;
+    /**
      * How each checkout this window has arranged is arranged, read once here.
      *
      * Per checkout rather than per workspace: how someone wants to look at a
@@ -1569,6 +2055,8 @@ export function happyAgentWorkspaceStoreCreate(
     };
     let fileTreeExpanded: ReadonlySet<string> = new Set();
     let fileTreeCollapsed: ReadonlySet<string> = new Set();
+    /** Counts the asks to show a region, so each one is its own event. */
+    let fileRevealRequests = 0;
     /** The parts of a new bot the store holds itself; the composer is a store of its own. */
     interface BotCreateDraft {
         readonly name: string;
@@ -1855,7 +2343,11 @@ export function happyAgentWorkspaceStoreCreate(
         fileViewMode,
         fileViewWrap,
         fileScope: "changed",
-        fileLayout: "flat",
+        slices: SLICES_NONE,
+        fileLayout: HAPPY_AGENT_FILE_LAYOUT_DEFAULT,
+        fileSearch: FILE_SEARCH_IDLE,
+        fileComments: FILE_COMMENTS_IDLE,
+        reviews: new Map(),
         fileTreeExpanded,
         fileTreeCollapsed,
         workspaceFilesLoading,
@@ -1979,6 +2471,9 @@ export function happyAgentWorkspaceStoreCreate(
         if (groupId === undefined) return [];
         const arrival = [
             ...groupConversationIdList(groupId),
+            // The whole change, where it is open. It belongs to the checkout the
+            // same way a file of it does, so it is arranged in the same strip.
+            ...(reviews.has(groupId) ? [reviewIdOf(groupId)] : []),
             ...fileTabs
                 .filter((tab) => tab.groupId === groupId && tab.placement === "main")
                 .map((tab) => tab.id),
@@ -2104,11 +2599,20 @@ export function happyAgentWorkspaceStoreCreate(
         // another project shows that project the way it was left, rather than
         // carrying the last one's panel width and listing across to it.
         const nextView = groupView(nextAddress.groupId);
-        const nextFileScope = nextView.fileScope ?? "changed";
+        const nextSlices = slices ?? SLICES_NONE;
+        const nextSlice = sliceResolve(nextSlices, nextView.sliceId);
+        // A remembered slice scope over a checkout with nothing to slice by
+        // shows the changes: an empty listing would say the checkout is clean.
+        const preferredScope = nextView.fileScope ?? "changed";
+        const nextFileScope =
+            preferredScope === "slice" && nextSlice === undefined ? "changed" : preferredScope;
         // The daemon's all-files contract is a lazy directory tree. Flattening
         // it would require recursively opening every directory before the first
         // row could be truthful, which turns one panel open into a request storm.
-        const nextFileLayout = nextFileScope === "all" ? "tree" : (nextView.fileLayout ?? "flat");
+        const nextFileLayout =
+            nextFileScope === "all"
+                ? "tree"
+                : (nextView.fileLayout ?? HAPPY_AGENT_FILE_LAYOUT_DEFAULT);
         const nextPanelWidth = nextView.panelWidth;
         // Recomputed here rather than remembered: it is derived from the same
         // list snapshot this projection is built from, so it cannot lag behind
@@ -2152,7 +2656,12 @@ export function happyAgentWorkspaceStoreCreate(
                 snapshot.fileViewMode === fileViewMode &&
                 snapshot.fileViewWrap === fileViewWrap &&
                 snapshot.fileScope === nextFileScope &&
+                snapshot.slices === nextSlices &&
+                snapshot.slice === nextSlice &&
                 snapshot.fileLayout === nextFileLayout &&
+                snapshot.fileSearch === fileSearch &&
+                snapshot.fileComments === fileComments &&
+                snapshot.reviews === reviews &&
                 snapshot.panelWidth === nextPanelWidth &&
                 snapshot.fileTreeExpanded === fileTreeExpanded &&
                 snapshot.fileTreeCollapsed === fileTreeCollapsed &&
@@ -2176,7 +2685,12 @@ export function happyAgentWorkspaceStoreCreate(
                           fileViewMode,
                           fileViewWrap,
                           fileScope: nextFileScope,
+                          slices: nextSlices,
+                          ...(nextSlice === undefined ? {} : { slice: nextSlice }),
                           fileLayout: nextFileLayout,
+                          fileSearch,
+                          fileComments,
+                          reviews,
                           ...(nextPanelWidth === undefined ? {} : { panelWidth: nextPanelWidth }),
                           fileTreeExpanded,
                           fileTreeCollapsed,
@@ -2266,16 +2780,203 @@ export function happyAgentWorkspaceStoreCreate(
     });
 
     /**
-     * Forgets which directories were opened and which were closed. These are
-     * remembered by path for the same reason a selection is, and they stop
-     * meaning anything at the same moment: `src` in one checkout is not `src`
-     * in the next. Carrying them over would not merely open the wrong folders —
-     * a directory closed here would arrive in another repository already
-     * closed, and the listing there would open half shut for no stated reason.
+     * Loads the directories this checkout was left with, forgetting the last
+     * one's entirely. These are remembered by path for the same reason a
+     * selection is, and a path stops meaning anything at the checkout boundary:
+     * `src` in one repository is not `src` in the next, so carrying the sets
+     * across would not merely open the wrong folders — a directory closed here
+     * would arrive in another repository already closed, and the listing there
+     * would open half shut for no stated reason.
      */
-    const fileTreeExpansionReset = (): void => {
-        fileTreeExpanded = new Set();
-        fileTreeCollapsed = new Set();
+    const fileTreeExpansionLoad = (groupId: HappyAgentGroupId | undefined): void => {
+        const view = groupView(groupId);
+        fileTreeExpanded = new Set(view.fileTreeOpened ?? []);
+        fileTreeCollapsed = new Set(view.fileTreeClosed ?? []);
+    };
+
+    /**
+     * Ends the search when the listing stops being about the same checkout. A
+     * query is about the files in front of the reader, and carrying it to
+     * another project would filter that project by what was wanted from this
+     * one. Any answer still in flight is retired with it.
+     */
+    const fileSearchReset = (): void => {
+        fileSearchGeneration += 1;
+        fileSearch = FILE_SEARCH_IDLE;
+    };
+
+    /** Review notes belong to the checkout they were written about. */
+    const fileCommentsReset = (): void => {
+        fileComments = FILE_COMMENTS_IDLE;
+        fileCommentsProject();
+    };
+
+    /** Whether two projections of the notes say the same thing in the same order. */
+    const commentsSame = (
+        left: readonly ComposerReviewComment[],
+        right: readonly ComposerReviewComment[],
+    ): boolean =>
+        left.length === right.length &&
+        left.every((comment, index) => {
+            const other = right[index];
+            return (
+                other !== undefined &&
+                comment.path === other.path &&
+                comment.lineNumber === other.lineNumber &&
+                comment.side === other.side &&
+                comment.text === other.text &&
+                comment.stale === other.stale
+            );
+        });
+
+    /** The notes as the one chip a draft carries them in, or nothing to carry. */
+    const fileCommentsAttachments = (): readonly ComposerAttachment[] =>
+        fileComments.comments.length === 0
+            ? []
+            : [
+                  {
+                      kind: "reviewComments",
+                      id: HAPPY_AGENT_REVIEW_COMMENTS_ATTACHMENT_ID,
+                      comments: happyAgentCommentsAttach(fileComments.comments),
+                  },
+              ];
+
+    /**
+     * Keeps the draft's chip saying what the notes say.
+     *
+     * The notes live here, with the change they are about, because that is what
+     * the diff draws them under. The chip is how the same notes appear where
+     * they are going to be sent from, so it is written from them every time
+     * they change rather than kept alongside them.
+     */
+    const fileCommentsProject = (): void => {
+        const target = groupComposer ?? composer;
+        if (target === undefined) return;
+        const waiting = target
+            .getState()
+            .attachments.find(
+                (attachment) => attachment.id === HAPPY_AGENT_REVIEW_COMMENTS_ATTACHMENT_ID,
+            );
+        const next = fileCommentsAttachments()[0];
+        if (next === undefined) {
+            if (waiting) commentsWrite(() => target.getState().attachmentRemove(waiting.id));
+            return;
+        }
+        if (
+            waiting?.kind === "reviewComments" &&
+            next.kind === "reviewComments" &&
+            commentsSame(waiting.comments, next.comments)
+        )
+            return;
+        commentsWrite(() => {
+            if (waiting) target.getState().attachmentRemove(waiting.id);
+            target.getState().attachmentAdd(next);
+        });
+    };
+
+    /**
+     * Runs one write of the chip without hearing it back as the reader dropping
+     * it. Replacing the chip removes the old one first, and that removal is this
+     * store's own doing rather than the reader saying they are done with the
+     * notes — which is what dropping the chip means, and what it still means
+     * whenever this is not running.
+     */
+    const commentsWrite = (write: () => void): void => {
+        commentsProjecting = true;
+        try {
+            write();
+        } finally {
+            commentsProjecting = false;
+        }
+    };
+
+    /**
+     * The reader dropped the chip, so the notes are dropped with it. A note
+     * exists to become a request; taking the request out of the draft is saying
+     * that request is not going, and leaving the notes drawn on the diff would
+     * make that a lie the next send would tell.
+     */
+    const fileCommentsDrop = (attachmentId: string): void => {
+        if (commentsProjecting || attachmentId !== HAPPY_AGENT_REVIEW_COMMENTS_ATTACHMENT_ID)
+            return;
+        if (fileComments.comments.length === 0) return;
+        fileComments = { ...fileComments, comments: [] };
+        recompute();
+    };
+
+    /**
+     * The notes went with a message that was sent, so they are spent.
+     *
+     * The draft that carried them clears itself on confirmation, but a send
+     * from a group opens the conversation it created before it returns, and
+     * that new draft was built while the notes were still waiting. Projecting
+     * again is what takes the spent chip back out of it.
+     */
+    const fileCommentsSpend = (attachments: readonly ComposerAttachment[]): void => {
+        if (!attachments.some((attachment) => attachment.kind === "reviewComments")) return;
+        if (fileComments.comments.length === 0) return;
+        fileComments = { ...fileComments, comments: [] };
+        fileCommentsProject();
+        recompute();
+    };
+
+    /**
+     * Marks the notes on changed paths as written against older text.
+     *
+     * Deliberately a statement and not a repair. Once the bytes move, where a
+     * commented line went is a question only a diff of the two versions could
+     * answer, and answering it by guessing is how a note ends up confidently
+     * attached to code nobody meant. A note that knows it is stale can still be
+     * sent — it carries the caveat with it.
+     */
+    const fileCommentsStale = (paths: readonly string[] | null): void => {
+        if (fileComments.comments.length === 0) return;
+        const changed = paths === null ? undefined : new Set(paths);
+        const affected = (path: string): boolean => changed === undefined || changed.has(path);
+        let touched = false;
+        const comments = fileComments.comments.map((comment) => {
+            if (comment.stale || !affected(comment.anchor.path)) return comment;
+            touched = true;
+            return { ...comment, stale: true };
+        });
+        if (!touched) return;
+        fileComments = { ...fileComments, comments };
+        // The caveat travels with the note, so the chip is rewritten for it.
+        fileCommentsProject();
+    };
+
+    /**
+     * Sets what is being looked for and, where the answer has to come from the
+     * daemon, asks for it. Only All Files does: Changes is already whole in
+     * memory and is filtered where its rows are built, so a query there is
+     * recorded and nothing is fetched for it.
+     *
+     * Does not `recompute` — the caller publishes, because switching scope
+     * changes more than the search and should announce once.
+     */
+    const fileSearchApply = (query: string): void => {
+        // A later query retires whatever an earlier one is still waiting for,
+        // so a slow answer to an abandoned prefix cannot land on a newer one.
+        const generation = ++fileSearchGeneration;
+        const groupId = addressedGroupId;
+        const ask = query !== "" && groupId !== undefined && fileScopeOf(groupId) === "all";
+        fileSearch = { query, searching: ask };
+        if (!ask || groupId === undefined) return;
+        void client.filesSearch(groupId, query, FILE_SEARCH_LIMIT).then(
+            (results) => {
+                if (generation !== fileSearchGeneration) return;
+                fileSearch = { query, results, searching: false };
+                recompute();
+            },
+            () => {
+                // A refused search leaves the query showing with no claim about
+                // what it matched, which is the honest answer: an empty result
+                // list would say the checkout holds nothing by that name.
+                if (generation !== fileSearchGeneration) return;
+                fileSearch = { query, searching: false };
+                recompute();
+            },
+        );
     };
 
     const fileChangeFind = (
@@ -2289,6 +2990,20 @@ export function happyAgentWorkspaceStoreCreate(
                 return project.changes?.find((change) => change.path === path);
             const worktree = project.worktrees.find((candidate) => candidate.id === groupId);
             if (worktree) return worktree.changes?.find((change) => change.path === path);
+        }
+        return undefined;
+    };
+
+    /** Every changed file in one checkout, as the live Git snapshot has them. */
+    const groupChangesRead = (
+        groupId: HappyAgentGroupId,
+    ): readonly HappyAgentGitChangedFile[] | undefined => {
+        const projects = list.get().projects;
+        if (projects.type !== "ready") return undefined;
+        for (const project of projects.value) {
+            if (project.id === groupId) return project.changes;
+            const worktree = project.worktrees.find((candidate) => candidate.id === groupId);
+            if (worktree) return worktree.changes;
         }
         return undefined;
     };
@@ -2739,11 +3454,319 @@ export function happyAgentWorkspaceStoreCreate(
         );
     };
 
-    /** Reconciles durable bytes after the daemon reports a filesystem change. */
+    /**
+     * Rebuilds an open review against the checkout's current changes, keeping
+     * every document already read for a file whose bytes have not moved.
+     *
+     * The set of changed files is itself a moving thing: the agent adds one,
+     * the reader reverts another. So the stream is recomputed from the live Git
+     * snapshot rather than from what it held when it opened, and a file that
+     * stopped being changed leaves it.
+     */
+    const reviewReconcile = (groupId: HappyAgentGroupId, moved: readonly string[] | null): void => {
+        const open = reviews.get(groupId);
+        if (open === undefined) return;
+        // A rebuild is a different review from the one whose reads are in
+        // flight: they answer for files at addresses that may no longer exist.
+        reviewGenerations.set(
+            reviewIdOf(groupId),
+            (reviewGenerations.get(reviewIdOf(groupId)) ?? 0) + 1,
+        );
+        const changes = groupChangesRead(groupId) ?? [];
+        const held = new Map(open.files.map((file) => [file.path, file]));
+        const stale = (path: string): boolean => moved === null || moved.includes(path);
+        const files = changes.map<HappyAgentReviewFile>((change) => {
+            const previous = held.get(change.path);
+            const read = previous?.document.type === "ready";
+            const current = read && previous.revision === change.revision && !stale(change.path);
+            return {
+                path: change.path,
+                ...(change.previousPath === undefined ? {} : { oldPath: change.previousPath }),
+                status: change.status,
+                revision: change.revision,
+                // A file already read keeps what was read for it even when its
+                // bytes have moved on: it is replaced when the new read lands,
+                // rather than leaving a hole in the stream until then.
+                document: read ? previous.document : { type: "unloaded" },
+                ...(read && !current ? { stale: true as const } : {}),
+            };
+        });
+        // What was said about a file belongs to that file. A file that has left
+        // the change takes its mark with it, so a path that comes back is not
+        // met by a decision made about an older version of it.
+        const present = new Set(files.map((file) => file.path));
+        const kept = (paths: ReadonlySet<string>): ReadonlySet<string> =>
+            [...paths].every((path) => present.has(path))
+                ? paths
+                : new Set([...paths].filter((path) => present.has(path)));
+        const presentation = reviewPresentationOf(changes);
+        // A change read one file at a time keeps the reader where they were.
+        // Where they were is a path, and a path that has left the change leaves
+        // them at the file that took its place in the order.
+        const was = open.files.findIndex((file) => file.path === open.activePath);
+        const activePath =
+            presentation === "stream"
+                ? undefined
+                : open.activePath !== undefined && present.has(open.activePath)
+                  ? open.activePath
+                  : (files[Math.min(Math.max(was, 0), Math.max(files.length - 1, 0))]?.path ??
+                    files[0]?.path);
+        // Written out rather than spread over the review it replaces: the file
+        // on screen is named only while the change is read one file at a time,
+        // and a stream that inherited a name would go on claiming one.
+        const next: HappyAgentReview = {
+            id: open.id,
+            groupId: open.groupId,
+            // A change that has grown past what one scroll holds, or shrunk
+            // back inside it, is drawn a different way: what was on screen is
+            // not what is going on screen, so it is waited for whole again.
+            drawn: open.drawn && presentation === open.presentation,
+            files,
+            presentation,
+            ...(activePath === undefined ? {} : { activePath }),
+            collapsed: kept(open.collapsed),
+            viewed: kept(open.viewed),
+            loading: false,
+        };
+        reviews = new Map(reviews).set(groupId, reviewSettle(next));
+        reviewLoad(groupId);
+    };
+
+    /**
+     * Moves to the file before or after the one on screen, in a change being
+     * read one file at a time.
+     *
+     * Said freely: a stream has no such step, and neither end of the change has
+     * one past it.
+     */
+    const reviewFileStep = (groupId: HappyAgentGroupId, direction: -1 | 1): void => {
+        const open = reviews.get(groupId);
+        if (open === undefined || open.presentation !== "one-file") return;
+        const at = open.files.findIndex((file) => file.path === open.activePath);
+        const activePath = open.files[Math.max(at, 0) + direction]?.path;
+        if (activePath === undefined) return;
+        const next: HappyAgentReview = { ...open, activePath, loading: false };
+        reviews = new Map(reviews).set(groupId, reviewSettle(next));
+        reviewLoad(groupId);
+        recompute();
+    };
+
+    /**
+     * Closes every file in the review, or opens every one.
+     *
+     * Which it is, is the reader's to say rather than a guess from the current
+     * mix: a review half closed has both answers, and only one of them is the
+     * one being asked for.
+     */
+    const reviewFilesCollapsedSet = (groupId: HappyAgentGroupId, collapsedAll: boolean): void => {
+        const open = reviews.get(groupId);
+        if (open === undefined) return;
+        reviews = new Map(reviews).set(groupId, {
+            ...open,
+            collapsed: collapsedAll ? new Set(open.files.map((file) => file.path)) : new Set(),
+        });
+        recompute();
+    };
+
+    /** Opens a closed file in the review, or closes an open one. */
+    const reviewFileCollapsedToggle = (groupId: HappyAgentGroupId, path: string): void => {
+        const open = reviews.get(groupId);
+        if (open === undefined) return;
+        const collapsed = new Set(open.collapsed);
+        if (!collapsed.delete(path)) collapsed.add(path);
+        reviews = new Map(reviews).set(groupId, { ...open, collapsed });
+        recompute();
+    };
+
+    /**
+     * Says a file has been reviewed, or takes that back.
+     *
+     * Marking one closes it, because saying "done with this" and still looking
+     * at it is two different answers. Taking the mark off does not reopen it: a
+     * reviewer correcting the record is not asking to read the file again, and
+     * a file that sprang open under the pointer would move everything below it.
+     */
+    const reviewFileViewedToggle = (groupId: HappyAgentGroupId, path: string): void => {
+        const open = reviews.get(groupId);
+        if (open === undefined) return;
+        const viewed = new Set(open.viewed);
+        const marking = !viewed.delete(path);
+        if (marking) viewed.add(path);
+        const collapsed = marking ? new Set(open.collapsed).add(path) : open.collapsed;
+        reviews = new Map(reviews).set(groupId, { ...open, viewed, collapsed });
+        recompute();
+    };
+
+    /**
+     * Reads again the files whose last read failed.
+     *
+     * A read that fails leaves its file with no diff to draw, and the stream
+     * says so rather than quietly showing a change short of a file. This is what
+     * saying "try again" there does.
+     */
+    const reviewRetry = (groupId: HappyAgentGroupId): void => {
+        const open = reviews.get(groupId);
+        if (open === undefined) return;
+        if (!open.files.some((file) => file.document.type === "error")) return;
+        const next: HappyAgentReview = {
+            ...open,
+            files: open.files.map((file) =>
+                file.document.type === "error"
+                    ? { ...file, document: { type: "unloaded" as const } }
+                    : file,
+            ),
+            loading: false,
+        };
+        // A file nothing is going to draw is not something the review is
+        // waiting for, so asking again does not leave it saying it is loading.
+        reviews = new Map(reviews).set(groupId, reviewSettle(next));
+        reviewLoad(groupId);
+        recompute();
+    };
+
+    /**
+     * Reads the files this review is going to draw and has not read yet.
+     *
+     * Only the ones nobody has asked about: a file already being read stays
+     * being read, so stepping to it adds no second request. A read that lands
+     * after the review it belonged to was rebuilt is dropped rather than
+     * written into whatever the stream holds now.
+     */
+    const reviewLoad = (groupId: HappyAgentGroupId): void => {
+        const id = reviewIdOf(groupId);
+        const generation = reviewGenerations.get(id) ?? 0;
+        const open = reviews.get(groupId);
+        if (open === undefined) return;
+        // Never read, or read before its bytes moved. A file already in flight
+        // is neither, so stepping to it adds no second request.
+        const asked = reviewRead(open).filter(
+            (file) => file.document.type === "unloaded" || file.stale === true,
+        );
+        if (asked.length === 0) return;
+        const reading = new Set(asked.map((file) => file.path));
+        reviews = new Map(reviews).set(groupId, {
+            ...open,
+            files: open.files.map((file) => {
+                if (!reading.has(file.path)) return file;
+                // A file with something to show goes on showing it while it is
+                // read again; only a file with nothing says it is loading.
+                const { stale: _asked, ...rest } = file;
+                return file.document.type === "ready"
+                    ? rest
+                    : { ...rest, document: { type: "loading" as const } };
+            }),
+        });
+        for (const file of asked) {
+            const change = fileChangeFind(groupId, file.path);
+            const settle = (document: Loadable<HappyAgentChangedFileDocument>): void => {
+                if (reviewGenerations.get(id) !== generation) return;
+                const current = reviews.get(groupId);
+                if (current === undefined) return;
+                const files = current.files.map((candidate) => {
+                    if (candidate.path !== file.path || candidate.revision !== file.revision)
+                        return candidate;
+                    const { stale: _answered, ...rest } = candidate;
+                    return { ...rest, document };
+                });
+                reviews = new Map(reviews).set(groupId, reviewSettle({ ...current, files }));
+                recompute();
+            };
+            // Each file answers for itself. Whatever one of them does — refused
+            // by the checkout, or refusing even to start — the others are still
+            // asked for, and the one that failed says so rather than staying
+            // open forever as a file the review is silently short of.
+            if (change === undefined) {
+                settle({
+                    type: "error",
+                    error: happyAgentUserError(
+                        new Error(`${file.path} is no longer among this checkout's changes.`),
+                    ),
+                });
+                continue;
+            }
+            try {
+                void client
+                    .changedFileRead(groupId, file.path, change)
+                    .then((value) => {
+                        settle({ type: "ready", value });
+                    })
+                    .catch((error: unknown) => {
+                        settle({ type: "error", error: happyAgentUserError(error) });
+                    });
+            } catch (error: unknown) {
+                settle({ type: "error", error: happyAgentUserError(error) });
+            }
+        }
+    };
+
+    /**
+     * Takes one report of the addressed checkout's slices. A slice built while
+     * the reader is already looking through slices is the one they were waiting
+     * for, so it becomes the listed one; built while they are reading changes
+     * or a file, it waits in the picker rather than taking the screen.
+     */
+    const slicesReceive = (groupId: HappyAgentGroupId, next: readonly HappyAgentSlice[]): void => {
+        if (slicesGroupId !== groupId) return;
+        const previous = slices;
+        slices = next;
+        if (previous !== undefined && fileScopeOf(groupId) === "slice") {
+            const known = new Set(previous.map((slice) => slice.id));
+            const built = next.find((slice) => !known.has(slice.id));
+            if (built !== undefined) viewPreferencesWrite(groupId, { sliceId: built.id });
+        }
+        recompute();
+    };
+
+    /**
+     * Removes one slice. The listing drops it before the daemon answers, so the
+     * hand that clicked sees the row go; the daemon's confirmation and the
+     * event behind it find nothing left to remove. A refusal is reported as a
+     * mutation failure and the next slice read puts the row back.
+     */
+    const sliceDelete = (groupId: HappyAgentGroupId, sliceId: HappyAgentSliceId): void => {
+        if (slicesGroupId === groupId && slices?.some((slice) => slice.id === sliceId)) {
+            slices = slices.filter((slice) => slice.id !== sliceId);
+            recompute();
+        }
+        client.sliceDelete(groupId, sliceId);
+    };
+
+    /** Lists the panel by one slice; shared by the picker and the transcript card. */
+    const sliceSelect = (groupId: HappyAgentGroupId, sliceId: HappyAgentSliceId): void => {
+        const view = groupView(groupId);
+        if (view.fileScope === "slice" && view.sliceId === sliceId) return;
+        viewPreferencesWrite(groupId, { fileScope: "slice", sliceId });
+        // The query survives the switch, asked again against the slice.
+        if (fileSearch.query !== "") fileSearchApply(fileSearch.query);
+        recompute();
+    };
+
+    /**
+     * Keeps the slice subscription on the addressed checkout, and only while a
+     * surface is running: slices are read for the checkout on screen, not for
+     * every checkout the reader has ever opened.
+     */
+    const slicesFollow = (): void => {
+        const groupId = active ? addressedGroupId : undefined;
+        if (slicesGroupId === groupId) return;
+        unsubscribeSlices?.();
+        unsubscribeSlices = undefined;
+        slicesGroupId = groupId;
+        slices = undefined;
+        if (groupId === undefined) return;
+        unsubscribeSlices = client.workspaceSlicesSubscribe(groupId, (next) =>
+            slicesReceive(groupId, next),
+        );
+    };
+
+    /** Reconciles durable bytes once a filesystem change is known — reported by
+     *  the daemon's watcher, or done by a write of our own. */
     const workspaceFilesChanged = (change: HappyAgentWorkspaceFilesChanged): void => {
         const affected = (path: string): boolean =>
             change.paths === null || change.paths.includes(path);
         fileAddressesInvalidate(change.groupId, change.paths);
+        fileCommentsStale(change.paths);
+        reviewReconcile(change.groupId, change.paths);
         for (const tab of fileTabs) {
             if (tab.groupId !== change.groupId || !affected(tab.path)) continue;
             fileTabLoadedIdentities.delete(tab.id);
@@ -2761,8 +3784,27 @@ export function happyAgentWorkspaceStoreCreate(
         requestedKind: HappyAgentFileTabKind,
         preview: boolean,
         placement: HappyAgentViewPlacement = "main",
+        selection?: HappyAgentFileLineRange,
     ): void => {
         const kind = fileKindResolve(groupId, path, requestedKind);
+        // A fresh ask every time, so following the same reference twice scrolls
+        // back to it twice. Opening the file with no region named clears the
+        // last one rather than leaving a band marking lines nobody asked about.
+        const reveal =
+            selection === undefined
+                ? undefined
+                : { ...selection, requestId: (fileRevealRequests += 1) };
+        const revealApply = (tab: HappyAgentFileTabSnapshot): HappyAgentFileTabSnapshot => {
+            if (reveal !== undefined) return { ...tab, reveal };
+            // A preview is not a second decision about the file: it is what a
+            // click in the listing and the file's own address both resolve to,
+            // and the address is re-applied moments after a reference opens the
+            // file. Clearing here would take the region away from the reader
+            // who just asked for it. Opening the file outright does clear it.
+            if (tab.reveal === undefined || preview) return tab;
+            const { reveal: _cleared, ...rest } = tab;
+            return rest;
+        };
         if (!restoring)
             client.memory.recentTabRemember({ type: "file", groupId, path, fileKind: kind });
         const id = fileTabIdOf(groupId, path);
@@ -2782,6 +3824,7 @@ export function happyAgentWorkspaceStoreCreate(
         // Whatever the panel was holding steps aside: the viewer is one slot.
         if (placement === "panel") panelFileTabClose(id);
         if (existing) {
+            fileTabs = fileTabs.map((tab) => (tab.id === id ? revealApply(tab) : tab));
             if (existing.placement !== placement)
                 fileTabs = fileTabs.map((tab) => (tab.id === id ? { ...tab, placement } : tab));
             const change = fileChangeFind(groupId, path);
@@ -2825,6 +3868,7 @@ export function happyAgentWorkspaceStoreCreate(
             kind,
             placement,
             preview,
+            ...(reveal === undefined ? {} : { reveal }),
             revision,
             presentationId,
             saving: false,
@@ -2892,6 +3936,52 @@ export function happyAgentWorkspaceStoreCreate(
         fileTabCacheStore(held);
         fileTabRelease(held.id);
         fileTabs = fileTabs.filter((tab) => tab.id !== held.id);
+    };
+
+    /**
+     * Opens the whole change as one stream and selects it.
+     *
+     * The stream is built from the checkout's current changes and then read, so
+     * selecting it a second time is only a selection — the files it already
+     * holds are not read again.
+     */
+    const reviewTabOpen = (groupId: HappyAgentGroupId): void => {
+        const id = reviewIdOf(groupId);
+        activeMainViewId = id;
+        activeMainViewGroupId = undefined;
+        if (reviews.has(groupId)) {
+            groupTabRemember(groupId, id);
+            recompute();
+            return;
+        }
+        reviews = new Map(reviews).set(groupId, {
+            id,
+            groupId,
+            files: [],
+            // What it is, is settled the moment the change's own counts are
+            // read, which is the next thing that happens.
+            presentation: "stream",
+            drawn: false,
+            collapsed: new Set(),
+            viewed: new Set(),
+            loading: true,
+        });
+        groupTabRemember(groupId, id);
+        reviewReconcile(groupId, null);
+        recompute();
+    };
+
+    const reviewTabClose = (groupId: HappyAgentGroupId): void => {
+        const id = reviewIdOf(groupId);
+        if (!reviews.has(groupId)) return;
+        // Whatever is still in flight for it belongs to nothing now.
+        reviewGenerations.set(id, (reviewGenerations.get(id) ?? 0) + 1);
+        const next = new Map(reviews);
+        next.delete(groupId);
+        reviews = next;
+        if (activeMainViewId === id) activeMainViewId = undefined;
+        if (displayedMainViewId === id) displayedMainViewId = undefined;
+        recompute();
     };
 
     const fileTabClose = (tabId: string): void => {
@@ -3111,7 +4201,10 @@ export function happyAgentWorkspaceStoreCreate(
             if (refusal) throw new Error(refusal);
             paths.push(await attachmentReferenceOf(groupId, attachment));
         }
-        return happyAgentAttachmentTextAppend(text, paths);
+        return happyAgentAttachmentTextAppend(
+            happyAgentCommentsTextAppend(text, attachments),
+            paths,
+        );
     };
 
     /**
@@ -3140,7 +4233,12 @@ export function happyAgentWorkspaceStoreCreate(
         key: Key,
         target: ComposerStore,
     ): void => {
-        const attachments = target.getState().attachments;
+        // The notes are not held here. They belong to the checkout's review and
+        // are written into whichever draft is addressing it, so keeping a copy
+        // per conversation would hand the same notes to two drafts at once.
+        const attachments = target
+            .getState()
+            .attachments.filter((attachment) => attachment.kind !== "reviewComments");
         if (attachments.length === 0) held.delete(key);
         else held.set(key, attachments);
     };
@@ -3259,11 +4357,17 @@ export function happyAgentWorkspaceStoreCreate(
                 mentions: true,
             },
             ...(carriedText === undefined ? {} : { text: carriedText }),
-            attachments: conversationAttachments.get(conversationId) ?? [],
+            attachments: [
+                ...(conversationAttachments.get(conversationId) ?? []),
+                ...fileCommentsAttachments(),
+            ],
             output: (event) => {
                 switch (event.type) {
-                    case "attachmentAdded":
                     case "attachmentRemoved":
+                        fileCommentsDrop(event.attachmentId);
+                        attachmentsRemember(conversationAttachments, conversationId, created);
+                        return;
+                    case "attachmentAdded":
                         attachmentsRemember(conversationAttachments, conversationId, created);
                         return;
                     case "textUpdated":
@@ -3292,6 +4396,7 @@ export function happyAgentWorkspaceStoreCreate(
                                 );
                                 await withChatStore((store) => store.messageSend(text, images));
                                 conversationAttachments.delete(conversationId);
+                                fileCommentsSpend(event.attachments);
                             },
                             event.attachments,
                         );
@@ -4340,6 +5445,7 @@ export function happyAgentWorkspaceStoreCreate(
             recompute();
         });
         unsubscribeWorkspaceFiles = client.workspaceFilesSubscribe(workspaceFilesChanged);
+        slicesFollow();
         // The addressed conversation survives losing every subscriber (the URL
         // still names it), so remounting re-acquires it rather than opening
         // nothing.
@@ -4378,6 +5484,7 @@ export function happyAgentWorkspaceStoreCreate(
         unsubscribeList = undefined;
         unsubscribeWorkspaceFiles?.();
         unsubscribeWorkspaceFiles = undefined;
+        slicesFollow();
         unsubscribeModels?.();
         unsubscribeModels = undefined;
         fileDocumentsReconcileOnStart = true;
@@ -4438,7 +5545,11 @@ export function happyAgentWorkspaceStoreCreate(
                     // Nothing is addressed here, so there is no checkout whose
                     // arrangement this could be: the defaults stand in.
                     fileScope: "changed",
-                    fileLayout: "flat",
+                    slices: SLICES_NONE,
+                    fileLayout: HAPPY_AGENT_FILE_LAYOUT_DEFAULT,
+                    fileSearch,
+                    fileComments,
+                    reviews,
                     fileTreeExpanded,
                     fileTreeCollapsed,
                     ...(workspaceFiles ? { workspaceFiles } : {}),
@@ -4636,6 +5747,20 @@ export function happyAgentWorkspaceStoreCreate(
         projectCompute = undefined;
     };
 
+    /**
+     * Puts the open conversation back on screen: no file tab, no tool tab.
+     *
+     * Selecting nothing is what "the conversation" means here, and the tab the
+     * group is then being read on is remembered as such.
+     */
+    const mainViewClear = (): void => {
+        activeMainViewId = undefined;
+        displayedMainViewId = undefined;
+        activeMainViewGroupId = undefined;
+        if (addressedGroupId !== undefined && openId !== undefined)
+            groupTabRemember(addressedGroupId, openId);
+    };
+
     return {
         get: () => snapshotStore.getState(),
         panel,
@@ -4650,7 +5775,11 @@ export function happyAgentWorkspaceStoreCreate(
 
         conversationOpen: (conversationId, groupId) => {
             addressApply(groupId, conversationId);
-            if (groupId !== addressedGroupId) fileTreeExpansionReset();
+            if (groupId !== addressedGroupId) {
+                fileTreeExpansionLoad(groupId);
+                fileSearchReset();
+                fileCommentsReset();
+            }
             releaseGroup();
             if (groupId !== undefined && fileScopeOf(groupId) === "all")
                 workspaceFilesEnsure(groupId);
@@ -4662,6 +5791,7 @@ export function happyAgentWorkspaceStoreCreate(
                 });
                 addressedGroupId = groupId;
                 addressedGroupSeenUpdate();
+                slicesFollow();
                 groupRestore(groupId);
                 // Restoration reopens the group's tabs, but this address names
                 // the session. A file address applies this action first and
@@ -4680,12 +5810,15 @@ export function happyAgentWorkspaceStoreCreate(
             addressApply(groupId, undefined);
             if (groupId !== addressedGroupId) {
                 displayedMainViewId = undefined;
-                fileTreeExpansionReset();
+                fileTreeExpansionLoad(groupId);
+                fileSearchReset();
+                fileCommentsReset();
             }
             // The panel belongs to this group, so it learns the address before
             // the conversation is released rather than after.
             addressedGroupId = groupId;
             addressedGroupSeenUpdate();
+            slicesFollow();
             openConversation(undefined);
             groupRestore(groupId);
             // The scope belongs to this checkout, so a group left listing every
@@ -4698,14 +5831,20 @@ export function happyAgentWorkspaceStoreCreate(
             const created: ComposerStore = composerStoreCreate(groupId, {
                 capabilities: { shellMode: false, commands: [], mentions: false },
                 text: client.memory.groupRead(groupId)?.draft ?? "",
-                attachments: groupAttachments.get(groupId) ?? [],
+                attachments: [
+                    ...(groupAttachments.get(groupId) ?? []),
+                    ...fileCommentsAttachments(),
+                ],
                 output: (event) => {
                     switch (event.type) {
                         case "textUpdated":
                             client.memory.groupDraftWrite(groupId, event.text);
                             return;
-                        case "attachmentAdded":
                         case "attachmentRemoved":
+                            fileCommentsDrop(event.attachmentId);
+                            attachmentsRemember(groupAttachments, groupId, created);
+                            return;
+                        case "attachmentAdded":
                             attachmentsRemember(groupAttachments, groupId, created);
                             return;
                         case "textSubmitted": {
@@ -4729,6 +5868,7 @@ export function happyAgentWorkspaceStoreCreate(
                                     // own record of the draft is cleared here.
                                     client.memory.groupDraftWrite(groupId, "");
                                     groupAttachments.delete(groupId);
+                                    fileCommentsSpend(event.attachments);
                                 },
                                 event.attachments,
                             );
@@ -4754,7 +5894,11 @@ export function happyAgentWorkspaceStoreCreate(
             // ask the owner to navigate away from a list it is already on.
             addressedGroupId = undefined;
             addressedGroupSeen = undefined;
+            slicesFollow();
             displayedMainViewId = undefined;
+            fileTreeExpansionLoad(undefined);
+            fileSearchReset();
+            fileCommentsReset();
             openConversation(undefined);
         },
         conversationListRetry: () => {
@@ -5033,9 +6177,9 @@ export function happyAgentWorkspaceStoreCreate(
         worktreeReorder: (projectId, worktreeId, afterId) =>
             list.worktreeReorder(projectId, worktreeId, afterId),
 
-        filePanelOpen(groupId, path, kind) {
+        filePanelOpen(groupId, path, kind, selection) {
             if (disposed) return;
-            fileTabOpen(groupId, path, kind, false, "panel");
+            fileTabOpen(groupId, path, kind, false, "panel", selection);
             panel.fileViewOpen();
         },
         filePanelClose() {
@@ -5045,7 +6189,8 @@ export function happyAgentWorkspaceStoreCreate(
             recompute();
         },
         filePreview: (groupId, path, kind) => fileTabOpen(groupId, path, kind, true),
-        fileOpen: (groupId, path, kind) => fileTabOpen(groupId, path, kind, false),
+        fileOpen: (groupId, path, kind, selection) =>
+            fileTabOpen(groupId, path, kind, false, "main", selection),
         filePreprocess: (groupId, path, kind) => filePreprocessEnqueue(groupId, path, kind),
         attachmentFileOpen: (source, kind) => {
             const resolved = groupPathResolve(source);
@@ -5122,6 +6267,11 @@ export function happyAgentWorkspaceStoreCreate(
         },
         mainViewSelect(viewId) {
             if (disposed) return;
+            if (viewId === undefined) {
+                mainViewClear();
+                recompute();
+                return;
+            }
             const file =
                 viewId !== undefined ? fileTabs.find((tab) => tab.id === viewId) : undefined;
             const tool =
@@ -5175,6 +6325,15 @@ export function happyAgentWorkspaceStoreCreate(
             recompute();
         },
         fileClose: (tabId) => fileTabClose(tabId),
+        reviewOpen: (groupId) => reviewTabOpen(groupId),
+        reviewClose: (groupId) => reviewTabClose(groupId),
+        reviewFileNext: (groupId) => reviewFileStep(groupId, 1),
+        reviewFilePrevious: (groupId) => reviewFileStep(groupId, -1),
+        reviewRetry: (groupId) => reviewRetry(groupId),
+        reviewFileCollapsedToggle: (groupId, path) => reviewFileCollapsedToggle(groupId, path),
+        reviewFilesCollapsedSet: (groupId, collapsed) =>
+            reviewFilesCollapsedSet(groupId, collapsed),
+        reviewFileViewedToggle: (groupId, path) => reviewFileViewedToggle(groupId, path),
         fileRetry(tabId) {
             const tab = fileTabs.find((candidate) => candidate.id === tabId);
             if (tab)
@@ -5196,12 +6355,75 @@ export function happyAgentWorkspaceStoreCreate(
             if (scope === "all") workspaceFilesEnsure(groupId);
             if (fileScopeOf(groupId) === scope) return;
             viewPreferencesWrite(groupId, { fileScope: scope });
+            // The query survives the switch — the reader is still looking for
+            // the same thing — but the two scopes answer it from different
+            // places, so it is asked again against the one now showing.
+            if (fileSearch.query !== "") fileSearchApply(fileSearch.query);
             recompute();
+        },
+        sliceSelect,
+        sliceDelete,
+        sliceOpen(groupId, sliceId) {
+            panel.filesSelect();
+            sliceSelect(groupId, sliceId);
         },
         fileLayoutUpdate(groupId, layout) {
             if (fileScopeOf(groupId) === "all") return;
-            if ((groupView(groupId).fileLayout ?? "flat") === layout) return;
+            if ((groupView(groupId).fileLayout ?? HAPPY_AGENT_FILE_LAYOUT_DEFAULT) === layout)
+                return;
             viewPreferencesWrite(groupId, { fileLayout: layout });
+            recompute();
+        },
+        fileSearchUpdate(query) {
+            if (fileSearch.query === query) return;
+            fileSearchApply(query);
+            recompute();
+        },
+        commentDraftOpen(anchor) {
+            fileComments = { ...fileComments, draft: { anchor, text: "" } };
+            recompute();
+        },
+        commentDraftUpdate(text) {
+            if (fileComments.draft === undefined) return;
+            fileComments = { ...fileComments, draft: { ...fileComments.draft, text } };
+            recompute();
+        },
+        commentDraftCancel() {
+            if (fileComments.draft === undefined) return;
+            fileComments = { comments: fileComments.comments };
+            recompute();
+        },
+        commentDraftSubmit() {
+            const draft = fileComments.draft;
+            if (draft === undefined) return;
+            const text = draft.text.trim();
+            // Nothing was written, so there is nothing to keep. Closing the
+            // composer is the whole of what was asked for.
+            if (text === "") {
+                fileComments = { comments: fileComments.comments };
+                recompute();
+                return;
+            }
+            const comment: HappyAgentFileComment = {
+                id: `comment:${String(++commentSequence)}` as HappyAgentCommentId,
+                anchor: draft.anchor,
+                text,
+                stale: false,
+            };
+            fileComments = { comments: [...fileComments.comments, comment] };
+            // A written note is already part of what the reader is asking for,
+            // so it joins the draft here rather than waiting behind a button
+            // that only repeats what writing it down already said.
+            fileCommentsProject();
+            recompute();
+        },
+        commentRemove(commentId) {
+            const remaining = fileComments.comments.filter(
+                (candidate) => candidate.id !== commentId,
+            );
+            if (remaining.length === fileComments.comments.length) return;
+            fileComments = { ...fileComments, comments: remaining };
+            fileCommentsProject();
             recompute();
         },
         panelWidthUpdate(groupId, width) {
@@ -5228,6 +6450,14 @@ export function happyAgentWorkspaceStoreCreate(
             fileTreeExpanded = opened;
             fileTreeCollapsed = closed;
             const groupId = addressedGroupId;
+            // How this checkout's listing stands is part of how it is being
+            // looked at, so it is kept beside the panel width and the layout
+            // and comes back the way it was left.
+            if (groupId !== undefined)
+                viewPreferencesWrite(groupId, {
+                    fileTreeOpened: [...opened],
+                    fileTreeClosed: [...closed],
+                });
             if (expanded && groupId !== undefined && fileScopeOf(groupId) === "all")
                 workspaceFilesDirectoryEnsure(groupId, path);
             recompute();
@@ -5254,12 +6484,19 @@ export function happyAgentWorkspaceStoreCreate(
                     ? { ...candidate, draft, preview: false }
                     : candidate,
             );
+            // Typing in the file moves its lines just as surely as the agent
+            // rewriting it does, so notes left on it stop describing where they
+            // were left. That the reader did it themselves changes nothing about
+            // whether the recorded line numbers still hold.
+            fileCommentsStale([tab.path]);
             recompute();
         },
         fileDraftRevert(tabId) {
+            // Reverting leaves nothing to write back, so the reason the last
+            // write failed is about text that no longer exists.
             fileTabs = fileTabs.map((tab) =>
                 tab.id === tabId && !tab.saving && tab.draft !== undefined
-                    ? { ...tab, draft: undefined }
+                    ? { ...tab, draft: undefined, saveError: undefined }
                     : tab,
             );
             recompute();
@@ -5271,33 +6508,66 @@ export function happyAgentWorkspaceStoreCreate(
             if (refusal) throw new Error(refusal);
             const draft = tab.draft;
             fileTabs = fileTabs.map((candidate) =>
-                candidate.id === tabId ? { ...candidate, saving: true } : candidate,
+                candidate.id === tabId
+                    ? { ...candidate, saving: true, saveError: undefined }
+                    : candidate,
             );
             recompute();
             try {
                 const expectedHash =
                     tab.document.type === "ready" ? (tab.document.value.hash ?? null) : null;
-                await client.workspaceFileWrite(tab.groupId, tab.path, draft, expectedHash);
-                // The draft is dropped on success, not kept as the new content:
-                // what the file now says is the checkout's answer, and the
-                // reload below is what asks for it. Keeping the draft would
-                // leave the tab showing text nothing had confirmed.
+                const written = await client.workspaceFileWrite(
+                    tab.groupId,
+                    tab.path,
+                    draft,
+                    expectedHash,
+                );
+                // An accepted write says what the file now contains and what its
+                // identity now is, so the tab is told both at once rather than
+                // dropping the draft and showing the bytes read before it until
+                // a reload answers. That gap was visible: the editor was handed
+                // the old text, replaced what was on screen, and the caret and
+                // scroll the person was holding went with it.
                 fileTabs = fileTabs.map((candidate) =>
-                    candidate.id === tabId
-                        ? { ...candidate, draft: undefined, saving: false }
+                    candidate.groupId === tab.groupId && candidate.path === tab.path
+                        ? {
+                              ...candidate,
+                              document: fileDocumentSaved(candidate.document, draft, written.hash),
+                              ...(candidate.id === tabId
+                                  ? {
+                                        draft: undefined,
+                                        saving: false,
+                                        saveError: undefined,
+                                    }
+                                  : {}),
+                          }
                         : candidate,
                 );
                 recompute();
-                fileLoad(tabId, fileChangeFind(tab.groupId, tab.path)?.revision ?? tab.revision);
+                // An accepted write is first-hand knowledge that the bytes on
+                // disk changed, so it reconciles on its own rather than waiting
+                // for the watcher to mention what we already did. A write to the
+                // working tree moves no revision, so the cached document cannot
+                // be told apart from the one read before it: reloading without
+                // retiring it scores a hit on the pre-save text and the tab
+                // silently reverts what was just saved. Every tab on the path
+                // reconciles, not only the one saved from, because one file
+                // opened twice is still one file.
+                workspaceFilesChanged({ groupId: tab.groupId, paths: [tab.path] });
             } catch (error) {
                 // The draft survives a failed write. It is the only copy of what
                 // was typed, and throwing it away to report an error would cost
-                // more than the error is worth.
+                // more than the error is worth. The reason is kept beside it,
+                // because the tab is the only place the reader is looking and a
+                // rejected promise alone shows them nothing.
+                const failure = happyAgentUserError(error);
                 fileTabs = fileTabs.map((candidate) =>
-                    candidate.id === tabId ? { ...candidate, saving: false } : candidate,
+                    candidate.id === tabId
+                        ? { ...candidate, saving: false, saveError: failure }
+                        : candidate,
                 );
                 recompute();
-                throw error;
+                throw failure;
             }
         },
 

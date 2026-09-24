@@ -760,6 +760,8 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                     onScrollbarVisibilityChange={(visibility) =>
                         props.appearance.scrollbarVisibilitySelect(visibility)
                     }
+                    linkOpenPlacement={settings.linkOpenPlacement}
+                    onLinkOpenPlacementChange={props.settings.linkOpenPlacementUpdate}
                     onExperimentalFeaturesChange={(enabled) =>
                         experimentsStore.experimentalFeaturesUpdate(enabled)
                     }

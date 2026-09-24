@@ -10,10 +10,13 @@ import { HappyAgentSettingsSection } from "./HappyAgentSettingsShell";
 
 export type HappyAgentAppearanceChoice = "system" | "light" | "dark";
 export type HappyAgentScrollbarVisibilityChoice = "always" | "automatic";
+/** Where a clicked web link opens: the side panel's browser tab, or the machine's browser. */
+export type HappyAgentLinkOpenPlacementChoice = "panel" | "browser";
 
 export type HappyAgentGeneralSettingsProps = {
     appearance: HappyAgentAppearanceChoice;
     scrollbarVisibility: HappyAgentScrollbarVisibilityChoice;
+    linkOpenPlacement: HappyAgentLinkOpenPlacementChoice;
     /** The default a new session starts on, keyed `${providerId}:${modelId}`. */
     defaultModelKey?: string;
     /** Every model the enabled providers offer, already labelled for display. */
@@ -61,6 +64,7 @@ export type HappyAgentGeneralSettingsProps = {
     };
     onAppearanceChange: (appearance: HappyAgentAppearanceChoice) => void;
     onScrollbarVisibilityChange: (visibility: HappyAgentScrollbarVisibilityChoice) => void;
+    onLinkOpenPlacementChange: (placement: HappyAgentLinkOpenPlacementChoice) => void;
     onExperimentalFeaturesChange: (enabled: boolean) => void;
     onTitleShimmerChange: (enabled: boolean) => void;
     onDefaultModelChange: (key: string) => void;
@@ -82,6 +86,11 @@ const appearanceSegments = [
 const scrollbarSegments = [
     { value: "automatic", label: "Automatic" },
     { value: "always", label: "Always visible" },
+];
+
+const linkOpenSegments = [
+    { value: "panel", label: "Side panel" },
+    { value: "browser", label: "Browser" },
 ];
 
 /**
@@ -150,6 +159,28 @@ export function HappyAgentGeneralSettings(props: HappyAgentGeneralSettingsProps)
                     description="Animates running session, project, and workspace names"
                     htmlFor="happy-agent-settings-title-shimmer"
                     label="Shimmer active titles"
+                />
+            </HappyAgentSettingsSection>
+            <HappyAgentSettingsSection
+                description="Where a web link goes when it is clicked. A link's own menu can always choose the other."
+                title="Links"
+            >
+                <FormRow
+                    control={
+                        <SegmentedControl
+                            aria-label="Open links in"
+                            onChange={(value) =>
+                                props.onLinkOpenPlacementChange(
+                                    value as HappyAgentLinkOpenPlacementChoice,
+                                )
+                            }
+                            segments={linkOpenSegments}
+                            size="small"
+                            value={props.linkOpenPlacement}
+                        />
+                    }
+                    description="Side panel keeps the page beside the conversation; Browser hands it to the machine's own"
+                    label="Open links in"
                 />
             </HappyAgentSettingsSection>
             <HappyAgentSettingsSection

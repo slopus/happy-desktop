@@ -15,6 +15,7 @@ declare const happyAgentProjectIdBrand: unique symbol;
 declare const happyAgentWorktreeIdBrand: unique symbol;
 declare const happyAgentTerminalIdBrand: unique symbol;
 declare const happyAgentBotIdBrand: unique symbol;
+declare const happyAgentSliceIdBrand: unique symbol;
 
 /** Branded session identifier (CUID2 on the wire) so ids are not interchangeable with plain strings. */
 export type HappyAgentSessionId = string & { readonly [happyAgentSessionIdBrand]: true };
@@ -562,6 +563,48 @@ export interface HappyAgentGitChangedFile {
     /** Lines this file gained and lost against HEAD; absent when it is binary. */
     readonly addedLines?: number;
     readonly deletedLines?: number;
+}
+
+/** Branded identifier of one slice an agent built over a checkout (CUID2 on the wire). */
+export type HappyAgentSliceId = string & { readonly [happyAgentSliceIdBrand]: true };
+
+/** One-based, inclusive run of lines inside a sliced file. */
+export interface HappyAgentSliceLineRange {
+    readonly start: number;
+    readonly end: number;
+}
+
+/** One file a slice names, with why it is there and which lines matter. */
+export interface HappyAgentSliceFile {
+    /** Relative to the checkout root. */
+    readonly path: string;
+    /** The agent's one-line reason for including it, when it gave one. */
+    readonly reason?: string;
+    /** Empty when the whole file is meant. */
+    readonly lines: readonly HappyAgentSliceLineRange[];
+}
+
+/**
+ * A slice: an attention mask an agent built over a checkout from the meaning
+ * of a request — "the API schema changes", "the core data structures". It
+ * names files and, sometimes, lines, and carries nothing else: what is shown
+ * through it is always the working tree as it stands now, never a copy.
+ *
+ * It belongs to the checkout rather than to the conversation that made it,
+ * the way a review does, because it is about a working tree and stays useful
+ * across the sessions read beside it.
+ */
+export interface HappyAgentSlice {
+    readonly id: HappyAgentSliceId;
+    readonly groupId: HappyAgentGroupId;
+    /** The conversation whose agent built it. */
+    readonly sessionId: HappyAgentSessionId;
+    readonly title: string;
+    /** What the slice is for, in a sentence or two, when the agent said. */
+    readonly note?: string;
+    readonly files: readonly HappyAgentSliceFile[];
+    /** Epoch milliseconds. */
+    readonly createdAt: number;
 }
 
 /** Current working-tree text loaded for an ordinary workspace-file tab. */

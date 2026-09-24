@@ -74,6 +74,13 @@ export type ToolPresentation =
           target: "web" | "x";
           query: string;
           sources?: readonly { url: string; title: string }[];
+      }
+    | {
+          /** A slice the agent built over the checkout; the slice itself is read separately. */
+          kind: "slice";
+          sliceId: string;
+          title: string;
+          fileCount: number;
       };
 
 interface BaseChatElement {
@@ -639,6 +646,7 @@ export type MutationAction =
     | "set_bot_avatar"
     | "create_workspace"
     | "archive_workspace"
+    | "delete_slice"
     | "create_session"
     | "send_message"
     | "invoke_slash_command"
@@ -699,6 +707,42 @@ export interface HappyAgentGroupsConnection {
     projects: () => readonly ProjectGroup[];
     bots: () => readonly BotGroup[];
     state: () => GroupsState;
+    close: () => void;
+}
+
+/**
+ * One slice of a workspace: an attention mask an agent built over the checkout
+ * from the meaning of a request. It names files and, optionally, line ranges;
+ * it never carries content, so what it shows is always the working tree as it
+ * stands now.
+ */
+export interface WorkspaceSlice {
+    id: string;
+    workspaceId: string;
+    /** The agent that built it. */
+    agentId: string;
+    title: string;
+    note: string | null;
+    files: readonly {
+        /** Relative to the checkout root. */
+        path: string;
+        reason: string | null;
+        /** One-based inclusive line ranges; empty when the whole file is meant. */
+        lines: readonly { start: number; end: number }[];
+    }[];
+    createdAt: number;
+}
+
+export interface HappyAgentSlicesSubscriptionOptions {
+    workspaceId: string;
+    /** The workspace's slices, newest first, each time they are known or change. */
+    onChange: (slices: readonly WorkspaceSlice[]) => void;
+    onError?: (error: unknown) => void;
+}
+
+export interface HappyAgentSlicesConnection {
+    /** What is known so far: nothing until the first read has answered. */
+    slices: () => readonly WorkspaceSlice[] | undefined;
     close: () => void;
 }
 
@@ -810,6 +854,18 @@ export interface HappyAgentConnection {
     retry: () => void;
     connectSession: (options: HappyAgentSessionSubscriptionOptions) => HappyAgentSessionConnection;
     connectGroups: (options: HappyAgentGroupsSubscriptionOptions) => HappyAgentGroupsConnection;
+    /**
+     * Follows one workspace's slices. The list is read from the daemon on the
+     * first subscription and kept current from `slice.created`; a daemon that
+     * has no slices — or does not know the resource — answers with none.
+     */
+    connectSlices: (options: HappyAgentSlicesSubscriptionOptions) => HappyAgentSlicesConnection;
+    /**
+     * Removes one slice the person no longer needs. Everyone following the
+     * workspace's slices sees it leave when the daemon confirms, and again
+     * harmlessly when `slice.deleted` arrives.
+     */
+    deleteSlice(workspaceId: string, sliceId: string): MutationId;
     projects: {
         add(path: string, options?: ProjectAddOptions): Promise<Project>;
         archive(projectId: string): MutationId;

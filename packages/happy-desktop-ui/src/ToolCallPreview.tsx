@@ -59,9 +59,10 @@ function statusLabel(tool: ConversationToolCall): string {
 
 function presentationTitle(
     presentation: ConversationActivityPresentation | undefined,
-): "File edit" | "Terminal" | "Sub-agent spawn" | "Tool call" {
+): "File edit" | "Terminal" | "Sub-agent spawn" | "Slice" | "Tool call" {
     if (presentation?.type === "agentSpawn") return "Sub-agent spawn";
     if (presentation?.type === "fileDiff") return "File edit";
+    if (presentation?.type === "slice") return "Slice";
     if (
         presentation?.type === "execCommand" ||
         presentation?.type === "backgroundTerminalInteraction"
@@ -106,7 +107,9 @@ export function ToolCallPreview(props: ToolCallPreviewProps) {
                                   ? "doc"
                                   : title === "Sub-agent spawn"
                                     ? "agents"
-                                    : "zap"
+                                    : title === "Slice"
+                                      ? "filter"
+                                      : "zap"
                         }
                         size={16}
                     />

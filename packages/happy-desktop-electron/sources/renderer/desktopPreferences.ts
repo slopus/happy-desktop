@@ -13,6 +13,7 @@ import type {
     DesktopAppearanceMode,
     DesktopConfig,
     DesktopDefaultModel,
+    DesktopKeepAwakeMode,
     DesktopModelPreference,
     DesktopScrollbarVisibility,
     HappyDesktopBridge,
@@ -33,6 +34,8 @@ const THINKING_LEVELS: ReadonlySet<string> = new Set([
 
 export interface DesktopPreferences {
     readonly initialAppearance: DesktopAppearanceMode;
+    /** Absent until the reader has chosen; the store then applies the product default. */
+    readonly initialKeepAwake: DesktopKeepAwakeMode | undefined;
     readonly initialScrollbarVisibility: DesktopScrollbarVisibility;
     readonly initialSettings: HappyAgentSettingsInitial;
     readonly preferencePersistence: HappyAgentModelPreferencePersistence;
@@ -41,6 +44,7 @@ export interface DesktopPreferences {
         mode: DesktopAppearanceMode,
         scrollbarVisibility: DesktopScrollbarVisibility,
     ): void;
+    keepAwakeChanged(mode: DesktopKeepAwakeMode): void;
     settingsChanged(snapshot: HappyAgentSettingsSnapshot): void;
 }
 
@@ -93,6 +97,7 @@ export function desktopPreferencesCreate(
 
     return {
         initialAppearance: config.appearance,
+        initialKeepAwake: config.keepAwake,
         initialScrollbarVisibility: config.scrollbarVisibility,
         initialSettings: settingsInitial(config),
         preferencePersistence,
@@ -101,6 +106,10 @@ export function desktopPreferencesCreate(
             if (config.appearance === mode && config.scrollbarVisibility === scrollbarVisibility)
                 return;
             commit({ ...config, appearance: mode, scrollbarVisibility });
+        },
+        keepAwakeChanged(mode) {
+            if (config.keepAwake === mode) return;
+            commit({ ...config, keepAwake: mode });
         },
         settingsChanged(snapshot) {
             const nextEffort = snapshot.defaultEffort;
@@ -113,10 +122,12 @@ export function desktopPreferencesCreate(
                           ...(snapshot.defaultEffort ? { effort: snapshot.defaultEffort } : {}),
                       }
                     : undefined;
+            const nextLinkOpen = snapshot.linkOpenPlacement;
             if (
                 defaultEqual(config.defaultModel, nextDefault) &&
                 config.defaultEffort === nextEffort &&
                 config.defaultPermissionMode === nextPermissionMode &&
+                (config.linkOpen ?? "panel") === nextLinkOpen &&
                 (config.previewUpdatesEnabled === true) === snapshot.previewUpdatesEnabled
             )
                 return;
@@ -148,6 +159,8 @@ export function desktopPreferencesCreate(
                 defaultEffort: nextEffort,
                 ...(nextDefault ? { defaultModel: nextDefault } : {}),
                 defaultPermissionMode: nextPermissionMode,
+                ...(config.keepAwake === undefined ? {} : { keepAwake: config.keepAwake }),
+                linkOpen: nextLinkOpen,
                 ...(nextDefault
                     ? {
                           lastPickedModel: {
@@ -184,6 +197,7 @@ function settingsInitial(config: DesktopConfig): HappyAgentSettingsInitial {
             : {}),
         defaultEffort: effort,
         defaultPermissionMode: permissionMode(config.defaultPermissionMode),
+        ...(config.linkOpen === undefined ? {} : { linkOpenPlacement: config.linkOpen }),
         previewUpdatesEnabled: config.previewUpdatesEnabled === true,
     };
 }
@@ -263,6 +277,8 @@ function configFromPreferenceDocument(
               : {}),
         ...(document.lastPickedModel ? { lastPickedModel: document.lastPickedModel } : {}),
         defaultPermissionMode: current.defaultPermissionMode,
+        ...(current.keepAwake === undefined ? {} : { keepAwake: current.keepAwake }),
+        ...(current.linkOpen === undefined ? {} : { linkOpen: current.linkOpen }),
         ...(current.previewUpdatesEnabled === undefined
             ? {}
             : { previewUpdatesEnabled: current.previewUpdatesEnabled }),

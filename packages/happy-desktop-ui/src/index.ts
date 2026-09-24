@@ -1,11 +1,31 @@
 import "./styles.css";
 
 export { happyLogoBlackUrl, happyLogoWhiteUrl } from "./assets";
-export { ChangedFileDiff, type ChangedFileDiffProps } from "./ChangedFileDiff";
+export {
+    ChangedFileDiff,
+    type ChangedFileDiffComment,
+    type ChangedFileDiffCommentDraft,
+    type ChangedFileDiffCommentSide,
+    type ChangedFileDiffProps,
+} from "./ChangedFileDiff";
+export {
+    ReviewComment,
+    reviewCommentPlace,
+    type ReviewCommentProps,
+    type ReviewCommentSide,
+} from "./ReviewComment";
+export {
+    ReviewStream,
+    type ReviewStreamComment,
+    type ReviewStreamCommentDraft,
+    type ReviewStreamFile,
+    type ReviewStreamProps,
+    type ReviewStreamSingleFile,
+} from "./ReviewStream";
 export { CompactActivityRow, type CompactActivityRowProps } from "./CompactActivityRow";
 export { compactCount } from "./countText";
 export { CodeBlock, codeBlockLanguage, type CodeBlockProps } from "./CodeBlock";
-export { CodeEditor, type CodeEditorProps } from "./CodeEditor";
+export { CodeEditor, type CodeEditorProps, type CodeEditorReveal } from "./CodeEditor";
 export {
     ScrollArea,
     ScrollbarTrack,
@@ -178,6 +198,7 @@ export {
     type FileBrowserLayout,
     type FileBrowserProps,
     type FileBrowserScope,
+    type FileBrowserSlice,
 } from "./FileBrowser";
 export { FilePathLabel, type FilePathLabelProps } from "./FilePathLabel";
 export {
@@ -205,8 +226,15 @@ export { HtmlPreviewError, type HtmlPreviewErrorProps } from "./HtmlPreviewError
 export {
     MarkdownDocument,
     markdownDocumentLinkPath,
+    markdownDocumentLinkTarget,
     type MarkdownDocumentProps,
 } from "./MarkdownDocument";
+export {
+    fileReferenceFragment,
+    fileReferenceSplit,
+    type FileOpenHandler,
+    type FileReference,
+} from "./fileReference";
 export { MermaidDiagram, type MermaidDiagramProps } from "./MermaidDiagram";
 export { Icon, type IconName, iconNames, type IconProps } from "./Icon";
 export {
@@ -234,7 +262,11 @@ export {
     SystemNotice,
     type SystemNoticeSegment,
 } from "./Message";
-export { type MessageGenerationStatus } from "./MessageMarkdown";
+export {
+    type LinkOpenHandler,
+    type LinkOpenPlacement,
+    type MessageGenerationStatus,
+} from "./MessageMarkdown";
 export { Lightbox, type LightboxProps } from "./Lightbox";
 export { Rail, type RailItem, type RailProps } from "./Rail";
 export {
@@ -255,6 +287,11 @@ export {
     type SidebarSection,
 } from "./Sidebar";
 export { SidebarFooter, type SidebarFooterProps } from "./SidebarFooter";
+export {
+    SidebarKeepAwakeMenu,
+    type SidebarKeepAwakeMenuProps,
+    type SidebarKeepAwakeMode,
+} from "./SidebarKeepAwakeMenu";
 export {
     SIDEBAR_SPACES_BAR_HEIGHT,
     SIDEBAR_SPACES_DOT_SIZE,
@@ -282,15 +319,18 @@ export {
 } from "./AgentActivityRow";
 export { ConversationEntryView, type ConversationEntryViewProps } from "./ConversationEntryView";
 export { DelegatedAgentActivity, type DelegatedAgentActivityProps } from "./DelegatedAgentActivity";
+export { ContextMenu, type ContextMenuProps } from "./ContextMenu";
 export { ContextMeter, type ContextMeterProps } from "./ContextMeter";
 export {
     fileTreeBuild,
     fileTreeExpanded,
     fileTreeFlatten,
+    fileTreeRanked,
     fileTreeVisibleFiles,
     type FileTreeBuildEntry,
     type FileTreeExpansion,
 } from "./fileTreeBuild";
+export { filePathMatches } from "./fileTreeSearch";
 export { fileEntriesSort, fileNameCompare, filePathCompare } from "./fileTreeSort";
 export {
     ConversationStatus,
@@ -600,6 +640,7 @@ export {
     HappyAgentGeneralSettings,
     type HappyAgentAppearanceChoice,
     type HappyAgentGeneralSettingsProps,
+    type HappyAgentLinkOpenPlacementChoice,
     type HappyAgentScrollbarVisibilityChoice,
 } from "./pages/settings/HappyAgentGeneralSettings";
 export {

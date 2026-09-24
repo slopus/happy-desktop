@@ -1,0 +1,64 @@
+/*
+ * The file name in a diff header.
+ *
+ * Pierre slots this into its header in light DOM, so it is styled here like any
+ * other part of the page. It replaces the renderer's own name, which is hidden
+ * from inside the shadow root; see `PIERRE_DIFF_HEADER_CSS`.
+ *
+ * Pierre puts slotted content in a plain `div` of its own, which then becomes
+ * the flex item in its header row and, being a block, refuses to shrink below
+ * its content — a long path walks over the counts instead of losing its head.
+ * Dissolving that wrapper makes this title the flex item, where `min-width: 0`
+ * means what it says.
+ */
+
+.happy-diff-surface [slot="header-prefix"] {
+    display: contents;
+}
+
+.happy-diff-file-title {
+    display: flex;
+    flex: 0 1 auto;
+    align-items: center;
+    min-width: 0;
+    color: var(--text);
+    font-size: 12px;
+}
+
+/* Spacing is set per part rather than as one gap: a path is one word, so the
+   directories and the file name must meet with nothing between them, while the
+   glyph and the rename arrow stand apart. */
+.happy-diff-file-title .happy-file-family {
+    margin-inline-end: 8px;
+}
+
+.happy-diff-file-title__previous {
+    margin-inline-end: 4px;
+}
+
+/* The head of a path is the part a reader gives up first, so it is the part
+   that shrinks and loses its start to the ellipsis. `direction: rtl` puts the
+   ellipsis at the beginning; the `bdi` inside keeps the characters in their own
+   order. */
+.happy-diff-file-title__directory,
+.happy-diff-file-title__previous {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    direction: rtl;
+}
+
+.happy-diff-file-title__rename {
+    flex: none;
+    margin-inline-end: 4px;
+    color: var(--text-secondary);
+}
+
+/* What the reader came for. It keeps its width whatever the pane does. */
+.happy-diff-file-title__name {
+    flex: none;
+    white-space: nowrap;
+}

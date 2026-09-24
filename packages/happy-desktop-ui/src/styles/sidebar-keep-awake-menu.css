@@ -1,0 +1,169 @@
+/*
+ * C-285 SidebarKeepAwakeMenu — the footer's coffee-cup trigger and the small
+ * three-way menu it opens above the footer.
+ *
+ * Contract: the trigger is an ordinary 28px ghost glyph like its neighbours and
+ * paints in full ink only while the machine is actually being held awake. The
+ * menu hangs from the footer's right gutter (`.happy-sidebar-footer` is the
+ * containing block, see SidebarFooter) as a 4px-padded card: a 32px header
+ * carrying the title and the live state, then three 48px radio rows of a 14px
+ * label over a 12px description, each with a 16px leading slot that holds a
+ * 6px dot on the chosen row.
+ */
+
+.happy-sidebar-keep-awake,
+.happy-sidebar-keep-awake * {
+    box-sizing: border-box;
+}
+
+.happy-sidebar-keep-awake {
+    display: flex;
+    flex: none;
+}
+
+.happy-sidebar-keep-awake[data-active] > .happy-sidebar-keep-awake__trigger,
+.happy-sidebar-keep-awake[data-open] > .happy-sidebar-keep-awake__trigger {
+    color: var(--text);
+}
+
+.happy-sidebar-keep-awake[data-open] > .happy-sidebar-keep-awake__trigger {
+    background: var(--surface-ripple);
+}
+
+/* ---- Menu ------------------------------------------------------------- */
+
+.happy-sidebar-keep-awake__menu {
+    position: absolute;
+    right: 0;
+    bottom: calc(100% + 8px);
+    z-index: 30;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    max-width: 320px;
+    padding: 4px;
+    border: 1px solid var(--modal-border);
+    border-radius: var(--happy-radius-md);
+    background: var(--surface);
+    box-shadow: 0 2px 8px var(--shadow-color);
+    color: var(--text);
+    font-family: var(--happy-font-ui);
+    font-synthesis: none;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+.happy-sidebar-keep-awake__header {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-width: 0;
+    height: 32px;
+    padding: 0 8px;
+}
+
+.happy-sidebar-keep-awake__title {
+    display: block;
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 16px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-sidebar-keep-awake__state {
+    display: block;
+    flex: none;
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 16px;
+    white-space: nowrap;
+}
+
+/* ---- Rows ------------------------------------------------------------- */
+
+.happy-sidebar-keep-awake__option {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    height: 48px;
+    margin: 0;
+    padding: 0 8px;
+    border: 0;
+    /* The card's 10px radius minus its 5px border-box inset, so every row is
+       the true parallel curve of the card. */
+    border-radius: 5px;
+    background: transparent;
+    color: var(--text);
+    font-family: var(--happy-font-ui);
+    font-synthesis: none;
+    text-align: left;
+    cursor: pointer;
+    appearance: none;
+    transition: background-color 120ms ease;
+}
+
+.happy-sidebar-keep-awake__option:hover {
+    background: var(--surface-ripple);
+}
+
+.happy-sidebar-keep-awake__option:focus-visible {
+    outline: 2px solid var(--radio-active);
+    outline-offset: -2px;
+}
+
+.happy-sidebar-keep-awake__mark {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+}
+
+/* The dot is drawn only on the chosen row; the slot stays so labels align. */
+.happy-sidebar-keep-awake__option[aria-checked="true"] > .happy-sidebar-keep-awake__mark::before {
+    content: "";
+    display: block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--text);
+}
+
+.happy-sidebar-keep-awake__copy {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.happy-sidebar-keep-awake__label {
+    display: block;
+    overflow: hidden;
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 18px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-sidebar-keep-awake__description {
+    display: block;
+    overflow: hidden;
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 16px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}

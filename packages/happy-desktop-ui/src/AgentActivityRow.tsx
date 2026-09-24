@@ -12,6 +12,7 @@ import { compactCount, changeCountLabel } from "./countText";
 import { CopyButton } from "./CopyButton";
 import { DiffSnippet, type DiffLine } from "./DiffSnippet";
 import { filePreviewKind } from "./FilePreview";
+import type { FileOpenHandler } from "./fileReference";
 import { Icon, type IconName } from "./Icon";
 import { useMessageListDisclosureAnchor } from "./messageListDisclosureAnchor";
 import { renderMessageMarkdown } from "./MessageMarkdown";
@@ -47,7 +48,13 @@ export type AgentActivityRowProps = {
      * viewer. A row whose tool names no single showable file offers nothing,
      * and a surface with no workspace behind it passes nothing.
      */
-    onFileOpen?: (path: string) => void;
+    onFileOpen?: FileOpenHandler;
+    /**
+     * Shows a slice the agent built, in the workspace's file listing. The row
+     * is the card the slice is named by, so the whole of it opens the slice;
+     * a surface with no listing behind it passes nothing and the row is inert.
+     */
+    onSliceOpen?: (sliceId: string) => void;
     /** Start expanded (blueprint/tests). Otherwise rich bodies collapse by default. */
     defaultExpanded?: boolean;
     /** Controlled disclosure state for a virtualized transcript row. */
@@ -172,6 +179,7 @@ function toolVerb(
     }
     if (presentation?.type === "search") return active ? "Searching" : "Searched";
     if (presentation?.type === "exploration") return active ? "Exploring" : "Explored";
+    if (presentation?.type === "slice") return active ? "Slicing" : "Sliced";
     // Typing into a terminal that is already running is not the same act as
     // starting one, and it is certainly not editing a file: `write_stdin` would
     // otherwise fall through to the write/edit family below and claim to have
@@ -206,6 +214,9 @@ function toolVerbFocused(verb: string): string {
         case "Waiting":
         case "Waited":
             return "Wait";
+        case "Slicing":
+        case "Sliced":
+            return "Slice";
         case "Used":
             return "Tool";
         default:
@@ -220,7 +231,7 @@ function toolVerbFocused(verb: string): string {
  */
 type ToolGlyph =
     | { set: "house"; name: IconName }
-    | { set: "ionicons"; name: "document-outline" | "terminal-outline" }
+    | { set: "ionicons"; name: "document-outline" | "layers-outline" | "terminal-outline" }
     | { set: "octicons"; name: "alert" | "code" };
 
 function toolGlyph(
@@ -234,6 +245,9 @@ function toolGlyph(
     if (presentation?.type === "search") return { set: "house", name: "globe" };
     if (presentation?.type === "exploration") return { set: "house", name: "search" };
     if (presentation?.type === "fileDiff") return { set: "ionicons", name: "document-outline" };
+    // A slice is a layer laid over the checkout: what shows through it is the
+    // working tree, not a copy of it.
+    if (presentation?.type === "slice") return { set: "ionicons", name: "layers-outline" };
     const lower = name.toLowerCase();
     // Typing into a running terminal gets the terminal itself, so it is not
     // mistaken for the command that started one or for a file edit.
@@ -541,11 +555,19 @@ function AgentToolActivity(props: {
     treatment?: ActivityTreatment;
     onSelect?: (tool: ConversationToolCall) => void;
     onFileOpen?: (path: string) => void;
+    onSliceOpen?: (sliceId: string) => void;
     singleLine?: boolean;
     time?: string;
 }) {
     const { tool } = props;
     const presentation = tool.presentation;
+    /* The row is the card a slice is named by, so the whole header opens it —
+       in every variant, because a slice has no body to disclose and nothing
+       else the header could do. */
+    const sliceOpen =
+        presentation?.type === "slice" && props.onSliceOpen
+            ? () => props.onSliceOpen?.(presentation.sliceId)
+            : undefined;
     const [expanded, setExpanded] = useExpansion(
         props.defaultExpanded ?? false,
         props.expanded,
@@ -584,6 +606,11 @@ function AgentToolActivity(props: {
     } else if (presentation?.type === "exploration") {
         verb = toolVerb(tool.toolName, tool.status, presentation);
         primaryText = explorationSummary(presentation);
+    } else if (presentation?.type === "slice") {
+        verb = toolVerb(tool.toolName, tool.status, presentation);
+        primaryText = `${presentation.title} · ${compactCount(presentation.fileCount)} ${
+            presentation.fileCount === 1 ? "file" : "files"
+        }`;
     } else if (presentation?.type === "fileDiff") {
         const first = presentation.files[0];
         verb = first ? diffVerb(first.kind) : toolVerb(tool.toolName, tool.status, presentation);
@@ -813,7 +840,17 @@ function AgentToolActivity(props: {
                 it: the header is itself a button in most variants, and a
                 nested button would be neither valid nor clickable. */}
             <div className="happy-agent-activity__line" data-happy-desktop-ui="agent-activity-line">
-                {singleLine && props.onSelect ? (
+                {sliceOpen ? (
+                    <button
+                        className="happy-agent-activity__header"
+                        data-happy-desktop-ui="agent-activity-header"
+                        data-slice-open=""
+                        onClick={sliceOpen}
+                        type="button"
+                    >
+                        {header}
+                    </button>
+                ) : singleLine && props.onSelect ? (
                     <button
                         className="happy-agent-activity__header"
                         data-happy-desktop-ui="agent-activity-header"
@@ -1312,6 +1349,7 @@ export function AgentActivityRow(props: AgentActivityRowProps) {
                     treatment={props.treatment}
                     onSelect={props.onToolSelect}
                     {...(props.onFileOpen ? { onFileOpen: props.onFileOpen } : {})}
+                    {...(props.onSliceOpen ? { onSliceOpen: props.onSliceOpen } : {})}
                     singleLine={props.singleLine}
                     time={props.time}
                     tool={activity.tool}

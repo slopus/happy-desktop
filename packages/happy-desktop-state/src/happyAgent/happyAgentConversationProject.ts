@@ -1160,6 +1160,13 @@ function presentationProject(
                 query: presentation.query,
                 ...(presentation.sources === undefined ? {} : { sources: presentation.sources }),
             };
+        case "slice":
+            return {
+                type: "slice",
+                sliceId: presentation.sliceId,
+                title: presentation.title,
+                fileCount: presentation.fileCount,
+            };
     }
 }
 

@@ -95,6 +95,13 @@
     min-height: 0;
 }
 
+/* The editor supplied as this file's source face fills the body, the way it
+   fills the file's own tab. It scrolls itself. */
+.happy-changed-file-editor {
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
 /* The stage is the room a file that plays sits in: one centered child, with
    room around it. Pictures and recordings have viewers of their own and do not
    pass through here; what is left is sound, which has nothing to show. */

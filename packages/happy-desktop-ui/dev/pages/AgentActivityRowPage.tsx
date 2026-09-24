@@ -16,6 +16,7 @@ import {
     happyAgentMcpInterruptedTool,
     happyAgentMcpTool,
     happyAgentRunningTool,
+    happyAgentSliceTool,
     happyAgentStoppedTool,
     happyAgentTerminalTool,
 } from "./happyAgentChatFixtures";
@@ -139,6 +140,42 @@ export function AgentActivityRowPage() {
                     <AgentActivityRow activity={{ kind: "tool", tool: happyAgentMcpTool }} />
                     <AgentActivityRow
                         activity={{ kind: "tool", tool: happyAgentMcpInterruptedTool }}
+                    />
+                </div>
+            </Specimen>
+
+            <Specimen
+                detail="the card a slice is named by · the whole row opens the slice in the panel's file listing · transcript single-line and focused treatments"
+                label="Slice"
+                number="slice"
+                stage="surface"
+            >
+                <div
+                    style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "12px",
+                        width: "720px",
+                    }}
+                >
+                    <AgentActivityRow
+                        activity={{ kind: "tool", tool: happyAgentSliceTool }}
+                        onSliceOpen={() => undefined}
+                        singleLine
+                    />
+                    <AgentActivityRow
+                        activity={{ kind: "tool", tool: happyAgentSliceTool }}
+                        motion="calm"
+                        onSliceOpen={() => undefined}
+                        singleLine
+                        treatment="focused"
+                    />
+                    <AgentActivityRow
+                        activity={{
+                            kind: "tool",
+                            tool: { ...happyAgentSliceTool, status: "running" },
+                        }}
+                        singleLine
                     />
                 </div>
             </Specimen>

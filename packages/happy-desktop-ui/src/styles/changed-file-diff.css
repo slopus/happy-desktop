@@ -71,11 +71,11 @@
     overflow-y: auto;
 }
 
-/* A preview is a whole viewer that owns its own scrolling — a document with a
-   reading measure, a picture on a stage, a recording that fills its frame — so
-   the pane hands it the region rather than scrolling it from outside, which
-   would give the same content two scrollbars. */
-.happy-changed-file-diff[data-mode="preview"] .happy-changed-file-diff__body {
+/* The file itself is a whole viewer that owns its own scrolling — a document
+   with a reading measure, a picture on a stage, an editor — so the pane hands
+   it the region rather than scrolling it from outside, which would give the
+   same content two scrollbars. */
+.happy-changed-file-diff[data-mode="file"] .happy-changed-file-diff__body {
     display: flex;
     overflow: hidden;
 }
@@ -91,32 +91,20 @@
        file viewer's editor and every panel draw: it appears while this pane is
        being scrolled and is gone otherwise. It is an overlay and takes no
        layout, so a row's green or red runs to the pane edge and continues
-       underneath it. */
-    --diffs-font-family: var(--happy-font-mono);
-    --diffs-header-font-family: var(--happy-font-ui);
-    --diffs-font-size: 12px;
-    --diffs-line-height: 20px;
-    /* Pierre's default header is `1lh + 3 × gap-block`: 20 + 3 × 4 = 32,
-       exactly the same row as the tabs, mode bar, and Preview path. */
-    --diffs-gap-block: var(--happy-subheader-inset);
-    --diffs-gap-inline: 10px;
-    --diffs-light-bg: var(--surface);
-    --diffs-dark-bg: var(--surface);
-    --diffs-light: var(--text);
-    --diffs-dark: var(--text);
+       underneath it.
 
-    /* Pierre mixes one accent per side into the page background to build every
-       addition and deletion surface it draws. Setting those two accents is
-       therefore the whole of the color integration: row fills, gutter tints,
-       and word-level emphasis all follow from them. They are the same tokens
-       `DiffSnippet` paints inline diffs with, so a hunk in the transcript and
-       the same hunk in this pane are finally the same green and red.
+       Type, material, and colour come from `.happy-diff-surface`, which this
+       element also carries: they are shared with the review stream, because a
+       diff should not change its size or its green because of which surface
+       opened it. */
+}
 
-       One declaration serves both appearances: these are the theme-neutral
-       fallbacks Pierre consults inside both branches of its `light-dark()`, and
-       the tokens themselves already switch with the theme. */
-    --diffs-addition-color: var(--diff-added-border);
-    --diffs-deletion-color: var(--diff-removed-border);
+/* The two steps through the change read as one control, so they sit together
+   with no gap between them and a normal one to whatever is beside them. */
+.happy-changed-file-diff__steps {
+    display: flex;
+    flex: none;
+    align-items: center;
 }
 
 /* The same code editor the file tab uses: editing a change should not look like

@@ -1,15 +1,37 @@
 import type { DaemonConfig, GitFileChange, Project } from "@slopus/happy-agent-client";
 import { happyAgentServiceTiersFromWire } from "../happyAgentServiceTier.js";
+import type { WorkspaceSlice } from "../happyAgentConnection/types.js";
 import type {
     HappyAgentChangedFileDocument,
     HappyAgentGitChangedFile,
+    HappyAgentGroupId,
     HappyAgentModel,
     HappyAgentModelCatalog,
     HappyAgentProjectCompute,
     HappyAgentProjectComputeState,
     HappyAgentProjectId,
+    HappyAgentSessionId,
+    HappyAgentSlice,
+    HappyAgentSliceId,
     HappyAgentThinkingLevel,
 } from "./happyAgentTypes.js";
+
+/** One slice as the connection publishes it, in the product's own vocabulary. */
+export function happyAgentSliceProject(slice: WorkspaceSlice): HappyAgentSlice {
+    return {
+        id: slice.id as HappyAgentSliceId,
+        groupId: slice.workspaceId as HappyAgentGroupId,
+        sessionId: slice.agentId as HappyAgentSessionId,
+        title: slice.title,
+        ...(slice.note === null || slice.note === "" ? {} : { note: slice.note }),
+        files: slice.files.map((file) => ({
+            path: file.path,
+            ...(file.reason === null || file.reason === "" ? {} : { reason: file.reason }),
+            lines: file.lines,
+        })),
+        createdAt: slice.createdAt,
+    };
+}
 
 type ProviderModel = DaemonConfig["providers"][string]["models"][number];
 

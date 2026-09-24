@@ -6,7 +6,13 @@ import { toCssDimension } from "./dimensions";
 import { Icon } from "./Icon";
 type SearchFieldSharedProps = {
     placeholder?: string;
-    shortcutHint?: string;
+    /**
+     * The key that reaches this field, shown as a cap at its trailing edge.
+     * `false` is for a field with no shortcut behind it — a filter that lives
+     * inside the surface it filters — where a cap would promise a key that does
+     * nothing.
+     */
+    shortcutHint?: string | false;
     value: string;
     width?: Dimension;
 };
@@ -88,7 +94,9 @@ export function SearchField(props: SearchFieldProps) {
                 type="text"
                 value={props.value}
             />
-            <KeyCap className="happy-search-field__hint" keys={props.shortcutHint ?? "⌘K"} />
+            {props.shortcutHint === false ? null : (
+                <KeyCap className="happy-search-field__hint" keys={props.shortcutHint ?? "⌘K"} />
+            )}
         </div>
     );
 }
@@ -172,3 +180,4 @@ export function TitleBar(props: TitleBarProps) {
         </header>
     );
 }
+// test edit sdf

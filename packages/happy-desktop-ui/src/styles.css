@@ -50,6 +50,7 @@
 @import "./styles/segmented-control.css";
 @import "./styles/audience-toggle.css";
 @import "./styles/dev-build-menu.css";
+@import "./styles/sidebar-keep-awake-menu.css";
 @import "./styles/live-performance.css";
 @import "./styles/banner.css";
 @import "./styles/empty-state.css";
@@ -82,6 +83,12 @@
 @import "./styles/file-tree.css";
 @import "./styles/file-panel.css";
 @import "./styles/file-browser.css";
+@import "./styles/diff-surface.css";
+@import "./styles/file-family.css";
+@import "./styles/diff-file-title.css";
+@import "./styles/review-file-actions.css";
+@import "./styles/review-comment.css";
+@import "./styles/review-stream.css";
 @import "./styles/file-path-label.css";
 @import "./styles/markdown-document.css";
 @import "./styles/mermaid-diagram.css";

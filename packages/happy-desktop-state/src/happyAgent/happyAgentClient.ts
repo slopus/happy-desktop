@@ -27,6 +27,7 @@ import type { HappyAgentHostServices } from "./happyAgentHostServices.js";
 import {
     happyAgentChangedFileProject,
     happyAgentModelCatalogProject,
+    happyAgentSliceProject,
     happyAgentTextDecodeBase64,
     happyAgentTextEncodeBase64,
 } from "./happyAgentProject.js";
@@ -37,6 +38,8 @@ import type {
     HappyAgentGroupId,
     HappyAgentOpenInTarget,
     HappyAgentOpenInTargets,
+    HappyAgentSlice,
+    HappyAgentSliceId,
     HappyAgentWorkspaceFileBytes,
     HappyAgentWorkspaceFileDocument,
     HappyAgentWorkspaceFileTreePage,
@@ -192,6 +195,22 @@ export interface HappyAgentWorkspaceClient {
         listener: (change: HappyAgentWorkspaceFilesChanged) => void,
     ): () => void;
     /**
+     * Follows one checkout's slices, newest first, for as long as a surface
+     * shows them. The listener is called once the list is known and again
+     * each time an agent builds a slice; a checkout that has none, or a
+     * Happy Agent that has never heard of slices, reports an empty list.
+     */
+    workspaceSlicesSubscribe(
+        groupId: HappyAgentGroupId,
+        listener: (slices: readonly HappyAgentSlice[]) => void,
+    ): () => void;
+    /**
+     * Removes one slice of a checkout. The slice leaves every subscribed
+     * listing when the daemon confirms; a refusal surfaces as a mutation
+     * failure like any other.
+     */
+    sliceDelete(groupId: HappyAgentGroupId, sliceId: HappyAgentSliceId): void;
+    /**
      * Reads one workspace file as bytes, for showing it rather than editing it.
      * Makes no claim that the file is text, so an image or a video arrives whole.
      */
@@ -205,13 +224,18 @@ export interface HappyAgentWorkspaceClient {
      * that renders the document rather than its source.
      */
     htmlPreviewOpen(groupId: HappyAgentGroupId, path: string): Promise<string>;
-    /** Writes one existing text file back to its checkout. */
+    /**
+     * Writes one existing text file back to its checkout, answering with the
+     * identity the file now has. An accepted write is first-hand knowledge of
+     * what the file says, so the surface that wrote it does not have to read it
+     * back to find out.
+     */
     workspaceFileWrite(
         groupId: HappyAgentGroupId,
         path: string,
         content: string,
         expectedHash: string | null,
-    ): Promise<void>;
+    ): Promise<{ readonly hash: string }>;
     /** Where a file the reader chose lives on this machine, when it lives anywhere. */
     attachmentSourcePath(file: File): string | undefined;
     /**
@@ -560,15 +584,28 @@ export function happyAgentWorkspaceClientCreate(
             });
             return () => connection.close();
         },
+        workspaceSlicesSubscribe(groupId, listener) {
+            if (disposed) throw new Error("The Happy Agent client is disposed.");
+            const connection = deps.connection.connectSlices({
+                workspaceId: groupId,
+                onChange: (slices) => listener(slices.map(happyAgentSliceProject)),
+            });
+            return () => connection.close();
+        },
+        sliceDelete(groupId, sliceId) {
+            if (disposed) throw new Error("The Happy Agent client is disposed.");
+            deps.connection.deleteSlice(groupId, sliceId);
+        },
         workspaceFileBytesRead: (groupId, path, signal) =>
             deps.hostServices.workspaceFileBytesRead(groupId, path, signal),
         htmlPreviewOpen: (groupId, path) => deps.hostServices.htmlPreviewOpen(groupId, path),
         workspaceFileWrite: async (groupId, path, content, expectedHash) => {
-            await deps.client.writeFile(groupId, {
+            const written = await deps.client.writeFile(groupId, {
                 path,
                 content: happyAgentTextEncodeBase64(content),
                 expectedHash,
             });
+            return { hash: written.hash };
         },
         attachmentSourcePath: (file) => deps.hostServices.attachmentSourcePath(file),
         attachmentSourceReachable: (groupId, sourcePath) =>

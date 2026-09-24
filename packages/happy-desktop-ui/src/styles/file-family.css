@@ -1,0 +1,65 @@
+/*
+ * A file's family colour, wherever the family is shown.
+ *
+ * The file tree applies these from its row, because a row has other states to
+ * combine them with. Anywhere else — a diff header, a tab — there is no row to
+ * ask, so the element carries its own family and reads the same tokens. One
+ * vocabulary: a stylesheet is the same violet in the listing and in the header
+ * of its own diff.
+ */
+
+.happy-file-family {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    color: var(--file-other);
+}
+
+.happy-file-family[data-family="archive"] {
+    color: var(--file-archive);
+}
+
+.happy-file-family[data-family="audio"] {
+    color: var(--file-audio);
+}
+
+.happy-file-family[data-family="code"] {
+    color: var(--file-code);
+}
+
+.happy-file-family[data-family="config"] {
+    color: var(--file-config);
+}
+
+.happy-file-family[data-family="data"] {
+    color: var(--file-data);
+}
+
+.happy-file-family[data-family="directory"] {
+    color: var(--file-directory);
+}
+
+.happy-file-family[data-family="image"] {
+    color: var(--file-image);
+}
+
+.happy-file-family[data-family="prose"] {
+    color: var(--file-prose);
+}
+
+.happy-file-family[data-family="secret"] {
+    color: var(--file-secret);
+}
+
+.happy-file-family[data-family="shell"] {
+    color: var(--file-shell);
+}
+
+.happy-file-family[data-family="style"] {
+    color: var(--file-style);
+}
+
+.happy-file-family[data-family="video"] {
+    color: var(--file-video);
+}

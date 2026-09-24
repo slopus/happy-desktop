@@ -102,6 +102,7 @@ const bridge: HappyDesktopBridge = {
     // `send`, not `invoke`: the shell has nothing to answer, and a badge that
     // made the window await the operating system would be a worse badge.
     dockUnreadSet: (count: number) => ipcRenderer.send(desktopIpc.dockUnreadSet, count),
+    keepAwakeSet: (active: boolean) => ipcRenderer.send(desktopIpc.keepAwakeSet, active),
     /* The View menu does the zooming and says so; this side only relays. Reading
        it back from `webFrame` on a viewport change cannot see ⌘0 at 100% or a
        ⌘− that the floor refused, which are the two answers worth showing. */

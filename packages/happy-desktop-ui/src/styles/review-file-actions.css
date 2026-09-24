@@ -1,0 +1,73 @@
+/*
+ * What can be done with one file of a change, in that file's own header.
+ *
+ * The renderer slots this into its header in light DOM, so it is styled here
+ * like any other part of the page. Whether the pointer is on the header is
+ * known only inside the shadow root, which sets `--happy-header-pointer` there;
+ * inherited properties cross into slotted content, so that is what the three
+ * quiet controls read. See `PIERRE_DIFF_HEADER_CSS`.
+ */
+
+.happy-review-file-actions {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Out of the way until the header is under the pointer. Kept in the layout
+   rather than removed, so the counts beside them do not jump as the pointer
+   travels down a stream of thirty headers. */
+.happy-review-file-actions__quiet {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    opacity: var(--happy-header-pointer, 0);
+    transition: opacity 120ms linear;
+}
+
+/* Keyboard reach must not depend on a pointer being anywhere. */
+.happy-review-file-actions__quiet:focus-within {
+    opacity: 1;
+}
+
+/* The clipboard button hides itself until its own row is hovered, which is what
+   a transcript line wants. Here the group it sits in already answers that
+   question for all three controls together, so it stays with them. */
+.happy-review-file-actions__copy {
+    width: 24px;
+    height: 24px;
+    opacity: 1;
+}
+
+/* The reviewer's own record of where they had got to, so it stays legible
+   without the pointer. Before it is marked it is an offer, and reads as one. */
+.happy-review-file-actions__viewed {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: 4px;
+    height: 24px;
+    padding: 0 8px;
+    border: 0;
+    border-radius: var(--happy-radius-small);
+    background: transparent;
+    color: var(--text-secondary);
+    font-family: var(--happy-font-ui);
+    font-size: 12px;
+    line-height: 1;
+    white-space: nowrap;
+    cursor: pointer;
+    opacity: var(--happy-header-pointer, 0);
+    transition: opacity 120ms linear;
+}
+
+.happy-review-file-actions__viewed[data-viewed],
+.happy-review-file-actions__viewed:focus-visible {
+    opacity: 1;
+}
+
+.happy-review-file-actions__viewed:hover {
+    background: var(--surface-pressed);
+    color: var(--text);
+}
