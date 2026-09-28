@@ -1,6 +1,7 @@
 import { expect, it } from "vitest";
 import { server } from "vitest/browser";
 import "./theme.css";
+import "./styles/scrollbar.css";
 import "./styles/visually-hidden.css";
 import "./styles/diff-snippet.css";
 import { DiffSnippet, type DiffLine } from "./DiffSnippet";
@@ -301,7 +302,7 @@ it("holds DiffSnippet geometry, colors, typography, and scrolling", async () => 
     const scrollSnippet = view.$('[data-testid="diff-scroll"]');
     await inked(scrollSnippet);
     const scroll = view.$(
-        '[data-testid="diff-scroll"] [data-happy-desktop-ui="diff-snippet-scroll"]',
+        '[data-testid="diff-scroll"] [data-happy-desktop-ui="diff-snippet-scroll"] [data-scrollbar-viewport]',
     );
     expect(scroll.computedStyles(["overflow-x", "overflow-y"])).toEqual({
         "overflow-x": "auto",

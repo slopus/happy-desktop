@@ -36,6 +36,11 @@ export type FileTreeNode = {
     /** Lines the file gained and lost, shown beside its status. */
     readonly addedLines?: number;
     readonly deletedLines?: number;
+    /**
+     * Why the row is here, shown dimmed after the name and giving way to it:
+     * the reason an agent named a file in a slice, and the lines it meant.
+     */
+    readonly detail?: string;
     /** Directory only: whether its children row-group is shown. */
     readonly expanded?: boolean;
     /** Directory only: a page request is in flight. */
@@ -628,6 +633,15 @@ function FileTreeRowView(props: FileTreeRowViewProps) {
                             {node.directory ? <FileTreePath path={node.directory} /> : null}
                             <FileTreeName name={node.name} />
                         </span>
+                        {node.detail ? (
+                            <span
+                                className="happy-file-tree__detail"
+                                data-happy-desktop-ui="file-tree-detail"
+                                title={node.detail}
+                            >
+                                {node.detail}
+                            </span>
+                        ) : null}
                         <FileTreeStat added={node.addedLines} deleted={node.deletedLines} />
                         {status ? (
                             <span

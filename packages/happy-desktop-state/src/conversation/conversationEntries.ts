@@ -506,6 +506,16 @@ function presentationEqual(
             left.files.length === right.files.length &&
             left.files.every((file, index) => fileDiffEqual(file, right.files[index]))
         );
+    // A slice is written once, by the call that made it; the same card can
+    // only ever say the same thing, so what names it is enough to compare.
+    if (left.type === "slice" && right.type === "slice")
+        return (
+            left.workspaceId === right.workspaceId &&
+            left.title === right.title &&
+            left.note === right.note &&
+            left.fileCount === right.fileCount &&
+            left.paths.length === right.paths.length
+        );
     return false;
 }
 

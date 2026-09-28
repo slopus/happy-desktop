@@ -132,3 +132,13 @@
 .happy-code-editor[data-read-only] .cm-activeLineGutter {
     background: transparent;
 }
+
+/* The region a reference named. It outlives the scroll that brought it on
+   screen — landing in the middle of a file says nothing about which lines were
+   meant — and the editor drops it the moment the reader edits or clicks. The
+   active line is written over rather than under it: the caret has its own mark
+   and this band is answering a different question. */
+.happy-code-editor .cm-line.happy-code-editor__reveal,
+.happy-code-editor .cm-line.happy-code-editor__reveal.cm-activeLine {
+    background: var(--code-reveal);
+}

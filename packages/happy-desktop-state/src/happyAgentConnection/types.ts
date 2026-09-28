@@ -74,6 +74,31 @@ export type ToolPresentation =
           target: "web" | "x";
           query: string;
           sources?: readonly { url: string; title: string }[];
+      }
+    | {
+          /**
+           * A slice the agent built over a checkout: a gitignore-style mask,
+           * carried whole so the card is the slice. Nothing is stored anywhere
+           * else; what the mask holds is asked of the checkout when shown.
+           */
+          kind: "slice";
+          /** The workspace the mask was evaluated against. */
+          workspaceId: string;
+          /** The folder that workspace resolved to when the slice was made. */
+          root: string;
+          title: string;
+          note?: string;
+          source: "changes" | "all";
+          include: readonly string[];
+          exclude: readonly string[];
+          paths: readonly {
+              path: string;
+              reason?: string;
+              /** One-based, inclusive; empty when the whole file is meant. */
+              lines: readonly { start: number; end: number }[];
+          }[];
+          /** How many files the mask held when the slice was made. */
+          fileCount: number;
       };
 
 interface BaseChatElement {

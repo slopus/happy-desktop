@@ -120,6 +120,7 @@ export async function happyAgentWorkspaceAttachmentData(
 
 /** Releases the browser resource held by one media preview, when it has one. */
 export function happyAgentComposerAttachmentPreviewRelease(attachment: ComposerAttachment): void {
+    if (attachment.kind === "reviewComments") return;
     if (attachment.previewUrl && typeof URL.revokeObjectURL === "function")
         URL.revokeObjectURL(attachment.previewUrl);
 }
@@ -139,6 +140,42 @@ export function happyAgentAttachmentTextAppend(text: string, paths: readonly str
     const lines = paths.map((path) => `- ${path}`).join("\n");
     const heading = paths.length === 1 ? "Attached file:" : "Attached files:";
     return text.trim().length === 0 ? `${heading}\n${lines}` : `${text}\n\n${heading}\n${lines}`;
+}
+
+/**
+ * Writes a draft's review notes out as one request the agent can act on, under
+ * whatever the reader said about them.
+ *
+ * Each note names the file and the line it was left on, because that address is
+ * the whole reason a note beats a sentence in the composer: "this is wrong"
+ * about a named line is actionable, and the same words about a changed file are
+ * a guess. A note whose file moved underneath it says so rather than quietly
+ * offering a line number that no longer means anything.
+ *
+ * The request is written here, at send, rather than when the notes were
+ * attached: until then they are a chip the reader can drop whole, not text
+ * they have to edit around.
+ */
+export function happyAgentCommentsTextAppend(
+    text: string,
+    attachments: readonly ComposerAttachment[],
+): string {
+    const comments = attachments.flatMap((attachment) =>
+        attachment.kind === "reviewComments" ? attachment.comments : [],
+    );
+    if (comments.length === 0) return text;
+    const lines = comments.map((comment) => {
+        const place =
+            comment.lineNumber === 0
+                ? comment.path
+                : `${comment.path}:${String(comment.lineNumber)}${
+                      comment.side === "deletions" ? " (removed line)" : ""
+                  }`;
+        const caveat = comment.stale ? " — written before the file changed again" : "";
+        return `- ${place}${caveat}\n  ${comment.text.split("\n").join("\n  ")}`;
+    });
+    const request = `Please address these review comments:\n\n${lines.join("\n")}`;
+    return text.trim().length === 0 ? request : `${text}\n\n${request}`;
 }
 
 /** Encodes the inline images of a draft, in draft order, only during submission. */

@@ -1091,6 +1091,23 @@ function projectToolPresentation(
                 query: presentation.query,
                 ...(presentation.sources === undefined ? {} : { sources: presentation.sources }),
             };
+        case "slice":
+            return {
+                kind: "slice",
+                workspaceId: presentation.workspaceId,
+                root: presentation.root,
+                title: presentation.title,
+                ...(presentation.note === undefined ? {} : { note: presentation.note }),
+                source: presentation.source,
+                include: presentation.include,
+                exclude: presentation.exclude,
+                paths: presentation.paths.map((path) => ({
+                    path: path.path,
+                    ...(path.reason === undefined ? {} : { reason: path.reason }),
+                    lines: path.lines.map((range) => ({ start: range.start, end: range.end })),
+                })),
+                fileCount: presentation.fileCount,
+            };
     }
 }
 

@@ -6,6 +6,8 @@ export interface FileTreeBuildEntry {
     readonly gitStatus?: FileTreeGitStatus;
     readonly addedLines?: number;
     readonly deletedLines?: number;
+    /** Why this row is listed, shown dimmed after its name: a slice's reason, the lines it named. */
+    readonly detail?: string;
 }
 
 /**
@@ -51,6 +53,7 @@ function entryFacts(entry: FileTreeBuildEntry) {
         ...(entry.gitStatus ? { gitStatus: entry.gitStatus } : {}),
         ...(entry.addedLines === undefined ? {} : { addedLines: entry.addedLines }),
         ...(entry.deletedLines === undefined ? {} : { deletedLines: entry.deletedLines }),
+        ...(entry.detail === undefined ? {} : { detail: entry.detail }),
     };
 }
 
@@ -151,7 +154,22 @@ export function fileTreeBuild(
  * moving the file.
  */
 export function fileTreeFlatten(entries: readonly FileTreeBuildEntry[]): FileTreeNode[] {
-    return fileEntriesSort(entries).map((entry) => {
+    return fileTreeRows(fileEntriesSort(entries));
+}
+
+/**
+ * The same rows, in the order they were given.
+ *
+ * For a ranked answer, where the order is the answer: sorting search results by
+ * path would throw away which of them the checkout thought was the best match
+ * and bury it under whatever happens to sort first.
+ */
+export function fileTreeRanked(entries: readonly FileTreeBuildEntry[]): FileTreeNode[] {
+    return fileTreeRows(entries);
+}
+
+function fileTreeRows(entries: readonly FileTreeBuildEntry[]): FileTreeNode[] {
+    return entries.map((entry) => {
         const cut = entry.path.lastIndexOf("/");
         return {
             id: entry.path,

@@ -328,6 +328,127 @@ export interface HappyAgentFileSearchResult {
 }
 
 // ---------------------------------------------------------------------------
+// Slices (attention masks an agent lays over a checkout)
+// ---------------------------------------------------------------------------
+
+declare const happyAgentSliceIdBrand: unique symbol;
+/**
+ * Branded identifier of one slice: the id of the `create_slice` call whose
+ * card is the slice. Nothing is stored anywhere else, so the card's id is the
+ * only one there is.
+ */
+export type HappyAgentSliceId = string & { readonly [happyAgentSliceIdBrand]: true };
+
+/** What a slice's mask is laid over: the working tree's changes, or every file in it. */
+export type HappyAgentSliceSource = "changes" | "all";
+
+/** One-based, inclusive run of lines inside a sliced file. */
+export interface HappyAgentSliceLineRange {
+    readonly start: number;
+    readonly end: number;
+}
+
+/** One file an agent named outright in a slice, with why it is there and which lines matter. */
+export interface HappyAgentSlicePinnedPath {
+    /** Relative to the checkout root. */
+    readonly path: string;
+    /** The agent's one-line reason for including it, when it gave one. */
+    readonly reason?: string;
+    /** Empty when the whole file is meant. */
+    readonly lines: readonly HappyAgentSliceLineRange[];
+}
+
+/**
+ * The mask itself: what a slice says, apart from where it came from. It is
+ * what a pinned slice keeps in the checkout's view preferences, and what the
+ * checkout is asked to evaluate whenever the slice is shown.
+ */
+export interface HappyAgentSliceDefinition {
+    readonly title: string;
+    /** What the slice is for, in a sentence or two, when the agent said. */
+    readonly note?: string;
+    readonly source: HappyAgentSliceSource;
+    /** Gitignore-style rules a file must match; empty includes every file of the source. */
+    readonly include: readonly string[];
+    /** Rules that take a file back out, applied after `include`. */
+    readonly exclude: readonly string[];
+    readonly paths: readonly HappyAgentSlicePinnedPath[];
+}
+
+/**
+ * A slice: an attention mask an agent built over a checkout from the meaning
+ * of a request — "the API schema changes", "the core data structures". It is
+ * a set of gitignore-style rules and, sometimes, files named outright, and it
+ * carries no content: what is shown through it is always the working tree as
+ * it stands now, evaluated when it is looked at.
+ *
+ * The card in the transcript is the slice. This window builds its picker from
+ * the cards of every conversation it has loaded, so a slice never expires and
+ * a card always opens what it names; a slice the reader pins is kept with the
+ * checkout's view preferences and offered even when no loaded conversation
+ * names it.
+ */
+export interface HappyAgentSlice extends HappyAgentSliceDefinition {
+    readonly id: HappyAgentSliceId;
+    /** The checkout the mask was evaluated against; a card is filed under it whatever conversation shows it. */
+    readonly groupId: HappyAgentGroupId;
+    /** The folder that checkout resolved to when the slice was made. */
+    readonly root: string;
+    /** The agent that built it. */
+    readonly agentId: HappyAgentSessionId;
+    /** How many files the mask held when the slice was made. */
+    readonly fileCount: number;
+    /** Epoch milliseconds: when the card was written. */
+    readonly createdAt: number;
+    /** Whether the reader keeps it with the checkout, independent of any loaded conversation. */
+    readonly pinned: boolean;
+}
+
+/** One file a slice holds right now, with what the agent said about it when it named it. */
+export interface HappyAgentSliceFile {
+    readonly path: string;
+    readonly reason?: string;
+    /** Empty when the whole file is meant, which is every file the rules matched rather than named. */
+    readonly lines: readonly HappyAgentSliceLineRange[];
+}
+
+/**
+ * What the checkout answered when asked what a slice holds. A mask is
+ * evaluated against the working tree as it is, so this is asked again whenever
+ * the tree moves, and the answer before it stays on screen while the next one
+ * is on its way.
+ */
+export interface HappyAgentSliceMatch {
+    readonly status: "loading" | "ready" | "error";
+    readonly files: readonly HappyAgentSliceFile[];
+    /** How many files the mask holds in all; `files` may be shorter. */
+    readonly total: number;
+    /** Whether `files` is shorter than `total`, or the checkout itself was cut short. */
+    readonly truncated: boolean;
+    /** Include and exclude rules, and pinned paths, that matched nothing, as written. */
+    readonly unmatchedRules: readonly string[];
+    /** Why the last ask failed, while `status` is `error`. */
+    readonly error?: string;
+}
+
+/** A mask to evaluate against one checkout, as the client asks it. */
+export interface HappyAgentFileMatchRequest {
+    readonly source: HappyAgentSliceSource;
+    readonly include: readonly string[];
+    readonly exclude: readonly string[];
+    readonly paths: readonly HappyAgentSlicePinnedPath[];
+}
+
+/** What the checkout holds under a mask right now. */
+export interface HappyAgentFileMatchResult {
+    /** The matched paths, sorted, up to the daemon's limit. */
+    readonly files: readonly string[];
+    readonly total: number;
+    readonly truncated: boolean;
+    readonly unmatchedRules: readonly string[];
+}
+
+// ---------------------------------------------------------------------------
 // Session usage (token/cost accounting, `/usage`)
 // ---------------------------------------------------------------------------
 

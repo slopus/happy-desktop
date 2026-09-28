@@ -85,6 +85,33 @@ export const happyAgentFileDiffTool: ConversationToolCall = {
     },
 };
 
+export const happyAgentSliceTool: ConversationToolCall = {
+    toolCallId: "tool-slice",
+    toolName: "create_slice",
+    arguments: { request: "show the API schema changes" },
+    status: "success",
+    failed: false,
+    display: "Created slice “API schema changes” over 4 files",
+    presentation: {
+        type: "slice",
+        workspaceId: "ws-desktop",
+        root: "/Users/me/Projects/happy-desktop",
+        title: "API schema changes",
+        note: "The wire schema and the client that reads it.",
+        source: "changes",
+        include: ["packages/happy-agent-client/sources/protocol/**"],
+        exclude: ["**/*.test.ts"],
+        paths: [
+            {
+                path: "packages/happy-agent/API.md",
+                reason: "The contract every change here is measured against",
+                lines: [{ start: 120, end: 168 }],
+            },
+        ],
+        fileCount: 4,
+    },
+};
+
 export const happyAgentExecTool: ConversationToolCall = {
     toolCallId: "tool-exec",
     toolName: "bash",

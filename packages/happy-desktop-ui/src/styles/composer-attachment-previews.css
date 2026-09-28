@@ -27,6 +27,137 @@
     overflow: visible;
 }
 
+/* Review notes are not a thing to look at, so they do not take a preview
+ * square: they are one line saying how many are going, sized to their own
+ * words. */
+.happy-composer-attachments__item[data-kind="comments"] {
+    width: auto;
+    height: 32px;
+    padding: 0 10px;
+    border-radius: var(--happy-radius-pill);
+}
+
+.happy-composer-attachments__comments {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    padding-right: 14px;
+    color: var(--text);
+}
+
+.happy-composer-attachments__comments-label {
+    overflow: hidden;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 16px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* What the chip is carrying, in the popover language of Tooltip and Menu: the
+ * plain surface, a hairline, and a short faint drop over whatever it floats
+ * above. It leaves the flow entirely, so the composer measures the same whether
+ * the pointer is on the chip or not, and it opens on the same dwell as a
+ * tooltip because it answers the same kind of question about the same chip. */
+.happy-composer-attachments__notes {
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 0;
+    z-index: var(--happy-z-overlay);
+    display: flex;
+    flex-direction: column;
+    width: max-content;
+    min-width: 220px;
+    max-width: 420px;
+    max-height: 320px;
+    /* The card is the scrollport when a review runs long, so it keeps no
+       padding of its own: the spacing belongs to the list inside it. */
+    overflow-y: auto;
+    background: var(--surface);
+    border: 1px solid var(--modal-border);
+    border-radius: var(--happy-radius-md);
+    box-shadow: 0 2px 8px var(--shadow-color);
+    opacity: 0;
+    pointer-events: none;
+    transition:
+        opacity 90ms ease,
+        transform 90ms ease;
+    transform: translateY(3px);
+}
+
+.happy-composer-attachments__item[data-kind="comments"]:hover .happy-composer-attachments__notes,
+.happy-composer-attachments__item[data-kind="comments"]:focus-within
+    .happy-composer-attachments__notes {
+    opacity: 1;
+    transition-delay: 180ms;
+    transform: translateY(0);
+}
+
+.happy-composer-attachments__note-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 10px 12px;
+}
+
+.happy-composer-attachments__note {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+}
+
+.happy-composer-attachments__note-where {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    min-width: 0;
+    color: var(--text-secondary);
+    font-size: 11px;
+    line-height: 14px;
+}
+
+.happy-composer-attachments__note-path {
+    min-width: 0;
+    overflow: hidden;
+    font-size: 11px;
+    line-height: 14px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-composer-attachments__note-place {
+    flex: none;
+    color: var(--text-secondary);
+    font-variant-numeric: lining-nums tabular-nums;
+}
+
+/* The note itself is what the reader wrote, so it is read as they wrote it:
+ * their own line breaks kept, and long remarks wrapped rather than clipped. */
+.happy-composer-attachments__note-text {
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 400;
+    line-height: 18px;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .happy-composer-attachments__notes {
+        transition: none;
+        transform: none;
+    }
+}
+
+/* The pill is short enough that a disc straddling its corner would sit off its
+ * end rather than on it, so the close sits inside the pill instead. */
+.happy-composer-attachments__item[data-kind="comments"] .happy-composer-attachment-remove {
+    top: 2px;
+    right: -6px;
+}
+
 .happy-composer-attachments__media {
     display: block;
     width: 100%;

@@ -1,4 +1,5 @@
 import { partitionComponentProps } from "./componentProps";
+import type { FileOpenHandler } from "./fileReference";
 import { useVirtualizer, type Virtualizer } from "@tanstack/react-virtual";
 import {
     Children,
@@ -23,7 +24,12 @@ import {
     MessageListDisclosureAnchorProvider,
     type MessageListDisclosureAnchor,
 } from "./messageListDisclosureAnchor";
-import { renderMessageMarkdown, type MessageGenerationStatus } from "./MessageMarkdown";
+import {
+    renderMessageMarkdown,
+    type LinkOpenHandler,
+    type LinkOpenPlacement,
+    type MessageGenerationStatus,
+} from "./MessageMarkdown";
 import { ScrollArea } from "./Scrollbar";
 export type MessageSegment =
     | {
@@ -194,7 +200,16 @@ export type MessageProps = Omit<HTMLAttributes<HTMLDivElement>, "style"> & {
      * viewer. Absent leaves such links inert, which is what a surface with no
      * workspace behind it can honestly offer.
      */
-    onFileOpen?: (path: string) => void;
+    onFileOpen?: FileOpenHandler;
+    /**
+     * Opens a web link this message carries where the reader asked for it —
+     * the machine's browser or the side panel — from the link's context menu.
+     * Absent leaves a link as it is: a plain click that goes where the host
+     * sends it, with no menu offered.
+     */
+    onLinkOpen?: LinkOpenHandler;
+    /** Which of the two places a plain click on a link goes, marked in its menu. */
+    linkOpenDefault?: LinkOpenPlacement;
     /** Makes the avatar and author name clickable to open the author's profile.
      *  Only the leading message of a group renders an avatar/name, so grouped
      *  follow-ups intentionally carry no profile affordance. */
@@ -292,6 +307,8 @@ export function Message(props: MessageProps) {
         "images",
         "onImageOpen",
         "onFileOpen",
+        "onLinkOpen",
+        "linkOpenDefault",
         "initials",
         "metaAccessory",
         "onAuthorSelect",
@@ -451,6 +468,8 @@ export function Message(props: MessageProps) {
                           inlineIncomingHoverMeta ?? undefined,
                           local.onFileOpen,
                           local.generationStatus,
+                          local.onLinkOpen,
+                          local.linkOpenDefault,
                       )
                     : null}
                 {/* An empty generated reply keeps a non-breaking-space line box

@@ -32,6 +32,8 @@ import {
 } from "./happyAgentProject.js";
 import type {
     HappyAgentChangedFileDocument,
+    HappyAgentFileMatchRequest,
+    HappyAgentFileMatchResult,
     HappyAgentFileSearchResult,
     HappyAgentGitChangedFile,
     HappyAgentGroupId,
@@ -178,6 +180,15 @@ export interface HappyAgentWorkspaceClient {
         limit?: number,
     ): Promise<readonly HappyAgentFileSearchResult[]>;
     /**
+     * Asks one checkout what a gitignore-style mask holds right now. A pure
+     * query, like the search: nothing is stored on either side, and the answer
+     * is only as current as the working tree at the moment it was asked.
+     */
+    filesMatch(
+        groupId: HappyAgentGroupId,
+        request: HappyAgentFileMatchRequest,
+    ): Promise<HappyAgentFileMatchResult>;
+    /**
      * Reads one existing text file from a project/worktree checkout. A file
      * belongs to the checkout rather than to any conversation open over it, so
      * it is addressed by the group.
@@ -205,13 +216,18 @@ export interface HappyAgentWorkspaceClient {
      * that renders the document rather than its source.
      */
     htmlPreviewOpen(groupId: HappyAgentGroupId, path: string): Promise<string>;
-    /** Writes one existing text file back to its checkout. */
+    /**
+     * Writes one existing text file back to its checkout, answering with the
+     * identity the file now has. An accepted write is first-hand knowledge of
+     * what the file says, so the surface that wrote it does not have to read it
+     * back to find out.
+     */
     workspaceFileWrite(
         groupId: HappyAgentGroupId,
         path: string,
         content: string,
         expectedHash: string | null,
-    ): Promise<void>;
+    ): Promise<{ readonly hash: string }>;
     /** Where a file the reader chose lives on this machine, when it lives anywhere. */
     attachmentSourcePath(file: File): string | undefined;
     /**
@@ -542,6 +558,24 @@ export function happyAgentWorkspaceClientCreate(
                     ...(limit === undefined ? {} : { limit }),
                 })
             ).files.map((file) => ({ fileName: file.fileName, path: file.path })),
+        filesMatch: async (groupId, request) => {
+            const matched = await deps.client.matchFiles(groupId, {
+                source: request.source,
+                include: [...request.include],
+                exclude: [...request.exclude],
+                paths: request.paths.map((path) => ({
+                    path: path.path,
+                    ...(path.reason === undefined ? {} : { reason: path.reason }),
+                    lines: path.lines.map((range) => ({ start: range.start, end: range.end })),
+                })),
+            });
+            return {
+                files: matched.files,
+                total: matched.total,
+                truncated: matched.truncated,
+                unmatchedRules: matched.unmatchedRules,
+            };
+        },
         workspaceFileRead: async (groupId, path, signal) => {
             const file = await deps.client.readFile(groupId, path, { signal });
             return { path, content: happyAgentTextDecodeBase64(file.content), hash: file.hash };
@@ -564,11 +598,12 @@ export function happyAgentWorkspaceClientCreate(
             deps.hostServices.workspaceFileBytesRead(groupId, path, signal),
         htmlPreviewOpen: (groupId, path) => deps.hostServices.htmlPreviewOpen(groupId, path),
         workspaceFileWrite: async (groupId, path, content, expectedHash) => {
-            await deps.client.writeFile(groupId, {
+            const written = await deps.client.writeFile(groupId, {
                 path,
                 content: happyAgentTextEncodeBase64(content),
                 expectedHash,
             });
+            return { hash: written.hash };
         },
         attachmentSourcePath: (file) => deps.hostServices.attachmentSourcePath(file),
         attachmentSourceReachable: (groupId, sourcePath) =>

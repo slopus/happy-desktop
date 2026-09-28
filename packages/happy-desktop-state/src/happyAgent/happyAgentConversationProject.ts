@@ -1146,6 +1146,19 @@ function presentationProject(
                     ? {}
                     : { omittedFiles: presentation.omittedFiles }),
             };
+        case "slice":
+            return {
+                type: "slice",
+                workspaceId: presentation.workspaceId,
+                root: presentation.root,
+                title: presentation.title,
+                ...(presentation.note === undefined ? {} : { note: presentation.note }),
+                source: presentation.source,
+                include: presentation.include,
+                exclude: presentation.exclude,
+                paths: presentation.paths,
+                fileCount: presentation.fileCount,
+            };
         case "terminal_input":
             return {
                 type: "backgroundTerminalInteraction",

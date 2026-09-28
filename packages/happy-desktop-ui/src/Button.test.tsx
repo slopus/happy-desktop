@@ -201,7 +201,7 @@ it("holds Button dimensions, typography, and optical label centering for every s
             ).toEqual({
                 "align-items": "center",
                 "background-color": variantStyles[variant].background,
-                "border-radius": "6px",
+                "border-radius": "999px",
                 "border-top-color": variantStyles[variant].borderColor,
                 "border-top-width": "1px",
                 "box-sizing": "border-box",

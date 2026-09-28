@@ -430,3 +430,20 @@
     min-height: 28px;
     padding: 8px 12px;
 }
+
+/* Why a row is listed — a slice's reason, the lines it named — after the name
+   and quieter than it. It gives way first: the name is what is being looked
+   for, and the reason is there for the row that has been found. */
+.happy-file-tree__detail {
+    display: block;
+    flex: 0 1 auto;
+    min-width: 0;
+    margin-left: 8px;
+    overflow: hidden;
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 400;
+    line-height: 18px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}

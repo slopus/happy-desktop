@@ -174,6 +174,33 @@ export type ConversationActivityPresentation =
           readonly target: "web" | "x";
           readonly query: string;
           readonly sources?: readonly { readonly url: string; readonly title: string }[];
+      }
+    | {
+          /**
+           * A slice the agent built over the checkout: a named set of files
+           * worth looking at. The row carries only what names it; the files
+           * themselves are read from the checkout's own slices when opened.
+           */
+          readonly type: "slice";
+          /** The checkout the mask was evaluated against — not always the one this conversation is read beside. */
+          readonly workspaceId: string;
+          /** The folder that checkout resolved to when the slice was made. */
+          readonly root: string;
+          readonly title: string;
+          readonly note?: string;
+          /** What the mask is laid over: the working tree's changes, or every file in it. */
+          readonly source: "changes" | "all";
+          readonly include: readonly string[];
+          readonly exclude: readonly string[];
+          /** Files named outright, with why and which lines. */
+          readonly paths: readonly {
+              readonly path: string;
+              readonly reason?: string;
+              /** One-based, inclusive; empty when the whole file is meant. */
+              readonly lines: readonly { readonly start: number; readonly end: number }[];
+          }[];
+          /** How many files the mask held when the slice was made. */
+          readonly fileCount: number;
       };
 
 export interface ConversationActivityFailure {
