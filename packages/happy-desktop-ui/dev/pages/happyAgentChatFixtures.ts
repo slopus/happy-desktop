@@ -85,6 +85,21 @@ export const happyAgentFileDiffTool: ConversationToolCall = {
     },
 };
 
+export const happyAgentSliceTool: ConversationToolCall = {
+    toolCallId: "tool-slice",
+    toolName: "create_slice",
+    arguments: { request: "show the API schema changes" },
+    status: "success",
+    failed: false,
+    display: "Created slice “API schema changes” over 4 files",
+    presentation: {
+        type: "slice",
+        sliceId: "slice-api-schema",
+        title: "API schema changes",
+        fileCount: 4,
+    },
+};
+
 export const happyAgentExecTool: ConversationToolCall = {
     toolCallId: "tool-exec",
     toolName: "bash",

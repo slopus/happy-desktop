@@ -506,6 +506,12 @@ function presentationEqual(
             left.files.length === right.files.length &&
             left.files.every((file, index) => fileDiffEqual(file, right.files[index]))
         );
+    if (left.type === "slice" && right.type === "slice")
+        return (
+            left.sliceId === right.sliceId &&
+            left.title === right.title &&
+            left.fileCount === right.fileCount
+        );
     return false;
 }
 

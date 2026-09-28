@@ -1,11 +1,18 @@
 import { useState, type ReactNode } from "react";
-import { FileBrowser, type FileBrowserLayout, type FileBrowserScope } from "../../src/FileBrowser";
+import {
+    FileBrowser,
+    type FileBrowserLayout,
+    type FileBrowserScope,
+    type FileBrowserSlice,
+} from "../../src/FileBrowser";
 import {
     fileTreeBuild,
     fileTreeFlatten,
+    fileTreeRanked,
     type FileTreeBuildEntry,
     type FileTreeExpansion,
 } from "../../src/fileTreeBuild";
+import { filePathMatches } from "../../src/fileTreeSearch";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
 /** The component plan this page documents. The selector and the page header read the same value. */
@@ -116,6 +123,59 @@ const totals = changed.reduce(
     }),
     { added: 0, deleted: 0 },
 );
+/**
+ * What an agent kept when asked for "the file listing work": the rows of the
+ * change that are about it, plus one file it touches that has not changed.
+ * The rest of the change is what the note under the controls counts.
+ */
+const sliced: FileTreeBuildEntry[] = [
+    changed[0]!,
+    changed[1]!,
+    changed[2]!,
+    { path: "packages/happy-desktop-ui/src/fileTreeBuild.ts" },
+];
+const sliceTotals = sliced.reduce(
+    (sum, entry) => ({
+        added: sum.added + (entry.addedLines ?? 0),
+        deleted: sum.deleted + (entry.deletedLines ?? 0),
+    }),
+    { added: 0, deleted: 0 },
+);
+const HOUR = 60 * 60 * 1000;
+const slices: FileBrowserSlice[] = [
+    { id: "slice-file-listing", title: "File listing work", createdAt: Date.now() - HOUR },
+    { id: "slice-api", title: "API schema changes", createdAt: Date.now() - 3 * HOUR },
+    { id: "slice-api-2", title: "API schema changes", createdAt: Date.now() - 26 * HOUR },
+    {
+        id: "slice-top",
+        title: "Top 20% of the last two turns, by substance",
+        createdAt: Date.now() - 4 * 24 * HOUR,
+    },
+];
+/**
+ * Several slices: the name is the picker, and choosing one relists the panel.
+ * Each row shows when it was made, and a cross on hover removes it; deleting
+ * the one listed by moves to the newest that remains.
+ */
+function SlicePicker() {
+    const [remaining, remainingSet] = useState(slices);
+    const [sliceId, sliceIdSet] = useState(slices[0]!.id);
+    const listed = remaining.find((slice) => slice.id === sliceId) ?? remaining[0];
+    return panelFrame(
+        <FileBrowser
+            addedLines={sliceTotals.added}
+            count={sliced.length}
+            deletedLines={sliceTotals.deleted}
+            layout="tree"
+            nodes={fileTreeBuild(sliced, untouched)}
+            onSliceDelete={(id) => remainingSet((current) => current.filter((s) => s.id !== id))}
+            onSliceSelect={sliceIdSet}
+            scope={listed === undefined ? "changed" : "slice"}
+            {...(listed === undefined ? {} : { sliceId: listed.id })}
+            slices={remaining}
+        />,
+    );
+}
 /** The tree as it stands before the reader has opened or closed anything. */
 const untouched: FileTreeExpansion = {
     opened: new Set(),
@@ -152,18 +212,28 @@ function LiveBrowser(props: { entries: FileTreeBuildEntry[]; height?: number; wi
     const [opened, openedSet] = useState<ReadonlySet<string>>(new Set());
     const [closed, closedSet] = useState<ReadonlySet<string>>(new Set());
     const [selectedId, selectedIdSet] = useState<string | undefined>(undefined);
+    const [query, querySet] = useState("");
     const expansion: FileTreeExpansion = { opened, closed, defaultDepth: 1 };
+    // The specimen has its whole listing in hand, so it answers a query the way
+    // Changes does in the product. All Files asks the checkout instead, which is
+    // a store's job and not something a blueprint page can stand in for.
+    const matched = props.entries.filter((entry) => filePathMatches(entry.path, query));
     const nodes =
-        layout === "tree"
-            ? fileTreeBuild(props.entries, expansion)
-            : fileTreeFlatten(props.entries);
+        query !== ""
+            ? fileTreeRanked(matched)
+            : layout === "tree"
+              ? fileTreeBuild(props.entries, expansion)
+              : fileTreeFlatten(props.entries);
     return panelFrame(
         <FileBrowser
-            count={props.entries.length}
+            count={query === "" ? props.entries.length : matched.length}
+            emptyLabel={query === "" ? undefined : `Nothing matches “${query}”.`}
             layout={layout}
             nodes={nodes}
             onLayoutChange={layoutSet}
             onScopeChange={scopeSet}
+            onSearchQueryChange={querySet}
+            searchQuery={query}
             onSelect={(id) => selectedIdSet(id)}
             onToggle={(path, expanded) => {
                 openedSet((current) => {
@@ -207,6 +277,7 @@ export function FileBrowserPage() {
                             deletedLines={totals.deleted}
                             layout="flat"
                             nodes={fileTreeFlatten(changed)}
+                            onReviewOpen={() => undefined}
                             scope="changed"
                             selectedId="packages/happy-desktop-ui/src/FileTree.tsx"
                         />,
@@ -248,6 +319,30 @@ export function FileBrowserPage() {
                         scope="all"
                     />,
                 )}
+            </Specimen>
+
+            <Specimen
+                detail="A third choice once an agent has cut one: the slice's name where Changes states its count, a picker when there are several, and a note for the changes it leaves out"
+                label="Slice"
+                number="03b"
+                stage="surface"
+            >
+                <div style={{ display: "flex", gap: "12px" }}>
+                    {panelFrame(
+                        <FileBrowser
+                            addedLines={sliceTotals.added}
+                            count={sliced.length}
+                            deletedLines={sliceTotals.deleted}
+                            layout="flat"
+                            nodes={fileTreeFlatten(sliced)}
+                            note="4 changed files outside this slice"
+                            scope="slice"
+                            sliceId="slice-file-listing"
+                            slices={[slices[0]!]}
+                        />,
+                    )}
+                    <SlicePicker />
+                </div>
             </Specimen>
 
             <Specimen

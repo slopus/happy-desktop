@@ -1,0 +1,129 @@
+/*
+ * Every changed file in one scroll. The chrome is deliberately the same as one
+ * changed file's: a review that opens one file and a review that opens all of
+ * them should not look like two different products.
+ */
+
+.happy-review-stream {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    background: var(--surface);
+    color: var(--text);
+}
+
+.happy-review-stream__bar {
+    box-sizing: border-box;
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    height: var(--happy-subheader-height);
+    padding: 0 8px;
+    background: var(--surface);
+    box-shadow: inset 0 -1px var(--divider);
+}
+
+/* What is being reviewed, said plainly. It is the only label the stream has:
+   the files name themselves in their own headers below. */
+.happy-review-stream__count {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.happy-review-stream__bar-end {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* The two steps read as one control, so they sit together with no gap. */
+.happy-review-stream__steps {
+    display: flex;
+    flex: none;
+    align-items: center;
+}
+
+/* The header of the file being read, picked up.
+
+   A stream is one scroll through many files, and a file's own header scrolls
+   away underneath its own hunks. This is that file handed to the same renderer
+   closed, so the strip here is the strip every closed file wears — nothing
+   about it is styled to resemble one. What can be done to the review as a whole
+   belongs to the bar above, with the count of files.
+
+   It lies over the top of the scrollport rather than above it. In the flow it
+   took its own height from the pane, so the moment it appeared — and again the
+   moment the file's own header came back and it left — the pane resized under
+   the reader and the lines they were reading jumped by the height of this row.
+   Over the pane it costs the scroll nothing, and showing it is a change of
+   paint rather than of layout. */
+.happy-review-stream__reading {
+    position: absolute;
+    z-index: 1;
+    inset: 0 0 auto 0;
+    display: flex;
+    flex-direction: column;
+    /* One row, the same row as the bar above it: a file's header is
+       `1lh + 3 × gap-block`, which is what the subheader height is. The
+       renderer measures its item taller than what it paints, and the difference
+       was a band of dead space under the picked-up name. It lies over moving
+       code, so it is also opaque: any transparency along it shows a line
+       sliding underneath. */
+    height: var(--happy-subheader-height);
+    overflow: hidden;
+    background: var(--surface);
+}
+
+/* Hidden rather than unmounted: the row is a renderer of its own, and building
+   one at the moment the reader crosses a header is the stutter this replaced.
+   It keeps its box, so nothing below it moves either way. */
+.happy-review-stream__reading:not([data-pinned]) {
+    visibility: hidden;
+    pointer-events: none;
+}
+
+/* Named files the checkout would not give up. It sits above the stream rather
+   than inside it: what is missing from a review is not something to scroll to. */
+.happy-review-stream__failures {
+    flex: none;
+    margin: 8px;
+}
+
+/* The step to the file before this one. The glyph is the forward chevron
+   flipped across the vertical axis: the box is square and the glyph is
+   box-centered, so the flip changes what is drawn and nothing about layout. */
+.happy-review-stream__step-back .happy-icon {
+    transform: scaleX(-1);
+}
+
+/* Why this change is being read a file at a time. Above the stream for the same
+   reason: it is about the change, not about anywhere in it. */
+.happy-review-stream__oversize {
+    flex: none;
+    margin: 8px;
+}
+
+/* Holds the renderer so the stream has something of its own to watch: a scroll
+   event does not bubble, and the scrollport is the renderer's element. */
+.happy-review-stream__body {
+    position: relative;
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+}
+
+/* The renderer virtualizes the whole review against this box, so this box is
+   the scrollport: it measures what is visible and draws around it. One
+   scrollport for every file together is the point — a scroll per file would be
+   the pane-at-a-time reading this replaces. */
+.happy-review-stream__renderer {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+}

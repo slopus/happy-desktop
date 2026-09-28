@@ -147,6 +147,79 @@
     margin-left: 8px;
 }
 
+/* Quiet trailing text — a time, a count — set apart from the label by weight
+   and hue, with figures that line up down a list of rows. */
+.happy-menu__item-detail {
+    flex: none;
+    margin-left: 8px;
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 400;
+    font-variant-numeric: tabular-nums;
+    line-height: 16px;
+    white-space: nowrap;
+}
+
+/* ---- Row with a trailing act -------------------------------------------- */
+
+/* The row keeps its own button whole; the act is a second button laid over
+   the trailing edge the row reserves for it, shown only when a hand or focus
+   is on the row so the list reads as a plain list until then. */
+.happy-menu__row {
+    position: relative;
+    display: flex;
+    flex: none;
+    width: 100%;
+}
+
+.happy-menu__item[data-has-action] {
+    padding-right: 28px;
+}
+
+.happy-menu__item-action {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    margin: 0;
+    padding: 0;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    opacity: 0;
+    appearance: none;
+    transition:
+        opacity 120ms ease,
+        background-color 120ms ease,
+        color 120ms ease;
+}
+
+.happy-menu__row:hover .happy-menu__item-action,
+.happy-menu__row:focus-within .happy-menu__item-action {
+    opacity: 1;
+}
+
+.happy-menu__item-action:hover {
+    background: var(--surface-ripple);
+    color: var(--text);
+}
+
+.happy-menu__item-action:focus-visible {
+    outline: 2px solid var(--radio-active);
+    outline-offset: -2px;
+}
+
+.happy-menu__item-action:disabled {
+    cursor: not-allowed;
+    opacity: 0;
+}
+
 /* ---- Section label --------------------------------------------------- */
 
 .happy-menu__header,
@@ -178,4 +251,25 @@
     height: 1px;
     margin: 4px 0;
     background: var(--divider);
+}
+
+/* ---- Context menu ----------------------------------------------------- */
+
+/* A Menu opened at the pointer. The backdrop is a full-window click target
+   that takes the menu down; the card itself is fixed at the point asked for,
+   and the component pushes it back inside the viewport after measuring. */
+.happy-context-menu__backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: calc(var(--happy-z-overlay) - 1);
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    cursor: default;
+}
+
+.happy-context-menu {
+    position: fixed;
+    z-index: var(--happy-z-overlay);
 }

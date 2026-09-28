@@ -66,6 +66,29 @@
     color: var(--text);
 }
 
+/* Reading the whole change. It is a sibling of the layout choices rather than
+   one of them — those say how this listing is arranged, this leaves it — so it
+   wears the same quiet shape without ever being the pressed one. */
+.happy-file-browser__review {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: var(--happy-subheader-control-height);
+    margin: 0;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: var(--happy-radius-sm);
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+}
+
+.happy-file-browser__review:hover {
+    color: var(--text);
+}
+
 .happy-file-browser__layout[data-active] {
     border-color: var(--surface-selected);
     background: var(--surface-selected);
@@ -101,6 +124,141 @@
     text-overflow: ellipsis;
 }
 
+/* ---- Slice ------------------------------------------------------------ */
+
+/* The slice's name, on a row of its own under the controls: three choices
+   fill the control row in a panel this narrow, and a name squeezed into what
+   is left would be no name at all. Prose rather than a figure, so it takes the
+   interface face; it gives way before the totals beside it do, since a name
+   cut short is still a name and half a diff stat is not. */
+.happy-file-browser__slice {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    height: var(--happy-subheader-control-height);
+    margin-bottom: 4px;
+    padding: 0 var(--happy-panel-inset);
+    /* Not clipped here: the picker's popover opens out of this row, and the
+       name and the totals each clip themselves. */
+    white-space: nowrap;
+}
+
+/* The glyph stands where the search field's magnifier and the tree's chevrons
+   stand — 8px in from the shared inset — so the column of rows reads as one
+   wrapper rather than as one row pushed to the edge. */
+.happy-file-browser__slice-title {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    padding-left: 8px;
+    color: var(--text);
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 16px;
+}
+
+.happy-file-browser__slice-title > span {
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* The one-slice row has no list to hold the act, so the cross sits on the
+   row itself and shows the same way a list row's does: on hover or focus. */
+.happy-file-browser__slice-delete {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    margin: 0;
+    padding: 0;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    opacity: 0;
+    appearance: none;
+    transition:
+        opacity 120ms ease,
+        background-color 120ms ease,
+        color 120ms ease;
+}
+
+.happy-file-browser__slice:hover .happy-file-browser__slice-delete,
+.happy-file-browser__slice:focus-within .happy-file-browser__slice-delete {
+    opacity: 1;
+}
+
+.happy-file-browser__slice-delete:hover {
+    background: var(--surface-ripple);
+    color: var(--text);
+}
+
+.happy-file-browser__slice-delete:focus-visible {
+    outline: 2px solid var(--radio-active);
+    outline-offset: -2px;
+}
+
+.happy-file-browser__slice-glyph {
+    display: flex;
+    flex: none;
+    color: var(--text-secondary);
+}
+
+/* The picker is the name itself, so it wears the row's control height rather
+   than a button's own, and no more chrome than the layout switch above it. */
+/* The button's own 6px padding plus this puts its glyph on the same 8px line
+   as the one-slice title's, so switching between one slice and several does
+   not move the glyph. */
+.happy-file-browser__slice .happy-menu-button {
+    flex: 0 1 auto;
+    min-width: 0;
+    margin-left: 2px;
+}
+
+.happy-file-browser__slice .happy-menu-button > .happy-button {
+    max-width: 100%;
+    height: var(--happy-subheader-control-height);
+    padding: 0 6px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+/* A long name gives way to an ellipsis before the glyph or the totals do. */
+.happy-file-browser__slice .happy-menu-button > .happy-button .happy-button__content {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.happy-file-browser__slice .happy-menu-button > .happy-button .happy-button__label {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-file-browser__slice .happy-menu-button .happy-menu-button__popover {
+    min-width: 220px;
+}
+
+.happy-file-browser__slice .happy-file-browser__lines {
+    margin-left: auto;
+    font-family: var(--happy-font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 16px;
+    font-feature-settings: "tnum" 1;
+}
+
 /* The two totals travel together: half a diff stat is worse than none. */
 .happy-file-browser__lines {
     display: flex;
@@ -121,11 +279,30 @@
     color: var(--git-removed-text);
 }
 
+/* ---- Search ----------------------------------------------------------- */
+
+/* Inset to the same edge as the control row and the file rows, so the field,
+   the scope control, and the listing all start on one line. No rule under it:
+   the field already reads as a box, and a hairline as well would cut this
+   narrow column into pieces. */
+.happy-file-browser__search {
+    display: flex;
+    flex: none;
+    padding: 0 var(--happy-panel-inset) 6px;
+}
+
+/* A search still waiting on the checkout says so by going quiet rather than by
+   replacing the rows underneath, which are still the last true answer. */
+.happy-file-browser__search[data-busy] {
+    opacity: 0.6;
+}
+
+/* Inset like every other row, then the same 8px the rows' first ink keeps. */
 .happy-file-browser__note {
     display: flex;
     flex: none;
     align-items: center;
-    padding: 0 12px 6px;
+    padding: 0 calc(var(--happy-panel-inset) + 8px) 6px;
     color: var(--text-secondary);
     font-size: 11px;
     font-weight: 500;

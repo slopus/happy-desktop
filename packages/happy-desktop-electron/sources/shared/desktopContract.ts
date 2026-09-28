@@ -10,6 +10,10 @@ export type DesktopMode = "local";
 /** Appearance source the Electron shell applies to every local renderer and guest. */
 export type DesktopAppearanceMode = "dark" | "light" | "system";
 export type DesktopScrollbarVisibility = "always" | "automatic";
+/** When the shell holds this computer out of system sleep. Follows the agents when absent. */
+export type DesktopKeepAwakeMode = "on" | "agent" | "off";
+/** Where a plain click on a web link opens: the side panel's browser tab, or the machine's browser. */
+export type DesktopLinkOpenPlacement = "panel" | "browser";
 
 export interface DesktopCloudAuthConfiguration {
     readonly environment: "production" | "staging";
@@ -48,7 +52,10 @@ export interface DesktopConfig {
     readonly defaultModel?: DesktopDefaultModel;
     readonly defaultEffort: string;
     readonly defaultPermissionMode: DesktopPermissionMode;
+    readonly keepAwake?: DesktopKeepAwakeMode;
     readonly lastPickedModel?: DesktopModelIdentity;
+    /** Where a clicked link opens; the side panel when absent. */
+    readonly linkOpen?: DesktopLinkOpenPlacement;
     readonly modelPreferences: readonly DesktopModelPreference[];
     /** Explicit opt-in to Desktop and Happy Agent preview releases, off when absent. */
     readonly previewUpdatesEnabled?: boolean;
@@ -698,6 +705,14 @@ export interface HappyDesktopBridge {
      */
     dockUnreadSet(count: number): void;
     /**
+     * States whether this computer should be held out of system sleep right
+     * now. One-way and fire-and-forget like the Dock mark: the window resolves
+     * the reader's choice against what the agents are doing, and the shell
+     * holds or releases the operating system's sleep assertion to match. The
+     * display may still sleep; only the machine itself is kept running.
+     */
+    keepAwakeSet(active: boolean): void;
+    /**
      * Fires every time zoom is asked for, with the whole-number percentage the
      * window is now at — including when the answer is the one it was already
      * showing, because ⌘0 at 100% and ⌘− against the floor are exactly the
@@ -836,6 +851,8 @@ export const desktopIpc = {
     mediaPreviewOpen: "happy:media-preview:open",
     /** Renderer → main only: the number of conversations waiting for the person. */
     dockUnreadSet: "happy:dock:unread-set",
+    /** Renderer → main only: whether the computer should be held out of sleep. */
+    keepAwakeSet: "happy:keep-awake:set",
     /** Main → renderer only: the window's zoom, every time the View menu is used. */
     zoomChanged: "happy:zoom:changed",
     desktopConfigGet: "happy:desktop-config:get",

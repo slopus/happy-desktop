@@ -40,7 +40,24 @@ export const composerCapabilitiesNone: ComposerCapabilities = {
     mentions: false,
 };
 
-/** One local file or image attachment waiting with its draft. */
+/**
+ * One review note carried by a draft, flattened out of wherever it was written.
+ *
+ * The address travels with the words because it is what makes the note worth
+ * more than a sentence: "this is wrong" about a named line is actionable, and
+ * the same words about a file are a guess.
+ */
+export interface ComposerReviewComment {
+    readonly path: string;
+    /** 0 when the note is about the file rather than one of its lines. */
+    readonly lineNumber: number;
+    readonly side: "deletions" | "additions";
+    readonly text: string;
+    /** The file changed after the note was written, so its line moved. */
+    readonly stale: boolean;
+}
+
+/** One local file, image, or set of review notes waiting with its draft. */
 export type ComposerAttachment =
     | {
           readonly kind: "inlineImage";
@@ -81,6 +98,19 @@ export type ComposerAttachment =
           readonly sourcePath?: string;
           /** Object URL for image/video thumbnails; owned by the workspace store. */
           readonly previewUrl?: string;
+      }
+    | {
+          /**
+           * Notes left while reading a change, waiting to go with the sentence
+           * the reader is writing about them. They ride as an attachment rather
+           * than as text in the draft so the request stays one chip the reader
+           * can drop whole, instead of a wall of quoted lines they have to edit
+           * around to say anything of their own.
+           */
+          readonly kind: "reviewComments";
+          /** Client-minted; unique within this draft only. */
+          readonly id: string;
+          readonly comments: readonly ComposerReviewComment[];
       };
 
 export type ComposerSubmission =

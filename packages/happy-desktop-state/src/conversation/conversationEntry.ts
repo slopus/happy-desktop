@@ -174,6 +174,17 @@ export type ConversationActivityPresentation =
           readonly target: "web" | "x";
           readonly query: string;
           readonly sources?: readonly { readonly url: string; readonly title: string }[];
+      }
+    | {
+          /**
+           * A slice the agent built over the checkout: a named set of files
+           * worth looking at. The row carries only what names it; the files
+           * themselves are read from the checkout's own slices when opened.
+           */
+          readonly type: "slice";
+          readonly sliceId: string;
+          readonly title: string;
+          readonly fileCount: number;
       };
 
 export interface ConversationActivityFailure {

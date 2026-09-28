@@ -1,5 +1,6 @@
-import { type ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 import { ChangedFileDiff } from "../../src/ChangedFileDiff";
+import { CodeEditor } from "../../src/CodeEditor";
 import { FilePreview } from "../../src/FilePreview";
 import { TabbedPane } from "../../src/TabbedPane";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
@@ -55,6 +56,41 @@ function preview(path: string, text: string) {
     return <FilePreview content={{ type: "text", text }} path={path} />;
 }
 
+/**
+ * The same surface where the checkout can be written: the file's characters are
+ * the editor rather than a second read-only copy of them. This is what the
+ * product hands in for a writable file, and why there is no editing mode beside
+ * this one.
+ */
+function EditableFile(props: { path: string; text: string }) {
+    const [text, textSet] = useState(props.text);
+    return (
+        <ChangedFileDiff
+            appearance="light"
+            mode="file"
+            newContent={text}
+            oldContent={sourceBefore}
+            onContentChange={textSet}
+            onSave={() => undefined}
+            path={props.path}
+            preview={
+                <FilePreview
+                    content={{ type: "text", text }}
+                    editor={
+                        <CodeEditor
+                            className="happy-changed-file-editor"
+                            name={props.path}
+                            onValueChange={textSet}
+                            value={text}
+                        />
+                    }
+                    path={props.path}
+                />
+            }
+        />
+    );
+}
+
 /* The diff renderer is told which appearance to draw in, so each specimen pins
    the face it names rather than following the workbench and disagreeing with
    the surface underneath it. */
@@ -80,7 +116,7 @@ function frame(children: ReactNode, height = 420, appearance: "dark" | "light" =
 
 /** The real three-layer file surface, used twice so Preview and Pierre can be
  * compared without either specimen quietly changing the surrounding chrome. */
-function tabbedDiff(mode: "preview" | "unified") {
+function tabbedDiff(mode: "file" | "unified") {
     return (
         <TabbedPane
             activeId="master-plans/03-file-viewer.md"
@@ -105,6 +141,71 @@ function tabbedDiff(mode: "preview" | "unified") {
     );
 }
 
+/* A file long enough that its changes are not all on screen at once, which is
+   the only condition under which stepping through them means anything. Three
+   edits, far apart, with plenty of untouched code between them. */
+const longBefore = Array.from(
+    { length: 120 },
+    (_, index) => `export const value${String(index)} = ${String(index)};`,
+).join("\n");
+const longAfter = longBefore
+    .split("\n")
+    .map((line, index) =>
+        index === 4 || index === 60 || index === 110 ? `${line} // revisited` : line,
+    )
+    .join("\n");
+
+/* Notes are written, not posed: this specimen owns the same little state the
+   product's store owns, so the gutter affordance, the composer, and the
+   handover control can be exercised here rather than only described. */
+function CommentedDiff() {
+    const [comments, commentsSet] = useState<
+        readonly { id: string; lineNumber: number; side: "additions"; text: string }[]
+    >([
+        {
+            id: "c1",
+            lineNumber: 4,
+            side: "additions",
+            text: "Say this in the same voice as the sentence above it.",
+        },
+    ]);
+    const [draft, draftSet] = useState<
+        { lineNumber: number; side: "deletions" | "additions"; text: string } | undefined
+    >(undefined);
+
+    return (
+        <ChangedFileDiff
+            appearance="light"
+            commentDraft={draft}
+            comments={comments}
+            mode="unified"
+            newContent={newContent}
+            oldContent={oldContent}
+            onCommentDraftCancel={() => draftSet(undefined)}
+            onCommentDraftOpen={(lineNumber, side) => draftSet({ lineNumber, side, text: "" })}
+            onCommentDraftSubmit={() => {
+                if (draft === undefined || draft.text.trim() === "") return;
+                commentsSet([
+                    ...comments,
+                    {
+                        id: `c${String(comments.length + 1)}`,
+                        lineNumber: draft.lineNumber,
+                        side: "additions",
+                        text: draft.text,
+                    },
+                ]);
+                draftSet(undefined);
+            }}
+            onCommentDraftUpdate={(text) => draftSet(draft && { ...draft, text })}
+            onCommentRemove={(commentId) =>
+                commentsSet(comments.filter((comment) => comment.id !== commentId))
+            }
+            path="master-plans/03-file-viewer.md"
+            preview={preview("master-plans/03-file-viewer.md", newContent)}
+        />
+    );
+}
+
 export function ChangedFileDiffPage() {
     return (
         <ComponentPage
@@ -119,7 +220,7 @@ export function ChangedFileDiffPage() {
                 stage="surface"
             >
                 <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                    {frame(tabbedDiff("preview"), 280)}
+                    {frame(tabbedDiff("file"), 280)}
                     {frame(tabbedDiff("unified"), 280)}
                     <DimensionRule label="Preview ↔ Unified · consecutive 32 px bands · 16 px icon at x16 · path at x42 · diff stats right" />
                 </div>
@@ -134,7 +235,7 @@ export function ChangedFileDiffPage() {
                 {frame(
                     <ChangedFileDiff
                         appearance="light"
-                        mode="preview"
+                        mode="file"
                         newContent={source}
                         oldContent={sourceBefore}
                         path="packages/happy-desktop-ui/src/elapsed.ts"
@@ -178,22 +279,13 @@ export function ChangedFileDiffPage() {
             </Specimen>
 
             <Specimen
-                detail="Offered only with somewhere to hand an edit; Command-S saves without adding another button to the mode bar"
-                label="Edit"
+                detail="The file face of a writable file is the editor: one place to read the result and fix what it says, with Command-S to save and no second mode showing the same lines read-only"
+                label="File, written"
                 number="05"
                 stage="surface"
             >
                 {frame(
-                    <ChangedFileDiff
-                        appearance="light"
-                        mode="edit"
-                        newContent={source}
-                        oldContent={sourceBefore}
-                        onContentChange={() => {}}
-                        onSave={() => {}}
-                        path="packages/happy-desktop-ui/src/elapsed.ts"
-                        preview={preview("packages/happy-desktop-ui/src/elapsed.ts", source)}
-                    />,
+                    <EditableFile path="packages/happy-desktop-ui/src/elapsed.ts" text={source} />,
                     300,
                 )}
             </Specimen>
@@ -208,7 +300,7 @@ export function ChangedFileDiffPage() {
                     {frame(
                         <ChangedFileDiff
                             appearance="light"
-                            mode="preview"
+                            mode="file"
                             newContent={source}
                             oldContent=""
                             path="packages/happy-desktop-ui/src/elapsed.ts"
@@ -234,7 +326,7 @@ export function ChangedFileDiffPage() {
                     {frame(
                         <ChangedFileDiff
                             appearance="light"
-                            mode="preview"
+                            mode="file"
                             newContent=""
                             oldContent={source}
                             path="packages/happy-desktop-ui/src/elapsed.ts"
@@ -254,7 +346,7 @@ export function ChangedFileDiffPage() {
                 {frame(
                     <ChangedFileDiff
                         appearance="light"
-                        mode="preview"
+                        mode="file"
                         newContent=""
                         oldContent={oldContent}
                         path="master-plans/03-file-viewer.md"
@@ -273,7 +365,7 @@ export function ChangedFileDiffPage() {
                     <ChangedFileDiff
                         appearance="light"
                         loading
-                        mode="preview"
+                        mode="file"
                         newContent={newContent}
                         oldContent={oldContent}
                         path="master-plans/03-file-viewer.md"
@@ -293,7 +385,7 @@ export function ChangedFileDiffPage() {
                     {frame(
                         <ChangedFileDiff
                             appearance="dark"
-                            mode="preview"
+                            mode="file"
                             newContent={newContent}
                             oldContent={oldContent}
                             path="master-plans/03-file-viewer.md"
@@ -325,7 +417,7 @@ export function ChangedFileDiffPage() {
                 {frame(
                     <ChangedFileDiff
                         appearance="light"
-                        mode="edit"
+                        mode="file"
                         newContent={source}
                         oldContent={sourceBefore}
                         onContentChange={() => {}}
@@ -336,6 +428,33 @@ export function ChangedFileDiffPage() {
                     />,
                     300,
                 )}
+            </Specimen>
+
+            <Specimen
+                detail="Three edits far apart in a long file; the steps travel between them instead of the scrollbar travelling past everything else"
+                label="Walking the change"
+                number="13"
+                stage="surface"
+            >
+                {frame(
+                    <ChangedFileDiff
+                        appearance="light"
+                        mode="unified"
+                        newContent={longAfter}
+                        oldContent={longBefore}
+                        path="packages/happy-desktop-ui/src/values.ts"
+                    />,
+                    320,
+                )}
+            </Specimen>
+
+            <Specimen
+                detail="The gutter offers a note where the pointer is; a written note sits under its line, and the bar says how many are waiting"
+                label="Review notes"
+                number="12"
+                stage="surface"
+            >
+                {frame(<CommentedDiff />, 420)}
             </Specimen>
 
             <Specimen

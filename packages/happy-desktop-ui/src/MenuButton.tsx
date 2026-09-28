@@ -19,6 +19,8 @@ export interface MenuButtonProps {
     /** Static rows, or a catalog materialized only when the menu opens. */
     readonly items: readonly MenuItem[] | (() => readonly MenuItem[]);
     readonly onSelect: (id: string) => void;
+    /** A row's trailing act was taken; the menu closes as it does for a choice. */
+    readonly onAction?: (id: string) => void;
     readonly align?: "start" | "end";
     /** Which edge of the trigger the popover opens from. */
     readonly placement?: "above" | "below";
@@ -184,6 +186,14 @@ export function MenuButton(props: MenuButtonProps) {
                             id={menuId}
                             items={[...visibleItems]}
                             label={props.menuLabel}
+                            {...(props.onAction
+                                ? {
+                                      onAction: (id: string) => {
+                                          close(true);
+                                          props.onAction?.(id);
+                                      },
+                                  }
+                                : {})}
                             onSelect={(id) => {
                                 if (id === previousPageId) {
                                     setMenuPage((page) => Math.max(0, page - 1));

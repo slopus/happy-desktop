@@ -14,6 +14,7 @@ import type {
     Question,
     Run,
     SlashCommand,
+    Slice,
     UsageBreakdown,
     Workspace,
 } from "@slopus/happy-agent-client";
@@ -33,6 +34,7 @@ import type {
     ToolPresentation,
     UserInputRequest,
     WorkspaceGroup,
+    WorkspaceSlice,
 } from "./types.js";
 
 export interface TranscriptMessage {
@@ -1091,7 +1093,31 @@ function projectToolPresentation(
                 query: presentation.query,
                 ...(presentation.sources === undefined ? {} : { sources: presentation.sources }),
             };
+        case "slice":
+            return {
+                kind: "slice",
+                sliceId: presentation.sliceId,
+                title: presentation.title,
+                fileCount: presentation.fileCount,
+            };
     }
+}
+
+/** One wire slice as the connection publishes it: same facts, plain numbers. */
+export function projectSlice(slice: Slice): WorkspaceSlice {
+    return {
+        id: slice.id,
+        workspaceId: slice.workspaceId,
+        agentId: slice.agentId,
+        title: slice.title,
+        note: slice.note,
+        files: slice.files.map((file) => ({
+            path: file.path,
+            reason: file.reason,
+            lines: file.lines.map((range) => ({ start: range.start, end: range.end })),
+        })),
+        createdAt: slice.createdAt,
+    };
 }
 
 function projectUsage(
