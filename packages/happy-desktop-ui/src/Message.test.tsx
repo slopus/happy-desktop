@@ -1437,15 +1437,14 @@ it("follows the newest content in MessageList unless the reader scrolled up", as
     expect(element.scrollTop, "wheel at the bottom does not nudge the transcript").toBe(
         bottomBeforeWheel,
     );
+    /* A reader parked within the follow threshold of the bottom who wheels
+       down again is handed back to the tail: following resumes and the
+       transcript rests at the bottom. */
     element.scrollTop = maxScroll() - 1;
     await nextFrame();
-    const nearBottomBeforeWheel = element.scrollTop;
     await userEvent.wheel(element, { delta: { y: 120 } });
     await nextFrame();
-    expect(
-        element.scrollTop,
-        "wheel within the bottom edge tolerance does not snap the transcript",
-    ).toBe(nearBottomBeforeWheel);
+    expect(atBottom(), "wheel within the bottom edge tolerance resumes following").toBe(true);
     const lastLong = view.$('[data-testid="long-13"]');
     expect(
         Math.abs(lastLong.bounds().y + lastLong.bounds().height - (list.bounds().y + 360 - 8)),
@@ -1474,9 +1473,14 @@ it("follows the newest content in MessageList unless the reader scrolled up", as
     await nextFrame();
     await nextFrame();
     expect(element.scrollTop, "parked reader stays parked").toBe(parked);
-    /* Returning to the bottom re-engages following. */
+    /* Returning to the bottom re-engages following once the reader nudges it
+       there. A bare scroll position that lands at the bottom while the content
+       is still growing reads as layout, not as the reader's return; the wheel
+       is what hands the transcript back. */
     element.scrollTop = maxScroll();
     await nextFrame();
+    await nextFrame();
+    await userEvent.wheel(element, { delta: { y: 120 } });
     await nextFrame();
     flushSync(() =>
         setExtra([
@@ -1861,7 +1865,10 @@ it("renders string bodies as safe streaming Markdown", async () => {
     const unsafeBody = view.$('[data-testid="md-unsafe"] [data-happy-desktop-ui="message-body"]');
     expect(unsafeBody.element.querySelector("img"), "no live <img> from raw HTML").toBeNull();
     expect(unsafeBody.element.querySelector("script"), "no <script> from raw HTML").toBeNull();
-    expect(unsafeBody.element.textContent).toContain("onerror");
+    /* Raw HTML is skipped outright, tag and attributes alike; the prose
+       around it survives. */
+    expect(unsafeBody.element.textContent).not.toContain("onerror");
+    expect(unsafeBody.element.textContent).toContain("Injected");
     expect(
         (
             window as unknown as {

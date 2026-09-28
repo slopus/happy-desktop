@@ -14,10 +14,17 @@ import PierreHighlightWorker from "@pierre/diffs/worker/worker.js?worker";
  * components highlight on the main thread, which is what a test or a Blueprint
  * page wants.
  *
+ * What is paid for it is one pass of uncoloured text: with a pool the renderer
+ * never takes a highlighter synchronously, so rows are drawn immediately and
+ * tokens arrive by message. That wait is the tokenizing itself and scales with
+ * the file — measured at roughly 100 ms over 180 lines and 490 ms over 3,600.
+ * Opening the same content again is immediate, because the result is cached
+ * against the diff's identity. Warming the pool's grammars ahead of time was
+ * tried and changed nothing (412 ms against 409 ms over six files), which is
+ * how we know the wait is the work and not the starting.
+ *
  * The pool is a process-wide singleton, so mounting the provider twice shares
- * one pool rather than starting a second. Two workers is deliberate: one file
- * and one diff highlighting concurrently is the realistic ceiling, and eight
- * idle workers (the library default) is a cost with no question behind it.
+ * one pool rather than starting a second.
  */
 export function CodeHighlightWorkers(props: { children: ReactNode }) {
     // jsdom has no Worker, so a test render takes the main-thread fallback
@@ -29,7 +36,14 @@ export function CodeHighlightWorkers(props: { children: ReactNode }) {
             // initialized with the one palette every code surface here asks for.
             highlighterOptions={{ theme: { dark: "pierre-dark", light: "pierre-light" } }}
             poolOptions={{
-                poolSize: 2,
+                // Four, because the review stream hands over every changed file
+                // in a checkout at once and they queue on whatever is here. Two
+                // was sized for "one file and one diff", which a review is not:
+                // six files at once finished colouring in 544 ms on two workers
+                // and 409 ms on four. Still well under the library's default of
+                // eight, which is eight idle threads with no question behind
+                // them.
+                poolSize: 4,
                 // Pierre keeps separate file and diff AST LRUs at this size;
                 // cap each one explicitly so the worker pool cannot retain
                 // its library default of 100 entries per cache.

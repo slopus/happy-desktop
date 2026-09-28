@@ -34,3 +34,15 @@
     padding-top: 0;
     padding-bottom: 4px;
 }
+
+/* Drawn in the window's overlay lane rather than in the trigger's box: fixed,
+   and placed beside the trigger by the component once the card has a size to
+   measure. The inline offsets it writes are the whole position, so nothing
+   here anchors it to a parent. */
+.happy-menu-button__popover[data-overlay] {
+    position: fixed;
+    top: auto;
+    right: auto;
+    bottom: auto;
+    left: auto;
+}

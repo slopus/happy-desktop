@@ -110,7 +110,10 @@ function workspace(): HappyAgentWorkspaceStore {
         fileLayout: "flat" as const,
         fileTreeExpanded: new Set<string>(),
         fileTreeCollapsed: new Set<string>(),
+        fileSearch: { query: "", searching: false },
         workspaceFilesLoading: false,
+        fileComments: { comments: [] },
+        reviews: new Map(),
     };
     return {
         get: () => snapshot,

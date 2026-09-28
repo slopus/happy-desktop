@@ -3,6 +3,7 @@ import { userEvent } from "vitest/browser";
 import { useState } from "react";
 import type { TerminalCellSnapshot, TerminalGridSnapshot } from "happy-desktop-state";
 import "./theme.css";
+import "./styles/scrollbar.css";
 import "./styles/terminal-panel.css";
 import "./styles/button.css";
 import "./styles/icon.css";
@@ -116,12 +117,19 @@ it("holds TerminalPanel geometry, full-bleed screen, and lifecycle controls", as
 
     /* ---- Screen scrollport is full-bleed: zero margin/padding, edge to edge */
     const screen = view.$('[data-testid="connected"] [data-happy-desktop-ui="terminal-screen"]');
-    expect(screen.computedStyles(["margin", "padding", "overflow", "box-sizing"])).toEqual({
+    expect(screen.computedStyles(["margin", "padding", "box-sizing"])).toEqual({
         margin: "0px",
         padding: "0px",
-        overflow: "auto",
         "box-sizing": "border-box",
     });
+    /* The host frames the screen; the viewport inside it is the scrollport. */
+    expect(
+        view
+            .$(
+                '[data-testid="connected"] [data-happy-desktop-ui="terminal-screen"] [data-scrollbar-viewport]',
+            )
+            .computedStyles(["margin", "padding", "overflow"]),
+    ).toEqual({ margin: "0px", padding: "0px", overflow: "auto" });
     expect(screen.bounds().width).toBe(panelEl.bounds().width);
 
     /* ---- Rows wrapper carries the spacing and the monospace type -------- */

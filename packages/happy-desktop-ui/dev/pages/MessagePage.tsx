@@ -383,6 +383,32 @@ export function MessagePage() {
             </Specimen>
 
             <Specimen
+                detail="A written file reference becomes the click it looks like. A path with a line or a run of lines links, in prose and in backticks alike; a fenced block is code being shown rather than cited, a time of day is not a file, and a link that is already a link is left alone"
+                label="Message — file references"
+                number="17"
+                stage="app"
+            >
+                {channelFrame(
+                    <Message
+                        agent
+                        author="Codex"
+                        body={
+                            "The reveal lives in packages/happy-desktop-ui/src/CodeEditor.tsx:84-112, " +
+                            "and the tab that carries it is `happyAgentWorkspaceStore.ts:3628`.\n\n" +
+                            "Standup is at 10:30, and nothing in\n\n" +
+                            "```ts\nconst at = doc.line(3);\n```\n\n" +
+                            "is a citation."
+                        }
+                        generationStatus="complete"
+                        initials="CX"
+                        onFileOpen={() => {}}
+                        time="11:20"
+                        tone="mint"
+                    />,
+                )}
+            </Specimen>
+
+            <Specimen
                 detail="String body renders as Markdown — headings, lists, emphasis, inline + fenced code, isolated Mermaid diagrams, and safe links, all on theme tokens"
                 label="Message — Markdown body (complete)"
                 number="08"
@@ -403,6 +429,7 @@ export function MessagePage() {
                         }
                         generationStatus="complete"
                         initials="CX"
+                        onLinkOpen={() => {}}
                         time="10:58"
                         tone="mint"
                     />,

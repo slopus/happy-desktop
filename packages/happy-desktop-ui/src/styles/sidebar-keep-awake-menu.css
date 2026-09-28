@@ -1,0 +1,23 @@
+/*
+ * C-285 SidebarKeepAwakeMenu — the footer's coffee-cup trigger. The menu it
+ * opens is the house MenuButton popover, drawn in the window's overlay lane;
+ * what is styled here is only the trigger's ink, which carries the live state.
+ *
+ * Contract: the trigger is an ordinary 28px ghost glyph like its neighbours and
+ * paints in full ink only while the machine is actually being held awake, or
+ * while its menu is open.
+ */
+
+.happy-sidebar-keep-awake {
+    display: flex;
+    flex: none;
+}
+
+.happy-sidebar-keep-awake[data-active] > .happy-menu-button > .happy-button,
+.happy-sidebar-keep-awake > .happy-menu-button[data-open] > .happy-button {
+    color: var(--text);
+}
+
+.happy-sidebar-keep-awake > .happy-menu-button[data-open] > .happy-button {
+    background: var(--surface-ripple);
+}

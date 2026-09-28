@@ -2,6 +2,7 @@ import { expect, it } from "vitest";
 import { server } from "vitest/browser";
 import { type ReactNode } from "react";
 import "./theme.css";
+import "./styles/scrollbar.css";
 import "./styles/icon.css";
 import "./styles/button.css";
 import "./styles/badge.css";
@@ -183,8 +184,12 @@ it("holds AgentTracePanel header, scrollport contract, entry rows, and timestamp
     expect(body.bounds().width).toBe(288);
     expect(body.bounds().height).toBe(464);
     expect(body.bounds().y - panel.bounds().y).toBe(56);
+    /* The host frames the region; the viewport inside it owns the scrolling. */
+    const bodyViewport = view.$(
+        '[data-testid="tp-running"] [data-happy-desktop-ui="agent-trace-panel-body"] [data-scrollbar-viewport]',
+    );
     expect(
-        body.computedStyles([
+        bodyViewport.computedStyles([
             "margin-top",
             "margin-right",
             "margin-bottom",
@@ -464,7 +469,10 @@ it("scrolls overflowing traces edge to edge and centers loading, error, and empt
         '[data-testid="tp-scroll"] [data-happy-desktop-ui="agent-trace-panel-body"]',
     );
     expect(body.bounds()).toMatchObject({ width: 288, height: 264 });
-    expect(body.element.scrollHeight).toBeGreaterThan(body.element.clientHeight);
+    const bodyViewport = view.$(
+        '[data-testid="tp-scroll"] [data-happy-desktop-ui="agent-trace-panel-body"] [data-scrollbar-viewport]',
+    ).element;
+    expect(bodyViewport.scrollHeight).toBeGreaterThan(bodyViewport.clientHeight);
     /* Single-step badge grammar while we are here. */
     expect(
         view.$('[data-testid="tp-scroll"] [data-happy-desktop-ui="toolbar-subtitle"]').element
@@ -488,7 +496,7 @@ it("scrolls overflowing traces edge to edge and centers loading, error, and empt
 
     /* …and after scrolling to the end, the last entry sits fully inside the
      * scrollport with the wrapper's 12px bottom inset. */
-    body.element.scrollTop = body.element.scrollHeight;
+    bodyViewport.scrollTop = bodyViewport.scrollHeight;
     const last = view.$(
         '[data-testid="tp-scroll"] [data-happy-desktop-ui="agent-trace-panel-entries"] > :nth-child(20)',
     );
