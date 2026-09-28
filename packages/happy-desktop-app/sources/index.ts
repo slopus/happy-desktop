@@ -2,6 +2,8 @@ import "./styles.css";
 
 export {
     AppHappyAgentView,
+    type AppBuildIdentity,
+    type AppBuildIdentityStore,
     type AppHappyAgentDirectorySnapshot,
     type AppHappyAgentDirectoryStore,
     type AppHappyAgentEntry,

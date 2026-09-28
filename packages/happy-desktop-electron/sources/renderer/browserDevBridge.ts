@@ -76,6 +76,9 @@ export function browserDevBridgeCreate(): HappyDesktopBridge {
         // Browser-local development has no explicit Electron debug launch, so
         // it must not start the desktop-only live metrics sampler.
         debugMetricsEnabled: false,
+        // A browser tab is not a checkout: it has no identity to report or to change.
+        buildIdentityGet: async () => undefined,
+        buildIdentitySubscribe: () => () => undefined,
         // A normal browser exposes no native preferred-color-scheme override;
         // the application tree itself is already controlled by ThemeScope.
         appearanceSet: () => undefined,

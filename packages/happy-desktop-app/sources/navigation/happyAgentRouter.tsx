@@ -39,7 +39,7 @@ import {
 } from "happy-desktop-ui";
 import {
     AppHappyAgentView,
-    type AppBuildIdentity,
+    type AppBuildIdentityStore,
     type AppHappyAgentDirectoryStore,
     type AppHappyAgentUpdate,
 } from "../AppHappyAgentView";
@@ -85,8 +85,8 @@ export interface HappyAgentRouterContext {
     readonly daemon?: AppHappyAgentDaemonStore;
     readonly profiler?: AppHappyAgentProfilerStore;
     readonly happyAgents: AppHappyAgentDirectoryStore;
-    /** This build's development identity; absent in the packaged product. */
-    readonly buildIdentity?: AppBuildIdentity;
+    /** This build's development identity, following the checkout; absent in the packaged product. */
+    readonly buildIdentity?: AppBuildIdentityStore;
     readonly appearance: AppearanceStore;
     /** The window's own local preferences: default model, effort, and permissions. */
     readonly settings: HappyAgentSettingsStore;

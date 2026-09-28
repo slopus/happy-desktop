@@ -9,6 +9,7 @@ import {
     happyAgentRouterGroupOpen,
     happyAgentRouterGroupForget,
     happyAgentRouterCreate,
+    type AppBuildIdentityStore,
     type AppHappyAgentDaemonStore,
     type AppHappyAgentUpdate,
     type AppHappyAgentDebugStore,
@@ -87,6 +88,7 @@ import {
     type LocalWebUpdateSnapshot,
     type LocalWebUpdateStore,
 } from "./localWebUpdateStore";
+import { buildIdentityStoreCreate } from "./buildIdentityStore";
 import { surfaceWindowStateStoreCreate, windowStateStoreCreate } from "./windowStateStore";
 import { DesktopBrowserView } from "./desktopBrowserView";
 import { DesktopHtmlPreviewView } from "./desktopHtmlPreviewView";
@@ -279,6 +281,8 @@ function HappyAgentBoundary(props: {
     htmlPreview?: HtmlPreviewRenderer;
     mediaWindow?: MediaWindowOpener;
     experiments: ExperimentsStore;
+    /** The checkout this development window follows; absent in the packaged product. */
+    buildIdentity?: AppBuildIdentityStore;
     platform: "desktop" | "web";
     router: HappyAgentRouter;
     navigationOrder: HappyAgentNavigationOrderStore;
@@ -296,9 +300,9 @@ function HappyAgentBoundary(props: {
             context={{
                 appearance: props.appearance,
                 browserContent: props.browserContent,
-                // A development window says which checkout it came from; the
+                // A development window says which checkout it is on; the
                 // packaged product supplies nothing and shows nothing.
-                buildIdentity: props.bridge.buildIdentity,
+                buildIdentity: props.buildIdentity,
                 commandPalette: props.commandPalette,
                 connectionOnboarding: props.connectionOnboarding,
                 ...(props.daemon ? { daemon: props.daemon } : {}),
@@ -466,6 +470,8 @@ interface DesktopRendererProps {
     htmlPreview?: HtmlPreviewRenderer;
     mediaWindow?: MediaWindowOpener;
     bridge: HappyDesktopBridge;
+    /** The checkout this development window follows; absent in the packaged product. */
+    buildIdentity?: AppBuildIdentityStore;
     experiments: ExperimentsStore;
     navigationOrder: HappyAgentNavigationOrderStore;
     sidebarCollapse: HappyAgentSidebarCollapseStore;
@@ -936,6 +942,7 @@ function DesktopRuntimeContent(
                 <HappyAgentBoundary
                     appearance={props.appearance}
                     bridge={props.bridge}
+                    buildIdentity={props.buildIdentity}
                     commandPalette={props.commandPalette}
                     {...(props.daemon ? { daemon: props.daemon } : {})}
                     debug={props.debug}
@@ -1186,6 +1193,11 @@ if (mediaPreviewBridge) {
             terminalColorScheme: () => appearance.get().appearance,
         });
         const windowState = windowStateStoreCreate(desktopBridge);
+        // A development window follows its checkout from the identity it was
+        // launched with; the packaged product has none and never acquires one.
+        const buildIdentity = desktopBridge.buildIdentity
+            ? buildIdentityStoreCreate(desktopBridge, desktopBridge.buildIdentity)
+            : undefined;
         // What the surfaces lay out against: the window itself, or the
         // closed-inset arrangement while the rail owns the window's left edge.
         const surfaceWindowState = surfaceWindowStateStoreCreate({
@@ -1347,6 +1359,7 @@ if (mediaPreviewBridge) {
                         startupValues={startupValuesStoreCreate()}
                         store={runtimeStore}
                         welcome={welcome}
+                        buildIdentity={buildIdentity}
                         windowState={windowState}
                         surfaceWindowState={surfaceWindowState}
                         restart={restart}

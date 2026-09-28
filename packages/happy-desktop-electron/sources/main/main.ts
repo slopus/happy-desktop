@@ -83,7 +83,11 @@ import { DesktopDebugController } from "./desktopDebugController";
 import { desktopMainInspectorStart } from "./desktopInspector";
 import { DesktopProfilerController } from "./desktopProfilerController";
 import { DesktopWindowStateStore } from "./windowState";
-import { desktopBuildIdentityRead } from "./buildIdentity";
+import {
+    desktopBuildIdentityRead,
+    desktopBuildIdentityWatch,
+    type DesktopBuildIdentityWatch,
+} from "./buildIdentity";
 import { DesktopDaemonController } from "./desktopDaemonController";
 import { cloudAuthProductionRedirectUri } from "../shared/cloudAuthConfig";
 
@@ -92,6 +96,14 @@ if (process.platform !== "darwin" && process.platform !== "linux" && process.pla
     app.exit(1);
 }
 const buildIdentity = desktopBuildIdentityRead(app.isPackaged, app.getAppPath());
+/*
+ * The identity above is the launch-time one, and it keys everything that must
+ * not move under a running process: the user-data directory, the single-instance
+ * lock, the debug port. This one follows the checkout as it is worked on — a
+ * branch switched, a rebase detaching HEAD — and is what the windows show.
+ */
+let buildIdentityCurrent = buildIdentity;
+let buildIdentityWatch: DesktopBuildIdentityWatch | undefined;
 const desktopGymActive = process.env.HAPPY_DESKTOP_GYM_PROFILE !== undefined;
 const desktopProfilerLaunchMode =
     process.env.HAPPY_DESKTOP_PROFILE_MODE === "optimized" || desktopGymActive
@@ -161,10 +173,29 @@ const applicationIconPath = existsSync(generatedApplicationIconPath)
  * ordinary checkout on the default branch is simply "Happy Dev": it is the one
  * window with nothing to distinguish it from, and naming it twice says nothing.
  */
-const windowTitle =
-    buildIdentity && buildIdentity.label !== "dev"
-        ? `${applicationName} — ${buildIdentity.label}`
+function windowTitle(): string {
+    return buildIdentityCurrent && buildIdentityCurrent.label !== "dev"
+        ? `${applicationName} — ${buildIdentityCurrent.label}`
         : applicationName;
+}
+
+/**
+ * Follows the checkout and tells every application window when it moves, so
+ * the footer and the title say which branch is checked out now. The preview
+ * window is left alone: it is named after its file, not after the build.
+ */
+function buildIdentityFollow(): DesktopBuildIdentityWatch | undefined {
+    if (!buildIdentity) return undefined;
+    return desktopBuildIdentityWatch(app.getAppPath(), buildIdentity, (identity) => {
+        buildIdentityCurrent = identity;
+        for (const window of BrowserWindow.getAllWindows()) {
+            if (window.isDestroyed() || window === mediaPreviewWindow) continue;
+            window.setTitle(windowTitle());
+            if (!window.webContents.isDestroyed())
+                window.webContents.send(desktopIpc.buildIdentityChanged, identity);
+        }
+    });
+}
 const desktopDebugEnabled =
     !app.isPackaged &&
     (process.env.HAPPY_DESKTOP_DEBUG === "1" || process.argv.includes("--debug"));
@@ -868,7 +899,7 @@ function windowOptions(
 ): BrowserWindowConstructorOptions {
     return {
         backgroundColor: windowBackgroundColor(),
-        title: windowTitle,
+        title: windowTitle(),
         width: bounds?.width ?? 1100,
         height: bounds?.height ?? 760,
         ...(bounds ? { x: bounds.x, y: bounds.y } : {}),
@@ -895,7 +926,7 @@ function windowOptions(
  */
 function windowTitleHold(window: BrowserWindow): void {
     const hold = () => {
-        if (!window.isDestroyed()) window.setTitle(windowTitle);
+        if (!window.isDestroyed()) window.setTitle(windowTitle());
     };
     window.on("page-title-updated", (event) => {
         event.preventDefault();
@@ -1096,7 +1127,7 @@ function mediaPreviewNameHold(window: BrowserWindow): void {
     const hold = () => {
         if (window.isDestroyed()) return;
         window.setTitle(
-            mediaPreviewSubject ? mediaPreviewTitle(mediaPreviewSubject.path) : windowTitle,
+            mediaPreviewSubject ? mediaPreviewTitle(mediaPreviewSubject.path) : windowTitle(),
         );
     };
     window.on("page-title-updated", (event) => {
@@ -1136,7 +1167,7 @@ function mediaPreviewWindowCreate(): BrowserWindow {
           : address(pathToFileURL(rendererPath).toString());
     const window = new BrowserWindow({
         backgroundColor: windowBackgroundColor(),
-        title: windowTitle,
+        title: windowTitle(),
         width: 1100,
         height: 760,
         minWidth: 480,
@@ -1826,6 +1857,12 @@ void app
         ipcMain.handle(desktopIpc.windowStateGet, (event) => ({
             fullScreen: BrowserWindow.fromWebContents(event.sender)?.isFullScreen() ?? false,
         }));
+        ipcMain.handle(desktopIpc.buildIdentityGet, () => buildIdentityCurrent);
+        buildIdentityWatch = buildIdentityFollow();
+        app.once("will-quit", () => buildIdentityWatch?.dispose());
+        // Coming back to the window is the moment a switch made in a terminal
+        // matters, and the moment a watcher that missed it gets a second chance.
+        app.on("browser-window-focus", () => buildIdentityWatch?.refresh());
         windowSynchronize(runtime.get());
         applicationMenuInstall(runtime.get());
         desktopDebugRuntimeLog(runtime.get());

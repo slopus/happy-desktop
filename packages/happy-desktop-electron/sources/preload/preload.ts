@@ -46,6 +46,13 @@ const debugMetricsEnabled = process.argv.includes(debugMetricsArgument);
 
 const bridge: HappyDesktopBridge = {
     ...(identity ? { buildIdentity: identity } : {}),
+    buildIdentityGet: () => ipcRenderer.invoke(desktopIpc.buildIdentityGet),
+    buildIdentitySubscribe(listener: (identity: DesktopBuildIdentity) => void) {
+        const receive = (_event: Electron.IpcRendererEvent, identity: DesktopBuildIdentity) =>
+            listener(identity);
+        ipcRenderer.on(desktopIpc.buildIdentityChanged, receive);
+        return () => ipcRenderer.removeListener(desktopIpc.buildIdentityChanged, receive);
+    },
     debugMetricsEnabled,
     appearanceSet: (mode) => ipcRenderer.send(desktopIpc.appearanceSet, mode),
     attachmentSourcePath(file: File) {

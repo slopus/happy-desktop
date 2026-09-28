@@ -628,11 +628,18 @@ export type DesktopPreviewNavigation = DesktopPreviewNavigationStep & {
 
 export interface HappyDesktopBridge {
     /**
-     * This window's development identity, absent in a packaged build. It is a
-     * plain value rather than a call because the window is one build for its
-     * whole life: the shell has it before the first frame and it never changes.
+     * The development identity this window was launched with, absent in a
+     * packaged build. It is a plain value so the shell can render it in the
+     * first frame; it is the checkout as it stood at launch. The checkout moves
+     * underneath a running build — a branch is switched, a rebase detaches and
+     * reattaches HEAD — so what the window shows follows `buildIdentitySubscribe`
+     * from then on. A packaged build never gains an identity later.
      */
     readonly buildIdentity?: DesktopBuildIdentity;
+    /** The checkout as it stands now; undefined in a packaged build. */
+    buildIdentityGet(): Promise<DesktopBuildIdentity | undefined>;
+    /** Fires when the checkout this build runs from changes branch or worktree. */
+    buildIdentitySubscribe(listener: (identity: DesktopBuildIdentity) => void): () => void;
     /**
      * Whether this window was explicitly launched with desktop debug tooling.
      * This is fixed for the window's life and is separate from `buildIdentity`:
@@ -886,6 +893,9 @@ export const desktopIpc = {
     updateInstall: "happy:update:install",
     windowStateChanged: "happy:window-state:changed",
     windowStateGet: "happy:window-state:get",
+    /** Main → renderer only: the checkout moved to another branch or detached. */
+    buildIdentityChanged: "happy:build-identity:changed",
+    buildIdentityGet: "happy:build-identity:get",
 } as const;
 
 /**

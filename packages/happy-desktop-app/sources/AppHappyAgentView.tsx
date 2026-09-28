@@ -365,9 +365,9 @@ export interface AppHappyAgentDirectoryStore {
 }
 
 /**
- * What a development window calls itself: the worktree or branch it was built
- * from, and the checkout worth copying out of it. A packaged Happy supplies
- * none — the product has one identity and does not have to announce it.
+ * What a development window calls itself: the worktree or branch it is on, and
+ * the checkout worth copying out of it. A packaged Happy supplies none — the
+ * product has one identity and does not have to announce it.
  */
 export interface AppBuildIdentity {
     readonly branch: string;
@@ -375,14 +375,31 @@ export interface AppBuildIdentity {
     readonly path: string;
 }
 
+/**
+ * The checkout as it stands now. A development build's branch moves under it —
+ * a switch, a rebase — and the footer says so without a restart, so the identity
+ * is a store rather than a value fixed at launch.
+ */
+export interface AppBuildIdentityStore {
+    get(): AppBuildIdentity;
+    subscribe(listener: () => void): () => void;
+}
+
+/** What the packaged product reads instead of a store: no identity, ever. */
+const BUILD_IDENTITY_ABSENT = {
+    get: (): AppBuildIdentity | undefined => undefined,
+    subscribe: (): (() => void) => () => undefined,
+};
+
 export interface AppHappyAgentViewProps {
     /** The host Happy Agent this window is an interface onto, and what it currently holds. */
     happyAgents: AppHappyAgentDirectoryStore;
     /**
-     * This build's development identity, shown in the sidebar footer menu.
-     * Absent in the packaged product, where there is nothing to tell apart.
+     * This build's development identity, shown in the sidebar footer menu and
+     * following the checkout as it moves. Absent in the packaged product, where
+     * there is nothing to tell apart.
      */
-    buildIdentity?: AppBuildIdentity;
+    buildIdentity?: AppBuildIdentityStore;
     /** Live renderer diagnostics, supplied only by an explicitly debug-launched desktop window. */
     performance?: LivePerformanceStore;
     /** Which Happy Agent the URL addresses; its projects and sessions fill the window. */
@@ -1658,6 +1675,12 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
         props.happyAgents.get,
         props.happyAgents.get,
     );
+    const buildIdentityStore = props.buildIdentity ?? BUILD_IDENTITY_ABSENT;
+    const buildIdentity = useSyncExternalStore<AppBuildIdentity | undefined>(
+        buildIdentityStore.subscribe,
+        buildIdentityStore.get,
+        buildIdentityStore.get,
+    );
     const appearance = useSyncExternalStore(
         props.appearance.subscribe,
         props.appearance.get,
@@ -1826,18 +1849,18 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                     actions={sidebarUpdate}
                     appearance={appearance.appearance}
                     devMenu={
-                        props.buildIdentity ? (
+                        buildIdentity ? (
                             <DevBuildMenu
-                                branch={props.buildIdentity.branch}
-                                label={props.buildIdentity.label}
+                                branch={buildIdentity.branch}
+                                label={buildIdentity.label}
                                 onBlueprintOpen={props.onBlueprintOpen}
                                 onCopyPath={() =>
                                     void navigator.clipboard
-                                        .writeText(props.buildIdentity!.path)
+                                        .writeText(buildIdentity.path)
                                         .catch(() => undefined)
                                 }
                                 performance={props.performance}
-                                path={props.buildIdentity.path}
+                                path={buildIdentity.path}
                             />
                         ) : undefined
                     }
