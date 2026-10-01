@@ -17,8 +17,13 @@ import type {
     HappyAgentConversationSnapshot,
     HappyAgentFileLayout,
     HappyAgentWorkspaceFiles,
+    HappyAgentCommentDraft,
+    HappyAgentCommentId,
+    HappyAgentFileComment,
     HappyAgentFileScope,
+    HappyAgentFileSearch,
     HappyAgentFileViewMode,
+    HappyAgentReview,
     HappyAgentHost,
     HappyAgentIntegrationStore,
     HappyAgentGroupId,
@@ -105,6 +110,7 @@ import {
     commandPaletteResultsRows,
     ContextMeter,
     ChangedFileDiff,
+    CodeEditor,
     ComposerFooterBar,
     ComposerModelControl,
     type ComposerModelUsageWatch,
@@ -122,12 +128,15 @@ import {
     MenuButton,
     Modal,
     ModalOverlay,
+    ReviewStream,
     HappyAgentActivityControl,
     HappyAgentActivityPanel,
     HappyAgentControlMenu,
     fileTreeBuild,
     fileTreeExpanded,
     fileTreeFlatten,
+    fileTreeRanked,
+    filePathMatches,
     fileNameCompare,
     type FileTreeExpansion,
     type FileTreeBuildEntry,
@@ -1132,6 +1141,15 @@ function fileTabItem(tab: HappyAgentFileTabSnapshot): TabItem {
         dirty: fileTabDirty(tab),
         icon: fileTabIcon(tab.path, tab.kind),
         preview: tab.preview,
+    };
+}
+
+/** The whole change, as one tab. It names the checkout's change, not a file. */
+function reviewTabItem(review: HappyAgentReview): TabItem {
+    return {
+        id: review.id,
+        label: "All changes",
+        icon: "file-diff",
     };
 }
 
@@ -3095,6 +3113,11 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
               (tab) => tab.groupId === openGroup.id && tab.placement === "main",
           )
         : [];
+    // The checkout's whole change, where the reader has it open. It is one per
+    // checkout, so the addressed group names it outright rather than the strip
+    // being searched for it.
+    const openReview = openGroup ? workspace.reviews.get(openGroup.id) : undefined;
+    const activeReview = openReview?.id === workspace.activeMainViewId ? openReview : undefined;
     const activeFile = groupFileTabs.find((tab) => tab.id === workspace.activeMainViewId);
     const displayedFileTab = groupFileTabs.find((tab) => tab.id === workspace.displayedMainViewId);
     const displayedFile =
@@ -3185,6 +3208,7 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                                         openBot === undefined,
                                 )
                           ).map((tab) => (availability.online ? tab : { ...tab, closable: false })),
+                          ...(openReview ? [reviewTabItem(openReview)] : []),
                           ...groupFileTabs.map(fileTabItem),
                           ...toolTabItems(mainTools),
                       ]
@@ -3333,6 +3357,12 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
             props.onChatSelect(currentGroup.id, fallbackSessionId, true);
     };
     const groupTabClose = (tabId: string) => {
+        // The review is one tab of one checkout, and the state knows it by that
+        // checkout rather than by a strip id, so it closes by name.
+        if (openReview?.id === tabId && openGroup) {
+            props.workspace.reviewClose(openGroup.id);
+            return;
+        }
         // A detached subagent's tab is an address, not a member of the list:
         // closing it only steps back to the sessions that are listed.
         if (tabId === detachedConversationId) {
@@ -3401,6 +3431,12 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
             key={`${file.id}:${file.kind}`}
             {...(props.mediaWindow ? { mediaWindow: props.mediaWindow } : {})}
             mode={workspace.fileViewMode}
+            comments={workspace.fileComments.comments.filter(
+                (comment) => comment.anchor.path === file.path,
+            )}
+            {...(workspace.fileComments.draft?.anchor.path === file.path
+                ? { commentDraft: workspace.fileComments.draft }
+                : {})}
             happyAgentOnline={happyAgentOnline}
             onMainFileOpen={(path, kind) =>
                 props.onFileSelect(file.groupId, props.chatId, path, kind)
@@ -3411,6 +3447,157 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
             workspace={props.workspace}
         />
     );
+    /**
+     * The checkout's whole change, in one scroll — or one file of it, when the
+     * change is too large for that and is read a file at a time instead.
+     *
+     * Only files whose two sides have been read are handed over, and the change
+     * is not drawn at all until every one of them has: what is on screen does
+     * not grow under the reader. Notes are the same notes the single-file diff
+     * leaves — they carry their path already, so nothing here re-addresses
+     * them.
+     */
+    const mainReviewBody = (review: HappyAgentReview): ReactNode => {
+        // A change too large for one scroll is read a file at a time, so only
+        // that file is drawn. The ones read either side of it are read so that
+        // stepping is a step rather than a round trip, not so they are shown.
+        const drawn =
+            review.presentation === "one-file"
+                ? review.files.filter((file) => file.path === review.activePath)
+                : review.files;
+        const files = drawn.flatMap((file) =>
+            file.document.type === "ready"
+                ? [
+                      {
+                          path: file.path,
+                          ...(file.oldPath === undefined ? {} : { oldPath: file.oldPath }),
+                          oldContent: file.document.value.oldContent,
+                          newContent: file.document.value.newContent,
+                          // The same two identities one file's diff gives its
+                          // sides. Without them the renderer has nothing to file
+                          // a tokenized result under, so every file here would
+                          // be highlighted from scratch each time the stream is
+                          // opened or rebuilt — and a review is many files at
+                          // once, which is exactly where that is felt.
+                          ...(file.document.value.oldHash === undefined
+                              ? {}
+                              : {
+                                    oldCacheKey: `d:old:${review.groupId}:${file.document.value.oldHash}:${fileHighlightLanguageKey(file.document.value.oldPath)}`,
+                                }),
+                          ...(file.document.value.hash === undefined
+                              ? {}
+                              : {
+                                    newCacheKey: `d:new:${review.groupId}:${file.document.value.hash}:${fileHighlightLanguageKey(file.path)}`,
+                                }),
+                      },
+                  ]
+                : [],
+        );
+        // Nothing is drawn until the whole change has been read once. A stream
+        // built up file by file as the reads land is a floor that moves while
+        // the reader is standing on it: the scroll slides, and the steps travel
+        // to addresses that were somewhere else a moment ago. One wait, then
+        // the change. After that the stream stays on screen — a file the agent
+        // has since written arrives in its own place when its read lands.
+        if ((review.loading && !review.drawn) || files.length === 0)
+            return (
+                <EmptyState
+                    animation={review.loading ? "snail" : undefined}
+                    description={
+                        review.loading
+                            ? "Reading every changed file."
+                            : "Nothing in this checkout has changed."
+                    }
+                    icon="file-diff"
+                    size="panel"
+                    title={review.loading ? "Opening the change…" : "No changes"}
+                />
+            );
+        return (
+            <ReviewStream
+                appearance={appearance.appearance}
+                {...(workspace.fileComments.draft === undefined
+                    ? {}
+                    : {
+                          commentDraft: {
+                              path: workspace.fileComments.draft.anchor.path,
+                              lineNumber: workspace.fileComments.draft.anchor.lineNumber,
+                              side: workspace.fileComments.draft.anchor.side,
+                              text: workspace.fileComments.draft.text,
+                          },
+                      })}
+                comments={workspace.fileComments.comments.map((comment) => ({
+                    id: comment.id,
+                    path: comment.anchor.path,
+                    lineNumber: comment.anchor.lineNumber,
+                    side: comment.anchor.side,
+                    text: comment.text,
+                    stale: comment.stale,
+                }))}
+                files={files}
+                onCommentDraftCancel={() => props.workspace.commentDraftCancel()}
+                {...(review.presentation === "one-file"
+                    ? {
+                          singleFile: {
+                              index:
+                                  review.files.findIndex(
+                                      (file) => file.path === review.activePath,
+                                  ) + 1,
+                              onNext: () => props.workspace.reviewFileNext(review.groupId),
+                              onPrevious: () => props.workspace.reviewFilePrevious(review.groupId),
+                          },
+                      }
+                    : {})}
+                // A file the checkout would not give up is named rather than
+                // left out, or the review is quietly short of part of itself.
+                failures={review.files
+                    .filter((file) => file.document.type === "error")
+                    .map((file) => file.path)}
+                onFailuresRetry={() => props.workspace.reviewRetry(review.groupId)}
+                total={review.files.length}
+                collapsed={review.collapsed}
+                viewed={review.viewed}
+                onFileCollapsedToggle={(path) =>
+                    props.workspace.reviewFileCollapsedToggle(review.groupId, path)
+                }
+                onFileViewedToggle={(path) =>
+                    props.workspace.reviewFileViewedToggle(review.groupId, path)
+                }
+                onFilesCollapsedSet={(collapsed) =>
+                    props.workspace.reviewFilesCollapsedSet(review.groupId, collapsed)
+                }
+                // One preference for how a diff is drawn, wherever it is drawn:
+                // choosing Split here is choosing it for a single file's diff
+                // too. The file face belongs to a file, not to a review, so a
+                // review opened while it was chosen reads as Unified.
+                view={workspace.fileViewMode === "split" ? "split" : "unified"}
+                onViewChange={(view) => props.workspace.fileViewModeUpdate(view)}
+                // Opening one file of a change gives it its own tab, the same
+                // one the listing opens — a file is a file wherever it is
+                // reached from.
+                onFileOpen={(path) => {
+                    if (!happyAgentOnline()) return;
+                    const kind = fileTabKind(path);
+                    props.workspace.fileOpen(review.groupId, path, kind);
+                    props.onFileSelect(review.groupId, props.chatId, path, kind);
+                }}
+                {...(access.writeRefusal === undefined
+                    ? {
+                          onCommentDraftOpen: (path, lineNumber, side) => {
+                              props.workspace.commentDraftOpen({ path, lineNumber, side });
+                          },
+                      }
+                    : {})}
+                onCommentDraftSubmit={() => props.workspace.commentDraftSubmit()}
+                onCommentDraftUpdate={(text) => props.workspace.commentDraftUpdate(text)}
+                onCommentRemove={(commentId) =>
+                    props.workspace.commentRemove(commentId as HappyAgentCommentId)
+                }
+                onWrapChange={(wrap) => props.workspace.fileViewWrapUpdate(wrap)}
+                wrap={workspace.fileViewWrap}
+            />
+        );
+    };
     const mainConversationBody =
         openGroup === undefined ? undefined : openGroup.conversations.length === 0 &&
           workspace.groupComposer ? (
@@ -3610,7 +3797,12 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                                   happyAgentAvailability: terminalHappyAgentAvailability,
                                   happyAgentAvailabilityReason: availability.message,
                               })}
+                        onReviewOpen={() => {
+                            if (openGroup) props.workspace.reviewOpen(openGroup.id);
+                        }}
                         scope={workspace.fileScope}
+                        search={workspace.fileSearch}
+                        onSearchQueryChange={(query) => props.workspace.fileSearchUpdate(query)}
                         selectedPath={activeFile?.path}
                         store={props.workspace.panel}
                         workspaceFiles={workspace.workspaceFiles}
@@ -3919,6 +4111,10 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                                 props.workspace.tabReorder(move.id, move.afterId);
                             }}
                             onSelect={(tabId) => {
+                                if (openReview?.id === tabId) {
+                                    props.workspace.reviewOpen(openGroup.id);
+                                    return;
+                                }
                                 const file = groupFileTabs.find((tab) => tab.id === tabId);
                                 if (file) {
                                     props.onFileSelect(
@@ -4013,17 +4209,22 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                                     current={
                                         displayedMainTool
                                             ? undefined
-                                            : displayedFile
+                                            : activeReview
                                               ? {
-                                                    id:
-                                                        displayedFile.displayedPresentationId ??
-                                                        displayedFile.presentationId,
-                                                    content: mainFileBody(displayedFile),
+                                                    id: activeReview.id,
+                                                    content: mainReviewBody(activeReview),
                                                 }
-                                              : {
-                                                    id: `conversation:${openGroup.id}:${props.chatId ?? "empty"}`,
-                                                    content: mainConversationBody,
-                                                }
+                                              : displayedFile
+                                                ? {
+                                                      id:
+                                                          displayedFile.displayedPresentationId ??
+                                                          displayedFile.presentationId,
+                                                      content: mainFileBody(displayedFile),
+                                                  }
+                                                : {
+                                                      id: `conversation:${openGroup.id}:${props.chatId ?? "empty"}`,
+                                                      content: mainConversationBody,
+                                                  }
                                     }
                                     fallback={
                                         <EmptyState
@@ -4133,6 +4334,26 @@ function happyAgentFileRevalidationBanner(
     ) : null;
 }
 
+/**
+ * What a file tab has to say about itself before its content: that the bytes
+ * on screen may be stale, and that the last save did not happen. A refused
+ * write is the louder of the two — the edit is still only in this window — so
+ * it is stated first.
+ */
+function happyAgentFileNotices(file: HappyAgentFileTabSnapshot): ReactNode {
+    if (file.saveError === undefined)
+        return happyAgentFileRevalidationBanner(file.revalidationError);
+    return (
+        <>
+            <Banner tone="danger" title="Could not save this file">
+                {file.saveError.message} Your edit is still here and has not been written to the
+                workspace.
+            </Banner>
+            {happyAgentFileRevalidationBanner(file.revalidationError)}
+        </>
+    );
+}
+
 function HappyAgentFileBody(props: {
     appearance: "dark" | "light";
     file: HappyAgentFileTabSnapshot;
@@ -4149,6 +4370,9 @@ function HappyAgentFileBody(props: {
     writeRefusal?: string;
     /** Why the current local draft cannot be persisted to the Happy Agent. */
     saveRefusal?: string;
+    /** Review notes on this file, and the one being written if it is on this file. */
+    comments: readonly HappyAgentFileComment[];
+    commentDraft?: HappyAgentCommentDraft;
     workspace: HappyAgentWorkspaceStore;
 }) {
     const { file, workspace } = props;
@@ -4198,7 +4422,7 @@ function HappyAgentFileBody(props: {
                 : undefined;
         return (
             <FileEditor
-                banner={happyAgentFileRevalidationBanner(file.revalidationError)}
+                banner={happyAgentFileNotices(file)}
                 documentKey={fileDocumentKey(file.id, file.document.value)}
                 dirty={dirty}
                 {...(file.kind === "document" && props.htmlPreview
@@ -4285,7 +4509,7 @@ function HappyAgentFileBody(props: {
                 : undefined;
         return (
             <>
-                {happyAgentFileRevalidationBanner(file.revalidationError)}
+                {happyAgentFileNotices(file)}
                 <ChangedFileDiff
                     appearance={props.appearance}
                     documentKey={fileDocumentKey(file.id, file.document.value)}
@@ -4308,6 +4532,45 @@ function HappyAgentFileBody(props: {
                           }
                         : {})}
                     saveDisabled={saveDisabled}
+                    {...(writable
+                        ? {
+                              // Notes are about this file, so only this file's
+                              // ones are drawn; the rest belong to their own
+                              // tabs and travel together only when sent.
+                              comments: props.comments.map((comment) => ({
+                                  id: comment.id,
+                                  lineNumber: comment.anchor.lineNumber,
+                                  side: comment.anchor.side,
+                                  text: comment.text,
+                                  stale: comment.stale,
+                              })),
+                              ...(props.commentDraft === undefined
+                                  ? {}
+                                  : {
+                                        commentDraft: {
+                                            lineNumber: props.commentDraft.anchor.lineNumber,
+                                            side: props.commentDraft.anchor.side,
+                                            text: props.commentDraft.text,
+                                        },
+                                    }),
+                              onCommentDraftOpen: (
+                                  lineNumber: number,
+                                  side: "deletions" | "additions",
+                              ) =>
+                                  workspace.commentDraftOpen({
+                                      path: file.path,
+                                      lineNumber,
+                                      side,
+                                      ...(change.hash === undefined ? {} : { hash: change.hash }),
+                                  }),
+                              onCommentDraftUpdate: (text: string) =>
+                                  workspace.commentDraftUpdate(text),
+                              onCommentDraftCancel: () => workspace.commentDraftCancel(),
+                              onCommentDraftSubmit: () => workspace.commentDraftSubmit(),
+                              onCommentRemove: (commentId: string) =>
+                                  workspace.commentRemove(commentId as HappyAgentCommentId),
+                          }
+                        : {})}
                     onModeChange={(mode) => workspace.fileViewModeUpdate(mode)}
                     onWrapChange={(wrap) => workspace.fileViewWrapUpdate(wrap)}
                     wrap={props.wrap}
@@ -4323,6 +4586,42 @@ function HappyAgentFileBody(props: {
                                       onFileOpen={linkedFileOpen}
                                       openDisabled={props.saveRefusal !== undefined}
                                       text={current}
+                                      // The file's characters, where they can be
+                                      // written: the same editor the file's own
+                                      // tab uses, so reading a change and fixing
+                                      // what it says are one place.
+                                      {...(writable
+                                          ? {
+                                                editor: (
+                                                    <CodeEditor
+                                                        className="happy-changed-file-editor"
+                                                        documentKey={fileDocumentKey(
+                                                            file.id,
+                                                            file.document.value,
+                                                        )}
+                                                        name={file.path}
+                                                        onSave={() => {
+                                                            if (
+                                                                !saveDisabled &&
+                                                                props.happyAgentOnline()
+                                                            )
+                                                                void workspace
+                                                                    .fileDraftSave(file.id)
+                                                                    .catch(() => undefined);
+                                                        }}
+                                                        onValueChange={(content) =>
+                                                            workspace.fileDraftUpdate(
+                                                                file.id,
+                                                                content,
+                                                            )
+                                                        }
+                                                        readOnly={file.saving}
+                                                        value={current}
+                                                        wrap={props.wrap}
+                                                    />
+                                                ),
+                                            }
+                                          : {})}
                                   />
                               ),
                           })}
@@ -4392,6 +4691,8 @@ function HappyAgentChangedFilePreview(props: {
     /** Opens a linked file on the side this one is being read on. */
     onFileOpen: (path: string) => void;
     text: string;
+    /** The file's characters, editable, where this checkout can be written. */
+    editor?: ReactNode;
 }) {
     const { file } = props;
     // A picture, a recording, or an archive opens as itself rather than as a
@@ -4415,6 +4716,7 @@ function HappyAgentChangedFilePreview(props: {
         <FilePreview
             content={readable ? { type: "text", text: props.text } : { type: "unavailable" }}
             {...(cacheKey === undefined ? {} : { cacheKey })}
+            {...(props.editor === undefined || !readable ? {} : { editor: props.editor })}
             {...(saved === undefined
                 ? {}
                 : {
@@ -5658,6 +5960,8 @@ function HappyAgentPanelBody(props: {
     onFilePreprocess: (path: string) => void;
     onFileSelect: (path: string) => void;
     onLayoutChange: (layout: HappyAgentFileLayout) => void;
+    /** Opens every change in this checkout as one stream. */
+    onReviewOpen: () => void;
     onPanelClose: () => void;
     /** The file the viewer tab is on, read out of the transcript beside it. */
     panelFile?: HappyAgentFileTabSnapshot;
@@ -5683,23 +5987,35 @@ function HappyAgentPanelBody(props: {
     happyAgentAvailability?: "reconnecting" | "unavailable";
     happyAgentAvailabilityReason?: string;
     scope: HappyAgentFileScope;
+    /** What the reader is looking for in the listing, and what the checkout found. */
+    search: HappyAgentFileSearch;
+    onSearchQueryChange: (query: string) => void;
     selectedPath?: string;
     store: HappyAgentPanelStore;
     workspaceFiles?: HappyAgentWorkspaceFiles;
     workspaceFilesLoading: boolean;
 }) {
     const all = props.scope === "all";
-    const entries: FileTreeBuildEntry[] = useMemo(
-        () => props.changes.map(changeEntry),
-        [props.changes],
-    );
+    const query = props.search.query;
+    // Changes is whole in memory, so its query is answered right here by
+    // dropping the rows that do not match. All Files cannot be: the tree holds
+    // only the directories somebody opened, so filtering it would quietly
+    // present a fraction of the checkout as the whole answer — the daemon ranks
+    // that one and its results arrive through the snapshot.
+    const entries: FileTreeBuildEntry[] = useMemo(() => {
+        const built = props.changes.map(changeEntry);
+        return query === "" ? built : built.filter((entry) => filePathMatches(entry.path, query));
+    }, [props.changes, query]);
     const expansion: FileTreeExpansion = useMemo(
         () => ({
             opened: props.expanded,
             closed: props.collapsed,
             // All Files starts closed because every disclosure is a real daemon
-            // read. Changes is already complete in memory and can open one level.
-            defaultDepth: all ? 0 : 1,
+            // read. Changes is already complete in memory, and what it holds is
+            // the answer to "what did this touch" — so it stands open all the
+            // way down and the reader sees every changed file without opening
+            // a folder to find it.
+            defaultDepth: all ? 0 : Number.POSITIVE_INFINITY,
         }),
         [all, props.expanded, props.collapsed],
     );
@@ -5707,14 +6023,39 @@ function HappyAgentPanelBody(props: {
         () => new Map(props.changes.map((change) => [change.path, change])),
         [props.changes],
     );
+    const searchResults = props.search.results;
     const nodes: FileTreeNode[] = useMemo(
         () =>
             all
-                ? workspaceFileTreeNodes(props.workspaceFiles, "", expansion, changesByPath)
+                ? // A query replaces the tree with the checkout's ranked answer
+                  // rather than filtering it: what matched may live in
+                  // directories nobody has opened, which a tree cannot show
+                  // without opening them. Until the first answer arrives the
+                  // tree stays, so the panel does not blank out per keystroke.
+                  query !== "" && searchResults !== undefined
+                    ? fileTreeRanked(
+                          searchResults.map((result) => {
+                              // A match that is also a changed file keeps saying
+                              // so: the status is a fact about the file, not
+                              // about which listing found it.
+                              const change = changesByPath.get(result.path);
+                              return change ? changeEntry(change) : { path: result.path };
+                          }),
+                      )
+                    : workspaceFileTreeNodes(props.workspaceFiles, "", expansion, changesByPath)
                 : props.layout === "tree"
                   ? fileTreeBuild(entries, expansion)
                   : fileTreeFlatten(entries),
-        [all, changesByPath, entries, expansion, props.layout, props.workspaceFiles],
+        [
+            all,
+            changesByPath,
+            entries,
+            expansion,
+            props.layout,
+            props.workspaceFiles,
+            query,
+            searchResults,
+        ],
     );
     const loading = all ? props.workspaceFilesLoading : props.changesStatus === "loading";
     const changesUnavailable = props.changesStatus === "unavailable";
@@ -5891,12 +6232,17 @@ function HappyAgentPanelBody(props: {
                                 : { addedLines, deletedLines })}
                             count={count}
                             emptyLabel={
-                                all
-                                    ? "No files."
-                                    : changesUnavailable
-                                      ? "Git changes are temporarily unavailable."
-                                      : "No changed files."
+                                query !== ""
+                                    ? `Nothing matches “${query}”.`
+                                    : all
+                                      ? "No files."
+                                      : changesUnavailable
+                                        ? "Git changes are temporarily unavailable."
+                                        : "No changed files."
                             }
+                            onSearchQueryChange={props.onSearchQueryChange}
+                            searchQuery={query}
+                            searching={props.search.searching}
                             layout={props.layout}
                             loading={loading}
                             nodes={nodes}
@@ -5915,6 +6261,7 @@ function HappyAgentPanelBody(props: {
                             onLayoutChange={(layout: HappyAgentFileLayout) =>
                                 props.onLayoutChange(layout)
                             }
+                            onReviewOpen={props.onReviewOpen}
                             onDirectoryPrefetch={props.onDirectoryPrefetch}
                             onFilePrefetch={props.onFilePreprocess}
                             onLoadMore={props.onLoadMore}

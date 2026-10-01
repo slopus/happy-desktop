@@ -76,18 +76,25 @@ it("holds Menu popover geometry, item rows, icons, danger, and shortcuts", async
         "border-top-width": "1px",
         "box-sizing": "border-box",
         color: "rgb(0, 0, 0)",
-        display: "block",
+        display: "flex",
     });
     expect((await menu.visibleMetrics()).pixelCount).toBeGreaterThan(0);
 
     const list = view.$('[data-testid="actions"] [data-happy-desktop-ui="menu-list"]');
     /* The list is inset by exactly the 1px card border on every edge. */
     expect(list.offsets()).toEqual({ top: 1, right: 1, bottom: 1, left: 1 });
+    /* The list is the scrolling column; the rows wrapper inside it carries
+       the 4px inset so the inset scrolls with the rows. */
     expect(list.computedStyles(["display", "flex-direction", "padding"])).toEqual({
         display: "flex",
         "flex-direction": "column",
-        padding: "4px",
+        padding: "0px",
     });
+    expect(
+        view
+            .$('[data-testid="actions"] [data-happy-desktop-ui="menu-rows"]')
+            .computedStyles(["padding"]),
+    ).toEqual({ padding: "4px" });
 
     /* ---- Row grid -------------------------------------------------------- */
 

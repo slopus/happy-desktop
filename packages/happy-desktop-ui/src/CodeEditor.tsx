@@ -137,7 +137,12 @@ interface EditorDocument {
     readonly editable: Compartment;
     /** The read-only, wrapping, and placeholder configuration currently installed. */
     editableKey: string;
-    readonly key?: string;
+    /**
+     * Which document this is, as the surface names it. It moves when the same
+     * text is renamed under it — a save gives the file it wrote a new identity,
+     * and the state the person is inside of goes with it.
+     */
+    key?: string;
     readonly language: Compartment;
     /** Pending lazy language whose single shared request this document follows. */
     languageDescription?: LanguageDescription;
@@ -337,6 +342,45 @@ function editorDocumentAcquire(props: CodeEditorProps): EditorDocument {
     return document;
 }
 
+/**
+ * Whether the requested document is the text this editor already holds.
+ *
+ * Not a guess about which document it is: the editor's own text is the
+ * comparison, so this is only true when the bytes being asked for are the bytes
+ * on screen.
+ */
+function editorSameText(
+    editor: { view: EditorView; document: EditorDocument },
+    props: CodeEditorProps,
+): boolean {
+    return (
+        props.documentKey !== undefined &&
+        editor.document.editableKey === editorEditableKey(props) &&
+        props.value === editor.view.state.doc.toString()
+    );
+}
+
+/**
+ * Moves a live document to another key, keeping the state the person is inside
+ * of. Only the bookkeeping moves: the live count that says whether a key is in
+ * use, and the name the document will be cached under when it is released.
+ */
+function editorDocumentRekey(document: EditorDocument, key: string | undefined): void {
+    const previous = document.key;
+    if (previous !== undefined) {
+        const remaining = Math.max(0, (editorDocumentLiveCounts.get(previous) ?? 1) - 1);
+        if (remaining === 0) editorDocumentLiveCounts.delete(previous);
+        else editorDocumentLiveCounts.set(previous, remaining);
+    }
+    document.key = key;
+    if (key === undefined) return;
+    // Whatever was cached under the new name is the same file's older text, and
+    // the live document is now the answer for it.
+    const replaced = editorDocumentCacheTake(key);
+    if (replaced !== undefined) editorDocumentDrop(replaced);
+    editorDocumentLiveCounts.set(key, (editorDocumentLiveCounts.get(key) ?? 0) + 1);
+}
+
 function editorDocumentRelease(document: EditorDocument): void {
     const key = document.key;
     let remaining = 0;
@@ -478,7 +522,14 @@ export function CodeEditor(props: CodeEditorProps) {
         latest.current = props;
         const editor = handle.current;
         if (editor === undefined) return;
-        if (props.documentKey !== editor.document.key) {
+        if (props.documentKey !== editor.document.key && editorSameText(editor, props)) {
+            // A new identity carrying the text already on screen is this same
+            // document under a new name — what a save is, since what the file
+            // now says is what was just typed into it. Swapping states here
+            // would throw away the caret, the scroll, and the selection the
+            // person is holding, so the document is renamed in place instead.
+            editorDocumentRekey(editor.document, props.documentKey);
+        } else if (props.documentKey !== editor.document.key) {
             // Take the requested state before remembering the outgoing one, so
             // an LRU at capacity cannot evict the state we are returning to.
             const incoming = editorDocumentAcquire(props);

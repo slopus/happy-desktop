@@ -1,7 +1,27 @@
 import "./styles.css";
 
 export { happyLogoBlackUrl, happyLogoWhiteUrl } from "./assets";
-export { ChangedFileDiff, type ChangedFileDiffProps } from "./ChangedFileDiff";
+export {
+    ChangedFileDiff,
+    type ChangedFileDiffComment,
+    type ChangedFileDiffCommentDraft,
+    type ChangedFileDiffCommentSide,
+    type ChangedFileDiffProps,
+} from "./ChangedFileDiff";
+export {
+    ReviewComment,
+    reviewCommentPlace,
+    type ReviewCommentProps,
+    type ReviewCommentSide,
+} from "./ReviewComment";
+export {
+    ReviewStream,
+    type ReviewStreamComment,
+    type ReviewStreamCommentDraft,
+    type ReviewStreamFile,
+    type ReviewStreamProps,
+    type ReviewStreamSingleFile,
+} from "./ReviewStream";
 export { CompactActivityRow, type CompactActivityRowProps } from "./CompactActivityRow";
 export { compactCount } from "./countText";
 export { CodeBlock, codeBlockLanguage, type CodeBlockProps } from "./CodeBlock";
@@ -291,10 +311,12 @@ export {
     fileTreeBuild,
     fileTreeExpanded,
     fileTreeFlatten,
+    fileTreeRanked,
     fileTreeVisibleFiles,
     type FileTreeBuildEntry,
     type FileTreeExpansion,
 } from "./fileTreeBuild";
+export { filePathMatches } from "./fileTreeSearch";
 export { fileEntriesSort, fileNameCompare, filePathCompare } from "./fileTreeSort";
 export {
     ConversationStatus,

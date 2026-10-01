@@ -21,6 +21,8 @@ export type IconName =
     | "copy"
     | "chevron-down"
     | "chevron-right"
+    | "chevron-up"
+    | "file-diff"
     | "close"
     | "branch"
     | "merge"
@@ -42,6 +44,10 @@ export type IconName =
     | "lock"
     | "eye"
     | "link"
+    | "open-external"
+    | "fold"
+    | "unfold"
+    | "locate"
     | "mobile"
     | "smile"
     | "paperclip"
@@ -131,10 +137,14 @@ const glyphs: Record<IconName, IconGlyph> = {
     copy: { set: "ionicons", name: "copy-outline" },
     "chevron-down": { set: "ionicons", name: "chevron-down-outline" },
     "chevron-right": { set: "ionicons", name: "chevron-forward-outline" },
+    "chevron-up": { set: "ionicons", name: "chevron-up-outline" },
     // A bare cross: dismissing a thing where it is an affordance, and what went
     // wrong where it is not. In a danger or warning tone beside a failure it is
     // the house mark for trouble; `shield` says the opposite and is never it.
     close: { set: "ionicons", name: "close-outline" },
+    // The whole change read as one thing, rather than one file's diff: the mark
+    // for the review stream and nothing else.
+    "file-diff": { set: "octicons", name: "file-diff" },
     branch: { set: "octicons", name: "git-branch" },
     merge: { set: "octicons", name: "git-merge" },
     spark: { set: "ionicons", name: "sparkles-outline" },
@@ -165,6 +175,17 @@ const glyphs: Record<IconName, IconGlyph> = {
     lock: { set: "ionicons", name: "lock-closed-outline" },
     eye: { set: "ionicons", name: "eye-outline" },
     link: { set: "ionicons", name: "link-outline" },
+    // A box with an arrow leaving it: the same thing, opened somewhere of its
+    // own. Never "a link" — `link` is that — and never a navigation arrow.
+    "open-external": { set: "ionicons", name: "open-outline" },
+    // Collapsing many things to their headers and opening them again. Octicons
+    // draws the pair as arrows meeting a line and leaving it, which reads as
+    // what happens to a list rather than to one row.
+    fold: { set: "octicons", name: "fold" },
+    unfold: { set: "octicons", name: "unfold" },
+    // Finding your own place again: the crosshair that centres on where you
+    // already are, not an arrow that takes you somewhere else.
+    locate: { set: "ionicons", name: "locate-outline" },
     mobile: { set: "ionicons", name: "phone-portrait-outline" },
     smile: { set: "ionicons", name: "happy-outline" },
     paperclip: { set: "ionicons", name: "attach-outline" },
