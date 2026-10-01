@@ -81,22 +81,20 @@ export function happyAgentMenusDerive(
         }),
     );
 
-    const supportsFast = selectedProvider?.serviceTiers.includes("fast") ?? false;
     const serviceTierOptions: HappyAgentServiceTierOption[] = [
         {
             tier: null,
             label: happyAgentServiceTierLabel(null),
             current: selection.serviceTier === undefined,
         },
-        ...(supportsFast
-            ? [
-                  {
-                      tier: "fast" as const,
-                      label: happyAgentServiceTierLabel("fast"),
-                      current: selection.serviceTier === "fast",
-                  },
-              ]
-            : []),
+        ...(selectedProvider?.disabledReason === undefined
+            ? (currentModel?.serviceTiers ?? [])
+            : []
+        ).map((tier) => ({
+            tier,
+            label: happyAgentServiceTierLabel(tier),
+            current: selection.serviceTier === tier,
+        })),
     ];
 
     return {

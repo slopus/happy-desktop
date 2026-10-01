@@ -373,7 +373,8 @@ export function happyAgentModelStoreCreate(
                 preference?.serviceTier === null
                     ? undefined
                     : preference?.serviceTier &&
-                        provider?.serviceTiers.includes(preference.serviceTier)
+                        provider?.disabledReason === undefined &&
+                        model?.serviceTiers.includes(preference.serviceTier)
                       ? preference.serviceTier
                       : selected.serviceTier;
             return {
@@ -464,7 +465,7 @@ function preferenceSelection(
     const supportedDefaultEffort =
         defaultEffort && model.thinkingLevels.includes(defaultEffort) ? defaultEffort : undefined;
     const serviceTier =
-        preference?.serviceTier && provider.serviceTiers.includes(preference.serviceTier)
+        preference?.serviceTier && model.serviceTiers.includes(preference.serviceTier)
             ? preference.serviceTier
             : undefined;
     return {

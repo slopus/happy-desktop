@@ -8,10 +8,139 @@ import {
     type FakeHappyAgentDaemon,
 } from "../testing/fakeHappyAgentDaemon.js";
 import { happyAgentChatStoreCreate, type HappyAgentChatDeps } from "./happyAgentChatStore.js";
-import { happyAgentModelStoreCreate, type HappyAgentModelStore } from "./happyAgentModelStore.js";
+import {
+    happyAgentModelStoreCreate,
+    type HappyAgentModelStore,
+    type HappyAgentModelPreferenceDocument,
+} from "./happyAgentModelStore.js";
 import { happyAgentModelCatalogProject } from "./happyAgentProject.js";
 import { happyAgentSessionDraftStoreOwnedCreate } from "./happyAgentSessionDraftStore.js";
 import type { HappyAgentModelCatalog, HappyAgentSessionId } from "./happyAgentTypes.js";
+
+/** The same model on two accounts, with tiers declared by each provider reference. */
+function tierConfig(daemon: FakeHappyAgentDaemon, eligible = true): DaemonConfig {
+    const config = daemon.configGet();
+    const model = config.models["test-model"]!;
+    return {
+        ...config,
+        defaults: { ...config.defaults, modelId: "astra", providerId: "codex" },
+        models: {
+            ...config.models,
+            astra: { ...model, name: "GPT-6 Astra", serviceTiers: ["priority", "ultrafast"] },
+            sol: { ...model, name: "GPT-6.1 Sol", serviceTiers: ["priority"] },
+        },
+        providers: {
+            codex: {
+                type: "codex",
+                enabled: true,
+                models: [
+                    {
+                        id: "astra",
+                        enabled: true,
+                        serviceTiers: eligible ? ["priority", "ultrafast"] : [],
+                    },
+                    { id: "sol", enabled: true, serviceTiers: ["priority"] },
+                ],
+            },
+            codex_other: {
+                type: "codex",
+                enabled: true,
+                models: [{ id: "astra", enabled: true, serviceTiers: [] }],
+            },
+        },
+    };
+}
+
+it("scopes speed choices to the selected model and account, including an empty account override", () => {
+    const daemon = fakeHappyAgentDaemonCreate();
+    const catalog = happyAgentModelCatalogProject(tierConfig(daemon));
+    const { store: draft } = happyAgentSessionDraftStoreOwnedCreate({ catalog });
+    expect(draft.get().menus.serviceTierOptions.map((option) => option.label)).toEqual([
+        "Regular",
+        "Fast",
+        "Ultrafast",
+    ]);
+    draft.serviceTierUpdate("ultrafast");
+    expect(draft.get().menus.serviceTierOptions.find((option) => option.current)?.label).toBe(
+        "Ultrafast",
+    );
+    draft.modelUpdate({ providerId: "codex", modelId: "sol" });
+    expect(draft.get().selection.serviceTier).toBeUndefined();
+    expect(draft.get().menus.serviceTierOptions.map((option) => option.label)).toEqual([
+        "Regular",
+        "Fast",
+    ]);
+    draft.modelUpdate({ providerId: "codex", modelId: "astra" });
+    draft.serviceTierUpdate("ultrafast");
+    draft.modelUpdate({ providerId: "codex_other", modelId: "astra" });
+    expect(draft.get().selection.serviceTier).toBeUndefined();
+    expect(draft.get().menus.serviceTierOptions.map((option) => option.label)).toEqual(["Regular"]);
+    draft.serviceTierUpdate("ultrafast");
+    expect(draft.get().selection.serviceTier).toBeUndefined();
+});
+
+it("clears a pending Ultrafast selection when account capabilities are revoked", () => {
+    const daemon = fakeHappyAgentDaemonCreate();
+    const { store: draft, writer } = happyAgentSessionDraftStoreOwnedCreate({
+        catalog: happyAgentModelCatalogProject(tierConfig(daemon)),
+    });
+    draft.effortUpdate("high");
+    draft.serviceTierUpdate("ultrafast");
+    writer.catalogChanged(happyAgentModelCatalogProject(tierConfig(daemon, false)));
+    expect(draft.get().selection).toMatchObject({
+        modelId: "astra",
+        providerId: "codex",
+        effort: "high",
+        permissionMode: "auto",
+    });
+    expect(draft.get().selection.serviceTier).toBeUndefined();
+    expect(draft.get().menus.serviceTierOptions).toEqual([
+        { tier: null, label: "Regular", current: true },
+    ]);
+});
+
+it("restores a remembered Ultrafast selection only when the current account still advertises it", async () => {
+    const daemon = fakeHappyAgentDaemonCreate();
+    let document: HappyAgentModelPreferenceDocument = { preferences: {} };
+    const persistence = {
+        read: () => document,
+        write: (next: HappyAgentModelPreferenceDocument) => {
+            document = next;
+        },
+    };
+    const catalog = happyAgentModelCatalogProject(tierConfig(daemon));
+    const models = happyAgentModelStoreCreate({
+        catalogRead: async () => catalog,
+        preferencePersistence: persistence,
+    });
+    disposables.push(models);
+    await models.load();
+    models.selectionUsed({
+        providerId: "codex",
+        modelId: "astra",
+        permissionMode: "auto",
+        effort: "high",
+        serviceTier: "ultrafast",
+    });
+    const reopened = happyAgentModelStoreCreate({
+        catalogRead: async () => catalog,
+        preferencePersistence: persistence,
+    });
+    disposables.push(reopened);
+    expect((await reopened.load()).lastUsedSelection.serviceTier).toBe("ultrafast");
+    reopened.catalogChanged(happyAgentModelCatalogProject(tierConfig(daemon, false)));
+    expect(reopened.get()).toMatchObject({
+        type: "ready",
+        lastUsedSelection: { modelId: "astra", effort: "high" },
+    });
+    const snapshot = reopened.get();
+    if (snapshot.type !== "ready") throw new Error("Model store not ready");
+    expect(snapshot.lastUsedSelection.serviceTier).toBeUndefined();
+    expect(
+        reopened.modelSelect(snapshot.lastUsedSelection, { providerId: "codex", modelId: "astra" })
+            .serviceTier,
+    ).toBeUndefined();
+});
 
 const disposables: { [Symbol.dispose](): void }[] = [];
 const connections: HappyAgentConnection[] = [];

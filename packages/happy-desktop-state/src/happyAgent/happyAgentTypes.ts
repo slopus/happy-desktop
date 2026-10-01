@@ -193,6 +193,8 @@ export type HappyAgentGoalStatus = "active" | "blocked" | "complete" | "paused";
 export interface HappyAgentModel {
     readonly id: string;
     readonly name: string;
+    /** The speed tiers offered by this model on its owning provider account. */
+    readonly serviceTiers: readonly HappyAgentServiceTier[];
     readonly thinkingLevels: readonly HappyAgentThinkingLevel[];
     readonly defaultThinkingLevel: HappyAgentThinkingLevel;
     /** The hard window in tokens; absent for a custom model whose limit is unknown. */
@@ -213,7 +215,6 @@ export interface HappyAgentModelProvider {
      */
     readonly type: string;
     readonly models: readonly HappyAgentModel[];
-    readonly serviceTiers: readonly HappyAgentServiceTier[];
     /**
      * Whether the machine will use this provider at all, as its own
      * configuration states it. Stated rather than read back out of

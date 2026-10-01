@@ -38,7 +38,7 @@ export interface HappyAgentSessionDraftStore {
     /**
      * Selects a model, and with it the provider that offers it. Effort follows
      * the new model's own default rather than carrying over a level the model
-     * may not support, and a service tier the new provider does not offer is
+     * may not support, and a service tier the new model/account does not offer is
      * dropped for the same reason.
      */
     modelUpdate(input: HappyAgentModelSelection): void;
@@ -51,7 +51,7 @@ export interface HappyAgentSessionDraftStore {
 export interface HappyAgentSessionDraftWriter {
     /**
      * The daemon changed what it offers. The pickers re-derive from the new
-     * catalog; the reader's selection is theirs and is left as it is.
+     * catalog; a speed tier the model/account no longer offers is cleared.
      */
     catalogChanged(catalog: HappyAgentModelCatalog): void;
 }
@@ -115,7 +115,7 @@ export function happyAgentSessionSelectionDefault(
  * Selects a model within a selection. Which provider offers a model is the
  * catalog's to answer, not the caller's; effort follows the new model's own
  * default rather than carrying over a level it may not support, and a service
- * tier the new provider does not offer is dropped for the same reason.
+ * tier the new model/account does not offer is dropped for the same reason.
  *
  * Pure, so the pre-session draft and a live session's pending picker state apply
  * the identical rule without either store reaching into the other.
@@ -136,7 +136,8 @@ export function happyAgentSelectionModelUpdate(
     const effort = input.effort ?? model?.defaultThinkingLevel;
     const tierSupported =
         current.serviceTier === undefined ||
-        (provider?.serviceTiers.includes(current.serviceTier) ?? false);
+        (provider?.disabledReason === undefined &&
+            (model?.serviceTiers.includes(current.serviceTier) ?? false));
     return {
         providerId,
         modelId: input.modelId,
@@ -146,6 +147,23 @@ export function happyAgentSelectionModelUpdate(
             ? { serviceTier: current.serviceTier }
             : {}),
     };
+}
+
+/** Clears a revoked speed choice without changing model, effort, or permissions. */
+export function happyAgentSelectionServiceTierReconcile(
+    catalog: HappyAgentModelCatalog,
+    selection: HappyAgentSelection,
+): HappyAgentSelection {
+    if (selection.serviceTier === undefined) return selection;
+    const provider = catalog.providers.find((candidate) => candidate.id === selection.providerId);
+    const model = provider?.models.find((candidate) => candidate.id === selection.modelId);
+    if (
+        provider?.disabledReason === undefined &&
+        model?.serviceTiers.includes(selection.serviceTier)
+    )
+        return selection;
+    const { serviceTier: _serviceTier, ...regular } = selection;
+    return regular;
 }
 
 /** Sets the thinking level, or clears it back to the model's own default. */
@@ -224,13 +242,17 @@ export function happyAgentSessionDraftStoreOwnedCreate(options: HappyAgentSessio
     readonly writer: HappyAgentSessionDraftWriter;
 } {
     let catalog = options.catalog;
-    const seed = options.selection ?? happyAgentSessionSelectionDefault(catalog);
+    const seed = happyAgentSelectionServiceTierReconcile(
+        catalog,
+        options.selection ?? happyAgentSessionSelectionDefault(catalog),
+    );
     const snapshotOf = (selection: HappyAgentSelection): HappyAgentSessionDraftSnapshot => ({
         selection,
         menus: happyAgentMenusDerive(catalog, selection, options.effortRemembered),
     });
     const store = createStore<HappyAgentSessionDraftSnapshot>()(() => snapshotOf(seed));
     const selectionSet = (selection: HappyAgentSelection): void => {
+        selection = happyAgentSelectionServiceTierReconcile(catalog, selection);
         const previous = store.getState();
         if (happyAgentSelectionEqual(previous.selection, selection)) return;
         store.setState(
@@ -276,12 +298,16 @@ export function happyAgentSessionDraftStoreOwnedCreate(options: HappyAgentSessio
                 if (next === catalog) return;
                 catalog = next;
                 const previous = store.getState();
+                const selection = happyAgentSelectionServiceTierReconcile(
+                    catalog,
+                    previous.selection,
+                );
                 const menus = happyAgentMenusReferencesPreserve(
                     previous.menus,
-                    happyAgentMenusDerive(catalog, previous.selection, options.effortRemembered),
+                    happyAgentMenusDerive(catalog, selection, options.effortRemembered),
                 );
-                if (menus === previous.menus) return;
-                store.setState({ selection: previous.selection, menus }, true);
+                if (menus === previous.menus && selection === previous.selection) return;
+                store.setState({ selection, menus }, true);
             },
         },
     };

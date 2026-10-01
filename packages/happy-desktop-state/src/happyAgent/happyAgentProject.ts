@@ -23,6 +23,9 @@ function modelProject(
     return {
         id: modelId,
         name: reference?.name ?? definition.name,
+        serviceTiers: happyAgentServiceTiersFromWire(
+            reference?.serviceTiers ?? definition.serviceTiers,
+        ),
         thinkingLevels: (reference?.efforts ?? definition.efforts) as HappyAgentThinkingLevel[],
         defaultThinkingLevel: (reference?.defaultEffort ??
             definition.defaultEffort) as HappyAgentThinkingLevel,
@@ -50,18 +53,11 @@ export function happyAgentModelCatalogProject(config: DaemonConfig): HappyAgentM
                 const model = modelProject(config, reference.id, reference);
                 return model === undefined ? [] : [model];
             });
-            const serviceTiers = happyAgentServiceTiersFromWire(
-                references.flatMap(
-                    (reference) =>
-                        reference.serviceTiers ?? config.models[reference.id]?.serviceTiers ?? [],
-                ),
-            );
             return {
                 enabled: provider.enabled,
                 id: providerId,
                 type: provider.type,
                 models,
-                serviceTiers,
                 ...(provider.enabled
                     ? models.length === 0
                         ? { disabledReason: "no_models" as const }

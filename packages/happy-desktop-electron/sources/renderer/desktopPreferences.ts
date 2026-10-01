@@ -201,7 +201,10 @@ function preferenceDocument(config: DesktopConfig): HappyAgentModelPreferenceDoc
         const provider = preferences[preference.providerId] ?? {};
         provider[preference.modelId] = {
             effort: thinkingLevel(preference.lastEffort) ?? null,
-            serviceTier: preference.lastSpeed === "fast" ? "fast" : null,
+            serviceTier:
+                preference.lastSpeed === "fast" || preference.lastSpeed === "ultrafast"
+                    ? preference.lastSpeed
+                    : null,
         };
         preferences[preference.providerId] = provider;
     }

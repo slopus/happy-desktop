@@ -1090,7 +1090,9 @@ function providerRows(
         })),
         name: providerAccountName(provider.id),
         saving: provider.saving,
-        serviceTiers: provider.serviceTiers.map((tier) => (tier === "fast" ? "Fast" : tier)),
+        serviceTiers: [...new Set(provider.models.flatMap((model) => model.serviceTiers))].map(
+            (tier) => (tier === "fast" ? "Fast" : "Ultrafast"),
+        ),
         status: provider.disabledReason ?? "ready",
     }));
 }

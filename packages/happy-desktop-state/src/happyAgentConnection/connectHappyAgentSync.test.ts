@@ -128,6 +128,23 @@ async function liveHarness(): Promise<
 
 // --- startup and SSE reconnection ---------------------------------------
 
+it("sends the selected Ultrafast wire tier with the user message, then clears it for Regular", async () => {
+    const { connection, daemon, chat, sessionId } = await liveHarness();
+    connection.setServiceTier(sessionId, "ultrafast");
+    expect(chat.session?.serviceTier).toBe("ultrafast");
+    connection.sendMessage(sessionId, "first");
+    await vi.waitFor(() => expect(daemon.callCount("sendMessage")).toBe(1));
+    expect(daemon.calls.find((call) => call.method === "sendMessage")?.args[1]).toMatchObject({
+        mode: { serviceTier: "ultrafast" },
+    });
+    connection.setServiceTier(sessionId, undefined);
+    connection.sendMessage(sessionId, "second");
+    await vi.waitFor(() => expect(daemon.callCount("sendMessage")).toBe(2));
+    expect(daemon.calls.filter((call) => call.method === "sendMessage")[1]?.args[1]).toMatchObject({
+        mode: { serviceTier: null },
+    });
+});
+
 it("keeps 523 untouched catalog sessions identical when one session changes", async () => {
     const { connection, daemon } = harnessOpen();
     const project = daemon.projectSeed({ id: "project-large" });

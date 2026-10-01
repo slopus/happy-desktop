@@ -315,7 +315,9 @@ function sessionProject(
 function conversationProject(session: GroupSession): HappyAgentConversationSummaryInput {
     const effort = thinkingLevel(session.effort);
     const serviceTier =
-        session.serviceTier === "fast" ? ("fast" as HappyAgentServiceTier) : undefined;
+        session.serviceTier === "fast" || session.serviceTier === "ultrafast"
+            ? (session.serviceTier as HappyAgentServiceTier)
+            : undefined;
     return {
         id: session.id as HappyAgentSessionId,
         ...(session.archivedAt === undefined ? {} : { archivedAt: session.archivedAt }),

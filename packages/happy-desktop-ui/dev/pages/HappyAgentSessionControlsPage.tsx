@@ -144,6 +144,31 @@ export function HappyAgentSessionControlsPage() {
             </Specimen>
 
             <Specimen
+                detail="an eligible Astra account offers Regular, Fast, and Ultrafast"
+                label="Ultrafast selected"
+                number="08"
+                stage="surface"
+            >
+                <div style={{ width: "620px", padding: "12px", background: "var(--surface)" }}>
+                    <HappyAgentSessionControls
+                        menus={{
+                            ...happyAgentMenus,
+                            serviceTierOptions: [
+                                { tier: null, label: "Regular", current: false },
+                                { tier: "fast", label: "Fast", current: false },
+                                { tier: "ultrafast", label: "Ultrafast", current: true },
+                            ],
+                            currentServiceTier: "ultrafast",
+                        }}
+                        onEffortChange={() => undefined}
+                        onModelChange={() => undefined}
+                        onPermissionModeChange={() => undefined}
+                        onServiceTierChange={() => undefined}
+                    />
+                </div>
+            </Specimen>
+
+            <Specimen
                 detail="one control opened to its Menu popover"
                 label="Open control menu"
                 number="07"

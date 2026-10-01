@@ -297,7 +297,13 @@ export function HappyAgentSessionControls(props: HappyAgentSessionControlsProps)
 
     const currentTierLabel =
         menus?.serviceTierOptions.find((option) => option.current)?.label ??
-        (menus ? (menus.currentServiceTier ? "Fast" : "Regular") : "…");
+        (menus
+            ? menus.currentServiceTier === "ultrafast"
+                ? "Ultrafast"
+                : menus.currentServiceTier === "fast"
+                  ? "Fast"
+                  : "Regular"
+            : "…");
 
     const control = (field: HappyAgentSessionControlField) => {
         if (field === "model")
