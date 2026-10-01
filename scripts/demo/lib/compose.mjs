@@ -150,11 +150,13 @@ function typingSpeedLayer() {
 }
 
 /** Work acceleration stays separate from both subtitles and keyboard badges. */
-function workSpeedLayer() {
+function workSpeedLayer(below = false) {
+    const x = below ? output.width - 104 - 48 : 1744;
+    const y = below ? output.height - 64 - 48 : 72;
     return Buffer.from(
         `<svg xmlns="http://www.w3.org/2000/svg" width="${output.width}" height="${output.height}">
-            <rect x="1744" y="72" width="104" height="64" rx="32" fill="rgba(8,10,14,0.88)" stroke="rgba(255,255,255,0.18)"/>
-            <text x="1796" y="116" text-anchor="middle" font-family="${fontStack}" font-size="36" font-weight="650" fill="#f4f6fb">4×</text>
+            <rect x="${x}" y="${y}" width="104" height="64" rx="32" fill="rgba(8,10,14,0.88)" stroke="rgba(255,255,255,0.18)"/>
+            <text x="${x + 52}" y="${y + 44}" text-anchor="middle" font-family="${fontStack}" font-size="36" font-weight="650" fill="#f4f6fb">4×</text>
         </svg>`,
     );
 }
@@ -312,12 +314,17 @@ async function stickerRender(source, pose, camera) {
 export async function composeFrames(options) {
     const { appearance, frames, onProgress, sourceDirectory, targetDirectory } = options;
     const rawWindow = options.demo.rawWindow === true;
+    const appHeight = output.height;
+    const subtitleStrip = options.demo.subtitles === "below" ? 140 : 0;
+    if (subtitleStrip && (!rawWindow || options.demo.transitions !== "none"))
+        throw new Error("Below-window subtitles require a raw-window take with no transitions.");
+    output.height = appHeight + subtitleStrip;
     const overlay = rawWindow ? undefined : await overlayBuild(appearance);
     const captions = new Map();
     const cards = new Map();
     const stickers = new Map();
     const typingSpeed = typingSpeedLayer();
-    const workSpeed = workSpeedLayer();
+    const workSpeed = workSpeedLayer(subtitleStrip > 0);
     // The delivered pixel density: output pixels per CSS pixel of the app.
     const density = deviceScaleFactor * (output.width / (frames[0]?.camera.width ?? output.width));
     let confetti;
@@ -352,11 +359,13 @@ export async function composeFrames(options) {
 
         let pipeline = sharp(composed)
             .extract(entry.camera)
-            .resize(output.width, output.height, {
+            .resize(output.width, appHeight, {
                 kernel: "lanczos3",
                 fit: "contain",
                 background: rawWindow ? "#212121" : "#090b10",
             });
+        if (subtitleStrip)
+            pipeline = pipeline.extend({ bottom: subtitleStrip, background: "#111318" });
         const layers = [];
         if (entry.sticker) {
             layers.push(

@@ -1,0 +1,69 @@
+{
+    "sourceFrames": 5725,
+    "revision": {
+        "intent": "Open on the submitted Regular prompt, retain Astra hover and the real speed menu, announce Ultrafast after selection, label shortened waits, and show each actual completed result for two seconds. Preserve the exact native run durations.",
+        "resultHolds": [
+            {
+                "frame": 4300,
+                "frames": 120,
+                "caption": "One live take \u00b7 Regular 64.867s \u00b7 Ultrafast 9.202s"
+            },
+            {
+                "frame": 5724,
+                "frames": 120,
+                "caption": "One live take \u00b7 Regular 64.867s \u00b7 Ultrafast 9.202s"
+            }
+        ],
+        "segments": [
+            {
+                "from": 750,
+                "to": 1110,
+                "caption": "Regular \u00b7 Low effort \u00b7 Wait shortened"
+            },
+            {
+                "from": 3872,
+                "to": 4232,
+                "caption": "Regular \u00b7 Low effort \u00b7 Wait shortened"
+            },
+            {
+                "from": 4232,
+                "to": 4234,
+                "caption": "Regular \u00b7 Low effort \u00b7 Wait shortened"
+            },
+            {
+                "from": 4234,
+                "to": 4376,
+                "caption": "Regular \u00b7 64.867 seconds total"
+            },
+            {
+                "from": 4463,
+                "to": 4628,
+                "caption": "Switch to Ultrafast. Keep the same Low effort."
+            },
+            {
+                "from": 4628,
+                "to": 4672,
+                "caption": "Ultrafast selected \u00b7 Same Astra \u00b7 Same Low effort"
+            },
+            {
+                "from": 4851,
+                "to": 4979,
+                "caption": "Ultrafast \u00b7 Same prompt: count internally."
+            },
+            {
+                "from": 4979,
+                "to": 5469,
+                "caption": "Ultrafast \u00b7 Waiting footage shortened"
+            },
+            {
+                "from": 5469,
+                "to": 5604
+            }
+        ]
+    },
+    "retainedFrames": 2066,
+    "outputFrames": 1159,
+    "nativeRunsUnchanged": true,
+    "fps": 60,
+    "appearance": "dark"
+}

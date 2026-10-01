@@ -5,6 +5,7 @@ import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { promisify } from "node:util";
 import { deviceScaleFactor, viewport } from "./scene.mjs";
 import { demoDaemonBaseline, overlayInstall, overlayOptions } from "./overlay.mjs";
+import { offlineStageInstall } from "./offline-stage.mjs";
 
 /*
  * Where the demo actually runs.
@@ -252,15 +253,27 @@ async function processTreeStop(child) {
  * take inherits another take's source even when `--all` records one session.
  */
 export async function stageOpen(options) {
+    if (
+        options.staticDirectory &&
+        ((options.patches?.length ?? 0) || (options.assets?.length ?? 0))
+    )
+        throw new Error(
+            "A built-product take cannot apply recording-only source patches or replacement assets.",
+        );
     const { chromium } = gymRequire("playwright");
-    const source = options.url
-        ? workspace
-        : await patchedSourcePrepare(options.patches ?? [], options.assets ?? []);
-    const vite = options.url ? undefined : await viteStart({ ...options, source });
-    const url = options.url ?? vite.url;
+    const source =
+        options.url || options.staticDirectory
+            ? workspace
+            : await patchedSourcePrepare(options.patches ?? [], options.assets ?? []);
+    const vite =
+        options.url || options.staticDirectory
+            ? undefined
+            : await viteStart({ ...options, source });
+    let url = options.url ?? vite?.url;
 
     let browser;
     let context;
+    let offline;
     try {
         browser = await chromium.launch({
             args: [
@@ -290,7 +303,44 @@ export async function stageOpen(options) {
             reducedMotion: "no-preference",
             timezoneId: "America/Los_Angeles",
             viewport,
+            ...(options.staticDirectory ? { offline: true, serviceWorkers: "block" } : {}),
         });
+        if (options.staticDirectory) {
+            if (!options.gym)
+                throw new Error("A full-product offline stage needs its isolated native gym.");
+            const effort = options.gym.nativeEffort;
+            if (!effort)
+                throw new Error("The native stage needs the scenario's explicit reasoning effort.");
+            offline = await offlineStageInstall({
+                context,
+                directory: options.staticDirectory,
+                socketPath: options.gym.paths.socketPath,
+                tokenPath: options.gym.paths.tokenPath,
+                healthRead: () => options.gym.client.getHealth(),
+                desktopConfig: {
+                    appearance: options.appearance,
+                    defaultEffort: effort,
+                    defaultPermissionMode: "auto",
+                    defaultModel: {
+                        providerId: "codex",
+                        modelId: "openai/gpt-6-astra",
+                        effort,
+                    },
+                    lastPickedModel: { providerId: "codex", modelId: "openai/gpt-6-astra" },
+                    modelPreferences: [
+                        {
+                            providerId: "codex",
+                            modelId: "openai/gpt-6-astra",
+                            lastEffort: effort,
+                            lastSpeed: "standard",
+                        },
+                    ],
+                    scrollbarVisibility: "automatic",
+                    version: 1,
+                },
+            });
+            url = offline.url;
+        }
         await context.addInitScript(overlayInstall, {
             ...overlayOptions(options.appearance),
             daemon: demoDaemonBaseline,
@@ -306,6 +356,7 @@ export async function stageOpen(options) {
             source,
             url,
             async close() {
+                offline?.close();
                 await context.close().catch(() => undefined);
                 await browser.close().catch(() => undefined);
                 if (vite) await processTreeStop(vite.child);
@@ -319,6 +370,7 @@ export async function stageOpen(options) {
             },
         };
     } catch (error) {
+        offline?.close();
         await context?.close().catch(() => undefined);
         await browser?.close().catch(() => undefined);
         if (vite) await processTreeStop(vite.child);

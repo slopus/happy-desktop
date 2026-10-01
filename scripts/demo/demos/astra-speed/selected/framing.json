@@ -1,0 +1,25 @@
+{
+    "css": {
+        "x": 220,
+        "y": 88,
+        "width": 560,
+        "height": 576
+    },
+    "crop": {
+        "left": 620,
+        "top": 290,
+        "width": 1400,
+        "height": 1440
+    },
+    "restCrop": {
+        "left": 70,
+        "top": 70,
+        "width": 1950,
+        "height": 1660
+    },
+    "output": {
+        "width": 1950,
+        "height": 1660
+    },
+    "deviceScaleFactor": 2.5
+}

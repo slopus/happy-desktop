@@ -1,0 +1,168 @@
+{
+    "inference": "native",
+    "runtime": {
+        "daemonVersion": "0.4.80-preview.2",
+        "codexVersion": "codex-cli 0.159.2",
+        "effort": "low",
+        "providerId": "codex",
+        "modelId": "openai/gpt-6-astra",
+        "serviceTiers": ["priority", "ultrafast"],
+        "source": "Real getConfig response before camera or comparison requests"
+    },
+    "model": "openai/gpt-6-astra",
+    "effort": "low",
+    "playback": {
+        "capture": 1,
+        "interactionsAndResults": 1,
+        "thinkingWaits": 4,
+        "workBadgeVisible": true
+    },
+    "measurement": "Daemon run endedAt minus startedAt, including run overhead; not provider-only latency.",
+    "caveat": "One run per speed. Requesting internal counting does not verify the model's private reasoning. Requested tier is recorded; no provider-served-tier claim.",
+    "runs": [
+        {
+            "label": "Regular",
+            "mode": {
+                "effort": "low",
+                "modelId": "openai/gpt-6-astra",
+                "permissionMode": "auto",
+                "providerId": "codex",
+                "serviceTier": null
+            },
+            "prompt": "Count from 1 to 1000 internally, then reply with exactly done and nothing else.",
+            "finalText": "done",
+            "startedAt": 1790770808431,
+            "endedAt": 1790770873298,
+            "elapsedMs": 64867,
+            "summaryText": "\uf290\nCompleted in\u00a01m\u00a04s\nUsed 8,903 tokens \u00b7 Final context 8,903 tokens"
+        },
+        {
+            "label": "Ultrafast",
+            "mode": {
+                "effort": "low",
+                "modelId": "openai/gpt-6-astra",
+                "permissionMode": "auto",
+                "providerId": "codex",
+                "serviceTier": "ultrafast"
+            },
+            "prompt": "Count from 1 to 1000 internally, then reply with exactly done and nothing else.",
+            "finalText": "done",
+            "startedAt": 1790770884636,
+            "endedAt": 1790770893838,
+            "elapsedMs": 9202,
+            "summaryText": "\uf290\nCompleted in\u00a09s\nUsed 8,914 tokens \u00b7 Final context 8,914 tokens"
+        }
+    ],
+    "timing": {
+        "fps": 60,
+        "startedAt": 5780.089917,
+        "frames": 5725,
+        "liveWaits": [],
+        "wallMs": 95401.247917,
+        "maxFrameLatenessMs": 126.89066699999967,
+        "sourceFrames": 4978
+    },
+    "editorial": {
+        "sourceTake": "take-07-low (raw capture not committed)",
+        "durationSeconds": 19.316666666666666,
+        "outputFrames": 1159,
+        "dimensions": {
+            "width": 1950,
+            "height": 1800
+        },
+        "fps": 60,
+        "sha256": "bfdef42b875a6b5945a906f145fc3bd25b2085b01e208eb3b4bfadd3dc893d40",
+        "fullDecodePassed": true,
+        "thinkingPlayback": 4,
+        "retainedThinkingSeconds": {
+            "regular": 3,
+            "ultrafast": 2.05
+        },
+        "shortenedWaitsExplicitlyLabeled": true,
+        "modelHoverRetained": true,
+        "menuBeforeSelectionSeconds": 1.37,
+        "selectionCaptionAfterConfirmedControl": true,
+        "finalNativeResultsSecondsEach": 2,
+        "revisionFile": "revision.json",
+        "segments": [
+            {
+                "from": 750,
+                "to": 1110,
+                "caption": "Regular \u00b7 Low effort \u00b7 Wait shortened"
+            },
+            {
+                "from": 3872,
+                "to": 4232,
+                "caption": "Regular \u00b7 Low effort \u00b7 Wait shortened"
+            },
+            {
+                "from": 4232,
+                "to": 4234,
+                "caption": "Regular \u00b7 Low effort \u00b7 Wait shortened"
+            },
+            {
+                "from": 4234,
+                "to": 4376,
+                "caption": "Regular \u00b7 64.867 seconds total"
+            },
+            {
+                "from": 4463,
+                "to": 4628,
+                "caption": "Switch to Ultrafast. Keep the same Low effort."
+            },
+            {
+                "from": 4628,
+                "to": 4672,
+                "caption": "Ultrafast selected \u00b7 Same Astra \u00b7 Same Low effort"
+            },
+            {
+                "from": 4851,
+                "to": 4979,
+                "caption": "Ultrafast \u00b7 Same prompt: count internally."
+            },
+            {
+                "from": 4979,
+                "to": 5469,
+                "caption": "Ultrafast \u00b7 Waiting footage shortened"
+            },
+            {
+                "from": 5469,
+                "to": 5604
+            }
+        ],
+        "resultHolds": [
+            {
+                "frame": 4300,
+                "frames": 120,
+                "caption": "One live take \u00b7 Regular 64.867s \u00b7 Ultrafast 9.202s"
+            },
+            {
+                "frame": 5724,
+                "frames": 120,
+                "caption": "One live take \u00b7 Regular 64.867s \u00b7 Ultrafast 9.202s"
+            }
+        ],
+        "ffprobe": {
+            "programs": [],
+            "stream_groups": [],
+            "streams": [
+                {
+                    "codec_name": "h264",
+                    "width": 1950,
+                    "height": 1800,
+                    "r_frame_rate": "60/1",
+                    "nb_frames": "1159"
+                },
+                {
+                    "codec_name": "aac",
+                    "r_frame_rate": "0/0",
+                    "nb_frames": "907"
+                }
+            ],
+            "format": {
+                "duration": "19.316667",
+                "size": "1116291"
+            }
+        }
+    }
+}

@@ -1,0 +1,31 @@
+1
+00:00:00,000 --> 00:00:03,033
+Regular · Low effort · Wait shortened
+
+2
+00:00:03,033 --> 00:00:05,400
+Regular · 64.867 seconds total
+
+3
+00:00:05,400 --> 00:00:08,150
+Switch to Ultrafast. Keep the same Low effort.
+
+4
+00:00:08,150 --> 00:00:08,883
+Ultrafast selected · Same Astra · Same Low effort
+
+5
+00:00:08,883 --> 00:00:11,017
+Ultrafast · Same prompt: count internally.
+
+6
+00:00:11,017 --> 00:00:13,067
+Ultrafast · Waiting footage shortened
+
+7
+00:00:13,067 --> 00:00:15,317
+Ultrafast · 9.202 seconds total
+
+8
+00:00:15,317 --> 00:00:19,317
+One live take · Regular 64.867s · Ultrafast 9.202s

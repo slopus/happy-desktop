@@ -13,6 +13,11 @@ It is a copy of the original `demos/resume/artifacts/v13/resume.mp4`; the
 original and other generated takes remain gitignored. Recording a new take
 does not overwrite this selected video.
 
+The native Astra speed comparison is preserved in
+[`demos/astra-speed/README.md`](./demos/astra-speed/README.md), including its
+selected video, sanitized native-run evidence, capture prerequisites and portable
+editor. It is explicitly selected and does not run in `--all`.
+
 The current landing-page story is defined in
 [`demos/core/SCRIPT.md`](./demos/core/SCRIPT.md): one static window, choose
 Fable, send the waveform task, let the real workspace naming run, then show

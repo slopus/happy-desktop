@@ -1,0 +1,30 @@
+{
+    "sourceBaseline": "f37326a5",
+    "capture": "take-07-low",
+    "inference": "native",
+    "daemonVersion": "0.4.80-preview.2",
+    "providerVersion": "0.0.33",
+    "codexVersion": "0.159.2",
+    "rawCaptureCommitted": false,
+    "portableEditorVerified": {
+        "movieByteIdentical": true,
+        "subtitlesByteIdentical": true,
+        "fullDecodePassed": true
+    },
+    "exactRecompositionRequires": [
+        "framing.json",
+        ".work/astra-speed/timeline.json",
+        ".work/astra-speed/sounds.json",
+        ".work/astra-speed/capture/ (referenced images)"
+    ],
+    "freshCaptureTiming": "Native inference is nondeterministic; choose new edit frame ranges and preserve the new measured run times.",
+    "delivery": {
+        "file": "astra-speed.mp4",
+        "bytes": 1116291,
+        "sha256": "bfdef42b875a6b5945a906f145fc3bd25b2085b01e208eb3b4bfadd3dc893d40",
+        "frames": 1159,
+        "fps": 60,
+        "width": 1950,
+        "height": 1800
+    }
+}

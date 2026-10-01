@@ -9,7 +9,7 @@ import { soundtrackWrite } from "./lib/sounds.mjs";
 import { stageOpen } from "./lib/stage.mjs";
 import { viewport } from "./lib/scene.mjs";
 import { subtitlesSrt, timelineEdit } from "./lib/timeline.mjs";
-import { gymOpen, gymReset } from "./scenario/runtime.mjs";
+import { gymOpen, gymReset, nativeCredentialsClear } from "./scenario/runtime.mjs";
 import { phoneVideoOpen } from "./lib/phone-video.mjs";
 import { mobileRunRead } from "./lib/mobile-run.mjs";
 
@@ -50,6 +50,10 @@ function parse(argv) {
         else if (argument === "--appearance") options.appearance = rest.shift();
         else if (argument === "--inference") options.inference = rest.shift();
         else if (argument === "--replay-io") options.replayIo = resolve(rest.shift());
+        else if (argument === "--built-app") options.staticDirectory = resolve(rest.shift());
+        else if (argument === "--native-auth") options.nativeAuth = resolve(rest.shift());
+        else if (argument === "--native-account") options.nativeAccount = rest.shift();
+        else if (argument === "--native-codex") options.nativeCodex = resolve(rest.shift());
         else if (argument === "--mobile-server") options.mobileServerUrl = rest.shift();
         else if (argument === "--mobile-run") options.mobileRun = resolve(rest.shift());
         else if (argument === "--phone-udid") options.phoneUdid = rest.shift();
@@ -63,8 +67,20 @@ function parse(argv) {
         throw new Error("--fps must be an integer from 1 through 60.");
     if (!new Set(["dark", "light"]).has(options.appearance))
         throw new Error('--appearance must be either "dark" or "light".');
-    if (!new Set(["screenplay", "live", "replay"]).has(options.inference))
-        throw new Error('--inference must be "screenplay", "live", or "replay".');
+    if (!new Set(["screenplay", "live", "replay", "native"]).has(options.inference))
+        throw new Error('--inference must be "screenplay", "live", "replay", or "native".');
+    if (
+        options.inference === "native" &&
+        (!options.nativeAuth ||
+            !options.nativeAccount ||
+            !options.staticDirectory ||
+            !options.nativeCodex ||
+            options.all ||
+            options.ids.length !== 1)
+    )
+        throw new Error(
+            "Native filming needs one explicit demo, --built-app, --native-auth, --native-account, and --native-codex. It never runs as --all.",
+        );
     if (options.mobileRun && options.mobileServerUrl)
         throw new Error("Choose --mobile-run or --mobile-server, not both.");
     if (options.phoneUdid && !options.mobileServerUrl && !options.mobileRun)
@@ -204,6 +220,11 @@ async function record(demo, stage, gym, options) {
                 await writeFile(
                     join(work, "timeline.json"),
                     JSON.stringify(sink.frames, null, 2),
+                    "utf8",
+                );
+                await writeFile(
+                    join(work, "sounds.json"),
+                    JSON.stringify(director.sounds, null, 2),
                     "utf8",
                 );
             }
@@ -359,14 +380,14 @@ if (options.command === "list") {
 }
 
 const selected = options.all
-    ? demos
+    ? demos.filter((demo) => !demo.manualOnly)
     : options.ids.length > 0
       ? options.ids.map((id) => {
             const found = demos.find((demo) => demo.id === id);
             if (!found) throw new Error(`No demo called "${id}". Try: pnpm demo list`);
             return found;
         })
-      : demos;
+      : demos.filter((demo) => !demo.manualOnly);
 
 for (const demo of selected) {
     if (demo.inferenceModes && !demo.inferenceModes.includes(options.inference))
@@ -404,6 +425,9 @@ async function demoGymOpen(demo) {
     process.stdout.write(`  opening the demo gym (${options.inference} inference)…\n`);
     gym = await gymOpen({
         inference: options.inference,
+        nativeAuth: options.nativeAuth,
+        nativeAccount: options.nativeAccount,
+        nativeCodex: options.nativeCodex,
         mobileServerUrl: options.mobileServerUrl,
         ...(activeWorld ? { world: activeWorld } : {}),
         ...(options.replayIo ? { replayPath: options.replayIo } : {}),
@@ -422,6 +446,8 @@ async function demoStageOpen(demo) {
         environment: protocol?.viteEnvironment ?? gym.viteEnvironment,
         patches,
         verbose: options.verbose,
+        staticDirectory: options.staticDirectory,
+        gym,
     });
     process.stdout.write(`  serving      ${stage.url}\n`);
     if (patches.length > 0)
@@ -431,6 +457,7 @@ async function demoStageOpen(demo) {
     return stage;
 }
 
+let recordingFailure;
 try {
     if (options.command === "probe") {
         // An unqualified probe inspects production source. Naming one demo
@@ -454,9 +481,30 @@ try {
             await record(demo, stage, gym, options);
         }
     }
+} catch (error) {
+    recordingFailure = error;
 } finally {
-    await stage?.close();
-    await protocol?.close();
-    activeWorld?.close?.();
-    await gym?.close();
+    const cleanupErrors = [];
+    for (const cleanup of [
+        () => stage?.close(),
+        () => protocol?.close(),
+        () => activeWorld?.close?.(),
+        () => gym?.close(),
+        () => nativeCredentialsClear(),
+    ]) {
+        try {
+            await cleanup();
+        } catch (error) {
+            cleanupErrors.push(error);
+        }
+    }
+    if (cleanupErrors.length) {
+        if (!recordingFailure)
+            recordingFailure = new AggregateError(cleanupErrors, "Recording cleanup failed.");
+        else
+            process.stderr.write(
+                "Recording cleanup also failed; inspect the private .d runtime before another take.\n",
+            );
+    }
 }
+if (recordingFailure) throw recordingFailure;

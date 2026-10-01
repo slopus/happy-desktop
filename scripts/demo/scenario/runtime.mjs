@@ -1,4 +1,4 @@
-import { execFile as execFileCallback } from "node:child_process";
+import { execFile as execFileCallback, spawn } from "node:child_process";
 import { chmod, copyFile, mkdir, readFile, rm, symlink, unlink, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { promisify } from "node:util";
@@ -9,6 +9,7 @@ import {
 } from "../../../packages/happy-desktop-gym/sources/electron/index.ts";
 import { gatewayCreate } from "./inference.mjs";
 import * as defaultWorld from "./world.mjs";
+import { nativeCredentialPrepare } from "./native-credential.mjs";
 
 const execFile = promisify(execFileCallback);
 const workspace = resolve(import.meta.dirname, "../../..");
@@ -38,6 +39,18 @@ const workspace = resolve(import.meta.dirname, "../../..");
 // private socket's 103-byte Unix limit even when `server.sock` itself fits.
 const root = join(workspace, ".d");
 const marker = join(root, "demo-gym.json");
+let nativeCredentialDispose;
+let nativeDaemonStop;
+
+export async function nativeCredentialsClear() {
+    try {
+        await nativeDaemonStop?.();
+    } finally {
+        nativeDaemonStop = undefined;
+        await nativeCredentialDispose?.();
+        nativeCredentialDispose = undefined;
+    }
+}
 
 // With HAPPY_GYM_INFERENCE_URL set, the daemon backs every catalog provider
 // with the gym endpoint, so a real provider/model pairing routes to our
@@ -86,16 +99,21 @@ function environment(p, gateway, mobileServerUrl) {
         HAPPY_AGENT_SERVER_SOCKET_PATH: p.socketPath,
         HAPPY_AGENT_SERVER_TOKEN_PATH: p.tokenPath,
         HAPPY_AGENT_WORKSPACES_DIRECTORY: p.workspaces,
-        HAPPY_GYM_INFERENCE_URL: gateway.url,
-        HAPPY_GYM_TOKEN: gateway.token,
+        ...(gateway
+            ? { HAPPY_GYM_INFERENCE_URL: gateway.url, HAPPY_GYM_TOKEN: gateway.token }
+            : {}),
         ...(mobileServerUrl ? { HAPPY_AGENT_HAPPY_SERVER_URL: mobileServerUrl } : {}),
         // Provider enablement checks that credentials exist; routing never
         // uses them, because the gym URL backs every provider with our
         // gateway. A placeholder enables the claude provider so sessions can
         // carry a real model identity instead of "Gym".
-        ANTHROPIC_API_KEY: "demo-gym-placeholder",
-        OPENAI_API_KEY: "demo-gym-placeholder",
-        XAI_API_KEY: "demo-gym-placeholder",
+        ...(gateway
+            ? {
+                  ANTHROPIC_API_KEY: "demo-gym-placeholder",
+                  OPENAI_API_KEY: "demo-gym-placeholder",
+                  XAI_API_KEY: "demo-gym-placeholder",
+              }
+            : {}),
         TMPDIR: p.tmp,
     };
 }
@@ -145,7 +163,7 @@ function processBaseEnvironment(p) {
     };
 }
 
-async function daemonStart(p, gateway, mobileServerUrl, models) {
+async function daemonStart(p, gateway, mobileServerUrl, models, nativeCodex, nativeEffort) {
     const executable = await happyAgentExecutableResolve();
     const command = join(p.bin, "happy-agent");
     await unlink(command).catch(() => undefined);
@@ -155,15 +173,59 @@ async function daemonStart(p, gateway, mobileServerUrl, models) {
     const nodeCommand = join(p.bin, "node");
     await unlink(nodeCommand).catch(() => undefined);
     await symlink(process.execPath, nodeCommand);
+    if (!gateway) {
+        if (!nativeCodex)
+            throw new Error("Native filming needs the actual installed --native-codex executable.");
+        const codexCommand = join(p.bin, "codex");
+        await unlink(codexCommand).catch(() => undefined);
+        await symlink(nativeCodex, codexCommand);
+    }
     const env = environment(p, gateway, mobileServerUrl);
     // A previous take may have left a daemon owning the socket; stop that exact
     // daemon before starting this lifetime so the token and gateway URL match.
     await execFile(command, ["stop"], { cwd: p.root, env, timeout: 15_000 }).catch(() => undefined);
     await unlink(p.socketPath).catch(() => undefined);
-    await runtimeConfigurationWrite(p, models);
-    await execFile(command, ["start"], { cwd: p.root, env, timeout: 30_000 });
-    const token = await tokenWait(p.tokenPath, 30_000);
-    return { command, env, token };
+    await runtimeConfigurationWrite(p, models, gateway === undefined, nativeEffort);
+    let launchCheck;
+    let codexVersion;
+    if (!gateway) {
+        const { stdout } = await execFile(join(p.bin, "codex"), ["--version"], {
+            cwd: p.root,
+            env,
+            timeout: 15000,
+        });
+        codexVersion = stdout.trim();
+        process.stdout.write(`  native CLI   ${codexVersion}\n`);
+        const child = spawn(command, ["run"], { cwd: p.root, env, stdio: "ignore" });
+        let launchError;
+        const ended = new Promise((settle) => {
+            child.once("exit", settle);
+            child.once("error", (error) => {
+                launchError = error;
+                settle();
+            });
+        });
+        launchCheck = () => {
+            if (launchError) throw launchError;
+            if (child.exitCode !== null || child.signalCode !== null)
+                throw new Error("The isolated foreground daemon exited before readiness.");
+        };
+        nativeDaemonStop = async () => {
+            try {
+                await execFile(command, ["stop"], { cwd: p.root, env, timeout: 15000 });
+            } finally {
+                if (await Promise.race([ended.then(() => false), delay(2000).then(() => true)])) {
+                    child.kill("SIGTERM");
+                    await Promise.race([ended, delay(2000)]);
+                }
+            }
+        };
+        process.stdout.write(`  native daemon  owned foreground PID ${child.pid}\n`);
+    } else {
+        await execFile(command, ["start"], { cwd: p.root, env, timeout: 30_000 });
+    }
+    const token = await tokenWait(p.tokenPath, 30_000, launchCheck);
+    return { command, env, token, codexVersion };
 }
 
 /**
@@ -174,8 +236,37 @@ async function daemonStart(p, gateway, mobileServerUrl, models) {
  * identity — its inference still routes to the gym gateway, which backs every
  * provider while the URL is set.
  */
-async function runtimeConfigurationWrite(p, models) {
+async function runtimeConfigurationWrite(p, models, native = false, nativeEffort) {
     await mkdir(join(p.happyHome, "agent"), { recursive: true });
+    if (native) {
+        if (!nativeEffort) throw new Error("Native filming requires an explicit reasoning effort.");
+        const publicConfig = join(p.root, "Happy", "Config");
+        await mkdir(publicConfig, { recursive: true });
+        await writeFile(
+            join(publicConfig, "happy.toml"),
+            [
+                "[settings]",
+                "happy_integration = false",
+                "",
+                "[providers]",
+                "default_enable = false",
+                "",
+                "[providers.codex]",
+                'type = "codex"',
+                "enabled = true",
+                "credential_isolation = true",
+                `auth_file = ${JSON.stringify(join(p.home, ".codex", "auth.json"))}`,
+                `include_models = ${JSON.stringify(models.codex)}`,
+                "",
+                "[defaults]",
+                'provider = "codex"',
+                'model = "openai/gpt-6-astra"',
+                `effort = ${JSON.stringify(nativeEffort)}`,
+                "",
+            ].join("\n"),
+        );
+        return;
+    }
     await writeFile(
         join(p.happyHome, "agent", "runtime.toml"),
         [
@@ -206,9 +297,10 @@ async function runtimeConfigurationWrite(p, models) {
     );
 }
 
-async function tokenWait(tokenPath, timeoutMs) {
+async function tokenWait(tokenPath, timeoutMs, launchCheck) {
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
+        launchCheck?.();
         const token = await readFile(tokenPath, "utf8").then(
             (value) => value.trim(),
             () => "",
@@ -225,7 +317,7 @@ async function healthWait(client, timeoutMs) {
     while (Date.now() < deadline) {
         try {
             const health = await client.getHealth();
-            if (health.status === "ready") return;
+            if (health.ready) return;
         } catch (error) {
             lastError = error;
         }
@@ -429,6 +521,7 @@ export async function gymOpen(options = {}) {
         for (const project of [definition.repository, ...definition.backgroundRepositories]) {
             await fixtureWrite(p, project);
         }
+        process.stdout.write("  repository fixtures prepared\n");
     }
 
     // Inference capture contains the full screenplay request/response body.
@@ -436,16 +529,68 @@ export async function gymOpen(options = {}) {
     await writeFile(p.ioPath, "", { encoding: "utf8", mode: 0o600, flag: "a" });
     await chmod(p.ioPath, 0o600);
 
-    const gateway = await gatewayCreate({
-        ioPath: p.ioPath,
-        mode: options.inference ?? "screenplay",
-        replayPath: options.replayPath,
-        screenplay: definition.reply,
-        turnFind: definition.turnFind,
-    });
-    const daemon = await daemonStart(p, gateway, mobileServerUrl, definition.models);
+    const native = options.inference === "native";
+    if (native) {
+        if (definition.sessions.length)
+            throw new Error("Native filming must not seed fictional inference turns.");
+        nativeCredentialDispose = await nativeCredentialPrepare({
+            source: options.nativeAuth,
+            expectedEmail: options.nativeAccount,
+            home: p.home,
+        });
+    }
+    const gateway = native
+        ? undefined
+        : await gatewayCreate({
+              ioPath: p.ioPath,
+              mode: options.inference ?? "screenplay",
+              replayPath: options.replayPath,
+              screenplay: definition.reply,
+              turnFind: definition.turnFind,
+          });
+    const daemon = await daemonStart(
+        p,
+        gateway,
+        mobileServerUrl,
+        definition.models,
+        options.nativeCodex,
+        definition.effort,
+    );
     let client = await clientCreate(p, daemon.token);
     await healthWait(client, 30_000);
+    let nativeRuntimeEvidence;
+    if (native) {
+        process.stdout.write(
+            "  native daemon ready; waiting for the real Astra capability catalog…\n",
+        );
+        const deadline = Date.now() + 90000;
+        for (;;) {
+            const { config } = await client.getConfig();
+            const reference = config.providers.codex?.models.find(
+                (model) => model.id === "openai/gpt-6-astra" && model.enabled,
+            );
+            const tiers =
+                reference?.serviceTiers ?? config.models["openai/gpt-6-astra"]?.serviceTiers ?? [];
+            if (config.providers.codex?.enabled && reference && tiers.includes("ultrafast")) {
+                nativeRuntimeEvidence = {
+                    daemonVersion: (await client.getHealth()).version.daemon,
+                    codexVersion: daemon.codexVersion,
+                    effort: definition.effort,
+                    providerId: "codex",
+                    modelId: reference.id,
+                    serviceTiers: [...tiers],
+                    source: "Real getConfig response before camera or comparison requests",
+                };
+                break;
+            }
+            if (Date.now() > deadline)
+                throw new Error(
+                    "The real account did not advertise Astra Ultrafast; recording refused.",
+                );
+            await delay(250);
+        }
+        process.stdout.write("  native catalog  Astra Ultrafast advertised by the real account\n");
+    }
 
     // Current Desktop waits for an onboarded owner before opening its catalog.
     // Give this private world its own fictional profile through the same API as
@@ -467,6 +612,9 @@ export async function gymOpen(options = {}) {
     if (!(await client.getOnboarding()).completed) await client.completeOnboarding();
 
     return {
+        inference: options.inference ?? "screenplay",
+        nativeRuntimeEvidence,
+        nativeEffort: native ? definition.effort : undefined,
         paths: p,
         world,
         get client() {
@@ -484,8 +632,11 @@ export async function gymOpen(options = {}) {
          * a take can show the drain progressing from tool execution to the
          * closing model response without relying on elapsed-time guesses.
          */
-        inferenceHold: (sessionId) => gateway.holdSet(sessionId),
-        inferenceRelease: () => gateway.release(),
+        inferenceHold: (sessionId) => {
+            if (!gateway) throw new Error("Native inference cannot be held or scripted.");
+            return gateway.holdSet(sessionId);
+        },
+        inferenceRelease: () => gateway?.release(),
         /** Starts the daemon's real sticky drain. Existing work continues; new work is refused. */
         daemonDrainBegin: () => client.drain(),
         /** The authoritative daemon health report, including real drain stages. */
@@ -506,7 +657,7 @@ export async function gymOpen(options = {}) {
             await execFile(daemon.command, ["stop"], { cwd: p.root, env, timeout: 120_000 });
             const stopMs = Date.now() - stopStartedAt;
             await unlink(p.socketPath).catch(() => undefined);
-            await runtimeConfigurationWrite(p);
+            await runtimeConfigurationWrite(p, definition.models, native, definition.effort);
             const startStartedAt = Date.now();
             await execFile(daemon.command, ["start"], { cwd: p.root, env, timeout: 30_000 });
             const token = await tokenWait(p.tokenPath, 30_000);
@@ -518,14 +669,18 @@ export async function gymOpen(options = {}) {
             return { currentPid, previousPid, stopMs, startMs: Date.now() - startStartedAt };
         },
         async close() {
-            gateway.release();
+            if (native) {
+                await nativeCredentialsClear();
+                return;
+            }
+            gateway?.release();
             const env = environment(p, gateway, mobileServerUrl);
             await execFile(daemon.command, ["stop"], {
                 cwd: p.root,
                 env,
                 timeout: 15_000,
             }).catch(() => undefined);
-            await gateway.close();
+            await gateway?.close();
         },
     };
 }
