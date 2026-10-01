@@ -10,6 +10,9 @@ export type DesktopMode = "local";
 /** Appearance source the Electron shell applies to every local renderer and guest. */
 export type DesktopAppearanceMode = "dark" | "light" | "system";
 export type DesktopScrollbarVisibility = "always" | "automatic";
+/** When the shell holds this computer out of system sleep. Follows the agents when absent. */
+/** Where a plain click on a web link opens: the side panel's browser tab, or the machine's browser. */
+export type DesktopLinkOpenPlacement = "panel" | "browser";
 
 export interface DesktopCloudAuthConfiguration {
     readonly environment: "production" | "staging";
@@ -49,6 +52,8 @@ export interface DesktopConfig {
     readonly defaultEffort: string;
     readonly defaultPermissionMode: DesktopPermissionMode;
     readonly lastPickedModel?: DesktopModelIdentity;
+    /** Where a clicked link opens; the side panel when absent. */
+    readonly linkOpen?: DesktopLinkOpenPlacement;
     readonly modelPreferences: readonly DesktopModelPreference[];
     /** Explicit opt-in to Desktop and Happy Agent preview releases, off when absent. */
     readonly previewUpdatesEnabled?: boolean;

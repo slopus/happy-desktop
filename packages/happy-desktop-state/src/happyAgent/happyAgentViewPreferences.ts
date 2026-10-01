@@ -20,6 +20,18 @@ export interface HappyAgentGroupViewPreferences {
     readonly fileLayout?: HappyAgentFileLayout;
     /** Right panel width in CSS pixels, as the reader last left it. */
     readonly panelWidth?: number;
+    /**
+     * Directories the reader opened in this checkout's listing, by full path,
+     * and the ones they closed. Two lists rather than one, because the listing
+     * opens part way on its own: "absent" has to mean "nothing was said about
+     * it" so that a folder somebody deliberately shut does not reopen the next
+     * time the panel is drawn.
+     *
+     * A path only means something inside the checkout it was read from, which
+     * is exactly why these live per group rather than per window.
+     */
+    readonly fileTreeOpened?: readonly string[];
+    readonly fileTreeClosed?: readonly string[];
 }
 
 /**
@@ -54,12 +66,39 @@ const PANEL_WIDTH_MAX = 8000;
  */
 const GROUP_MAX = 256;
 
+/**
+ * How many directory decisions one checkout keeps. Far more folders than anyone
+ * opens by hand in a sitting, and bounded so a listing walked end to end leaves
+ * a record rather than a transcript. The newest decisions are the ones kept:
+ * they are the arrangement the reader is actually looking at.
+ */
+const FILE_TREE_PATH_MAX = 512;
+
 function scopeParse(value: unknown): HappyAgentFileScope | undefined {
     return value === "changed" || value === "all" ? value : undefined;
 }
 
 function layoutParse(value: unknown): HappyAgentFileLayout | undefined {
     return value === "flat" || value === "tree" ? value : undefined;
+}
+
+/**
+ * A stored run of directory paths, trimmed to the ones this version will use.
+ *
+ * An empty run says nothing and is dropped, so a reader who reopens everything
+ * they closed stops carrying a record of having closed it.
+ */
+function pathsParse(value: unknown): readonly string[] | undefined {
+    if (!Array.isArray(value)) return undefined;
+    return pathsBound(
+        value.filter((entry): entry is string => typeof entry === "string" && entry.length > 0),
+    );
+}
+
+/** The newest decisions that fit, or nothing when there are none left to keep. */
+function pathsBound(paths: readonly string[] | undefined): readonly string[] | undefined {
+    if (paths === undefined || paths.length === 0) return undefined;
+    return paths.length > FILE_TREE_PATH_MAX ? paths.slice(-FILE_TREE_PATH_MAX) : paths;
 }
 
 function panelWidthParse(value: unknown): number | undefined {
@@ -83,13 +122,27 @@ function groupParse(value: unknown): HappyAgentGroupViewPreferences | undefined 
     const fileScope = scopeParse(raw.fileScope);
     const fileLayout = layoutParse(raw.fileLayout);
     const panelWidth = panelWidthParse(raw.panelWidth);
-    if (fileScope === undefined && fileLayout === undefined && panelWidth === undefined)
-        return undefined;
-    return {
+    const fileTreeOpened = pathsParse(raw.fileTreeOpened);
+    const fileTreeClosed = pathsParse(raw.fileTreeClosed);
+    const group: HappyAgentGroupViewPreferences = {
         ...(fileScope === undefined ? {} : { fileScope }),
         ...(fileLayout === undefined ? {} : { fileLayout }),
         ...(panelWidth === undefined ? {} : { panelWidth }),
+        ...(fileTreeOpened === undefined ? {} : { fileTreeOpened }),
+        ...(fileTreeClosed === undefined ? {} : { fileTreeClosed }),
     };
+    return groupSaysSomething(group) ? group : undefined;
+}
+
+/** Whether a record still holds a decision, or has become an empty entry to drop. */
+function groupSaysSomething(group: HappyAgentGroupViewPreferences): boolean {
+    return (
+        group.fileScope !== undefined ||
+        group.fileLayout !== undefined ||
+        group.panelWidth !== undefined ||
+        group.fileTreeOpened !== undefined ||
+        group.fileTreeClosed !== undefined
+    );
 }
 
 export function happyAgentViewPreferencesParse(
@@ -120,14 +173,21 @@ export function happyAgentViewPreferencesUpdate(
     change: HappyAgentGroupViewPreferences,
 ): HappyAgentViewPreferencesDocument {
     const current = document.groups[groupId] ?? {};
-    const next: HappyAgentGroupViewPreferences = { ...current, ...change };
+    const merged: HappyAgentGroupViewPreferences = { ...current, ...change };
+    // The directory decisions are bounded on the way in as well as on the way
+    // out: a listing walked end to end would otherwise hand storage a record
+    // the size of the checkout, and only trimming it on the next read.
+    const opened = pathsBound(merged.fileTreeOpened);
+    const closed = pathsBound(merged.fileTreeClosed);
+    const next: HappyAgentGroupViewPreferences = {
+        ...(merged.fileScope === undefined ? {} : { fileScope: merged.fileScope }),
+        ...(merged.fileLayout === undefined ? {} : { fileLayout: merged.fileLayout }),
+        ...(merged.panelWidth === undefined ? {} : { panelWidth: merged.panelWidth }),
+        ...(opened === undefined ? {} : { fileTreeOpened: opened }),
+        ...(closed === undefined ? {} : { fileTreeClosed: closed }),
+    };
     const groups: Record<string, HappyAgentGroupViewPreferences> = { ...document.groups };
-    if (
-        next.fileScope === undefined &&
-        next.fileLayout === undefined &&
-        next.panelWidth === undefined
-    )
-        delete groups[groupId];
+    if (!groupSaysSomething(next)) delete groups[groupId];
     else groups[groupId] = next;
     const ids = Object.keys(groups);
     if (ids.length > GROUP_MAX)

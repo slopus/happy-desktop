@@ -3,6 +3,7 @@ import { type CSSProperties } from "react";
 import { FileTree, type FileTreeNode, type FileTreeProps } from "./FileTree";
 import { compactCount, changeCountLabel } from "./countText";
 import { Icon } from "./Icon";
+import { SearchField } from "./TitleBar";
 import { SegmentedControl } from "./SegmentedControl";
 /** Which files the listing is about: only what changed, or the whole checkout. */
 export type FileBrowserScope = "changed" | "all";
@@ -18,6 +19,11 @@ export type FileBrowserProps = {
     scopeUnavailable?: Partial<Readonly<Record<FileBrowserScope, string>>>;
     layout: FileBrowserLayout;
     onLayoutChange?: (layout: FileBrowserLayout) => void;
+    /**
+     * Opens every change as one stream. Without it the listing offers no such
+     * control, because there would be nobody to open it.
+     */
+    onReviewOpen?: () => void;
     /** Rows to list. Passed straight through to FileTree. */
     nodes: readonly FileTreeNode[];
     selectedId?: FileTreeProps["selectedId"];
@@ -37,6 +43,16 @@ export type FileBrowserProps = {
     deletedLines?: number;
     /** Optional truthfulness note under the controls (e.g. a truncated listing). */
     note?: string;
+    /** What the reader is looking for. */
+    searchQuery?: string;
+    /**
+     * Receives what they type. Without it there is nobody to hand the query to,
+     * so the field is not offered at all rather than offered and silently inert.
+     */
+    onSearchQueryChange?: (query: string) => void;
+    searchPlaceholder?: string;
+    /** True while an answer for the current query is still outstanding. */
+    searching?: boolean;
     /** Why file rows cannot open or select remote content; directory disclosure stays local. */
     fileActionsUnavailable?: string;
 };
@@ -70,6 +86,7 @@ export function FileBrowser(props: FileBrowserProps) {
         "scopeUnavailable",
         "layout",
         "onLayoutChange",
+        "onReviewOpen",
         "nodes",
         "selectedId",
         "onSelect",
@@ -86,6 +103,10 @@ export function FileBrowser(props: FileBrowserProps) {
         "deletedLines",
         "note",
         "fileActionsUnavailable",
+        "searchQuery",
+        "onSearchQueryChange",
+        "searchPlaceholder",
+        "searching",
     ]);
     const added = local.addedLines !== undefined && local.addedLines > 0;
     const deleted = local.deletedLines !== undefined && local.deletedLines > 0;
@@ -176,9 +197,46 @@ export function FileBrowser(props: FileBrowserProps) {
                                 <Icon name="branch" size={14} />
                             </button>
                         </div>
+                        {/* Reading the change as a whole, rather than a file at
+                            a time. It sits with the listing it is about; where
+                            nothing has changed there is nothing to read, so the
+                            control is not offered. */}
+                        {local.onReviewOpen && (local.count ?? 0) > 0 ? (
+                            <button
+                                aria-label="Read every change in one scroll"
+                                className="happy-file-browser__review"
+                                data-happy-desktop-ui="file-browser-review"
+                                data-testid="file-browser-review"
+                                onClick={() => local.onReviewOpen?.()}
+                                type="button"
+                            >
+                                <Icon name="file-diff" size={14} />
+                            </button>
+                        ) : null}
                     </>
                 ) : null}
             </div>
+            {/* Directly above the rows it narrows, so the thing being typed
+                into and the thing changing under it read as one. The scope
+                choice stays at the top, because it says what this listing is
+                rather than which part of it is showing. */}
+            {local.onSearchQueryChange ? (
+                <div
+                    className="happy-file-browser__search"
+                    data-busy={local.searching ? "" : undefined}
+                    data-happy-desktop-ui="file-browser-search"
+                >
+                    <SearchField
+                        onChange={(query) => local.onSearchQueryChange?.(query)}
+                        placeholder={
+                            local.searchPlaceholder ??
+                            (local.scope === "all" ? "Search all files" : "Search changes")
+                        }
+                        shortcutHint={false}
+                        value={local.searchQuery ?? ""}
+                    />
+                </div>
+            ) : null}
             {local.note ? (
                 <div className="happy-file-browser__note" data-happy-desktop-ui="file-browser-note">
                     {local.note}

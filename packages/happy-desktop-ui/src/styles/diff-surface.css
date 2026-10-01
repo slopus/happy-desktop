@@ -1,0 +1,51 @@
+/*
+ * The look of a Pierre diff, wherever one is drawn.
+ *
+ * Pierre renders into Shadow DOM, so everything about its typography, material,
+ * and colour is set through inherited custom properties rather than by styling
+ * its internals. One changed file and a whole review are the same renderer
+ * showing the same kind of thing, so they read from one declaration here — a
+ * diff should not change its type size or its green because of which surface
+ * opened it.
+ */
+
+/*
+ * Both the element itself and any renderer host inside it, and that second
+ * selector is not belt and braces. Pierre writes the Shiki theme's own colours
+ * into its shadow root as declarations on `:host` — including the two
+ * backgrounds. A declaration on the host beats a value merely inherited into
+ * it, so setting these on an ancestor changes nothing: the theme's near-black
+ * wins and the code sits on a different material from the pane around it. Where
+ * the class lands on the host element itself, as it does on a single file's
+ * diff, ours wins and the surface is right. The review stream puts its class on
+ * the scrollport instead, because that is what it owns. Naming the host as well
+ * makes the two agree.
+ */
+.happy-diff-surface,
+.happy-diff-surface diffs-container {
+    --diffs-font-family: var(--happy-font-mono);
+    --diffs-header-font-family: var(--happy-font-ui);
+    --diffs-font-size: 12px;
+    --diffs-line-height: 20px;
+    /* Pierre's default header is `1lh + 3 × gap-block`: 20 + 3 × 4 = 32,
+       exactly the same row as the tabs, mode bar, and Preview path. */
+    --diffs-gap-block: var(--happy-subheader-inset);
+    --diffs-gap-inline: 10px;
+    --diffs-light-bg: var(--surface);
+    --diffs-dark-bg: var(--surface);
+    --diffs-light: var(--text);
+    --diffs-dark: var(--text);
+
+    /* Pierre mixes one accent per side into the page background to build every
+       addition and deletion surface it draws. Setting those two accents is
+       therefore the whole of the colour integration: row fills, gutter tints,
+       and word-level emphasis all follow from them. They are the same tokens
+       `DiffSnippet` paints inline diffs with, so a hunk in the transcript and
+       the same hunk in a pane are the same green and red.
+
+       One declaration serves both appearances: these are the theme-neutral
+       fallbacks Pierre consults inside both branches of its `light-dark()`, and
+       the tokens themselves already switch with the theme. */
+    --diffs-addition-color: var(--diff-added-border);
+    --diffs-deletion-color: var(--diff-removed-border);
+}

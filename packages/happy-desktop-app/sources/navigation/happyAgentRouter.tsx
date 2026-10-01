@@ -466,6 +466,7 @@ function HappyAgentWorkspaceLayout(
             {...(context.navigationOrder ? { navigationOrder: context.navigationOrder } : {})}
             {...(context.sidebarCollapse ? { sidebarCollapse: context.sidebarCollapse } : {})}
             {...(context.sidebarVisibility ? { sidebarVisibility: context.sidebarVisibility } : {})}
+            settings={context.settings}
             botCreateOpen={props.botCreate}
             inboxOpen={props.inbox}
             blueprintOpen={props.blueprint}

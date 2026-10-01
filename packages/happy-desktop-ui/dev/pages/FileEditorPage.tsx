@@ -240,6 +240,27 @@ export function FileEditorPage() {
                     )}
                 </div>
             </Specimen>
+
+            <Specimen
+                detail="A Markdown file opened at a region opens on its source: lines are a fact about the text, and the rendered page has none. The band marks what the reference named"
+                label="Opened at a region"
+                number="08"
+                stage="surface"
+            >
+                {frame(
+                    <FileEditor
+                        documentKey="docs/notes.md@5d02"
+                        onSave={() => {}}
+                        onWrapChange={() => {}}
+                        path="docs/notes.md"
+                        rendered={<MarkdownDocument text={markdownSample} />}
+                        reveal={{ startLine: 3, endLine: 3, requestId: 1 }}
+                        value={markdownSample}
+                    />,
+                    260,
+                    { path: "docs/notes.md" },
+                )}
+            </Specimen>
         </ComponentPage>
     );
 }

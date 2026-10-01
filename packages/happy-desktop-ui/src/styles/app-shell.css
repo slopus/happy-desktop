@@ -112,7 +112,12 @@
    all — `app-region: none` is not an escape hatch, Chromium resolves it to
    `no-drag`, so the only way out of the region list is to not match here. */
 .happy-desktop-app-shell[data-window-controls]
-    button:not(.happy-agent-control__backdrop, .happy-menu-button__backdrop, .happy-slot-backdrop),
+    button:not(
+        .happy-agent-control__backdrop,
+        .happy-menu-button__backdrop,
+        .happy-context-menu__backdrop,
+        .happy-slot-backdrop
+    ),
 .happy-desktop-app-shell[data-window-controls] a,
 .happy-desktop-app-shell[data-window-controls] input,
 .happy-desktop-app-shell[data-window-controls] select,

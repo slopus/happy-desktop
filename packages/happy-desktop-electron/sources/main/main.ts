@@ -989,9 +989,16 @@ function localWindowCreate(bounds?: DesktopWindowBounds) {
     }
     windowTitleHold(window);
     windowGeometryRemember(window);
+    // Where a plain click on a web link goes is the reader's choice, read here
+    // because this is the one door every such click passes through — a message,
+    // a sidebar link, an MCP app asking for one. A link's own menu bypasses it
+    // by naming its destination outright.
     window.webContents.setWindowOpenHandler(({ url }) => {
-        if (browserWebUrl(url)) browserOpenPublish(window, url);
-        else if (url.startsWith("mailto:")) void shell.openExternal(url);
+        const web = browserWebUrl(url);
+        if (web !== undefined) {
+            if (desktopConfigStore.get().linkOpen === "browser") void shell.openExternal(web);
+            else browserOpenPublish(window, web);
+        } else if (url.startsWith("mailto:")) void shell.openExternal(url);
         return { action: "deny" };
     });
     browserGuestAttach(window);

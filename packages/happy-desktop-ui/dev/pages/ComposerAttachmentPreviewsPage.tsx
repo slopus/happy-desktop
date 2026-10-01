@@ -36,13 +36,55 @@ const denseItems: readonly ComposerAttachmentPreview[] = [
     { id: "archive", kind: "file", name: "assets.zip", detail: "4.2 MB" },
 ];
 
+const noteItems: readonly ComposerAttachmentPreview[] = [
+    {
+        id: "one",
+        kind: "comments",
+        name: "1 comment",
+        notes: [
+            {
+                id: "n1",
+                path: "packages/happy-desktop-ui/src/ReviewStream.tsx",
+                place: "line R124",
+                text: "This reads the measured height before the file below it has drawn.",
+            },
+        ],
+    },
+    {
+        id: "many",
+        kind: "comments",
+        name: "3 comments",
+        notes: [
+            {
+                id: "n2",
+                path: "packages/happy-desktop-state/src/happyAgent/happyAgentWorkspaceStore.ts",
+                place: "line R5912",
+                text: "Say why the notes are projected here rather than at send.",
+            },
+            {
+                id: "n3",
+                path: "packages/happy-desktop-ui/src/ChangedFileDiff.tsx",
+                place: "line L88",
+                stale: true,
+                text: "The removed branch was the only caller of this helper.",
+            },
+            {
+                id: "n4",
+                path: "docs/releases.md",
+                place: "this file",
+                text: "Two paragraphs here describe the same step.\nKeep the second one.",
+            },
+        ],
+    },
+];
+
 const noop = () => undefined;
 
 export function ComposerAttachmentPreviewsPage() {
     return (
         <ComponentPage
             number={componentNumber}
-            summary="Compact square previews for image, video, and ordinary files waiting in a composer draft, with a removable and read-only treatment."
+            summary="Compact square previews for image, video, and ordinary files waiting in a composer draft, a pill for the review notes waiting with it, and a removable and read-only treatment."
             title="Composer attachment previews"
         >
             <Specimen
@@ -70,9 +112,17 @@ export function ComposerAttachmentPreviewsPage() {
                 />
             </Specimen>
             <Specimen
+                detail="32px pill · sized to its own words · the notes themselves under the pointer"
+                label="Review notes"
+                number="03"
+                stage="surface"
+            >
+                <ComposerAttachmentPreviews items={noteItems} onRemove={noop} />
+            </Specimen>
+            <Specimen
                 detail="same geometry · removal withheld while the draft is read-only"
                 label="Read only"
-                number="03"
+                number="04"
                 stage="surface"
             >
                 <ComposerAttachmentPreviews items={items} onOpen={noop} readOnly />

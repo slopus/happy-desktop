@@ -1,6 +1,7 @@
 import { expect, it } from "vitest";
 import { server } from "vitest/browser";
 import "./theme.css";
+import "./styles/scrollbar.css";
 import "./styles/icon.css";
 import "./styles/avatar.css";
 import "./styles/badge.css";
@@ -175,12 +176,16 @@ it("holds AgentDesk geometry, colors, and typography in the 340px shell panel", 
     const badgeInk = await ink(view, ".happy-agent-desk__count", 23.5);
     expect(Math.abs(badgeInk.dy)).toBeLessThanOrEqual(TEXT_TOLERANCE);
 
-    // Body: scroll container below the header.
+    // Body: the scroll region below the header. The host frames it; the
+    // viewport inside owns the scrolling (see styles/scrollbar.css).
     const body = view.$('[data-happy-desktop-ui="agent-desk-body"]');
     expect(body.bounds()).toEqual({ x: 0, y: 48, width: 340, height: 572 });
+    const bodyViewport = view.$(
+        '[data-happy-desktop-ui="agent-desk-body"] [data-scrollbar-viewport]',
+    );
     /* Scrollport edge-to-edge; the inner content wrapper owns gap + inset. */
     expect(
-        body.computedStyles([
+        bodyViewport.computedStyles([
             "overflow-y",
             "padding-bottom",
             "padding-left",
@@ -627,7 +632,9 @@ it("keeps ink optically centered at 280 and 400 widths and in a scrolling desk",
 
     // Height-constrained desk: the body scrolls; the header and the running
     // tile hold their optical centering above the fold…
-    const body = view.$('[data-testid="short"] [data-happy-desktop-ui="agent-desk-body"]');
+    const body = view.$(
+        '[data-testid="short"] [data-happy-desktop-ui="agent-desk-body"] [data-scrollbar-viewport]',
+    );
     expect(body.element.scrollHeight).toBeGreaterThan(body.element.clientHeight);
     const s = `[data-testid="short"]`;
     expect(
@@ -879,8 +886,11 @@ it("stays fluid, clamps progress, and scrolls overflowing content", async () => 
         '[data-testid="desk-scroll"] [data-happy-desktop-ui="agent-desk-body"]',
     );
     expect(scrollBody.height()).toBe(252);
-    expect(scrollBody.computedStyle("overflow-y")).toBe("auto");
-    expect(scrollBody.element.scrollHeight).toBeGreaterThanOrEqual(400);
+    const scrollViewport = view.$(
+        '[data-testid="desk-scroll"] [data-happy-desktop-ui="agent-desk-body"] [data-scrollbar-viewport]',
+    );
+    expect(scrollViewport.computedStyle("overflow-y")).toBe("auto");
+    expect(scrollViewport.element.scrollHeight).toBeGreaterThanOrEqual(400);
 
     await view.screenshot("AgentDesk.variants.test");
 });

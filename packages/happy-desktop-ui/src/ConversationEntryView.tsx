@@ -1,4 +1,6 @@
 import { type CSSProperties, type ReactNode } from "react";
+import type { FileOpenHandler } from "./fileReference";
+import type { LinkOpenHandler, LinkOpenPlacement } from "./MessageMarkdown";
 import { thumbhashDataUrl } from "./thumbhashDataUrl";
 import type {
     AgentTurnTraceSummary,
@@ -64,7 +66,11 @@ export type ConversationEntryViewProps = {
     /** Reference epoch millis used by live delegated-agent timers. */
     now?: number;
     /** Opens a workspace file named by a tool call or linked from a message. */
-    onFileOpen?: (path: string) => void;
+    onFileOpen?: FileOpenHandler;
+    /** Opens a web link from a message where its context menu asked for it. */
+    onLinkOpen?: LinkOpenHandler;
+    /** Which of the two places a plain click on a link goes, marked in its menu. */
+    linkOpenDefault?: LinkOpenPlacement;
     /** Disables request controls while a prior submission is in flight. */
     requestPending?: boolean;
     /** Last failed submission for this request. */
@@ -432,6 +438,8 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
                     : undefined
             }
             {...(props.onFileOpen ? { onFileOpen: props.onFileOpen } : {})}
+            {...(props.onLinkOpen ? { onLinkOpen: props.onLinkOpen } : {})}
+            {...(props.linkOpenDefault ? { linkOpenDefault: props.linkOpenDefault } : {})}
             own={own}
             style={props.style}
             time={messageTime(message.createdAt)}

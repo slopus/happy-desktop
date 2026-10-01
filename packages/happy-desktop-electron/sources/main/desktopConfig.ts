@@ -6,6 +6,7 @@ import type {
     DesktopAppearanceMode,
     DesktopConfig,
     DesktopDefaultModel,
+    DesktopLinkOpenPlacement,
     DesktopModelIdentity,
     DesktopModelPreference,
     DesktopPermissionMode,
@@ -116,6 +117,7 @@ export function desktopConfigValidate(candidate: unknown): DesktopConfig {
         "defaultModel",
         "defaultPermissionMode",
         "lastPickedModel",
+        "linkOpen",
         "modelPreferences",
         "previewUpdatesEnabled",
         "scrollbarVisibility",
@@ -154,6 +156,8 @@ export function desktopConfigValidate(candidate: unknown): DesktopConfig {
         candidate.lastPickedModel === undefined
             ? undefined
             : modelIdentityOnlyParse(candidate.lastPickedModel);
+    const linkOpen =
+        candidate.linkOpen === undefined ? undefined : linkOpenPlacementParse(candidate.linkOpen);
     const titleShimmerEnabled =
         typeof candidate.titleShimmerEnabled === "boolean"
             ? candidate.titleShimmerEnabled
@@ -168,6 +172,7 @@ export function desktopConfigValidate(candidate: unknown): DesktopConfig {
         !defaultEffort ||
         !defaultPermissionMode ||
         (candidate.lastPickedModel !== undefined && !lastPickedModel) ||
+        (candidate.linkOpen !== undefined && !linkOpen) ||
         !scrollbarVisibility
     )
         throw invalidConfigError();
@@ -188,6 +193,7 @@ export function desktopConfigValidate(candidate: unknown): DesktopConfig {
         ...(defaultModel ? { defaultModel } : {}),
         defaultPermissionMode,
         ...(lastPickedModel ? { lastPickedModel } : {}),
+        ...(linkOpen ? { linkOpen } : {}),
         modelPreferences,
         ...(candidate.previewUpdatesEnabled === undefined
             ? {}
@@ -200,6 +206,10 @@ export function desktopConfigValidate(candidate: unknown): DesktopConfig {
 
 function appearanceModeParse(value: unknown): DesktopAppearanceMode | undefined {
     return value === "dark" || value === "light" || value === "system" ? value : undefined;
+}
+
+function linkOpenPlacementParse(value: unknown): DesktopLinkOpenPlacement | undefined {
+    return value === "panel" || value === "browser" ? value : undefined;
 }
 
 function scrollbarVisibilityParse(value: unknown): DesktopScrollbarVisibility | undefined {
