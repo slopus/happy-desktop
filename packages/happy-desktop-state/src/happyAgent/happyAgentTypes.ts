@@ -494,14 +494,16 @@ export type HappyAgentProjectCompute =
     | { readonly type: "docker"; readonly image: string };
 
 /**
- * One project's durable compute configuration, exactly as the host holds it.
+ * What one project says about the workspaces cut from it, exactly as the host
+ * holds it: where their sessions run, what a new checkout runs to set itself
+ * up, and what its first agent is told.
  *
  * It is read on its own rather than carried on the project row because the live
  * catalog the workspace list is built from does not describe it at all: a row
  * that carried it would have it only on the reads that happen to come from the
  * host's own project read, and lose it again on the next live publish.
  */
-export interface HappyAgentProjectComputeState {
+export interface HappyAgentProjectSettingsState {
     readonly projectId: HappyAgentProjectId;
     /** Absent when the project states nothing and the host's configuration decides. */
     readonly compute?: HappyAgentProjectCompute;
@@ -511,6 +513,26 @@ export interface HappyAgentProjectComputeState {
      * previous choice built instead of reusing it.
      */
     readonly generation: number;
+    /**
+     * The shell commands a new workspace runs, in order, once its checkout
+     * exists — as the host last read them from the project's own `happy.toml`.
+     * The file is the source of truth; Happy shows the list and never writes it.
+     */
+    readonly setupCommands: readonly string[];
+    /**
+     * What Happy sends as the first message to the first agent in every new
+     * workspace of this project. Absent when the project says nothing.
+     */
+    readonly initialPrompt?: string;
+}
+
+/**
+ * The settings a project accepts new values for, written together: the host
+ * replaces them as one, so whoever changes one field carries the other along.
+ */
+export interface HappyAgentProjectSettingsInput {
+    readonly compute?: HappyAgentProjectCompute;
+    readonly initialPrompt?: string;
 }
 
 /**

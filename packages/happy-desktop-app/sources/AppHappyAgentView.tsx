@@ -5201,7 +5201,7 @@ function HappyAgentWindowDialogs(props: {
             {happyAgentNamingDialog(
                 workspace.rename,
                 workspace.projectArchive,
-                workspace.projectCompute,
+                workspace.projectSettings,
                 props.projects,
                 props.workspace,
                 props.happyAgentOnline,
@@ -5305,7 +5305,7 @@ function happyAgentGroupArchiveDialog(
 function happyAgentNamingDialog(
     rename: HappyAgentWorkspaceSnapshot["rename"],
     archive: HappyAgentWorkspaceSnapshot["projectArchive"],
-    compute: HappyAgentWorkspaceSnapshot["projectCompute"],
+    compute: HappyAgentWorkspaceSnapshot["projectSettings"],
     projects: readonly HappyAgentProjectGroup[],
     store: HappyAgentWorkspaceStore,
     happyAgentOnline: () => boolean,
@@ -5393,6 +5393,19 @@ function happyAgentNamingDialog(
                       ...(compute.error === undefined ? {} : { error: compute.error }),
                       ...(compute.readError === undefined ? {} : { readError: compute.readError }),
                   },
+                  // What a new workspace starts with comes from the same read as
+                  // the compute choice, so it is present exactly when that is.
+                  setup: {
+                      status: compute.status,
+                      setupCommands: compute.setupCommands,
+                      ...(compute.initialPrompt === undefined
+                          ? {}
+                          : { initialPrompt: compute.initialPrompt }),
+                      initialPromptDraft: compute.initialPromptDraft,
+                      submitting: compute.submitting,
+                      ...(compute.error === undefined ? {} : { error: compute.error }),
+                      ...(compute.readError === undefined ? {} : { readError: compute.readError }),
+                  },
               }
             : {};
     return (
@@ -5432,6 +5445,16 @@ function happyAgentNamingDialog(
                 if (happyAgentOnline()) void store.projectComputeSubmit().catch(() => undefined);
             }}
             onDraftChange={(value) => store.renameDraftUpdate(value)}
+            onInitialPromptChange={(value) => store.projectInitialPromptUpdate(value)}
+            onInitialPromptSubmit={() => {
+                if (happyAgentOnline())
+                    void store.projectInitialPromptSubmit().catch(() => undefined);
+            }}
+            // The commands live in the project's own happy.toml, so the offer is
+            // to open that file where the project is, not to edit them here.
+            {...(project
+                ? { onSetupFileOpen: () => store.fileOpen(project.id, "happy.toml", "file") }
+                : {})}
             onSubmit={() => {
                 if (happyAgentOnline()) void store.renameSubmit().catch(() => undefined);
             }}

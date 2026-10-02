@@ -6,7 +6,8 @@ import type {
     HappyAgentModel,
     HappyAgentModelCatalog,
     HappyAgentProjectCompute,
-    HappyAgentProjectComputeState,
+    HappyAgentProjectSettingsInput,
+    HappyAgentProjectSettingsState,
     HappyAgentProjectId,
     HappyAgentThinkingLevel,
 } from "./happyAgentTypes.js";
@@ -72,9 +73,10 @@ export function happyAgentModelCatalogProject(config: DaemonConfig): HappyAgentM
     };
 }
 
-/** Projects the project-owned default compute selection used by new workspaces. */
-export function happyAgentProjectComputeProject(project: Project): HappyAgentProjectComputeState {
+/** Projects what the host holds about a project's new workspaces: compute, setup, first words. */
+export function happyAgentProjectSettingsProject(project: Project): HappyAgentProjectSettingsState {
     const selected = project.settings.defaultWorkspaceCompute;
+    const initialPrompt = project.settings.workspaceInitialPrompt;
     return {
         projectId: project.id as HappyAgentProjectId,
         // Happy Agent versions the project resource rather than maintaining a
@@ -85,6 +87,10 @@ export function happyAgentProjectComputeProject(project: Project): HappyAgentPro
             selected.type === "host"
                 ? { type: "local" }
                 : { type: "docker", image: selected.image },
+        // An older daemon does not report the list; nothing is shown rather than
+        // a guess.
+        setupCommands: project.workspaceSetupCommands ?? [],
+        ...(initialPrompt === undefined || initialPrompt === null ? {} : { initialPrompt }),
     };
 }
 
@@ -92,6 +98,17 @@ export function happyAgentComputeRequest(
     compute: HappyAgentProjectCompute | undefined,
 ): { readonly type: "host" } | { readonly type: "docker"; readonly image: string } {
     return compute?.type === "docker" ? { type: "docker", image: compute.image } : { type: "host" };
+}
+
+/** The whole settings body the host replaces: compute, and the first message or `null` for none. */
+export function happyAgentProjectSettingsRequest(settings: HappyAgentProjectSettingsInput): {
+    readonly defaultWorkspaceCompute: ReturnType<typeof happyAgentComputeRequest>;
+    readonly workspaceInitialPrompt: string | null;
+} {
+    return {
+        defaultWorkspaceCompute: happyAgentComputeRequest(settings.compute),
+        workspaceInitialPrompt: settings.initialPrompt ?? null,
+    };
 }
 
 export function happyAgentGitChangeProject(change: GitFileChange): HappyAgentGitChangedFile {

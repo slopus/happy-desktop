@@ -43,6 +43,34 @@ export type HappyAgentProjectComputeSection = {
     readError?: string;
 };
 
+/**
+ * What a new workspace of this project starts with, as the settings dialog
+ * shows it: the commands its checkout runs, read from the project's own
+ * `happy.toml`, and the first message its agent is sent.
+ *
+ * The commands are shown, not set — the file is where they live, and the
+ * dialog only offers to open it. The first message is the host's answer
+ * (`initialPrompt`) beside the text being written (`initialPromptDraft`), kept
+ * apart for the same reason the compute section keeps its two: until they
+ * agree, the reader is looking at a decision they have not committed.
+ */
+export type HappyAgentProjectSetupSection = {
+    /** Whether the host's answer is in hand; nothing is stated until it is `ready`. */
+    status: "loading" | "ready" | "error";
+    /** The ordered shell commands a new checkout runs, as the host last read them. */
+    setupCommands: readonly string[];
+    /** What the host holds as the first message. Absent means the project says nothing. */
+    initialPrompt?: string;
+    /** The first message being written. */
+    initialPromptDraft: string;
+    /** True while the host is being told; the whole dialog stays up and inert. */
+    submitting?: boolean;
+    /** Why the last attempt did not save, in the reader's words. */
+    error?: string;
+    /** Why the settings could not be read, when `status` is `error`. */
+    readError?: string;
+};
+
 export type HappyAgentProjectSettingsDialogProps = {
     /** What the project is called now — the name the host has, not the draft. */
     name: string;
@@ -82,6 +110,20 @@ export type HappyAgentProjectSettingsDialogProps = {
     onComputeImageChange?: (image: string) => void;
     /** The reader committed the choice. */
     onComputeSubmit?: () => void;
+    /**
+     * What a new workspace starts with. Absent leaves the section out entirely,
+     * for the same reasons `compute` may be.
+     */
+    setup?: HappyAgentProjectSetupSection;
+    /** The reader edited the first message. Nothing is saved here. */
+    onInitialPromptChange?: (value: string) => void;
+    /** The reader committed the first message. */
+    onInitialPromptSubmit?: () => void;
+    /**
+     * The reader asked to see the project's `happy.toml`, where the setup
+     * commands are written. Absent leaves the offer out.
+     */
+    onSetupFileOpen?: () => void;
     /**
      * Archiving this project, when the caller offers it. Absent leaves the
      * section out entirely — a project the caller has lost sight of has nothing
@@ -159,6 +201,16 @@ function computeCurrentLabel(compute: HappyAgentProjectComputeChoice | undefined
 }
 
 /**
+ * The first message the host holds, on one line. A prompt is prose and may run
+ * to paragraphs; the row beside the commit only has to say which one it is.
+ */
+function initialPromptCurrentLabel(prompt: string | undefined): string {
+    if (prompt === undefined) return "Nothing; the first agent waits";
+    const firstLine = prompt.split(/\r?\n/u)[0]?.trim() ?? "";
+    return firstLine.length > 0 ? firstLine : "A message starting with a blank line";
+}
+
+/**
  * C-178 HappyAgentProjectSettingsDialog — what one project of the local workspace is,
  * and the one thing about it the reader sets.
  *
@@ -181,9 +233,10 @@ export function HappyAgentProjectSettingsDialog(props: HappyAgentProjectSettings
     const archiving = props.archive?.submitting === true;
     const confirming = props.archive?.confirming === true;
     const computing = props.compute?.submitting === true;
+    const settingUp = props.setup?.submitting === true;
     // One request is in flight and there is nothing to type into or commit while
     // it lands: the whole dialog answers for it rather than one block alone.
-    const submitting = props.submitting === true || archiving || computing;
+    const submitting = props.submitting === true || archiving || computing || settingUp;
     // A blank name is not a name; anything else commits, and a draft equal to
     // the current name simply closes, which is what the host is told to do with it.
     const committable = props.draft.trim().length > 0;
@@ -426,6 +479,149 @@ export function HappyAgentProjectSettingsDialog(props: HappyAgentProjectSettings
                                   </div>
                               );
                           })(props.compute)
+                        : null}
+                    {props.setup
+                        ? ((setup) => {
+                              const ready = setup.status === "ready";
+                              // The same rule as the compute section: nothing is
+                              // offered against a placeholder. The reader edits the
+                              // first message only once the host has said what it is.
+                              const inert = submitting || !ready;
+                              const changed =
+                                  ready &&
+                                  setup.initialPromptDraft.trim() !==
+                                      (setup.initialPrompt ?? "").trim();
+                              return (
+                                  <div
+                                      className="happy-agent-project-settings__setup"
+                                      data-happy-desktop-ui="happy-agent-project-settings-setup"
+                                  >
+                                      <span className="happy-agent-project-settings__label">
+                                          New workspaces
+                                      </span>
+                                      {setup.status === "error" ? (
+                                          <Banner
+                                              data-testid="happy-agent-project-setup-read-error"
+                                              tone="danger"
+                                              title="Not read"
+                                          >
+                                              {setup.readError ??
+                                                  "This project's workspace settings could not be read."}
+                                          </Banner>
+                                      ) : null}
+                                      {setup.error ? (
+                                          <Banner
+                                              data-testid="happy-agent-project-setup-error"
+                                              tone="danger"
+                                              title="Not saved"
+                                          >
+                                              {setup.error}
+                                          </Banner>
+                                      ) : null}
+                                      <div
+                                          className="happy-agent-project-settings__field"
+                                          data-happy-desktop-ui="happy-agent-project-settings-commands"
+                                      >
+                                          <span className="happy-agent-project-settings__sublabel">
+                                              Setup commands
+                                          </span>
+                                          {/* The list is the host's reading of the
+                                              file, so it is shown the way the path
+                                              is: in a well, mono, and plainly not a
+                                              thing to type into. */}
+                                          <div
+                                              className="happy-agent-project-settings__commands"
+                                              data-testid="happy-agent-project-setup-commands"
+                                          >
+                                              {setup.status === "loading" ? (
+                                                  <span className="happy-agent-project-settings__commands-empty">
+                                                      Reading what this project runs…
+                                                  </span>
+                                              ) : setup.setupCommands.length === 0 ? (
+                                                  <span className="happy-agent-project-settings__commands-empty">
+                                                      No setup commands
+                                                  </span>
+                                              ) : (
+                                                  setup.setupCommands.map((command, index) => (
+                                                      <span
+                                                          className="happy-agent-project-settings__command"
+                                                          // Commands may repeat; their
+                                                          // place in the order is what
+                                                          // tells them apart.
+                                                          key={`${String(index)}:${command}`}
+                                                          title={command}
+                                                      >
+                                                          {command}
+                                                      </span>
+                                                  ))
+                                              )}
+                                          </div>
+                                          <span className="happy-agent-project-settings__hint">
+                                              Run in order in every new workspace once its checkout
+                                              exists. They come from{" "}
+                                              <code>[workspace] setup_commands</code> in the
+                                              project&apos;s <code>happy.toml</code>; edit the file
+                                              to change them.
+                                          </span>
+                                          {props.onSetupFileOpen ? (
+                                              <div className="happy-agent-project-settings__setup-actions">
+                                                  <Button
+                                                      data-testid="happy-agent-project-setup-file-open"
+                                                      disabled={submitting}
+                                                      onClick={() => props.onSetupFileOpen?.()}
+                                                      size="small"
+                                                      variant="ghost"
+                                                  >
+                                                      Open happy.toml
+                                                  </Button>
+                                              </div>
+                                          ) : null}
+                                      </div>
+                                      <TextField
+                                          data-testid="happy-agent-project-initial-prompt"
+                                          disabled={inert}
+                                          fullWidth
+                                          hint="Sent to the first agent as soon as a new workspace is ready. Leave it empty to start quiet."
+                                          label="First message"
+                                          multiline
+                                          onValueChange={(value) =>
+                                              props.onInitialPromptChange?.(value)
+                                          }
+                                          placeholder="Install dependencies, run the tests, and report what fails before changing anything."
+                                          rows={4}
+                                          value={setup.initialPromptDraft}
+                                      />
+                                      {changed ? (
+                                          <div
+                                              className="happy-agent-project-settings__pending"
+                                              data-happy-desktop-ui="happy-agent-project-settings-setup-pending"
+                                          >
+                                              <span
+                                                  className="happy-agent-project-settings__pending-current"
+                                                  data-happy-desktop-ui="happy-agent-project-settings-setup-current"
+                                                  title={initialPromptCurrentLabel(
+                                                      setup.initialPrompt,
+                                                  )}
+                                              >
+                                                  {`Set to: ${initialPromptCurrentLabel(setup.initialPrompt)}`}
+                                              </span>
+                                              <Button
+                                                  data-testid="happy-agent-project-initial-prompt-apply"
+                                                  disabled={
+                                                      submitting ||
+                                                      props.submitDisabledReason !== undefined
+                                                  }
+                                                  onClick={() => props.onInitialPromptSubmit?.()}
+                                                  size="small"
+                                                  variant="primary"
+                                              >
+                                                  {settingUp ? "Applying…" : "Apply"}
+                                              </Button>
+                                          </div>
+                                      ) : null}
+                                  </div>
+                              );
+                          })(props.setup)
                         : null}
                     {props.archive ? (
                         <div
