@@ -1,0 +1,76 @@
+/*
+ * C-284 ShortcutSheet — every chord the window answers, inside a Modal.
+ *
+ * The card is the Modal's; this is only its body. Sections stack with 20px
+ * between them. Each row is 32px — a reading row, not the palette's 44px
+ * pressable one — with the title filling the row and the cap held at the
+ * trailing edge, so the caps form one column down the card and the eye runs
+ * down it to find a key. Headings wear the caption role so they read as
+ * labels of the groups rather than as rows of their own.
+ */
+
+.happy-shortcut-sheet,
+.happy-shortcut-sheet * {
+    box-sizing: border-box;
+}
+
+.happy-shortcut-sheet {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    font-family: var(--happy-font-ui);
+    font-synthesis: none;
+}
+
+.happy-shortcut-sheet__section {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.happy-shortcut-sheet__heading {
+    margin: 0;
+    padding: 0 10px 6px;
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    line-height: 16px;
+    text-transform: uppercase;
+}
+
+.happy-shortcut-sheet__list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.happy-shortcut-sheet__row {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 12px;
+    height: 32px;
+    padding: 0 10px;
+    border-radius: var(--happy-radius-sm);
+}
+
+.happy-shortcut-sheet__row:hover {
+    background: var(--surface-selected);
+}
+
+.happy-shortcut-sheet__title {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--text);
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 20px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}

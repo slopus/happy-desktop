@@ -122,6 +122,13 @@ export function TabbedPane(props: TabbedPaneProps) {
                     className="happy-tabbed-pane__scroller"
                     data-happy-desktop-ui="tabbed-pane-scroller"
                     ref={scroller}
+                    // A vertical wheel over the strip walks it sideways, the
+                    // way a mouse without a tilt wheel expects; a trackpad's
+                    // horizontal swipe already scrolls natively.
+                    onWheel={(event) => {
+                        if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
+                        event.currentTarget.scrollLeft += event.deltaY;
+                    }}
                 >
                     {/* The strip is only as wide as the tabs. The action follows
                         this shrinkable scrollport outside its clip, so it stays

@@ -20,6 +20,7 @@ export type IconName =
     | "check-circle"
     | "copy"
     | "chevron-down"
+    | "chevron-left"
     | "chevron-right"
     | "close"
     | "branch"
@@ -51,6 +52,7 @@ export type IconName =
     | "reply"
     | "zap"
     | "terminal"
+    | "keyboard"
     | "globe"
     | "filter"
     | "edit"
@@ -130,6 +132,7 @@ const glyphs: Record<IconName, IconGlyph> = {
     "check-circle": { set: "ionicons", name: "checkmark-circle-outline" },
     copy: { set: "ionicons", name: "copy-outline" },
     "chevron-down": { set: "ionicons", name: "chevron-down-outline" },
+    "chevron-left": { set: "ionicons", name: "chevron-back-outline" },
     "chevron-right": { set: "ionicons", name: "chevron-forward-outline" },
     // A bare cross: dismissing a thing where it is an affordance, and what went
     // wrong where it is not. In a danger or warning tone beside a failure it is
@@ -174,6 +177,7 @@ const glyphs: Record<IconName, IconGlyph> = {
     reply: { set: "ionicons", name: "arrow-undo-outline" },
     zap: { set: "ionicons", name: "flash-outline" },
     terminal: { set: "ionicons", name: "terminal-outline" },
+    keyboard: { set: "ionicons", name: "keypad-outline" },
     globe: { set: "ionicons", name: "globe-outline" },
     filter: { set: "ionicons", name: "funnel-outline" },
     edit: { set: "ionicons", name: "create-outline" },

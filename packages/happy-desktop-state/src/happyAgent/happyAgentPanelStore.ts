@@ -140,6 +140,13 @@ export interface HappyAgentPanelStore {
     browserAdd(url?: string): void;
     /** Reconciles Chromium-owned location/title metadata into one browser tab. */
     browserUpdate(tabId: HappyAgentPanelTabId, update: HappyAgentBrowserUpdate): void;
+    /**
+     * Opens a closed page again, in the panel of the group it belonged to. The
+     * group need not be the open one: the tab is added to that group's
+     * arrangement and selected there, so addressing the group finds it. When
+     * it is the open group, the panel shows it at once.
+     */
+    browserRestore(tab: HappyAgentBrowserClosed): void;
     tabSelect(tabId: HappyAgentPanelTabId): void;
     /**
      * Moves one tab to the other strip. Nothing behind it is touched — the shell
@@ -193,6 +200,19 @@ export interface HappyAgentPanelDeps {
      */
     readonly memoryRead?: (groupId: HappyAgentGroupId) => HappyAgentPanelMemory | undefined;
     readonly memoryWrite?: (groupId: HappyAgentGroupId, memory: HappyAgentPanelMemory) => void;
+    /**
+     * Told when a browser tab is closed, with enough to open the page again.
+     * The owner keeps the list of closed tabs; the panel only reports the
+     * closing. Optional, so the store works standalone.
+     */
+    readonly browserClosed?: (tab: HappyAgentBrowserClosed) => void;
+}
+
+/** One closed browser page, as reported to the owner. */
+export interface HappyAgentBrowserClosed {
+    readonly groupId: HappyAgentGroupId;
+    readonly url: string;
+    readonly label: string;
 }
 
 interface Tab {
@@ -563,6 +583,22 @@ export function happyAgentPanelStoreCreate(deps: HappyAgentPanelDeps): HappyAgen
             remember();
             recompute();
         },
+        browserRestore(tab) {
+            if (disposed) return;
+            const before = activeViewId;
+            browserTabAdd(tab.groupId, tab.url, tab.label);
+            if (tab.groupId === groupId) {
+                open = true;
+                remember();
+            } else {
+                // Another group's page: it is selected there for when that
+                // group is addressed, while this panel keeps showing what it
+                // was showing.
+                activeViewId = before;
+                chromeByGroup.set(tab.groupId, { open: true });
+            }
+            recompute();
+        },
         browserUpdate(tabId, update) {
             if (disposed) return;
             const tab = tabs.find(
@@ -592,9 +628,19 @@ export function happyAgentPanelStoreCreate(deps: HappyAgentPanelDeps): HappyAgen
             if (disposed) return;
             const index = tabs.findIndex((candidate) => candidate.id === tabId);
             if (index < 0) return;
+            const closing = tabs[index]!;
             tabDispose(index);
             remember();
             recompute();
+            // A page can be opened again from its address; a shell cannot be,
+            // its process having ended with the tab, so only the page is
+            // reported.
+            if (closing.kind === "browser")
+                deps.browserClosed?.({
+                    groupId: closing.groupId,
+                    url: closing.url ?? "about:blank",
+                    label: closing.label,
+                });
         },
         tabPlacementUpdate(tabId, placement) {
             if (disposed) return;
