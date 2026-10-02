@@ -115,7 +115,7 @@ export function TabbedPanePage() {
                 >
                     <div style={{ padding: "24px" }}>
                         <Pane active="one" tabs={sessionTabs} />
-                        <DimensionRule label="bar 32 · body flex 1 · min-height 0" />
+                        <DimensionRule label="bar 32 · every tab 160 wide · body flex 1 · min-height 0" />
                     </div>
                 </Specimen>
                 <Specimen
@@ -130,14 +130,14 @@ export function TabbedPanePage() {
                     </div>
                 </Specimen>
                 <Specimen
-                    detail="the active tab is revealed at the trailing edge; its action stays visible outside the clip"
+                    detail="the tabs shrink together down to the minimum, then the strip scrolls; the active tab is revealed at the trailing edge and the action stays visible outside the clip"
                     label="Many long tabs"
                     number="T-03"
                     stage="app"
                 >
                     <div style={{ padding: "24px" }}>
                         <Pane active="four" tabs={longTabs} withAction withTrailing />
-                        <DimensionRule label="tab max-width 200 · active revealed · label ellipsis · strip scrolls" />
+                        <DimensionRule label="tab 160 shrinking to 88 · equal widths · label ellipsis · active revealed · strip scrolls" />
                     </div>
                 </Specimen>
                 <Specimen
@@ -167,7 +167,7 @@ export function TabbedPanePage() {
                 >
                     <div style={{ padding: "24px" }}>
                         <Pane active="two" tabs={sessionTabs} withAction withClose />
-                        <DimensionRule label="preview title italic · close 16 × 16" />
+                        <DimensionRule label="preview title italic · close 16 × 16 at the tab's far edge" />
                     </div>
                 </Specimen>
                 <Specimen
