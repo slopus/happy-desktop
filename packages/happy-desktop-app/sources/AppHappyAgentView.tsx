@@ -4133,6 +4133,26 @@ function happyAgentFileRevalidationBanner(
     ) : null;
 }
 
+/**
+ * What a file tab has to say about itself before its content: that the bytes
+ * on screen may be stale, and that the last save did not happen. A refused
+ * write is the louder of the two — the edit is still only in this window — so
+ * it is stated first.
+ */
+function happyAgentFileNotices(file: HappyAgentFileTabSnapshot): ReactNode {
+    if (file.saveError === undefined)
+        return happyAgentFileRevalidationBanner(file.revalidationError);
+    return (
+        <>
+            <Banner tone="danger" title="Could not save this file">
+                {file.saveError.message} Your edit is still here and has not been written to the
+                workspace.
+            </Banner>
+            {happyAgentFileRevalidationBanner(file.revalidationError)}
+        </>
+    );
+}
+
 function HappyAgentFileBody(props: {
     appearance: "dark" | "light";
     file: HappyAgentFileTabSnapshot;
@@ -4198,7 +4218,7 @@ function HappyAgentFileBody(props: {
                 : undefined;
         return (
             <FileEditor
-                banner={happyAgentFileRevalidationBanner(file.revalidationError)}
+                banner={happyAgentFileNotices(file)}
                 documentKey={fileDocumentKey(file.id, file.document.value)}
                 dirty={dirty}
                 {...(file.kind === "document" && props.htmlPreview
@@ -4285,7 +4305,7 @@ function HappyAgentFileBody(props: {
                 : undefined;
         return (
             <>
-                {happyAgentFileRevalidationBanner(file.revalidationError)}
+                {happyAgentFileNotices(file)}
                 <ChangedFileDiff
                     appearance={props.appearance}
                     documentKey={fileDocumentKey(file.id, file.document.value)}

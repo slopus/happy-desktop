@@ -1,5 +1,6 @@
 import { expect, it } from "vitest";
 import "./theme.css";
+import "./styles/scrollbar.css";
 import "./styles/visually-hidden.css";
 import "./styles/icon.css";
 import "./styles/file-tree.css";
@@ -90,15 +91,22 @@ it("holds FileTree row grid, indentation, disclosure, git decorations, and selec
 
     const root = view.$('[data-testid="tree"]');
     expect(root.element.tagName).toBe("DIV");
-    expect(root.element.getAttribute("role")).toBe("tree");
+    /* The tree role sits on the scrollport that holds the rows. */
     expect(
-        root.computedStyles(["box-sizing", "display", "flex-direction", "background-color"]),
-    ).toEqual({
+        view.$('[data-testid="tree"] [data-scrollbar-viewport]').element.getAttribute("role"),
+    ).toBe("tree");
+    /* The root is a scroll host: a grid holding the viewport and its track
+       (see styles/scrollbar.css). The viewport is the column the rows stack in. */
+    expect(root.computedStyles(["box-sizing", "display", "background-color"])).toEqual({
         "box-sizing": "border-box",
-        display: "flex",
-        "flex-direction": "column",
+        display: "grid",
         "background-color": "rgba(0, 0, 0, 0)",
     });
+    expect(
+        view
+            .$('[data-testid="tree"] [data-scrollbar-viewport]')
+            .computedStyles(["display", "flex-direction"]),
+    ).toEqual({ display: "flex", "flex-direction": "column" });
 
     /* ---- Row grid: rendered in tree order, every row 28px tall ---------- */
 

@@ -1,6 +1,7 @@
 import { expect, it } from "vitest";
 import { server } from "vitest/browser";
 import "./theme.css";
+import "./styles/scrollbar.css";
 import "./styles/badge.css";
 import "./styles/button.css";
 import "./styles/icon.css";
@@ -299,22 +300,22 @@ it("holds BuildProgressPanel layout, progress geometry, typography, log, and fai
     /* ---- Retained log block + truncation note -------------------------- */
 
     const log = view.$('[data-testid="bp-failed"] [data-happy-desktop-ui="build-progress-log"]');
-    expect(log.element.tagName).toBe("PRE");
-    expect(
-        log.computedStyles([
-            "background-color",
-            "font-family",
-            "max-height",
-            "overflow-x",
-            "overflow-y",
-        ]),
-    ).toEqual({
+    /* The log is a scroll region: the host carries the box and the type, the
+       viewport inside it scrolls on both axes, and the text stays a <pre>. */
+    expect(log.element.tagName).toBe("DIV");
+    expect(log.computedStyles(["background-color", "font-family", "max-height"])).toEqual({
         "background-color": "rgb(246, 248, 250)",
         "font-family": monoFamily(),
         "max-height": "200px",
-        "overflow-x": "auto",
-        "overflow-y": "auto",
     });
+    expect(
+        view
+            .$(
+                '[data-testid="bp-failed"] [data-happy-desktop-ui="build-progress-log"] [data-scrollbar-viewport]',
+            )
+            .computedStyles(["overflow-x", "overflow-y"]),
+    ).toEqual({ "overflow-x": "auto", "overflow-y": "auto" });
+    expect(log.element.querySelector("pre")).not.toBeNull();
     await paints(log, "retained log");
 
     const truncated = view.$(
@@ -372,15 +373,20 @@ it("holds BuildProgressPanel layout, progress geometry, typography, log, and fai
         "border-top-color": "rgb(0, 0, 0)",
         "border-top-width": "2px",
     });
-    /* Static ring paints an unclipped, geometrically centered contour. */
+    /* Static ring paints an unclipped, geometrically centered contour. The
+       ink may bleed by up to half a device pixel (0.25 css px at 2×): WebKit
+       antialiases the round border's outer edge past the box. */
     const ring = await spinner.visibleMetrics();
     expect(ring.pixelCount, "spinner paints no pixels").toBeGreaterThan(0);
     const sb = spinner.bounds();
-    expect(ring.bounds.x, "ring clipped left").toBeGreaterThanOrEqual(0);
-    expect(ring.bounds.y, "ring clipped top").toBeGreaterThanOrEqual(0);
-    expect(ring.bounds.x + ring.bounds.width, "ring clipped right").toBeLessThanOrEqual(sb.width);
+    const BLEED = 0.25;
+    expect(ring.bounds.x, "ring clipped left").toBeGreaterThanOrEqual(-BLEED);
+    expect(ring.bounds.y, "ring clipped top").toBeGreaterThanOrEqual(-BLEED);
+    expect(ring.bounds.x + ring.bounds.width, "ring clipped right").toBeLessThanOrEqual(
+        sb.width + BLEED,
+    );
     expect(ring.bounds.y + ring.bounds.height, "ring clipped bottom").toBeLessThanOrEqual(
-        sb.height,
+        sb.height + BLEED,
     );
     expect(
         Math.abs(ring.bounds.x + ring.bounds.width / 2 - sb.width / 2),
