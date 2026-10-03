@@ -293,10 +293,12 @@ export {
     fileTreeBuild,
     fileTreeExpanded,
     fileTreeFlatten,
+    fileTreeRanked,
     fileTreeVisibleFiles,
     type FileTreeBuildEntry,
     type FileTreeExpansion,
 } from "./fileTreeBuild";
+export { filePathMatches } from "./fileTreeSearch";
 export { fileEntriesSort, fileNameCompare, filePathCompare } from "./fileTreeSort";
 export {
     ConversationStatus,

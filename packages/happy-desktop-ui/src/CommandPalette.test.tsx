@@ -2,6 +2,7 @@ import { useReducer, useState } from "react";
 import { expect, it } from "vitest";
 import { server, userEvent } from "vitest/browser";
 import "./theme.css";
+import "./styles/scrollbar.css";
 import "./styles/command-palette.css";
 import "./styles/search-results.css";
 import "./styles/badge.css";
@@ -157,8 +158,12 @@ it("holds the fixed 640x461 CommandPalette frame with a real short result set", 
 
     const body = view.$('[data-testid="cp"] [data-happy-desktop-ui="command-palette-body"]');
     expect(body.bounds()).toEqual({ x: 1, y: 61, width: 638, height: 399 });
+    /* The host frames the body; the viewport inside it is the scrollport. */
+    const bodyViewport = view.$(
+        '[data-testid="cp"] [data-happy-desktop-ui="command-palette-body"] [data-scrollbar-viewport]',
+    );
     expect(
-        body.computedStyles([
+        bodyViewport.computedStyles([
             "margin-top",
             "overflow-x",
             "overflow-y",
@@ -231,8 +236,9 @@ it("shrinks in a short host and keeps overflowing focused rows visible at both e
         { width: 640, height: 461 },
     );
     (
-        view.$('[data-testid="constrained"] [data-happy-desktop-ui="command-palette-body"]')
-            .element as HTMLElement
+        view.$(
+            '[data-testid="constrained"] [data-happy-desktop-ui="command-palette-body"] [data-scrollbar-viewport]',
+        ).element as HTMLElement
     ).scrollTop = 4;
     await view.ready();
 
@@ -250,7 +256,9 @@ it("shrinks in a short host and keeps overflowing focused rows visible at both e
     ).toBe(346);
 
     const body = view.$('[data-testid="overflow"] [data-happy-desktop-ui="command-palette-body"]');
-    const bodyElement = body.element as HTMLElement;
+    const bodyElement = view.$(
+        '[data-testid="overflow"] [data-happy-desktop-ui="command-palette-body"] [data-scrollbar-viewport]',
+    ).element as HTMLElement;
     expect(bodyElement.scrollHeight).toBeGreaterThan(bodyElement.clientHeight);
     expect(bodyElement.clientHeight).toBe(399);
 

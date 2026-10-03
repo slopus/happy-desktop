@@ -217,13 +217,18 @@ export interface HappyAgentWorkspaceClient {
      * that renders the document rather than its source.
      */
     htmlPreviewOpen(groupId: HappyAgentGroupId, path: string): Promise<string>;
-    /** Writes one existing text file back to its checkout. */
+    /**
+     * Writes one existing text file back to its checkout, answering with the
+     * identity the file now has. An accepted write is first-hand knowledge of
+     * what the file says, so the surface that wrote it does not have to read it
+     * back to find out.
+     */
     workspaceFileWrite(
         groupId: HappyAgentGroupId,
         path: string,
         content: string,
         expectedHash: string | null,
-    ): Promise<void>;
+    ): Promise<{ readonly hash: string }>;
     /** Where a file the reader chose lives on this machine, when it lives anywhere. */
     attachmentSourcePath(file: File): string | undefined;
     /**
@@ -576,11 +581,12 @@ export function happyAgentWorkspaceClientCreate(
             deps.hostServices.workspaceFileBytesRead(groupId, path, signal),
         htmlPreviewOpen: (groupId, path) => deps.hostServices.htmlPreviewOpen(groupId, path),
         workspaceFileWrite: async (groupId, path, content, expectedHash) => {
-            await deps.client.writeFile(groupId, {
+            const written = await deps.client.writeFile(groupId, {
                 path,
                 content: happyAgentTextEncodeBase64(content),
                 expectedHash,
             });
+            return { hash: written.hash };
         },
         attachmentSourcePath: (file) => deps.hostServices.attachmentSourcePath(file),
         attachmentSourceReachable: (groupId, sourcePath) =>

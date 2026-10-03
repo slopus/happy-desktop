@@ -121,6 +121,24 @@
     color: var(--git-removed-text);
 }
 
+/* ---- Search ----------------------------------------------------------- */
+
+/* Inset to the same edge as the control row and the file rows, so the field,
+   the scope control, and the listing all start on one line. No rule under it:
+   the field already reads as a box, and a hairline as well would cut this
+   narrow column into pieces. */
+.happy-file-browser__search {
+    display: flex;
+    flex: none;
+    padding: 0 var(--happy-panel-inset) 6px;
+}
+
+/* A search still waiting on the checkout says so by going quiet rather than by
+   replacing the rows underneath, which are still the last true answer. */
+.happy-file-browser__search[data-busy] {
+    opacity: 0.6;
+}
+
 .happy-file-browser__note {
     display: flex;
     flex: none;

@@ -3,9 +3,11 @@ import { FileBrowser, type FileBrowserLayout, type FileBrowserScope } from "../.
 import {
     fileTreeBuild,
     fileTreeFlatten,
+    fileTreeRanked,
     type FileTreeBuildEntry,
     type FileTreeExpansion,
 } from "../../src/fileTreeBuild";
+import { filePathMatches } from "../../src/fileTreeSearch";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
 /** The component plan this page documents. The selector and the page header read the same value. */
@@ -152,18 +154,28 @@ function LiveBrowser(props: { entries: FileTreeBuildEntry[]; height?: number; wi
     const [opened, openedSet] = useState<ReadonlySet<string>>(new Set());
     const [closed, closedSet] = useState<ReadonlySet<string>>(new Set());
     const [selectedId, selectedIdSet] = useState<string | undefined>(undefined);
+    const [query, querySet] = useState("");
     const expansion: FileTreeExpansion = { opened, closed, defaultDepth: 1 };
+    // The specimen has its whole listing in hand, so it answers a query the way
+    // Changes does in the product. All Files asks the checkout instead, which is
+    // a store's job and not something a blueprint page can stand in for.
+    const matched = props.entries.filter((entry) => filePathMatches(entry.path, query));
     const nodes =
-        layout === "tree"
-            ? fileTreeBuild(props.entries, expansion)
-            : fileTreeFlatten(props.entries);
+        query !== ""
+            ? fileTreeRanked(matched)
+            : layout === "tree"
+              ? fileTreeBuild(props.entries, expansion)
+              : fileTreeFlatten(props.entries);
     return panelFrame(
         <FileBrowser
-            count={props.entries.length}
+            count={query === "" ? props.entries.length : matched.length}
+            emptyLabel={query === "" ? undefined : `Nothing matches “${query}”.`}
             layout={layout}
             nodes={nodes}
             onLayoutChange={layoutSet}
             onScopeChange={scopeSet}
+            onSearchQueryChange={querySet}
+            searchQuery={query}
             onSelect={(id) => selectedIdSet(id)}
             onToggle={(path, expanded) => {
                 openedSet((current) => {

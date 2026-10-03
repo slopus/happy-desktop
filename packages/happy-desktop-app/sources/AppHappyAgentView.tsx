@@ -18,6 +18,7 @@ import type {
     HappyAgentFileLayout,
     HappyAgentWorkspaceFiles,
     HappyAgentFileScope,
+    HappyAgentFileSearch,
     HappyAgentFileViewMode,
     HappyAgentHost,
     HappyAgentIntegrationStore,
@@ -128,6 +129,8 @@ import {
     fileTreeBuild,
     fileTreeExpanded,
     fileTreeFlatten,
+    fileTreeRanked,
+    filePathMatches,
     fileNameCompare,
     type FileTreeExpansion,
     type FileTreeBuildEntry,
@@ -3611,6 +3614,8 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                                   happyAgentAvailabilityReason: availability.message,
                               })}
                         scope={workspace.fileScope}
+                        search={workspace.fileSearch}
+                        onSearchQueryChange={(query) => props.workspace.fileSearchUpdate(query)}
                         selectedPath={activeFile?.path}
                         store={props.workspace.panel}
                         workspaceFiles={workspace.workspaceFiles}
@@ -4133,6 +4138,26 @@ function happyAgentFileRevalidationBanner(
     ) : null;
 }
 
+/**
+ * What a file tab has to say about itself before its content: that the bytes
+ * on screen may be stale, and that the last save did not happen. A refused
+ * write is the louder of the two — the edit is still only in this window — so
+ * it is stated first.
+ */
+function happyAgentFileNotices(file: HappyAgentFileTabSnapshot): ReactNode {
+    if (file.saveError === undefined)
+        return happyAgentFileRevalidationBanner(file.revalidationError);
+    return (
+        <>
+            <Banner tone="danger" title="Could not save this file">
+                {file.saveError.message} Your edit is still here and has not been written to the
+                workspace.
+            </Banner>
+            {happyAgentFileRevalidationBanner(file.revalidationError)}
+        </>
+    );
+}
+
 function HappyAgentFileBody(props: {
     appearance: "dark" | "light";
     file: HappyAgentFileTabSnapshot;
@@ -4198,7 +4223,7 @@ function HappyAgentFileBody(props: {
                 : undefined;
         return (
             <FileEditor
-                banner={happyAgentFileRevalidationBanner(file.revalidationError)}
+                banner={happyAgentFileNotices(file)}
                 documentKey={fileDocumentKey(file.id, file.document.value)}
                 dirty={dirty}
                 {...(file.kind === "document" && props.htmlPreview
@@ -4285,7 +4310,7 @@ function HappyAgentFileBody(props: {
                 : undefined;
         return (
             <>
-                {happyAgentFileRevalidationBanner(file.revalidationError)}
+                {happyAgentFileNotices(file)}
                 <ChangedFileDiff
                     appearance={props.appearance}
                     documentKey={fileDocumentKey(file.id, file.document.value)}
@@ -5688,23 +5713,35 @@ function HappyAgentPanelBody(props: {
     happyAgentAvailability?: "reconnecting" | "unavailable";
     happyAgentAvailabilityReason?: string;
     scope: HappyAgentFileScope;
+    /** What the reader is looking for in the listing, and what the checkout found. */
+    search: HappyAgentFileSearch;
+    onSearchQueryChange: (query: string) => void;
     selectedPath?: string;
     store: HappyAgentPanelStore;
     workspaceFiles?: HappyAgentWorkspaceFiles;
     workspaceFilesLoading: boolean;
 }) {
     const all = props.scope === "all";
-    const entries: FileTreeBuildEntry[] = useMemo(
-        () => props.changes.map(changeEntry),
-        [props.changes],
-    );
+    const query = props.search.query;
+    // Changes is whole in memory, so its query is answered right here by
+    // dropping the rows that do not match. All Files cannot be: the tree holds
+    // only the directories somebody opened, so filtering it would quietly
+    // present a fraction of the checkout as the whole answer — the daemon ranks
+    // that one and its results arrive through the snapshot.
+    const entries: FileTreeBuildEntry[] = useMemo(() => {
+        const built = props.changes.map(changeEntry);
+        return query === "" ? built : built.filter((entry) => filePathMatches(entry.path, query));
+    }, [props.changes, query]);
     const expansion: FileTreeExpansion = useMemo(
         () => ({
             opened: props.expanded,
             closed: props.collapsed,
             // All Files starts closed because every disclosure is a real daemon
-            // read. Changes is already complete in memory and can open one level.
-            defaultDepth: all ? 0 : 1,
+            // read. Changes is already complete in memory, and what it holds is
+            // the answer to "what did this touch" — so it stands open all the
+            // way down and the reader sees every changed file without opening
+            // a folder to find it.
+            defaultDepth: all ? 0 : Number.POSITIVE_INFINITY,
         }),
         [all, props.expanded, props.collapsed],
     );
@@ -5712,14 +5749,39 @@ function HappyAgentPanelBody(props: {
         () => new Map(props.changes.map((change) => [change.path, change])),
         [props.changes],
     );
+    const searchResults = props.search.results;
     const nodes: FileTreeNode[] = useMemo(
         () =>
             all
-                ? workspaceFileTreeNodes(props.workspaceFiles, "", expansion, changesByPath)
+                ? // A query replaces the tree with the checkout's ranked answer
+                  // rather than filtering it: what matched may live in
+                  // directories nobody has opened, which a tree cannot show
+                  // without opening them. Until the first answer arrives the
+                  // tree stays, so the panel does not blank out per keystroke.
+                  query !== "" && searchResults !== undefined
+                    ? fileTreeRanked(
+                          searchResults.map((result) => {
+                              // A match that is also a changed file keeps saying
+                              // so: the status is a fact about the file, not
+                              // about which listing found it.
+                              const change = changesByPath.get(result.path);
+                              return change ? changeEntry(change) : { path: result.path };
+                          }),
+                      )
+                    : workspaceFileTreeNodes(props.workspaceFiles, "", expansion, changesByPath)
                 : props.layout === "tree"
                   ? fileTreeBuild(entries, expansion)
                   : fileTreeFlatten(entries),
-        [all, changesByPath, entries, expansion, props.layout, props.workspaceFiles],
+        [
+            all,
+            changesByPath,
+            entries,
+            expansion,
+            props.layout,
+            props.workspaceFiles,
+            query,
+            searchResults,
+        ],
     );
     const loading = all ? props.workspaceFilesLoading : props.changesStatus === "loading";
     const changesUnavailable = props.changesStatus === "unavailable";
@@ -5896,12 +5958,17 @@ function HappyAgentPanelBody(props: {
                                 : { addedLines, deletedLines })}
                             count={count}
                             emptyLabel={
-                                all
-                                    ? "No files."
-                                    : changesUnavailable
-                                      ? "Git changes are temporarily unavailable."
-                                      : "No changed files."
+                                query !== ""
+                                    ? `Nothing matches “${query}”.`
+                                    : all
+                                      ? "No files."
+                                      : changesUnavailable
+                                        ? "Git changes are temporarily unavailable."
+                                        : "No changed files."
                             }
+                            onSearchQueryChange={props.onSearchQueryChange}
+                            searchQuery={query}
+                            searching={props.search.searching}
                             layout={props.layout}
                             loading={loading}
                             nodes={nodes}
