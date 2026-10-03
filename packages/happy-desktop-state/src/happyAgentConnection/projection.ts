@@ -462,6 +462,64 @@ export function applyChanges<T extends object>(resource: T, changes: Partial<T>)
 }
 
 /**
+ * Replaces one project or workspace while keeping the archived agents it cannot carry.
+ *
+ * The daemon's owner resources hold only active agents: a project or workspace object, whether
+ * read whole, received in an update, or returned by a mutation, never lists an archived one.
+ * Archived agents reach this connection separately — through bootstrap's `archivedAgents` and
+ * through the agent events of a chat archived while connected — and live in the owner's
+ * `agents` beside the active ones, marked by `archivedAt`. So an incoming owner resource is a
+ * statement about the active series only; the archived agents already held are carried over,
+ * and only a later bootstrap says which of them the daemon still remembers.
+ */
+export function ownerResourceReplace<T extends { id: string; agents: Agent[] }>(
+    resources: readonly T[],
+    resource: T,
+): readonly T[] {
+    const current = resources.find((candidate) => candidate.id === resource.id);
+    if (current === undefined) return replaceResource(resources, resource);
+    const kept = current.agents.filter(
+        (agent) =>
+            agent.archivedAt !== null &&
+            !resource.agents.some((candidate) => candidate.id === agent.id),
+    );
+    return replaceResource(
+        resources,
+        kept.length === 0 ? resource : { ...resource, agents: [...resource.agents, ...kept] },
+    );
+}
+
+/**
+ * Places bootstrap's archived agents beside the active ones of their owners, so every later
+ * projection sees one series per owner with archival as a field rather than as absence.
+ * An archived agent names its owner by `workspaceId`; a project's root workspace shares the
+ * project's ID, so a root-owned agent lands in both the project and its root workspace copy,
+ * exactly as an active one does.
+ */
+export function archivedAgentsMerge(
+    projects: readonly Project[],
+    workspaces: readonly Workspace[],
+    archivedAgents: readonly Agent[],
+): { readonly projects: readonly Project[]; readonly workspaces: readonly Workspace[] } {
+    if (archivedAgents.length === 0) return { projects, workspaces };
+    const byOwner = new Map<string, Agent[]>();
+    for (const agent of archivedAgents) {
+        const owned = byOwner.get(agent.workspaceId) ?? [];
+        owned.push(agent);
+        byOwner.set(agent.workspaceId, owned);
+    }
+    const merge = <T extends { id: string; agents: Agent[] }>(owner: T): T => {
+        const owned = byOwner.get(owner.id);
+        if (owned === undefined) return owner;
+        const missing = owned.filter(
+            (agent) => !owner.agents.some((candidate) => candidate.id === agent.id),
+        );
+        return missing.length === 0 ? owner : { ...owner, agents: [...owner.agents, ...missing] };
+    };
+    return { projects: projects.map(merge), workspaces: workspaces.map(merge) };
+}
+
+/**
  * The bot catalog, in the order the daemon keeps it.
  *
  * A bot carries its one agent inline, so no workspace lookup is needed to state
