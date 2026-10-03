@@ -2,6 +2,7 @@ import { useState, type ReactNode } from "react";
 import { expect, it } from "vitest";
 import { userEvent } from "vitest/browser";
 import "./theme.css";
+import "./styles/scrollbar.css";
 import "./styles/modal-overlay.css";
 import "./styles/modal.css";
 import "./styles/button.css";
@@ -175,7 +176,9 @@ it("caps a taller-than-window card inside the gutter so its body scrolls, not th
     const overlay = view.$('[data-testid="ov"]');
     const dialog = view.$('[data-testid="ov"] [data-happy-desktop-ui="modal-dialog"]');
     const header = view.$('[data-testid="ov"] [data-happy-desktop-ui="modal-header"]');
-    const body = view.$('[data-testid="ov"] [data-happy-desktop-ui="modal-body"]');
+    const body = view.$(
+        '[data-testid="ov"] [data-happy-desktop-ui="modal-body"] [data-scrollbar-viewport]',
+    );
     /* ---- Card keeps a clear margin; it never fills the window height ------ */
     const overlayBounds = overlay.bounds();
     const dialogBounds = dialog.bounds();

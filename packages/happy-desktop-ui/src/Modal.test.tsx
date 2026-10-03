@@ -1,6 +1,7 @@
 import { expect, it } from "vitest";
 import { server } from "vitest/browser";
 import "./theme.css";
+import "./styles/scrollbar.css";
 import "./styles/modal.css";
 import "./styles/button.css";
 import "./styles/icon.css";
@@ -219,9 +220,13 @@ it("holds Modal dialog geometry, header/body/footer layout, and painted chrome g
     const body = view.$('[data-testid="md"] [data-happy-desktop-ui="modal-body"]');
     expect(body.bounds().width).toBe(478); /* 480 - 2 * 1px border */
     /* The scrollport stays edge-to-edge (no padding of its own); the inner
-       content wrapper carries the 4/20/20 inset. */
+       content wrapper carries the 4/20/20 inset. The host frames it, and the
+       viewport inside owns the scrolling. */
+    const bodyViewport = view.$(
+        '[data-testid="md"] [data-happy-desktop-ui="modal-body"] [data-scrollbar-viewport]',
+    );
     expect(
-        body.computedStyles([
+        bodyViewport.computedStyles([
             "color",
             "font-size",
             "font-weight",
