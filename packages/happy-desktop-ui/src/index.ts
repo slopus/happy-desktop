@@ -589,6 +589,12 @@ export {
     type QuickActionsCardItem,
     type QuickActionsCardProps,
 } from "./QuickActionsCard";
+export {
+    ShortcutSheet,
+    type ShortcutSheetItem,
+    type ShortcutSheetProps,
+    type ShortcutSheetSection,
+} from "./ShortcutSheet";
 export { ZoomIndicator } from "./ZoomIndicator";
 export {
     HappyAgentInboxPage,

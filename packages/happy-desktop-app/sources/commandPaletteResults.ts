@@ -62,6 +62,12 @@ export type CommandPaletteCommand =
       }
     | { readonly kind: "sessionCreate" }
     | { readonly kind: "workspaceCreate" }
+    /** The neighbouring tab of the main strip, wrapping at the ends. */
+    | { readonly kind: "tabStep"; readonly direction: 1 | -1 }
+    /** The tab closed most recently, back where it was. */
+    | { readonly kind: "tabReopen" }
+    /** The sheet listing every chord. */
+    | { readonly kind: "shortcutSheetOpen" }
     | { readonly kind: "settingsOpen" }
     | { readonly kind: "settingsSectionOpen"; readonly section: string }
     | { readonly kind: "updateApply" };
@@ -201,6 +207,10 @@ export interface CommandPaletteContext {
     readonly sessionCreateAvailable: boolean;
     /** Whether a new workspace can be made in the addressed project. */
     readonly workspaceCreateAvailable: boolean;
+    /** Whether the main strip has a neighbouring tab to step to. */
+    readonly tabStepAvailable: boolean;
+    /** What reopening would bring back, named, when something has been closed. */
+    readonly tabReopen?: { readonly label: string; readonly icon: IconName };
 }
 
 export interface CommandPaletteInput extends CommandPaletteContext {
@@ -794,6 +804,51 @@ function actionRows(
                   },
               ]
             : []),
+        // The strip's own chords, here so the caps have somewhere to be seen:
+        // a chord nothing in the window ever shows is one nobody learns.
+        ...(context.tabStepAvailable
+            ? [
+                  {
+                      kind: "command" as const,
+                      id: "action:tab-next",
+                      title: "Next tab",
+                      glyph: { kind: "icon" as const, name: "chevron-right" as const },
+                      shortcut: APP_SHORTCUTS.tabNext,
+                      command: { kind: "tabStep" as const, direction: 1 as const },
+                  },
+                  {
+                      kind: "command" as const,
+                      id: "action:tab-previous",
+                      title: "Previous tab",
+                      glyph: { kind: "icon" as const, name: "chevron-left" as const },
+                      shortcut: APP_SHORTCUTS.tabPrevious,
+                      command: { kind: "tabStep" as const, direction: -1 as const },
+                  },
+              ]
+            : []),
+        ...(context.tabReopen
+            ? [
+                  {
+                      kind: "command" as const,
+                      id: "action:tab-reopen",
+                      title: "Reopen closed tab",
+                      // Named, so the row says what it would bring back
+                      // before it is chosen.
+                      meta: context.tabReopen.label,
+                      glyph: { kind: "icon" as const, name: context.tabReopen.icon },
+                      shortcut: APP_SHORTCUTS.tabReopen,
+                      command: { kind: "tabReopen" as const },
+                  },
+              ]
+            : []),
+        {
+            kind: "command" as const,
+            id: "action:shortcuts",
+            title: "Keyboard shortcuts",
+            glyph: { kind: "icon" as const, name: "keyboard" as const },
+            shortcut: APP_SHORTCUTS.shortcutsShow,
+            command: { kind: "shortcutSheetOpen" as const },
+        },
         {
             kind: "command" as const,
             id: "action:settings",

@@ -19,6 +19,12 @@ export interface CommandPaletteSnapshot {
     readonly open: boolean;
     /** Empty whenever the palette is closed: a closed palette asks nothing. */
     readonly query: string;
+    /**
+     * Whether the sheet listing every chord is showing. It is the palette's
+     * sibling — the other window-wide surface a chord summons — and the two
+     * never show together: opening either closes the other.
+     */
+    readonly shortcutSheet: boolean;
 }
 
 export interface CommandPaletteStore {
@@ -32,10 +38,24 @@ export interface CommandPaletteStore {
     queryUpdate(value: string): void;
     /** Moves the highlight to a position the owner has already clamped into its list. */
     activeIndexUpdate(value: number): void;
+    shortcutSheetOpen(): void;
+    shortcutSheetClose(): void;
+    shortcutSheetToggle(): void;
 }
 
-const CLOSED: CommandPaletteSnapshot = { activeIndex: 0, open: false, query: "" };
-const OPENED: CommandPaletteSnapshot = { activeIndex: 0, open: true, query: "" };
+const CLOSED: CommandPaletteSnapshot = {
+    activeIndex: 0,
+    open: false,
+    query: "",
+    shortcutSheet: false,
+};
+const OPENED: CommandPaletteSnapshot = {
+    activeIndex: 0,
+    open: true,
+    query: "",
+    shortcutSheet: false,
+};
+const SHEET: CommandPaletteSnapshot = { ...CLOSED, shortcutSheet: true };
 
 /**
  * Creates the window-lifetime command palette store.
@@ -76,11 +96,22 @@ export function commandPaletteStoreCreate(): CommandPaletteStore {
             // A closed palette has no query to change, so a keystroke arriving
             // from a card being taken down cannot bring one back.
             if (!snapshot.open || snapshot.query === value) return;
-            publish({ activeIndex: 0, open: true, query: value });
+            publish({ activeIndex: 0, open: true, query: value, shortcutSheet: false });
         },
         activeIndexUpdate(value) {
             if (!snapshot.open || snapshot.activeIndex === value) return;
             publish({ ...snapshot, activeIndex: value });
+        },
+        shortcutSheetOpen() {
+            if (snapshot.shortcutSheet) return;
+            publish(SHEET);
+        },
+        shortcutSheetClose() {
+            if (!snapshot.shortcutSheet) return;
+            publish(CLOSED);
+        },
+        shortcutSheetToggle() {
+            publish(snapshot.shortcutSheet ? CLOSED : SHEET);
         },
     };
 }
@@ -98,4 +129,7 @@ export const commandPaletteStoreNoop: CommandPaletteStore = {
     paletteToggle: () => {},
     queryUpdate: () => {},
     activeIndexUpdate: () => {},
+    shortcutSheetOpen: () => {},
+    shortcutSheetClose: () => {},
+    shortcutSheetToggle: () => {},
 };

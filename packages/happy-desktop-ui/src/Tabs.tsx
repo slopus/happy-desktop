@@ -492,6 +492,12 @@ export function Tabs(props: TabsProps) {
         // is still a strip whose tabs are dragged: rearranging and moving out
         // are the same gesture, and either one alone is enough to start it.
         const draggable = local.onReorder !== undefined || movable(local.tabs[index]!);
+        // The middle button closes, below; its press must not start the
+        // browser's autoscroll on the way there.
+        if (event.button === 1) {
+            event.preventDefault();
+            return;
+        }
         if (!draggable || event.button !== 0) return;
         // A pointer-down on the close control is that control's, not a drag.
         if ((event.target as HTMLElement).closest('[data-happy-desktop-ui="tab-close"]')) return;
@@ -633,6 +639,15 @@ export function Tabs(props: TabsProps) {
                         data-preview={tab.preview ? "" : undefined}
                         data-reorderable={local.onReorder || movable(tab) ? "" : undefined}
                         data-tab-id={tab.id}
+                        onAuxClick={(event) => {
+                            // The middle button closes a tab, as it does in
+                            // every browser; a tab that cannot be closed
+                            // ignores it.
+                            if (event.button !== 1) return;
+                            if (local.onClose === undefined || tab.closable === false) return;
+                            event.preventDefault();
+                            local.onClose(tab.id);
+                        }}
                         onClick={() => {
                             if (dragClick.current) {
                                 dragClick.current = false;
