@@ -5,19 +5,14 @@ import { happyAgentSyncRead } from "../happyAgentConnection/happyAgentSyncRead.j
 import { happyDesktopMobileOnboardingStoreCreate } from "./happyDesktopMobileOnboardingStore.js";
 
 export type HappyMobileLinkPhase =
-    | { readonly kind: "checking" | "preparing" | "finishing" }
+    | { readonly kind: "checking" }
     | { readonly kind: "pairing"; readonly data: string; readonly expiresAt: number }
     | { readonly kind: "failed"; readonly message: string };
 
 export type HappyDesktopMobileStep =
-    | { readonly kind: "intro"; readonly alreadyLinked?: boolean }
-    | {
-          readonly kind: "get-app";
-          readonly platform: "ios" | "android";
-          readonly preparation: "preparing" | "ready" | "failed";
-          readonly message?: string;
-      }
-    | { readonly kind: "link"; readonly appReady: boolean; readonly phase: HappyMobileLinkPhase }
+    /** Platform pick and store code; confirming it is the consent that starts setup. */
+    | { readonly kind: "intro"; readonly platform: "ios" | "android" }
+    | { readonly kind: "link"; readonly phase: HappyMobileLinkPhase }
     | { readonly kind: "connected"; readonly online: boolean; readonly message?: string };
 
 export type HappyMobileOnboardingSnapshot =
@@ -61,9 +56,12 @@ export interface HappyMobileOnboardingStoreOptions {
         "cancelHappyIntegration" | "getHappyIntegration" | "startHappyIntegration"
     >;
     readonly initialSkipped?: boolean;
-    /** Local desktop only; remote Happy Agents retain their Agent-only pairing. */
-    readonly connectLegacyCli?: () => Promise<void>;
-    readonly prepareLegacyCli?: () => Promise<void>;
+    /**
+     * The guided flow: store code and platform pick, then the pairing code, on
+     * one setup surface. The local desktop uses it; remote Happy Agents keep
+     * their offer-then-pair flow.
+     */
+    readonly guided?: boolean;
     readonly onOutput?: (output: HappyMobileOnboardingOutput) => void;
 }
 
@@ -93,7 +91,7 @@ function resolved(snapshot: HappyMobileOnboardingSnapshot): boolean {
 export function happyMobileOnboardingStoreCreate(
     options: HappyMobileOnboardingStoreOptions,
 ): HappyMobileOnboardingStore {
-    if (options.connectLegacyCli) return happyDesktopMobileOnboardingStoreCreate(options);
+    if (options.guided) return happyDesktopMobileOnboardingStoreCreate(options);
     const listeners = new Set<() => void>();
     let snapshot: HappyMobileOnboardingSnapshot = options.initialSkipped ? SKIPPED : CHECKING;
     let version: string | undefined;

@@ -1,6 +1,6 @@
 {
     "name": "happy-desktop-electron",
-    "version": "0.0.88",
+    "version": "0.0.89",
     "private": true,
     "description": "Happy Place macOS desktop app",
     "author": "Slopus",
@@ -44,7 +44,8 @@
         "clean": "rm -rf dist release"
     },
     "dependencies": {
-        "@slopus/happy-agent-client": "0.0.67",
+        "@sinclair/typebox": "^0.34.49",
+        "@slopus/happy-agent-client": "0.0.71",
         "electron-updater": "^6.8.9",
         "ws": "^8.21.1",
         "yjs": "^13.6.31"
@@ -102,6 +103,9 @@
             }
         ],
         "mac": {
+            "extendInfo": {
+                "NSMicrophoneUsageDescription": "Happy uses your microphone for GPT-Live voice conversations when you choose Start."
+            },
             "category": "public.app-category.developer-tools",
             "entitlements": "build/entitlements.mac.plist",
             "entitlementsInherit": "build/entitlements.mac.plist",

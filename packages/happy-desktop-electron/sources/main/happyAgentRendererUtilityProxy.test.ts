@@ -120,6 +120,62 @@ describe("isolated renderer proxy lifecycle", () => {
         proxy.close();
     });
 
+    it("records voice ownership before acknowledging creation and restores it without replay after a utility crash", async () => {
+        const first = new FakeUtility();
+        const second = new FakeUtility();
+        const workers = [first, second];
+        const starting = happyAgentRendererUtilityProxyCreate({
+            fork: () => workers.shift() as unknown as UtilityProcess,
+            ready: async () => undefined,
+            offline: () => undefined,
+        });
+        first.ready(10101);
+        const proxy = await starting;
+        const liveAttemptClose = vi.fn();
+        await proxy.targetSet({
+            url: "http://127.0.0.1:20202/capability",
+            terminalCapability: "capability",
+            transport: { socketPath: "/private/daemon.sock", token: "secret-token" },
+            requestHandle: vi.fn(),
+            liveAttemptClose,
+        });
+        proxy.liveWindowStart!("window-a");
+        const attempt = { id: "liveattempt", windowId: "window-a", connectionId: "node-a" };
+        first.emit("message", {
+            type: "live-attempt-reserve",
+            reservationId: 7,
+            backingId: 1,
+            attempt,
+        });
+        expect(first.sent.at(-1)).toEqual({
+            type: "live-attempt-reserved",
+            reservationId: 7,
+            allowed: true,
+        });
+        expect(liveAttemptClose).not.toHaveBeenCalled();
+        first.kill();
+        expect(liveAttemptClose).toHaveBeenCalledWith(attempt);
+        await new Promise((resolve) => setTimeout(resolve, 160));
+        second.ready(30303);
+        await vi.waitFor(() => expect(proxy.port).toBe(30303));
+        expect(second.sent).toContainEqual({
+            type: "live-attempt-restore",
+            attempt,
+            disposed: false,
+        });
+        expect(second.sent.map((message) => message.type)).toEqual([
+            "backing",
+            "live-window-start",
+            "live-attempt-restore",
+        ]);
+        proxy.liveWindowClose!("window-b");
+        expect(liveAttemptClose).toHaveBeenCalledOnce();
+        proxy.liveWindowClose!("window-a");
+        expect(liveAttemptClose).toHaveBeenCalledTimes(2);
+        expect(second.sent.at(-1)).toEqual({ type: "live-window-close", windowId: "window-a" });
+        proxy.close();
+    });
+
     it("fails the main-frame gate closed during a crash and installs only a new authenticated PAC route", async () => {
         const first = new FakeUtility();
         const second = new FakeUtility();
@@ -135,6 +191,8 @@ describe("isolated renderer proxy lifecycle", () => {
             }) => void,
         ) => void;
         const browserSession = {
+            setPermissionCheckHandler: vi.fn(),
+            setPermissionRequestHandler: vi.fn(),
             setProxy: async (settings: { pacScript: string }) => {
                 pac.push(Buffer.from(settings.pacScript.split(",")[1]!, "base64").toString());
                 const port = /PROXY 127\.0\.0\.1:(\d+)/u.exec(pac.at(-1)!)?.[1];

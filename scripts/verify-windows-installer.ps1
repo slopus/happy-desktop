@@ -13,10 +13,6 @@ if ($installers.Count -ne 1) { throw 'Expected exactly one Windows x64 installer
 $installer = $installers[0].FullName
 function Assert-ReleaseSignature([string]$Path, [string]$ExpectedPublisher = '') {
     $signature = Get-AuthenticodeSignature -LiteralPath $Path
-    if ($env:HAPPY_WINDOWS_SIGNING_ENABLED -ne 'true') {
-        if ($signature.Status -ne 'NotSigned') { throw "Expected an unsigned validation artifact: $Path" }
-        return
-    }
     if ($signature.Status -ne 'Valid' -or $null -eq $signature.TimeStamperCertificate) {
         throw "Expected a valid timestamped signature: $Path ($($signature.Status))"
     }
@@ -46,9 +42,7 @@ if ($process.ExitCode -ne 0) { throw "Installer failed: $($process.ExitCode)" }
 $executable = Join-Path $installation ($definition.productName + '.exe')
 if (-not (Test-Path -LiteralPath $executable)) { throw "The installer did not install $executable." }
 Assert-ReleaseSignature $executable $env:WINDOWS_SIGNING_PUBLISHER
-if ($env:HAPPY_WINDOWS_SIGNING_ENABLED -eq 'true') {
-    $nativeFiles = @(Get-ChildItem -LiteralPath $installation -Recurse -File | Where-Object { $_.Extension -in '.exe', '.dll', '.node' })
-    foreach ($file in $nativeFiles) { Assert-ReleaseSignature $file.FullName }
-}
+$nativeFiles = @(Get-ChildItem -LiteralPath $installation -Recurse -File | Where-Object { $_.Extension -in '.exe', '.dll', '.node' })
+foreach ($file in $nativeFiles) { Assert-ReleaseSignature $file.FullName }
 "HAPPY_DESKTOP_ELECTRON_EXECUTABLE=$executable" >> $env:GITHUB_ENV
 'NSIS installer and signing policy verified; the next step launches the installed application.' >> $env:GITHUB_STEP_SUMMARY

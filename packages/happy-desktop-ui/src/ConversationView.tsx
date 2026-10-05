@@ -4,6 +4,8 @@ import {
     type ComposerSnapshot,
     type ConversationAuthor,
     type ConversationEntry,
+    type ConversationErrorAssistance,
+    type ConversationErrorAssistanceEntry,
     type ConversationRequestSubmission,
     type ConversationToolCall,
 } from "happy-desktop-state";
@@ -97,6 +99,9 @@ export type ConversationViewProps = {
      */
     streamingCaret?: boolean;
     entries: readonly ConversationEntry[];
+    errorAssistance?: readonly ConversationErrorAssistanceEntry[];
+    errorAssistanceUnavailable?: string;
+    onErrorAssistanceRequest?: (entryId: string) => void;
     /** Custom introduction for a loaded conversation with no transcript entries. */
     emptyContent?: ReactNode;
     /** Agent identity shown when a tool/activity row opens a turn before prose exists. */
@@ -306,6 +311,19 @@ export function ConversationStatus(props: { elapsedMs?: number; running?: boolea
  */
 export function ConversationView(props: ConversationViewProps) {
     const composer = props.composer;
+    const errorAssistanceByEntry = new Map(
+        props.errorAssistance?.map((entry) => [entry.entryId, entry.assistance]),
+    );
+    const errorAssistanceFor = (
+        entry: ConversationEntry | undefined,
+    ): ConversationErrorAssistance | undefined => {
+        if (entry?.kind !== "notice") return undefined;
+        const assistance = errorAssistanceByEntry.get(entry.id);
+        if (!assistance) return undefined;
+        return props.errorAssistanceUnavailable === undefined || assistance.status === "pending"
+            ? assistance
+            : { status: "unavailable", reason: props.errorAssistanceUnavailable };
+    };
     const textLayoutGeneration = useSyncExternalStore(
         messageTextLayoutFontGenerationSubscribe,
         messageTextLayoutFontGenerationGet,
@@ -539,6 +557,8 @@ export function ConversationView(props: ConversationViewProps) {
                 <MessageList
                     estimateDependencies={[
                         props.entries,
+                        props.errorAssistance,
+                        props.errorAssistanceUnavailable,
                         props.viewerId,
                         props.activityTreatment,
                         statusVisible,
@@ -552,6 +572,7 @@ export function ConversationView(props: ConversationViewProps) {
                             index,
                             {
                                 activityTreatment: props.activityTreatment,
+                                errorAssistance: errorAssistanceFor(transcript[index]),
                                 expanded:
                                     transcript[index] === undefined
                                         ? false
@@ -637,6 +658,8 @@ export function ConversationView(props: ConversationViewProps) {
                                 : undefined;
                         return (
                             <ConversationEntryView
+                                errorAssistance={errorAssistanceFor(entry)}
+                                onErrorAssistanceRequest={props.onErrorAssistanceRequest}
                                 activityMotion={props.motion}
                                 activityTreatment={props.activityTreatment}
                                 {...(props.streamingCaret === undefined

@@ -436,6 +436,50 @@ it("does not duplicate the session row when agent.created is redelivered", async
 
 // --- sent message reconciliation ------------------------------------------
 
+it("voice acceptance waits for authority and preserves the optimistic row identity", async () => {
+    const { connection, daemon, chat, sessionId } = await liveHarness();
+    const release = daemon.pause("sendMessage");
+    let accepted = false;
+    const sent = connection.sendMessageConfirmed(sessionId, "Reviewed voice text").then(() => {
+        accepted = true;
+    });
+    const optimistic = userMessages(chat.elements)[0]!;
+    expect(optimistic.authority).toBe("local");
+    await Promise.resolve();
+    expect(accepted).toBe(false);
+    release();
+    await sent;
+    expect(accepted).toBe(true);
+    const authoritative = userMessages(chat.elements)[0]!;
+    expect(authoritative.authority).toBe("server");
+    expect(authoritative.id).toBe(optimistic.id);
+    expect(authoritative.messageId).toBe(optimistic.messageId);
+    expect(daemon.callCount("sendMessage")).toBe(1);
+});
+
+it("voice acceptance resolves from an authoritative event before the HTTP response", async () => {
+    const { connection, daemon, chat, sessionId } = await liveHarness();
+    const release = daemon.pause("sendMessage:respond");
+    try {
+        await connection.sendMessageConfirmed(sessionId, "Exact confirmed text");
+        expect(userMessages(chat.elements)).toHaveLength(1);
+        expect(userMessages(chat.elements)[0]?.authority).toBe("server");
+        expect(daemon.callCount("sendMessage")).toBe(1);
+    } finally {
+        release();
+    }
+});
+
+it("voice acceptance rejects a delayed daemon refusal without claiming delivery or retrying", async () => {
+    const { connection, daemon, chat, sessionId } = await liveHarness();
+    daemon.failOnce("sendMessage", new HappyAgentApiError(400, "refused", "invalid_request", null));
+    const sent = connection.sendMessageConfirmed(sessionId, "Do not claim this was sent");
+    expect(userMessages(chat.elements)[0]?.authority).toBe("local");
+    await expect(sent).rejects.toThrow("not accepted");
+    expect(userMessages(chat.elements)).toEqual([]);
+    expect(daemon.callCount("sendMessage")).toBe(1);
+});
+
 it("shows an optimistic message immediately and keeps its identity once the daemon takes it", async () => {
     const { connection, daemon, chat, sessionId } = await liveHarness();
     const release = daemon.pause("sendMessage");

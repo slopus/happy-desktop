@@ -212,17 +212,23 @@ function preparationRetain(cache: MessageTextLayoutCache, key: string, font?: st
     cache.preparedSourceSize += size;
     return true;
 }
-function preparedText(text: string, font: string, cache: MessageTextLayoutCache): PreparedText {
+function preparedText(
+    text: string,
+    font: string,
+    cache: MessageTextLayoutCache,
+    whiteSpace: "normal" | "pre-wrap" = "normal",
+): PreparedText {
     const ready = cacheReady(cache);
-    let byText = ready.prepared[font];
+    const fontKey = whiteSpace === "normal" ? font : `${font}:pre-wrap`;
+    let byText = ready.prepared[fontKey];
     if (!byText) {
         byText = dictionaryCreate();
-        ready.prepared[font] = byText;
+        ready.prepared[fontKey] = byText;
     }
     const hit = byText[text];
     if (hit !== undefined) return hit;
-    const value = prepare(text, font, { whiteSpace: "normal" });
-    if (preparationRetain(ready, text, font)) byText[text] = value;
+    const value = prepare(text, font, { whiteSpace });
+    if (preparationRetain(ready, text, fontKey)) byText[text] = value;
     return value;
 }
 /** Painted height of one wrapped run, never less than a single line box. */
@@ -232,13 +238,15 @@ function runHeight(
     lineHeight: number,
     measure: number,
     cache: MessageTextLayoutCache,
+    whiteSpace: "normal" | "pre-wrap" = "normal",
 ): number {
-    if (measure <= 0 || text.trim().length === 0) return lineHeight;
+    if (measure <= 0 || (whiteSpace === "normal" && text.trim().length === 0)) return lineHeight;
     const ready = cacheReady(cache);
-    let byText = ready.runHeights[font];
+    const fontKey = whiteSpace === "normal" ? font : `${font}:pre-wrap`;
+    let byText = ready.runHeights[fontKey];
     if (!byText) {
         byText = dictionaryCreate();
-        ready.runHeights[font] = byText;
+        ready.runHeights[fontKey] = byText;
     }
     let layouts = byText[text];
     if (!layouts) {
@@ -248,7 +256,7 @@ function runHeight(
     const key = `${String(measure)}:${String(lineHeight)}`;
     const hit = layouts[key];
     if (hit !== undefined) return hit;
-    const value = preparedText(text, font, ready);
+    const value = preparedText(text, font, ready, whiteSpace);
     const height = Math.max(lineHeight, layout(value, measure, lineHeight).height);
     layouts[key] = height;
     return height;
@@ -721,6 +729,23 @@ export function uiTextHeight(
     cache: MessageTextLayoutCache = sharedCache,
 ): number {
     return runHeight(text, `${String(size)}px ${UI_FAMILY}`, lineHeight, measure, cache);
+}
+
+/** The error card's 14/20 text, including preserved diagnostic line breaks. */
+export function errorTextHeight(
+    text: string,
+    measure: number,
+    cache: MessageTextLayoutCache = sharedCache,
+    heading = false,
+): number {
+    return runHeight(
+        text,
+        `${heading ? "500 " : ""}14px ${UI_FAMILY}`,
+        20,
+        measure,
+        cache,
+        heading ? "normal" : "pre-wrap",
+    );
 }
 /** The heading ramp: h2 is the largest, h3 alone carries a taller line. */
 const HEADINGS = [

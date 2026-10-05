@@ -2,6 +2,8 @@ import { type CSSProperties, type ReactNode } from "react";
 import { Avatar } from "./Avatar";
 import { Box } from "./Box";
 import { Button } from "./Button";
+import { Icon } from "./Icon";
+import { Spinner } from "./Spinner";
 
 export type SidebarFooterProps = {
     /**
@@ -33,6 +35,12 @@ export type SidebarFooterProps = {
     onSettingsOpen?: () => void;
     /** Overrides the settings control's label. */
     settingsLabel?: string;
+    /**
+     * The machine behind this surface is out of reach. It is stated here, in
+     * the footer's leading slot, rather than in a band that would move the
+     * whole window. Absent while the machine is connected.
+     */
+    connection?: SidebarFooterConnection;
     /** Development-only branch and Blueprint control, pinned beside the footer actions. */
     devMenu?: ReactNode;
     /** The appearance currently rendered; picks the toggle's icon and label. */
@@ -43,6 +51,13 @@ export type SidebarFooterProps = {
     className?: string;
     "data-testid"?: string;
     style?: CSSProperties;
+};
+
+export type SidebarFooterConnection = {
+    /** What is wrong, in full; the row shows it truncated. */
+    message: string;
+    /** Whether Happy is still trying. A settled failure gets no spinner. */
+    retrying: boolean;
 };
 
 /**
@@ -112,7 +127,31 @@ export function SidebarFooter(props: SidebarFooterProps) {
                         {identity}
                     </span>
                 )
-            ) : props.devMenu === undefined ? (
+            ) : null}
+            {props.connection !== undefined ? (
+                <span
+                    aria-live="polite"
+                    className="happy-sidebar-connection"
+                    data-happy-desktop-ui="sidebar-connection"
+                    data-retrying={props.connection.retrying ? "" : undefined}
+                    role="status"
+                    title={props.connection.message}
+                >
+                    <span aria-hidden="true" className="happy-sidebar-connection__icon">
+                        {props.connection.retrying ? (
+                            <Spinner size={14} tone="muted" />
+                        ) : (
+                            <Icon name="alert" size={14} />
+                        )}
+                    </span>
+                    <span className="happy-sidebar-connection__label">
+                        {props.connection.message}
+                    </span>
+                </span>
+            ) : null}
+            {identity === undefined &&
+            props.devMenu === undefined &&
+            props.connection === undefined ? (
                 // No identity to show: the controls keep their trailing position
                 // rather than sliding to the left of an empty row.
                 <span style={{ flex: "1 1 auto" }} />

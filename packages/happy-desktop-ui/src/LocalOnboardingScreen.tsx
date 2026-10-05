@@ -1,7 +1,11 @@
 import { type AssistantMarkName } from "./AssistantMark";
 import { Button } from "./Button";
 import { CopyButton } from "./CopyButton";
-import { DesktopMobileSetup, type DesktopMobileSetupStep } from "./DesktopMobileSetup";
+import {
+    DesktopMobileSetup,
+    MobileAppCopy,
+    type DesktopMobileSetupStep,
+} from "./DesktopMobileSetup";
 import { MenuButton } from "./MenuButton";
 import { OnboardingSteps, type OnboardingStage } from "./OnboardingSteps";
 import { QRCode } from "./QRCode";
@@ -10,8 +14,7 @@ import {
     type SetupAssistantAction,
     type SetupAssistantEntry,
 } from "./SetupAssistants";
-import { SetupPage, SetupProgress, type SetupPageProgress } from "./SetupPage";
-import { Spinner } from "./Spinner";
+import { SetupPage, type SetupPageProgress, type SetupPageStatus } from "./SetupPage";
 import { TextField } from "./TextField";
 import type { ThemeMode } from "./ThemeScope";
 
@@ -159,35 +162,18 @@ function agentSetupProgress(phase: LocalOnboardingAgentSetupPhase): SetupPagePro
     return phase.kind === "downloading" ? downloadProgress(phase.download) : { kind: "waiting" };
 }
 
-function agentSetupProgressLabel(phase: LocalOnboardingAgentSetupPhase): string {
+/** The whole of setup's status line: what it is doing, as briefly as it can be said. */
+function agentSetupStatus(phase: LocalOnboardingAgentSetupPhase): SetupPageStatus {
     switch (phase.kind) {
         case "preparing":
-            return "Preparing download…";
+            return { label: "Preparing…", progress: { kind: "waiting" } };
         case "downloading":
-            return "Downloading Happy Agent…";
+            return { label: "Downloading…", progress: downloadProgress(phase.download) };
         case "retrying":
-            return "Retrying automatically…";
+            return { busy: true, label: `${phase.message} Retrying…` };
         case "ready":
-            return "Starting Happy Agent…";
         case "starting":
-            return "Waiting for Happy Agent…";
-    }
-}
-
-function agentSetupCopy(
-    phase: LocalOnboardingAgentSetupPhase,
-    message: string | undefined,
-): string {
-    switch (phase.kind) {
-        case "retrying":
-            return `${phase.message} Happy will retry the download automatically.`;
-        case "ready":
-            return message ?? "Happy Agent is downloaded and starting automatically.";
-        case "starting":
-            return message ?? "Happy Agent is starting automatically.";
-        case "preparing":
-        case "downloading":
-            return "Happy is downloading and verifying Happy Agent for this machine.";
+            return { label: "Starting…", progress: agentSetupProgress(phase) };
     }
 }
 
@@ -338,40 +324,38 @@ const CHECKING_ASSISTANTS: readonly SetupAssistantEntry[] = Object.entries(ASSIS
 
 interface MachineSetupProjection {
     readonly assistants?: readonly SetupAssistantEntry[];
-    readonly auxiliary?: string;
-    readonly copy: string;
+    readonly copy?: string;
     /** Whether anything found on this machine can actually be used to work. */
     readonly hasValidAuthentication: boolean;
-    readonly label: string;
-    readonly progress: SetupPageProgress;
+    readonly status?: SetupPageStatus;
     readonly title: string;
 }
+
+const SETUP_COPY = "One-time download for this machine.";
+const SUBSCRIPTIONS_COPY = "Looking for Claude, Codex, and Grok.";
 
 function machineSetupProject(view: LocalOnboardingView): MachineSetupProjection | undefined {
     if (view.kind === "agent-setup")
         return {
-            copy: agentSetupCopy(view.phase, view.message),
+            copy: SETUP_COPY,
             hasValidAuthentication: false,
-            label: agentSetupProgressLabel(view.phase),
-            progress: agentSetupProgress(view.phase),
-            title: "Launching Happy Agent",
+            status: agentSetupStatus(view.phase),
+            title: "Setting up",
         };
     if (view.kind === "connecting")
         return {
-            copy: "Happy Agent is starting and connecting to Happy.",
+            copy: SETUP_COPY,
             hasValidAuthentication: false,
-            label: "Waiting for Happy Agent…",
-            progress: { kind: "waiting" },
-            title: "Launching Happy Agent",
+            status: { label: "Starting…", progress: { kind: "waiting" } },
+            title: "Setting up",
         };
     if (view.kind === "examining")
         return {
             assistants: CHECKING_ASSISTANTS,
-            copy: "Happy is checking your Claude, Codex, and Grok sign-ins on this machine.",
+            copy: SUBSCRIPTIONS_COPY,
             hasValidAuthentication: false,
-            label: "Preparing authentication checks…",
-            progress: { kind: "waiting" },
-            title: "Checking your subscriptions",
+            status: { busy: true, label: "Checking…" },
+            title: "Checking subscriptions",
         };
     if (view.kind === "provider-authentication") {
         const valid = view.assistants.some((assistant) => assistant.authentication === "valid");
@@ -379,84 +363,29 @@ function machineSetupProject(view: LocalOnboardingView): MachineSetupProjection 
             (assistant) => assistant.authentication === "checking",
         );
         const failed = view.assistants.some((assistant) => assistant.authentication === "error");
+        if (valid)
+            return {
+                assistants: view.assistants.map(assistantAuthenticationEntry),
+                hasValidAuthentication: true,
+                title: "You're set",
+            };
+        if (checking || failed)
+            return {
+                assistants: view.assistants.map(assistantAuthenticationEntry),
+                copy: SUBSCRIPTIONS_COPY,
+                hasValidAuthentication: false,
+                status: { busy: true, label: failed ? "Couldn't check · retrying…" : "Checking…" },
+                title: "Checking subscriptions",
+            };
         return {
             assistants: view.assistants.map(assistantAuthenticationEntry),
-            auxiliary:
-                "(The Claude, ChatGPT, and Grok desktop apps don't count here: Happy can only detect a signed-in CLI, even if the app is installed.) We're working on making this setup smoother.",
-            copy: valid
-                ? "Happy will use these subscriptions for its work."
-                : checking
-                  ? "Happy is checking your installed coding CLIs. Continue turns on as soon as one is ready."
-                  : failed
-                    ? "Happy couldn't finish checking your subscriptions. We'll retry automatically."
-                    : "Happy needs at least one coding CLI subscription. Install one of the CLIs below and sign in from your terminal — Happy detects it on its own, and Continue turns on.",
-            hasValidAuthentication: valid,
-            label: checking || failed ? "Checking subscriptions…" : "Waiting for sign-in…",
-            progress: { fraction: 1, kind: "measured" },
-            title: valid
-                ? "Subscriptions ready"
-                : checking
-                  ? "Checking your subscriptions"
-                  : failed
-                    ? "Couldn't check subscriptions"
-                    : "Connect a coding CLI",
+            copy: "One signed-in CLI is required.",
+            hasValidAuthentication: false,
+            status: { busy: true, label: "Waiting for sign-in…" },
+            title: "Sign in to a CLI",
         };
     }
     return undefined;
-}
-
-function MachineSetupStatus(props: {
-    readonly projection: MachineSetupProjection;
-    onContinue(): void;
-    onExternalOpen?(url: string): void;
-}) {
-    const showAssistants = props.projection.assistants !== undefined;
-    return (
-        <div
-            className="happy-local-onboarding__machine-status"
-            data-happy-desktop-ui="local-onboarding-machine-status"
-            data-view={showAssistants ? "assistants" : "progress"}
-        >
-            <div
-                aria-hidden={showAssistants}
-                className="happy-local-onboarding__machine-progress"
-                data-happy-desktop-ui="local-onboarding-machine-progress"
-            >
-                <SetupProgress
-                    label={props.projection.label}
-                    progress={props.projection.progress}
-                />
-            </div>
-            <div
-                aria-hidden={!showAssistants}
-                className="happy-local-onboarding__machine-assistants"
-                data-happy-desktop-ui="local-onboarding-machine-assistants"
-            >
-                <SetupAssistants
-                    assistants={props.projection.assistants ?? CHECKING_ASSISTANTS}
-                    data-testid={showAssistants ? "local-onboarding-assistants" : undefined}
-                    onExternalOpen={props.onExternalOpen}
-                />
-                {/* The way on is in the same place from the first moment this
-                    screen appears, and it turns on by itself as soon as one
-                    subscription is found. Nothing signed in is not a step to
-                    skip past: without a subscription there is no product to go
-                    on to, so until then the button is inert rather than absent. */}
-                <div className="happy-local-onboarding__machine-actions">
-                    {showAssistants ? (
-                        <Button
-                            disabled={!props.projection.hasValidAuthentication}
-                            onClick={props.onContinue}
-                            size="large"
-                            width={240}
-                        >
-                            Continue
-                        </Button>
-                    ) : null}
-                </div>
-            </div>
-        </div>
-    );
 }
 
 /**
@@ -488,6 +417,7 @@ export function LocalOnboardingScreen(props: LocalOnboardingScreenProps) {
                 onContinue={props.onHappyMobileConnect}
                 onSkip={props.onHappyMobileSkip}
                 onPlatformSelect={props.onHappyMobilePlatformSelect}
+                onExternalOpen={props.onExternalOpen}
             />
         );
     // Download, start, discovery, and verification are one machine-setup
@@ -531,24 +461,29 @@ export function LocalOnboardingScreen(props: LocalOnboardingScreenProps) {
         return (
             <SetupPage
                 {...frame}
+                {...(machineSetup.assistants
+                    ? {
+                          action: {
+                              disabled: !machineSetup.hasValidAuthentication,
+                              label: "Continue",
+                              onSelect: props.onAssistantsContinue,
+                          },
+                      }
+                    : {})}
                 className="happy-local-onboarding__machine-setup"
-                copy={machineSetup.copy}
+                {...(machineSetup.copy ? { copy: machineSetup.copy } : {})}
                 data-testid="local-onboarding-screen"
                 scene="owl"
+                {...(machineSetup.status ? { status: machineSetup.status } : {})}
                 title={machineSetup.title}
-                auxiliary={
-                    machineSetup.auxiliary ? (
-                        <p className="happy-local-onboarding__provider-note">
-                            {machineSetup.auxiliary}
-                        </p>
-                    ) : undefined
-                }
             >
-                <MachineSetupStatus
-                    onContinue={props.onAssistantsContinue}
-                    onExternalOpen={props.onExternalOpen}
-                    projection={machineSetup}
-                />
+                {machineSetup.assistants ? (
+                    <SetupAssistants
+                        assistants={machineSetup.assistants}
+                        data-testid="local-onboarding-assistants"
+                        onExternalOpen={props.onExternalOpen}
+                    />
+                ) : undefined}
             </SetupPage>
         );
 
@@ -556,28 +491,27 @@ export function LocalOnboardingScreen(props: LocalOnboardingScreenProps) {
         return (
             <SetupPage
                 {...frame}
-                action={{ label: "Continue", onSelect: props.onAssistantsContinue, width: 240 }}
-                copy="Happy Agent runs your agents on this machine. It's installed and connected — nothing to do here."
+                action={{ label: "Continue", onSelect: props.onAssistantsContinue }}
+                copy="Installed and connected."
                 data-testid="local-onboarding-screen"
                 scene="owl"
                 title="Happy Agent is running"
-                auxiliary={
-                    <div className="happy-local-onboarding__facts">
-                        {view.version ? <span>Happy Agent {view.version}</span> : null}
-                        {view.nodeVersion ? <span>Node {view.nodeVersion}</span> : null}
-                    </div>
-                }
-            />
+            >
+                <div className="happy-local-onboarding__facts">
+                    {view.version ? <span>Happy Agent {view.version}</span> : null}
+                    {view.nodeVersion ? <span>Node {view.nodeVersion}</span> : null}
+                </div>
+            </SetupPage>
         );
 
     if (view.kind === "checking")
         return (
             <SetupPage
                 {...frame}
-                copy={view.message ?? "Reading what this machine already has."}
                 data-testid="local-onboarding-screen"
                 scene="snail"
-                title="Checking this machine…"
+                status={{ busy: true, label: view.message ?? "Checking…" }}
+                title="Checking this machine"
             />
         );
 
@@ -585,21 +519,24 @@ export function LocalOnboardingScreen(props: LocalOnboardingScreenProps) {
         return (
             <SetupPage
                 {...frame}
-                copy="Happy Agent runs on Node, and Happy will not put a runtime on your machine by itself. Install Node and setup continues on its own."
+                copy="Install Node.js to continue."
                 data-testid="local-onboarding-screen"
                 scene="wand"
+                status={{ busy: true, label: "Waiting for Node.js…" }}
                 title="Node.js is required"
             />
         );
+
+    const skipMobile = { label: "Skip mobile setup", onSelect: props.onHappyMobileSkip };
 
     if (view.kind === "happy-mobile-checking")
         return (
             <SetupPage
                 {...frame}
-                copy="Reading this Happy Agent's mobile connection."
                 data-testid="local-onboarding-screen"
                 scene="snail"
-                title="Checking Happy Mobile…"
+                status={{ busy: true, label: "Checking…" }}
+                title="Checking Happy Mobile"
             />
         );
 
@@ -607,31 +544,19 @@ export function LocalOnboardingScreen(props: LocalOnboardingScreenProps) {
         return (
             <SetupPage
                 {...frame}
+                action={{
+                    busy: view.busy,
+                    label: "Connect phone",
+                    onSelect: props.onHappyMobileConnect,
+                }}
                 className="happy-local-onboarding__mobile"
-                copy={
-                    view.message ??
-                    "Connect Happy, Claude Code, and Codex to Happy Mobile. Follow sessions, reply, and approve requests when you're away from your desk."
-                }
+                copy={<MobileAppCopy onExternalOpen={props.onExternalOpen} />}
                 data-testid="local-onboarding-screen"
                 scene="alien-monster"
+                secondary={skipMobile}
+                {...(view.message ? { status: { label: view.message } } : {})}
                 title="Take Happy with you"
-                auxiliary={
-                    <Button onClick={props.onHappyMobileSkip} size="medium" variant="ghost">
-                        Skip mobile setup
-                    </Button>
-                }
-            >
-                <div className="happy-local-onboarding__mobile-actions">
-                    <Button
-                        loading={view.busy}
-                        onClick={props.onHappyMobileConnect}
-                        size="large"
-                        width={240}
-                    >
-                        Connect Happy Mobile
-                    </Button>
-                </div>
-            </SetupPage>
+            />
         );
 
     if (view.kind === "happy-mobile-pairing")
@@ -639,29 +564,23 @@ export function LocalOnboardingScreen(props: LocalOnboardingScreenProps) {
             <SetupPage
                 {...frame}
                 className="happy-local-onboarding__mobile happy-local-onboarding__mobile-pairing"
-                copy="Open Happy Mobile, choose Pair Desktop, then scan this code. Happy continues automatically when your phone approves."
+                copy="Open Happy Coder and scan."
                 data-testid="local-onboarding-screen"
-                title="Scan with Happy Mobile"
-                auxiliary={
-                    <Button onClick={props.onHappyMobileSkip} size="medium" variant="ghost">
-                        Skip mobile setup
-                    </Button>
-                }
+                secondary={skipMobile}
+                status={{
+                    busy: true,
+                    label: `Waiting for phone · expires ${pairingExpiration(view.expiresAt)}`,
+                }}
+                title="Scan this code"
             >
                 <div className="happy-local-onboarding__mobile-pairing-body">
                     <QRCode
                         data={view.data}
                         data-testid="happy-mobile-pairing-qr"
                         label="QR code to pair Happy Mobile"
-                        size={240}
+                        size={136}
                     />
                     <PairingLinkCopy data={view.data} />
-                    <div className="happy-local-onboarding__mobile-waiting">
-                        <Spinner label="Pairing in progress" size={16} tone="inverse" />
-                        <span>
-                            Waiting for your phone · expires {pairingExpiration(view.expiresAt)}
-                        </span>
-                    </div>
                 </div>
             </SetupPage>
         );
@@ -670,28 +589,18 @@ export function LocalOnboardingScreen(props: LocalOnboardingScreenProps) {
         return (
             <SetupPage
                 {...frame}
+                action={{
+                    busy: view.busy,
+                    label: "Try again",
+                    onSelect: props.onHappyMobileConnect,
+                }}
                 className="happy-local-onboarding__mobile"
-                copy={view.message}
                 data-testid="local-onboarding-screen"
                 scene="owl"
-                title="Happy Mobile didn't connect"
-                auxiliary={
-                    <Button onClick={props.onHappyMobileSkip} size="medium" variant="ghost">
-                        Skip mobile setup
-                    </Button>
-                }
-            >
-                <div className="happy-local-onboarding__mobile-actions">
-                    <Button
-                        loading={view.busy}
-                        onClick={props.onHappyMobileConnect}
-                        size="large"
-                        width={240}
-                    >
-                        Try again
-                    </Button>
-                </div>
-            </SetupPage>
+                secondary={skipMobile}
+                status={{ label: view.message }}
+                title="Phone didn't connect"
+            />
         );
 
     if (view.kind === "profile-required")
@@ -703,14 +612,11 @@ export function LocalOnboardingScreen(props: LocalOnboardingScreenProps) {
                     disabled: !view.name.trim() || !view.email.trim(),
                     label: "Create profile",
                     onSelect: props.onProfileCreate,
-                    width: 240,
                 }}
-                copy={
-                    view.message ??
-                    "Happy Agent uses this identity for your work and for messages shared with other Happy Agents."
-                }
+                copy="Shown on your commits and messages."
                 data-testid="local-onboarding-screen"
                 scene="disguised-face"
+                {...(view.message ? { status: { label: view.message } } : {})}
                 title="Create your profile"
             >
                 <div className="happy-local-onboarding__profile-form">
@@ -748,13 +654,13 @@ export function LocalOnboardingScreen(props: LocalOnboardingScreenProps) {
                     onSelect: props.onConnectRetry,
                 }}
                 command={DAEMON_START_COMMAND}
-                // Whatever actually refused, verbatim. This screen used to say
-                // nothing at all above a bare retry, which left a daemon failing
-                // for a nameable reason looking like a button that did nothing.
-                copy={view.message}
+                copy="Run the command below, then retry."
                 data-testid="local-onboarding-screen"
                 scene="owl"
-                title="Happy could not reach Happy Agent"
+                // Whatever actually refused, verbatim, so a daemon failing for a
+                // nameable reason does not look like a button that does nothing.
+                status={{ label: view.message }}
+                title="Can't reach Happy Agent"
             />
         );
 
@@ -766,26 +672,21 @@ export function LocalOnboardingScreen(props: LocalOnboardingScreenProps) {
                     disabled: view.busy,
                     label: view.busy ? "Opening…" : "Choose a folder…",
                     onSelect: props.onProjectChoose,
-                    width: 240,
                 }}
-                copy={
-                    view.message ??
-                    "Point Happy at a folder you work in. It becomes your first project, and you can add more later."
-                }
+                copy="Pick a folder you work in."
                 data-testid="local-onboarding-screen"
                 scene="wand"
+                {...(props.onProjectSetupBack
+                    ? {
+                          secondary: {
+                              disabled: view.busy,
+                              label: "Back to setup options",
+                              onSelect: props.onProjectSetupBack,
+                          },
+                      }
+                    : {})}
+                {...(view.message ? { status: { label: view.message } } : {})}
                 title="Open your first project"
-                auxiliary={
-                    props.onProjectSetupBack ? (
-                        <Button
-                            disabled={view.busy}
-                            onClick={props.onProjectSetupBack}
-                            variant="ghost"
-                        >
-                            Back to setup options
-                        </Button>
-                    ) : null
-                }
             />
         );
 
@@ -800,11 +701,7 @@ function onboardingStage(view: LocalOnboardingView): OnboardingStage {
         case "profile-required":
             return "profile";
         case "happy-mobile-desktop":
-            return view.step.kind === "link" && view.step.appReady
-                ? "connect-phone"
-                : view.step.kind === "connected"
-                  ? "connect-phone"
-                  : "get-app";
+            return view.step.kind === "intro" ? "get-app" : "connect-phone";
         case "happy-mobile-checking":
         case "happy-mobile-offer":
             return "get-app";

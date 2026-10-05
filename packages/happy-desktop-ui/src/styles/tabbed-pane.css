@@ -12,6 +12,16 @@
  */
 
 .happy-tabbed-pane {
+    /*
+     * Every document tab is the same width. A strip read by its titles is
+     * scanned as a row of equal cells, the way a browser's is: a tab does not
+     * grow because its page picked a long title or shrink because a session is
+     * still "Untitled", and a title arriving never moves the tabs beside it.
+     * When the bar runs out of room the tabs give way together, down to the
+     * minimum, and only then does the strip scroll.
+     */
+    --happy-tabbed-pane-tab-width: 160px;
+    --happy-tabbed-pane-tab-min-width: 88px;
     display: flex;
     flex: 1;
     flex-direction: column;
@@ -53,20 +63,34 @@
     display: none;
 }
 
-/* Sized by its content so the following action remains beside a short strip. */
+/*
+ * The strip fills the scrollport exactly. The scrollport's own basis is the
+ * tabs at their full width, so a short strip keeps the following action beside
+ * its last tab; when the bar is narrower than that, the scrollport shrinks and
+ * the strip shrinks with it, which is what lets the tabs inside give way.
+ */
 .happy-tabbed-pane__strip {
     display: flex;
-    flex: none;
+    flex: 1 1 auto;
     align-items: stretch;
+    min-width: 0;
 }
 
 .happy-tabbed-pane__tabs {
-    flex: none;
+    flex: 1 1 auto;
+    min-width: 0;
     border-bottom: 0;
 }
 
+/*
+ * One width for every tab, shrinking together and never below the minimum.
+ * Once the minimum is reached the tabs overflow the strip, and the scrollport
+ * around it is what scrolls.
+ */
 .happy-tabbed-pane__tabs .happy-tabs__tab {
-    max-width: 200px;
+    flex: 0 1 auto;
+    width: var(--happy-tabbed-pane-tab-width);
+    min-width: var(--happy-tabbed-pane-tab-min-width);
 }
 
 /* The label is the only part that gives way, so icons and badges stay whole. */
@@ -76,6 +100,27 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+/*
+ * A busy title is painted by ShimmerText, an atomic inline box of its own. An
+ * ellipsis is drawn on a line's overflowing text, not on an atomic box that
+ * overflows, so the run has to become the thing that truncates: laid out as a
+ * block filling the label, it ends in the same ellipsis a resting title does.
+ */
+.happy-tabbed-pane__tabs .happy-tabs__tab-label > .happy-shimmer-text {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/*
+ * Inside an equal-width tab the trailing lane holds the tab's far edge rather
+ * than following the label, so every close control and every spinner stands in
+ * the same column whatever the title's length.
+ */
+.happy-tabbed-pane__tabs .happy-tabs__tab-trailing {
+    margin-left: auto;
 }
 
 .happy-tabbed-pane__tabs .happy-tabs__tab-underline {

@@ -55,7 +55,12 @@ export function QRCode(props: QRCodeProps) {
             height={size}
             ref={draw}
             role="img"
-            style={{ height: size, width: size }}
+            // `size` is the drawn resolution and the default box. A layout that
+            // has to fit a short window may shrink the box through the property.
+            style={{
+                height: `var(--happy-qr-code-size, ${size}px)`,
+                width: `var(--happy-qr-code-size, ${size}px)`,
+            }}
             width={size}
         />
     );

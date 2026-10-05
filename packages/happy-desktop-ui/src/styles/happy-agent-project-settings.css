@@ -151,6 +151,97 @@
     white-space: nowrap;
 }
 
+/* What a new workspace starts with: the commands its checkout runs and the first
+   message its agent is sent. One more column in the dialog's rhythm — label,
+   then the two things under it, each with its own note — so it reads as more of
+   what the project is set to rather than as a second kind of surface. */
+.happy-agent-project-settings__setup {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    gap: 12px;
+    min-width: 0;
+}
+
+/* A heading inside a section: the same weight as the section label, one step
+   quieter, so "Setup commands" sits under "New workspaces" without competing. */
+.happy-agent-project-settings__sublabel {
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 16px;
+}
+
+/* The commands are the host's reading of a file, so they take the path well's
+   fill and border — plainly not editable — and stack one command per line in
+   mono. The well grows with the list; a project with twelve commands shows
+   twelve, since the dialog body scrolls and a list that hid entries would hide
+   what actually runs. */
+.happy-agent-project-settings__commands {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+    min-height: 36px;
+    padding: 8px 10px;
+    background: var(--input-background);
+    border: 1px solid var(--divider);
+    border-radius: var(--happy-radius-sm);
+}
+
+.happy-agent-project-settings__command {
+    flex: none;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--text);
+    font-family: var(--happy-font-mono);
+    font-size: 12px;
+    line-height: 20px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-agent-project-settings__commands-empty {
+    flex: none;
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 20px;
+}
+
+/* The one act the commands offer — opening the file they live in — sits at the
+   start of its own row so it lines up with the well's left edge. */
+.happy-agent-project-settings__setup-actions {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+/* What the project is set to now, beside the commit that would change it: the
+   same row the compute section uses, for the same reason. */
+.happy-agent-project-settings__pending {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+}
+
+.happy-agent-project-settings__pending-current {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 16px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 /* Where the project ends. It is the one block here that removes something, so a
    hairline separates it from the fields above rather than letting it read as one
    more of them, and it keeps the same label/value/note rhythm so the separation

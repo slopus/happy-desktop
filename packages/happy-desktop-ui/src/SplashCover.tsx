@@ -17,6 +17,12 @@ export interface SplashCoverProps {
     readonly steps?: readonly SegmentedProgressSegment[];
     /** Names the sequence for a screen reader when steps are shown. */
     readonly stepsLabel?: string;
+    /**
+     * Covers with the surface alone: no mark, no note, no steps. The window
+     * still never shows a half-built screen, and still dissolves into the app,
+     * but a start the person has already been through is not announced again.
+     */
+    readonly quiet?: boolean;
     readonly children: ReactNode;
 }
 
@@ -58,7 +64,13 @@ export function SplashCover(props: SplashCoverProps) {
                     if (props.ready) setFinished(true);
                 }}
             >
-                <SplashScreen note={props.note} steps={props.steps} stepsLabel={props.stepsLabel} />
+                {props.quiet ? null : (
+                    <SplashScreen
+                        note={props.note}
+                        steps={props.steps}
+                        stepsLabel={props.stepsLabel}
+                    />
+                )}
             </div>
         </div>
     );

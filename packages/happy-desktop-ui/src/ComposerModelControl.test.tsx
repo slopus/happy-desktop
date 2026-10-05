@@ -108,14 +108,43 @@ it("composes the controlled model picker into the composer and navigates its men
     const menu = view.$(
         '[data-testid="control"] [data-happy-desktop-ui="composer-model-control-menu"]',
     );
-    expect(menu.bounds().width).toBe(240);
+    expect(menu.bounds().width).toBe(192);
     expect(menu.bounds().x + menu.bounds().width).toBeCloseTo(
         control.bounds().x + control.bounds().width,
         1,
     );
     expect(menu.computedStyle("box-shadow")).toBe("none");
     expect(trigger.bounds().y - (menu.bounds().y + menu.bounds().height)).toBeCloseTo(8, 1);
-    expect(menu.element.textContent).toContain("5.6 Terra");
+    // The menu is two rows naming the current model and effort.
+    const modelSetting = view.$(
+        '[data-testid="control"] [data-happy-desktop-ui="composer-model-control-model-setting"]',
+    );
+    const effortSetting = view.$(
+        '[data-testid="control"] [data-happy-desktop-ui="composer-model-control-effort-setting"]',
+    );
+    expect(modelSetting.element.textContent).toContain("Model5.6 Sol");
+    expect(effortSetting.element.textContent).toContain("EffortExtra High");
+    // Effort opens its own list beside the menu; picking applies it and closes the menu.
+    await userEvent.click(effortSetting.element);
+    const standard = view.$(
+        '[data-testid="control"] [data-happy-desktop-ui="composer-model-control-efforts"] [role="menuitemradio"]',
+    );
+    expect(standard.element.textContent).toBe("Standard");
+    await userEvent.click(standard.element);
+    expect(trigger.element.textContent).toContain("Standard");
+    expect(
+        view.container.querySelector('[data-happy-desktop-ui="composer-model-control-menu"]'),
+    ).toBeNull();
+    await userEvent.click(trigger.element);
+    await userEvent.click(
+        view.$(
+            '[data-testid="control"] [data-happy-desktop-ui="composer-model-control-model-setting"]',
+        ).element,
+    );
+    const models = view.$(
+        '[data-testid="control"] [data-happy-desktop-ui="composer-model-control-models"]',
+    );
+    expect(models.element.textContent).toContain("5.6 Terra");
     const account = view.$(
         '[data-testid="control"] [data-service-header="codex"] [data-happy-desktop-ui="composer-model-control-account-label"]',
     );
@@ -128,15 +157,17 @@ it("composes the controlled model picker into the composer and navigates its men
         '[data-testid="control"] [data-happy-desktop-ui="composer-model-control-accounts"]',
     );
     expect(choices.element.textContent).toContain("work");
-    // The account panel opens as a column beside the menu, 8px away: to the
-    // right when the window has room there, otherwise to the left.
-    const menuRight = menu.element.getBoundingClientRect().right;
-    const side = menuRight + 8 + choices.bounds().width <= window.innerWidth - 8 ? "right" : "left";
-    expect(choices.element.getAttribute("data-side")).toBe(side);
+    // The account panel opens as a column beside the model list, 8px away, on
+    // whichever side the pane it is painted in has room for it.
+    const side = choices.element.getAttribute("data-side");
+    const pane = view.container.getBoundingClientRect();
+    const panel = choices.element.getBoundingClientRect();
+    expect(panel.left).toBeGreaterThanOrEqual(pane.left);
+    expect(panel.right).toBeLessThanOrEqual(pane.right);
     expect(
         side === "right"
-            ? choices.bounds().x - (menu.bounds().x + menu.bounds().width)
-            : menu.bounds().x - (choices.bounds().x + choices.bounds().width),
+            ? choices.bounds().x - (models.bounds().x + models.bounds().width)
+            : models.bounds().x - (choices.bounds().x + choices.bounds().width),
     ).toBeCloseTo(8, 0);
     // Its name toggles the list shut again.
     await userEvent.click(account.element);
@@ -145,7 +176,7 @@ it("composes the controlled model picker into the composer and navigates its men
     ).toBeNull();
     const terra = Array.from(
         view.container.querySelectorAll<HTMLButtonElement>(
-            '[data-testid="control"] .happy-composer-model-control__row-main',
+            '[data-testid="control"] [data-happy-desktop-ui="composer-model-control-row"]',
         ),
     ).find((choice) => choice.textContent === "5.6 Terra");
     await userEvent.click(terra!);

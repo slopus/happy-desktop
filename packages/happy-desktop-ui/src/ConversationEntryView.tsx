@@ -5,12 +5,14 @@ import type {
     ConversationAttachment,
     ConversationAuthor,
     ConversationEntry,
+    ConversationErrorAssistance,
     ConversationToolCall,
     UserError,
 } from "happy-desktop-state";
 import { AgentActivityRow, type ActivityMotion, type ActivityTreatment } from "./AgentActivityRow";
 import { ConversationComputeEvent } from "./ConversationComputeEvent";
 import { ConversationErrorCard } from "./ConversationErrorCard";
+import { conversationErrorTitle } from "./conversationErrorTitle";
 import { DelegatedAgentActivity } from "./DelegatedAgentActivity";
 import { TurnSummary } from "./TurnSummary";
 import { AgentTraceRow } from "./AgentTraceRow";
@@ -27,6 +29,8 @@ type ConversationLinkedAttachment = Extract<ConversationAttachment, { kind: "lin
 
 export type ConversationEntryViewProps = {
     entry: ConversationEntry;
+    errorAssistance?: ConversationErrorAssistance;
+    onErrorAssistanceRequest?: (entryId: string) => void;
     /** Identity heading for the first activity in an agent turn. */
     activityAuthor?: ConversationAuthor;
     /** Identity id of the reader, so their own messages take the own treatment. */
@@ -316,17 +320,17 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
         const notice =
             entry.level === "error" || entry.retry !== undefined ? (
                 <ConversationErrorCard
+                    assistance={props.errorAssistance}
+                    onAssistanceRequest={
+                        props.onErrorAssistanceRequest
+                            ? () => props.onErrorAssistanceRequest!(entry.id)
+                            : undefined
+                    }
                     className={props.activityAuthor ? undefined : props.className}
                     data-testid={props["data-testid"]}
                     reason={entry.text}
                     style={props.activityAuthor ? undefined : props.style}
-                    title={
-                        entry.retry === undefined
-                            ? (entry.title ?? "Error")
-                            : entry.retry.attempt === undefined || entry.retry.attempt === 1
-                              ? "Connection Error"
-                              : `Connection Error (Attempt ${String(entry.retry.attempt)})`
-                    }
+                    title={conversationErrorTitle(entry)}
                     tone={entry.retry ? "warning" : "error"}
                 />
             ) : (

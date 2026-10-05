@@ -102,9 +102,25 @@ export function SplashCoverPage() {
             </Specimen>
 
             <Specimen
+                detail="Quiet: every start after the first covers with the surface alone, so the mark is never announced twice"
+                label="Quiet"
+                number="04"
+                stage="surface"
+            >
+                <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                    <div style={frame}>
+                        <SplashCover quiet ready={false}>
+                            <Underneath />
+                        </SplashCover>
+                    </div>
+                    <DimensionRule label="Surface only · same veil and dissolve" />
+                </div>
+            </Specimen>
+
+            <Specimen
                 detail="Ready: the veil fades over 260ms and removes itself on animationend"
                 label="Dissolving"
-                number="04"
+                number="05"
                 stage="surface"
             >
                 <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>

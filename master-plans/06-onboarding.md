@@ -51,6 +51,14 @@ setup**, and every pairing QR code has **Copy auth link** directly beneath it.
 - DM `@Ex3NDR` on X
 - Look through filed issues: <https://github.com/slopus/happy/issues>
 
+## One download
+
+Downloading Happy Agent separately from the desktop app is probably a mistake.
+We probably want to bundle the two: once you have downloaded the desktop app,
+Happy Agent should already be on your machine too. Onboarding cannot usefully
+start before the agent is there, so it is better to download both in one shot.
+Happy Agent keeps updating on its own after that.
+
 ## How we know it is done
 
 - The five named steps form one stable, linear progress bar, and every

@@ -8,16 +8,18 @@ application tests, installs the actual `.exe` on a disposable hosted Windows
 runner, then launches that installed `Happy.exe` through Playwright and verifies
 the welcome screen. The screenshot is uploaded with the run.
 
-To validate a branch without publishing a release:
+Every Windows build is signed; there are no unsigned Windows builds. Azure's
+GitHub federation trusts only `main`, so the Windows build refuses to run from any
+other ref. To validate without publishing a release:
 
 ```sh
-gh workflow run desktop-validate.yml --ref <branch> -f platform=windows
+gh workflow run desktop-validate.yml --ref main -f platform=windows
 ```
 
-Download `happy-desktop-windows-installer-standard-unsigned` or
-`happy-desktop-windows-installer-local-web-unsigned` from the completed run and run its
+Download `happy-desktop-windows-installer-standard` or
+`happy-desktop-windows-installer-local-web` from the completed run and run its
 `.exe`. The Agent is downloaded separately by Desktop; public
-onboarding requires a Happy Agent release containing its Windows x64 archive.
+onboarding requires a Happy Agent release containing its signed Windows x64 archive.
 
 The existing manual `desktop-release.yml` workflow still publishes from `main`
 after validating the release version and notes. It now waits for this Windows
@@ -30,10 +32,8 @@ notarization remain unchanged.
 
 ## Azure Artifact Signing
 
-Signing is enabled only when the repository variable `WINDOWS_SIGNING_ENABLED`
-is `true` and the workflow runs from `main`. Other branches produce explicitly
-unsigned validation artifacts. Once enabled, a missing setting, failed signature,
-or unexpected publisher fails the build; there is no unsigned fallback.
+A missing setting, failed signature, or unexpected publisher fails the build;
+there is no unsigned fallback.
 
 Configure these GitHub Actions repository variables:
 
@@ -46,7 +46,6 @@ Configure these GitHub Actions repository variables:
 | `WINDOWS_SIGNING_ACCOUNT`   | Artifact Signing account name                                         |
 | `WINDOWS_SIGNING_PROFILE`   | Approved Public Trust certificate profile name                        |
 | `WINDOWS_SIGNING_PUBLISHER` | Exact certificate common name or full subject, as approved by Azure   |
-| `WINDOWS_SIGNING_ENABLED`   | Set to `true` only after provisioning is complete                     |
 
 The Azure application needs a federated credential with issuer
 `https://token.actions.githubusercontent.com`, audience `api://AzureADTokenExchange`,
@@ -58,15 +57,13 @@ uses a separate **Artifact Signing Identity Verifier** role.
 Electron Builder signs the application, native files, uninstaller, and NSIS
 installer before generating the blockmap and updater manifest. CI verifies the
 timestamped signatures and publisher on the installer and installed native files,
-the updater's publisher pin, and the final installer's SHA-512 and size. Signed
-artifact names end in `-signed`.
+the updater's publisher pin, and the final installer's SHA-512 and size. The
+release also refuses a published Agent that is not validly signed.
 
-Validate both flavors on `main` before publishing the first signed release. A
-certificate renewal under the same publisher can use the existing updater pin.
+A certificate renewal under the same publisher can use the existing updater pin.
 Changing the publisher later needs an updater migration: ship a bridge accepting
 both identities first and account for users who skip that bridge release.
 
-Unsigned installers can trigger SmartScreen warnings or be blocked by Smart App
-Control or organizational policy. Signing establishes a verified publisher; it
-does not guarantee immediate SmartScreen reputation. Happy's sandbox setup still
+Signing establishes a verified publisher; SmartScreen reputation accrues to that
+identity across releases, but is not guaranteed immediately. Happy's sandbox setup still
 has its own one-time Windows administrator approval.

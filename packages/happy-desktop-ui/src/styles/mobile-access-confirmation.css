@@ -1,0 +1,111 @@
+/*
+ * C-285 MobileAccessConfirmation — the destructive confirmations of Mobile
+ * Access, laid out inside the C-028 Modal body. The body is a column of short
+ * groups (a heading and its rows); paths, IDs, and fingerprints are set in the
+ * code face and wrap anywhere, so a long home directory never widens the
+ * dialog past its 480px card.
+ */
+
+.happy-mobile-access-confirmation__actions,
+.happy-mobile-access-confirmation__body,
+.happy-mobile-access-confirmation__group,
+.happy-mobile-access-confirmation__registration,
+.happy-mobile-access-confirmation__registration-details,
+.happy-mobile-access-detail {
+    box-sizing: border-box;
+}
+
+.happy-mobile-access-confirmation__actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.happy-mobile-access-confirmation__body {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.happy-mobile-access-confirmation__lead {
+    margin: 0;
+    color: var(--text);
+}
+
+.happy-mobile-access-confirmation__note {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 18px;
+}
+
+.happy-mobile-access-confirmation__group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+}
+
+.happy-mobile-access-confirmation__group-title {
+    color: var(--text);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 18px;
+}
+
+.happy-mobile-access-confirmation__list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin: 0;
+    padding: 0 0 0 18px;
+}
+
+.happy-mobile-access-confirmation__registration {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 12px;
+    background: var(--groupped-background);
+    border: 1px solid var(--divider);
+    border-radius: 10px;
+}
+
+.happy-mobile-access-confirmation__registration-details {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+}
+
+.happy-mobile-access-detail {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    min-width: 0;
+}
+
+.happy-mobile-access-detail__label {
+    flex: none;
+    width: 96px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 18px;
+}
+
+.happy-mobile-access-detail__value {
+    flex: 1 1 0%;
+    min-width: 0;
+    color: var(--text);
+    font-family: var(--happy-font-mono);
+    font-size: 12px;
+    font-synthesis: none;
+    line-height: 18px;
+    overflow-wrap: anywhere;
+    user-select: text;
+}
+
+.happy-mobile-access-detail__value[data-plain] {
+    font-family: var(--happy-font-ui);
+}

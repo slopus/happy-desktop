@@ -42,6 +42,19 @@ const computeDefault = {
     image: "",
 } as const;
 
+/** The host has answered: two commands from the repository's happy.toml, and no first message. */
+const setupCommands = {
+    status: "ready",
+    setupCommands: ["pnpm install --frozen-lockfile", "pnpm build"],
+    initialPromptDraft: "",
+} as const;
+
+const setupHandlers = {
+    onInitialPromptChange: () => {},
+    onInitialPromptSubmit: () => {},
+    onSetupFileOpen: () => {},
+} as const;
+
 export function HappyAgentProjectSettingsDialogPage() {
     return (
         <ComponentPage
@@ -523,6 +536,209 @@ export function HappyAgentProjectSettingsDialogPage() {
                     />,
                     880,
                 )}
+            </Specimen>
+            <Specimen
+                detail="the host has answered · two commands read from happy.toml, shown in a well and not editable · the first message is empty"
+                label="Setup, commands"
+                number="22"
+                stage="app"
+            >
+                {frame(
+                    <HappyAgentProjectSettingsDialog
+                        {...happy}
+                        {...setupHandlers}
+                        draft="happy"
+                        onClose={() => {}}
+                        onDraftChange={() => {}}
+                        onSubmit={() => {}}
+                        setup={setupCommands}
+                    />,
+                    900,
+                )}
+                <DimensionRule label="commands well · 36px minimum · 20px per command" />
+            </Specimen>
+            <Specimen
+                detail="the file names nothing: the well says so and the note says where to write them"
+                label="Setup, no commands"
+                number="23"
+                stage="app"
+            >
+                {frame(
+                    <HappyAgentProjectSettingsDialog
+                        {...happy}
+                        {...setupHandlers}
+                        draft="happy"
+                        onClose={() => {}}
+                        onDraftChange={() => {}}
+                        onSubmit={() => {}}
+                        setup={{ status: "ready", setupCommands: [], initialPromptDraft: "" }}
+                    />,
+                    900,
+                )}
+            </Specimen>
+            <Specimen
+                detail="the host's answer is not in yet: the well says it is reading and the message cannot be edited"
+                label="Setup, reading"
+                number="24"
+                stage="app"
+            >
+                {frame(
+                    <HappyAgentProjectSettingsDialog
+                        {...happy}
+                        {...setupHandlers}
+                        draft="happy"
+                        onClose={() => {}}
+                        onDraftChange={() => {}}
+                        onSubmit={() => {}}
+                        setup={{ status: "loading", setupCommands: [], initialPromptDraft: "" }}
+                    />,
+                    900,
+                )}
+            </Specimen>
+            <Specimen
+                detail="a first message written over nothing: what the host holds sits beside the commit that would change it"
+                label="Setup, message pending"
+                number="25"
+                stage="app"
+            >
+                {frame(
+                    <HappyAgentProjectSettingsDialog
+                        {...happy}
+                        {...setupHandlers}
+                        draft="happy"
+                        onClose={() => {}}
+                        onDraftChange={() => {}}
+                        onSubmit={() => {}}
+                        setup={{
+                            ...setupCommands,
+                            initialPromptDraft:
+                                "Install dependencies and run the whole test suite. Report what fails before changing anything.",
+                        }}
+                    />,
+                    940,
+                )}
+            </Specimen>
+            <Specimen
+                detail="the host holds a message and the reader has not touched it: no pending row"
+                label="Setup, message set"
+                number="26"
+                stage="app"
+            >
+                {frame(
+                    <HappyAgentProjectSettingsDialog
+                        {...happy}
+                        {...setupHandlers}
+                        draft="happy"
+                        onClose={() => {}}
+                        onDraftChange={() => {}}
+                        onSubmit={() => {}}
+                        setup={{
+                            ...setupCommands,
+                            initialPrompt:
+                                "Install dependencies and run the whole test suite. Report what fails before changing anything.",
+                            initialPromptDraft:
+                                "Install dependencies and run the whole test suite. Report what fails before changing anything.",
+                        }}
+                    />,
+                    900,
+                )}
+            </Specimen>
+            <Specimen
+                detail="the host is being told: the whole dialog is inert and the commit says what it is doing"
+                label="Setup, applying"
+                number="27"
+                stage="app"
+            >
+                {frame(
+                    <HappyAgentProjectSettingsDialog
+                        {...happy}
+                        {...setupHandlers}
+                        draft="happy"
+                        onClose={() => {}}
+                        onDraftChange={() => {}}
+                        onSubmit={() => {}}
+                        setup={{
+                            ...setupCommands,
+                            initialPromptDraft: "Run pnpm install, then wait for instructions.",
+                            submitting: true,
+                        }}
+                    />,
+                    940,
+                )}
+            </Specimen>
+            <Specimen
+                detail="the host refused: the reason, the text still in hand, and the same commit"
+                label="Setup, not saved"
+                number="28"
+                stage="app"
+            >
+                {frame(
+                    <HappyAgentProjectSettingsDialog
+                        {...happy}
+                        {...setupHandlers}
+                        draft="happy"
+                        onClose={() => {}}
+                        onDraftChange={() => {}}
+                        onSubmit={() => {}}
+                        setup={{
+                            ...setupCommands,
+                            error: "The project changed before its settings could be saved.",
+                            initialPromptDraft: "Run pnpm install, then wait for instructions.",
+                        }}
+                    />,
+                    1000,
+                )}
+            </Specimen>
+            <Specimen
+                detail="the settings could not be read: the section says so and offers nothing it cannot ground"
+                label="Setup, not read"
+                number="29"
+                stage="app"
+            >
+                {frame(
+                    <HappyAgentProjectSettingsDialog
+                        {...happy}
+                        {...setupHandlers}
+                        draft="happy"
+                        onClose={() => {}}
+                        onDraftChange={() => {}}
+                        onSubmit={() => {}}
+                        setup={{
+                            status: "error",
+                            setupCommands: [],
+                            initialPromptDraft: "",
+                            readError: "The Happy Agent on this machine could not be reached.",
+                        }}
+                    />,
+                    940,
+                )}
+            </Specimen>
+            <Specimen
+                detail="the whole dialog as the app composes it: compute and setup together, on the dark appearance"
+                label="Compute and setup, dark"
+                number="30"
+                stage="app"
+            >
+                <div className="happy-theme-dark" style={{ display: "flex" }}>
+                    {frame(
+                        <HappyAgentProjectSettingsDialog
+                            {...happy}
+                            {...setupHandlers}
+                            archive={{}}
+                            compute={computeDefault}
+                            draft="happy"
+                            onArchiveRequest={() => {}}
+                            onClose={() => {}}
+                            onComputeImageChange={() => {}}
+                            onComputeModeChange={() => {}}
+                            onComputeSubmit={() => {}}
+                            onDraftChange={() => {}}
+                            onSubmit={() => {}}
+                            setup={setupCommands}
+                        />,
+                        1240,
+                    )}
+                </div>
             </Specimen>
         </ComponentPage>
     );

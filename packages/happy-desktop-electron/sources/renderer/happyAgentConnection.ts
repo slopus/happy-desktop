@@ -5,6 +5,9 @@ import {
     HappyAgentClient,
     happyAgentWorkspaceClientCreate,
     happyAgentClockStoreCreate,
+    gptLiveRuntimeCreate,
+    type GptLiveRuntime,
+    type GptLiveRuntimeCreateOptions,
     happyAgentDebugLogStoreCreate,
     happyAgentWorkspaceStoreCreate,
     happyAgentOnboardingStoreCreate,
@@ -92,6 +95,8 @@ function workspaceMemoryPersistence(happyAgentId: string): HappyAgentWorkspaceMe
 }
 
 export interface HappyAgentSession {
+    /** Supplies the existing authenticated connection only to the opt-in voice integration. */
+    gptLiveRuntimeCreate(options: Omit<GptLiveRuntimeCreateOptions, "client">): GptLiveRuntime;
     readonly welcome: WelcomeStore;
     readonly onboarding: HappyAgentOnboardingStore;
     readonly connection: HappyAgentConnectionStore;
@@ -278,8 +283,14 @@ function streamConnectionStoreCreate(connection: HappyAgentConnection): {
  * state with the small set of services that remain owned by the desktop host.
  */
 export function happyAgentConnectionOpen(input: {
-    readonly prepareLegacyCli?: () => Promise<void>;
-    readonly connectLegacyCli?: () => Promise<void>;
+    /** The local desktop pairs Happy Mobile through the guided setup. */
+    readonly guidedMobileSetup?: boolean;
+    readonly readLegacyCli?: () => Promise<
+        import("happy-desktop-state").HappyTerminalCliInspection
+    >;
+    readonly resetLegacyCli?: (
+        request: import("happy-desktop-state").HappyTerminalCliResetRequest,
+    ) => Promise<import("happy-desktop-state").HappyTerminalCliResetOutcome>;
     readonly cloudHost: HappyAgentCloudHost;
     readonly host: HappyAgentHost;
     readonly deps: HappyAgentSessionDeps;
@@ -354,14 +365,14 @@ export function happyAgentConnectionOpen(input: {
         setupActive: input.happyAgentId !== "local" && welcome.get().welcomeAcknowledged,
         mobileSkipped: desktopHappyMobileOnboardingSkipped(input.happyAgentId),
         onMobileSkip: () => desktopHappyMobileOnboardingSkip(input.happyAgentId),
-        connectLegacyCli: input.connectLegacyCli,
-        prepareLegacyCli: input.prepareLegacyCli,
+        guidedMobileSetup: input.guidedMobileSetup,
     });
     const client: HappyAgentWorkspaceClient = happyAgentWorkspaceClientCreate({
         client: directClient,
-        connectLegacyCli: input.connectLegacyCli,
-        prepareLegacyCli: input.prepareLegacyCli,
+        guidedMobileSetup: input.guidedMobileSetup,
         cloudHost: input.cloudHost,
+        readLegacyCli: input.readLegacyCli,
+        resetLegacyCli: input.resetLegacyCli,
         connection: agentConnection,
         hostServices,
         modelPreferencePersistence: input.modelPreferencePersistence,
@@ -455,6 +466,11 @@ export function happyAgentConnectionOpen(input: {
                 });
                 sessionConnection = streamConnectionStoreCreate(agentConnection);
                 session = {
+                    gptLiveRuntimeCreate: (options) =>
+                        gptLiveRuntimeCreate({
+                            ...options,
+                            client: () => (disposed ? undefined : directClient),
+                        }),
                     welcome,
                     onboarding,
                     cloud: () => cloudStore,

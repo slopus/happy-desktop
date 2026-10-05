@@ -41,6 +41,20 @@ export function happyAgentVersionNewer(candidate: string, current: string): bool
     return false;
 }
 
+/** Sorts versions oldest first by precedence, breaking build-metadata ties by text. */
+export function happyAgentVersionCompare(left: string, right: string): number {
+    if (happyAgentVersionNewer(left, right)) return 1;
+    if (happyAgentVersionNewer(right, left)) return -1;
+    if (left === right) return 0;
+    return left < right ? -1 : 1;
+}
+
+/** Developer builds are installed by hand and are never removed automatically. */
+export function happyAgentVersionLocal(version: string): boolean {
+    const [release = "", build] = version.split("+", 2);
+    return release.split("-", 1)[0] === "0.0.0" || build?.split(".", 1)[0] === "local";
+}
+
 function versionParse(version: string): { core: bigint[]; prerelease: string[] } {
     const match = /^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/u.exec(version);
     if (!match) throw new Error(`Happy Agent version is invalid: ${version}`);

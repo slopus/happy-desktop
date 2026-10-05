@@ -4,6 +4,7 @@ import {
     debugMetricsArgument,
     desktopIpc,
     mediaPreviewArgument,
+    liveWindowArgument,
     type DesktopBrowserStatus,
     type DesktopNavigationStep,
     type DesktopPreviewNavigation,
@@ -45,6 +46,11 @@ const identity = buildIdentityRead();
 const debugMetricsEnabled = process.argv.includes(debugMetricsArgument);
 
 const bridge: HappyDesktopBridge = {
+    liveWindowId: process.argv
+        .find((value) => value.startsWith(liveWindowArgument))
+        ?.slice(liveWindowArgument.length),
+    liveMicrophoneStart: (input) => ipcRenderer.invoke(desktopIpc.liveMicrophoneStart, input),
+    liveMicrophoneRevoke: () => ipcRenderer.invoke(desktopIpc.liveMicrophoneRevoke),
     ...(identity ? { buildIdentity: identity } : {}),
     debugMetricsEnabled,
     appearanceSet: (mode) => ipcRenderer.send(desktopIpc.appearanceSet, mode),
@@ -123,6 +129,8 @@ const bridge: HappyDesktopBridge = {
     daemonInstallKill: () => ipcRenderer.invoke(desktopIpc.daemonInstallKill),
     daemonRestart: () => ipcRenderer.invoke(desktopIpc.daemonRestart),
     legacyCliConnect: () => ipcRenderer.invoke(desktopIpc.legacyCliConnect),
+    legacyCliStatus: () => ipcRenderer.invoke(desktopIpc.legacyCliStatus),
+    legacyCliReset: (request) => ipcRenderer.invoke(desktopIpc.legacyCliReset, request),
     legacyCliPrepare: () => ipcRenderer.invoke(desktopIpc.legacyCliPrepare),
     daemonGet: () => ipcRenderer.invoke(desktopIpc.daemonGet),
     daemonStart: () => ipcRenderer.invoke(desktopIpc.daemonStart),

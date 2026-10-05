@@ -244,7 +244,7 @@ jobs:
                   path: packages/happy-desktop-electron/release
                   merge-multiple: true
 
-            - name: Download unsigned Windows artifacts
+            - name: Download signed Windows artifacts
               if: ${{ !inputs.prerelease }}
               uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
               with:

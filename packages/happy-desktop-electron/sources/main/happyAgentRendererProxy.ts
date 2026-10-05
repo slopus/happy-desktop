@@ -11,6 +11,7 @@ import type { Duplex } from "node:stream";
 import { monitorEventLoopDelay } from "node:perf_hooks";
 import { HAPPY_AGENT_TERMINAL_CAPABILITY_PROTOCOL_PREFIX } from "./happyAgentTerminalBridge";
 import type { HappyAgentDaemonClientOptions } from "./happyAgentDaemonClient";
+import type { RendererLiveAttempt } from "../shared/happyAgentRendererUtilityContract";
 
 export const happyAgentRendererOrigin = "http://happy-agent";
 
@@ -22,6 +23,16 @@ export interface HappyAgentRendererTarget {
     readonly transport?: HappyAgentDaemonClientOptions;
     readonly onConnectionError?: () => void;
     readonly allowedOrigin?: string;
+    readonly liveWindowStart?: (windowId: string) => void;
+    readonly liveWindowClose?: (windowId: string) => void;
+    readonly upgradeHandle?: (
+        request: IncomingMessage,
+        socket: Duplex,
+        head: Buffer,
+        url: URL,
+    ) => boolean;
+    /** Main retains attempted IDs before the utility may forward creation. */
+    readonly liveAttemptClose?: (attempt: RendererLiveAttempt) => void;
 }
 
 export interface HappyAgentRendererProxy {
@@ -30,6 +41,8 @@ export interface HappyAgentRendererProxy {
     readonly password: string;
     /** Installs a backing without changing the renderer's URL or cache keys. */
     targetSet(target: HappyAgentRendererTarget): Promise<() => void>;
+    liveWindowStart?(windowId: string): void;
+    liveWindowClose?(windowId: string): void;
     close(): void;
 }
 
@@ -176,7 +189,8 @@ export function happyAgentRendererProxyCreate(
             socket.end("HTTP/1.1 503 Service Unavailable\r\nConnection: close\r\n\r\n");
             return;
         }
-        forwardUpgrade(request, socket, head, backing, url);
+        if (!backing.upgradeHandle?.(request, socket, head, url))
+            forwardUpgrade(request, socket, head, backing, url);
     };
     const server = createServer((request, response) => handle(request, response, false));
     // This parser has no listening port; only authenticated CONNECT sockets enter.
@@ -234,6 +248,12 @@ export function happyAgentRendererProxyCreate(
                     return () => {
                         if (target === next) target = undefined;
                     };
+                },
+                liveWindowStart(windowId) {
+                    target?.liveWindowStart?.(windowId);
+                },
+                liveWindowClose(windowId) {
+                    target?.liveWindowClose?.(windowId);
                 },
                 close() {
                     target = undefined;

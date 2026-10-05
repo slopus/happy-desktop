@@ -9,6 +9,11 @@ import type { HappyAgentRendererTarget } from "./happyAgentRendererProxy";
 import { happyAgentProxyHandle, type HappyAgentProxyClient } from "./happyAgentProxyHandle";
 import { happyAgentRequestTimingCreate } from "./happyAgentRequestTiming";
 import {
+    happyAgentLiveAttemptClose,
+    happyAgentLiveBridgeCreate,
+    type HappyAgentLiveClient,
+} from "./happyAgentLiveBridge";
+import {
     happyAgentTerminalBridgeCreate,
     type HappyAgentTerminalClient,
 } from "./happyAgentTerminalBridge";
@@ -27,7 +32,7 @@ export interface HappyAgentHttpProxyHandle {
 
 export interface HappyAgentHttpProxyBacking {
     /** The daemon client whose `/v0` surface this proxy exposes. */
-    readonly client: HappyAgentProxyClient & HappyAgentTerminalClient;
+    readonly client: HappyAgentProxyClient & HappyAgentTerminalClient & HappyAgentLiveClient;
 }
 
 export interface HappyAgentHttpProxyOptions extends HappyAgentHttpProxyBacking {
@@ -81,7 +86,7 @@ export function happyAgentDaemonHealthProject(
 export function happyAgentHttpProxyCreate(
     options: HappyAgentHttpProxyOptions,
 ): Promise<HappyAgentHttpProxyHandle> {
-    type Client = HappyAgentProxyClient & HappyAgentTerminalClient;
+    type Client = HappyAgentProxyClient & HappyAgentTerminalClient & HappyAgentLiveClient;
     interface CurrentBacking {
         readonly client: Client;
     }
@@ -89,6 +94,10 @@ export function happyAgentHttpProxyCreate(
         client: next.client,
     });
     let backing = backingCreate(options);
+    const live = happyAgentLiveBridgeCreate({
+        client: () => backing.client,
+        allowedOrigin: () => options.allowedOrigin,
+    });
     // Preview sites outlive one daemon transport. Their stored client is this
     // stable facade, whose every method lookup binds to the current host client.
     const liveHostClient = new Proxy(options.client, {
@@ -169,39 +178,49 @@ export function happyAgentHttpProxyCreate(
             response.end(JSON.stringify({ error: "JSON content type required." }));
             return;
         }
-        void happyAgentProxyHandle({
-            client,
-            method: request.method ?? "GET",
-            path: requestPath,
-            query: url.searchParams,
-            request,
-            response,
-            ...(onTiming ? { onTiming } : {}),
-            onConnectionError: (error: unknown) => {
-                // An old in-flight request may finish failing after a
-                // replacement is already live. It cannot invalidate
-                // the new connection or start another reconnect.
-                if (backing === requestBacking) options.onConnectionError?.(error);
-            },
-            ...(preview ? { htmlPreviewUrl: preview.workspace } : {}),
-        }).then(
-            (handled) => {
-                if (!handled && !response.headersSent) {
-                    response.writeHead(404, { "content-type": "application/json" });
-                    response.end(JSON.stringify({ error: "Not found." }));
-                }
-            },
-            (error: unknown) => {
-                if (!response.headersSent) {
-                    response.writeHead(500, { "content-type": "application/json" });
-                    response.end(
-                        JSON.stringify({
-                            error: error instanceof Error ? error.message : String(error),
-                        }),
-                    );
-                }
-            },
-        );
+        void (
+            requestPath === url.pathname
+                ? live.handle(request, response, url)
+                : Promise.resolve(false)
+        )
+            .then(
+                (handled) =>
+                    handled ||
+                    happyAgentProxyHandle({
+                        client,
+                        method: request.method ?? "GET",
+                        path: requestPath,
+                        query: url.searchParams,
+                        request,
+                        response,
+                        ...(onTiming ? { onTiming } : {}),
+                        onConnectionError: (error: unknown) => {
+                            // An old in-flight request may finish failing after a
+                            // replacement is already live. It cannot invalidate
+                            // the new connection or start another reconnect.
+                            if (backing === requestBacking) options.onConnectionError?.(error);
+                        },
+                        ...(preview ? { htmlPreviewUrl: preview.workspace } : {}),
+                    }),
+            )
+            .then(
+                (handled) => {
+                    if (!handled && !response.headersSent) {
+                        response.writeHead(404, { "content-type": "application/json" });
+                        response.end(JSON.stringify({ error: "Not found." }));
+                    }
+                },
+                (error: unknown) => {
+                    if (!response.headersSent) {
+                        response.writeHead(500, { "content-type": "application/json" });
+                        response.end(
+                            JSON.stringify({
+                                error: error instanceof Error ? error.message : String(error),
+                            }),
+                        );
+                    }
+                },
+            );
     };
     const server = createServer((request, response) => {
         const url = new URL(request.url ?? "/", "http://127.0.0.1");
@@ -245,6 +264,11 @@ export function happyAgentHttpProxyCreate(
                 ...(options.allowedOrigin ? { allowedOrigin: options.allowedOrigin } : {}),
                 requestHandle: (request, response, requestUrl) =>
                     handleRequest(request, response, requestUrl, requestUrl.pathname),
+                liveWindowStart: (windowId) => live.windowStart(windowId),
+                liveWindowClose: (windowId) => live.windowClose(windowId),
+                upgradeHandle: (request, socket, head, requestUrl) =>
+                    live.upgrade(request, socket, head, requestUrl),
+                liveAttemptClose: (attempt) => happyAgentLiveAttemptClose(selected.client, attempt),
                 ...(selected.client.rendererTransport
                     ? { transport: selected.client.rendererTransport() }
                     : {}),
@@ -279,12 +303,14 @@ export function happyAgentHttpProxyCreate(
                         closed = true;
                         rendererDetach?.();
                         terminals.close();
+                        live.close();
                         server.close();
                     },
                 });
             })().catch((error: unknown) => {
                 server.close();
                 terminals.close();
+                live.close();
                 reject(error);
             });
         });

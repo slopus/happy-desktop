@@ -24,18 +24,22 @@ jobs:
         defaults:
             run:
                 shell: bash
-        # Only main is trusted by Azure's GitHub federation. Branch validation
-        # stays unsigned; enabling signing on main never falls back on failure.
+        # Every Windows build is signed; there is no unsigned build. Azure's GitHub
+        # federation trusts only main, so any other ref stops before doing work.
         env:
             CSC_IDENTITY_AUTO_DISCOVERY: "false"
             CSC_LINK: ""
             WIN_CSC_LINK: ""
-            HAPPY_WINDOWS_SIGNING_ENABLED: ${{ vars.WINDOWS_SIGNING_ENABLED == 'true' && github.ref == 'refs/heads/main' }}
             WINDOWS_SIGNING_ENDPOINT: ${{ vars.WINDOWS_SIGNING_ENDPOINT }}
             WINDOWS_SIGNING_ACCOUNT: ${{ vars.WINDOWS_SIGNING_ACCOUNT }}
             WINDOWS_SIGNING_PROFILE: ${{ vars.WINDOWS_SIGNING_PROFILE }}
             WINDOWS_SIGNING_PUBLISHER: ${{ vars.WINDOWS_SIGNING_PUBLISHER }}
         steps:
+            - name: Require main, the only ref that can sign
+              if: github.ref != 'refs/heads/main'
+              run: |
+                  echo "Windows builds are always signed, and Azure signing trusts only main. Run this from main." >&2
+                  exit 1
             - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
             - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
             - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
@@ -57,7 +61,6 @@ jobs:
               if: inputs.verify_agent_release && matrix.flavor == 'standard'
               run: pnpm exec tsx scripts/verify-released-windows-agent.ts
             - name: Authenticate signing with GitHub OIDC
-              if: env.HAPPY_WINDOWS_SIGNING_ENABLED == 'true'
               uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3
               with:
                   client-id: ${{ vars.AZURE_CLIENT_ID }}
@@ -76,7 +79,7 @@ jobs:
             - name: Upload Windows release files
               uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
               with:
-                  name: happy-desktop-windows-installer-${{ matrix.flavor }}-${{ env.HAPPY_WINDOWS_SIGNING_ENABLED == 'true' && 'signed' || 'unsigned' }}
+                  name: happy-desktop-windows-installer-${{ matrix.flavor }}
                   path: |
                       packages/happy-desktop-electron/release/${{ matrix.flavor }}/*.exe
                       packages/happy-desktop-electron/release/${{ matrix.flavor }}/*.blockmap

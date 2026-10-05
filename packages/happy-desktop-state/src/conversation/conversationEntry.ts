@@ -319,6 +319,8 @@ export interface ConversationMessageEntry {
     readonly kind: "message";
     readonly message: ConversationMessageProjection;
     readonly source: "server" | "local";
+    /** Explicit send acceptance for daemon-projected user rows; voice never shares optimistic text. */
+    readonly pendingSend?: boolean;
     readonly delivery: "sending" | "pending_steering" | "sent" | "failed";
     readonly clientMutationId?: string;
     readonly error?: UserError;
@@ -374,6 +376,20 @@ export interface ConversationServiceNoticeEntry extends ConversationNoticeEntryB
         readonly maxAttempts?: number;
     };
     readonly title?: string;
+    /** Explicit durable provenance for a user-requested diagnostic handoff. */
+    readonly source?: { readonly messageId: string; readonly runId: string };
+}
+
+export type ConversationErrorAssistance =
+    | { readonly status: "ready" }
+    | { readonly status: "pending" }
+    | { readonly status: "sent" }
+    | { readonly status: "failed"; readonly reason: string }
+    | { readonly status: "unavailable"; readonly reason: string };
+
+export interface ConversationErrorAssistanceEntry {
+    readonly entryId: string;
+    readonly assistance: ConversationErrorAssistance;
 }
 
 /**

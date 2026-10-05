@@ -16,19 +16,17 @@ const desktop = join(workspace, "packages", "happy-desktop-electron");
 const require = createRequire(join(desktop, "package.json"));
 const { build, Platform, Arch } = require("electron-builder");
 const metadata = JSON.parse(await readFile(join(desktop, "package.json"), "utf8"));
-const signingEnabled = process.env.HAPPY_WINDOWS_SIGNING_ENABLED === "true";
+// Every Windows build is signed; a missing setting fails rather than producing an unsigned one.
 const signing = {};
-if (signingEnabled) {
-    for (const [option, variable] of Object.entries({
-        publisherName: "WINDOWS_SIGNING_PUBLISHER",
-        endpoint: "WINDOWS_SIGNING_ENDPOINT",
-        certificateProfileName: "WINDOWS_SIGNING_PROFILE",
-        codeSigningAccountName: "WINDOWS_SIGNING_ACCOUNT",
-    })) {
-        const value = process.env[variable]?.trim();
-        if (!value) throw new Error(`Signed Windows builds require ${variable}.`);
-        signing[option] = value;
-    }
+for (const [option, variable] of Object.entries({
+    publisherName: "WINDOWS_SIGNING_PUBLISHER",
+    endpoint: "WINDOWS_SIGNING_ENDPOINT",
+    certificateProfileName: "WINDOWS_SIGNING_PROFILE",
+    codeSigningAccountName: "WINDOWS_SIGNING_ACCOUNT",
+})) {
+    const value = process.env[variable]?.trim();
+    if (!value) throw new Error(`Windows builds require ${variable}.`);
+    signing[option] = value;
 }
 const pnpm = process.env.npm_execpath;
 if (!pnpm) throw new Error("Run this builder through pnpm desktop:win:release.");
@@ -57,16 +55,12 @@ await build({
     targets: Platform.WINDOWS.createTarget(["nsis"], Arch.x64),
     config: {
         ...structuredClone(metadata.build),
-        ...(signingEnabled
-            ? {
-                  forceCodeSigning: true,
-                  win: {
-                      ...metadata.build.win,
-                      signExts: [".exe", ".dll", ".node"],
-                      azureSignOptions: signing,
-                  },
-              }
-            : {}),
+        forceCodeSigning: true,
+        win: {
+            ...metadata.build.win,
+            signExts: [".exe", ".dll", ".node"],
+            azureSignOptions: signing,
+        },
         appId: flavor.appId,
         productName: flavor.productName,
         artifactName: `${flavor.artifactPrefix}-\${version}-\${arch}.\${ext}`,
@@ -99,7 +93,7 @@ if (
 ) {
     throw new Error(`Packaged updater configuration does not match ${flavor.productName}.`);
 }
-if (signingEnabled && ![updater.publisherName].flat().includes(signing.publisherName)) {
+if (![updater.publisherName].flat().includes(signing.publisherName)) {
     throw new Error("The signed app must verify its publisher when downloading updates.");
 }
 const manifest = parse(await readFile(join(output, `${flavor.channel}.yml`), "utf8"));

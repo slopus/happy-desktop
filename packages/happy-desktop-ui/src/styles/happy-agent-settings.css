@@ -149,6 +149,33 @@
     line-height: 20px;
 }
 
+/* Adding a phone happens on the phones; the steps are read, not acted on. */
+.happy-agent-mobile-settings__steps {
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 0;
+    padding: 0 0 0 20px;
+    color: var(--text);
+    font-size: 13px;
+    line-height: 20px;
+}
+
+.happy-agent-mobile-settings__steps strong {
+    font-weight: 600;
+}
+
+/* The terminal CLI's identity, as the host read it: server, key, machine. */
+.happy-agent-mobile-settings__details {
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--divider);
+}
+
 /*
  * The editor a whole document is edited in, inside a category that is otherwise
  * rows. It is given a height rather than left to grow: the settings body is one

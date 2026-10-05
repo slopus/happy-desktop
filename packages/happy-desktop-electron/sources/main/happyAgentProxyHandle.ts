@@ -12,6 +12,7 @@ import { openInRun, openInTargetsRead } from "./openIn";
 import { happyAgentDaemonHealthProject } from "./happyAgentHttpProxy";
 import type { HappyAgentRequestMilestone } from "./happyAgentRequestTiming";
 import type { HappyAgentDaemonClientOptions } from "./happyAgentDaemonClient";
+import { HAPPY_AGENT_LIVE_WINDOW_HEADER, happyAgentLivePath } from "./happyAgentLiveRoute";
 
 /** The minimal Happy Agent surface used by the loopback bridge. */
 export type HappyAgentProxyClient = Pick<
@@ -67,6 +68,10 @@ export async function happyAgentProxyHandle(
 ): Promise<boolean> {
     const { method, query, request, response } = options;
     let { client, path } = options;
+    if (happyAgentLivePath(path)) {
+        writeJson(response, 403, { error: "GPT-Live requires the native window transport." });
+        return true;
+    }
     const remote = /^\/connections\/([a-z][a-z0-9_-]{0,63})(\/[^/]+)$/u.exec(path);
     const connectionId = remote?.[1];
     if (connectionId) {
@@ -359,6 +364,7 @@ async function happyAgentForward(
             "host",
             "origin",
             "referer",
+            HAPPY_AGENT_LIVE_WINDOW_HEADER,
         ]);
         const forwardedHeaders: Record<string, string> = {};
         for (const [name, value] of Object.entries(request.headers)) {
