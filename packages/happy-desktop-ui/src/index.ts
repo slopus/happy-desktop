@@ -22,6 +22,8 @@ export {
     type ReviewStreamProps,
     type ReviewStreamSingleFile,
 } from "./ReviewStream";
+export { GptLiveSettings, type GptLiveSettingsProps } from "./GptLiveSettings";
+export { GptLiveSurface, type GptLiveSurfaceProps } from "./GptLiveSurface";
 export { CompactActivityRow, type CompactActivityRowProps } from "./CompactActivityRow";
 export { compactCount } from "./countText";
 export { CodeBlock, codeBlockLanguage, type CodeBlockProps } from "./CodeBlock";
@@ -285,7 +287,11 @@ export {
     type SidebarReorder,
     type SidebarSection,
 } from "./Sidebar";
-export { SidebarFooter, type SidebarFooterProps } from "./SidebarFooter";
+export {
+    SidebarFooter,
+    type SidebarFooterConnection,
+    type SidebarFooterProps,
+} from "./SidebarFooter";
 export {
     SIDEBAR_SPACES_BAR_HEIGHT,
     SIDEBAR_SPACES_DOT_SIZE,
@@ -365,6 +371,7 @@ export {
     type HappyAgentProjectComputeMode,
     type HappyAgentProjectComputeSection,
     type HappyAgentProjectSettingsDialogProps,
+    type HappyAgentProjectSetupSection,
 } from "./HappyAgentProjectSettingsDialog";
 export {
     HappyAgentCreateBotPage,
@@ -538,7 +545,6 @@ export {
     type AgentInstallScreenProps,
     type AgentInstallView,
 } from "./AgentInstallScreen";
-export { ConnectionHeader, type ConnectionHeaderProps } from "./ConnectionHeader";
 export {
     WelcomeScreen,
     type WelcomeScreenBackdrop,
@@ -645,7 +651,15 @@ export {
     HappyAgentMobileSettings,
     type HappyAgentMobileSettingsProps,
     type HappyAgentMobileStatus,
+    type HappyAgentMobileTerminal,
 } from "./pages/settings/HappyAgentMobileSettings";
+export {
+    MobileAccessConfirmation,
+    MobileAccessDetail,
+    type MobileAccessConfirmationProps,
+    type MobileAccessConfirmationState,
+    type MobileAccessTerminalResetPreview,
+} from "./MobileAccessConfirmation";
 export {
     HappyAgentDebugSettings,
     type HappyAgentDebugSettingsProps,

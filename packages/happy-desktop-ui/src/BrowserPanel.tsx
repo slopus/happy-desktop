@@ -61,6 +61,13 @@ export interface BrowserPanelProps {
 
 interface BrowserViewState {
     readonly address: string;
+    /**
+     * Whether the address is the reader's draft rather than the page's
+     * location. A page that commits a redirect or a hash change while the
+     * reader is halfway through typing must not replace what they typed; the
+     * location is written back once the draft is submitted or abandoned.
+     */
+    readonly editing: boolean;
     readonly canGoBack: boolean;
     readonly canGoForward: boolean;
     readonly failure?: BrowserFailure;
@@ -81,16 +88,27 @@ export function BrowserPanel(props: BrowserPanelProps) {
     // Keep the guest's mount source stable. Main-frame navigation is imperative;
     // rewriting `src` after every redirect would restart the page.
     const [source] = useState(props.initialUrl);
+    // A tab opened on nothing has nothing to read, so the address is the one
+    // thing on it worth typing into, and it takes the caret as the tab opens —
+    // the way a browser's new tab hands its omnibox to the reader.
+    const blank = props.initialUrl === "about:blank";
     const [view, viewSet] = useState<BrowserViewState>({
-        address: props.initialUrl === "about:blank" ? "" : props.initialUrl,
+        address: blank ? "" : props.initialUrl,
+        editing: false,
         canGoBack: false,
         canGoForward: false,
-        loading: props.initialUrl !== "about:blank",
+        loading: !blank,
     });
 
     const load = (url: string) => {
         if (props.unavailable !== undefined) return;
-        viewSet((current) => ({ ...current, address: url, failure: undefined, loading: true }));
+        viewSet((current) => ({
+            ...current,
+            address: url,
+            editing: false,
+            failure: undefined,
+            loading: true,
+        }));
         controller?.browserLoad(url);
     };
 
@@ -150,12 +168,14 @@ export function BrowserPanel(props: BrowserPanelProps) {
                 </Button>
                 <TextField
                     aria-label="Address and search"
+                    autoFocus={blank}
                     className="happy-browser-panel__address"
                     fullWidth
                     leadingIcon={view.address.startsWith("https://") ? "lock" : "globe"}
+                    onBlur={() => viewSet((current) => ({ ...current, editing: false }))}
                     onSubmit={navigate}
                     onValueChange={(address) =>
-                        viewSet((current) => ({ ...current, address, error: undefined }))
+                        viewSet((current) => ({ ...current, address, editing: true }))
                     }
                     placeholder="Search or enter address"
                     size="small"
@@ -191,7 +211,13 @@ export function BrowserPanel(props: BrowserPanelProps) {
                         browserLocationChanged(url, canGoBack, canGoForward) {
                             viewSet((current) => ({
                                 ...current,
-                                address: url === "about:blank" ? "" : url,
+                                // The page's location, unless the reader is in
+                                // the middle of typing over it.
+                                address: current.editing
+                                    ? current.address
+                                    : url === "about:blank"
+                                      ? ""
+                                      : url,
                                 canGoBack,
                                 canGoForward,
                                 // The guest keeps reporting the failed address

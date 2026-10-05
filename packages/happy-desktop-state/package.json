@@ -20,7 +20,8 @@
         "clean": "rm -rf coverage"
     },
     "dependencies": {
-        "@slopus/happy-agent-client": "0.0.67",
+        "@sinclair/typebox": "^0.34.49",
+        "@slopus/happy-agent-client": "0.0.71",
         "yjs": "^13.6.31",
         "zustand": "5.0.14"
     },

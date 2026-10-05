@@ -1,0 +1,63 @@
+{
+    "windowId": "window-fixture",
+    "connections": [{ "connectionId": "local", "name": "Test desktop", "online": true }],
+    "activeConnectionId": "local",
+    "activeTarget": {
+        "kind": "session",
+        "connectionId": "local",
+        "groupId": "project-voice",
+        "sessionId": "agent-voice"
+    },
+    "projects": [
+        {
+            "target": {
+                "kind": "project",
+                "connectionId": "local",
+                "projectId": "project-voice",
+                "groupId": "project-voice"
+            },
+            "name": "Voice test project"
+        }
+    ],
+    "workspaces": [],
+    "sessions": [
+        {
+            "target": {
+                "connectionId": "local",
+                "groupId": "project-voice",
+                "sessionId": "agent-other"
+            },
+            "title": "Other task",
+            "status": "idle"
+        },
+        {
+            "target": {
+                "connectionId": "local",
+                "groupId": "project-voice",
+                "sessionId": "agent-voice"
+            },
+            "title": "Voice safety",
+            "status": "idle"
+        }
+    ],
+    "bots": [],
+    "activeSession": {
+        "target": {
+            "connectionId": "local",
+            "groupId": "project-voice",
+            "sessionId": "agent-voice"
+        },
+        "status": "idle",
+        "messages": [
+            {
+                "id": "message:message-agent:1",
+                "role": "assistant",
+                "text": "The build completed successfully."
+            },
+            { "id": "message-human", "role": "user", "text": "Please inspect the build result." }
+        ],
+        "composerHasDraft": false,
+        "writeRefusal": null
+    },
+    "truncated": false
+}

@@ -3,6 +3,7 @@ import type { HappyAgentRendererProxy, HappyAgentRendererTarget } from "./happyA
 import type {
     RendererUtilityInput,
     RendererUtilityOutput,
+    RendererLiveAttempt,
 } from "../shared/happyAgentRendererUtilityContract";
 
 type Child = Pick<UtilityProcess, "on" | "off" | "postMessage" | "kill">;
@@ -25,6 +26,16 @@ export async function happyAgentRendererUtilityProxyCreate(options: {
     let credentials: RendererUtilityCredentials | undefined;
     let current: HappyAgentRendererTarget | undefined;
     let currentId = 0;
+    const backings = new Map<number, HappyAgentRendererTarget>();
+    const liveWindows = new Set<string>();
+    const liveAttempts = new Map<
+        string,
+        {
+            readonly attempt: RendererLiveAttempt;
+            readonly target: HappyAgentRendererTarget;
+            disposed: boolean;
+        }
+    >();
     let reconnect: ReturnType<typeof setTimeout> | undefined;
     let delay = 100;
     let pending = new Map<
@@ -54,6 +65,7 @@ export async function happyAgentRendererUtilityProxyCreate(options: {
         if (!target.transport || !child)
             return Promise.reject(new Error("The isolated Happy Agent transport is unavailable."));
         const id = ++currentId;
+        backings.set(id, target);
         const input: RendererUtilityInput = {
             type: "backing",
             id,
@@ -95,11 +107,41 @@ export async function happyAgentRendererUtilityProxyCreate(options: {
                 if (message.id === currentId) current?.onConnectionError?.();
             } else if (message.type === "debug") {
                 options.debug?.(message.text);
+            } else if (message.type === "live-attempt-reserve" && child === running) {
+                const key = `${message.attempt.connectionId ?? ""}/${message.attempt.id}`;
+                const target = backings.get(message.backingId);
+                if (target && !liveAttempts.has(key))
+                    liveAttempts.set(key, {
+                        attempt: message.attempt,
+                        target,
+                        disposed: !liveWindows.has(message.attempt.windowId),
+                    });
+                const record = liveAttempts.get(key);
+                running.postMessage({
+                    type: "live-attempt-reserved",
+                    reservationId: message.reservationId,
+                    allowed:
+                        target !== undefined &&
+                        record !== undefined &&
+                        !record.disposed &&
+                        record.attempt.windowId === message.attempt.windowId,
+                } satisfies RendererUtilityInput);
             } else if (message.type === "ready" && !started) {
                 started = true;
                 clearTimeout(timeout);
                 void (async () => {
                     if (current) await sendBacking(current);
+                    for (const windowId of liveWindows)
+                        running.postMessage({
+                            type: "live-window-start",
+                            windowId,
+                        } satisfies RendererUtilityInput);
+                    for (const record of liveAttempts.values())
+                        running.postMessage({
+                            type: "live-attempt-restore",
+                            attempt: record.attempt,
+                            disposed: record.disposed,
+                        } satisfies RendererUtilityInput);
                     if (closed || child !== running) return;
                     credentials = message;
                     await options.ready(message);
@@ -117,6 +159,8 @@ export async function happyAgentRendererUtilityProxyCreate(options: {
             child = undefined;
             credentials = undefined;
             options.offline();
+            for (const record of liveAttempts.values())
+                record.target.liveAttemptClose?.(record.attempt);
             for (const waiter of pending.values()) {
                 clearTimeout(waiter.timer);
                 waiter.reject(new Error("The isolated Happy Agent transport exited."));
@@ -161,11 +205,34 @@ export async function happyAgentRendererUtilityProxyCreate(options: {
                     } satisfies RendererUtilityInput);
             };
         },
+        liveWindowStart(windowId) {
+            liveWindows.add(windowId);
+            child?.postMessage({
+                type: "live-window-start",
+                windowId,
+            } satisfies RendererUtilityInput);
+        },
+        liveWindowClose(windowId) {
+            liveWindows.delete(windowId);
+            for (const record of liveAttempts.values()) {
+                if (record.attempt.windowId !== windowId || record.disposed) continue;
+                record.disposed = true;
+                record.target.liveAttemptClose?.(record.attempt);
+            }
+            child?.postMessage({
+                type: "live-window-close",
+                windowId,
+            } satisfies RendererUtilityInput);
+        },
         close() {
             if (closed) return;
             closed = true;
             if (reconnect) clearTimeout(reconnect);
             options.offline();
+            for (const record of liveAttempts.values())
+                record.target.liveAttemptClose?.(record.attempt);
+            liveAttempts.clear();
+            backings.clear();
             for (const waiter of pending.values()) {
                 clearTimeout(waiter.timer);
                 waiter.reject(new Error("The isolated Happy Agent transport closed."));

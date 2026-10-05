@@ -1,6 +1,11 @@
 import { createStore } from "zustand/vanilla";
 import { happyAgentBotSubtasks } from "./happyAgentBotSubtasks.js";
-import type { ConversationEntry } from "../conversation/conversationEntry.js";
+import type {
+    ConversationEntry,
+    ConversationErrorAssistance,
+    ConversationErrorAssistanceEntry,
+} from "../conversation/conversationEntry.js";
+import type { HappyAgentErrorAssistanceRequest } from "./happyAgentErrorAssistance.js";
 import type { ConversationSummary } from "../conversation/conversationSummary.js";
 import type { Loadable } from "../conversation/loadable.js";
 import type { UserError } from "../types.js";
@@ -83,7 +88,7 @@ import type {
     HappyAgentModelSelection,
     HappyAgentPermissionMode,
     HappyAgentProjectCompute,
-    HappyAgentProjectComputeState,
+    HappyAgentProjectSettingsState,
     HappyAgentProjectId,
     HappyAgentQueuedMessage,
     HappyAgentContextGauge,
@@ -194,6 +199,7 @@ export interface HappyAgentConversationSnapshot {
     readonly title?: string;
     readonly subtitle?: string;
     readonly entries: readonly ConversationEntry[];
+    readonly errorAssistance: readonly ConversationErrorAssistanceEntry[];
     readonly composer: ComposerSnapshot;
     readonly running: boolean;
     readonly workingPhase: HappyAgentWorkingPhase;
@@ -665,7 +671,7 @@ export interface HappyAgentWorkspaceSnapshot {
      * while a project's settings are open — a worktree has no compute of its own
      * — and it goes when they close.
      */
-    readonly projectCompute?: HappyAgentProjectComputeSnapshot;
+    readonly projectSettings?: HappyAgentProjectSettingsSnapshot;
     /**
      * How changed files are being read. One preference for the workspace rather
      * than one per tab: it is how this reader likes to look at diffs, and
@@ -1200,7 +1206,7 @@ export type HappyAgentProjectComputeMode = "default" | "local" | "docker";
  * describe it, so it is read for the project this dialog names and re-read
  * whenever the host says a project changed.
  */
-export interface HappyAgentProjectComputeSnapshot {
+export interface HappyAgentProjectSettingsSnapshot {
     readonly projectId: HappyAgentProjectId;
     /**
      * Whether the host's own answer is in hand yet. Until it is `ready` nothing
@@ -1225,6 +1231,16 @@ export interface HappyAgentProjectComputeSnapshot {
      * one space shorter.
      */
     readonly image: string;
+    /**
+     * The shell commands a new workspace runs once its checkout exists, as the
+     * host last read them from the project's own `happy.toml`. Shown, never set:
+     * the file is where they live.
+     */
+    readonly setupCommands: readonly string[];
+    /** What the host holds as the first message to a new workspace's agent. Absent means nothing. */
+    readonly initialPrompt?: string;
+    /** The first message being written. Seeded from `initialPrompt` when the host's answer arrives. */
+    readonly initialPromptDraft: string;
     /** True while the host is being told; the whole dialog stays up and inert. */
     readonly submitting: boolean;
     /** Why the last submission did not save, in the reader's words. */
@@ -1286,6 +1302,20 @@ export interface HappyAgentWorkspaceNewChatInput {
     readonly prompt?: string;
 }
 
+/** A retained existing conversation projection; voice does not create a second sync system. */
+export interface HappyAgentVoiceSession {
+    get(): HappyAgentChatSnapshot;
+    draftRead(): ComposerSnapshot | undefined;
+    subscribe(listener: () => void): () => void;
+    draftAppend(text: string, expectedDraft: string): Promise<void>;
+    messageSendConfirmed(
+        text: string,
+        expectedDraft: string,
+        permissionMode: HappyAgentPermissionMode,
+    ): Promise<void>;
+    [Symbol.dispose](): void;
+}
+
 export interface HappyAgentWorkspaceStore {
     get(): HappyAgentWorkspaceSnapshot;
     subscribe(listener: () => void): () => void;
@@ -1332,10 +1362,21 @@ export interface HappyAgentWorkspaceStore {
     messageSendCurrent(message: string): Promise<void>;
     /** Sends agent-authored slot text to one explicitly addressed conversation. */
     messageSend(sessionId: HappyAgentSessionId, message: string): Promise<void>;
+    /** Sends one quoted error to this daemon's Chief of Staff, then requests navigation. */
+    errorAssistanceRequest(entryId: string): void;
     /** Replaces one explicitly addressed conversation's composer draft. */
     draftUpdate(sessionId: HappyAgentSessionId, message: string): Promise<void>;
     /** Adds an unsent suggestion without replacing an existing draft or duplicating an unchanged retry. */
     draftAppend(sessionId: HappyAgentSessionId, message: string): Promise<void>;
+    /** Retains a concrete target for public-text reads, watches and guarded voice drafts. */
+    voiceSessionAcquire(sessionId: HappyAgentSessionId): Promise<HappyAgentVoiceSession>;
+    /** Creates in the named group without sending a prompt; the controller then navigates explicitly. */
+    voiceConversationCreate(groupId: HappyAgentGroupId): Promise<HappyAgentSessionLocation>;
+    voiceWorkspaceCreate(projectId: HappyAgentProjectId): Promise<{
+        readonly worktreeId: HappyAgentWorktreeId;
+        readonly location: HappyAgentSessionLocation;
+    }>;
+    voiceBotCreate(name?: string): Promise<HappyAgentBotCreation>;
     /** Starts the new conversation described by a slot action and optionally submits its prompt. */
     chatStart(input: HappyAgentWorkspaceNewChatInput): Promise<void>;
     /**
@@ -1765,6 +1806,16 @@ export interface HappyAgentWorkspaceStore {
      * never have another project's answer applied to it.
      */
     projectComputeSubmit(): Promise<void>;
+    /** Edits the first message a new workspace's agent is sent. Nothing is saved here. */
+    projectInitialPromptUpdate(value: string): void;
+    /**
+     * Saves the first message on the open project, and resolves once the host has
+     * answered with what it holds. A blank message means the project says
+     * nothing. It follows the same rules as `projectComputeSubmit`: one identity
+     * per distinct submission, nothing shown as saved until the host's read-back
+     * says so, and a superseded answer applied nowhere.
+     */
+    projectInitialPromptSubmit(): Promise<void>;
     /** Shows or hides one finished turn's intermediate entries in the transcript. */
     turnTraceToggle(turnId: string): void;
     /**
@@ -1897,6 +1948,16 @@ export function happyAgentWorkspaceStoreCreate(
     let attachmentSequence = 0;
 
     let conversation: Loadable<HappyAgentConversationSnapshot> = { type: "unloaded" };
+    type ErrorAssistanceAttempt = {
+        readonly location: HappyAgentSessionLocation;
+        readonly request: HappyAgentErrorAssistanceRequest;
+        status: ConversationErrorAssistance;
+    };
+    // Retain the prepared message identity across manual retries and navigation.
+    const errorAssistanceAttempts = new Map<
+        HappyAgentSessionId,
+        Map<string, ErrorAssistanceAttempt>
+    >();
     // An addressed group with nothing in it yet: its composer is live, and the
     // first thing sent into it is what creates the conversation.
     let openGroupId: HappyAgentGroupId | undefined;
@@ -1916,14 +1977,14 @@ export function happyAgentWorkspaceStoreCreate(
     let groupArchiveSubmission = 0;
     /** Which submission the pending archive belongs to, so a superseded one's answer is dropped. */
     let projectArchiveSubmission = 0;
-    let projectCompute: HappyAgentProjectComputeSnapshot | undefined;
+    let projectSettings: HappyAgentProjectSettingsSnapshot | undefined;
     /**
      * Which read of the compute setting is the current one. Every read takes a
      * token when it is issued, and only the newest may write, so a slow read
      * cannot put an older value back over a newer one — including the read that
      * was in flight when the reader opened another project's settings.
      */
-    let projectComputeReadToken = 0;
+    let projectSettingsReadToken = 0;
     /** Which submission owns the compute block, so a superseded one's answer is dropped. */
     let projectComputeSubmission = 0;
     /**
@@ -1934,6 +1995,10 @@ export function happyAgentWorkspaceStoreCreate(
      */
     let projectComputeMutationId: string | undefined;
     let projectComputeMutationChoice: string | undefined;
+    /** The same three, for the first message: its own submission, so a compute save cannot retire it. */
+    let projectPromptSubmission = 0;
+    let projectPromptMutationId: string | undefined;
+    let projectPromptMutationChoice: string | undefined;
     /** The host's "a project changed" feed, open only while a project's settings are. */
     let unsubscribeProjectsChanged: (() => void) | undefined;
 
@@ -2365,6 +2430,54 @@ export function happyAgentWorkspaceStoreCreate(
         recompute();
     };
 
+    const errorAssistanceProject = (
+        chat: HappyAgentChatSnapshot,
+    ): readonly ConversationErrorAssistanceEntry[] => {
+        const chief = list.get().bots.find((bot) => bot.systemKey === "chief_of_staff");
+        const attempts = errorAssistanceAttempts.get(chat.sessionId);
+        const projected: ConversationErrorAssistanceEntry[] = [];
+        for (const entry of chat.entries) {
+            if (entry.kind !== "notice" || entry.variant !== "notice" || entry.level !== "error")
+                continue;
+            const attempt = attempts?.get(entry.id);
+            const refusal = !entry.source
+                ? "This error has no saved message to reference. Copy the error for manual help."
+                : !chief
+                  ? "Chief of Staff is not available on this Happy Agent."
+                  : chief.conversation.id === chat.sessionId
+                    ? "This is already the Chief of Staff conversation. Use the composer for follow-up."
+                    : attempt && attempt.location.sessionId !== chief.conversation.id
+                      ? "The Chief of Staff for this handoff is no longer available."
+                      : list.groupConversationRefusal(chief.workspaceId);
+            projected.push({
+                entryId: entry.id,
+                assistance:
+                    attempt?.status.status === "pending"
+                        ? attempt.status
+                        : refusal
+                          ? { status: "unavailable", reason: refusal }
+                          : (attempt?.status ?? { status: "ready" }),
+            });
+        }
+        const previous =
+            conversation.type === "ready"
+                ? conversation.value.errorAssistance
+                : NO_ERROR_ASSISTANCE;
+        return projected.length === previous.length &&
+            projected.every((entry, index) => {
+                const old = previous[index]!;
+                return (
+                    entry.entryId === old.entryId &&
+                    entry.assistance.status === old.assistance.status &&
+                    (!("reason" in entry.assistance) ||
+                        ("reason" in old.assistance &&
+                            entry.assistance.reason === old.assistance.reason))
+                );
+            })
+            ? previous
+            : projected;
+    };
+
     const conversationProject = (
         chat: HappyAgentChatSnapshot,
         draft: ComposerSnapshot,
@@ -2383,6 +2496,7 @@ export function happyAgentWorkspaceStoreCreate(
             ...(chat.title ? { title: chat.title } : {}),
             ...(chat.cwd ? { subtitle: chat.cwd } : {}),
             entries: chat.entries,
+            errorAssistance: errorAssistanceProject(chat),
             composer: draft,
             running: chat.runStatus === "running",
             workingPhase: chat.workingPhase,
@@ -2623,7 +2737,7 @@ export function happyAgentWorkspaceStoreCreate(
                 snapshot.rename === rename &&
                 snapshot.projectArchive === projectArchive &&
                 snapshot.groupArchive === groupArchive &&
-                snapshot.projectCompute === projectCompute &&
+                snapshot.projectSettings === projectSettings &&
                 snapshot.fileViewMode === fileViewMode &&
                 snapshot.fileViewWrap === fileViewWrap &&
                 snapshot.fileScope === nextFileScope &&
@@ -2677,7 +2791,7 @@ export function happyAgentWorkspaceStoreCreate(
                           ...(rename ? { rename } : {}),
                           ...(projectArchive ? { projectArchive } : {}),
                           ...(groupArchive ? { groupArchive } : {}),
-                          ...(projectCompute ? { projectCompute } : {}),
+                          ...(projectSettings ? { projectSettings } : {}),
                       },
             true,
         );
@@ -4016,6 +4130,8 @@ export function happyAgentWorkspaceStoreCreate(
 
     const releaseConversation = (): void => {
         mentionGeneration += 1;
+        if (composer?.getState().voiceDraft)
+            voiceComposers.set(composer.getState().scopeId as HappyAgentSessionId, composer);
         unsubscribeComposer?.();
         unsubscribeComposer = undefined;
         composer = undefined;
@@ -4180,6 +4296,8 @@ export function happyAgentWorkspaceStoreCreate(
      * them rather than empty until the host's copy arrives.
      */
     const conversationDraftTexts = new Map<HappyAgentSessionId, string>();
+    // Retain the owning composer, not a mirrored draft. Never persisted or shared with another window.
+    const voiceComposers = new Map<HappyAgentSessionId, ComposerStore>();
 
     const attachmentsRemember = <Key>(
         held: Map<Key, readonly ComposerAttachment[]>,
@@ -4301,6 +4419,11 @@ export function happyAgentWorkspaceStoreCreate(
     };
 
     const composerCreate = (conversationId: HappyAgentSessionId): ComposerStore => {
+        const retainedVoice = voiceComposers.get(conversationId);
+        if (retainedVoice) {
+            voiceComposers.delete(conversationId);
+            return retainedVoice;
+        }
         const carriedText = conversationDraftTexts.get(conversationId);
         conversationDraftTexts.delete(conversationId);
         const created: ComposerStore = composerStoreCreate(conversationId, {
@@ -4324,11 +4447,35 @@ export function happyAgentWorkspaceStoreCreate(
                         attachmentsRemember(conversationAttachments, conversationId, created);
                         return;
                     case "textUpdated":
+                        if (created.getState().voiceDraft) return;
                         void withChatStore((store) =>
                             store.draftSet(event.text, nextDraftUpdatedAt(), draftOrigin),
                         ).catch(() => undefined);
                         return;
                     case "textSubmitted":
+                        if (created.getState().voiceDraft) {
+                            submitting(created, event.revision, async () => {
+                                if (openId !== conversationId || composer !== created)
+                                    throw new Error(
+                                        "Return to this conversation to send the voice draft.",
+                                    );
+                                const refusal = sessionConversationRefusal(conversationId);
+                                if (refusal) throw new Error(refusal);
+                                if (event.attachments.length > 0)
+                                    throw new Error(
+                                        "Remove attachments before sending a voice draft.",
+                                    );
+                                const target = chatStore;
+                                const state = target?.get();
+                                if (!target || state?.session.type !== "ready")
+                                    throw new Error("The conversation is not ready.");
+                                await target.voiceMessageSendConfirmed(
+                                    event.text,
+                                    state.session.value.permissionMode,
+                                );
+                            });
+                            return;
+                        }
                         void withChatStore((store) =>
                             store.draftSet("", nextDraftUpdatedAt(), draftOrigin),
                         ).catch(() => undefined);
@@ -5039,7 +5186,9 @@ export function happyAgentWorkspaceStoreCreate(
      * session's own composer from the first frame. Only the daemon's side of
      * the creation waits for the directory.
      */
-    const worktreeFirstConversationStart = (worktreeId: HappyAgentWorktreeId): void => {
+    const worktreeFirstConversationStart = (
+        worktreeId: HappyAgentWorktreeId,
+    ): HappyAgentSessionLocation | undefined => {
         const models = client.models.get();
         const selection = models.type === "ready" ? models.lastUsedSelection : undefined;
         const create: HappyAgentSessionCreateInput = {
@@ -5047,7 +5196,9 @@ export function happyAgentWorkspaceStoreCreate(
             worktreeId,
             ...(selection ? selectionCreateFields(selection) : {}),
         };
-        openRequest(list.worktreeSessionStart(worktreeId, create));
+        const location = list.worktreeSessionStart(worktreeId, create);
+        openRequest(location);
+        return location;
     };
 
     /**
@@ -5574,7 +5725,7 @@ export function happyAgentWorkspaceStoreCreate(
 
     /** The choice the compute block currently expresses, or `undefined` for stating nothing. */
     const computeOfDraft = (
-        pending: HappyAgentProjectComputeSnapshot,
+        pending: HappyAgentProjectSettingsSnapshot,
     ): HappyAgentProjectCompute | undefined =>
         pending.mode === "default"
             ? undefined
@@ -5591,13 +5742,13 @@ export function happyAgentWorkspaceStoreCreate(
      * something else. That is what lets another window's change show up here
      * without taking a half-made decision away from the person making it.
      */
-    const projectComputeApply = (state: HappyAgentProjectComputeState): void => {
-        const pending = projectCompute;
+    const projectSettingsApply = (state: HappyAgentProjectSettingsState): void => {
+        const pending = projectSettings;
         if (!pending || pending.projectId !== state.projectId) return;
         const untouched =
             pending.status !== "ready" ||
             computeKey(computeOfDraft(pending)) === computeKey(pending.current);
-        const seeded: Pick<HappyAgentProjectComputeSnapshot, "image" | "mode"> = untouched
+        const seeded: Pick<HappyAgentProjectSettingsSnapshot, "image" | "mode"> = untouched
             ? {
                   mode: state.compute === undefined ? "default" : state.compute.type,
                   // An image the reader typed is kept when the host states none,
@@ -5606,12 +5757,22 @@ export function happyAgentWorkspaceStoreCreate(
                   image: state.compute?.type === "docker" ? state.compute.image : pending.image,
               }
             : { mode: pending.mode, image: pending.image };
-        projectCompute = {
+        // The first message follows the same rule: reseeded only while the draft
+        // still says what the host last said.
+        const promptUntouched =
+            pending.status !== "ready" ||
+            pending.initialPromptDraft.trim() === (pending.initialPrompt ?? "").trim();
+        projectSettings = {
             projectId: pending.projectId,
             status: "ready",
             generation: state.generation,
             ...(state.compute === undefined ? {} : { current: state.compute }),
             ...seeded,
+            setupCommands: state.setupCommands,
+            ...(state.initialPrompt === undefined ? {} : { initialPrompt: state.initialPrompt }),
+            initialPromptDraft: promptUntouched
+                ? (state.initialPrompt ?? "")
+                : pending.initialPromptDraft,
             submitting: pending.submitting,
             ...(pending.error === undefined ? {} : { error: pending.error }),
         };
@@ -5627,24 +5788,24 @@ export function happyAgentWorkspaceStoreCreate(
      * to say. The block's own project is checked as well, so an answer can never
      * be applied to a project it was not asked about.
      */
-    const projectComputeLoad = (projectId: HappyAgentProjectId): void => {
-        const token = ++projectComputeReadToken;
-        void list.projectComputeRead(projectId).then(
+    const projectSettingsLoad = (projectId: HappyAgentProjectId): void => {
+        const token = ++projectSettingsReadToken;
+        void list.projectSettingsRead(projectId).then(
             (state) => {
-                if (disposed || token !== projectComputeReadToken) return;
-                if (projectCompute?.projectId !== projectId) return;
-                projectComputeApply(state);
+                if (disposed || token !== projectSettingsReadToken) return;
+                if (projectSettings?.projectId !== projectId) return;
+                projectSettingsApply(state);
                 recompute();
             },
             (error) => {
-                if (disposed || token !== projectComputeReadToken) return;
-                const pending = projectCompute;
+                if (disposed || token !== projectSettingsReadToken) return;
+                const pending = projectSettings;
                 if (pending?.projectId !== projectId) return;
                 // A read that failed after one succeeded keeps what is on screen:
                 // the reader is looking at the host's last answer, which is more
                 // than this failure can replace it with.
                 if (pending.status === "ready") return;
-                projectCompute = {
+                projectSettings = {
                     ...pending,
                     status: "error",
                     readError: happyAgentUserError(error).message,
@@ -5663,39 +5824,58 @@ export function happyAgentWorkspaceStoreCreate(
      * with the block and closed with it, so a dialog nobody has open follows
      * nothing.
      */
-    const projectComputeOpen = (projectId: HappyAgentProjectId): void => {
-        projectComputeClose();
-        projectCompute = {
+    const projectSettingsOpen = (projectId: HappyAgentProjectId): void => {
+        projectSettingsClose();
+        projectSettings = {
             projectId,
             status: "loading",
             generation: 0,
             mode: "default",
             image: "",
+            setupCommands: [],
+            initialPromptDraft: "",
             submitting: false,
         };
         unsubscribeProjectsChanged = list.projectsChangedSubscribe(() => {
-            if (disposed || projectCompute?.projectId !== projectId) return;
+            if (disposed || projectSettings?.projectId !== projectId) return;
             // Never while the host is being told: that request's own answer is
             // the read-back, and a read racing it could show the value from
             // before the write as though it were the result of it.
-            if (projectCompute.submitting) return;
-            projectComputeLoad(projectId);
+            if (projectSettings.submitting) return;
+            projectSettingsLoad(projectId);
         });
-        projectComputeLoad(projectId);
+        projectSettingsLoad(projectId);
     };
 
     /** Closes the compute block and retires every read still on its way back to it. */
-    const projectComputeClose = (): void => {
+    const projectSettingsClose = (): void => {
         unsubscribeProjectsChanged?.();
         unsubscribeProjectsChanged = undefined;
         // Retires the reads in flight rather than merely dropping the block: a
         // token taken after this is newer than all of them, so none of their
         // answers may write, whatever they were asked about.
-        projectComputeReadToken += 1;
+        projectSettingsReadToken += 1;
         projectComputeSubmission += 1;
         projectComputeMutationId = undefined;
         projectComputeMutationChoice = undefined;
-        projectCompute = undefined;
+        projectPromptSubmission += 1;
+        projectPromptMutationId = undefined;
+        projectPromptMutationChoice = undefined;
+        projectSettings = undefined;
+    };
+
+    /**
+     * Puts the open conversation back on screen: no file tab, no tool tab.
+     *
+     * Selecting nothing is what "the conversation" means here, and the tab the
+     * group is then being read on is remembered as such.
+     */
+    const mainViewClear = (): void => {
+        activeMainViewId = undefined;
+        displayedMainViewId = undefined;
+        activeMainViewGroupId = undefined;
+        if (addressedGroupId !== undefined && openId !== undefined)
+            groupTabRemember(addressedGroupId, openId);
     };
 
     /**
@@ -5872,6 +6052,190 @@ export function happyAgentWorkspaceStoreCreate(
             writeGuard(sessionConversationRefusal(sessionId), () =>
                 withAddressedChat(sessionId, (store) => store.messageSend(message, [])),
             ),
+        errorAssistanceRequest(entryId) {
+            if (disposed || !openId || conversation.type !== "ready") return;
+            const sourceSessionId = openId;
+            const entry = conversation.value.entries.find(
+                (candidate) => candidate.kind === "notice" && candidate.id === entryId,
+            );
+            const availability = conversation.value.errorAssistance.find(
+                (candidate) => candidate.entryId === entryId,
+            )?.assistance;
+            if (
+                !availability ||
+                availability.status === "unavailable" ||
+                availability.status === "pending" ||
+                entry?.kind !== "notice" ||
+                entry.variant !== "notice" ||
+                !entry.source
+            )
+                return;
+            const chief = list.get().bots.find((bot) => bot.systemKey === "chief_of_staff");
+            if (
+                !chief ||
+                chief.conversation.id === sourceSessionId ||
+                list.groupConversationRefusal(chief.workspaceId)
+            )
+                return;
+            let attempts = errorAssistanceAttempts.get(sourceSessionId);
+            if (!attempts) {
+                attempts = new Map();
+                errorAssistanceAttempts.set(sourceSessionId, attempts);
+            }
+            let attempt = attempts.get(entryId);
+            if (!attempt) {
+                const targetSessionId = chief.conversation.id as HappyAgentSessionId;
+                attempt = {
+                    location: { sessionId: targetSessionId, groupId: chief.workspaceId },
+                    request: client.errorAssistancePrepare(targetSessionId, {
+                        sessionId: sourceSessionId,
+                        messageId: entry.source.messageId,
+                        runId: entry.source.runId,
+                        text: entry.text,
+                    }),
+                    status: { status: "ready" },
+                };
+                attempts.set(entryId, attempt);
+            }
+            if (attempt.location.sessionId !== chief.conversation.id) return;
+            if (attempt.status.status === "sent") {
+                output({ type: "conversationOpenRequested", location: attempt.location });
+                return;
+            }
+            const pending = attempt;
+            const generation = acquisitionGeneration;
+            pending.status = { status: "pending" };
+            recompute();
+            void pending.request.send().then(
+                () => {
+                    if (disposed) return;
+                    pending.status = { status: "sent" };
+                    recompute();
+                    // A late acknowledgement must not take the reader away from a
+                    // conversation they deliberately opened during this request.
+                    if (openId === sourceSessionId && acquisitionGeneration === generation)
+                        output({ type: "conversationOpenRequested", location: pending.location });
+                },
+                (error: unknown) => {
+                    if (disposed) return;
+                    pending.status = {
+                        status: "failed",
+                        reason: happyAgentUserError(error).message,
+                    };
+                    recompute();
+                },
+            );
+        },
+        async voiceSessionAcquire(sessionId) {
+            const acquired = await client.chat(sessionId);
+            let released = false;
+            const guarded = () => {
+                if (released || disposed) throw new Error("This conversation is no longer open.");
+                const refusal = sessionConversationRefusal(sessionId);
+                if (refusal) throw new Error(refusal);
+                const snapshot = acquired.store.get();
+                if (snapshot.session.type !== "ready")
+                    throw new Error("The conversation is not ready.");
+                if (
+                    snapshot.pendingUserInputs.length ||
+                    snapshot.session.value.pendingUserInputs.length
+                )
+                    throw new Error(
+                        "Answer the pending question yourself before adding voice text.",
+                    );
+                return snapshot;
+            };
+            return {
+                get: acquired.store.get,
+                draftRead: () =>
+                    openId === sessionId
+                        ? composer?.getState()
+                        : voiceComposers.get(sessionId)?.getState(),
+                subscribe: acquired.store.subscribe,
+                async draftAppend(text, expectedDraft) {
+                    guarded();
+                    if (openId !== sessionId || !composer)
+                        throw new Error("Open this conversation before adding voice text.");
+                    const current = composer.getState();
+                    if (current.text !== expectedDraft || current.submission.status === "pending")
+                        throw new Error("The draft changed. Try again after reviewing it.");
+                    if (current.text.length > 0 && !current.voiceDraft)
+                        throw new Error(
+                            "The composer contains a human draft. Voice left it unchanged.",
+                        );
+                    current.composerInput({ type: "voiceTextAppended", text });
+                },
+                async messageSendConfirmed(text, expectedDraft, permissionMode) {
+                    guarded();
+                    if (openId !== sessionId || !composer)
+                        throw new Error("Return to this conversation to send the voice draft.");
+                    const target = composer;
+                    const current = target.getState();
+                    if (
+                        !current.voiceDraft ||
+                        current.text !== expectedDraft ||
+                        text !== expectedDraft ||
+                        current.attachments.length > 0 ||
+                        current.submission.status === "pending"
+                    )
+                        throw new Error("The draft changed. Review it in the conversation.");
+                    current.composerInput({
+                        type: "voiceMessageSending",
+                        revision: current.revision,
+                    });
+                    try {
+                        await acquired.store.voiceMessageSendConfirmed(text, permissionMode);
+                        target.getState().composerInput({
+                            type: "voiceMessageSent",
+                            revision: current.revision,
+                        });
+                    } catch (error) {
+                        target.getState().composerInput({
+                            type: "submissionFailed",
+                            revision: current.revision,
+                            error: happyAgentUserError(error),
+                        });
+                        throw error;
+                    }
+                },
+                [Symbol.dispose]() {
+                    if (released) return;
+                    released = true;
+                    acquired[Symbol.dispose]();
+                },
+            };
+        },
+        async voiceConversationCreate(groupId) {
+            const refusal = groupConversationRefusalFind(groupId);
+            if (refusal) throw new Error(refusal);
+            const start = groupStartFind(groupId);
+            if (!start) throw new Error("That project or workspace is not ready.");
+            const location = start.worktreeId
+                ? list.worktreeSessionStart(start.worktreeId, start.create)
+                : await list.sessionCreate(start.create);
+            if (!location) throw new Error("The conversation could not be started.");
+            await list.sessionCreationWait(location.sessionId);
+            await list.sessionsRefresh();
+            return location;
+        },
+        async voiceWorkspaceCreate(projectId) {
+            const refusal = groupWorkRefusalFind(projectId);
+            if (refusal) throw new Error(refusal);
+            const worktreeId = list.worktreeCreate(projectId);
+            if (!worktreeId) throw new Error("The workspace could not be requested.");
+            const location = list.worktreeSessionStart(worktreeId, {});
+            if (!location)
+                throw new Error(
+                    "The workspace was requested, but its conversation could not be requested.",
+                );
+            await Promise.all([
+                list.workspaceCreationWait(worktreeId),
+                list.sessionCreationWait(location.sessionId),
+            ]);
+            await list.sessionsRefresh();
+            return { worktreeId, location };
+        },
+        voiceBotCreate: (name) => list.botCreate(name ? { name } : {}),
         draftUpdate: (sessionId, message) =>
             writeGuard(sessionConversationRefusal(sessionId), () =>
                 withAddressedChat(sessionId, (store) =>
@@ -6122,7 +6486,17 @@ export function happyAgentWorkspaceStoreCreate(
             const worktreeId = list.worktreeCreate(projectId);
             if (worktreeId === undefined) return;
             output({ type: "groupOpenRequested", groupId: worktreeId });
-            worktreeFirstConversationStart(worktreeId);
+            const location = worktreeFirstConversationStart(worktreeId);
+            if (location === undefined) return;
+            // The project may have first words for every new workspace. They are
+            // read from the host now rather than carried on the row — the live
+            // catalog does not describe them — and sent the way a person would
+            // send them: the chat queues the message behind the checkout, so the
+            // agent starts on it the moment the workspace is ready.
+            const settings = await list.projectSettingsRead(projectId);
+            const prompt = settings.initialPrompt;
+            if (disposed || prompt === undefined || prompt.trim().length === 0) return;
+            await withAddressedChat(location.sessionId, (store) => store.messageSend(prompt, []));
         },
         worktreeArchive: (projectId, worktreeId) => list.worktreeArchive(projectId, worktreeId),
         worktreeReorder: (projectId, worktreeId, afterId) =>
@@ -6720,7 +7094,7 @@ export function happyAgentWorkspaceStoreCreate(
                 draft: bot.name,
                 submitting: false,
             };
-            projectComputeClose();
+            projectSettingsClose();
             recompute();
         },
         renameOpen(projectId, worktreeId) {
@@ -6751,8 +7125,8 @@ export function happyAgentWorkspaceStoreCreate(
             // Only a project runs sessions; a worktree inherits its project's
             // choice and has nothing of its own to set, so its dialog opens no
             // compute block and follows nothing on the host's behalf.
-            if (worktreeId) projectComputeClose();
-            else projectComputeOpen(projectId);
+            if (worktreeId) projectSettingsClose();
+            else projectSettingsOpen(projectId);
             recompute();
         },
         renameDraftUpdate(draft) {
@@ -6775,7 +7149,7 @@ export function happyAgentWorkspaceStoreCreate(
             // The compute block belongs to this dialog and goes with it, which
             // is also what stops following the project and retires every read
             // still on its way back.
-            projectComputeClose();
+            projectSettingsClose();
             recompute();
         },
         async renameSubmit() {
@@ -6804,7 +7178,7 @@ export function happyAgentWorkspaceStoreCreate(
                 // stuck open over a row that already shows the answer.
                 if (rename === submitting) {
                     rename = undefined;
-                    projectComputeClose();
+                    projectSettingsClose();
                 }
                 recompute();
             }
@@ -6922,7 +7296,7 @@ export function happyAgentWorkspaceStoreCreate(
                 projectArchive = undefined;
                 if (rename && rename.kind !== "bot" && rename.projectId === pending.projectId) {
                     rename = undefined;
-                    projectComputeClose();
+                    projectSettingsClose();
                 }
                 recompute();
                 return;
@@ -6939,25 +7313,25 @@ export function happyAgentWorkspaceStoreCreate(
             recompute();
         },
         projectComputeModeUpdate(mode) {
-            const pending = projectCompute;
+            const pending = projectSettings;
             // Nothing to choose between until the host has answered, and nothing
             // to change while it is being told.
             if (!pending || pending.status !== "ready" || pending.submitting) return;
             if (pending.mode === mode) return;
             // The reason a previous attempt failed described the choice it was
             // made about; choosing again is not that attempt.
-            projectCompute = { ...pending, mode, error: undefined };
+            projectSettings = { ...pending, mode, error: undefined };
             recompute();
         },
         projectComputeImageUpdate(image) {
-            const pending = projectCompute;
+            const pending = projectSettings;
             if (!pending || pending.status !== "ready" || pending.submitting) return;
             if (pending.image === image) return;
-            projectCompute = { ...pending, image, error: undefined };
+            projectSettings = { ...pending, image, error: undefined };
             recompute();
         },
         async projectComputeSubmit() {
-            const pending = projectCompute;
+            const pending = projectSettings;
             if (!pending || pending.status !== "ready" || pending.submitting) return;
             const chosen = computeOfDraft(pending);
             // Checked before anything goes out, because the reader is better told
@@ -6967,12 +7341,12 @@ export function happyAgentWorkspaceStoreCreate(
             if (pending.mode === "docker") {
                 const image = pending.image.trim();
                 if (image.length === 0) {
-                    projectCompute = { ...pending, error: "Name the Docker image to run in." };
+                    projectSettings = { ...pending, error: "Name the Docker image to run in." };
                     recompute();
                     return;
                 }
                 if (/\s/u.test(image)) {
-                    projectCompute = {
+                    projectSettings = {
                         ...pending,
                         error: "A Docker image name cannot contain spaces.",
                     };
@@ -6986,7 +7360,7 @@ export function happyAgentWorkspaceStoreCreate(
             // not compare them itself.
             const key = computeKey(chosen);
             if (key === computeKey(pending.current)) {
-                projectCompute = { ...pending, error: undefined };
+                projectSettings = { ...pending, error: undefined };
                 recompute();
                 return;
             }
@@ -7002,21 +7376,32 @@ export function happyAgentWorkspaceStoreCreate(
             const mutationId = projectComputeMutationId;
             const projectId = pending.projectId;
             const submission = ++projectComputeSubmission;
-            projectCompute = { ...pending, submitting: true, error: undefined };
+            projectSettings = { ...pending, submitting: true, error: undefined };
             recompute();
-            const result = await list.projectComputeUpdate(projectId, chosen, mutationId);
+            // The host replaces the settings as one, so the first message it
+            // already holds travels with the new choice rather than being dropped.
+            const result = await list.projectSettingsUpdate(
+                projectId,
+                {
+                    ...(chosen === undefined ? {} : { compute: chosen }),
+                    ...(pending.initialPrompt === undefined
+                        ? {}
+                        : { initialPrompt: pending.initialPrompt }),
+                },
+                mutationId,
+            );
             // Superseded, closed, or reopened on another project: a later
             // submission owns this block now, or nothing does. Either way this
             // answer has nowhere to go, and applying it would be applying one
             // project's result to whatever is on screen instead.
             if (disposed || submission !== projectComputeSubmission) return;
-            const open = projectCompute;
+            const open = projectSettings;
             if (!open || open.projectId !== projectId) return;
             if (result.type === "failed") {
                 // The setting is whatever the host says it is, which this
                 // failure does not establish; the block keeps showing the last
                 // answer it had, with the reason and the same commit.
-                projectCompute = { ...open, submitting: false, error: result.error.message };
+                projectSettings = { ...open, submitting: false, error: result.error.message };
                 recompute();
                 return;
             }
@@ -7025,7 +7410,7 @@ export function happyAgentWorkspaceStoreCreate(
             // rather than left on the request, so a write that raced another
             // window shows the choice that actually won instead of claiming the
             // one this reader made.
-            projectCompute = {
+            projectSettings = {
                 projectId,
                 status: "ready",
                 generation: result.state.generation,
@@ -7035,12 +7420,86 @@ export function happyAgentWorkspaceStoreCreate(
                     result.state.compute?.type === "docker"
                         ? result.state.compute.image
                         : open.image,
+                setupCommands: result.state.setupCommands,
+                ...(result.state.initialPrompt === undefined
+                    ? {}
+                    : { initialPrompt: result.state.initialPrompt }),
+                // A compute save says nothing about the message being written.
+                initialPromptDraft: open.initialPromptDraft,
                 submitting: false,
             };
             // The submission is done with; the next one starts its own identity
             // even if it makes the same choice again.
             projectComputeMutationId = undefined;
             projectComputeMutationChoice = undefined;
+            recompute();
+        },
+        projectInitialPromptUpdate(value) {
+            const pending = projectSettings;
+            if (!pending || pending.status !== "ready" || pending.submitting) return;
+            if (pending.initialPromptDraft === value) return;
+            projectSettings = { ...pending, initialPromptDraft: value, error: undefined };
+            recompute();
+        },
+        async projectInitialPromptSubmit() {
+            const pending = projectSettings;
+            if (!pending || pending.status !== "ready" || pending.submitting) return;
+            // Blank is "nothing to say", and the text itself is kept as typed:
+            // a prompt is prose for a model, and its own line breaks are part of it.
+            const trimmed = pending.initialPromptDraft.trim();
+            const chosen = trimmed.length === 0 ? undefined : pending.initialPromptDraft;
+            const key = chosen ?? "";
+            if (key.trim() === (pending.initialPrompt ?? "").trim()) {
+                projectSettings = { ...pending, error: undefined };
+                recompute();
+                return;
+            }
+            if (projectPromptMutationChoice !== key || projectPromptMutationId === undefined) {
+                projectPromptMutationChoice = key;
+                projectPromptMutationId = computeMutationIdCreate();
+            }
+            const mutationId = projectPromptMutationId;
+            const projectId = pending.projectId;
+            const submission = ++projectPromptSubmission;
+            projectSettings = { ...pending, submitting: true, error: undefined };
+            recompute();
+            // The compute choice the host holds travels with the new message,
+            // since the host replaces the settings as one.
+            const result = await list.projectSettingsUpdate(
+                projectId,
+                {
+                    ...(pending.current === undefined ? {} : { compute: pending.current }),
+                    ...(chosen === undefined ? {} : { initialPrompt: chosen }),
+                },
+                mutationId,
+            );
+            if (disposed || submission !== projectPromptSubmission) return;
+            const open = projectSettings;
+            if (!open || open.projectId !== projectId) return;
+            if (result.type === "failed") {
+                projectSettings = { ...open, submitting: false, error: result.error.message };
+                recompute();
+                return;
+            }
+            // Saved, as the host's read-back describes it. The compute controls are
+            // left as the reader has them: a message save says nothing about a
+            // compute choice still being made.
+            projectSettings = {
+                projectId,
+                status: "ready",
+                generation: result.state.generation,
+                ...(result.state.compute === undefined ? {} : { current: result.state.compute }),
+                mode: open.mode,
+                image: open.image,
+                setupCommands: result.state.setupCommands,
+                ...(result.state.initialPrompt === undefined
+                    ? {}
+                    : { initialPrompt: result.state.initialPrompt }),
+                initialPromptDraft: result.state.initialPrompt ?? "",
+                submitting: false,
+            };
+            projectPromptMutationId = undefined;
+            projectPromptMutationChoice = undefined;
             recompute();
         },
         turnTraceToggle: (turnId) => chatStore?.turnTraceToggle(turnId),
@@ -7069,6 +7528,7 @@ export function happyAgentWorkspaceStoreCreate(
             groupAttachments.clear();
             conversationAttachments.clear();
             conversationDraftTexts.clear();
+            voiceComposers.clear();
             // Disposing the panel stops every terminal it opened: this connection is
             // going away, and a shell nobody can reach again is an orphan.
             unsubscribePanel();
@@ -7086,6 +7546,7 @@ export function happyAgentWorkspaceStoreCreate(
 /* Stable empties, so an acquiring snapshot recomputed twice stays equal to
    itself and the surface is not notified for nothing. */
 const NO_ENTRIES: readonly ConversationEntry[] = [];
+const NO_ERROR_ASSISTANCE: readonly ConversationErrorAssistanceEntry[] = [];
 const NO_QUEUED: readonly HappyAgentQueuedMessage[] = [];
 const NO_SUBMISSIONS: HappyAgentChatSnapshot["requestSubmissions"] = [];
 const NO_SELECTIONS: HappyAgentChatSnapshot["requestSelections"] = new Map();
@@ -7115,6 +7576,7 @@ function conversationAcquiring(
         ...(summary?.title ? { title: summary.title } : {}),
         ...(summary?.subtitle ? { subtitle: summary.subtitle } : {}),
         entries: NO_ENTRIES,
+        errorAssistance: NO_ERROR_ASSISTANCE,
         composer,
         running: false,
         workingPhase: "working",

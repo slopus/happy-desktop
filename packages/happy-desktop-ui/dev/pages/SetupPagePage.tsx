@@ -53,47 +53,13 @@ const firstProjectSteps: readonly { label: string; view: LocalOnboardingView }[]
 ];
 
 const mobileSteps: readonly { label: string; step: DesktopMobileSetupStep }[] = [
-    { label: "Mobile · opt-in", step: { kind: "intro" } },
-    { label: "Mobile · existing connection", step: { kind: "intro", alreadyLinked: true } },
-    {
-        label: "Mobile · get app and install CLI",
-        step: { kind: "get-app", platform: "ios", preparation: "preparing" },
-    },
-    {
-        label: "Mobile · app ready",
-        step: { kind: "get-app", platform: "ios", preparation: "ready" },
-    },
-    {
-        label: "Mobile · Android",
-        step: { kind: "get-app", platform: "android", preparation: "ready" },
-    },
-    {
-        label: "Mobile · CLI installation error",
-        step: {
-            kind: "get-app",
-            platform: "ios",
-            preparation: "failed",
-            message:
-                "Happy could not update the terminal CLI. Check your npm installation and permissions, then try again.",
-        },
-    },
-    {
-        label: "Mobile · checking saved connection",
-        step: { kind: "link", appReady: true, phase: { kind: "checking" } },
-    },
-    {
-        label: "Mobile · initial connection check",
-        step: { kind: "link", appReady: false, phase: { kind: "checking" } },
-    },
-    {
-        label: "Mobile · already paired",
-        step: { kind: "link", appReady: true, phase: { kind: "preparing" } },
-    },
+    { label: "Mobile · get the app", step: { kind: "intro", platform: "ios" } },
+    { label: "Mobile · Android", step: { kind: "intro", platform: "android" } },
+    { label: "Mobile · code on its way", step: { kind: "link", phase: { kind: "checking" } } },
     {
         label: "Mobile · device QR",
         step: {
             kind: "link",
-            appReady: true,
             phase: {
                 kind: "pairing",
                 data: "happy://terminal?AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
@@ -102,18 +68,12 @@ const mobileSteps: readonly { label: string; step: DesktopMobileSetupStep }[] = 
         },
     },
     {
-        label: "Mobile · finishing inline",
-        step: { kind: "link", appReady: true, phase: { kind: "finishing" } },
-    },
-    {
-        label: "Mobile · link retry",
+        label: "Mobile · code expired",
         step: {
             kind: "link",
-            appReady: true,
             phase: {
                 kind: "failed",
-                message:
-                    "Happy CLI is linked but spawn and resume are not online yet. Retry when your connection is available.",
+                message: "The pairing code expired or was cancelled. Try again for a new code.",
             },
         },
     },

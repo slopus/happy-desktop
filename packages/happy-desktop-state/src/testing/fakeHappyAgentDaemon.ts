@@ -1,11 +1,15 @@
 import {
     HAPPY_AGENT_PROTOCOL_VERSION,
     HappyAgentClient,
+    HappyAgentApiError,
     type Agent,
     type AgentContextUsage,
     type AgentDraftSnapshot,
     type CompactionMessage,
     type DaemonConfig,
+    type CreateLiveSessionRequest,
+    type CloseLiveSessionRequest,
+    type LiveSession,
     type EventStreamFrame,
     type EventStreamOptions,
     type HappyAgentEvent,
@@ -94,7 +98,15 @@ export interface FakeHappyAgentDaemon {
     gapOnNextStream(): void;
 
     /** Toggle daemon health readiness, protocol number, and product version. */
-    healthSet(options: { daemon?: string; ready?: boolean; protocol?: number }): void;
+    healthSet(options: {
+        daemon?: string;
+        ready?: boolean;
+        protocol?: number;
+        desktopLiveControl?: boolean;
+    }): void;
+    /** Authoritative Live resource state; control frames are supplied by the test's socket port. */
+    liveSessionSet(session: LiveSession): void;
+    liveSessionGet(id: string): LiveSession | undefined;
 
     /** The effective configuration `getConfig` and the desktop bootstrap serve. */
     configGet(): DaemonConfig;
@@ -280,6 +292,9 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
     const streamOpens: (string | undefined)[] = [];
     let nextStreamGap = false;
     let healthReady = true;
+    let desktopLiveControl: boolean | undefined;
+    const liveSessions = new Map<string, LiveSession>();
+    const liveUrls = new HappyAgentClient({ endpoint: "http://fake-happy-agent.test/" });
     let protocol = HAPPY_AGENT_PROTOCOL_VERSION;
     let daemonVersion = MINIMUM_HAPPY_AGENT_VERSION;
     let daemonGeneration = 1;
@@ -351,11 +366,73 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
                 ready: healthReady,
                 status: healthReady ? ("ready" as const) : ("starting" as const),
                 version: { daemon: daemonVersion, protocol },
+                ...(desktopLiveControl === undefined
+                    ? {}
+                    : { capabilities: { desktopLiveControl } }),
             };
         },
         async getConfig(...args: unknown[]) {
             await record("getConfig", args);
             return { config };
+        },
+        async createLiveSession(request: CreateLiveSessionRequest, ...args: unknown[]) {
+            const recording = record("createLiveSession", [request, ...args]);
+            const id = request.id ?? `flive${liveSessions.size + 1}`;
+            const existing = liveSessions.get(id);
+            if (existing) {
+                await recording;
+                throw new HappyAgentApiError(
+                    409,
+                    "This Live resource already exists.",
+                    "conflict",
+                    { session: existing },
+                );
+            }
+            const session: LiveSession = {
+                id,
+                windowId: request.windowId,
+                credential: request.credential,
+                contextRevision: request.contextRevision,
+                status: "starting",
+                usage: { seconds: null, final: false },
+                error: null,
+                createdAt: 1,
+                updatedAt: 1,
+                endedAt: null,
+                version: "live-v1",
+            };
+            liveSessions.set(id, session);
+            await recording;
+            return {
+                session: liveSessions.get(id)!,
+                transport: { type: "webrtc" as const, sdp: "fake-answer" },
+            };
+        },
+        async getLiveSession(id: string, ...args: unknown[]) {
+            await record("getLiveSession", [id, ...args]);
+            const session = liveSessions.get(id);
+            if (!session)
+                throw new HappyAgentApiError(404, "Unknown Live resource.", "not_found", null);
+            return { session };
+        },
+        async closeLiveSession(
+            id: string,
+            request: CloseLiveSessionRequest = {},
+            ...args: unknown[]
+        ) {
+            await record("closeLiveSession", [id, request, ...args]);
+            const session = liveSessions.get(id);
+            if (!session)
+                throw new HappyAgentApiError(404, "Unknown Live resource.", "not_found", null);
+            const next: LiveSession =
+                session.status === "closed" || session.status === "failed"
+                    ? session
+                    : { ...session, status: "closing", updatedAt: 2 };
+            liveSessions.set(id, next);
+            return { session: next };
+        },
+        liveSessionControlUrl(id: string, windowId: string) {
+            return liveUrls.liveSessionControlUrl(id, windowId);
         },
         async getOnboarding(...args: unknown[]) {
             await record("getOnboarding", args);
@@ -803,6 +880,14 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
             if (options.ready !== undefined) healthReady = options.ready;
             if (options.protocol !== undefined) protocol = options.protocol;
             if (options.daemon !== undefined) daemonVersion = options.daemon;
+            if (options.desktopLiveControl !== undefined)
+                desktopLiveControl = options.desktopLiveControl;
+        },
+        liveSessionSet(session) {
+            liveSessions.set(session.id, session);
+        },
+        liveSessionGet(id) {
+            return liveSessions.get(id);
         },
         configGet: () => config,
         configSet(next) {

@@ -56,8 +56,10 @@ export type TabbedPaneProps = {
  *
  * The bar is the component's reason to exist: it is a fixed row that never
  * grows, so an unbounded number of tabs scrolls horizontally inside it instead
- * of wrapping into a second row that would move the body. Labels truncate at a
- * fixed tab width so the strip stays scannable, and the body owns its own
+ * of wrapping into a second row that would move the body. Every tab is the same
+ * width, the way a browser's are: labels truncate inside it, a long title never
+ * widens its tab, and when the bar runs short the tabs shrink together down to
+ * a minimum before the strip starts to scroll. The body owns its own
  * scrollports. Trailing actions follow the shrinkable tab scrollport, staying
  * beside short strips and remaining visible while long ones scroll.
  *

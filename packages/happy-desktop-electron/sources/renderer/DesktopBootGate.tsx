@@ -1,5 +1,5 @@
 import { useSyncExternalStore, type ReactNode } from "react";
-import { SplashCover, type SegmentedProgressSegment } from "happy-desktop-ui";
+import { SplashCover } from "happy-desktop-ui";
 import type { DesktopRuntimeSnapshot, LocalOnboardingSnapshot } from "../shared/desktopContract";
 import type { LocalOnboardingStore } from "./localOnboardingStore";
 import type {
@@ -11,7 +11,7 @@ import type { DesktopRuntimeStore } from "./runtimeStore";
 /**
  * Whether this window has ever finished starting up.
  *
- * A window-lifetime fact rather than component state: the mark belongs in front
+ * A window-lifetime fact rather than component state: the cover belongs in front
  * of the very first mount and never again, so losing a Happy Agent an hour later
  * degrades the surfaces that Happy Agent owns instead of replacing the app with a
  * loader. Module scope is what makes that hold however the tree below remounts —
@@ -25,7 +25,7 @@ let booted = false;
  *
  * The single caller is the agent restart, which discards the entire app and
  * builds it again from nothing. That is a real cold start — new stores, no
- * carried state, every Happy Agent connected from scratch — so the mark belongs in front
+ * carried state, every Happy Agent connected from scratch — so the cover belongs in front
  * of it exactly as it belongs in front of the first one. This is not a way to
  * bring the cover back for a disconnect; a disconnect never calls it.
  */
@@ -33,11 +33,23 @@ export function desktopBootForget(): void {
     booted = false;
 }
 
+/**
+ * Marks this window as started without the cover ever having been shown.
+ *
+ * The single caller is the first-launch welcome, which opens the window on a
+ * whole screen of its own before anything has booted. Setup follows it, and
+ * setup answers for itself screen by screen, so the cover must not come back
+ * in front of it.
+ */
+export function desktopBootSkip(): void {
+    booted = true;
+}
+
 /** A Happy Agent that has said something conclusive about what it holds. */
 function happyAgentSettled(happyAgent: HappyAgentDirectoryEntry): boolean {
     // Only a Happy Agent that is up owes an answer about its projects. One that is
     // unreachable has already given its answer, and waiting for a catalog it
-    // cannot send would hold the mark for as long as that machine stays down.
+    // cannot send would hold the cover for as long as that machine stays down.
     if (happyAgent.status !== "connected") return happyAgent.status !== "connecting";
     return happyAgent.projectsStatus !== "loading";
 }
@@ -47,7 +59,7 @@ function happyAgentSettled(happyAgent: HappyAgentDirectoryEntry): boolean {
  *
  * Every screen before the workspace answers for itself: a machine that has to be
  * set up, a choice to make, a failure to read. Those are the window's real
- * content and the mark must get out of their way, so only the run-up to a
+ * content and the cover must get out of their way, so only the run-up to a
  * mounted workspace is covered.
  */
 function bootReady(
@@ -64,7 +76,7 @@ function bootReady(
     // and it arrives on its own channel. Uncovering before it lands is a race
     // the machine can lose either way: quick, and the workspace mounts against a
     // machine that turns out to need setting up; slow, and setup's own first
-    // screen appears after the mark has already gone.
+    // screen appears after the cover has already gone.
     if (!setup) return false;
     // Resumed setup may need input before a workspace connection can exist.
     // Waiting for that connection would hide the very screen that can unblock
@@ -94,50 +106,17 @@ function bootReady(
 }
 
 /**
- * What the window is waiting for, as the three things it actually waits for.
+ * Holds the window on its bare surface for the whole run-up to a mounted
+ * workspace, then dissolves into it.
  *
- * They are the boot's own steps rather than a guess at how long it will take:
- * the machine's agent has to be up, this window has to reach it, and it has to
- * say what it holds. Each is read from the state that already decides when the
- * cover lifts, so the bar and the cover can never disagree about where the boot
- * is. None of them counts anything — nothing in a boot knows its own size — so a
- * live step says it is alive and claims no position inside itself.
- *
- * There is no failed step here. Every way a boot can fail is a screen of its own
- * that the cover gets out of the way for, so a bar that stopped in red would be
- * drawn underneath the page already explaining the failure.
- */
-function bootSteps(
-    runtime: DesktopRuntimeSnapshot | undefined,
-    happyAgents: readonly HappyAgentDirectoryEntry[],
-    setupAnswered: boolean,
-): readonly SegmentedProgressSegment[] {
-    const running = runtime?.phase === "ready";
-    const reached = running && happyAgents.some((happyAgent) => happyAgent.status === "connected");
-    const settled = reached && setupAnswered && happyAgents.every((one) => happyAgentSettled(one));
-    return [
-        { id: "agent", label: "Starting Happy Agent", state: running ? "done" : "running" },
-        {
-            id: "connect",
-            label: "Connecting",
-            state: !running ? "pending" : reached ? "done" : "running",
-        },
-        {
-            id: "projects",
-            label: "Loading projects",
-            state: !reached ? "pending" : settled ? "done" : "running",
-        },
-    ];
-}
-
-/**
- * Holds the window on the Happy mark for the whole run-up to a mounted
- * workspace, then dissolves the mark off it.
+ * It says nothing: no mark, no "Starting Happy Agent". The first launch is the
+ * welcome, which needs no cover, and every later start is one the person has
+ * seen before, so the cover only keeps half-built screens off the window.
  *
  * It sits above every desktop screen rather than inside the router, because the
  * boot crosses several of them — reading settings, connecting, first-run setup,
  * then the workspace — and a cover mounted inside any one of them is unmounted
- * and remounted as the window moves between them. That is visible: the mark
+ * and remounted as the window moves between them. That is visible: the cover
  * leaves and a new one arrives a frame later, which is the flicker this replaces.
  * One cover, mounted once, spans all of it.
  *
@@ -176,11 +155,7 @@ export function DesktopBootGate(props: {
     const ready = bootReady(runtime, local, setup.onboarding);
     if (ready) booted = true;
     return (
-        <SplashCover
-            ready={ready}
-            steps={bootSteps(runtime, local, setup.onboarding !== undefined)}
-            stepsLabel="Startup progress"
-        >
+        <SplashCover quiet ready={ready}>
             {props.children}
         </SplashCover>
     );

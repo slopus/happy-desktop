@@ -12,6 +12,7 @@ import {
     HappyAgentProfileSettings,
     HappyAgentSecretSettings,
     HappyAgentSettingsShell,
+    GptLiveSettings,
     HappyAgentUsageSettings,
     type HappyAgentProviderRow,
     type HappyAgentSecretRow,
@@ -494,7 +495,26 @@ export function HappyAgentSettingsBlueprintPage() {
                 </HappyAgentSettingsShell>
             </FullScreenSpecimen>
             <FullScreenSpecimen
-                detail="Mobile Access category: configured and connected, with the installation-wide unlink action"
+                label="Happy Agent settings — Experimental"
+                detail="Revealed only after enabling experimental features in General"
+                number="01x"
+            >
+                <HappyAgentSettingsShell
+                    activeCategoryId="experimental"
+                    categories={[
+                        ...categories,
+                        { id: "experimental", label: "Experimental", icon: "zap" },
+                    ]}
+                    title="Experimental"
+                    description="Features that are still being built"
+                    onCategorySelect={noop}
+                    onClose={noop}
+                >
+                    <GptLiveSettings enabled={false} onEnabledChange={noop} />
+                </HappyAgentSettingsShell>
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="Mobile Access category: configured and connected, with the selected owner's disconnect action"
                 label="Happy Agent settings — Mobile Access"
                 number="01e"
             >
@@ -567,20 +587,20 @@ export function HappyAgentSettingsBlueprintPage() {
                 </FullScreenSpecimen>
             ))}
             <FullScreenSpecimen
-                detail="Settings opens the exact first-run component and store. Not now or completion Continue returns to Mobile Access status."
+                detail="Settings opens the exact first-run component and store. Skip or Continue returns to Mobile Access status."
                 label="Happy Mobile — shared local setup"
                 number="01f-setup"
             >
                 <DesktopMobileSetup
                     appearance="light"
-                    step={{ kind: "intro", alreadyLinked: true }}
+                    step={{ kind: "intro", platform: "ios" }}
                     onContinue={noop}
                     onSkip={noop}
                     onPlatformSelect={noop}
                 />
             </FullScreenSpecimen>
             <FullScreenSpecimen
-                detail="A failed native status read stays unknown and shows its reason, even after the CLI is ready."
+                detail="A failed native status read stays unknown and shows its reason."
                 label="Happy Mobile — native status unavailable"
                 number="01f-read-failed"
             >
@@ -588,7 +608,6 @@ export function HappyAgentSettingsBlueprintPage() {
                     appearance="light"
                     step={{
                         kind: "link",
-                        appReady: true,
                         phase: {
                             kind: "failed",
                             message:

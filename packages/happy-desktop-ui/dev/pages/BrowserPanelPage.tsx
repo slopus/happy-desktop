@@ -76,8 +76,8 @@ export function BrowserPanelPage() {
                 </div>
             </Specimen>
             <Specimen
-                detail="no content renderer connected · unavailable host"
-                label="Unavailable host"
+                detail="opened on nothing · the address takes the caret as the tab opens · no content renderer connected"
+                label="New tab"
                 number="02"
                 stage="app"
             >

@@ -117,7 +117,6 @@
 @import "./styles/setup-assistants.css";
 @import "./styles/setup-command.css";
 @import "./styles/agent-install.css";
-@import "./styles/connection-header.css";
 @import "./styles/setup-option-card.css";
 @import "./styles/default-agent-form.css";
 @import "./styles/build-progress-panel.css";
@@ -139,6 +138,7 @@
 @import "./styles/happy-agent-usage.css";
 @import "./styles/happy-agent-activity.css";
 @import "./styles/happy-agent-settings.css";
+@import "./styles/mobile-access-confirmation.css";
 @import "./styles/happy-agent-secret-settings.css";
 @import "./styles/happy-agent-debug-log.css";
 @import "./styles/happy-agent-raw-state.css";
@@ -150,3 +150,4 @@
 @import "./styles/workspace-lifecycle-notice.css";
 @import "./styles/connections.css";
 @import "./styles/window-chrome.css";
+@import "./styles/gpt-live.css";

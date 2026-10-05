@@ -157,6 +157,13 @@ export function browserDevBridgeCreate(): HappyDesktopBridge {
         legacyCliPrepare: async () => {
             throw new Error("Install the terminal CLI from the Electron desktop window.");
         },
+        legacyCliStatus: async () => ({
+            snapshot: {
+                status: "unavailable",
+                message:
+                    "Terminal CLI status and sign-out are available in the Electron desktop window.",
+            },
+        }),
         daemonStart: async () => {
             throw new Error("Happy Agent is started from the Electron desktop window.");
         },

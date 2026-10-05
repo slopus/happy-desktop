@@ -24,14 +24,12 @@
 .happy-setup-page__copy,
 .happy-setup-page__header,
 .happy-setup-page__core,
-.happy-setup-page__auxiliary,
+.happy-setup-page__footer,
 .happy-setup-page__progress,
 .happy-setup-page__progress-track,
 .happy-setup-page__progress-fill,
 .happy-setup-page__progress-line,
 .happy-setup-page__slot,
-.happy-local-onboarding__machine-status,
-.happy-local-onboarding__machine-progress,
 .happy-local-onboarding__machine-assistants {
     box-sizing: border-box;
 }
@@ -51,34 +49,15 @@
     background: var(--surface);
 }
 
-.happy-local-onboarding__mobile-actions,
-.happy-local-onboarding__mobile-pairing-body,
-.happy-local-onboarding__mobile-waiting {
+/* The code, centred, with its copy link under it. */
+.happy-local-onboarding__mobile-pairing-body {
     display: flex;
     flex: none;
-    align-items: center;
-    justify-content: center;
-}
-
-.happy-local-onboarding__mobile-actions,
-.happy-local-onboarding__mobile-pairing-body {
     flex-direction: column;
-    width: 100%;
-}
-
-.happy-local-onboarding__mobile-actions {
-    gap: 4px;
-}
-
-.happy-local-onboarding__mobile-pairing-body {
-    gap: 12px;
-}
-
-.happy-local-onboarding__mobile-waiting {
+    align-items: center;
     gap: 8px;
-    color: color-mix(in srgb, var(--button-primary-tint) 78%, transparent);
-    font-size: 13px;
-    line-height: 20px;
+    width: 100%;
+    --happy-qr-code-size: var(--happy-setup-pairing-qr-size);
 }
 
 .happy-local-onboarding__profile-form {
@@ -87,17 +66,7 @@
     gap: 16px;
     width: 100%;
     max-width: 400px;
-    margin-bottom: 24px;
     align-self: center;
-}
-
-.happy-local-onboarding__provider-note {
-    max-width: 600px;
-    margin: 0;
-    color: var(--text-secondary);
-    font-size: 12px;
-    line-height: 18px;
-    text-wrap: pretty;
 }
 
 .happy-setup-page {
@@ -112,6 +81,15 @@
     color: var(--text);
     font-family: var(--happy-font-ui);
     font-synthesis: none;
+    /* The centre line is measured on the window, not on whatever is above it. */
+    container-type: size;
+    /*
+     * A pairing code is the tallest thing that hangs under the line: the lead
+     * (subtitle and status, 76px with the core's padding and gap), the code,
+     * 8px, its 28px copy link, and both footer slots (120px). Full size while
+     * that fits; a shorter window shrinks the code rather than move the line.
+     */
+    --happy-setup-pairing-qr-size: clamp(88px, 50cqh - 232px, 136px);
 }
 
 .happy-setup-page > .happy-window-drag-region {
@@ -130,32 +108,32 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: safe center;
     overflow: auto;
 }
 
 /*
- * Every setup page is the same four bands, in the same places:
+ * Every setup page is the same three places:
  *
- *   header      title and subtitle, at one coordinate on every page
- *   spacer
- *   core        what the page is for, and its primary action
- *   spacer
- *   auxiliary   progress, a way to skip, footnotes
+ *   header   scene and title — the title's bottom edge sits on the centre line
+ *   core     subtitle, status, then what the page is for, hanging from it
+ *   footer   primary action and a reserved slot for a way out, at the bottom
  *
- * The header's height does not depend on its contents, so moving between two
- * pages changes the words rather than where they are.
+ * The header grows upward from the line and the core grows downward from it,
+ * so neither moves the other, and the footer is pinned to the foot.
+ *
+ * The line is the window's centre at every window size. What hangs below it
+ * is budgeted for the smallest window (640px): a QR code scales with the
+ * window rather than pushing the line up.
  */
 .happy-setup-page__body {
     display: flex;
-    flex: 1 1 auto;
+    flex: 1 0 auto;
     flex-direction: column;
     align-items: center;
-    gap: 0;
     width: 100%;
     max-width: 560px;
     min-height: 100%;
-    padding: 40px;
+    padding: 0 40px;
 }
 
 .happy-setup-page__header {
@@ -163,36 +141,55 @@
     flex: none;
     flex-direction: column;
     align-items: center;
+    justify-content: flex-end;
     gap: 8px;
     width: 100%;
-}
-
-.happy-setup-page__spacer {
-    flex: 1 1 auto;
-    min-height: 24px;
+    min-height: 50cqh;
+    /* Clear of the step bar overlaid across the top of the window. */
+    padding-top: 96px;
 }
 
 .happy-setup-page__core,
-.happy-setup-page__auxiliary {
+.happy-setup-page__footer,
+.happy-setup-page__lead {
     display: flex;
-    flex: none;
     flex-direction: column;
     align-items: center;
     width: 100%;
 }
 
 .happy-setup-page__core {
+    flex: 1 0 auto;
     gap: 16px;
+    padding-top: 8px;
 }
 
-.happy-setup-page__auxiliary {
-    gap: 12px;
-    min-height: 44px;
-    justify-content: flex-end;
+/* The subtitle and the live line read as one sentence and its state. */
+.happy-setup-page__lead {
+    flex: none;
+    gap: 8px;
 }
 
-/* Reachable from every step, and never in the way of one: out of the bands
-   entirely, pinned to the window's own corner. */
+/* 24px at the foot keeps the second slot level with the help button. */
+.happy-setup-page__footer {
+    flex: none;
+    gap: 8px;
+    padding-bottom: 24px;
+}
+
+/* Both slots hold a full-size button, so a page that needs a way out never
+   moves its primary action to make room for one. */
+.happy-setup-page__footer-primary,
+.happy-setup-page__footer-secondary {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    height: 44px;
+}
+
+/* Reachable from every step, and never in the way of one: pinned to the
+   window's own corner, level with the footer's second slot. */
 .happy-setup-page__help {
     position: absolute;
     right: 24px;
@@ -200,11 +197,15 @@
     z-index: 2;
 }
 
+/* Overlaid rather than in the flow, so the anchor line is measured from the
+   top of the window whether or not a page shows the step bar. */
 .happy-setup-page__steps {
-    position: relative;
-    z-index: 1;
+    position: absolute;
+    top: 0;
+    right: 0;
+    left: 0;
+    z-index: 2;
     display: flex;
-    flex: none;
     justify-content: center;
     padding: 32px 32px 8px;
 }
@@ -239,10 +240,8 @@
 .happy-setup-page[data-backdrop="sky"] .happy-setup-assistants__detail,
 .happy-setup-page[data-backdrop="sky"] .happy-setup-assistants__note,
 .happy-setup-page[data-backdrop="sky"] .happy-setup-assistants__link,
-.happy-setup-page[data-backdrop="sky"] .happy-setup-assistants__link-url,
 .happy-setup-page[data-backdrop="sky"] .happy-copy-button[data-captioned],
 .happy-setup-page[data-backdrop="sky"] .happy-local-onboarding__facts,
-.happy-setup-page[data-backdrop="sky"] .happy-local-onboarding__provider-note,
 .happy-setup-page[data-backdrop="sky"] .happy-text-field__label {
     color: var(--button-primary-tint);
 }
@@ -320,9 +319,39 @@
     flex: none;
     align-items: center;
     justify-content: center;
-    width: 96px;
-    height: 96px;
+    width: 80px;
+    height: 80px;
     margin-bottom: 8px;
+}
+
+/* As a status the bar is not a stand-in for a button: wide enough for its
+   label and count on one line, with the line centred under the words. */
+.happy-setup-page__lead > .happy-setup-page__progress {
+    width: 360px;
+    margin-top: 4px;
+}
+
+.happy-setup-page__lead > .happy-setup-page__progress .happy-setup-page__progress-line {
+    justify-content: center;
+}
+
+.happy-setup-page__status {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 20px;
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 20px;
+    text-align: center;
+}
+
+.happy-setup-page__status[data-tone="inverse"] {
+    color: color-mix(in srgb, var(--button-primary-tint) 78%, transparent);
 }
 
 .happy-setup-page__title {
@@ -335,8 +364,10 @@
     text-align: center;
 }
 
+/* One line by contract: the copy is written short. The line is held even when
+   a page has no subtitle, so the title stays at its height. */
 .happy-setup-page__copy {
-    max-width: 400px;
+    min-height: 24px;
     margin: 0;
     color: var(--text-secondary);
     font-size: 16px;
@@ -356,94 +387,24 @@
     width: 100%;
 }
 
-/* Download, launch, discovery, and verification rewrite one retained frame.
-   The subscription copy fits three lines; reserving them from the first paint
-   keeps the status region on the same coordinates as words change. */
+/* Download, launch, discovery, and verification rewrite one retained frame. */
 .happy-local-onboarding__machine-setup .happy-setup-page__title {
     white-space: nowrap;
 }
 
-.happy-local-onboarding__machine-setup .happy-setup-page__copy {
-    display: flex;
-    flex: none;
-    align-items: center;
-    justify-content: center;
-    min-height: 72px;
-}
-
-/* Both lifecycle layers occupy this one reserved region during the handoff.
-   Keeping the region fixed means neither the progress line nor the harness row
-   can move the title, copy, or surrounding column when it becomes active. */
 /* Three columns that may each carry a command well need more measure than a
    paragraph does, so this one page is wider than the setup default. */
 .happy-local-onboarding__machine-setup .happy-setup-page__body {
     max-width: 720px;
 }
 
-.happy-local-onboarding__machine-setup .happy-setup-page__slot,
-.happy-local-onboarding__machine-status {
-    flex: none;
-    width: 100%;
-    min-height: 216px;
-}
-
-/* The two lifecycle layers share one cell rather than one fixed rectangle:
-   both are painted during the handoff and neither may move the other, but the
-   region grows with whichever is taller now that a column can carry a command. */
-.happy-local-onboarding__machine-status {
-    /* eslint-disable-next-line happy-layout/use-flex-layout -- two crossfading layers must occupy the same cell, which flexbox cannot express */
-    display: grid;
-    grid-template-areas: "status";
-}
-
-.happy-local-onboarding__machine-progress,
 .happy-local-onboarding__machine-assistants {
-    grid-area: status;
     display: flex;
+    flex: none;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
-    width: 100%;
-    height: 100%;
-    transition: opacity 180ms ease;
-}
-
-.happy-local-onboarding__machine-progress {
-    opacity: 1;
-}
-
-.happy-local-onboarding__machine-progress .happy-setup-page__progress {
-    width: 400px;
-}
-
-.happy-local-onboarding__machine-assistants {
     gap: 24px;
-    height: auto;
-    opacity: 0;
-    pointer-events: none;
-}
-
-.happy-local-onboarding__machine-actions {
-    display: flex;
-    flex: none;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 4px;
-    height: 44px;
-}
-
-.happy-local-onboarding__machine-status[data-view="assistants"]
-    .happy-local-onboarding__machine-progress {
-    opacity: 0;
-    pointer-events: none;
-}
-
-.happy-local-onboarding__machine-status[data-view="assistants"]
-    .happy-local-onboarding__machine-assistants {
-    opacity: 1;
-    pointer-events: auto;
-    transition-delay: 120ms;
+    width: 100%;
 }
 
 /*
@@ -590,11 +551,6 @@
 
     .happy-setup-page__progress {
         animation: none;
-    }
-
-    .happy-local-onboarding__machine-progress,
-    .happy-local-onboarding__machine-assistants {
-        transition: none;
     }
 
     .happy-setup-page__progress-fill {

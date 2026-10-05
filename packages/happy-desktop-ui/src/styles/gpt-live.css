@@ -1,0 +1,69 @@
+.happy-gpt-live {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+}
+.happy-gpt-live__application {
+    display: flex;
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+}
+.happy-gpt-live__bar {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 8px;
+    min-height: 48px;
+    padding: 8px 16px;
+    box-sizing: border-box;
+    border-top: 1px solid var(--divider);
+    background: var(--surface);
+    color: var(--text);
+    font-family: var(--happy-font-ui);
+    font-size: 13px;
+    line-height: 20px;
+}
+.happy-gpt-live__status {
+    flex: 1 1 auto;
+    min-width: 0;
+    color: var(--text-secondary);
+}
+.happy-gpt-live__panel,
+.happy-gpt-live__confirmation,
+.happy-gpt-live__transcript {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-width: 0;
+}
+.happy-gpt-live__actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.happy-gpt-live__description,
+.happy-gpt-live__message {
+    margin: 0;
+    font-family: var(--happy-font-ui);
+    font-size: 13px;
+    line-height: 20px;
+    overflow-wrap: anywhere;
+}
+.happy-gpt-live__description {
+    color: var(--text-secondary);
+}
+.happy-gpt-live__message {
+    color: var(--text);
+    white-space: pre-wrap;
+}
+.happy-gpt-live__confirmation {
+    border-top: 1px solid var(--divider);
+    padding-top: 16px;
+}

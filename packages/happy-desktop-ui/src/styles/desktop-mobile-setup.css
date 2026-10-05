@@ -1,50 +1,82 @@
 .happy-desktop-mobile-setup .happy-setup-page__body {
-    gap: 8px;
     max-width: 640px;
-    padding: 32px 24px 16px;
 }
 
-.happy-desktop-mobile-setup .happy-setup-page__copy {
-    max-width: 560px;
-    text-wrap: balance;
-}
-
-/* Keep the progress header and QR actions visible in short desktop windows. */
-.happy-desktop-mobile-setup[data-steps] .happy-setup-page__body {
-    padding: 8px 24px;
-}
-
-.happy-desktop-mobile-setup[data-steps] .happy-setup-page__heading {
-    flex-direction: row;
-    justify-content: center;
-    gap: 12px;
-}
-
-.happy-desktop-mobile-setup__body,
-.happy-desktop-mobile-setup__preparation {
+/*
+ * The code, centred, with its copy link under it. Under the centre line hang
+ * the subtitle (48px with the core's padding and gap), the code, 8px, its 28px
+ * copy link, and both footer slots (120px): full size while that fits, and a
+ * shorter window shrinks the code rather than move the line.
+ */
+.happy-desktop-mobile-setup__pairing {
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: 8px;
-    width: 100%;
-    min-width: 0;
+    --happy-qr-code-size: clamp(88px, 50cqh - 204px, 136px);
 }
 
-.happy-desktop-mobile-setup__actions {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    align-items: center;
-    gap: 12px;
+/*
+ * The code's stand-in: the same card at the same size, its modules blurred out
+ * of reach of any camera, with a light band passing over them. Only the
+ * modules blur; the card keeps the real code's crisp edge and shadow, so the
+ * swap reads as the pattern coming into focus rather than a new box arriving.
+ */
+.happy-desktop-mobile-setup__code-placeholder {
+    position: relative;
+    flex: none;
+    overflow: hidden;
+    width: var(--happy-qr-code-size, 136px);
+    height: var(--happy-qr-code-size, 136px);
+    border-radius: var(--happy-radius-shell);
+    background: var(--page-canvas);
+    box-shadow: 0 12px 36px var(--shadow-floating);
 }
 
-.happy-desktop-mobile-setup__note {
-    margin: 0;
+.happy-desktop-mobile-setup__code-placeholder > .happy-qr-code {
+    border-radius: 0;
+    box-shadow: none;
+    filter: blur(5px);
+    opacity: 0.5;
+}
+
+.happy-desktop-mobile-setup__code-placeholder::after {
+    position: absolute;
+    inset: 0;
+    content: "";
+    background: linear-gradient(
+        100deg,
+        transparent 30%,
+        color-mix(in srgb, var(--page-canvas) 85%, transparent) 50%,
+        transparent 70%
+    );
+    background-size: 300% 100%;
+    animation: happy-desktop-mobile-setup-code-sweep 1.4s ease-in-out infinite;
+}
+
+@keyframes happy-desktop-mobile-setup-code-sweep {
+    from {
+        background-position: 100% 0;
+    }
+
+    to {
+        background-position: 0% 0;
+    }
+}
+
+/* Less motion keeps the blurred stand-in and drops only the passing band. */
+@media (prefers-reduced-motion: reduce) {
+    .happy-desktop-mobile-setup__code-placeholder::after {
+        animation: none;
+        background: none;
+    }
+}
+
+.happy-desktop-mobile-setup__link {
     color: var(--button-primary-tint);
-    font-size: 14px;
-    line-height: 20px;
-    text-align: center;
-    overflow-wrap: anywhere;
+    font-weight: 500;
+    text-decoration: underline;
+    text-underline-offset: 3px;
 }
 
 .happy-desktop-mobile-setup__download {
@@ -62,8 +94,4 @@
     border-radius: 8px;
     background: var(--surface);
     padding: 4px;
-}
-
-.happy-desktop-mobile-setup__preparation {
-    min-height: 36px;
 }

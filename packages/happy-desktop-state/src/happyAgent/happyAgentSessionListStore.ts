@@ -22,7 +22,10 @@ import {
     happyAgentUserError,
     referencesPreserve,
 } from "./happyAgentSupport.js";
-import { happyAgentComputeRequest, happyAgentProjectComputeProject } from "./happyAgentProject.js";
+import {
+    happyAgentProjectSettingsProject,
+    happyAgentProjectSettingsRequest,
+} from "./happyAgentProject.js";
 import { happyAgentWorkspaceGeneratedName } from "./happyAgentWorkspaceNames.js";
 import type {
     HappyAgentBot,
@@ -32,8 +35,8 @@ import type {
     HappyAgentBotSubtask,
     HappyAgentGroupId,
     HappyAgentProjectCatalog,
-    HappyAgentProjectCompute,
-    HappyAgentProjectComputeState,
+    HappyAgentProjectSettingsInput,
+    HappyAgentProjectSettingsState,
     HappyAgentProjectId,
     HappyAgentSelection,
     HappyAgentSession,
@@ -147,8 +150,8 @@ export type HappyAgentSessionRestoreResult =
  * Returned by value rather than recorded in `mutationError` so an unrelated
  * concurrent mutation can neither clear nor stand in for this answer.
  */
-export type HappyAgentProjectComputeResult =
-    | { readonly type: "saved"; readonly state: HappyAgentProjectComputeState }
+export type HappyAgentProjectSettingsResult =
+    | { readonly type: "saved"; readonly state: HappyAgentProjectSettingsState }
     | { readonly type: "failed"; readonly error: UserError };
 
 /**
@@ -196,6 +199,8 @@ export type HappyAgentSessionListOutput = {
 };
 
 export interface HappyAgentSessionListStore {
+    sessionCreationWait(sessionId: HappyAgentSessionId): Promise<void>;
+    workspaceCreationWait(workspaceId: HappyAgentWorktreeId): Promise<void>;
     get(): HappyAgentSessionListSnapshot;
     subscribe(listener: () => void): () => void;
     /**
@@ -285,27 +290,30 @@ export interface HappyAgentSessionListStore {
     projectArchive(projectId: HappyAgentProjectId): Promise<HappyAgentProjectArchiveResult>;
 
     /**
-     * Reads where sessions started in one project run by default. Not part of the
-     * list snapshot: the host's live catalog does not describe the setting, so it
-     * belongs to the surface that asks for it rather than to every row.
+     * Reads what one project says about its new workspaces: where their sessions
+     * run, what a checkout runs to set itself up, and what its first agent is
+     * told. Not part of the list snapshot: the host's live catalog does not
+     * describe these, so they belong to the surface that asks for them rather
+     * than to every row.
      */
-    projectComputeRead(projectId: HappyAgentProjectId): Promise<HappyAgentProjectComputeState>;
+    projectSettingsRead(projectId: HappyAgentProjectId): Promise<HappyAgentProjectSettingsState>;
 
     /**
-     * Changes where sessions started in one project run by default, or stops the
-     * project stating it when `compute` is absent. Deliberately not optimistic
-     * and not recorded in `mutationError`: the answer is the host's own read-back
-     * of the project, returned to the one caller that asked.
+     * Replaces the settings a project accepts new values for — where sessions
+     * run, and the first message — or stops the project stating one when the
+     * field is absent. Deliberately not optimistic and not recorded in
+     * `mutationError`: the answer is the host's own read-back of the project,
+     * returned to the one caller that asked.
      *
      * `mutationId` is the caller's identity for this submission and must be
      * reused by every attempt at it, so a request whose answer was lost can be
      * sent again without the host applying it a second time.
      */
-    projectComputeUpdate(
+    projectSettingsUpdate(
         projectId: HappyAgentProjectId,
-        compute: HappyAgentProjectCompute | undefined,
+        settings: HappyAgentProjectSettingsInput,
         mutationId: string,
-    ): Promise<HappyAgentProjectComputeResult>;
+    ): Promise<HappyAgentProjectSettingsResult>;
 
     /**
      * Notifies whenever the host says a project changed, whether or not the
@@ -429,6 +437,8 @@ export interface HappyAgentSessionListDeps {
         | "createBot"
         | "createSession"
         | "createWorkspace"
+        | "sessionCreationWait"
+        | "workspaceCreationWait"
         | "markSessionRead"
         | "renameGroup"
         | "reorderBot"
@@ -1671,6 +1681,9 @@ export function happyAgentSessionListStoreCreate(
             }
             deps.connectActions.markSessionRead(sessionId);
         },
+        sessionCreationWait: (sessionId) => deps.connectActions.sessionCreationWait(sessionId),
+        workspaceCreationWait: (workspaceId) =>
+            deps.connectActions.workspaceCreationWait(workspaceId),
         sessionCreate: (input) => mutate(async () => sessionCreateRun(input)),
         projectCloneGithub(repository, name) {
             return connectMutationTrack(
@@ -2077,11 +2090,11 @@ export function happyAgentSessionListStoreCreate(
                 void reconcile();
             });
         },
-        async projectComputeRead(projectId) {
+        async projectSettingsRead(projectId) {
             const { project } = await deps.client.getProject(projectId);
-            return happyAgentProjectComputeProject(project);
+            return happyAgentProjectSettingsProject(project);
         },
-        async projectComputeUpdate(projectId, compute, mutationId) {
+        async projectSettingsUpdate(projectId, settings, mutationId) {
             try {
                 // The `/v0` answer is the host's own read of the project
                 // after the write, not an echo of the request, so this is the
@@ -2093,13 +2106,10 @@ export function happyAgentSessionListStoreCreate(
                     state: await deps.client.getProject(projectId).then(async ({ project }) => {
                         const updated = await deps.client.replaceProjectSettings(
                             projectId,
-                            {
-                                defaultWorkspaceCompute: happyAgentComputeRequest(compute),
-                                mutationId,
-                            },
+                            { ...happyAgentProjectSettingsRequest(settings), mutationId },
                             { ifMatch: project.version },
                         );
-                        return happyAgentProjectComputeProject(updated.project);
+                        return happyAgentProjectSettingsProject(updated.project);
                     }),
                 };
             } catch (error) {

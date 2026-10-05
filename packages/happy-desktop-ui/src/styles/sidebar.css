@@ -1176,6 +1176,46 @@
     position: relative;
 }
 
+/*
+ * The machine being out of reach, in the footer's leading slot. It takes the
+ * row's free space and truncates inside it, so the trailing controls never
+ * move and nothing else in the window shifts when it appears.
+ */
+.happy-sidebar-connection {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    height: 28px;
+    padding: 0 4px;
+    color: var(--text-secondary);
+    font-family: var(--happy-font-ui);
+    font-size: 12px;
+    line-height: 16px;
+    user-select: none;
+}
+
+.happy-sidebar-connection__icon {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+}
+
+.happy-sidebar-connection:not([data-retrying]) .happy-sidebar-connection__icon {
+    color: var(--status-error);
+}
+
+.happy-sidebar-connection__label {
+    overflow: hidden;
+    min-width: 0;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .happy-sidebar__dev-build {
     display: flex;
     flex: 1 1 auto;

@@ -1,6 +1,5 @@
 import type { HappyIntegration } from "@slopus/happy-agent-client";
 import { happyAgentUserError } from "../happyAgent/happyAgentSupport.js";
-import { happyMobileLegacyLink } from "./happyMobileLegacyLink.js";
 import type {
     HappyDesktopMobileStep,
     HappyMobileOnboardingSnapshot,
@@ -8,14 +7,24 @@ import type {
     HappyMobileOnboardingStoreOptions,
 } from "./happyMobileOnboardingStore.js";
 
-/** Desktop-only consent, app-install gate, and handoff; no legacy work on subscription. */
+/**
+ * The shortest time the code's placeholder stays up. A code that arrives
+ * sooner waits out the rest, so the placeholder never flashes for a frame.
+ */
+const CODE_PLACEHOLDER_MINIMUM_MS = 1_000;
+
+/**
+ * The guided phone setup: the store code first, then one pairing code for
+ * Happy Agent. The phone reaches this computer through Happy Agent alone, so
+ * nothing is installed on the computer for it.
+ */
 export function happyDesktopMobileOnboardingStoreCreate(
     options: HappyMobileOnboardingStoreOptions,
 ): HappyMobileOnboardingStore {
     const listeners = new Set<() => void>();
     let snapshot: HappyMobileOnboardingSnapshot = options.initialSkipped
         ? { status: "skipped" }
-        : { status: "desktop", step: { kind: "intro" } };
+        : { status: "desktop", step: { kind: "intro", platform: "ios" } };
     let consented = false;
     let skipped = options.initialSkipped === true;
     let continued = false;
@@ -27,26 +36,18 @@ export function happyDesktopMobileOnboardingStoreCreate(
     let networkError: string | undefined;
     let reading = false;
     let transportOnline = false;
-    let prepared = false;
-    let preparing = false;
-    let preparationError: string | undefined;
-    let appReady = false;
     let pairing = false;
     let pairingError: string | undefined;
-    let linking = false;
-    let linkAttempted = false;
-    let linked = false;
-    let linkError: string | undefined;
+    /** Until when a code that has already arrived is still held back. */
+    let codeHeldUntil = 0;
+    let codeTimer: ReturnType<typeof setTimeout> | undefined;
 
     const active = () => !disposed && !skipped && !continued && listeners.size > 0;
     const errorMessage = (error: unknown) => happyAgentUserError(error).message;
     const step = (): HappyDesktopMobileStep => {
-        if (!consented)
-            return {
-                kind: "intro",
-                ...(integration?.configured ? { alreadyLinked: true } : {}),
-            };
-        if (linked && integration?.configured) {
+        // A saved pairing is the finished state, whether it was made just now
+        // or on an earlier run: there is nothing left to ask for.
+        if (integration?.configured) {
             const online = integration.status === "connected" && transportOnline && !networkError;
             return {
                 kind: "connected",
@@ -55,57 +56,36 @@ export function happyDesktopMobileOnboardingStoreCreate(
                     ? {
                           message:
                               networkError ??
-                              "Your pairing is saved. This computer is reconnecting to Happy Mobile; remote control will be available when it is online.",
+                              "Your pairing is saved. Remote control resumes when this computer is online.",
                       }
                     : {}),
             };
         }
+        if (!consented) return { kind: "intro", platform };
         // An unsuccessful read is not evidence that there is no saved pairing.
-        // Keep its reason visible even when CLI preparation has already finished.
         if (!integration || networkError || reading)
             return {
                 kind: "link",
-                appReady: appReady || integration?.configured === true,
                 phase:
                     networkError && !reading
                         ? { kind: "failed", message: networkError }
                         : { kind: "checking" },
             };
-        if (integration.configured) {
-            const message = preparationError ?? linkError;
+        if (pairingError) return { kind: "link", phase: { kind: "failed", message: pairingError } };
+        if (integration.status === "pairing" && Date.now() < codeHeldUntil)
+            return { kind: "link", phase: { kind: "checking" } };
+        if (integration.status === "pairing")
             return {
                 kind: "link",
-                appReady: true,
-                phase: message
-                    ? { kind: "failed", message }
-                    : { kind: prepared ? "finishing" : "preparing" },
-            };
-        }
-        if (!appReady)
-            return {
-                kind: "get-app",
-                platform,
-                preparation: preparationError ? "failed" : prepared ? "ready" : "preparing",
-                ...(preparationError || networkError
-                    ? { message: preparationError ?? networkError }
-                    : {}),
-            };
-        const message = pairingError ?? networkError;
-        if (message) return { kind: "link", appReady: true, phase: { kind: "failed", message } };
-        if (integration?.status === "pairing")
-            return {
-                kind: "link",
-                appReady: true,
                 phase: {
                     kind: "pairing",
                     data: integration.authorization.data,
                     expiresAt: integration.authorization.expiresAt,
                 },
             };
-        if (integration?.status === "failed" || integration?.status === "disabled")
+        if (integration.status === "failed" || integration.status === "disabled")
             return {
                 kind: "link",
-                appReady: true,
                 phase: {
                     kind: "failed",
                     message:
@@ -116,7 +96,6 @@ export function happyDesktopMobileOnboardingStoreCreate(
             };
         return {
             kind: "link",
-            appReady: true,
             phase: pairing
                 ? { kind: "checking" }
                 : {
@@ -139,6 +118,8 @@ export function happyDesktopMobileOnboardingStoreCreate(
         network?.abort();
         network = undefined;
         transportOnline = false;
+        clearTimeout(codeTimer);
+        codeTimer = undefined;
     };
     const currentFor = (request: number) => () => active() && request === generation;
     function adopt(next: HappyIntegration, authoritative = false): void {
@@ -147,84 +128,23 @@ export function happyDesktopMobileOnboardingStoreCreate(
             return;
         integration = next;
         networkError = undefined;
-        if (!next.configured) {
-            linked = false;
-            if (!linking) linkAttempted = false;
-        }
         publish();
-        advance();
     }
-    function advance(): void {
-        if (
-            active() &&
-            consented &&
-            prepared &&
-            !networkError &&
-            transportOnline &&
-            integration?.configured &&
-            !linked &&
-            !linkAttempted
-        )
-            link();
-    }
-    function prepare(): void {
-        if (!active() || !consented || preparing) return;
-        if (prepared) {
-            advance();
-            return;
-        }
-        preparing = true;
-        preparationError = undefined;
-        const current = currentFor(generation);
-        publish();
-        void (async () => {
-            if (!options.prepareLegacyCli)
-                throw new Error(
-                    "This desktop version cannot prepare the Happy CLI. Update Happy and try again.",
-                );
-            await options.prepareLegacyCli();
-            if (!current()) return;
-            preparing = false;
-            prepared = true;
+    /** Shows a held code once its placeholder has been up for the minimum. */
+    function codeRelease(): void {
+        const remaining = codeHeldUntil - Date.now();
+        if (remaining <= 0 || codeTimer) return;
+        codeTimer = setTimeout(() => {
+            codeTimer = undefined;
             publish();
-            advance();
-        })().catch((error: unknown) => {
-            if (!current()) return;
-            preparing = false;
-            preparationError = errorMessage(error);
-            publish();
-        });
-    }
-    function link(): void {
-        const connect = options.connectLegacyCli;
-        if (!active() || !consented || !prepared || !integration?.configured || !connect || linking)
-            return;
-        linking = true;
-        linkAttempted = true;
-        linkError = undefined;
-        const current = currentFor(generation);
-        publish();
-        void happyMobileLegacyLink(options.client, connect, current).then(
-            (next) => {
-                if (!current() || !next) return;
-                linking = false;
-                linked = true;
-                adopt(next);
-                publish();
-            },
-            (error: unknown) => {
-                if (!current()) return;
-                linking = false;
-                linkError = errorMessage(error);
-                publish();
-            },
-        );
+        }, remaining);
     }
     function pair(): void {
-        if (!active() || !consented || !prepared || !appReady || pairing) return;
+        if (!active() || !consented || pairing) return;
         pairing = true;
         pairingError = undefined;
         networkError = undefined;
+        codeHeldUntil = Date.now() + CODE_PLACEHOLDER_MINIMUM_MS;
         const current = currentFor(generation);
         publish();
         void (async () => {
@@ -238,6 +158,7 @@ export function happyDesktopMobileOnboardingStoreCreate(
             ) {
                 pairing = false;
                 adopt(saved.integration);
+                codeRelease();
                 return;
             }
             const response = await options.client.startHappyIntegration();
@@ -248,6 +169,7 @@ export function happyDesktopMobileOnboardingStoreCreate(
             }
             pairing = false;
             adopt(response.integration);
+            codeRelease();
         })().catch((error: unknown) => {
             if (!current()) return;
             pairing = false;
@@ -280,7 +202,8 @@ export function happyDesktopMobileOnboardingStoreCreate(
                 if (!current()) return;
                 reading = false;
                 publish();
-                advance();
+                // The read was only ever in the way of the code someone asked for.
+                if (!networkError) pair();
             });
     }
     async function follow(abort: AbortController): Promise<void> {
@@ -350,20 +273,14 @@ export function happyDesktopMobileOnboardingStoreCreate(
             if (disposed) return () => undefined;
             listeners.add(listener);
             start();
+            // A screen that comes back within the hold still gets its code.
+            codeRelease();
             return () => {
                 listeners.delete(listener);
                 if (listeners.size) return;
                 generation += 1;
                 reading = false;
                 stop();
-                if (preparing) {
-                    preparing = false;
-                    preparationError = "Setup paused. Try again to prepare the CLI.";
-                }
-                if (linking) {
-                    linking = false;
-                    linkError = "Setup paused. Try again to finish linking.";
-                }
                 if (pairing) {
                     pairing = false;
                     pairingError = "Setup paused. Try again to connect your phone.";
@@ -373,43 +290,29 @@ export function happyDesktopMobileOnboardingStoreCreate(
         },
         happyMobileConnect() {
             if (!active() || snapshot.status !== "desktop") return;
-            if (!consented) {
-                consented = true;
-                prepare();
-                return;
-            }
             if (snapshot.step.kind === "connected") {
                 continued = true;
                 publish();
                 stop();
                 return;
             }
-            if (!prepared) prepare();
+            // The first screen shows the store code, so confirming it is both
+            // the consent and the person saying the app is installed.
+            consented = true;
             if (!integration || networkError) {
                 retryRead();
                 return;
             }
-            if (!prepared) return;
-            if (integration?.configured) {
-                link();
-                return;
-            }
-            if (snapshot.step.kind === "get-app") {
-                appReady = true;
-                pair();
-                return;
-            }
-            if (appReady) pair();
-            else retryRead();
+            pair();
         },
         happyMobilePlatformSelect(value) {
-            if (!active() || !consented || appReady) return;
+            if (!active() || consented) return;
             platform = value;
             publish();
         },
         happyMobileSkip() {
             if (!active()) return;
-            const cancel = appReady && integration?.status === "pairing";
+            const cancel = consented && integration?.status === "pairing";
             skipped = true;
             generation += 1;
             stop();
@@ -419,11 +322,13 @@ export function happyDesktopMobileOnboardingStoreCreate(
         },
         [Symbol.dispose]() {
             if (disposed) return;
-            const cancel = !skipped && !continued && appReady && integration?.status === "pairing";
+            const cancel = !skipped && !continued && consented && integration?.status === "pairing";
             disposed = true;
             generation += 1;
             stop();
             listeners.clear();
+            // Nothing is shown any more, so nothing is held back either.
+            codeHeldUntil = 0;
             if (cancel) void options.client.cancelHappyIntegration().catch(() => undefined);
         },
     };

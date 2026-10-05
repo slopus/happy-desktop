@@ -42,6 +42,7 @@ export {
     happyAgentMemoryHistoryCreate,
     happyAgentRouterConversationOpen,
     happyAgentRouterGroupOpen,
+    happyAgentRouterWorkspaceVisible,
     happyAgentRouterGroupForget,
     happyAgentRouterCreate,
     type HappyAgentRouter,
@@ -56,3 +57,6 @@ export {
 export { terminalDriverCreate } from "./terminalDriver";
 export { ghosttyEmulatorCreate, type TerminalEmulator } from "./ghosttyTerminal";
 export { happyAgentWelcomeSlides } from "./onboarding/happyAgentWelcomeSlides";
+export { AppGptLiveSurface } from "./gptLive/AppGptLiveSurface";
+export { gptLiveMediaOpen } from "./gptLive/gptLiveMedia";
+export { gptLiveBrowserTransport } from "./gptLive/gptLiveBrowserTransport";

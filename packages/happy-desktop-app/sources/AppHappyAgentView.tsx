@@ -1888,8 +1888,8 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                 />
             }
             headerAccessory={
-                // Reachability is the window's line, not the sidebar's — see the
-                // band at the top. What stays here is what only this list can
+                // Reachability is the footer's line, not this heading's. What
+                // stays here is what only this list can
                 // say: that the Happy Agent is up and still did not hand over its
                 // sessions.
                 active?.status === "connected" && active.projectsStatus === "error" ? (
@@ -1905,7 +1905,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                     </Banner>
                 ) : active?.status === "connected" && active.projectsStatus === "loading" ? (
                     // Also only while the Happy Agent is up. Losing it resets the list to
-                    // loading, and "Loading sessions…" under a band saying the
+                    // loading, and "Loading sessions…" under a footer saying the
                     // machine is unreachable is a promise nothing is keeping.
                     <Banner tone="neutral">Loading sessions…</Banner>
                 ) : undefined
@@ -4008,8 +4008,8 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                         icon={openGroup.home ? "home" : "inbox"}
                         title={openGroup.name}
                     />
-                    {/* No banner for an unreachable Happy Agent. The window says that
-                        once, in the band across its top, and repeating it here
+                    {/* No banner for an unreachable Happy Agent. The sidebar footer says
+                        that once, and repeating it here
                         pushed the transcript down for something the reader was
                         already told — in the one surface where the shift is
                         most expensive. What this conversation still owes is the
@@ -4376,8 +4376,8 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                     {/* With no project open there is no tab strip, so this side of
                         the window would have no lane to drag it by. */}
                     {desktop ? <WindowDragRegion /> : null}
-                    {/* No banner for an unreachable Happy Agent here either. The band
-                        across the top of the window is the window's one account
+                    {/* No banner for an unreachable Happy Agent here either. The sidebar
+                        footer is the window's one account
                         of the machine being out of touch, and this screen has
                         nothing to add to it: what it offers already goes quiet
                         on `availability`, below. */}
@@ -5277,7 +5277,7 @@ function HappyAgentConversationSurface(props: {
     // composer locks instead of collecting a message with nowhere to go.
     //
     // The Happy Agent being unreachable is deliberately not this: that is a wait, the
-    // draft survives it, and the window-level band names it. Only an unusable
+    // draft survives it, and the sidebar footer names it. Only an unusable
     // destination locks the box.
     const sendRefusal = props.unavailable;
     /*
@@ -5331,6 +5331,11 @@ function HappyAgentConversationSurface(props: {
             }
             conversationId={conversation.conversationId}
             entries={conversation.entries}
+            errorAssistance={conversation.errorAssistance}
+            errorAssistanceUnavailable={props.unavailable}
+            onErrorAssistanceRequest={(entryId) => {
+                if (props.happyAgentOnline()) workspace.errorAssistanceRequest(entryId);
+            }}
             loading={!conversation.ready}
             {...(props.notice === undefined ? {} : { notice: props.notice })}
             scrollPosition={conversation.scrollPosition}
@@ -5614,7 +5619,7 @@ function HappyAgentWindowDialogs(props: {
             {happyAgentNamingDialog(
                 workspace.rename,
                 workspace.projectArchive,
-                workspace.projectCompute,
+                workspace.projectSettings,
                 props.projects,
                 props.workspace,
                 props.happyAgentOnline,
@@ -5718,7 +5723,7 @@ function happyAgentGroupArchiveDialog(
 function happyAgentNamingDialog(
     rename: HappyAgentWorkspaceSnapshot["rename"],
     archive: HappyAgentWorkspaceSnapshot["projectArchive"],
-    compute: HappyAgentWorkspaceSnapshot["projectCompute"],
+    compute: HappyAgentWorkspaceSnapshot["projectSettings"],
     projects: readonly HappyAgentProjectGroup[],
     store: HappyAgentWorkspaceStore,
     happyAgentOnline: () => boolean,
@@ -5806,6 +5811,19 @@ function happyAgentNamingDialog(
                       ...(compute.error === undefined ? {} : { error: compute.error }),
                       ...(compute.readError === undefined ? {} : { readError: compute.readError }),
                   },
+                  // What a new workspace starts with comes from the same read as
+                  // the compute choice, so it is present exactly when that is.
+                  setup: {
+                      status: compute.status,
+                      setupCommands: compute.setupCommands,
+                      ...(compute.initialPrompt === undefined
+                          ? {}
+                          : { initialPrompt: compute.initialPrompt }),
+                      initialPromptDraft: compute.initialPromptDraft,
+                      submitting: compute.submitting,
+                      ...(compute.error === undefined ? {} : { error: compute.error }),
+                      ...(compute.readError === undefined ? {} : { readError: compute.readError }),
+                  },
               }
             : {};
     return (
@@ -5845,6 +5863,16 @@ function happyAgentNamingDialog(
                 if (happyAgentOnline()) void store.projectComputeSubmit().catch(() => undefined);
             }}
             onDraftChange={(value) => store.renameDraftUpdate(value)}
+            onInitialPromptChange={(value) => store.projectInitialPromptUpdate(value)}
+            onInitialPromptSubmit={() => {
+                if (happyAgentOnline())
+                    void store.projectInitialPromptSubmit().catch(() => undefined);
+            }}
+            // The commands live in the project's own happy.toml, so the offer is
+            // to open that file where the project is, not to edit them here.
+            {...(project
+                ? { onSetupFileOpen: () => store.fileOpen(project.id, "happy.toml", "file") }
+                : {})}
             onSubmit={() => {
                 if (happyAgentOnline()) void store.renameSubmit().catch(() => undefined);
             }}

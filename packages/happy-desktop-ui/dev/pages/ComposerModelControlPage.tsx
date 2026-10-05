@@ -257,13 +257,13 @@ function Picker(props: {
     );
 }
 
-/** Pins the pill to the bottom-right corner, where the composer puts it, with room for its menu. */
+/** Pins the pill to the bottom-right corner, where the composer puts it, with room for its lists. */
 function Anchor(props: { children: ReactNode; height?: number; width?: number | string }) {
     return (
         <div
             style={{
                 display: "flex",
-                width: props.width ?? 400,
+                width: props.width ?? 880,
                 height: props.height ?? 480,
                 alignItems: "flex-end",
                 justifyContent: "flex-end",
@@ -285,7 +285,7 @@ function Open(props: {
     return (
         <Anchor height={props.height} width={props.width}>
             <Picker
-                preview={{ open: true, ...props.preview }}
+                preview={{ panel: "model", ...props.preview }}
                 selection={props.selection}
                 services={props.services}
                 usageWatch={props.usageWatch}
@@ -310,7 +310,7 @@ export function ComposerModelControlPage() {
         <ComponentPage
             number={componentNumber}
             title="Composer model control"
-            summary="One flat menu on one left edge: each service names its account, and each model names its effort when it is chosen, hovered, or focused, with a check right after the chosen label. The effort opens a small list; the account opens a panel beside the menu."
+            summary="The pill opens a menu of two rows, Model and Effort, each naming its current choice. Model opens the catalog beside the menu, where each service header names its account and opens the accounts; Effort opens the chosen model's efforts."
         >
             <Specimen
                 number="01"
@@ -332,72 +332,81 @@ export function ComposerModelControlPage() {
             </Specimen>
             <Specimen
                 number="02"
-                label="Open"
-                detail="Astra is chosen at Extra High: its check follows its name, and the chosen row always names its effort. Each service's own account reads Default account."
+                label="Menu"
+                detail="Two rows: Model and Effort, each with its current choice and a chevron to its list."
+                stage="surface"
+            >
+                <Open preview={{ panel: "main" }} height={200} />
+            </Specimen>
+            <Specimen
+                number="03"
+                label="Model list"
+                detail="Model opens the catalog beside the menu, bottom edges level. Astra is chosen: its check follows its name. Each header reads its service and account, such as Codex (default account), with a chevron centred on the text."
                 stage="surface"
             >
                 <Open />
             </Specimen>
             <Specimen
-                number="03"
+                number="04"
+                label="Effort list"
+                detail="Effort opens the chosen model's efforts beside the menu, the check after the current one. Picking one applies it and closes the menu; horizontal scroll over the Effort row steps it in place."
+                stage="surface"
+            >
+                <Open preview={{ panel: "effort" }} height={320} />
+            </Specimen>
+            <Specimen
+                number="05"
                 label="Hovered row"
-                detail="Sol, hovered below the selected Astra, names its remembered effort. The two highlights keep a gap."
+                detail="Sol, hovered below the selected Astra. The two highlights keep a gap."
                 stage="surface"
             >
                 <Open preview={{ activeModel: { service: "codex", model: "gpt-6-sol" } }} />
             </Specimen>
             <Specimen
-                number="04"
-                label="Effort button hovered"
-                detail="Pointing at Sol's effort highlights just that button, the way a project's settings gear does in the sidebar."
-                stage="surface"
-            >
-                <Open
-                    preview={{
-                        activeModel: { service: "codex", model: "gpt-6-sol" },
-                        effortHover: true,
-                    }}
-                />
-            </Specimen>
-            <Specimen
-                number="05"
-                label="Effort list open"
-                detail="Clicking Extra High lists Astra's efforts, the check after the current one. Picking one applies it and closes the menu."
-                stage="surface"
-            >
-                <Open preview={{ efforts: { service: "codex", model: "gpt-6-astra" } }} />
-            </Specimen>
-            <Specimen
                 number="06"
-                label="Account panel opening right"
-                detail="Clicking Claude's account opens its accounts in a panel beside the menu, level with the header. There is room to the right, so it opens there."
+                label="Header hovered"
+                detail="Pointing at a header highlights just that button, the way a project's settings gear does in the sidebar."
                 stage="surface"
             >
-                <Open preview={{ accounts: "claude", accountHover: "claude" }} />
+                <Open preview={{ accountButtonHover: "claude" }} />
             </Specimen>
             <Specimen
                 number="07"
-                label="Account panel opening left"
-                detail="Near the window's right edge there is no room beside the menu, so the same panel opens to its left."
+                label="Account panel"
+                detail="Clicking Claude's header opens its accounts beside the model list, away from the menu and level with the header."
                 stage="surface"
             >
-                <Open preview={{ accounts: "claude", accountHover: "claude" }} width="100%" />
+                <Open preview={{ accounts: "claude", accountHover: "claude" }} width={1140} />
             </Specimen>
             <Specimen
                 number="08"
-                label="Default account and a named one"
-                detail="Codex runs on its own account, which reads Default account. Claude runs on claude_extra, which reads by its id. Headers never show a plan; plans live in the account panel."
+                label="Account panel inside a pane"
+                detail="The pane the menu is painted in clips at the sidebar beside it and has no room for the account panel on the left of the model list, so the panel stays inside the pane, over the menu."
                 stage="surface"
             >
-                <Open selection={OPUS_EXTRA} />
+                <div style={{ display: "flex", width: 900, height: 480 }}>
+                    <div style={{ display: "flex", flex: "0 0 640px", overflow: "hidden" }}>
+                        <Open
+                            preview={{ accounts: "claude", accountHover: "claude" }}
+                            width={620}
+                        />
+                    </div>
+                    <div
+                        style={{
+                            flex: "1 1 auto",
+                            borderLeft: "1px solid var(--divider)",
+                            background: "var(--surface-high)",
+                        }}
+                    />
+                </div>
             </Specimen>
             <Specimen
                 number="09"
-                label="Cached usage shown instantly"
-                detail="The panel shows the reading held from earlier in the session at once and refreshes it in the background once it is a minute old. Every account has a plan cell: the full claude login reports Max."
+                label="Default account and a named one"
+                detail="Codex runs on its own account, which reads (default account). Claude runs on claude_extra, which reads by its id. Headers never show a plan; plans live in the account panel."
                 stage="surface"
             >
-                <Open preview={{ accounts: "claude", accountHover: "claude" }} />
+                <Open selection={OPUS_EXTRA} />
             </Specimen>
             <Specimen
                 number="10"
@@ -408,6 +417,7 @@ export function ComposerModelControlPage() {
                 <Open
                     preview={{ accounts: "claude", accountHover: "claude_extra" }}
                     selection={OPUS_EXTRA}
+                    width={1140}
                 />
             </Specimen>
             <Specimen
@@ -416,12 +426,12 @@ export function ComposerModelControlPage() {
                 detail="grok_api is an API key, and the Grok API has no usage endpoint: its plan cell reads a dash and its usage reads unknown, never 0%. The grok CLI account reports no plan either."
                 stage="surface"
             >
-                <Open preview={{ accounts: "grok", accountHover: "grok_api" }} />
+                <Open preview={{ accounts: "grok", accountHover: "grok_api" }} width={1140} />
             </Specimen>
             <Specimen
                 number="12"
                 label="Account without the model"
-                detail="Fable 5.1 runs on claude_extra. The default account has no Fable 5.1, so it says so and cannot be picked instead of silently swapping models."
+                detail="Fable 5.1 runs on claude_extra. The default account has no Fable 5.1, but it can still be picked: the selection moves to its top model, Opus 5.5, on its remembered or default effort."
                 stage="surface"
             >
                 <Open
@@ -433,33 +443,21 @@ export function ComposerModelControlPage() {
                         effort: "medium",
                     }}
                     services={PARTIAL_SERVICES}
+                    width={1140}
                 />
             </Specimen>
             <Specimen
                 number="13"
                 label="Long catalog"
-                detail="The menu stops at 480 px and scrolls. The scrollbar stands beside the rows, the panel inset away from the selected row, and the benchmarks link stays in view."
+                detail="The model list stops at 480 px and scrolls. The scrollbar stands beside the rows, the panel inset away from the selected row, and the benchmarks link stays in view."
                 stage="surface"
             >
                 <Open height={560} services={LONG_SERVICES} />
             </Specimen>
             <Specimen
                 number="14"
-                label="Keyboard focus"
-                detail="A focused row names its effort and rings inside its own highlight. Left and Right step the effort; Up and Down move."
-                stage="surface"
-            >
-                <Open
-                    preview={{
-                        activeModel: { service: "grok", model: "grok-4.6" },
-                        focusVisible: true,
-                    }}
-                />
-            </Specimen>
-            <Specimen
-                number="15"
                 label="Header focus above a hovered row"
-                detail="The reported dark-theme case in the composer: keyboard focus on Codex's account above a hovered, selected GPT-6 Astra. Nothing touches."
+                detail="Keyboard focus on Codex's header above a hovered, selected GPT-6 Astra, in the composer. Nothing touches."
                 stage="surface"
             >
                 <div
@@ -479,7 +477,7 @@ export function ComposerModelControlPage() {
                         modelControl={
                             <Picker
                                 preview={{
-                                    open: true,
+                                    panel: "model",
                                     activeModel: { service: "codex", model: "gpt-6-astra" },
                                     accountFocus: "codex",
                                 }}
@@ -494,38 +492,28 @@ export function ComposerModelControlPage() {
                 </div>
             </Specimen>
             <Specimen
-                number="16"
+                number="15"
                 label="Model without efforts"
-                detail="A made-up model with no effort levels names no effort, and the pill names only the model."
+                detail="A made-up model with no effort levels has no Effort row, and the pill names only the model."
                 stage="surface"
             >
                 <Open
                     height={560}
+                    preview={{ panel: "main" }}
                     selection={{ service: "local", account: "local", model: "echo-1" }}
                     services={NO_EFFORT_SERVICES}
                 />
             </Specimen>
             <Specimen
-                number="17"
-                label="Swipe effort"
-                detail="Horizontal scroll over a row steps its effort one level per flick and selects it; the menu stays open."
-                stage="surface"
-            >
-                <Open
-                    preview={{ activeModel: { service: "claude", model: "opus-5-5" } }}
-                    selection={OPUS_MEDIUM}
-                />
-            </Specimen>
-            <Specimen
-                number="18"
+                number="16"
                 label="Swipe account"
-                detail="Horizontal scroll over a header steps its account and moves the selected model onto it."
+                detail="Horizontal scroll over a header steps its account and moves the selected model onto it, or onto the account's top model when it lacks this one."
                 stage="surface"
             >
                 <Open selection={OPUS_MEDIUM} />
             </Specimen>
             <Specimen
-                number="19"
+                number="17"
                 label="Models not configured"
                 detail="An empty node may still report a default model and effort. Neither is presented as a usable configuration."
                 stage="surface"
@@ -553,7 +541,7 @@ export function ComposerModelControlPage() {
                 </div>
             </Specimen>
             <Specimen
-                number="20"
+                number="18"
                 label="Catalog changes"
                 detail="Adding models enables the picker. Removing all models closes it immediately."
                 stage="surface"

@@ -33,13 +33,27 @@ export function Specimen(props: {
         </article>
     );
 }
-/** Hosts one production desktop page at its exact minimum-window geometry and 100% scale. */
+/**
+ * Hosts one production desktop page at 100% scale, at the minimum-window
+ * geometry unless a window size is given. `screen` names the viewport for
+ * `pnpm blueprint:screens`, which captures every named viewport on a page.
+ */
 export function FullScreenSpecimen(props: {
     children: ReactNode;
     detail: string;
     label: string;
     number: string;
+    screen?: string;
+    window?: { readonly width: number; readonly height: number };
 }) {
+    const size = props.window
+        ? {
+              width: `${props.window.width}px`,
+              minWidth: `${props.window.width}px`,
+              height: `${props.window.height}px`,
+              minHeight: `${props.window.height}px`,
+          }
+        : undefined;
     return (
         <article className="specimen full-screen-specimen">
             <header>
@@ -51,7 +65,9 @@ export function FullScreenSpecimen(props: {
                 around the viewport belongs to the inset so it survives scrolling. */}
             <div className="full-screen-stage">
                 <div className="full-screen-inset">
-                    <div className="full-screen-viewport">{props.children}</div>
+                    <div className="full-screen-viewport" data-screen={props.screen} style={size}>
+                        {props.children}
+                    </div>
                 </div>
             </div>
         </article>

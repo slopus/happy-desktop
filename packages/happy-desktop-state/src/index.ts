@@ -14,6 +14,10 @@ export * from "./conversation/loadable.js";
 export * from "./appearance/appearanceStore.js";
 export * from "./commandPalette/commandPaletteStore.js";
 export * from "./experiments/experimentsStore.js";
+export * from "./gptLive/gptLiveStore.js";
+export * from "./gptLive/gptLiveRuntime.js";
+export * from "./gptLive/gptLiveRuntimeCreate.js";
+export * from "./gptLive/gptLiveDesktopSource.js";
 export * from "./titleShimmer/titleShimmerStore.js";
 export * from "./modules/composer/composerState.js";
 export * from "./modules/terminal/terminalState.js";
@@ -60,3 +64,13 @@ export * from "./happyAgent/happyAgentWindowStore.js";
 export * from "./happyAgent/happyAgentWorkspaceMemory.js";
 export * from "./happyAgent/happyAgentWorkspaceStore.js";
 export * from "./happyAgent/happyAgentViewPreferences.js";
+export type {
+    HappyTerminalCliSnapshot,
+    HappyTerminalCliResetPreview,
+    HappyTerminalCliInspection,
+    HappyTerminalCliResetRequest,
+    HappyTerminalCliResetOutcome,
+    HappyTerminalCliResetErrorCode,
+    HappyTerminalCliResetEffects,
+    HappyMobileManagementConfirmation,
+} from "./happyAgent/happyTerminalCli.js";

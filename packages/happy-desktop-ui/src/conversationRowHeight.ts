@@ -2,6 +2,7 @@ import {
     entryKey,
     type AgentTurnTraceSummary,
     type ConversationEntry,
+    type ConversationErrorAssistance,
     type ConversationRequest,
 } from "happy-desktop-state";
 import {
@@ -15,6 +16,7 @@ import {
 } from "./conversationMessageGrouped";
 import {
     asideTimeWidth,
+    errorTextHeight,
     markdownBodyHeight,
     messageTextLayoutCacheCreate,
     messageTextLayoutCacheRefresh,
@@ -27,6 +29,8 @@ import {
 } from "./messageTextLayout";
 import { SYSTEM_NOTIFICATION_HEIGHT } from "./systemNotification";
 import { agentTraceMetaStats, agentTraceMetaTitle } from "./agentTraceMeta";
+import { conversationErrorTitle } from "./conversationErrorTitle";
+import { conversationErrorAssistanceText } from "./conversationErrorAssistanceText";
 
 /**
  * Height of one conversation row, computed from the entry and the list's measure
@@ -62,6 +66,7 @@ export type ConversationRowContext = {
     readonly expanded?: boolean;
     /** A live status footer follows the final agent message. */
     readonly liveStatus?: boolean;
+    readonly errorAssistance?: ConversationErrorAssistance;
 };
 type CachedRowHeight = { readonly value: number | undefined };
 type Dictionary<T> = Record<string, T | undefined>;
@@ -194,6 +199,10 @@ export const DIVIDER_HEIGHT = 60;
 /** Centered `.happy-system-notice`: 16px padding above and below. */
 const NOTICE_CHROME_CENTER = 32;
 const NOTICE_INSET = 50;
+/** Error card: 14px icon + 20px copy button + two 8px gaps beside the text. */
+const ERROR_TEXT_INSET = 50;
+/** Error card: 6px vertical padding per side, plus 4px between heading and reason. */
+const ERROR_TEXT_CHROME = 16;
 /* A steering notice keeps the notice row's 16px lead but closes to 4px above the
    quote it introduces; the quote itself wraps at 560px, inset 20px per side, and
    closes the row with the notice's usual 16px. */
@@ -600,6 +609,29 @@ export function conversationRowHeight(
             context.surface === "conversation" && conversationAgentRowStartsGroup(entries, index)
                 ? ACTIVITY_LEAD_CHROME
                 : 0;
+        if (entry.level === "error" || entry.retry !== undefined) {
+            const measure = width - (lead > 0 ? AGENT_INSET : 126) - ERROR_TEXT_INSET;
+            const assistance = context.errorAssistance
+                ? conversationErrorAssistanceText(context.errorAssistance)
+                : undefined;
+            return rowHeightCached(
+                cache,
+                entry,
+                `error:${String(width)}:${String(lead)}:${assistance?.label ?? ""}:${assistance?.detail ?? ""}`,
+                () =>
+                    lead +
+                    ERROR_TEXT_CHROME +
+                    errorTextHeight(conversationErrorTitle(entry), measure, cache?.text, true) +
+                    errorTextHeight(entry.text, measure, cache?.text) +
+                    (assistance
+                        ? 4 +
+                          errorTextHeight(assistance.label, measure, cache?.text) +
+                          (assistance.detail
+                              ? 4 + errorTextHeight(assistance.detail, measure, cache?.text)
+                              : 0)
+                        : 0),
+            );
+        }
         return rowHeightCached(
             cache,
             entry,

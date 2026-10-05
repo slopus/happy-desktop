@@ -555,6 +555,7 @@ function happyAgentConnectGroupProject(
                 entries.push({
                     kind: "message",
                     source: "server",
+                    pendingSend: element.authority === "local",
                     delivery: element.delivery,
                     message: messageProject({
                         id: element.messageId,
@@ -834,6 +835,9 @@ function happyAgentConnectGroupProject(
                         ? { retry: { attempt: element.attempt } }
                         : {}),
                     title: element.outcome === "retried" ? "Retrying" : "Failure",
+                    ...(element.messageId === undefined
+                        ? {}
+                        : { source: { messageId: element.messageId, runId: element.runId } }),
                     text: happyAgentConversationFailureText(element.reason),
                     sequence,
                 });

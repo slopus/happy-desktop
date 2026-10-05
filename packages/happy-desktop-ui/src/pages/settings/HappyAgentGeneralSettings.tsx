@@ -421,7 +421,7 @@ export function HappyAgentGeneralSettings(props: HappyAgentGeneralSettingsProps)
                             size="small"
                         />
                     }
-                    description="Shows Inbox and Folders in the sidebar. Kept on this machine only."
+                    description="Reveals Experimental settings, Inbox, and Folders. Kept on this machine only."
                     htmlFor="happy-agent-settings-experimental-features"
                     label="Enable experimental features"
                 />

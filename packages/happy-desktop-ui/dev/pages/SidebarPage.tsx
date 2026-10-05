@@ -1125,6 +1125,52 @@ export function SidebarPage() {
             </Specimen>
 
             <Specimen
+                detail="A dropped machine is stated in the footer's leading slot: a spinner while reconnecting, an alert once settled. The line takes the free space and truncates; the trailing controls never move and nothing above shifts."
+                label="Connection lost"
+                number="01e"
+                stage="app"
+            >
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "16px" }}>
+                    {[
+                        {
+                            label: "Reconnecting",
+                            connection: { message: "This Mac is unreachable.", retrying: true },
+                        },
+                        {
+                            label: "Settled error",
+                            connection: {
+                                message: "This Happy Agent connection is closed.",
+                                retrying: false,
+                            },
+                        },
+                    ].map(({ label, connection }) => (
+                        <div
+                            key={label}
+                            style={{ display: "flex", flexDirection: "column", gap: "8px" }}
+                        >
+                            <Frame height={160}>
+                                <Sidebar
+                                    activeItemId=""
+                                    footer={
+                                        <SidebarFooter
+                                            appearance="light"
+                                            connection={connection}
+                                            onAppearanceToggle={() => {}}
+                                            onSettingsOpen={() => {}}
+                                        />
+                                    }
+                                    onItemSelect={() => {}}
+                                    sections={[]}
+                                    title={label}
+                                />
+                            </Frame>
+                            <DimensionRule label={`${label} · 28 px line · 14 px glyph`} />
+                        </div>
+                    ))}
+                </div>
+            </Specimen>
+
+            <Specimen
                 detail="Drill-down level: back button + title replace the brand; body animates in. Used for the administration sub-navigation."
                 label="Back / drill-down header"
                 number="01b"

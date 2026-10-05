@@ -152,9 +152,6 @@ export function SetupAssistants(props: SetupAssistantsProps) {
                                               >
                                                   {action.label}
                                               </a>
-                                              <code className="happy-setup-assistants__link-url">
-                                                  {action.href}
-                                              </code>
                                           </>
                                       )}
                                   </span>

@@ -1,18 +1,7 @@
 import { execFile } from "node:child_process";
-import { createHash, randomUUID } from "node:crypto";
+import { createHash } from "node:crypto";
 import { createWriteStream } from "node:fs";
-import {
-    chmod,
-    lstat,
-    mkdir,
-    mkdtemp,
-    open,
-    readFile,
-    rename,
-    rm,
-    stat,
-    unlink,
-} from "node:fs/promises";
+import { chmod, lstat, mkdir, mkdtemp, open, readFile, rename, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
@@ -30,6 +19,7 @@ import {
     type HappyAgentBinary,
     SEMANTIC_VERSION_PATTERN,
 } from "./happyAgentBinaryConfig";
+import { happyAgentInstallLockAcquire } from "./happyAgentInstallLock";
 import {
     HAPPY_AGENT_BINARY_FILE_NAME,
     happyAgentBinaryPath,
@@ -41,11 +31,8 @@ const HAPPY_AGENT_LATEST_RELEASE_URL = `${HAPPY_AGENT_RELEASES_URL}/latest`;
 const RELEASE_PAGE_SIZE = 100;
 const MAXIMUM_ARCHIVE_BYTES = 512 * 1024 * 1024;
 const MAXIMUM_BINARY_BYTES = 2 * 1024 * 1024 * 1024;
-const INSTALL_LOCK_TIMEOUT_MS = 15 * 60_000;
 const RELEASE_DOWNLOAD_TIMEOUT_MS = 15 * 60_000;
 const RELEASE_LOOKUP_TIMEOUT_MS = 30_000;
-const INCOMPLETE_LOCK_GRACE_MS = 5_000;
-const LOCK_POLL_MS = 100;
 
 interface ReleaseAsset {
     readonly browser_download_url: string;
@@ -58,10 +45,6 @@ interface Release {
     readonly draft: boolean;
     readonly prerelease: boolean;
     readonly tag_name: string;
-}
-interface InstallLockRecord {
-    readonly pid: number;
-    readonly token: string;
 }
 
 export interface HappyAgentRelease {
@@ -202,7 +185,7 @@ export async function happyAgentReleaseDownload(
     await mkdir(paths.versionsDirectory, { mode: 0o700, recursive: true });
     await chmod(paths.distDirectory, 0o700);
     await chmod(paths.versionsDirectory, 0o700);
-    const lock = await installLockAcquire(paths.installLockPath, options.onStatus);
+    const lock = await happyAgentInstallLockAcquire(paths.installLockPath, options.onStatus);
     try {
         const finalPath = happyAgentBinaryPath(paths, release.version);
         if (!(await executableFile(finalPath))) {
@@ -461,72 +444,6 @@ function fileRun(executable: string, arguments_: readonly string[]): Promise<str
     });
 }
 
-async function installLockAcquire(
-    path: string,
-    onStatus: ((message: string) => void) | undefined,
-): Promise<{ release(): Promise<void> }> {
-    const record: InstallLockRecord = { pid: process.pid, token: randomUUID() };
-    const deadline = Date.now() + INSTALL_LOCK_TIMEOUT_MS;
-    let announcedWait = false;
-    for (;;) {
-        try {
-            const handle = await open(path, "wx", 0o600);
-            try {
-                await handle.writeFile(JSON.stringify(record), "utf8");
-                await handle.sync();
-                await handle.chmod(0o600);
-            } catch (error) {
-                await handle.close();
-                await unlink(path).catch(() => undefined);
-                throw error;
-            }
-            return {
-                async release() {
-                    try {
-                        const current = await installLockRead(path);
-                        if (current?.token === record.token)
-                            await unlink(path).catch(() => undefined);
-                    } finally {
-                        await handle.close();
-                    }
-                },
-            };
-        } catch (error) {
-            if (!alreadyExists(error)) throw error;
-        }
-
-        if (!announcedWait) {
-            announcedWait = true;
-            onStatus?.("Waiting for another process to finish downloading Happy Agent.");
-        }
-        const owner = await installLockRead(path);
-        const age = await lockAge(path);
-        if (
-            (owner !== undefined && !processExists(owner.pid)) ||
-            (owner === undefined && age !== undefined && age >= INCOMPLETE_LOCK_GRACE_MS)
-        ) {
-            await unlink(path).catch((error: unknown) => {
-                if (!missing(error)) throw error;
-            });
-            continue;
-        }
-        if (Date.now() >= deadline) {
-            throw new Error("Timed out waiting for another process to install Happy Agent.");
-        }
-        await delay(LOCK_POLL_MS);
-    }
-}
-
-async function installLockRead(path: string): Promise<InstallLockRecord | undefined> {
-    try {
-        const parsed: unknown = JSON.parse(await readFile(path, "utf8"));
-        return installLockValid(parsed) ? parsed : undefined;
-    } catch (error) {
-        if (missing(error) || error instanceof SyntaxError) return undefined;
-        throw error;
-    }
-}
-
 function releaseValid(value: unknown): value is Release {
     if (!record(value)) return false;
     if (
@@ -560,44 +477,8 @@ function releaseAssetValid(value: unknown): value is ReleaseAsset {
     );
 }
 
-function installLockValid(value: unknown): value is InstallLockRecord {
-    return (
-        record(value) &&
-        Object.keys(value).every((key) => key === "pid" || key === "token") &&
-        typeof value.pid === "number" &&
-        Number.isSafeInteger(value.pid) &&
-        value.pid >= 1 &&
-        value.pid <= 2_147_483_647 &&
-        typeof value.token === "string" &&
-        value.token.length >= 1 &&
-        value.token.length <= 128
-    );
-}
-
 function record(value: unknown): value is Record<string, unknown> {
     return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-async function lockAge(path: string): Promise<number | undefined> {
-    try {
-        return Date.now() - (await stat(path)).mtimeMs;
-    } catch (error) {
-        if (missing(error)) return undefined;
-        throw error;
-    }
-}
-
-function processExists(pid: number): boolean {
-    try {
-        process.kill(pid, 0);
-        return true;
-    } catch (error) {
-        return !(error instanceof Error && "code" in error && error.code === "ESRCH");
-    }
-}
-
-function alreadyExists(error: unknown): boolean {
-    return error instanceof Error && "code" in error && error.code === "EEXIST";
 }
 
 function destinationExists(error: unknown): boolean {
@@ -610,8 +491,4 @@ function destinationExists(error: unknown): boolean {
 
 function missing(error: unknown): boolean {
     return error instanceof Error && "code" in error && error.code === "ENOENT";
-}
-
-function delay(milliseconds: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }

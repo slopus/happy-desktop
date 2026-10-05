@@ -11,6 +11,10 @@ import {
     WORKSPACE_SERVICE_AUTHORIZATION_HEADER,
     type AgentResponse,
     type Cuid2,
+    type CreateLiveSessionRequest,
+    type CreateLiveSessionResponse,
+    type CloseLiveSessionRequest,
+    type LiveSessionResponse,
     type DrainResponse,
     type FileContentResponse,
     type HealthResponse,
@@ -32,6 +36,9 @@ import { WebSocket, createWebSocketStream } from "ws";
  * unbounded WebSocket payload before it can reach the renderer.
  */
 export const HAPPY_AGENT_TERMINAL_MAX_WIRE_BYTES = 4 * 1024 * 1024;
+
+/** The approved Live control protocol carries bounded UTF-8 JSON, never audio. */
+export const HAPPY_AGENT_LIVE_MAX_WIRE_BYTES = 256 * 1024;
 
 export interface HappyAgentDaemonClientOptions {
     readonly socketPath: string;
@@ -133,6 +140,61 @@ export class HappyAgentDaemonClient {
 
     getAgent(agentId: string, signal?: AbortSignal): Promise<AgentResponse> {
         return this.#client.getAgent(agentId as Cuid2, signal ? { signal } : undefined);
+    }
+
+    createLiveSession(
+        request: CreateLiveSessionRequest,
+        signal?: AbortSignal,
+    ): Promise<CreateLiveSessionResponse> {
+        return this.#client.createLiveSession(request, signal ? { signal } : undefined);
+    }
+
+    getLiveSession(id: Cuid2, signal?: AbortSignal): Promise<LiveSessionResponse> {
+        return this.#client.getLiveSession(id, signal ? { signal } : undefined);
+    }
+
+    closeLiveSession(
+        id: Cuid2,
+        request: CloseLiveSessionRequest = {},
+        signal?: AbortSignal,
+    ): Promise<LiveSessionResponse> {
+        return this.#client.closeLiveSession(id, request, signal ? { signal } : undefined);
+    }
+
+    /** JSON frames stay intact; neither daemon credentials nor provider keys leave this transport. */
+    attachLiveSession(id: Cuid2, windowId: string): Promise<WebSocket> {
+        const url = new URL(this.#client.liveSessionControlUrl(id, windowId));
+        url.protocol = "ws:";
+        return new Promise((resolve, reject) => {
+            const socket = new WebSocket(url, {
+                createConnection: () => connectLocalSocket(this.socketPath),
+                handshakeTimeout: 10_000,
+                headers: { authorization: `Bearer ${this.#token}` },
+                maxPayload: HAPPY_AGENT_LIVE_MAX_WIRE_BYTES,
+                perMessageDeflate: false,
+            });
+            const fail = (error: Error) => {
+                socket.terminate();
+                reject(error);
+            };
+            socket.once("error", fail);
+            socket.once("unexpected-response", (_request, response) => {
+                response.resume();
+                fail(
+                    new HappyAgentDaemonHttpError(
+                        response.statusCode ?? 502,
+                        "The GPT-Live control channel was refused.",
+                    ),
+                );
+            });
+            socket.once("open", () => {
+                socket.off("error", fail);
+                // Install the relay before receiving the daemon's first hello frame.
+                socket.pause();
+                socket.on("error", () => undefined);
+                resolve(socket);
+            });
+        });
     }
 
     getWorkspace(workspaceId: string, signal?: AbortSignal): Promise<WorkspaceResponse> {

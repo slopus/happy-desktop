@@ -547,6 +547,11 @@ export interface HappyAgentChatStore {
     sessionRetry(): void;
     historyLoadMore(): void;
     messageSend(text: string, images?: readonly HappyAgentImageInput[]): Promise<void>;
+    /** Exact-text human confirmation from voice. Never routes text into a pending question. */
+    voiceMessageSendConfirmed(
+        text: string,
+        permissionMode: HappyAgentPermissionMode,
+    ): Promise<void>;
     slashCommandInvoke(name: string, argumentsValue?: string): Promise<void>;
     draftSet(draft: string, updatedAt: number, origin: string): Promise<void>;
     runAbort(): Promise<void>;
@@ -591,6 +596,7 @@ export interface HappyAgentChatDeps {
         | "compactSession"
         | "invokeSlashCommand"
         | "sendMessage"
+        | "sendMessageConfirmed"
         | "setDraft"
         | "setEffort"
         | "setPermissionMode"
@@ -1095,6 +1101,24 @@ export function happyAgentChatStoreCreate(
             if (token === undefined || transcriptSession?.loadingMore === true) return;
             transcriptConnection?.loadMore(token);
         },
+        voiceMessageSendConfirmed: (text, permissionMode) =>
+            rejecting(async () => {
+                const current = store.getState();
+                if (current.session.type !== "ready")
+                    throw new Error("The conversation is not ready.");
+                if (
+                    current.pendingUserInputs.length > 0 ||
+                    current.session.value.pendingUserInputs.length > 0
+                )
+                    throw new Error(
+                        "Answer the pending question yourself before sending a voice draft.",
+                    );
+                if (current.session.value.permissionMode !== permissionMode)
+                    throw new Error("The access mode changed. Review the message again.");
+                const steered = runStatus === "running";
+                await deps.connectActions.sendMessageConfirmed(sessionId, text);
+                output({ type: "messageSent", sessionId, steered });
+            }),
         messageSend: (text, images) =>
             rejecting(async () => {
                 if ((await pendingQuestionAnswer(text)).textUsed) return;

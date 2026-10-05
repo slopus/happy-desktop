@@ -24,12 +24,65 @@ const environment: NodeJS.ProcessEnv = {
 delete environment.HAPPY_AGENT_SERVER_SOCKET_PATH;
 delete environment.HAPPY_AGENT_SERVER_TOKEN_PATH;
 const paths = happyDaemonPaths(environment);
+
+/**
+ * Onboarding downloads this executable and runs it, so an unsigned one is both an
+ * unverified binary and a Defender trigger — a freshly built PE arriving in AppData
+ * from another process is the shape Windows distrusts most. The Agent is signed in
+ * its own repository; asserting the signature on the binary Desktop actually
+ * installed keeps a Desktop release from shipping onboarding that installs an
+ * unsigned Agent, whatever that repository published.
+ *
+ * The publisher is deliberately not pinned here. happy-agent verifies its own
+ * certificate subject while signing, and pinning it again from this side would tie
+ * two repositories' signing variables together for no added guarantee.
+ */
+async function releasedAgentSignatureVerify(binary: string): Promise<void> {
+    const inspected = await run(
+        "powershell.exe",
+        [
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            "$ErrorActionPreference = 'Stop';" +
+                " $signature = Get-AuthenticodeSignature -LiteralPath $env:HAPPY_AGENT_SIGNED_PATH;" +
+                " ConvertTo-Json -Compress -InputObject ([pscustomobject]@{" +
+                " status = [string]$signature.Status;" +
+                " timestamped = ($null -ne $signature.TimeStamperCertificate) })",
+        ],
+        // The path travels in the environment so it never meets PowerShell quoting.
+        {
+            env: { ...environment, HAPPY_AGENT_SIGNED_PATH: binary },
+            windowsHide: true,
+            timeout: 60_000,
+        },
+    );
+    const signature: unknown = JSON.parse(inspected.stdout);
+    if (
+        typeof signature !== "object" ||
+        signature === null ||
+        !("status" in signature) ||
+        !("timestamped" in signature)
+    ) {
+        throw new Error(`Could not read the published Agent's signature: ${inspected.stdout}`);
+    }
+    if (signature.status !== "Valid" || signature.timestamped !== true) {
+        throw new Error(
+            "The published Windows Agent must carry a valid timestamped signature, but its" +
+                ` signature is ${String(signature.status)} (timestamped:` +
+                ` ${String(signature.timestamped)}). Publish a signed Agent from` +
+                " slopus/happy-agent before releasing Desktop.",
+        );
+    }
+}
+
 let executable: string | undefined;
 try {
     const release = await happyAgentReleaseLatest();
     const installed = await happyAgentReleaseInstall(release, paths, { onStatus: console.log });
     executable = installed.path;
     assert.deepEqual(await happyAgentBinarySelected(paths), installed);
+    await releasedAgentSignatureVerify(executable);
     const version = await run(executable, ["--version"], {
         env: environment,
         windowsHide: true,
@@ -53,6 +106,7 @@ try {
             version: release.version,
             downloadedFromGitHub: true,
             selected: true,
+            signed: true,
             authenticatedNamedPipeHealth: true,
         }),
     );

@@ -201,7 +201,12 @@ function payloadEqual(left: ConversationEntry, right: ConversationEntry): boolea
                 left.elapsedMs === right.elapsedMs
             );
         if (left.variant === "compute" || right.variant === "compute") return false;
-        return left.level === right.level && left.title === right.title;
+        return (
+            left.level === right.level &&
+            left.title === right.title &&
+            left.source?.messageId === right.source?.messageId &&
+            left.source?.runId === right.source?.runId
+        );
     }
     if (left.kind === "agentActivity" && right.kind === "agentActivity")
         return activityEqual(left.activity, right.activity);

@@ -17,6 +17,7 @@ import {
 } from "./happyAgentVersion";
 import {
     happyAgentBinaryDownloaded,
+    happyAgentBinaryPrune,
     happyAgentBinarySelect,
     happyAgentBinarySelected,
     type HappyAgentBinary,
@@ -55,6 +56,10 @@ export class DesktopDaemonController {
     private readonly listeners = new Set<(snapshot: DesktopDaemonSnapshot) => void>();
     private operation = Promise.resolve();
     private publishedCatalog: readonly HappyAgentRelease[] = [];
+    /** Removing superseded versions waits for the first connection, which names the one running. */
+    private pruned = false;
+    /** What the daemon reported when this window last connected to it. */
+    private runningVersion?: string;
     private snapshotValue: DesktopDaemonSnapshot;
 
     private constructor(
@@ -382,7 +387,10 @@ export class DesktopDaemonController {
                     },
                     operation: "upgrading",
                 });
-                if (version !== undefined) await happyAgentBinarySelect(this.paths, version);
+                if (version !== undefined)
+                    await happyAgentBinarySelect(this.paths, version, {
+                        retainedVersions: await this.versionsRetained(),
+                    });
                 await happyAgentRestartRun({
                     binary: { path: happyAgentBinaryPath(this.paths, selected), version: selected },
                     environment: await this.launchEnvironmentRead(),
@@ -559,7 +567,9 @@ export class DesktopDaemonController {
                 runtime: "starting",
             });
             try {
-                await happyAgentBinarySelect(this.paths, version);
+                await happyAgentBinarySelect(this.paths, version, {
+                    retainedVersions: await this.versionsRetained(),
+                });
                 const path = happyAgentBinaryPath(this.paths, version);
                 this.publish({
                     ...this.snapshotValue,
@@ -674,6 +684,15 @@ export class DesktopDaemonController {
     }
 
     runtimeSet(runtime: DesktopRuntimeSnapshot): void {
+        if (runtime.phase === "ready") {
+            this.runningVersion = runtime.activeTarget.happyAgentVersion;
+            if (this.managed && !this.pruned) {
+                this.pruned = true;
+                void this.serial(async () =>
+                    happyAgentBinaryPrune(this.paths, await this.versionsRetained()),
+                );
+            }
+        }
         const state =
             runtime.phase === "ready"
                 ? "ready"
@@ -682,6 +701,18 @@ export class DesktopDaemonController {
                   : "stopped";
         if (this.snapshotValue.runtime === state) return;
         this.publish({ ...this.snapshotValue, runtime: state });
+    }
+
+    /**
+     * What a selection keeps besides itself and the one before it: the version
+     * the daemon is running, which may be neither after a failed restart, and
+     * the downloaded update still on offer, so it is not fetched again.
+     */
+    private async versionsRetained(): Promise<string[]> {
+        const { readyVersion } = await this.readyVersionRead();
+        return [this.runningVersion, readyVersion].filter(
+            (version): version is string => version !== undefined,
+        );
     }
 
     /**

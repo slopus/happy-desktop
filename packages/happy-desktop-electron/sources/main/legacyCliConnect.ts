@@ -6,7 +6,7 @@ import { localRuntimeProbe } from "./localHappyAgent";
 
 const capability = "happy-desktop-link-v1";
 
-interface PreparedLegacyCli {
+export interface PreparedLegacyCli {
     readonly node: string;
     readonly entry: string;
     readonly environment: NodeJS.ProcessEnv;
@@ -70,7 +70,7 @@ export function legacyCliConnectorCreate(launchEnvironment: () => Promise<NodeJS
                 } catch {
                     // Never forward arbitrary subprocess output: it can contain credentials.
                     throw new Error(
-                        "Happy could not link the terminal CLI. Check that your existing CLI uses the same account and server as Happy Mobile, then try again. For details, run happy auth desktop in your terminal.",
+                        "Terminal setup did not finish. The CLI may have refused an account or server change, or its daemon may not be online. Your phone pairing is saved. Check the separate terminal CLI status in Mobile Access settings.",
                     );
                 }
                 requireCurrent(current);
@@ -100,28 +100,7 @@ async function prepare(
         throw new Error(
             "Automatic terminal linking is unavailable for a custom Happy Agent connection. Use the CLI on that Agent's machine.",
         );
-    const probe = await localRuntimeProbe();
-    if (!probe.nodeCommand)
-        throw new Error(
-            "Install Node.js with npm to connect Claude Code and Codex to Happy Mobile.",
-        );
-    const node = await realpath(probe.nodeCommand);
-    const environment: NodeJS.ProcessEnv = {
-        ...probe.environment,
-        HAPPY_HOME_DIR: happyDaemonPaths(nativeEnvironment).happyHome,
-        HAPPY_VARIANT: "stable",
-        HAPPY_BOOT_AGENT: "0",
-    };
-    // Match the environment captured for the native daemon, not later shell edits.
-    const nativeServer =
-        nativeEnvironment.HAPPY_AGENT_HAPPY_SERVER_URL?.trim() ||
-        nativeEnvironment.HAPPY_SERVER_URL?.trim();
-    if (nativeServer) environment.HAPPY_SERVER_URL = nativeServer;
-    else delete environment.HAPPY_SERVER_URL;
-    delete environment.HAPPY_AGENT_HAPPY_SERVER_URL;
-    // The selected Node must also be the one npm and the CLI's children find.
-    const pathKey = Object.keys(environment).find((key) => key.toLowerCase() === "path") ?? "PATH";
-    environment[pathKey] = `${dirname(node)}${delimiter}${environment[pathKey] ?? ""}`;
+    const { node, environment, pathKey } = await legacyCliEnvironmentResolve(nativeEnvironment);
     const run = async (entry: string, args: readonly string[], timeout = 30_000) => {
         requireCurrent(current);
         return command(node, [entry, ...args], environment, timeout);
@@ -175,6 +154,61 @@ async function prepare(
     }
     requireCurrent(current);
     return { node, entry, environment };
+}
+
+/** Resolve the existing CLI for status/removal; this path never installs it. */
+export async function legacyCliInstalledResolve(
+    launchEnvironment: () => Promise<NodeJS.ProcessEnv>,
+): Promise<PreparedLegacyCli | undefined> {
+    const nativeEnvironment = await launchEnvironment();
+    const { node, environment, pathKey } = await legacyCliEnvironmentResolve(nativeEnvironment);
+    // Terminal inspection uses the CLI's own selected server, not the Agent's
+    // separate override. It must not turn a mismatch into an apparent match.
+    const cliServer = nativeEnvironment.HAPPY_SERVER_URL?.trim();
+    if (cliServer) environment.HAPPY_SERVER_URL = cliServer;
+    else delete environment.HAPPY_SERVER_URL;
+    const override = process.env.HAPPY_DESKTOP_LEGACY_CLI_PATH;
+    if (override !== undefined) {
+        if (!isAbsolute(override) || !override.endsWith(".mjs"))
+            throw new Error("The review CLI path must name an absolute built .mjs file.");
+        return { node, environment, entry: await realpath(override) };
+    }
+    const npm = await npmEntryResolve(environment[pathKey] ?? "");
+    const root = (await command(node, [npm, "root", "--global"], environment, 30_000)).trim();
+    if (!isAbsolute(root))
+        throw new Error("npm did not report an absolute global package directory.");
+    const entry = await happyEntryResolve(root);
+    return entry ? { node, environment, entry } : undefined;
+}
+
+async function legacyCliEnvironmentResolve(nativeEnvironment: NodeJS.ProcessEnv): Promise<{
+    node: string;
+    environment: NodeJS.ProcessEnv;
+    pathKey: string;
+}> {
+    const probe = await localRuntimeProbe();
+    if (!probe.nodeCommand)
+        throw new Error(
+            "Install Node.js with npm to connect Claude Code and Codex to Happy Mobile.",
+        );
+    const node = await realpath(probe.nodeCommand);
+    const environment: NodeJS.ProcessEnv = {
+        ...probe.environment,
+        HAPPY_HOME_DIR: happyDaemonPaths(nativeEnvironment).happyHome,
+        HAPPY_VARIANT: "stable",
+        HAPPY_BOOT_AGENT: "0",
+    };
+    // Match the environment captured for the native daemon, not later shell edits.
+    const nativeServer =
+        nativeEnvironment.HAPPY_AGENT_HAPPY_SERVER_URL?.trim() ||
+        nativeEnvironment.HAPPY_SERVER_URL?.trim();
+    if (nativeServer) environment.HAPPY_SERVER_URL = nativeServer;
+    else delete environment.HAPPY_SERVER_URL;
+    delete environment.HAPPY_AGENT_HAPPY_SERVER_URL;
+    // The selected Node must also be the one npm and the CLI's children find.
+    const pathKey = Object.keys(environment).find((key) => key.toLowerCase() === "path") ?? "PATH";
+    environment[pathKey] = `${dirname(node)}${delimiter}${environment[pathKey] ?? ""}`;
+    return { node, environment, pathKey };
 }
 
 /** Resolve npm's JS entry, never pass a .cmd wrapper through a shell. */

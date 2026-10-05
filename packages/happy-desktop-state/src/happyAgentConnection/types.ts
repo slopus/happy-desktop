@@ -86,6 +86,8 @@ interface BaseChatElement {
 export interface UserMessageElement extends BaseChatElement {
     kind: "user_message";
     messageId: string;
+    /** Whether the daemon has acknowledged this exact message ID. */
+    authority: "local" | "server";
     /** Rendering identity: null is the local viewer; userId retains the real account ID. */
     identity: string | null;
     userId?: string;
@@ -282,6 +284,8 @@ export interface CompactionElement extends BaseChatElement {
 
 export interface FailureElement extends BaseChatElement {
     kind: "failure";
+    /** Durable service message identity; absent on a local-only failure. */
+    messageId?: string;
     outcome: "retried" | "continued" | "failed";
     attempt?: number;
     reason: string;
@@ -816,6 +820,8 @@ export interface HappyAgentConnection {
         clone(input: CreateRemoteProjectInput): MutationId;
     };
     createWorkspace(input: CreateWorkspaceInput): MutationId;
+    /** Resolves the already-issued creation's authoritative response; never starts or retries another creation. */
+    workspaceCreationWait(workspaceId: string): Promise<void>;
     archiveWorkspace(projectId: string, workspaceId: string): MutationId;
     /**
      * Names the agent and returns that name at once, so the session can be
@@ -830,8 +836,11 @@ export interface HappyAgentConnection {
      * either way, so a caller supplying it need do nothing else.
      */
     createSession(input: CreateSessionInput, checkoutReady?: Promise<unknown>): MutationId;
+    sessionCreationWait(sessionId: string): Promise<void>;
     markSessionRead(sessionId: string): MutationId;
     sendMessage(sessionId: string, message: string | SendMessageInput): MutationId;
+    /** Same send/idempotency path, resolving only after authoritative acceptance. */
+    sendMessageConfirmed(sessionId: string, message: string | SendMessageInput): Promise<void>;
     /** Invokes one slash command under the session's current composer selection. */
     invokeSlashCommand(sessionId: string, name: string, argumentsValue?: string): MutationId;
     stopBackgroundProcess(sessionId: string, projectedProcessId: number): MutationId;

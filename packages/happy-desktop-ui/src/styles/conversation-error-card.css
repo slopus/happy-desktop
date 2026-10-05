@@ -1,8 +1,8 @@
 /*
  * ConversationErrorCard — a failed turn's reason on the assistant activity rail.
  *
- * Its 6px vertical inset around one 20px line gives it the same 32px height as
- * a compact tool call. Icon, label, and reason stay in one scanning row.
+ * The heading and full pre-wrapped reason share one text column. The icon and
+ * copy action stay aligned with its first line as the diagnostic grows.
  */
 
 .happy-conversation-error-card,
@@ -30,8 +30,8 @@
 
 .happy-conversation-error-card__bubble {
     display: flex;
-    align-items: center;
-    gap: 6px;
+    align-items: flex-start;
+    gap: 8px;
     width: 100%;
     min-width: 0;
 }
@@ -49,13 +49,15 @@
 .happy-conversation-error-card__content {
     display: flex;
     flex: 1 1 auto;
-    align-items: center;
-    gap: 6px;
+    flex-direction: column;
+    gap: 4px;
     min-width: 0;
 }
 
 .happy-conversation-error-card__title {
     flex: none;
+    min-height: 20px;
+    overflow-wrap: anywhere;
     color: color-mix(in srgb, var(--status-error) 38%, var(--text-secondary));
     font-size: 14px;
     font-weight: 500;
@@ -68,11 +70,13 @@
     color: color-mix(in srgb, var(--box-warning-text) 38%, var(--text-secondary));
 }
 
-/* The reason scrolls sideways (see ScrollingText) instead of ending in an
-   ellipsis: a failure a reader cannot finish reading is not a report. */
+/* Keep the exact diagnostic's hard breaks and indentation. Even an unbroken
+   provider identifier must wrap instead of pushing the row beyond its measure. */
 .happy-conversation-error-card__reason {
     min-width: 0;
-    flex: 1 1 auto;
+    min-height: 20px;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
     color: color-mix(in srgb, var(--status-error) 38%, var(--text-secondary));
     font-size: 14px;
     font-weight: 400;
@@ -82,4 +86,49 @@
 .happy-conversation-error-card:hover .happy-copy-button,
 .happy-conversation-error-card:focus-within .happy-copy-button {
     opacity: 1;
+}
+
+.happy-conversation-error-card__assistance {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.happy-conversation-error-card__assistance-action,
+.happy-conversation-error-card__assistance-detail {
+    min-width: 0;
+    min-height: 20px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    font-family: var(--happy-font-ui);
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 20px;
+    text-align: left;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.happy-conversation-error-card__assistance-action {
+    color: var(--text);
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+.happy-conversation-error-card__assistance-action:focus-visible {
+    outline: 2px solid var(--text);
+    outline-offset: 2px;
+}
+
+.happy-conversation-error-card__assistance-action:disabled,
+.happy-conversation-error-card__assistance-detail {
+    color: var(--text-secondary);
+}
+
+.happy-conversation-error-card__assistance-action:disabled {
+    cursor: default;
+    text-decoration: none;
 }

@@ -17,6 +17,7 @@ import type {
     AppearanceStore,
     CommandPaletteStore,
     ExperimentsStore,
+    GptLiveStore,
     HappyAgentGroupId,
     HappyAgentFileTabKind,
     HappyAgentNavigationOrderStore,
@@ -108,6 +109,8 @@ export interface HappyAgentRouterContext {
      * in a host that remembers no such choice, which withholds them.
      */
     readonly experiments?: ExperimentsStore;
+    /** Window-owned GPT-Live opt-in; unrelated to coding-provider settings. */
+    readonly gptLive?: GptLiveStore;
     /** Window-local preference for animated activity titles. */
     readonly titleShimmer?: TitleShimmerStore;
     /**
@@ -375,8 +378,13 @@ const settingsSectionRoute = createRoute({
     component: HappyAgentSettingsRoute,
     getParentRoute: () => rootRoute,
     path: "/settings/$section",
-    beforeLoad: ({ params }) => {
-        if (!happyAgentSettingsCategoryExists(params.section))
+    beforeLoad: ({ params, context }) => {
+        if (
+            !happyAgentSettingsCategoryExists(
+                params.section,
+                context.experiments?.get().experimentalFeaturesEnabled,
+            )
+        )
             throw redirect({
                 params: { section: HAPPY_AGENT_SETTINGS_DEFAULT_CATEGORY },
                 replace: true,
@@ -550,7 +558,10 @@ function HappyAgentWorkspaceLayout(
             onSettingsSectionOpen={(section) =>
                 void navigate({
                     params: {
-                        section: happyAgentSettingsCategoryExists(section)
+                        section: happyAgentSettingsCategoryExists(
+                            section,
+                            context.experiments?.get().experimentalFeaturesEnabled,
+                        )
                             ? section
                             : HAPPY_AGENT_SETTINGS_DEFAULT_CATEGORY,
                     },
@@ -577,6 +588,7 @@ function HappyAgentSettingsRoute() {
             {...(context.debug ? { debug: context.debug } : {})}
             {...(context.profiler ? { profiler: context.profiler } : {})}
             {...(context.experiments ? { experiments: context.experiments } : {})}
+            {...(context.gptLive ? { gptLive: context.gptLive } : {})}
             onCategorySelect={(section) =>
                 void navigate({ params: { section }, to: "/settings/$section" })
             }
@@ -627,6 +639,11 @@ export function happyAgentRouterConversationOpen(
         params: { chatId: location.sessionId, groupId: location.groupId, happyAgentId },
         to: "/chats/$happyAgentId/$groupId/$chatId",
     });
+}
+
+/** Uses the router's explicit route identity, never a pathname convention. */
+export function happyAgentRouterWorkspaceVisible(router: HappyAgentRouter): boolean {
+    return router.state.matches.some((match) => match.routeId === workspaceRoute.id);
 }
 
 /**
