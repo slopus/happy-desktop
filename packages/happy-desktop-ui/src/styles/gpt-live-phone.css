@@ -5,39 +5,6 @@
 .happy-gpt-live-phone[data-status="unavailable"] {
     color: var(--text-destructive);
 }
-.happy-gpt-live-phone__confirmation {
-    /* The review card leaves the footer flow and anchors above its full width. */
-    position: absolute;
-    bottom: calc(100% + 8px);
-    left: 8px;
-    right: 8px;
-    z-index: var(--happy-z-overlay);
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    padding: 12px;
-    border: 1px solid var(--divider);
-    border-radius: 8px;
-    background: var(--surface);
-    color: var(--text);
-    font-family: var(--happy-font-ui);
-    font-size: 13px;
-    line-height: 20px;
-}
-.happy-gpt-live-phone__target {
-    color: var(--text-secondary);
-}
-.happy-gpt-live-phone__message {
-    margin: 0;
-    white-space: pre-wrap;
-    overflow-wrap: anywhere;
-}
-.happy-gpt-live-phone__actions {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 8px;
-}
 .happy-gpt-live-settings {
     display: flex;
     flex-direction: column;

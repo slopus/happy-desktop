@@ -545,17 +545,6 @@ export function gptLiveRuntimeCreate(options: GptLiveRuntimeCreateOptions): GptL
                         if (phase === "ready" || phase === "opening")
                             media?.microphoneMutedUpdate(muted);
                     },
-                    messageConfirm(actionId) {
-                        if (!active || phase !== "ready" || !controller)
-                            return Promise.reject(
-                                new UserError("Voice control is not ready to send this message."),
-                            );
-                        return controller.messageConfirm(actionId);
-                    },
-                    messageCancel(actionId) {
-                        if (phase !== "ended" && phase !== "closing")
-                            controller?.messageCancel(actionId);
-                    },
                 };
             } catch (error) {
                 const failure = userError(error, "The voice call could not start.");

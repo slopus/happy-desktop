@@ -15,12 +15,6 @@ export function AppGptLivePhone(props: { store: GptLiveStore; experiments?: Expe
         experiments.get,
     ).experimentalFeaturesEnabled;
     return experimental && state.gptLiveEnabled ? (
-        <GptLivePhone
-            state={state}
-            onStart={props.store.callStart}
-            onEnd={props.store.callEnd}
-            onMessageConfirm={props.store.messageConfirm}
-            onMessageCancel={props.store.messageCancel}
-        />
+        <GptLivePhone state={state} onStart={props.store.callStart} onEnd={props.store.callEnd} />
     ) : null;
 }

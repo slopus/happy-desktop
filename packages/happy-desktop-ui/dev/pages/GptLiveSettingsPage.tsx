@@ -12,7 +12,6 @@ const base: GptLiveSnapshot = {
     status: "idle",
     panelVisible: false,
     microphoneMuted: false,
-    confirmationSending: false,
     transcripts: [],
 };
 const accounts = [
@@ -72,8 +71,6 @@ export function GptLiveSettingsPage() {
                                     }}
                                     onStart={() => {}}
                                     onEnd={() => {}}
-                                    onMessageConfirm={() => {}}
-                                    onMessageCancel={() => {}}
                                 />
                             }
                         />
@@ -81,44 +78,8 @@ export function GptLiveSettingsPage() {
                 </Specimen>
             ))}
             <Specimen
-                label="Exact-message confirmation"
-                number="06"
-                detail="Target, exact text, Keep as draft / Send."
-            >
-                <Box
-                    width={320}
-                    height={260}
-                    style={{ display: "flex", flexDirection: "column", justifyContent: "flex-end" }}
-                >
-                    <SidebarFooter
-                        appearance="light"
-                        onAppearanceToggle={() => {}}
-                        onSettingsOpen={() => {}}
-                        voice={
-                            <GptLivePhone
-                                state={{
-                                    ...base,
-                                    status: "active",
-                                    confirmation: {
-                                        actionId: "one",
-                                        targetLabel: "Login test",
-                                        connectionLabel: "Development",
-                                        modeLabel: "Auto",
-                                        text: "Fix the flaky login test.",
-                                    },
-                                }}
-                                onStart={() => {}}
-                                onEnd={() => {}}
-                                onMessageConfirm={() => {}}
-                                onMessageCancel={() => {}}
-                            />
-                        }
-                    />
-                </Box>
-            </Specimen>
-            <Specimen
                 label="Selected account"
-                number="07"
+                number="06"
                 detail="API billing appears as one short line."
             >
                 <Box width={680}>

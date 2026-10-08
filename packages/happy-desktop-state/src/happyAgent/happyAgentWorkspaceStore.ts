@@ -1346,11 +1346,6 @@ export interface HappyAgentVoiceSession {
     draftRead(): ComposerSnapshot | undefined;
     subscribe(listener: () => void): () => void;
     draftAppend(text: string, expectedDraft: string): Promise<void>;
-    messageSendConfirmed(
-        text: string,
-        expectedDraft: string,
-        permissionMode: HappyAgentPermissionMode,
-    ): Promise<void>;
     [Symbol.dispose](): void;
 }
 
@@ -6482,46 +6477,6 @@ export function happyAgentWorkspaceStoreCreate(
                             "The composer contains a human draft. Voice left it unchanged.",
                         );
                     current.composerInput({ type: "voiceTextAppended", text });
-                },
-                async messageSendConfirmed(text, expectedDraft, permissionMode) {
-                    guarded();
-                    if (openId !== sessionId || !composer)
-                        throw new Error("Return to this conversation to send the voice draft.");
-                    const target = composer;
-                    const current = target.getState();
-                    if (
-                        !current.voiceDraft ||
-                        current.text !== expectedDraft ||
-                        text !== expectedDraft ||
-                        current.attachments.length > 0 ||
-                        current.submission.status === "pending"
-                    )
-                        throw new Error("The draft changed. Review it in the conversation.");
-                    current.composerInput({
-                        type: "voiceMessageSending",
-                        revision: current.revision,
-                    });
-                    try {
-                        await acquired.store.voiceMessageSendConfirmed(text, permissionMode);
-                        target.getState().composerInput({
-                            type: "voiceMessageSent",
-                            revision: current.revision,
-                        });
-                        const session = acquired.store.get().session;
-                        activityRecord({
-                            kind: "messageSent",
-                            ...activityAddress(sessionId),
-                            source: "voice",
-                            model: session.type === "ready" ? activityModel(session.value) : {},
-                        });
-                    } catch (error) {
-                        target.getState().composerInput({
-                            type: "submissionFailed",
-                            revision: current.revision,
-                            error: happyAgentUserError(error),
-                        });
-                        throw error;
-                    }
                 },
                 [Symbol.dispose]() {
                     if (released) return;

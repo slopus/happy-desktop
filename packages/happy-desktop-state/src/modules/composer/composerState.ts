@@ -204,8 +204,6 @@ export type ComposerOutput =
 
 export type ComposerInput =
     | { readonly type: "voiceTextAppended"; readonly text: string }
-    | { readonly type: "voiceMessageSending"; readonly revision: number }
-    | { readonly type: "voiceMessageSent"; readonly revision: number }
     | { readonly type: "textReconciled"; readonly text: string }
     | { readonly type: "commandsReconciled"; readonly commands: readonly ComposerCommand[] }
     | {
@@ -546,20 +544,6 @@ export function composerStoreCreate(
                     });
                     return;
                 }
-                case "voiceMessageSent":
-                    if (snapshot.voiceDraft && snapshot.revision === event.revision)
-                        set({
-                            text: "",
-                            voiceDraft: undefined,
-                            revision: snapshot.revision + 1,
-                            submission: { status: "idle" },
-                            ...draftDerive("", snapshot.capabilities),
-                        });
-                    return;
-                case "voiceMessageSending":
-                    if (snapshot.voiceDraft && snapshot.revision === event.revision)
-                        set({ submission: { status: "pending", revision: event.revision } });
-                    return;
                 case "textReconciled":
                     if (snapshot.voiceDraft) return;
                     if (snapshot.text !== event.text)

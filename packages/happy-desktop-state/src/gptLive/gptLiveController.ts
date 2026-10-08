@@ -10,7 +10,6 @@ import type {
     HappyAgentGroupId,
     HappyAgentProjectId,
     HappyAgentSessionId,
-    HappyAgentPermissionMode,
 } from "../happyAgent/happyAgentTypes.js";
 import type {
     HappyAgentVoiceSession,
@@ -41,12 +40,6 @@ const refKey = (target: LiveSessionRef) =>
     JSON.stringify([target.connectionId, target.groupId, target.sessionId]);
 const targetEqual = (a: LiveDesktopTarget | null, b: LiveDesktopTarget | null) =>
     JSON.stringify(a) === JSON.stringify(b);
-const permissionLabel: Record<HappyAgentPermissionMode, string> = {
-    auto: "Auto",
-    workspace_write: "Workspace write",
-    read_only: "Read only",
-    full_access: "Full access",
-};
 
 /** Cancels the local waiter, never an already-issued Desktop/server mutation. */
 function duringCall<T>(operation: Promise<T>, signal: AbortSignal): Promise<T> {
@@ -70,8 +63,6 @@ export interface GptLiveController {
     contextRead(): { revision: number; context: LiveDesktopContext };
     start(): void;
     actionReceive(request: Request): void;
-    messageConfirm(actionId: string): Promise<void>;
-    messageCancel(actionId: string): void;
     close(): void;
 }
 
@@ -138,17 +129,6 @@ export function gptLiveControllerCreate(options: {
         context.sessions.some((item) => refKey(item.target) === refKey(target)) ||
         context.bots.some((item) => refKey(item.target) === refKey(target)) ||
         (context.activeSession !== null && refKey(context.activeSession.target) === refKey(target));
-    let staged:
-        | {
-              actionId: string;
-              target: LiveSessionRef;
-              text: string;
-              permissionMode: HappyAgentPermissionMode;
-              workspace: HappyAgentWorkspaceStore;
-              sending: boolean;
-          }
-        | undefined;
-
     const send = (message: LiveControlClientMessage) => {
         if (closed) return;
         if (gptLiveSerializedBytes(message) > GPT_LIVE_FRAME_BYTES)
@@ -230,29 +210,6 @@ export function gptLiveControllerCreate(options: {
     };
     const schedule = () => {
         if (closed || !started) return;
-        if (staged) {
-            const current = source.get();
-            const connection = current.connections.find(
-                (item) => item.id === staged!.target.connectionId,
-            );
-            const workspace = staged.workspace.get();
-            const conversation = workspace.conversation;
-            const draft = conversation.type === "ready" ? conversation.value.composer : undefined;
-            if (
-                current.activeConnectionId !== staged.target.connectionId ||
-                !connection?.online ||
-                connection.workspace !== staged.workspace ||
-                workspace.address.groupId !== staged.target.groupId ||
-                workspace.address.conversationId !== staged.target.sessionId ||
-                !draft?.voiceDraft ||
-                draft.text !== staged.text ||
-                (!staged.sending && draft.submission.status === "pending")
-            ) {
-                const actionId = staged.actionId;
-                staged = undefined;
-                options.receive({ type: "messageConfirmationCleared", actionId });
-            }
-        }
         contextRead(); // Stale-intent protection is synchronous even while delivery is coalesced.
         if (timer === undefined) timer = setTimeout(flush, 250);
     };
@@ -635,11 +592,6 @@ export function gptLiveControllerCreate(options: {
                 "unavailable",
                 "Five conversations are already watched. Disable one watch first.",
             );
-        if ((action.type === "sessionSend" || action.type === "composerDraftAppend") && staged)
-            throw new Refusal(
-                "draftConflict",
-                "A voice draft is already awaiting the human. It will not be replaced.",
-            );
         const handle = await acquire(target, signal);
         let retained = false;
         try {
@@ -696,23 +648,9 @@ export function gptLiveControllerCreate(options: {
                 throw new Refusal("unavailable", "The conversation is not ready.");
             await handle.draftAppend(action.text, draft.text);
             if (action.type === "sessionSend") {
-                staged = {
-                    actionId: request.actionId,
-                    target,
-                    text: action.text,
-                    permissionMode: snapshot.session.value.permissionMode,
-                    workspace: connection.workspace,
-                    sending: false,
-                };
                 options.receive({
-                    type: "messageConfirmationRequested",
-                    request: {
-                        actionId: request.actionId,
-                        connectionLabel: connection.name,
-                        targetLabel: connection.title,
-                        modeLabel: permissionLabel[staged.permissionMode],
-                        text: action.text,
-                    },
+                    type: "actionStatusUpdated",
+                    message: `Added a local draft in ${connection.title}. Review, edit, and send it from the conversation composer; nothing was sent.`,
                 });
                 return { status: "succeeded", output: { type: "staged" } };
             }
@@ -792,64 +730,6 @@ export function gptLiveControllerCreate(options: {
                     schedule();
                 });
         },
-        async messageConfirm(actionId) {
-            const pending = staged;
-            if (closed || !pending || pending.actionId !== actionId || pending.sending)
-                throw new Refusal("ended", "That confirmation is no longer available.");
-            const connection = sessionFind(pending.target, true);
-            if (connection.workspace !== pending.workspace)
-                throw new Refusal("staleContext", "That Desktop connection was replaced.");
-            activeCheck(pending.target, pending.workspace);
-            pending.sending = true;
-            let handle: HappyAgentVoiceSession | undefined;
-            let submitted = false;
-            try {
-                handle = await pending.workspace.voiceSessionAcquire(
-                    pending.target.sessionId as HappyAgentSessionId,
-                );
-                if (closed || staged !== pending)
-                    throw new Refusal("ended", "The confirmation ended before sending.");
-                sessionFind(pending.target, true);
-                activeCheck(pending.target, pending.workspace);
-                refusePending(handle);
-                submitted = true;
-                await handle.messageSendConfirmed(
-                    pending.text,
-                    pending.text,
-                    pending.permissionMode,
-                );
-                if (staged === pending) staged = undefined;
-                if (!closed) {
-                    options.receive({ type: "messageConfirmationCleared", actionId });
-                    options.receive({
-                        type: "actionStatusUpdated",
-                        message: "Your exact message was accepted by the conversation.",
-                    });
-                    schedule();
-                }
-            } catch (error) {
-                pending.sending = false;
-                if (submitted && staged === pending) {
-                    staged = undefined;
-                    if (!closed) {
-                        options.receive({ type: "messageConfirmationCleared", actionId });
-                        options.receive({
-                            type: "actionStatusUpdated",
-                            message:
-                                "Message acceptance was not confirmed. Your local draft is retained; inspect the conversation before manually sending again.",
-                        });
-                    }
-                }
-                throw error;
-            } finally {
-                handle?.[Symbol.dispose]();
-            }
-        },
-        messageCancel(actionId) {
-            if (staged?.actionId !== actionId || staged.sending) return;
-            staged = undefined;
-            options.receive({ type: "messageConfirmationCleared", actionId });
-        },
         close() {
             if (closed) return;
             closed = true;
@@ -866,9 +746,6 @@ export function gptLiveControllerCreate(options: {
                 watchRelease(watch);
             }
             watches.clear();
-            if (staged)
-                options.receive({ type: "messageConfirmationCleared", actionId: staged.actionId });
-            staged = undefined;
         },
     };
 }

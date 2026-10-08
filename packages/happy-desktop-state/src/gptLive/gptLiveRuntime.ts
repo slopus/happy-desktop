@@ -20,34 +20,18 @@ export interface GptLiveTranscriptFragment {
     readonly endMs?: number;
 }
 
-export interface GptLiveMessageConfirmation {
-    readonly actionId: string;
-    readonly targetLabel: string;
-    readonly connectionLabel: string;
-    readonly modeLabel: string;
-    readonly text: string;
-}
-
 /** Events are already validated and projected by the owning call integration. */
 export type GptLiveRuntimeEvent =
     | { readonly type: "callActive" }
     | { readonly type: "callClosed" }
     | { readonly type: "callFailed"; readonly message: string }
     | { readonly type: "transcriptReceived"; readonly fragment: GptLiveTranscriptFragment }
-    | {
-          readonly type: "messageConfirmationRequested";
-          readonly request: GptLiveMessageConfirmation;
-      }
-    | { readonly type: "messageConfirmationCleared"; readonly actionId: string }
     | { readonly type: "actionStatusUpdated"; readonly message: string };
 
 export interface GptLiveCall {
     /** Stops recording/actions synchronously; bounded transport finalization may finish asynchronously. Never aborts tasks. */
     close(): void;
     microphoneMutedUpdate(muted: boolean): void;
-    /** Invoked only by an explicit exact-text human confirmation in the voice UI. */
-    messageConfirm(actionId: string): Promise<void>;
-    messageCancel(actionId: string): void;
 }
 
 /**

@@ -7,16 +7,13 @@ import { SidebarFooter } from "./SidebarFooter";
 import { createRenderer } from "./testing";
 import "./styles.css";
 
-it("starts only on trusted click, retains focus and composer identity, and sends only the reviewed text", async () => {
+it("starts only on trusted click and keeps the existing composer without a draft dialog", async () => {
     let receive: (event: GptLiveRuntimeEvent) => void = () => {};
-    const confirm = vi.fn(async () => {});
     const open = vi.fn(async (_input, listener) => {
         receive = listener;
         return {
             close: () => {},
             microphoneMutedUpdate: () => {},
-            messageConfirm: confirm,
-            messageCancel: () => {},
         };
     });
     const store = gptLiveStoreCreate(undefined, {
@@ -62,8 +59,6 @@ it("starts only on trusted click, retains focus and composer identity, and sends
                                 state={state}
                                 onStart={store.callStart}
                                 onEnd={store.callEnd}
-                                onMessageConfirm={store.messageConfirm}
-                                onMessageCancel={store.messageCancel}
                             />
                         ) : undefined
                     }
@@ -95,18 +90,13 @@ it("starts only on trusted click, retains focus and composer identity, and sends
         await expect.poll(() => open.mock.calls.length).toBe(1);
         receive({ type: "callActive" });
         receive({
-            type: "messageConfirmationRequested",
-            request: {
-                actionId: "exact",
-                targetLabel: "Login test",
-                connectionLabel: "Local",
-                modeLabel: "Auto",
-                text: "Fix this exact flaky login test.",
-            },
+            type: "actionStatusUpdated",
+            message: "Review the draft in the conversation composer.",
         });
         await expect
-            .poll(() => document.querySelector('[aria-label="Review voice message"]') !== null)
+            .poll(() => document.querySelector('[aria-label="End voice call"]') !== null)
             .toBe(true);
+        expect(document.querySelector('[role="dialog"]')).toBeNull();
         expect(view.$("input").element).toBe(input);
         expect(input.value).toBe("Keep my text");
         expect(mounts).toBe(1);
@@ -123,22 +113,18 @@ it("starts only on trusted click, retains focus and composer identity, and sends
                 view.$('[aria-label="End voice call"]').bounds().x -
                 28,
         ).toBe(4);
-        const card = view.$('[data-happy-desktop-ui="gpt-live-confirmation"]').bounds();
-        expect(card.x).toBeGreaterThanOrEqual(0);
-        expect(card.x + card.width).toBeLessThanOrEqual(320);
-        expect(card.y).toBeGreaterThanOrEqual(0);
-        const send = [...document.querySelectorAll("button")].find(
-            (node) => node.textContent === "Send",
-        )!;
-        send.focus();
-        await userEvent.keyboard("{Enter}");
-        expect(confirm).not.toHaveBeenCalled();
-        send.click();
-        expect(confirm).not.toHaveBeenCalled();
-        await view.screenshot("GptLivePhone.confirmation.test");
-        await userEvent.click(send);
-        await expect.poll(() => confirm.mock.calls.length).toBe(1);
-        expect(confirm).toHaveBeenCalledWith("exact");
+        input.focus();
+        input.setSelectionRange(2, 7);
+        receive({
+            type: "transcriptReceived",
+            fragment: { id: "one", role: "assistant", text: "Ready." },
+        });
+        await expect.poll(() => store.get().transcripts.length).toBe(1);
+        expect(document.activeElement).toBe(input);
+        expect(input.selectionStart).toBe(2);
+        expect(input.selectionEnd).toBe(7);
+        expect(view.$("input").element).toBe(input);
+        await view.screenshot("GptLivePhone.composer.test");
     } finally {
         view.destroy();
         store[Symbol.dispose]();

@@ -2,7 +2,6 @@ import type {
     GptLiveAccount,
     GptLiveAvailability,
     GptLiveCall,
-    GptLiveMessageConfirmation,
     GptLiveRuntime,
     GptLiveRuntimeEvent,
     GptLiveTranscriptFragment,
@@ -36,8 +35,6 @@ export interface GptLiveSnapshot {
     readonly microphoneMuted: boolean;
     readonly panelVisible: boolean;
     readonly transcripts: readonly GptLiveTranscriptFragment[];
-    readonly confirmation?: GptLiveMessageConfirmation;
-    readonly confirmationSending: boolean;
     readonly actionStatus?: string;
     readonly error?: string;
 }
@@ -56,8 +53,6 @@ export interface GptLiveStore {
     panelOpen(): void;
     panelClose(): void;
     microphoneMutedUpdate(muted: boolean): void;
-    messageConfirm(actionId: string): void;
-    messageCancel(actionId: string): void;
     [Symbol.dispose](): void;
 }
 
@@ -67,7 +62,6 @@ const DISABLED: GptLiveSnapshot = {
     microphoneMuted: false,
     panelVisible: false,
     transcripts: [],
-    confirmationSending: false,
 };
 
 /**
@@ -127,17 +121,11 @@ export function gptLiveStoreCreate(
         callController = undefined;
     };
     const idle = (error?: string) => {
-        const {
-            confirmation: _confirmation,
-            actionStatus: _actionStatus,
-            error: _error,
-            ...rest
-        } = snapshot;
+        const { actionStatus: _actionStatus, error: _error, ...rest } = snapshot;
         publish({
             ...rest,
             status: snapshot.gptLiveEnabled ? (error ? "error" : "idle") : "disabled",
             microphoneMuted: false,
-            confirmationSending: false,
             ...(error ? { error } : {}),
         });
     };
@@ -164,21 +152,6 @@ export function gptLiveStoreCreate(
                 publish({ ...snapshot, transcripts: transcripts.slice(-100) });
                 break;
             }
-            case "messageConfirmationRequested":
-                if (snapshot.confirmation) return;
-                publish({
-                    ...snapshot,
-                    confirmation: event.request,
-                    confirmationSending: false,
-                    panelVisible: true,
-                });
-                break;
-            case "messageConfirmationCleared":
-                if (snapshot.confirmation?.actionId === event.actionId) {
-                    const { confirmation: _confirmation, ...rest } = snapshot;
-                    publish({ ...rest, confirmationSending: false });
-                }
-                break;
             case "actionStatusUpdated":
                 publish({ ...snapshot, actionStatus: event.message });
                 break;
@@ -360,42 +333,6 @@ export function gptLiveStoreCreate(
             call?.microphoneMutedUpdate(muted);
             publish({ ...snapshot, microphoneMuted: muted });
         },
-        messageConfirm(actionId) {
-            if (
-                disposed ||
-                !call ||
-                snapshot.status !== "active" ||
-                snapshot.confirmation?.actionId !== actionId ||
-                snapshot.confirmationSending
-            )
-                return;
-            const epoch = generation;
-            publish({ ...snapshot, confirmationSending: true });
-            void call.messageConfirm(actionId).catch(() => {
-                if (
-                    disposed ||
-                    epoch !== generation ||
-                    snapshot.confirmation?.actionId !== actionId
-                )
-                    return;
-                publish({
-                    ...snapshot,
-                    confirmationSending: false,
-                    error: "The message could not be sent. Your draft has not been discarded.",
-                });
-            });
-        },
-        messageCancel(actionId) {
-            if (
-                disposed ||
-                snapshot.confirmation?.actionId !== actionId ||
-                snapshot.confirmationSending
-            )
-                return;
-            call?.messageCancel(actionId);
-            const { confirmation: _confirmation, ...rest } = snapshot;
-            publish({ ...rest, confirmationSending: false });
-        },
         [Symbol.dispose]() {
             if (disposed) return;
             stop();
@@ -429,7 +366,5 @@ export const gptLiveStoreNoop: GptLiveStore = {
     panelOpen: () => {},
     panelClose: () => {},
     microphoneMutedUpdate: () => {},
-    messageConfirm: () => {},
-    messageCancel: () => {},
     [Symbol.dispose]: () => {},
 };

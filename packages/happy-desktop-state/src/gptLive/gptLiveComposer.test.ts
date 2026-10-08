@@ -62,8 +62,9 @@ describe("local-only voice draft provenance", () => {
         const composer = composerStoreCreate("session");
         composer.getState().composerInput({ type: "voiceTextAppended", text: "Reviewed text" });
         const revision = composer.getState().revision;
+        composer.getState().textSubmit();
         composer.getState().textUpdate("New local text");
-        composer.getState().composerInput({ type: "voiceMessageSent", revision });
+        composer.getState().composerInput({ type: "submissionConfirmed", revision });
         expect(composer.getState()).toMatchObject({ voiceDraft: true, text: "New local text" });
     });
 });

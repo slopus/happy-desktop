@@ -156,7 +156,7 @@ it("serializes the real Desktop public-context projection without reasoning or t
     }
 });
 
-it("stages a terminal action result, rejects stale/replayed/second drafts and only sends on an independent human confirmation", async () => {
+it("stages in the existing composer, rejects stale/replayed/second drafts and sends human edits only on composer submission", async () => {
     const f = await fixture();
     const frames: Parameters<Parameters<typeof gptLiveControllerCreate>[0]["send"]>[0][] = [];
     const controller = gptLiveControllerCreate({
@@ -233,11 +233,15 @@ it("stages a terminal action result, rejects stale/replayed/second drafts and on
                 }),
             ),
         );
-        await controller.messageConfirm("stage-exact");
-        expect(f.daemon.callCount("sendMessage")).toBe(1);
-        await expect(controller.messageConfirm("stage-exact")).rejects.toThrow(
-            "no longer available",
-        );
+        f.workspace.composerTextUpdate("My edited message");
+        expect(f.voice.draftRead()?.voiceDraft).toBe(true);
+        expect(f.daemon.callCount("sendMessage")).toBe(0);
+        controller.close();
+        expect(f.voice.draftRead()?.text).toBe("My edited message");
+        f.workspace.composerTextSubmit();
+        await vi.waitFor(() => expect(f.voice.draftRead()?.text).toBe(""));
+        const sent = f.daemon.calls.find((call) => call.method === "sendMessage");
+        expect(sent?.args[1]).toMatchObject({ text: "My edited message" });
         expect(f.daemon.callCount("sendMessage")).toBe(1);
     } finally {
         controller.close();
@@ -310,9 +314,7 @@ it("refuses sessionSend and composerDraftAppend over an existing human draft wit
         );
         expect(f.voice.draftRead()?.text).toBe("Private existing human draft");
         expect(f.voice.draftRead()?.voiceDraft).toBeUndefined();
-        expect(receive).not.toHaveBeenCalledWith(
-            expect.objectContaining({ type: "messageConfirmationRequested" }),
-        );
+        expect(receive).not.toHaveBeenCalled();
         expect(JSON.stringify(frames)).not.toContain("Private existing human draft");
         expect(f.daemon.callCount("sendMessage")).toBe(0);
     } finally {
@@ -407,7 +409,7 @@ it("keeps accepted context immutable while real runtime streams focused public t
 });
 
 it.each(["edit", "empty", "submit"] as const)(
-    "clears the exact confirmation when the owning voice draft changes through %s",
+    "reviews the staged draft only through existing composer %s",
     async (change) => {
         const f = await fixture();
         const frames: Parameters<Parameters<typeof gptLiveControllerCreate>[0]["send"]>[0][] = [];
@@ -440,28 +442,15 @@ it.each(["edit", "empty", "submit"] as const)(
                     text: "Exact generated text",
                 },
             });
-            await vi.waitFor(() =>
-                expect(receive).toHaveBeenCalledWith(
-                    expect.objectContaining({
-                        type: "messageConfirmationRequested",
-                        request: expect.objectContaining({ text: "Exact generated text" }),
-                    }),
-                ),
+            await vi.waitFor(() => expect(f.voice.draftRead()?.text).toBe("Exact generated text"));
+            expect(receive).toHaveBeenCalledWith(
+                expect.objectContaining({ type: "actionStatusUpdated" }),
             );
             if (change === "submit") f.workspace.composerTextSubmit();
             else
                 f.workspace.composerTextUpdate(
                     change === "empty" ? "" : "Human edited the suggestion",
                 );
-            await vi.waitFor(() =>
-                expect(receive).toHaveBeenCalledWith({
-                    type: "messageConfirmationCleared",
-                    actionId: "card-lifetime",
-                }),
-            );
-            await expect(controller.messageConfirm("card-lifetime")).rejects.toThrow(
-                "no longer available",
-            );
             if (change === "submit") {
                 await vi.waitFor(() => expect(f.voice.draftRead()?.text).toBe(""));
                 f.workspace.conversationOpen(f.otherId, f.group);
@@ -470,7 +459,12 @@ it.each(["edit", "empty", "submit"] as const)(
                 expect(f.daemon.callCount("sendMessage")).toBe(1);
                 const remote = await f.daemon.client.getAgentBootstrap(f.id);
                 expect(remote.draft.value?.text ?? "").toBe("");
-            } else expect(f.daemon.callCount("sendMessage")).toBe(0);
+            } else {
+                expect(f.voice.draftRead()?.text).toBe(
+                    change === "empty" ? "" : "Human edited the suggestion",
+                );
+                expect(f.daemon.callCount("sendMessage")).toBe(0);
+            }
         } finally {
             controller.close();
             f.voice[Symbol.dispose]();
@@ -966,16 +960,13 @@ it("preserves local text until daemon acceptance, sends slash text literally and
     try {
         await f.voice.draftAppend("/abort", "");
         const release = f.daemon.pause("sendMessage");
-        const sending = f.voice.messageSendConfirmed("/abort", "/abort", "auto");
+        f.workspace.composerTextSubmit();
         expect(f.voice.draftRead()?.text).toBe("/abort");
         expect(f.voice.draftRead()?.submission.status).toBe("pending");
         f.workspace.composerTextSubmit();
-        await expect(f.voice.messageSendConfirmed("/abort", "/abort", "auto")).rejects.toThrow(
-            "draft changed",
-        );
         expect(f.daemon.callCount("invokeSlashCommand")).toBe(0);
         release();
-        await sending;
+        await vi.waitFor(() => expect(f.voice.draftRead()?.submission.status).toBe("idle"));
         expect(f.voice.draftRead()?.text).toBe("");
         expect(f.daemon.callCount("sendMessage")).toBe(1);
         expect(f.daemon.callCount("saveAgentDraft")).toBe(0);
@@ -984,22 +975,18 @@ it("preserves local text until daemon acceptance, sends slash text literally and
     }
 });
 
-it("retains refused voice text and rechecks exact local draft before a human send", async () => {
+it("retains edited voice text when the existing composer send is refused", async () => {
     const f = await fixture();
     try {
         await f.voice.draftAppend("Reviewed text", "");
         f.workspace.composerTextUpdate("Changed text");
-        await expect(
-            f.voice.messageSendConfirmed("Reviewed text", "Reviewed text", "auto"),
-        ).rejects.toThrow("draft changed");
         expect(f.daemon.callCount("sendMessage")).toBe(0);
         f.daemon.failOnce(
             "sendMessage",
             new HappyAgentApiError(400, "refused", "invalid_request", null),
         );
-        await expect(
-            f.voice.messageSendConfirmed("Changed text", "Changed text", "auto"),
-        ).rejects.toThrow("not accepted");
+        f.workspace.composerTextSubmit();
+        await vi.waitFor(() => expect(f.voice.draftRead()?.submission.status).toBe("failed"));
         expect(f.voice.draftRead()?.text).toBe("Changed text");
         expect(f.daemon.callCount("sendMessage")).toBe(1);
     } finally {

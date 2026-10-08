@@ -33,8 +33,6 @@ function fixture() {
     const call: GptLiveCall = {
         close: vi.fn(),
         microphoneMutedUpdate: vi.fn(),
-        messageConfirm: vi.fn(async () => {}),
-        messageCancel: vi.fn(),
     };
     const runtime: GptLiveRuntime = {
         availabilityRead: vi.fn(async () => available),
@@ -169,7 +167,7 @@ describe("GPT-Live call lifetime", () => {
         expect(f.store.get().status).toBe("idle");
     });
 
-    it("deduplicates Start and requires a matching explicit confirmation", async () => {
+    it("deduplicates Start and reports draft staging without opening another surface", async () => {
         const f = fixture();
         await f.start();
         f.store.callStart();
@@ -178,23 +176,11 @@ describe("GPT-Live call lifetime", () => {
         await Promise.resolve();
         f.receive({ type: "callActive" });
         f.receive({
-            type: "messageConfirmationRequested",
-            request: {
-                actionId: "a1",
-                targetLabel: "Review",
-                connectionLabel: "Local",
-                modeLabel: "Auto",
-                text: "Make the requested change",
-            },
+            type: "actionStatusUpdated",
+            message: "Review the draft in the conversation composer.",
         });
-        expect(f.call.messageConfirm).not.toHaveBeenCalled();
-        f.store.messageConfirm("other");
-        expect(f.call.messageConfirm).not.toHaveBeenCalled();
-        f.store.messageConfirm("a1");
-        f.store.messageConfirm("a1");
-        expect(f.call.messageConfirm).toHaveBeenCalledTimes(1);
-        f.receive({ type: "messageConfirmationCleared", actionId: "a1" });
-        expect(f.store.get().confirmation).toBeUndefined();
+        expect(f.store.get().actionStatus).toBe("Review the draft in the conversation composer.");
+        expect(f.store.get().panelVisible).toBe(false);
     });
 
     it("aborts availability on disable without republishing a late success", async () => {
