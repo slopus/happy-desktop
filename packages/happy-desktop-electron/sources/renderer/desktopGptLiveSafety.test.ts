@@ -156,7 +156,7 @@ it("serializes the real Desktop public-context projection without reasoning or t
     }
 });
 
-it("stages in the existing composer, rejects stale/replayed/second drafts and sends human edits only on composer submission", async () => {
+it("reads immutable context during a mutation, stages in the existing composer and sends human edits only on composer submission", async () => {
     const f = await fixture();
     const frames: Parameters<Parameters<typeof gptLiveControllerCreate>[0]["send"]>[0][] = [];
     const controller = gptLiveControllerCreate({
@@ -185,6 +185,30 @@ it("stages in the existing composer, rejects stale/replayed/second drafts and se
     };
     try {
         controller.actionReceive(request);
+        const stateRequest = {
+            ...request,
+            actionId: "read-during-mutation",
+            action: { type: "desktopState" as const },
+        };
+        controller.actionReceive(stateRequest);
+        const stateResult = frames.find(
+            (frame) => frame.type === "actionResult" && frame.actionId === stateRequest.actionId,
+        );
+        expect(stateResult).toMatchObject({
+            result: { status: "succeeded", output: { type: "context" } },
+        });
+        expect(f.voice.draftRead()?.text).toBe("");
+        expect(frames).not.toContainEqual(
+            expect.objectContaining({ type: "actionResult", actionId: request.actionId }),
+        );
+        controller.actionReceive({ ...request, actionId: "write-during-mutation" });
+        expect(frames).toContainEqual(
+            expect.objectContaining({
+                type: "actionResult",
+                actionId: "write-during-mutation",
+                result: expect.objectContaining({ status: "refused", code: "unavailable" }),
+            }),
+        );
         await vi.waitFor(() =>
             expect(frames).toContainEqual({
                 type: "actionResult",
@@ -194,6 +218,14 @@ it("stages in the existing composer, rejects stale/replayed/second drafts and se
         );
         expect(f.daemon.callCount("sendMessage")).toBe(0);
         expect(f.daemon.callCount("saveAgentDraft")).toBe(0);
+        controller.actionReceive(stateRequest);
+        const stateResults = frames.filter(
+            (frame) => frame.type === "actionResult" && frame.actionId === stateRequest.actionId,
+        );
+        expect(stateResults).toEqual([stateResult, stateResult]);
+        expect(stateResult).toMatchObject({
+            result: { output: { context: { activeSession: { composerHasDraft: false } } } },
+        });
         const resultIndex = frames.findIndex(
             (frame) => frame.type === "actionResult" && frame.actionId === "stage-exact",
         );
@@ -237,6 +269,9 @@ it("stages in the existing composer, rejects stale/replayed/second drafts and se
         expect(f.voice.draftRead()?.voiceDraft).toBe(true);
         expect(f.daemon.callCount("sendMessage")).toBe(0);
         controller.close();
+        const frameCount = frames.length;
+        controller.actionReceive({ ...stateRequest, actionId: "read-after-close" });
+        expect(frames).toHaveLength(frameCount);
         expect(f.voice.draftRead()?.text).toBe("My edited message");
         f.workspace.composerTextSubmit();
         await vi.waitFor(() => expect(f.voice.draftRead()?.text).toBe(""));

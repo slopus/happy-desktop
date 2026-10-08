@@ -460,7 +460,9 @@ export function gptLiveControllerCreate(options: {
         }
     };
     const execute = async (
-        request: Request,
+        request: Omit<Request, "action"> & {
+            readonly action: Exclude<Request["action"], { type: "desktopState" }>;
+        },
         signal: AbortSignal,
     ): Promise<LiveDesktopActionResult> => {
         const { action } = request;
@@ -472,14 +474,6 @@ export function gptLiveControllerCreate(options: {
             if (watch) watchRelease(watch);
             watches.delete(key);
             return { status: "succeeded", output: { type: "ack" } };
-        }
-        if (action.type === "desktopState") {
-            if (closed || signal.aborted)
-                throw new Refusal("ended", "This voice call or action has ended.");
-            return {
-                status: "succeeded",
-                output: { type: "context", context: contextRead().context },
-            };
         }
         check(request.contextRevision, signal);
         if (action.type === "desktopOpen") {
@@ -692,6 +686,15 @@ export function gptLiveControllerCreate(options: {
                 return;
             }
             ledger.set(request.actionId, undefined);
+            if (request.action.type === "desktopState") {
+                // A synchronous memory snapshot owns no mutation or async lease.
+                // Keep context inspection available while a Desktop action finishes.
+                finish(request.actionId, {
+                    status: "succeeded",
+                    output: { type: "context", context: contextRead().context },
+                });
+                return;
+            }
             if (busy) {
                 finish(request.actionId, {
                     status: "refused",
@@ -711,7 +714,7 @@ export function gptLiveControllerCreate(options: {
                 });
             }, 50_000);
             busy = { id: request.actionId, abort, timer: timeout };
-            void execute(request, abort.signal)
+            void execute({ ...request, action: request.action }, abort.signal)
                 .then(
                     (result) => finish(request.actionId, result),
                     (error: unknown) =>
