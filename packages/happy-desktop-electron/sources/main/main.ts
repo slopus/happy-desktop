@@ -267,7 +267,8 @@ nativeTheme.themeSource = "system";
 // Keep them from exhausting Chromium's per-host sockets and starving API requests.
 // Only that origin: lifting the limit for 127.0.0.1 also unthrottles the Vite
 // development server, whose cold module graph then overflows the loopback
-// listen backlog and resets connections, leaving the window blank.
+// listen backlog and resets connections, leaving the window blank. CORS
+// preflights never get this exemption, so the main window sends none.
 app.commandLine.appendSwitch("ignore-connections-limit", "happy-agent");
 // The exact virtual origin is local to Electron's authenticated proxy. Unlike
 // localhost, this requested hostname is not inherently trustworthy to Chromium;
@@ -949,6 +950,17 @@ function localWindowCreate(bounds?: DesktopWindowBounds) {
             preload: join(dirname, "preload.cjs"),
             sandbox: true,
             webviewTag: true,
+            // Each Happy Agent connection holds an update stream open on
+            // happy-agent, and Chromium gives one host six sockets.
+            // ignore-connections-limit lifts that for this window's requests,
+            // but not for the CORS preflights in front of them, so six
+            // connections left every preflighted request waiting for another to
+            // free a socket: seconds after a click, minutes when idle. Without
+            // web security there are no preflights. That holds for every origin
+            // in this window, not just happy-agent; guests keep web security
+            // (will-attach-webview), and insecure content stays blocked.
+            webSecurity: false,
+            allowRunningInsecureContent: false,
         }),
     });
     happyAgentRendererSession?.windowRegister(
