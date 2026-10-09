@@ -89,7 +89,6 @@ import { DesktopProfilerController } from "./desktopProfilerController";
 import { DesktopWindowStateStore } from "./windowState";
 import { desktopBuildIdentityRead } from "./buildIdentity";
 import { DesktopDaemonController } from "./desktopDaemonController";
-import { electronReleaseFetchCreate } from "./electronReleaseFetch";
 import { cloudAuthProductionRedirectUri } from "../shared/cloudAuthConfig";
 
 if (process.platform !== "darwin" && process.platform !== "linux" && process.platform !== "win32") {
@@ -1448,7 +1447,6 @@ void app
         daemonController = await DesktopDaemonController.create({
             channel: desktopConfigStore.get().previewUpdatesEnabled === true ? "preview" : "stable",
             environment: launchEnvironment,
-            fetch: electronReleaseFetchCreate(),
             launchEnvironment: async () => launchEnvironment,
             managed: managedDaemon,
         });
