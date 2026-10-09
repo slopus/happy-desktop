@@ -28,6 +28,7 @@ import type {
     HappyAgentWorkspaceFilesChanged,
 } from "./happyAgentClient.js";
 import type { HappyAgentRecentTabMemory } from "./happyAgentWorkspaceMemory.js";
+import type { HappyAgentWorktreeGroup } from "./happyAgentProjectGroupProject.js";
 import {
     HAPPY_AGENT_VIEW_PREFERENCES_EMPTY,
     happyAgentViewPreferencesParse,
@@ -1201,6 +1202,15 @@ export type HappyAgentGroupArchiveSnapshot =
           readonly kind: "project";
           readonly projectId: HappyAgentProjectId;
           readonly name: string;
+          /** How many workspaces leave with the project; each loses its worktree folder. */
+          readonly worktrees: number;
+          /**
+           * Whether the reader still wants this question next time. Starts
+           * true on every open; "Don't ask again" in the confirmation turns it
+           * off, and the owner records that choice only once the reader
+           * confirms. Cancelling asks nothing of the future.
+           */
+          readonly askAgain: boolean;
           readonly submitting: boolean;
           readonly error?: string;
       }
@@ -1209,9 +1219,58 @@ export type HappyAgentGroupArchiveSnapshot =
           readonly projectId: HappyAgentProjectId;
           readonly worktreeId: HappyAgentWorktreeId;
           readonly name: string;
+          /**
+           * What the worktree folder still holds that is not committed, as the
+           * row reports it. The confirmation is the last place the reader can
+           * learn this before the folder is removed, so it is carried here
+           * rather than read from the sidebar.
+           */
+          readonly changes: HappyAgentGroupArchiveChanges;
+          /** As on the project variant: the reader's answer to "Don't ask again". */
+          readonly askAgain: boolean;
           readonly submitting: boolean;
           readonly error?: string;
       };
+
+/**
+ * The uncommitted state of a worktree about to be archived. `unknown` is the
+ * row's own missing or stale report: the host has not counted, or the count
+ * it gave is no longer trusted, and the confirmation says so rather than
+ * claiming the folder is clean.
+ */
+export type HappyAgentGroupArchiveChanges =
+    | { readonly status: "unknown" }
+    | { readonly status: "clean" }
+    | {
+          readonly status: "dirty";
+          readonly changedFiles: number;
+          readonly addedLines: number;
+          readonly deletedLines: number;
+      };
+
+/** The changes summary one worktree row contributes to its archive confirmation. */
+function groupArchiveChangesOf(worktree: HappyAgentWorktreeGroup): HappyAgentGroupArchiveChanges {
+    if (worktree.changesStatus !== "ready") return { status: "unknown" };
+    const changedFiles = worktree.changedFiles ?? 0;
+    const addedLines = worktree.addedLines ?? 0;
+    const deletedLines = worktree.deletedLines ?? 0;
+    if (changedFiles === 0 && addedLines === 0 && deletedLines === 0) return { status: "clean" };
+    return { status: "dirty", changedFiles, addedLines, deletedLines };
+}
+
+/** Whether two change summaries say the same thing, so a recompute keeps the reference. */
+function groupArchiveChangesEqual(
+    left: HappyAgentGroupArchiveChanges,
+    right: HappyAgentGroupArchiveChanges,
+): boolean {
+    if (left.status !== right.status) return false;
+    if (left.status !== "dirty" || right.status !== "dirty") return true;
+    return (
+        left.changedFiles === right.changedFiles &&
+        left.addedLines === right.addedLines &&
+        left.deletedLines === right.deletedLines
+    );
+}
 
 /** Which of the three things a project can say about where its sessions run. */
 export type HappyAgentProjectComputeMode = "default" | "local" | "docker";
@@ -1822,6 +1881,8 @@ export interface HappyAgentWorkspaceStore {
     groupArchiveOpen(groupId: HappyAgentGroupId): void;
     /** Dismisses the empty-group archive confirmation. */
     groupArchiveCancel(): void;
+    /** Records the reader's "Don't ask again" answer on the open confirmation. */
+    groupArchiveAskAgainUpdate(askAgain: boolean): void;
     /** Confirms the pending empty-group archive. */
     groupArchiveSubmit(): Promise<void>;
     /**
@@ -5717,20 +5778,44 @@ export function happyAgentWorkspaceStoreCreate(
                 output({ type: "addressedGroupRemoved", groupId: addressedGroupId });
             }
         }
+        // The confirmation describes what is about to be removed, so it follows
+        // the row: a rename or a fresh count of uncommitted work lands in the
+        // dialog, and a group the list no longer holds closes it.
+        // Only a rename retires the reason a previous attempt was refused; a
+        // recount of the folder says nothing about whether the host will
+        // answer differently.
         if (groupArchive && !groupArchive.submitting) {
             const pendingArchive = groupArchive;
             const project = projects.value.find(
                 (candidate) => candidate.id === pendingArchive.projectId,
             );
-            const currentName =
-                pendingArchive.kind === "project"
-                    ? project?.name
-                    : project?.worktrees.find(
-                          (candidate) => candidate.id === pendingArchive.worktreeId,
-                      )?.name;
-            if (currentName === undefined) groupArchive = undefined;
-            else if (currentName !== pendingArchive.name)
-                groupArchive = { ...pendingArchive, name: currentName, error: undefined };
+            if (!project) groupArchive = undefined;
+            else if (pendingArchive.kind === "project") {
+                const renamed = project.name !== pendingArchive.name;
+                if (renamed || project.worktrees.length !== pendingArchive.worktrees)
+                    groupArchive = {
+                        ...pendingArchive,
+                        name: project.name,
+                        worktrees: project.worktrees.length,
+                        ...(renamed ? { error: undefined } : {}),
+                    };
+            } else {
+                const worktree = project.worktrees.find(
+                    (candidate) => candidate.id === pendingArchive.worktreeId,
+                );
+                if (!worktree) groupArchive = undefined;
+                else {
+                    const changes = groupArchiveChangesOf(worktree);
+                    const renamed = worktree.name !== pendingArchive.name;
+                    if (renamed || !groupArchiveChangesEqual(changes, pendingArchive.changes))
+                        groupArchive = {
+                            ...pendingArchive,
+                            name: worktree.name,
+                            changes,
+                            ...(renamed ? { error: undefined } : {}),
+                        };
+                }
+            }
         }
         // A submission owns its own confirmation until it settles; the read that
         // proves it archived is the one that closes it, from `projectArchiveSubmit`.
@@ -7543,6 +7628,8 @@ export function happyAgentWorkspaceStoreCreate(
                         kind: "project",
                         projectId: project.id,
                         name: project.name,
+                        worktrees: project.worktrees.length,
+                        askAgain: true,
                         submitting: false,
                     };
                     recompute();
@@ -7555,6 +7642,8 @@ export function happyAgentWorkspaceStoreCreate(
                     projectId: project.id,
                     worktreeId: worktree.id,
                     name: worktree.name,
+                    changes: groupArchiveChangesOf(worktree),
+                    askAgain: true,
                     submitting: false,
                 };
                 recompute();
@@ -7564,6 +7653,14 @@ export function happyAgentWorkspaceStoreCreate(
         groupArchiveCancel() {
             if (!groupArchive || groupArchive.submitting) return;
             groupArchive = undefined;
+            recompute();
+        },
+        groupArchiveAskAgainUpdate(askAgain) {
+            // The answer belongs to the question on screen; once the host is
+            // being told there is no question left to answer differently.
+            if (!groupArchive || groupArchive.submitting) return;
+            if (groupArchive.askAgain === askAgain) return;
+            groupArchive = { ...groupArchive, askAgain };
             recompute();
         },
         async groupArchiveSubmit() {

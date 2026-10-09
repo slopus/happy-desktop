@@ -26,6 +26,7 @@ import {
     gptLiveStoreCreate,
     gptLiveExperimentsConnect,
     titleShimmerStoreCreate,
+    groupArchiveConfirmationStoreCreate,
     welcomeStoreCreate,
     happyAgentNavigationOrderStoreCreate,
     happyAgentSidebarCollapseStoreCreate,
@@ -42,6 +43,7 @@ import {
     type HappyAgentSidebarVisibilityStore,
     type HappyAgentSettingsStore,
     type TitleShimmerStore,
+    type GroupArchiveConfirmationStore,
     type HappyAgentWindowStore,
     type HappyAgentModelPreferencePersistence,
     type HappyAgentSessionId,
@@ -107,6 +109,7 @@ import { desktopProfilerStoreCreate } from "./desktopProfilerStore";
 import { desktopMetricsStoreCreate } from "./desktopMetricsStore";
 import { desktopDaemonStoreCreate } from "./desktopDaemonStore";
 import { desktopExperimentsPersistence } from "./desktopExperiments";
+import { desktopGroupArchiveConfirmationPersistence } from "./desktopGroupArchiveConfirmation";
 import { desktopGptLivePersistence } from "./desktopGptLive";
 import { desktopGptLiveRuntimeCreate } from "./desktopGptLiveRuntime";
 import { desktopWelcomePersistence } from "./desktopWelcome";
@@ -300,6 +303,7 @@ function HappyAgentBoundary(props: {
     happyAgents: HappyAgentDirectoryStore;
     settings: HappyAgentSettingsStore;
     titleShimmer: TitleShimmerStore;
+    groupArchiveConfirmation: GroupArchiveConfirmationStore;
     update?: WorkspaceUpdate;
     windowState: HappyAgentWindowStore;
 }) {
@@ -346,6 +350,7 @@ function HappyAgentBoundary(props: {
                 happyAgents: props.happyAgents,
                 settings: props.settings,
                 titleShimmer: props.titleShimmer,
+                groupArchiveConfirmation: props.groupArchiveConfirmation,
                 windowState: props.windowState,
             }}
             router={props.router}
@@ -465,6 +470,7 @@ interface DesktopRendererProps {
     happyAgents: HappyAgentDirectoryStore;
     settings: HappyAgentSettingsStore;
     titleShimmer: TitleShimmerStore;
+    groupArchiveConfirmation: GroupArchiveConfirmationStore;
     startupValues: StartupValuesStore;
     store: DesktopRuntimeStore;
     welcome: WelcomeStore;
@@ -650,6 +656,7 @@ function DesktopScreens(props: DesktopRendererProps) {
                                 happyAgents={ui.directory}
                                 settings={ui.settings}
                                 titleShimmer={props.titleShimmer}
+                                groupArchiveConfirmation={props.groupArchiveConfirmation}
                                 windowState={surfaceWindowState}
                             />
                         </ConnectionSurface>
@@ -904,6 +911,7 @@ function DesktopRuntimeContent(
             happyAgents={props.happyAgents}
             settings={props.settings}
             titleShimmer={props.titleShimmer}
+            groupArchiveConfirmation={props.groupArchiveConfirmation}
             update={snapshot ? workspaceUpdate(snapshot.update, hostedUpdate) : undefined}
             windowState={props.windowState}
         />
@@ -1073,6 +1081,13 @@ if (mediaPreviewBridge) {
         // the product default in memory and writes only after the reader changes
         // the switch, so untouched installations follow future defaults.
         const titleShimmer = titleShimmerStoreCreate(preferences.titleShimmerPersistence);
+        // Whether archiving a workspace or project still asks first. Kept in
+        // the renderer's own storage like the experiments switch: the folder
+        // being deleted is on this machine, so the choice is this
+        // installation's and never a daemon's.
+        const groupArchiveConfirmation = groupArchiveConfirmationStoreCreate(
+            desktopGroupArchiveConfirmationPersistence(),
+        );
         // What the command palette is currently showing and asking. It is this
         // window's transient view state, so it is created here beside the other
         // window-lifetime stores and deliberately given nothing to persist: an
@@ -1343,6 +1358,7 @@ if (mediaPreviewBridge) {
                         localWebUpdate={localWebUpdateStoreCreate(localWebBuild)}
                         settings={settings}
                         titleShimmer={titleShimmer}
+                        groupArchiveConfirmation={groupArchiveConfirmation}
                         startupValues={startupValuesStoreCreate()}
                         store={runtimeStore}
                         welcome={welcome}

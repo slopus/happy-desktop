@@ -96,6 +96,8 @@ import {
     happyAgentSettingsStoreCreate,
     keepAwakeStoreCreate,
     titleShimmerStoreNoop,
+    groupArchiveConfirmationStoreNoop,
+    type GroupArchiveConfirmationStore,
     type HappyAgentConversationSource,
 } from "happy-desktop-state";
 import {
@@ -154,6 +156,8 @@ import {
     type FileTreeExpansion,
     type FileTreeBuildEntry,
     HappyAgentCreateBotPage,
+    HappyAgentGroupArchiveDialog,
+    type HappyAgentGroupArchiveSubject,
     HappyAgentProjectCloneDialog,
     HappyAgentProjectSettingsDialog,
     HappyAgentSessionControls,
@@ -477,6 +481,12 @@ export interface AppHappyAgentViewProps {
      * without this preference uses the current product default.
      */
     titleShimmer?: TitleShimmerStore;
+    /**
+     * Whether archiving a workspace or project asks first. A host without this
+     * preference always asks: the confirmation is the product default, and
+     * "Don't ask again" is the reader's to record.
+     */
+    groupArchiveConfirmation?: GroupArchiveConfirmationStore;
     /**
      * What the command palette is showing and asking. A host that supplies none
      * has no palette, and Command-K does nothing rather than opening a surface
@@ -1034,6 +1044,34 @@ function activeRowId(
 }
 
 /** The project a sidebar row belongs to, and whether the row is one of its worktrees. */
+/**
+ * Asks to archive a project or workspace. The confirmation is the default,
+ * because archiving a workspace deletes its worktree folder. A reader who
+ * answered "Don't ask again" has the archive performed straight away; the home
+ * project is never archived, since it only comes back on the next session.
+ * Nothing navigates here either way: leaving the addressed group is driven by
+ * the host's own catalog no longer holding it.
+ */
+function groupArchiveRequest(
+    workspace: HappyAgentWorkspaceStore,
+    confirmation: GroupArchiveConfirmationStore,
+    projects: readonly HappyAgentProjectGroup[],
+    groupId: HappyAgentGroupId,
+): void {
+    if (confirmation.get().groupArchiveConfirmationEnabled) {
+        workspace.groupArchiveOpen(groupId);
+        return;
+    }
+    const owner = rowOwnerFind(projects, groupId);
+    if (!owner) return;
+    if (owner.worktreeId) {
+        void workspace.worktreeArchive(owner.project.id, owner.worktreeId).catch(() => undefined);
+        return;
+    }
+    if (owner.project.kind === "home") return;
+    void workspace.projectArchive(owner.project.id).catch(() => undefined);
+}
+
 function rowOwnerFind(
     projects: readonly HappyAgentProjectGroup[],
     id: string,
@@ -1826,6 +1864,10 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
         keepAwakeStore.get,
     );
     const titleShimmerStore = props.titleShimmer ?? titleShimmerStoreNoop;
+    // Read at the moment an archive is asked for rather than subscribed to:
+    // nothing on this surface renders differently while the answer stands.
+    const groupArchiveConfirmationStore =
+        props.groupArchiveConfirmation ?? groupArchiveConfirmationStoreNoop;
     const titleShimmerEnabled = useSyncExternalStore(
         titleShimmerStore.subscribe,
         titleShimmerStore.get,
@@ -2109,17 +2151,19 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                     return;
                 }
                 if (actionId !== ROW_MENU_ARCHIVE) return;
-                // Deliberately no navigation here. An archive that the host
-                // refuses would have ejected the reader from a project that is
-                // still there, and an archive performed from another window or
-                // another machine would not have moved them at all. Leaving the
-                // addressed group is one thing, driven by the host's own catalog
-                // no longer holding it, and the workspace reports that.
-                void (
-                    owner.worktreeId
-                        ? workspace.worktreeArchive(owner.project.id, owner.worktreeId)
-                        : workspace.projectArchive(owner.project.id)
-                ).catch(() => undefined);
+                // The menu item only asks. Archiving a workspace deletes its
+                // worktree folder, so the confirmation names that folder and
+                // what it still holds before anything is removed. Deliberately
+                // no navigation here either: an archive that the host refuses
+                // would have ejected the reader from a project that is still
+                // there, and leaving the addressed group is driven by the
+                // host's own catalog no longer holding it.
+                groupArchiveRequest(
+                    workspace,
+                    groupArchiveConfirmationStore,
+                    happyAgent.projects,
+                    (owner.worktreeId ?? owner.project.id) as HappyAgentGroupId,
+                );
             }}
             // Addressing a group opens the tab it was left on, so a list row
             // lands back where the reader was rather than on an empty screen.
@@ -2169,12 +2213,19 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                 const owner = rowOwnerFind(happyAgent.projects, row.id);
                 if (!owner || !workspace) return;
                 // The plus on a project adds a worktree; the control on a
-                // worktree archives it.
-                void (
-                    owner.worktreeId
-                        ? workspace.worktreeArchive(owner.project.id, owner.worktreeId)
-                        : workspace.worktreeCreate(owner.project.id)
-                ).catch(() => undefined);
+                // worktree asks to archive it. The folder goes with the
+                // workspace, so one click never deletes it unless the reader
+                // has said not to ask: the confirmation does, after naming it.
+                if (owner.worktreeId) {
+                    groupArchiveRequest(
+                        workspace,
+                        groupArchiveConfirmationStore,
+                        happyAgent.projects,
+                        owner.worktreeId as HappyAgentGroupId,
+                    );
+                    return;
+                }
+                void workspace.worktreeCreate(owner.project.id).catch(() => undefined);
             }}
             // The cog on a project row. Only project rows carry one, and the
             // settings surface is the same one the row's menu opens.
@@ -2376,6 +2427,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
         if (active?.session)
             return (
                 <HappyAgentWorkspaceSurface
+                    groupArchiveConfirmation={groupArchiveConfirmationStore}
                     availability={
                         activeAvailability ??
                         happyAgentAvailabilityProject(active.session.connection.get(), true, {
@@ -2497,6 +2549,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
             {active?.session?.workspace ? (
                 <HappyAgentWindowDialogs
                     projects={active.projects}
+                    groupArchiveConfirmation={groupArchiveConfirmationStore}
                     happyAgentOnline={activeHappyAgentOnline}
                     workspace={active.session.workspace}
                     {...(activeAvailability?.refusal === undefined
@@ -3169,6 +3222,8 @@ interface HappyAgentWorkspaceSurfaceProps {
     happyAgentOnline: () => boolean;
     /** Joined conversation-list + active-conversation product store. */
     workspace: HappyAgentWorkspaceStore;
+    /** Whether Cmd-W over an empty pane asks before archiving the open group. */
+    groupArchiveConfirmation: GroupArchiveConfirmationStore;
     /**
      * The Happy Agent's projects, for the surfaces that address a project the window is
      * not currently open on — the settings dialog reached from any row.
@@ -3641,7 +3696,13 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
         const current = props.workspace.get();
         const tabId = current.activeMainViewId ?? current.address.conversationId;
         if (tabId) groupTabClose(tabId);
-        else if (openGroup) props.workspace.groupArchiveOpen(openGroup.id);
+        else if (openGroup)
+            groupArchiveRequest(
+                props.workspace,
+                props.groupArchiveConfirmation,
+                rows,
+                openGroup.id,
+            );
     };
     // The strip in the order it is drawn, without the detached subagent: it is
     // addressed rather than listed, so a sweep over "the tabs beside this one"
@@ -5790,6 +5851,7 @@ function happyAgentTurnElapsedMs(
  */
 function HappyAgentWindowDialogs(props: {
     projects: readonly HappyAgentProjectGroup[];
+    groupArchiveConfirmation: GroupArchiveConfirmationStore;
     happyAgentOnline: () => boolean;
     unavailable?: string;
     workspace: HappyAgentWorkspaceStore;
@@ -5813,6 +5875,7 @@ function HappyAgentWindowDialogs(props: {
             {happyAgentGroupArchiveDialog(
                 workspace.groupArchive,
                 props.workspace,
+                props.groupArchiveConfirmation,
                 props.happyAgentOnline,
                 props.unavailable,
             )}
@@ -5836,62 +5899,49 @@ function HappyAgentWindowDialogs(props: {
 }
 
 /**
- * Cmd-W over an empty main pane stops at a confirmation. The dialog names the
- * exact group the store resolved, and the keystroke itself never archives it.
+ * Every archive of a project or workspace stops at this confirmation: the
+ * sidebar row's control, its context menu, and Cmd-W over an empty main pane
+ * all open it, and none of them archives anything itself. The dialog names the
+ * exact group the store resolved and, for a workspace, the folder that goes
+ * with it and the uncommitted work that folder still holds.
  */
 function happyAgentGroupArchiveDialog(
     archive: HappyAgentWorkspaceSnapshot["groupArchive"],
     store: HappyAgentWorkspaceStore,
+    confirmation: GroupArchiveConfirmationStore,
     happyAgentOnline: () => boolean,
     unavailable?: string,
 ): ReactNode {
     if (!archive) return null;
-    const subject = archive.kind === "worktree" ? "workspace" : "project";
+    const subject: HappyAgentGroupArchiveSubject =
+        archive.kind === "worktree"
+            ? {
+                  kind: "workspace",
+                  name: archive.name,
+                  changes: archive.changes,
+              }
+            : {
+                  kind: "project",
+                  name: archive.name,
+                  worktrees: archive.worktrees,
+              };
     return (
-        <ModalOverlay
-            {...(archive.submitting ? {} : { onDismiss: () => store.groupArchiveCancel() })}
-        >
-            <Modal
-                footer={
-                    <>
-                        <Button
-                            disabled={archive.submitting}
-                            onClick={() => store.groupArchiveCancel()}
-                            variant="ghost"
-                        >
-                            Cancel
-                        </Button>
-                        <Button
-                            disabled={unavailable !== undefined}
-                            loading={archive.submitting}
-                            onClick={() => {
-                                if (happyAgentOnline())
-                                    void store.groupArchiveSubmit().catch(() => undefined);
-                            }}
-                            variant="danger"
-                        >
-                            Archive {subject}
-                        </Button>
-                    </>
-                }
-                icon="archive"
-                {...(archive.submitting ? {} : { onClose: () => store.groupArchiveCancel() })}
-                size="small"
-                title={`Archive ${archive.name}?`}
-                tone="danger"
-            >
-                {archive.error ? (
-                    <Banner tone="danger" title={`Could not archive ${subject}`}>
-                        {archive.error}
-                    </Banner>
-                ) : null}
-                <p>
-                    {archive.kind === "worktree"
-                        ? "This removes the workspace from the sidebar and removes its worktree folder."
-                        : "This removes the project and its sessions from the sidebar, archives every workspace under it, and removes those worktree folders. The project's own checkout stays where it is."}
-                </p>
-            </Modal>
-        </ModalOverlay>
+        <HappyAgentGroupArchiveDialog
+            {...(archive.error === undefined ? {} : { error: archive.error })}
+            {...(unavailable === undefined ? {} : { confirmDisabledReason: unavailable })}
+            askAgain={archive.askAgain}
+            onAskAgainChange={(askAgain) => store.groupArchiveAskAgainUpdate(askAgain)}
+            onCancel={() => store.groupArchiveCancel()}
+            onConfirm={() => {
+                if (!happyAgentOnline()) return;
+                // Confirming is what records "Don't ask again": the reader has
+                // seen what the question protects and still wants it gone.
+                if (!archive.askAgain) confirmation.groupArchiveConfirmationUpdate(false);
+                void store.groupArchiveSubmit().catch(() => undefined);
+            }}
+            subject={subject}
+            submitting={archive.submitting}
+        />
     );
 }
 

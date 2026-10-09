@@ -16,6 +16,7 @@ import type {
     HappyAgentThinkingLevel,
     HappyAgentWindowStore,
     TitleShimmerStore,
+    GroupArchiveConfirmationStore,
     UsageAnalyticsStore,
 } from "happy-desktop-state";
 import {
@@ -38,6 +39,7 @@ import {
     happyAgentSecretsStoreNoop,
     happyAgentWindowStoreNoop,
     titleShimmerStoreNoop,
+    groupArchiveConfirmationStoreNoop,
 } from "happy-desktop-state";
 import {
     DesktopMobileSetup,
@@ -314,6 +316,8 @@ export interface AppHappyAgentSettingsViewProps {
     settings: HappyAgentSettingsStore;
     /** Window-local preference for animated activity titles. */
     titleShimmer?: TitleShimmerStore;
+    /** Window-local choice of whether archiving a workspace or project asks first. */
+    groupArchiveConfirmation?: GroupArchiveConfirmationStore;
     windowState?: HappyAgentWindowStore;
 }
 
@@ -363,6 +367,13 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
         titleShimmerStore.subscribe,
         titleShimmerStore.get,
         titleShimmerStore.get,
+    );
+    const groupArchiveConfirmationStore =
+        props.groupArchiveConfirmation ?? groupArchiveConfirmationStoreNoop;
+    const groupArchiveConfirmation = useSyncExternalStore(
+        groupArchiveConfirmationStore.subscribe,
+        groupArchiveConfirmationStore.get,
+        groupArchiveConfirmationStore.get,
     );
     const directory = useSyncExternalStore(
         props.happyAgents.subscribe,
@@ -634,6 +645,7 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                             securityPolicy,
                             settings,
                             titleShimmer,
+                            groupArchiveConfirmation,
                             usage,
                             windowState,
                         })}
@@ -851,6 +863,12 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                     onTitleShimmerChange={(enabled) =>
                         titleShimmerStore.titleShimmerUpdate(enabled)
                     }
+                    groupArchiveConfirmationEnabled={
+                        groupArchiveConfirmation.groupArchiveConfirmationEnabled
+                    }
+                    onGroupArchiveConfirmationChange={(enabled) =>
+                        groupArchiveConfirmationStore.groupArchiveConfirmationUpdate(enabled)
+                    }
                     onDefaultModelChange={(key) => {
                         const [providerId, ...rest] = key.split(":");
                         const modelId = rest.join(":");
@@ -905,6 +923,7 @@ function stateDocuments(snapshots: {
     readonly securityPolicy: unknown;
     readonly settings: unknown;
     readonly titleShimmer: unknown;
+    readonly groupArchiveConfirmation: unknown;
     readonly usage: unknown;
     readonly windowState: unknown;
 }): readonly HappyAgentStateDocument[] {
@@ -986,6 +1005,12 @@ function stateDocuments(snapshots: {
             id: "title-shimmer",
             label: "Title shimmer",
             value: stateText(snapshots.titleShimmer),
+        },
+        {
+            description: "Whether archiving a workspace or project asks first",
+            id: "group-archive-confirmation",
+            label: "Archive confirmation",
+            value: stateText(snapshots.groupArchiveConfirmation),
         },
         {
             description: "Full-screen and window chrome state",

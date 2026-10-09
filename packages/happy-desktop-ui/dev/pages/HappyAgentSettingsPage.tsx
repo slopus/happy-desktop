@@ -489,6 +489,8 @@ export function HappyAgentSettingsBlueprintPage() {
                         onLinkOpenPlacementChange={noop}
                         linkOpenPlacement="panel"
                         onTitleShimmerChange={noop}
+                        groupArchiveConfirmationEnabled
+                        onGroupArchiveConfirmationChange={noop}
                         permissionMode="auto"
                         permissionModeOptions={permissionModeOptions}
                         scrollbarVisibility="automatic"
@@ -974,6 +976,8 @@ export function HappyAgentSettingsBlueprintPage() {
                         onLinkOpenPlacementChange={noop}
                         linkOpenPlacement="panel"
                         onTitleShimmerChange={noop}
+                        groupArchiveConfirmationEnabled
+                        onGroupArchiveConfirmationChange={noop}
                         permissionMode="auto"
                         permissionModeOptions={permissionModeOptions}
                         scrollbarVisibility="automatic"

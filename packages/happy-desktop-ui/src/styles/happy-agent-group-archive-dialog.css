@@ -1,0 +1,59 @@
+/*
+ * C-286 HappyAgentGroupArchiveDialog — the destructive confirmation for
+ * archiving a workspace or project, in the small Modal card. The body is one
+ * column on a 10px rhythm: an optional banner, one sentence naming what goes
+ * and what it costs, one line on the uncommitted work a workspace still holds,
+ * and the opt-out for next time.
+ */
+
+.happy-agent-group-archive-dialog__body {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-width: 0;
+    color: var(--text);
+    font-family: var(--happy-font-ui);
+    font-synthesis: none;
+}
+
+.happy-agent-group-archive-dialog__lead {
+    margin: 0;
+    min-width: 0;
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 400;
+    line-height: 18px;
+    overflow-wrap: anywhere;
+}
+
+/* The name reads as the subject of the sentence: primary ink, same size. */
+.happy-agent-group-archive-dialog__name {
+    color: var(--text);
+    font-weight: 600;
+}
+
+.happy-agent-group-archive-dialog__changes {
+    min-width: 0;
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 16px;
+}
+
+/* Uncommitted work is the thing about to be lost: it takes the error ink so it
+   is the loudest line in the body. A count the host could not give is a
+   warning, not a reassurance. */
+.happy-agent-group-archive-dialog__changes[data-tone="danger"] {
+    color: var(--box-error-text);
+}
+
+.happy-agent-group-archive-dialog__changes[data-tone="warning"] {
+    color: var(--box-warning-text);
+}
+
+/* The opt-out closes the body, a quieter line than the loss above it: it is
+   about next time, not about this folder. */
+.happy-agent-group-archive-dialog__ask-again {
+    align-self: flex-start;
+    min-width: 0;
+}

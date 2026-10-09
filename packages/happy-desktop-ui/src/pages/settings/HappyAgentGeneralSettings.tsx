@@ -36,6 +36,8 @@ export type HappyAgentGeneralSettingsProps = {
     experimentalFeaturesEnabled: boolean;
     /** Whether active session, project, and workspace titles shimmer. */
     titleShimmerEnabled: boolean;
+    /** Whether archiving a workspace or project stops at a confirmation first. */
+    groupArchiveConfirmationEnabled: boolean;
     /** Whether this window sends product analytics events. Absent where the host sends none. */
     usageAnalyticsEnabled?: boolean;
     onUsageAnalyticsChange?: (enabled: boolean) => void;
@@ -71,6 +73,7 @@ export type HappyAgentGeneralSettingsProps = {
     onLinkOpenPlacementChange: (placement: HappyAgentLinkOpenPlacementChoice) => void;
     onExperimentalFeaturesChange: (enabled: boolean) => void;
     onTitleShimmerChange: (enabled: boolean) => void;
+    onGroupArchiveConfirmationChange: (enabled: boolean) => void;
     onDefaultModelChange: (key: string) => void;
     onEffortChange: (effort: string) => void;
     onPermissionModeChange: (mode: string) => void;
@@ -163,6 +166,25 @@ export function HappyAgentGeneralSettings(props: HappyAgentGeneralSettingsProps)
                     description="Animates running session, project, and workspace names"
                     htmlFor="happy-agent-settings-title-shimmer"
                     label="Shimmer active titles"
+                />
+            </HappyAgentSettingsSection>
+            <HappyAgentSettingsSection
+                description="Archiving a workspace deletes its worktree folder, and archiving a project does that for every workspace under it."
+                title="Archiving"
+            >
+                <FormRow
+                    control={
+                        <Switch
+                            aria-label="Ask before archiving"
+                            checked={props.groupArchiveConfirmationEnabled}
+                            id="happy-agent-settings-group-archive-confirmation"
+                            onChange={props.onGroupArchiveConfirmationChange}
+                            size="small"
+                        />
+                    }
+                    description="Shows the folder and its uncommitted changes before anything is deleted. “Don’t ask again” in that confirmation turns this off."
+                    htmlFor="happy-agent-settings-group-archive-confirmation"
+                    label="Ask before archiving"
                 />
             </HappyAgentSettingsSection>
             <HappyAgentSettingsSection

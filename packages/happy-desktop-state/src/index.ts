@@ -21,6 +21,7 @@ export * from "./gptLive/gptLiveRuntime.js";
 export * from "./gptLive/gptLiveRuntimeCreate.js";
 export * from "./gptLive/gptLiveDesktopSource.js";
 export * from "./titleShimmer/titleShimmerStore.js";
+export * from "./groupArchiveConfirmation/groupArchiveConfirmationStore.js";
 export * from "./modules/composer/composerState.js";
 export * from "./modules/terminal/terminalState.js";
 export * from "./onboarding/welcomeStore.js";

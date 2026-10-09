@@ -388,6 +388,12 @@ export {
     type HappyAgentProjectCloneDialogProps,
 } from "./HappyAgentProjectCloneDialog";
 export {
+    HappyAgentGroupArchiveDialog,
+    type HappyAgentGroupArchiveChanges,
+    type HappyAgentGroupArchiveDialogProps,
+    type HappyAgentGroupArchiveSubject,
+} from "./HappyAgentGroupArchiveDialog";
+export {
     HappyAgentActivityPanel,
     type HappyAgentActivityPanelProps,
 } from "./HappyAgentActivityPanel";

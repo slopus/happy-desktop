@@ -29,6 +29,7 @@ import type {
     HappyAgentSessionLocation,
     HappyAgentSettingsStore,
     TitleShimmerStore,
+    GroupArchiveConfirmationStore,
     HappyAgentWindowStore,
     HappyAgentWorkspaceStore,
 } from "happy-desktop-state";
@@ -123,6 +124,8 @@ export interface HappyAgentRouterContext {
     readonly keepAwake?: KeepAwakeStore;
     /** Window-local preference for animated activity titles. */
     readonly titleShimmer?: TitleShimmerStore;
+    /** Window-local choice of whether archiving a workspace or project asks first. */
+    readonly groupArchiveConfirmation?: GroupArchiveConfirmationStore;
     /**
      * What the window's command palette is showing and asking. Absent in a host
      * that offers no palette, which leaves Command-K unbound.
@@ -482,6 +485,9 @@ function HappyAgentWorkspaceLayout(
             {...(context.gptLive ? { gptLive: context.gptLive } : {})}
             {...(context.keepAwake ? { keepAwake: context.keepAwake } : {})}
             {...(context.titleShimmer ? { titleShimmer: context.titleShimmer } : {})}
+            {...(context.groupArchiveConfirmation
+                ? { groupArchiveConfirmation: context.groupArchiveConfirmation }
+                : {})}
             {...(context.commandPalette ? { commandPalette: context.commandPalette } : {})}
             {...(context.navigationOrder ? { navigationOrder: context.navigationOrder } : {})}
             {...(context.sidebarCollapse ? { sidebarCollapse: context.sidebarCollapse } : {})}
@@ -612,6 +618,9 @@ function HappyAgentSettingsRoute() {
             section={params.section ?? HAPPY_AGENT_SETTINGS_DEFAULT_CATEGORY}
             settings={context.settings}
             {...(context.titleShimmer ? { titleShimmer: context.titleShimmer } : {})}
+            {...(context.groupArchiveConfirmation
+                ? { groupArchiveConfirmation: context.groupArchiveConfirmation }
+                : {})}
             windowState={context.windowState}
         />
     );
