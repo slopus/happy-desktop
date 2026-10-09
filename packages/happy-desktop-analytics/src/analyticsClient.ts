@@ -19,8 +19,21 @@ const POSTHOG_PROPERTY_NAMES: ReadonlySet<string> = new Set([
     "$process_person_profile",
 ]);
 
+export interface AnalyticsTrackOptions {
+    /**
+     * Sends this one event at once by `sendBeacon` instead of queueing it, for
+     * the moment the window is going away. Best effort: a library that has not
+     * loaded yet cannot load in time.
+     */
+    readonly beacon?: boolean;
+}
+
 export interface AnalyticsClient {
-    track<E extends AnalyticsEventName>(event: E, properties: AnalyticsEventProperties<E>): void;
+    track<E extends AnalyticsEventName>(
+        event: E,
+        properties: AnalyticsEventProperties<E>,
+        options?: AnalyticsTrackOptions,
+    ): void;
 }
 
 export interface AnalyticsClientOptions {
@@ -63,6 +76,8 @@ function analyticsBeforeSend(capture: CaptureResult | null): CaptureResult | nul
 export function analyticsClientCreate(options: AnalyticsClientOptions): AnalyticsClient {
     const apiKey = options.apiKey;
     let loading: Promise<PostHog | undefined> | undefined;
+    /** The library once it has loaded, so a closing window can send without waiting. */
+    let loaded: PostHog | undefined;
     const load = (key: string): Promise<PostHog | undefined> => {
         loading ??= import("posthog-js").then(
             ({ default: posthog }) => {
@@ -90,6 +105,7 @@ export function analyticsClientCreate(options: AnalyticsClientOptions): Analytic
                     save_campaign_params: false,
                     before_send: analyticsBeforeSend,
                 });
+                loaded = posthog;
                 return posthog;
             },
             (error: unknown) => {
@@ -100,8 +116,12 @@ export function analyticsClientCreate(options: AnalyticsClientOptions): Analytic
         return loading;
     };
     return {
-        track(event, properties) {
+        track(event, properties, trackOptions) {
             if (apiKey === undefined || apiKey.length === 0 || !options.enabled()) return;
+            if (trackOptions?.beacon && loaded) {
+                loaded.capture(event, { ...properties }, { transport: "sendBeacon" });
+                return;
+            }
             void load(apiKey).then((posthog) => {
                 if (!options.enabled()) return;
                 posthog?.capture(event, { ...properties });

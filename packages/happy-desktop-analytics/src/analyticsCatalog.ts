@@ -64,16 +64,60 @@ export type AnalyticsModelProperties = Pick<
     "model" | "model_provider_kind" | "provider_account_hash" | "effort"
 >;
 
+/** What one Subscriptions card says about its assistant. */
+export type AnalyticsAssistantStatus =
+    | "signed_in"
+    | "not_signed_in"
+    | "not_installed"
+    | "check_failed";
+
+/**
+ * Why a first-run Setup attempt did not end with Happy Agent connected, by the
+ * step that failed: never the message it failed with.
+ */
+export type AnalyticsSetupErrorCode =
+    /** No Node runtime on this machine. */
+    | "node_missing"
+    /** Fetching Happy Agent failed. */
+    | "download_failed"
+    /** Selecting or starting the downloaded Happy Agent failed. */
+    | "start_failed"
+    /** Happy Agent is installed but could not be reached. */
+    | "connect_failed"
+    /** The window could not read setup's own state from the app. */
+    | "state_unreadable"
+    /** The window closed while setup was still working, with no failure seen. */
+    | "closed_during_setup";
+
 /** Event-specific properties, by event name. */
 export interface AnalyticsEvents {
     readonly app_opened: { readonly launch_count: number };
     readonly onboarding_step_viewed: {
         readonly step: "setup" | "subscriptions" | "get_app" | "connect_phone";
     };
+    readonly onboarding_setup_result: (
+        | { readonly result: "ok" }
+        | { readonly result: "failed"; readonly error_code: AnalyticsSetupErrorCode }
+    ) & {
+        /** From the Setup step first showing in this window to its end. */
+        readonly duration_ms: number;
+    };
     readonly onboarding_assistant_status: {
         readonly assistant: "claude" | "codex" | "grok" | "custom";
         /** For `custom`, `signed_in` means a valid custom configuration. */
-        readonly status: "signed_in" | "not_signed_in" | "not_installed" | "check_failed";
+        readonly status: AnalyticsAssistantStatus;
+    };
+    readonly onboarding_command_copied: {
+        readonly assistant: "claude" | "codex" | "grok" | "custom";
+        /** `agent_prompt` is one of the Custom card's prompts for the person's own coding agent. */
+        readonly kind: "install" | "sign_in" | "agent_prompt";
+    };
+    /** The window closed on Subscriptions without Continue: what each card said then. */
+    readonly onboarding_subscriptions_exit: {
+        readonly claude_status: AnalyticsAssistantStatus | null;
+        readonly codex_status: AnalyticsAssistantStatus | null;
+        readonly grok_status: AnalyticsAssistantStatus | null;
+        readonly custom_status: AnalyticsAssistantStatus | null;
     };
     readonly onboarding_mobile: { readonly action: "paired" | "skipped" };
     readonly onboarding_completed: Readonly<Record<never, never>>;
@@ -111,8 +155,14 @@ export const ANALYTICS_PROPERTY_NAMES: ReadonlySet<string> = new Set([
     "happy_agent_version",
     "launch_count",
     "step",
+    "duration_ms",
     "assistant",
     "status",
+    "kind",
+    "claude_status",
+    "codex_status",
+    "grok_status",
+    "custom_status",
     "action",
     "source",
     "result",

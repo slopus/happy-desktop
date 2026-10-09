@@ -25,9 +25,12 @@ provide that ID.
 
 | event | fires when | payload |
 |---|---|---|
-| `app_opened` | main process is ready | `launch_count: number` |
+| `app_opened` | once per launch, when the active Happy Agent's version is known, or after 10 s without it (or at close, whichever is first) | `launch_count: number` |
 | `onboarding_step_viewed` | the step changes | `step: setup \| subscriptions \| get_app \| connect_phone` |
+| `onboarding_setup_result` | the Setup step ends: Happy Agent answers and setup moves on, or the window closes while Setup is still running (once per pass through Setup in a window) | `result: ok \| failed`, `error_code?: node_missing \| download_failed \| start_failed \| connect_failed \| state_unreadable \| closed_during_setup` (on close, the last failure Setup met, else `closed_during_setup`), `duration_ms: number` |
 | `onboarding_assistant_status` | Subscriptions continues | `assistant: claude \| codex \| grok \| custom`, `status: signed_in \| not_signed_in \| not_installed \| check_failed` (one event per card; for `custom`, `signed_in` means a valid custom configuration) |
+| `onboarding_command_copied` | a Subscriptions card's command or prompt is copied | `assistant: claude \| codex \| grok \| custom`, `kind: install \| sign_in \| agent_prompt` (never the copied text) |
+| `onboarding_subscriptions_exit` | the window closes on Subscriptions without continuing | `claude_status`, `codex_status`, `grok_status`, `custom_status`: the `onboarding_assistant_status` enum, or null while a card is still checking |
 | `onboarding_mobile` | mobile step ends | `action: paired \| skipped` |
 | `onboarding_completed` | onboarding reaches `complete` | none |
 | `conversation_created` | a new conversation starts | `model`, `model_provider_kind`, `provider_account_hash`, `effort` (as in `message_sent`), `source: workspace \| command_palette \| shortcut \| voice` |
@@ -36,6 +39,8 @@ provide that ID.
 | `bot_created` | a bot is created | `source: sidebar \| voice`, `result`, `error_code?` |
 | `subtask_created` | a subtask first appears | `result`, `task_depth` (the new subtask's depth, as in `message_sent`) |
 | `message_sent` | the user sends a message | the shared properties below |
+
+Events fired as the window closes (`onboarding_setup_result` with a close, `onboarding_subscriptions_exit`, a pending `app_opened`) are sent at once by `sendBeacon`. That is best effort: a close before the analytics library has loaded sends nothing.
 
 ### Shared `message_sent`
 

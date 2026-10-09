@@ -10,7 +10,8 @@ const PRODUCT_ANALYTICS_DISCLOSURE: readonly DataDisclosureGroup[] = [
         title: "Examples of what we send",
         items: [
             "Happy opened, and how many times",
-            "Which setup step you reached, and which subscriptions are signed in",
+            "Which setup step you reached, how long setup took, and which step failed if it did",
+            "Which subscriptions are signed in, and whether you copied a setup command (never the command)",
             "A conversation, project, workspace, or bot was created",
             "A message was sent, with its model and effort level, and whether it went to a bot or a subtask",
             "A one-way code that tells two accounts of one provider apart, never the account itself",

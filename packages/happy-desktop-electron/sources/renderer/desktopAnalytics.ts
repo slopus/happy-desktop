@@ -2,12 +2,15 @@ import {
     analyticsClientCreate,
     analyticsModel,
     analyticsProviderKind,
+    type AnalyticsAssistantStatus,
     type AnalyticsClient,
     type AnalyticsCommonProperties,
     type AnalyticsEventName,
     type AnalyticsEvents,
     type AnalyticsOs,
     type AnalyticsOutcome,
+    type AnalyticsSetupErrorCode,
+    type AnalyticsTrackOptions,
 } from "happy-desktop-analytics";
 import {
     happyAgentBotSubtasks,
@@ -24,6 +27,8 @@ import {
 import {
     localOnboardingStage,
     type LocalOnboardingAssistant,
+    type LocalOnboardingCommandCopy,
+    type LocalOnboardingView,
     type OnboardingStage,
 } from "happy-desktop-ui";
 import {
@@ -40,11 +45,16 @@ declare const __HAPPY_POSTHOG_API_KEY__: string | null;
 const INSTALL_ID_KEY = "happy.analytics.install-id.v1";
 const LAUNCH_COUNT_KEY = "happy.analytics.launch-count.v1";
 const USAGE_ANALYTICS_KEY = "happy.usage-analytics.v1";
+/** How long `app_opened` waits for the Happy Agent's version before going without it. */
+const APP_OPENED_VERSION_WAIT_MS = 10_000;
 
 export interface DesktopAnalytics {
     /** The Settings switch, shared with the settings screen. */
     readonly preference: UsageAnalyticsStore;
-    /** Counts this renderer start and reports it. */
+    /**
+     * Counts this renderer start and reports it once, as soon as the active
+     * Happy Agent's version is known or after a short wait without it.
+     */
     appOpened(): void;
     /** What one Happy Agent's workspace reported doing. */
     activity(happyAgentId: string, activity: HappyAgentActivity): void;
@@ -54,7 +64,7 @@ export interface DesktopAnalytics {
      * store, and subscribing it is what starts setup's machine work.
      */
     onboardingObserve(store: LocalOnboardingStore, welcome: WelcomeStore): LocalOnboardingStore;
-    /** Stops following the directory. */
+    /** Stops following the directory and the window's closing. */
     dispose(): void;
 }
 
@@ -146,7 +156,7 @@ function stepOf(stage: OnboardingStage): AnalyticsEvents["onboarding_step_viewed
 
 function assistantStatus(
     authentication: LocalOnboardingAssistant["authentication"],
-): AnalyticsEvents["onboarding_assistant_status"]["status"] | undefined {
+): AnalyticsAssistantStatus | undefined {
     switch (authentication) {
         case "valid":
             return "signed_in";
@@ -158,6 +168,58 @@ function assistantStatus(
             return "check_failed";
         case "checking":
             return undefined;
+    }
+}
+
+/**
+ * Which step of Setup is failing right now, read from what each step reports:
+ * the stage the shell says setup is at, the download controller's error for
+ * the work it is doing, and which of this window's own requests failed. Never
+ * the message any of them gave.
+ */
+function setupFailureOf(
+    snapshot: LocalOnboardingViewSnapshot,
+): AnalyticsSetupErrorCode | undefined {
+    const failure = snapshot.failure?.cause;
+    if (failure === "stateRead") return "state_unreadable";
+    switch (snapshot.onboarding?.stage) {
+        case "nodeMissing":
+            return "node_missing";
+        case "connectFailed":
+            return "connect_failed";
+        case "daemonDownload":
+        case "daemonStarting": {
+            if (failure === "download") return "download_failed";
+            if (failure === "start") return "start_failed";
+            // The controller's error belongs to the work it is doing: fetching
+            // until a verified release is ready here, starting it after.
+            if (!snapshot.daemon?.error) return undefined;
+            return snapshot.daemon.readyVersion === undefined ? "download_failed" : "start_failed";
+        }
+        default:
+            return undefined;
+    }
+}
+
+/** The Setup step as the step bar draws it, and not a finished Setup being looked at again. */
+function setupLive(snapshot: LocalOnboardingViewSnapshot, view: LocalOnboardingView): boolean {
+    return (
+        localOnboardingStage(view) === "setup" &&
+        view.kind !== "agent-ready" &&
+        snapshot.onboarding?.reachedStage === undefined
+    );
+}
+
+function commandKindOf(
+    kind: LocalOnboardingCommandCopy["kind"],
+): AnalyticsEvents["onboarding_command_copied"]["kind"] {
+    switch (kind) {
+        case "install":
+            return "install";
+        case "sign-in":
+            return "sign_in";
+        case "agent-prompt":
+            return "agent_prompt";
     }
 }
 
@@ -202,7 +264,16 @@ export function desktopAnalyticsCreate(options: {
         happyAgentId: string,
         event: E,
         properties: AnalyticsEvents[E],
-    ): void => client.track(event, { ...common(happyAgentId), ...properties });
+        trackOptions?: AnalyticsTrackOptions,
+    ): void => client.track(event, { ...common(happyAgentId), ...properties }, trackOptions);
+
+    // What must still be said when the window goes away, each sent at once by
+    // beacon because nothing queued after this moment would leave.
+    const closers = new Set<() => void>();
+    const closing = (): void => {
+        for (const closer of closers) closer();
+    };
+    window.addEventListener("pagehide", closing);
 
     const accountHashes = new Map<string, Promise<string | null>>();
     const accountHash = (providerId: string | undefined): Promise<string | null> => {
@@ -249,6 +320,7 @@ export function desktopAnalyticsCreate(options: {
         }
     };
     const directoryUnsubscribe = options.happyAgents.subscribe(subtasksFollow);
+    let appOpenedCancel = (): void => undefined;
     subtasksFollow();
 
     return {
@@ -257,7 +329,37 @@ export function desktopAnalyticsCreate(options: {
             const count = Number(storageRead(LAUNCH_COUNT_KEY) ?? "0");
             const launchCount = (Number.isSafeInteger(count) && count > 0 ? count : 0) + 1;
             storageWrite(LAUNCH_COUNT_KEY, String(launchCount));
-            track(LOCAL_HAPPY_AGENT_ID, "app_opened", { launch_count: launchCount });
+            // Reported on the Happy Agent the window is using, once its
+            // version is known: a launch reported before the first connection
+            // could only ever say it did not know which agent it ran.
+            const activeId = (): string =>
+                options.happyAgents.get().activeHappyAgentId ?? LOCAL_HAPPY_AGENT_ID;
+            let sent = false;
+            let timeout: ReturnType<typeof setTimeout> | undefined;
+            let unsubscribe = (): void => undefined;
+            const stop = (): void => {
+                clearTimeout(timeout);
+                unsubscribe();
+                closers.delete(close);
+            };
+            const send = (trackOptions?: AnalyticsTrackOptions): void => {
+                if (sent) return;
+                sent = true;
+                stop();
+                track(activeId(), "app_opened", { launch_count: launchCount }, trackOptions);
+            };
+            const close = (): void => send({ beacon: true });
+            const versionWait = (): void => {
+                const id = activeId();
+                const entry = options.happyAgents.get().happyAgents.find((item) => item.id === id);
+                if (entry?.version !== undefined) send();
+            };
+            appOpenedCancel = stop;
+            closers.add(close);
+            timeout = setTimeout(() => send(), APP_OPENED_VERSION_WAIT_MS);
+            unsubscribe = options.happyAgents.subscribe(versionWait);
+            if (sent) unsubscribe();
+            else versionWait();
         },
         activity(happyAgentId, activity) {
             switch (activity.kind) {
@@ -301,6 +403,62 @@ export function desktopAnalyticsCreate(options: {
             }
         },
         onboardingObserve(store, welcome) {
+            /** One pass through Setup in this window, from its first showing to its end. */
+            let setup:
+                | { readonly startedAt: number; failure?: AnalyticsSetupErrorCode }
+                | undefined;
+            const setupEnd = (
+                outcome:
+                    | { readonly result: "ok" }
+                    | { readonly result: "failed"; readonly error_code: AnalyticsSetupErrorCode },
+                trackOptions?: AnalyticsTrackOptions,
+            ): void => {
+                if (!setup) return;
+                const durationMs = Math.round(performance.now() - setup.startedAt);
+                setup = undefined;
+                track(
+                    LOCAL_HAPPY_AGENT_ID,
+                    "onboarding_setup_result",
+                    { ...outcome, duration_ms: durationMs },
+                    trackOptions,
+                );
+            };
+            const setupClose = (): void =>
+                // Setup retries on its own and never gives up, so a pass that
+                // is still running when the window goes is reported here, with
+                // the last failure it met if it met one.
+                setupEnd(
+                    { result: "failed", error_code: setup?.failure ?? "closed_during_setup" },
+                    { beacon: true },
+                );
+            const subscriptionsClose = (): void => {
+                const snapshot = store.get();
+                const view = localOnboardingView(snapshot);
+                if (
+                    view?.kind !== "provider-authentication" ||
+                    snapshot.pending ||
+                    snapshot.onboarding?.reachedStage !== undefined ||
+                    !welcome.get().welcomeAcknowledged
+                )
+                    return;
+                const statusOf = (id: LocalOnboardingAssistant["id"]) => {
+                    const assistant = view.assistants.find((item) => item.id === id);
+                    return (assistant && assistantStatus(assistant.authentication)) ?? null;
+                };
+                track(
+                    LOCAL_HAPPY_AGENT_ID,
+                    "onboarding_subscriptions_exit",
+                    {
+                        claude_status: statusOf("claude"),
+                        codex_status: statusOf("codex"),
+                        grok_status: statusOf("grok"),
+                        custom_status: assistantStatus(view.custom.authentication) ?? null,
+                    },
+                    { beacon: true },
+                );
+            };
+            closers.add(setupClose);
+            closers.add(subscriptionsClose);
             let step: AnalyticsEvents["onboarding_step_viewed"]["step"] | undefined;
             let mobile: string | undefined;
             let stage: string | undefined;
@@ -312,6 +470,21 @@ export function desktopAnalyticsCreate(options: {
                         step = next;
                         track(LOCAL_HAPPY_AGENT_ID, "onboarding_step_viewed", { step: next });
                     }
+                    if (setupLive(snapshot, view)) setup ??= { startedAt: performance.now() };
+                }
+                if (setup) {
+                    const failure = setupFailureOf(snapshot);
+                    if (failure) setup.failure = failure;
+                    const stage = snapshot.onboarding?.stage;
+                    // Setup ends when Happy Agent answers and setup moves on to
+                    // what the machine has. Leaving local setup altogether is
+                    // neither a success nor a failure of it.
+                    if (stage === "inactive") setup = undefined;
+                    else if (
+                        stage === "complete" ||
+                        (view !== undefined && localOnboardingStage(view) !== "setup")
+                    )
+                        setupEnd({ result: "ok" });
                 }
                 const mobileStatus = snapshot.happyMobile?.status;
                 if (mobileStatus !== mobile) {
@@ -362,10 +535,20 @@ export function desktopAnalyticsCreate(options: {
                     }
                     store.assistantsContinue();
                 },
+                commandCopied(copy) {
+                    track(LOCAL_HAPPY_AGENT_ID, "onboarding_command_copied", {
+                        assistant: copy.assistant,
+                        kind: commandKindOf(copy.kind),
+                    });
+                    store.commandCopied(copy);
+                },
             };
         },
         dispose() {
             directoryUnsubscribe();
+            appOpenedCancel();
+            window.removeEventListener("pagehide", closing);
+            closers.clear();
         },
     };
 }
