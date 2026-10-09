@@ -37,6 +37,7 @@ import {
     type LocalOnboardingViewSnapshot,
 } from "./localOnboardingStore";
 import { LOCAL_HAPPY_AGENT_ID, type HappyAgentDirectoryStore } from "./happyAgentDirectoryStore";
+import type { DesktopSystem } from "../shared/desktopContract";
 import { localWebBuild } from "./localWebBuild";
 
 declare const __HAPPY_RENDERER_VERSION__: string;
@@ -177,18 +178,30 @@ function assistantStatus(
  * the work it is doing, and which of this window's own requests failed. Never
  * the message any of them gave.
  */
-function setupFailureOf(
+export function setupFailureOf(
     snapshot: LocalOnboardingViewSnapshot,
+    /** The local Happy Agent answered with a protocol this window cannot use. */
+    protocolMismatch = false,
 ): AnalyticsSetupErrorCode | undefined {
     const failure = snapshot.failure?.cause;
     if (failure === "stateRead") return "state_unreadable";
     switch (snapshot.onboarding?.stage) {
         case "nodeMissing":
             return "node_missing";
-        case "connectFailed":
-            return "connect_failed";
+        case "connectFailed": {
+            // An older shell sends no code, and its failure stays a failed connection.
+            const runtime = snapshot.runtime;
+            return runtime?.phase === "error" && runtime.code === "start_timeout"
+                ? "start_timeout"
+                : "connect_failed";
+        }
         case "daemonDownload":
         case "daemonStarting": {
+            if (
+                snapshot.daemon?.error !== undefined &&
+                snapshot.daemon.errorCode === "start_timeout"
+            )
+                return "start_timeout";
             if (failure === "download") return "download_failed";
             if (failure === "start") return "start_failed";
             // The controller's error belongs to the work it is doing: fetching
@@ -197,7 +210,7 @@ function setupFailureOf(
             return snapshot.daemon.readyVersion === undefined ? "download_failed" : "start_failed";
         }
         default:
-            return undefined;
+            return protocolMismatch ? "version_mismatch" : undefined;
     }
 }
 
@@ -231,14 +244,23 @@ function commandKindOf(
 export function desktopAnalyticsCreate(options: {
     readonly development: boolean;
     readonly happyAgents: HappyAgentDirectoryStore;
+    /** What the shell says about this machine; absent from older shells. */
+    readonly system?: DesktopSystem;
+    /** Replaces the PostHog client, for tests. */
+    readonly client?: AnalyticsClient;
 }): DesktopAnalytics {
     const preference = usageAnalyticsStoreCreate(usageAnalyticsPersistence());
     const installation = installId();
-    const client: AnalyticsClient = analyticsClientCreate({
-        apiKey: options.development ? undefined : (__HAPPY_POSTHOG_API_KEY__ ?? undefined),
-        distinctId: installation,
-        enabled: () => preference.get().usageAnalyticsEnabled,
-    });
+    const client: AnalyticsClient =
+        options.client ??
+        analyticsClientCreate({
+            apiKey: options.development ? undefined : (__HAPPY_POSTHOG_API_KEY__ ?? undefined),
+            distinctId: installation,
+            enabled: () => preference.get().usageAnalyticsEnabled,
+        });
+    // Loaded now rather than on the first event, so an event sent as the
+    // window closes in its first seconds still has a library to send it.
+    client.preload();
     const os = desktopOs();
 
     /**
@@ -255,6 +277,8 @@ export function desktopAnalyticsCreate(options: {
             app_version: __HAPPY_RENDERER_VERSION__,
             flavor: localWebBuild ? "nightly" : "standard",
             os,
+            os_version: options.system?.osVersion ?? null,
+            arch: options.system?.arch ?? null,
             agent_os: local ? os : null,
             agent_location: entry ? (local ? "local" : "remote") : null,
             happy_agent_version: entry?.version ?? null,
@@ -321,6 +345,10 @@ export function desktopAnalyticsCreate(options: {
     };
     const directoryUnsubscribe = options.happyAgents.subscribe(subtasksFollow);
     let appOpenedCancel = (): void => undefined;
+    /** Whether the local Happy Agent's protocol is one this window cannot use. */
+    const localProtocolMismatch = (): boolean =>
+        options.happyAgents.get().happyAgents.find((item) => item.id === LOCAL_HAPPY_AGENT_ID)
+            ?.protocolMismatch !== undefined;
     subtasksFollow();
 
     return {
@@ -473,7 +501,7 @@ export function desktopAnalyticsCreate(options: {
                     if (setupLive(snapshot, view)) setup ??= { startedAt: performance.now() };
                 }
                 if (setup) {
-                    const failure = setupFailureOf(snapshot);
+                    const failure = setupFailureOf(snapshot, localProtocolMismatch());
                     if (failure) setup.failure = failure;
                     const stage = snapshot.onboarding?.stage;
                     // Setup ends when Happy Agent answers and setup moves on to
@@ -484,7 +512,11 @@ export function desktopAnalyticsCreate(options: {
                         stage === "complete" ||
                         (view !== undefined && localOnboardingStage(view) !== "setup")
                     )
-                        setupEnd({ result: "ok" });
+                        setupEnd(
+                            localProtocolMismatch()
+                                ? { result: "failed", error_code: "version_mismatch" }
+                                : { result: "ok" },
+                        );
                 }
                 const mobileStatus = snapshot.happyMobile?.status;
                 if (mobileStatus !== mobile) {

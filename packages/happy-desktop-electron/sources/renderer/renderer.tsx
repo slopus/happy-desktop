@@ -1148,6 +1148,7 @@ if (mediaPreviewBridge) {
         const analytics = desktopAnalyticsCreate({
             development: browserLocal || desktopBridge.buildIdentity !== undefined,
             happyAgents,
+            ...(desktopBridge.system ? { system: desktopBridge.system } : {}),
         });
         appDisposers.push(analytics.dispose);
         analytics.appOpened();

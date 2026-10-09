@@ -29,6 +29,12 @@ export interface AnalyticsTrackOptions {
 }
 
 export interface AnalyticsClient {
+    /**
+     * Loads the library now when there is a key and analytics is on, so an
+     * event sent as the window closes does not wait on a load that cannot
+     * finish. Does nothing otherwise.
+     */
+    preload(): void;
     track<E extends AnalyticsEventName>(
         event: E,
         properties: AnalyticsEventProperties<E>,
@@ -51,7 +57,7 @@ export interface AnalyticsClientOptions {
  * person's home directory, the referrer, screen, browser, or session — and no
  * person property ever leaves the window.
  */
-function analyticsBeforeSend(capture: CaptureResult | null): CaptureResult | null {
+export function analyticsBeforeSend(capture: CaptureResult | null): CaptureResult | null {
     if (capture === null) return null;
     const properties: Record<string, unknown> = {};
     for (const [name, value] of Object.entries(capture.properties)) {
@@ -116,6 +122,10 @@ export function analyticsClientCreate(options: AnalyticsClientOptions): Analytic
         return loading;
     };
     return {
+        preload() {
+            if (apiKey === undefined || apiKey.length === 0 || !options.enabled()) return;
+            void load(apiKey);
+        },
         track(event, properties, trackOptions) {
             if (apiKey === undefined || apiKey.length === 0 || !options.enabled()) return;
             if (trackOptions?.beacon && loaded) {

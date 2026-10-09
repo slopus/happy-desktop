@@ -11,7 +11,7 @@ onboarding and how they create and use things. Nothing else.
 - No IP from the desktop: events set `$ip: null` and `$geoip_disable: true`. The project's "Discard client IP data" stays off, so PostHog still receives and may keep the request's IP. Settings says so: "Our analytics provider, PostHog, receives your IP address with each event and may keep it; we turn off its location lookup and don't use your IP."
 - No `$current_url`, no paths, no project, repo, branch or bot names, no prompts or message text, no emails, display names or hostnames.
 - No autocapture, pageviews, session recording or person properties.
-- Every event carries only `app_version`, `flavor` (`standard | nightly`), `os` (`mac | win | linux`, where the desktop runs), and for the connected Happy Agent `agent_os` (`mac | win | linux`), `agent_location` (`local | remote`) and `happy_agent_version`.
+- Every event carries only `app_version`, `flavor` (`standard | nightly`), `os` (`mac | win | linux`, where the desktop runs), `os_version` (the bare OS version number, e.g. `15.6.0` or `10.0.26100`; null on Linux, which reports only a kernel release, and on older shells), `arch` (`arm64 | x64 | other`, the desktop app's own architecture; null on older shells), and for the connected Happy Agent `agent_os` (`mac | win | linux`), `agent_location` (`local | remote`) and `happy_agent_version`.
 - Only the desktop app sends events. Happy Agent sends none; it only hands the desktop the phone-matching user ID. The phone keeps its own events. `message_sent` is one event shared with the phone and web, with the same name and properties (see below).
 - Default on, with an off switch in Settings. `DO_NOT_TRACK=1` turns it off too.
 
@@ -27,7 +27,7 @@ provide that ID.
 |---|---|---|
 | `app_opened` | once per launch, when the active Happy Agent's version is known, or after 10 s without it (or at close, whichever is first) | `launch_count: number` |
 | `onboarding_step_viewed` | the step changes | `step: setup \| subscriptions \| get_app \| connect_phone` |
-| `onboarding_setup_result` | the Setup step ends: Happy Agent answers and setup moves on, or the window closes while Setup is still running (once per pass through Setup in a window) | `result: ok \| failed`, `error_code?: node_missing \| download_failed \| start_failed \| connect_failed \| state_unreadable \| closed_during_setup` (on close, the last failure Setup met, else `closed_during_setup`), `duration_ms: number` |
+| `onboarding_setup_result` | the Setup step ends: Happy Agent answers and setup moves on, or the window closes while Setup is still running (once per pass through Setup in a window) | `result: ok \| failed`, `error_code?: node_missing \| download_failed \| start_failed \| start_timeout \| version_mismatch \| connect_failed \| state_unreadable \| closed_during_setup` (on close, the last failure Setup met, else `closed_during_setup`), `duration_ms: number` |
 | `onboarding_assistant_status` | Subscriptions continues | `assistant: claude \| codex \| grok \| custom`, `status: signed_in \| not_signed_in \| not_installed \| check_failed` (one event per card; for `custom`, `signed_in` means a valid custom configuration) |
 | `onboarding_command_copied` | a Subscriptions card's command or prompt is copied | `assistant: claude \| codex \| grok \| custom`, `kind: install \| sign_in \| agent_prompt` (never the copied text) |
 | `onboarding_subscriptions_exit` | the window closes on Subscriptions without continuing | `claude_status`, `codex_status`, `grok_status`, `custom_status`: the `onboarding_assistant_status` enum, or null while a card is still checking |
@@ -40,7 +40,9 @@ provide that ID.
 | `subtask_created` | a subtask first appears | `result`, `task_depth` (the new subtask's depth, as in `message_sent`) |
 | `message_sent` | the user sends a message | the shared properties below |
 
-Events fired as the window closes (`onboarding_setup_result` with a close, `onboarding_subscriptions_exit`, a pending `app_opened`) are sent at once by `sendBeacon`. That is best effort: a close before the analytics library has loaded sends nothing.
+Events fired as the window closes (`onboarding_setup_result` with a close, `onboarding_subscriptions_exit`, a pending `app_opened`) are sent at once by `sendBeacon`. That is best effort; the library is loaded at startup when analytics is on so it is ready by then. A window driven by automation (`navigator.webdriver`, as Playwright makes CI's boot checks) has its events dropped by PostHog itself, so CI sends none.
+
+`onboarding_setup_result.error_code` comes only from fixed facts: the setup stage, which of the window's own requests failed, the shell's `start_timeout` code (a start command killed by its timeout, or an agent that never answered), and the local connection's protocol check (`version_mismatch`). No error message is classified or sent. An older shell sends no code, and its failures keep the stage-based code. `node_missing` is reachable only with an externally managed daemon; a managed Happy Agent brings its own Node. There is no `port_in_use`: Happy Agent reports a busy port only as message text, so it cannot be told apart without parsing it.
 
 ### Shared `message_sent`
 

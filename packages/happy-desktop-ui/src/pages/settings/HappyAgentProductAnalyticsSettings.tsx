@@ -10,12 +10,12 @@ const PRODUCT_ANALYTICS_DISCLOSURE: readonly DataDisclosureGroup[] = [
         title: "Examples of what we send",
         items: [
             "Happy opened, and how many times",
-            "Which setup step you reached, how long setup took, and which step failed if it did",
+            "Which setup step you reached, how long setup took, and which step failed if it did (a fixed code such as download failed or timed out, never the error message)",
             "Which subscriptions are signed in, and whether you copied a setup command (never the command)",
             "A conversation, project, workspace, or bot was created",
             "A message was sent, with its model and effort level, and whether it went to a bot or a subtask",
             "A one-way code that tells two accounts of one provider apart, never the account itself",
-            "App and Happy Agent versions, and the operating system",
+            "App and Happy Agent versions, the operating system and its version number, and the chip type (Apple silicon/ARM or Intel/AMD)",
         ],
     },
     {
@@ -26,6 +26,7 @@ const PRODUCT_ANALYTICS_DISCLOSURE: readonly DataDisclosureGroup[] = [
             "Files, file paths, or folder names",
             "Project, repository, branch, workspace, or bot names",
             "Your name, email address, or computer name",
+            "Error messages, logs, or anything else a failure says about your machine",
             "Screen recordings, clicks, keystrokes, or page addresses",
         ],
     },

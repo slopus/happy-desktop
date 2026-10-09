@@ -21,6 +21,10 @@ export interface AnalyticsCommonProperties {
     readonly flavor: "standard" | "nightly";
     /** Where the desktop runs. */
     readonly os: AnalyticsOs | null;
+    /** The bare OS version number, e.g. `15.6.0` or `10.0.26100`; null on Linux and older shells. */
+    readonly os_version: string | null;
+    /** The desktop app's own architecture; null on shells too old to say. */
+    readonly arch: "arm64" | "x64" | "other" | null;
     readonly agent_os: AnalyticsOs | null;
     readonly agent_location: "local" | "remote" | null;
     readonly happy_agent_version: string | null;
@@ -82,6 +86,10 @@ export type AnalyticsSetupErrorCode =
     | "download_failed"
     /** Selecting or starting the downloaded Happy Agent failed. */
     | "start_failed"
+    /** Happy Agent was started but did not answer in time. */
+    | "start_timeout"
+    /** Happy Agent answered, but speaks a protocol this desktop cannot use. */
+    | "version_mismatch"
     /** Happy Agent is installed but could not be reached. */
     | "connect_failed"
     /** The window could not read setup's own state from the app. */
@@ -150,6 +158,8 @@ export const ANALYTICS_PROPERTY_NAMES: ReadonlySet<string> = new Set([
     "app_version",
     "flavor",
     "os",
+    "os_version",
+    "arch",
     "agent_os",
     "agent_location",
     "happy_agent_version",
