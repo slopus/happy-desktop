@@ -135,7 +135,7 @@ export {
     type LivePerformanceStore,
 } from "./LivePerformanceIndicator";
 export { Button, type ButtonProps, type ButtonSize, type ButtonVariant } from "./Button";
-export { QRCode, type QRCodeProps } from "./QRCode";
+export { QRCode, type QRCodeMark, type QRCodeProps } from "./QRCode";
 export { ChannelHeader, type ChannelHeaderProps, type ChannelMember } from "./ChannelHeader";
 export { PanelHeader, type PanelHeaderProps } from "./PanelHeader";
 export { AudienceToggle, type AudienceToggleProps, type AudienceValue } from "./AudienceToggle";
@@ -539,6 +539,7 @@ export {
     type LocalOnboardingScreenProps,
     type LocalOnboardingView,
 } from "./LocalOnboardingScreen";
+export { ProfileSetupScreen, type ProfileSetupScreenProps } from "./ProfileSetupScreen";
 export {
     DesktopMobileSetup,
     type DesktopMobileSetupProps,

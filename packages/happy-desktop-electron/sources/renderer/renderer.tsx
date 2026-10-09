@@ -405,11 +405,6 @@ function DesktopOnboardingGate(props: {
             onHappyMobilePlatformSelect={(platform) =>
                 props.store.happyMobilePlatformSelect(platform)
             }
-            // Local setup never asks for a profile; only a remote Happy Agent does.
-            onProfileCreate={() => undefined}
-            onProfileEmailChange={() => undefined}
-            onProfileNameChange={() => undefined}
-            onProjectChoose={() => props.store.projectChoose()}
             onStageSelect={(stage) => {
                 if (stage === "setup" || stage === "subscriptions") props.store.stepBack(stage);
             }}

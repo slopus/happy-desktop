@@ -31,12 +31,12 @@ export type OnboardingStepsProps =
 const desktopStages = [
     { id: "setup", label: "Setup" },
     { id: "subscriptions", label: "Subscriptions" },
-    { id: "get-app", label: "Get app" },
-    { id: "connect-phone", label: "Connect phone" },
+    { id: "get-app", label: "Get Mobile App" },
+    { id: "connect-phone", label: "Link Mobile App" },
 ] as const satisfies readonly { readonly id: OnboardingStage; readonly label: string }[];
 const mobileStages = [
-    { id: "get-app", label: "Get app" },
-    { id: "connect-phone", label: "Connect phone" },
+    { id: "get-app", label: "Get Mobile App" },
+    { id: "connect-phone", label: "Link Mobile App" },
 ] as const;
 
 function segments(

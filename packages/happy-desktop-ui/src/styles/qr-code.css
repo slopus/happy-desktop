@@ -1,11 +1,73 @@
 .happy-qr-code {
+    position: relative;
     box-sizing: border-box;
     display: block;
     flex: none;
     max-width: 100%;
+    overflow: hidden;
     border-radius: var(--happy-radius-shell);
     background: var(--page-canvas);
     box-shadow: 0 12px 36px var(--shadow-floating);
     color: var(--button-primary-background);
-    image-rendering: pixelated;
+    /* The mark is measured against the code's own box. */
+    container-type: size;
+}
+
+.happy-qr-code__symbol {
+    display: block;
+    width: 100%;
+    height: 100%;
+    fill: currentcolor;
+}
+
+/*
+ * The mark, centred in the cleared modules. Every length is a share of the
+ * code's width, drawn to the 176px reference, so the mark keeps the approved
+ * proportions at any size the layout gives the code. Text is trimmed to its cap
+ * height and baseline, so the gaps are the visible gaps between glyph, name,
+ * and action, and the stack centres on its ink.
+ */
+.happy-qr-code__mark {
+    --happy-qr-code-mark-unit: calc(100cqw / 176);
+    --happy-qr-code-mark-glyph: calc(16 * var(--happy-qr-code-mark-unit));
+
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: var(--qr-code-mark);
+    font-family: var(--happy-font-ui);
+    font-synthesis: none;
+    white-space: nowrap;
+    pointer-events: none;
+    user-select: none;
+}
+
+.happy-qr-code__mark-name,
+.happy-qr-code__mark-action {
+    display: block;
+    line-height: 1;
+    text-box: trim-both cap alphabetic;
+}
+
+.happy-qr-code__mark-name {
+    margin-top: calc(4 * var(--happy-qr-code-mark-unit));
+    font-size: calc(9.5 * var(--happy-qr-code-mark-unit));
+    font-weight: 650;
+    letter-spacing: -0.005em;
+}
+
+.happy-qr-code__mark-action {
+    margin-top: calc(3.5 * var(--happy-qr-code-mark-unit));
+    font-size: calc(8 * var(--happy-qr-code-mark-unit));
+    font-weight: 500;
+}
+
+/* 22px on a 136px pairing code. */
+.happy-qr-code__mark-devices {
+    display: block;
+    width: calc(22 / 136 * 100cqw);
+    height: calc(22 / 136 * 100cqw);
 }

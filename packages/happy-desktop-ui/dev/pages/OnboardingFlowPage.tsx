@@ -43,10 +43,6 @@ function onboarding(
             onExternalOpen={noop}
             onHappyMobileConnect={noop}
             onHappyMobileSkip={noop}
-            onProfileCreate={noop}
-            onProfileEmailChange={noop}
-            onProfileNameChange={noop}
-            onProjectChoose={noop}
             onStageSelect={noop}
             showSteps
             view={view}
@@ -210,7 +206,7 @@ const screens: readonly {
     },
     {
         id: "mobile",
-        label: "Mobile · take Happy with you",
+        label: "Get Mobile App · iPhone",
         render: () =>
             onboarding(
                 { kind: "happy-mobile-desktop", step: { kind: "intro", platform: "ios" } },
@@ -218,8 +214,17 @@ const screens: readonly {
             ),
     },
     {
+        id: "mobile-android",
+        label: "Get Mobile App · Android",
+        render: () =>
+            onboarding(
+                { kind: "happy-mobile-desktop", step: { kind: "intro", platform: "android" } },
+                "get-app",
+            ),
+    },
+    {
         id: "connect-code-loading",
-        label: "Connect phone · code on its way (shown at least 1s)",
+        label: "Link Mobile App · code on its way (shown at least 1s)",
         render: () =>
             onboarding(
                 {
@@ -231,7 +236,7 @@ const screens: readonly {
     },
     {
         id: "connect-phone",
-        label: "Connect phone · QR",
+        label: "Link Mobile App · QR",
         render: () =>
             onboarding(
                 {
@@ -250,7 +255,7 @@ const screens: readonly {
     },
     {
         id: "phone-connected",
-        label: "Connect phone · connected",
+        label: "Link Mobile App · linked, the last page",
         render: () =>
             onboarding(
                 { kind: "happy-mobile-desktop", step: { kind: "connected", online: true } },

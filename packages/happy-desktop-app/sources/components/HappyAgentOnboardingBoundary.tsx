@@ -5,7 +5,12 @@ import type {
     HappyAgentProfileStore,
     WelcomeStore,
 } from "happy-desktop-state";
-import { LocalOnboardingScreen, WelcomeScreen, type LocalOnboardingView } from "happy-desktop-ui";
+import {
+    LocalOnboardingScreen,
+    ProfileSetupScreen,
+    WelcomeScreen,
+    type LocalOnboardingView,
+} from "happy-desktop-ui";
 import { happyAgentWelcomeSlides } from "../onboarding/happyAgentWelcomeSlides";
 
 export function HappyAgentOnboardingBoundary(props: {
@@ -54,17 +59,33 @@ export function HappyAgentOnboardingBoundary(props: {
                 slides={happyAgentWelcomeSlides}
             />
         );
+    // A remote Happy Agent admits a new team member only once their profile
+    // exists. Local setup never asks for one.
+    if (!snapshot.state.steps.profile.done) {
+        const message = profile.saveError || snapshot.error;
+        return (
+            <ProfileSetupScreen
+                appearance={appearance.mode}
+                busy={profile.loading || profile.saving || !profileAvailable}
+                email={profile.email}
+                {...(message ? { message } : {})}
+                name={profile.name}
+                onCreate={() => {
+                    if (
+                        profileAvailable &&
+                        !profile.loading &&
+                        profile.name.trim() &&
+                        profile.email.trim()
+                    )
+                        void props.profile.profileSave().catch(() => undefined);
+                }}
+                onEmailChange={props.profile.emailUpdate}
+                onExternalOpen={props.onExternalOpen}
+                onNameChange={props.profile.displayNameUpdate}
+            />
+        );
+    }
     const view = ((): LocalOnboardingView => {
-        if (!snapshot.state.steps.profile.done)
-            return {
-                kind: "profile-required",
-                busy: profile.loading || profile.saving || !profileAvailable,
-                name: profile.name,
-                email: profile.email,
-                ...(profile.saveError || snapshot.error
-                    ? { message: profile.saveError ?? snapshot.error }
-                    : {}),
-            };
         switch (mobile.status) {
             case "desktop":
                 return { kind: "happy-mobile-desktop", step: mobile.step };
@@ -104,18 +125,6 @@ export function HappyAgentOnboardingBoundary(props: {
             onHappyMobileConnect={props.store.mobile.happyMobileConnect}
             onHappyMobileSkip={props.store.mobile.happyMobileSkip}
             onHappyMobilePlatformSelect={props.store.mobile.happyMobilePlatformSelect}
-            onProfileNameChange={props.profile.displayNameUpdate}
-            onProfileEmailChange={props.profile.emailUpdate}
-            onProfileCreate={() => {
-                if (
-                    profileAvailable &&
-                    !profile.loading &&
-                    profile.name.trim() &&
-                    profile.email.trim()
-                )
-                    void props.profile.profileSave().catch(() => undefined);
-            }}
-            onProjectChoose={() => undefined}
         />
     );
 }

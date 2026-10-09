@@ -79,19 +79,28 @@
     text-underline-offset: 3px;
 }
 
+/*
+ * The store code beside its platform pick. Under the centre line hang the
+ * subtitle (48px with the core's padding and gap), the code, and both footer
+ * slots (120px). The code is 176px, large enough for its store mark to read,
+ * while that fits, and a shorter window shrinks it to 136px at the smallest.
+ */
 .happy-desktop-mobile-setup__download {
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 16px;
+    --happy-qr-code-size: clamp(136px, 50cqh - 184px, 176px);
 }
 
+/* Each choice is a 36px pill (radius 18) inside 4px of padding, so the track's
+   22px corner is concentric with the selected pill. */
 .happy-desktop-mobile-setup__platform {
     display: flex;
     flex-direction: column;
     gap: 4px;
     width: 104px;
-    border-radius: 8px;
+    border-radius: 22px;
     background: var(--surface);
     padding: 4px;
 }

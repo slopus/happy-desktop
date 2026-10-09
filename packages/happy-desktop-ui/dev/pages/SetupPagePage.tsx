@@ -1,6 +1,7 @@
 import { SetupChoice } from "../../src/SetupChoice";
 import { DesktopMobileSetup, type DesktopMobileSetupStep } from "../../src/DesktopMobileSetup";
 import { LocalOnboardingScreen, type LocalOnboardingView } from "../../src/LocalOnboardingScreen";
+import { ProfileSetupScreen } from "../../src/ProfileSetupScreen";
 import { SetupHandoff, SetupPage } from "../../src/SetupPage";
 import { ThemeScope } from "../../src/ThemeScope";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
@@ -14,10 +15,6 @@ const desktopSteps: readonly { label: string; view: LocalOnboardingView }[] = [
     { label: "Progress · setup", view: { kind: "agent-setup", phase: { kind: "preparing" } } },
     { label: "Progress · assistants", view: { kind: "examining" } },
     {
-        label: "Progress · profile",
-        view: { kind: "profile-required", name: "", email: "", busy: false },
-    },
-    {
         label: "Progress · retry",
         view: {
             kind: "connect-failed",
@@ -27,28 +24,12 @@ const desktopSteps: readonly { label: string; view: LocalOnboardingView }[] = [
     },
 ];
 
-const firstProjectSteps: readonly { label: string; view: LocalOnboardingView }[] = [
+const handoffSteps: readonly { label: string; busy: boolean; message?: string }[] = [
+    { label: "Handoff · opening the conversation", busy: true },
     {
-        label: "First project · opening the conversation",
-        view: { kind: "finishing", busy: true },
-    },
-    {
-        label: "First project · setup retry",
-        view: {
-            kind: "finishing",
-            busy: false,
-            message: "The conversation could not be opened. Try again.",
-        },
-    },
-    { label: "First project · manual folder", view: { kind: "project", busy: false } },
-    {
-        label: "First project · manual retry",
-        view: {
-            kind: "project",
-            busy: false,
-            message:
-                "That folder is not in a Git repository. Choose a folder with a Git repository in it, or run git init there first.",
-        },
+        label: "Handoff · setup retry",
+        busy: false,
+        message: "The conversation could not be opened. Try again.",
     },
 ];
 
@@ -330,10 +311,6 @@ export function SetupPagePage() {
                             onConnectRetry={noop}
                             onHappyMobileConnect={noop}
                             onHappyMobileSkip={noop}
-                            onProfileCreate={noop}
-                            onProfileEmailChange={noop}
-                            onProfileNameChange={noop}
-                            onProjectChoose={noop}
                             view={{
                                 kind: "agent-setup",
                                 phase: {
@@ -363,10 +340,6 @@ export function SetupPagePage() {
                             onConnectRetry={noop}
                             onHappyMobileConnect={noop}
                             onHappyMobileSkip={noop}
-                            onProfileCreate={noop}
-                            onProfileEmailChange={noop}
-                            onProfileNameChange={noop}
-                            onProjectChoose={noop}
                             view={{ kind: "examining" }}
                         />
                     </ThemeScope>
@@ -387,10 +360,6 @@ export function SetupPagePage() {
                             onConnectRetry={noop}
                             onHappyMobileConnect={noop}
                             onHappyMobileSkip={noop}
-                            onProfileCreate={noop}
-                            onProfileEmailChange={noop}
-                            onProfileNameChange={noop}
-                            onProjectChoose={noop}
                             view={{
                                 assistants: [
                                     {
@@ -433,10 +402,6 @@ export function SetupPagePage() {
                             onConnectRetry={noop}
                             onHappyMobileConnect={noop}
                             onHappyMobileSkip={noop}
-                            onProfileCreate={noop}
-                            onProfileEmailChange={noop}
-                            onProfileNameChange={noop}
-                            onProjectChoose={noop}
                             view={{
                                 assistants: [
                                     {
@@ -479,10 +444,6 @@ export function SetupPagePage() {
                             onConnectRetry={noop}
                             onHappyMobileConnect={noop}
                             onHappyMobileSkip={noop}
-                            onProfileCreate={noop}
-                            onProfileEmailChange={noop}
-                            onProfileNameChange={noop}
-                            onProjectChoose={noop}
                             view={{
                                 assistants: [
                                     {
@@ -523,10 +484,6 @@ export function SetupPagePage() {
                             onConnectRetry={noop}
                             onHappyMobileConnect={noop}
                             onHappyMobileSkip={noop}
-                            onProfileCreate={noop}
-                            onProfileEmailChange={noop}
-                            onProfileNameChange={noop}
-                            onProjectChoose={noop}
                             view={{
                                 kind: "agent-ready",
                                 nodeVersion: "v22.11.0",
@@ -551,10 +508,6 @@ export function SetupPagePage() {
                             onConnectRetry={noop}
                             onHappyMobileConnect={noop}
                             onHappyMobileSkip={noop}
-                            onProfileCreate={noop}
-                            onProfileEmailChange={noop}
-                            onProfileNameChange={noop}
-                            onProjectChoose={noop}
                             view={{
                                 assistants: [
                                     {
@@ -598,10 +551,6 @@ export function SetupPagePage() {
                             onConnectRetry={noop}
                             onHappyMobileConnect={noop}
                             onHappyMobileSkip={noop}
-                            onProfileCreate={noop}
-                            onProfileEmailChange={noop}
-                            onProfileNameChange={noop}
-                            onProjectChoose={noop}
                             view={{ busy: false, kind: "happy-mobile-offer" }}
                         />
                     </ThemeScope>
@@ -622,10 +571,6 @@ export function SetupPagePage() {
                             onConnectRetry={noop}
                             onHappyMobileConnect={noop}
                             onHappyMobileSkip={noop}
-                            onProfileCreate={noop}
-                            onProfileEmailChange={noop}
-                            onProfileNameChange={noop}
-                            onProjectChoose={noop}
                             view={{
                                 data: "happy://terminal?eyJ2IjoxLCJwYWlyaW5nSWQiOiJibHVlcHJpbnQtcGFpcmluZyIsIm5vbmNlIjoiaGFwcHktbW9iaWxlIn0",
                                 expiresAt: 1_900_000_000_000,
@@ -650,10 +595,6 @@ export function SetupPagePage() {
                             onConnectRetry={noop}
                             onHappyMobileConnect={noop}
                             onHappyMobileSkip={noop}
-                            onProfileCreate={noop}
-                            onProfileEmailChange={noop}
-                            onProfileNameChange={noop}
-                            onProjectChoose={noop}
                             view={{
                                 busy: false,
                                 kind: "happy-mobile-failed",
@@ -682,10 +623,6 @@ export function SetupPagePage() {
                                 onConnectRetry={noop}
                                 onHappyMobileConnect={noop}
                                 onHappyMobileSkip={noop}
-                                onProfileCreate={noop}
-                                onProfileEmailChange={noop}
-                                onProfileNameChange={noop}
-                                onProjectChoose={noop}
                             />
                         </ThemeScope>
                     </div>
@@ -713,42 +650,46 @@ export function SetupPagePage() {
                     </div>
                 </Specimen>
             ))}
-            {firstProjectSteps.map(({ label, view }, index) => (
+            {handoffSteps.map(({ label, busy, message }, index) => (
                 <Specimen
                     key={label}
-                    detail="Automatic handoff to an unsent editable Chief of Staff draft · manual projects use the sidebar + button"
+                    detail="Link Mobile App is the last page · the app opens to an unsent editable Chief of Staff draft · manual projects use the sidebar + button"
                     label={label}
                     number={String(index + 18 + desktopSteps.length + mobileSteps.length)}
                     stage="surface"
                 >
-                    <div style={{ ...frame, height: "800px" }} data-first-project-specimen={label}>
+                    <div style={{ ...frame, height: "800px" }} data-handoff-specimen={label}>
                         <ThemeScope mode="dark">
-                            {view.kind === "finishing" ? (
-                                <SetupHandoff error={view.message} busy={view.busy} onRetry={noop}>
-                                    <SetupPage
-                                        title="Workspace stays open"
-                                        copy="The conversation and sidebar remain usable while the draft is prepared."
-                                    />
-                                </SetupHandoff>
-                            ) : (
-                                <LocalOnboardingScreen
-                                    appearance="dark"
-                                    onAssistantsContinue={noop}
-                                    onConnectRetry={noop}
-                                    onHappyMobileConnect={noop}
-                                    onHappyMobileSkip={noop}
-                                    onProfileCreate={noop}
-                                    onProfileEmailChange={noop}
-                                    onProfileNameChange={noop}
-                                    onProjectChoose={noop}
-                                    onProjectSetupBack={noop}
-                                    view={view}
+                            <SetupHandoff error={message} busy={busy} onRetry={noop}>
+                                <SetupPage
+                                    title="Workspace stays open"
+                                    copy="The conversation and sidebar remain usable while the draft is prepared."
                                 />
-                            )}
+                            </SetupHandoff>
                         </ThemeScope>
                     </div>
                 </Specimen>
             ))}
+            <Specimen
+                detail="Remote Happy Agent only · a new team member's profile · not part of local setup"
+                label="Remote · profile"
+                number={String(18 + desktopSteps.length + mobileSteps.length + handoffSteps.length)}
+                stage="surface"
+            >
+                <div style={{ ...frame, height: "800px" }}>
+                    <ThemeScope mode="dark">
+                        <ProfileSetupScreen
+                            appearance="dark"
+                            busy={false}
+                            email=""
+                            name=""
+                            onCreate={noop}
+                            onEmailChange={noop}
+                            onNameChange={noop}
+                        />
+                    </ThemeScope>
+                </div>
+            </Specimen>
         </ComponentPage>
     );
 }

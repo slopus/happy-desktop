@@ -114,6 +114,11 @@
        that sets no background of its own was written expecting white, and
        darkening it under black text would only make the page unreadable. */
     --page-canvas: #ffffff;
+    /* What names a QR code's destination inside the symbol. A QR code is always
+       dark modules on white paper, so this grey is the same in both
+       appearances: far enough from the modules that a camera and a reader never
+       take it for one of them. */
+    --qr-code-mark: #6e6e73;
     --divider: #eaeaea;
     --shadow-color: rgb(0 0 0 / 0.1);
     --shadow-opacity: 0.1;

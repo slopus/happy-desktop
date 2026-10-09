@@ -46,7 +46,7 @@ export interface LocalOnboardingViewSnapshot {
     readonly pending: boolean;
     /** Why the last request could not be delivered, until another is made. */
     readonly failure?: string;
-    /** The optional mobile step, materialized only before the first project. */
+    /** The optional mobile steps, materialized only until setup completes. */
     readonly happyMobile?: HappyMobileOnboardingSnapshot;
     readonly chiefOfStaffReady: boolean;
 }
@@ -57,7 +57,6 @@ export interface LocalOnboardingStore {
     connectRetry(): void;
     /** Enters machine setup and allows its automatic download and launch to begin. */
     agentSetupBegin(): void;
-    projectChoose(): void;
     chiefOfStaffSetup(): void;
     assistantsContinue(): void;
     stepBack(step: LocalOnboardingStepBack): void;
@@ -779,10 +778,6 @@ export function localOnboardingStoreCreate(
             if (agentSetupActive) return;
             agentSetupActive = true;
             setupSynchronize();
-        },
-        projectChoose() {
-            if (snapshot.pending) return;
-            attempt(bridge.onboardingProjectChoose(), "Happy could not open a project.");
         },
         chiefOfStaffSetup() {
             chiefOfStaffSetupBegin();

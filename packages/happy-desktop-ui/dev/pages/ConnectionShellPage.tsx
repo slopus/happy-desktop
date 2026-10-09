@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { ConnectionShell, type ConnectionShellItem } from "../../src/ConnectionShell";
 import { ConnectionSurface } from "../../src/ConnectionSurface";
-import { LocalOnboardingScreen } from "../../src/LocalOnboardingScreen";
+import { ProfileSetupScreen } from "../../src/ProfileSetupScreen";
 import { SplashScreen } from "../../src/SplashScreen";
 import { Sidebar } from "../../src/Sidebar";
 import { Button } from "../../src/Button";
@@ -275,22 +275,14 @@ export function ConnectionShellPage() {
                         onSelect={() => undefined}
                     >
                         <ConnectionSurface active>
-                            <LocalOnboardingScreen
+                            <ProfileSetupScreen
                                 appearance="light"
-                                view={{
-                                    kind: "profile-required",
-                                    name: "",
-                                    email: "",
-                                    busy: false,
-                                }}
-                                onAssistantsContinue={() => undefined}
-                                onConnectRetry={() => undefined}
-                                onHappyMobileConnect={() => undefined}
-                                onHappyMobileSkip={() => undefined}
-                                onProjectChoose={() => undefined}
-                                onProfileNameChange={() => undefined}
-                                onProfileEmailChange={() => undefined}
-                                onProfileCreate={() => undefined}
+                                busy={false}
+                                email=""
+                                name=""
+                                onCreate={() => undefined}
+                                onEmailChange={() => undefined}
+                                onNameChange={() => undefined}
                             />
                         </ConnectionSurface>
                     </ConnectionShell>

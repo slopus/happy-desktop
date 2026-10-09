@@ -1,12 +1,11 @@
 import { type AssistantMarkName } from "./AssistantMark";
-import { Button } from "./Button";
 import { CopyButton } from "./CopyButton";
 import {
     DesktopMobileSetup,
     MobileAppCopy,
     type DesktopMobileSetupStep,
 } from "./DesktopMobileSetup";
-import { MenuButton } from "./MenuButton";
+import { OnboardingHelp } from "./OnboardingHelp";
 import { OnboardingSteps, type OnboardingStage } from "./OnboardingSteps";
 import { QRCode } from "./QRCode";
 import {
@@ -15,7 +14,6 @@ import {
     type SetupAssistantEntry,
 } from "./SetupAssistants";
 import { SetupPage, type SetupPageProgress, type SetupPageStatus } from "./SetupPage";
-import { TextField } from "./TextField";
 import type { ThemeMode } from "./ThemeScope";
 
 /** The coding assistants Happy looks for, and nothing beyond them. */
@@ -96,13 +94,6 @@ export type LocalOnboardingView =
           readonly nodeVersion?: string;
       }
     | { readonly kind: "examining" }
-    | {
-          readonly busy: boolean;
-          readonly email: string;
-          readonly kind: "profile-required";
-          readonly message?: string;
-          readonly name: string;
-      }
     | { readonly kind: "happy-mobile-checking" }
     | {
           readonly busy: boolean;
@@ -120,11 +111,14 @@ export type LocalOnboardingView =
           readonly message: string;
       }
     | {
+          /**
+           * Mobile setup is answered and the app is opening. The host shows its
+           * workspace for this; there is no further setup page.
+           */
           readonly kind: "finishing";
           readonly busy: boolean;
           readonly message?: string;
-      }
-    | { readonly kind: "project"; readonly busy: boolean; readonly message?: string };
+      };
 
 export interface LocalOnboardingScreenProps {
     readonly showSteps?: boolean;
@@ -143,11 +137,6 @@ export interface LocalOnboardingScreenProps {
     onHappyMobileConnect(): void;
     onHappyMobileSkip(): void;
     onHappyMobilePlatformSelect?(platform: "ios" | "android"): void;
-    onProjectChoose(): void;
-    onProjectSetupBack?(): void;
-    onProfileNameChange(value: string): void;
-    onProfileEmailChange(value: string): void;
-    onProfileCreate(): void;
 }
 
 /** What a reader is told to run when Happy cannot start their Happy Agent itself. */
@@ -250,18 +239,6 @@ const ASSISTANTS: Record<
     },
 };
 
-/** Where somebody stuck during first-run setup can go, and to whom. */
-const HELP_LINKS = [
-    { id: "discord", label: "Ask on Discord", url: "https://discord.gg/fX9WBAhyfD" },
-    { id: "bra1n_dump", label: "DM @bra1n_dump on X", url: "https://x.com/bra1n_dump" },
-    { id: "ex3ndr", label: "DM @Ex3NDR on X", url: "https://x.com/Ex3NDR" },
-    {
-        id: "issues",
-        label: "Browse known issues",
-        url: "https://github.com/slopus/happy/issues",
-    },
-] as const;
-
 /**
  * One card on the report that follows an install: what is on the machine, and
  * where.
@@ -277,7 +254,7 @@ function assistantAuthenticationEntry(assistant: LocalOnboardingAssistant): Setu
             case "checking":
                 return "Checking…";
             case "valid":
-                return "Signed in";
+                return "Ready ✓";
             case "invalid":
                 return "Sign in by running:";
             case "error":
@@ -355,7 +332,7 @@ function customAuthenticationEntry(
     switch (custom.authentication) {
         case "valid":
             return {
-                detail: `${custom.providers.join(", ")} · ready`,
+                detail: "Ready ✓",
                 id: "custom",
                 mark: "custom",
                 name: CUSTOM_NAME,
@@ -460,6 +437,7 @@ function machineSetupProject(
             return {
                 assistants,
                 hasValidAuthentication: true,
+                status: { label: "" },
                 title: "You're set",
             };
         const failed = states.includes("error");
@@ -484,8 +462,8 @@ function machineSetupProject(
 
 /**
  * First-run setup for this machine, as one machine-setup surface followed by
- * the profile, optional mobile connection, and project decisions it discovers
- * are still owed.
+ * the optional mobile app. Link Mobile App is the last page: answering it, or
+ * skipping mobile setup, opens the app.
  *
  * Every state is one `SetupPage`: a picture of what is happening, a sentence
  * naming it, a line explaining it, and at most one thing to do. Download,
@@ -515,12 +493,9 @@ export function LocalOnboardingScreen(props: LocalOnboardingScreenProps) {
             />
         );
     // Download, start, discovery, and verification are one machine-setup
-    // surface. Profile, mobile pairing, and project decisions begin their own
-    // pages after that machine work.
+    // surface. Mobile setup begins its own pages after that machine work.
     const transitionKey = (() => {
         switch (view.kind) {
-            case "profile-required":
-            case "project":
             case "finishing":
             case "happy-mobile-checking":
             case "happy-mobile-offer":
@@ -641,7 +616,7 @@ export function LocalOnboardingScreen(props: LocalOnboardingScreenProps) {
                 {...frame}
                 action={{
                     busy: view.busy,
-                    label: "Connect phone",
+                    label: "Link Mobile App",
                     onSelect: props.onHappyMobileConnect,
                 }}
                 className="happy-local-onboarding__mobile"
@@ -650,7 +625,7 @@ export function LocalOnboardingScreen(props: LocalOnboardingScreenProps) {
                 scene="alien-monster"
                 secondary={skipMobile}
                 {...(view.message ? { status: { label: view.message } } : {})}
-                title="Take Happy with you"
+                title="Get Mobile App"
             />
         );
 
@@ -659,20 +634,21 @@ export function LocalOnboardingScreen(props: LocalOnboardingScreenProps) {
             <SetupPage
                 {...frame}
                 className="happy-local-onboarding__mobile happy-local-onboarding__mobile-pairing"
-                copy="Open Happy Coder and scan."
+                copy="Open Happy mobile app and scan."
                 data-testid="local-onboarding-screen"
                 secondary={skipMobile}
                 status={{
                     busy: true,
                     label: `Waiting for phone · expires ${pairingExpiration(view.expiresAt)}`,
                 }}
-                title="Scan this code"
+                title="Link Mobile App"
             >
                 <div className="happy-local-onboarding__mobile-pairing-body">
                     <QRCode
                         data={view.data}
                         data-testid="happy-mobile-pairing-qr"
-                        label="QR code to pair Happy Mobile"
+                        label="QR code to link your devices"
+                        mark="link"
                         size={136}
                     />
                     <PairingLinkCopy data={view.data} />
@@ -694,49 +670,8 @@ export function LocalOnboardingScreen(props: LocalOnboardingScreenProps) {
                 scene="owl"
                 secondary={skipMobile}
                 status={{ label: view.message }}
-                title="Phone didn't connect"
+                title="Mobile App Didn't Link"
             />
-        );
-
-    if (view.kind === "profile-required")
-        return (
-            <SetupPage
-                {...frame}
-                action={{
-                    busy: view.busy,
-                    disabled: !view.name.trim() || !view.email.trim(),
-                    label: "Create profile",
-                    onSelect: props.onProfileCreate,
-                }}
-                copy="Shown on your commits and messages."
-                data-testid="local-onboarding-screen"
-                scene="disguised-face"
-                {...(view.message ? { status: { label: view.message } } : {})}
-                title="Create your profile"
-            >
-                <div className="happy-local-onboarding__profile-form">
-                    <TextField
-                        autoFocus
-                        fullWidth
-                        label="Name"
-                        onSubmit={props.onProfileCreate}
-                        onValueChange={props.onProfileNameChange}
-                        placeholder="Your name"
-                        required
-                        value={view.name}
-                    />
-                    <TextField
-                        fullWidth
-                        label="Git email"
-                        onSubmit={props.onProfileCreate}
-                        onValueChange={props.onProfileEmailChange}
-                        placeholder="you@example.com"
-                        required
-                        type="email"
-                        value={view.email}
-                    />
-                </div>
-            </SetupPage>
         );
 
     if (view.kind === "connect-failed")
@@ -759,42 +694,14 @@ export function LocalOnboardingScreen(props: LocalOnboardingScreenProps) {
             />
         );
 
-    if (view.kind === "project")
-        return (
-            <SetupPage
-                {...frame}
-                action={{
-                    disabled: view.busy,
-                    label: view.busy ? "Opening…" : "Choose a folder…",
-                    onSelect: props.onProjectChoose,
-                }}
-                copy="Pick a folder you work in."
-                data-testid="local-onboarding-screen"
-                scene="wand"
-                {...(props.onProjectSetupBack
-                    ? {
-                          secondary: {
-                              disabled: view.busy,
-                              label: "Back to setup options",
-                              onSelect: props.onProjectSetupBack,
-                          },
-                      }
-                    : {})}
-                {...(view.message ? { status: { label: view.message } } : {})}
-                title="Open your first project"
-            />
-        );
-
     return null;
 }
 
 /** Which step of the bar a view belongs to. */
 export function localOnboardingStage(view: LocalOnboardingView): OnboardingStage {
     switch (view.kind) {
-        // Only a remote Happy Agent asks for a profile, and it draws no step bar.
         case "examining":
         case "provider-authentication":
-        case "profile-required":
             return "subscriptions";
         case "happy-mobile-desktop":
             return view.step.kind === "intro" ? "get-app" : "connect-phone";
@@ -804,7 +711,6 @@ export function localOnboardingStage(view: LocalOnboardingView): OnboardingStage
         case "happy-mobile-pairing":
         case "happy-mobile-failed":
         case "finishing":
-        case "project":
             return "connect-phone";
         default:
             return "setup";
@@ -826,27 +732,6 @@ function PairingLinkCopy(props: { readonly data: string }) {
             data-testid="happy-mobile-pairing-copy"
             label="Copy auth link"
             text={props.data}
-        />
-    );
-}
-
-/** Somewhere to turn on every screen, without leaving the step you are on. */
-function OnboardingHelp(props: { onExternalOpen?(url: string): void }) {
-    return (
-        <MenuButton
-            align="end"
-            icon="users"
-            items={HELP_LINKS.map((link) => ({ id: link.id, kind: "item", label: link.label }))}
-            label="Get help"
-            menuLabel="Get help"
-            placement="above"
-            onSelect={(id) => {
-                const link = HELP_LINKS.find((candidate) => candidate.id === id);
-                if (link) props.onExternalOpen?.(link.url);
-            }}
-            size="medium"
-            text="Get help"
-            variant="ghost"
         />
     );
 }

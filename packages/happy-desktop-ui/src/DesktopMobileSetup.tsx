@@ -1,7 +1,11 @@
 import type { ReactNode } from "react";
 import { Button } from "./Button";
 import { CopyButton } from "./CopyButton";
-import { OnboardingSteps, type MobileOnboardingStage } from "./OnboardingSteps";
+import {
+    OnboardingSteps,
+    type MobileOnboardingStage,
+    type OnboardingStage,
+} from "./OnboardingSteps";
 import { QRCode } from "./QRCode";
 import { SetupPage } from "./SetupPage";
 import type { ThemeMode } from "./ThemeScope";
@@ -24,7 +28,7 @@ export interface DesktopMobileSetupProps {
     /** Pinned bottom-right on every step, the way the rest of setup carries it. */
     readonly help?: ReactNode;
     /** Returns to an earlier onboarding step from the shared step bar. */
-    onStageSelect?(stage: "setup" | "subscriptions" | "get-app" | "connect-phone"): void;
+    onStageSelect?(stage: OnboardingStage): void;
     readonly appearance: ThemeMode;
     readonly step: DesktopMobileSetupStep;
     readonly onContinue: () => void;
@@ -35,7 +39,9 @@ export interface DesktopMobileSetupProps {
 }
 
 const STORE_URLS = {
-    ios: "https://apps.apple.com/us/app/happy-claude-code-client/id6748571505",
+    // The short form of the App Store link: fewer bytes keep the code at a
+    // lower version, so it still decodes at the smallest window.
+    ios: "https://apps.apple.com/app/id6748571505",
     android: "https://play.google.com/store/apps/details?id=com.ex3ndr.happy",
 } as const;
 const ENCRYPTION_DOCS_URL = "https://happy.engineering/docs/security/";
@@ -50,20 +56,36 @@ export function MobileAppCopy(props: { onExternalOpen?(url: string): void }) {
     return (
         <>
             Download the end-to-end encrypted mobile app.{" "}
-            <a
-                className="happy-desktop-mobile-setup__link"
-                href={ENCRYPTION_DOCS_URL}
-                onClick={(event) => {
-                    if (!props.onExternalOpen) return;
-                    event.preventDefault();
-                    props.onExternalOpen(ENCRYPTION_DOCS_URL);
-                }}
-                rel="noopener noreferrer"
-                target="_blank"
-            >
-                How it works
-            </a>
+            <EncryptionLink onExternalOpen={props.onExternalOpen} />
         </>
+    );
+}
+
+/** What to do with the store code, and where encryption is explained. */
+function GetMobileAppCopy(props: { onExternalOpen?(url: string): void }) {
+    return (
+        <>
+            Scan with your phone’s camera. End-to-end encrypted.{" "}
+            <EncryptionLink onExternalOpen={props.onExternalOpen} />
+        </>
+    );
+}
+
+function EncryptionLink(props: { onExternalOpen?(url: string): void }) {
+    return (
+        <a
+            className="happy-desktop-mobile-setup__link"
+            href={ENCRYPTION_DOCS_URL}
+            onClick={(event) => {
+                if (!props.onExternalOpen) return;
+                event.preventDefault();
+                props.onExternalOpen(ENCRYPTION_DOCS_URL);
+            }}
+            rel="noopener noreferrer"
+            target="_blank"
+        >
+            How it works
+        </a>
     );
 }
 
@@ -96,17 +118,17 @@ export function DesktopMobileSetup(props: DesktopMobileSetupProps) {
     } as const;
     const skip = { label: "Skip mobile setup", onSelect: props.onSkip };
 
-    // One screen gets the app onto the phone: the encrypted-app line, the
+    // One screen gets the app onto the phone: what to do with the code, the
     // platform pick, and the store code. Confirming it asks for the pairing code.
     if (step.kind === "intro")
         return (
             <SetupPage
                 {...frame}
-                action={{ label: "I have it", onSelect: props.onContinue }}
-                copy={<MobileAppCopy onExternalOpen={props.onExternalOpen} />}
+                action={{ label: "Downloaded and opened", onSelect: props.onContinue }}
+                copy={<GetMobileAppCopy onExternalOpen={props.onExternalOpen} />}
                 scene="closed-lock"
                 secondary={skip}
-                title="Take Happy with you"
+                title="Get Mobile App"
             >
                 <div className="happy-desktop-mobile-setup__download">
                     <div
@@ -133,9 +155,10 @@ export function DesktopMobileSetup(props: DesktopMobileSetupProps) {
                     </div>
                     <QRCode
                         data={STORE_URLS[step.platform]}
-                        size={136}
-                        label="QR code to download Happy Coder"
                         data-testid="happy-mobile-store-qr"
+                        label="QR code to download Happy mobile app"
+                        mark={step.platform === "ios" ? "app-store" : "google-play"}
+                        size={176}
                     />
                 </div>
             </SetupPage>
@@ -151,7 +174,7 @@ export function DesktopMobileSetup(props: DesktopMobileSetupProps) {
                     scene="closed-lock"
                     secondary={skip}
                     status={{ label: phase.message }}
-                    title="Phone didn't connect"
+                    title="Mobile App Didn't Link"
                 />
             );
         // One page whether or not the code has arrived. Until it has, a
@@ -160,19 +183,20 @@ export function DesktopMobileSetup(props: DesktopMobileSetupProps) {
         return (
             <SetupPage
                 {...frame}
-                copy="Open Happy Coder and scan."
+                copy="Open Happy mobile app and scan."
                 scene="closed-lock"
                 secondary={skip}
-                title="Scan this code"
+                title="Link Mobile App"
             >
                 <div className="happy-desktop-mobile-setup__pairing">
                     {phase.kind === "pairing" ? (
                         <>
                             <QRCode
                                 data={phase.data}
-                                size={136}
-                                label="QR code to link your devices"
                                 data-testid="happy-mobile-pairing-qr"
+                                label="QR code to link your devices"
+                                mark="link"
+                                size={136}
                             />
                             {/* The payload is opaque by contract: a client either
                                 draws it as a QR code or hands it over as a deep
@@ -191,7 +215,7 @@ export function DesktopMobileSetup(props: DesktopMobileSetupProps) {
                             className="happy-desktop-mobile-setup__code-placeholder"
                             data-testid="happy-mobile-pairing-placeholder"
                         >
-                            <QRCode data={PLACEHOLDER_CODE} size={136} />
+                            <QRCode data={PLACEHOLDER_CODE} mark="link" size={136} />
                         </div>
                     )}
                 </div>
@@ -213,7 +237,7 @@ export function DesktopMobileSetup(props: DesktopMobileSetupProps) {
                               "Remote control resumes when your computer is online.",
                       },
                   })}
-            title={step.online ? "Phone connected" : "Phone linked"}
+            title="Mobile App Linked"
         />
     );
 }

@@ -94,23 +94,18 @@
 /*
  * The whole column carries its own status, because there is no badge to carry
  * it. A machine that does not have the command at all keeps its place in the row
- * and steps back out of the reading order; one that has it but cannot use it is
- * the only thing here anybody can act on, so its line is the only one at full
- * ink — read as an instruction rather than as a location.
+ * and steps back out of the reading order. Only a usable assistant is at full
+ * ink; finding an installed command alone does not make it ready.
  */
 /* Dims what the column says about itself, never what it asks you to do: the
    column nobody has signed into is precisely the one with something to act on. */
-.happy-setup-assistants__item[data-status="checking"] .happy-setup-assistants__mark,
-.happy-setup-assistants__item[data-status="checking"] .happy-setup-assistants__name,
-.happy-setup-assistants__item[data-status="checking"] .happy-setup-assistants__detail,
-.happy-setup-assistants__item[data-status="missing"] .happy-setup-assistants__mark,
-.happy-setup-assistants__item[data-status="missing"] .happy-setup-assistants__name,
-.happy-setup-assistants__item[data-status="missing"]:not(:has(.happy-setup-assistants__action))
-    .happy-setup-assistants__detail {
+.happy-setup-assistants__item:not([data-status="found"]) .happy-setup-assistants__mark,
+.happy-setup-assistants__item:not([data-status="found"]) .happy-setup-assistants__name,
+.happy-setup-assistants__item:not([data-status="found"]) .happy-setup-assistants__detail {
     opacity: 0.45;
 }
 
-/* A line that introduces a remedy is an instruction, read at full ink. */
+/* A remedy's instruction uses primary text with the unresolved emphasis above. */
 .happy-setup-assistants__item[data-status="signed-out"] .happy-setup-assistants__detail,
 .happy-setup-assistants__item[data-status="missing"] .happy-setup-assistants__detail {
     color: var(--text);

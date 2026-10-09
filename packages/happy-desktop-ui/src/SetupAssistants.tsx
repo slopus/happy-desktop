@@ -101,10 +101,9 @@ function pathBreakable(path: string): string {
  * command-line tools, which they already knew, and left the name doing every
  * bit of the identifying.
  *
- * Status is carried by emphasis rather than by a label. What is here is at full
- * ink with the path that proves it; what is not is dimmed, which is what it is
- * worth on a screen nobody reads for long. Only the case that asks for an action
- * says so in words, because it is the only one where words are the point.
+ * Only a verified usable assistant is at full ink; unresolved assistants keep
+ * their mark, name, and state dimmed. Remedies stay readable so the person can
+ * make an assistant ready.
  *
  * The install links point to the vendors' official instructions and leave Happy
  * through the host's external browser. The report still owns no setup state:
@@ -132,7 +131,7 @@ export function SetupAssistants(props: SetupAssistantsProps) {
                             data-happy-desktop-ui="setup-assistants-mark"
                         >
                             {assistant.mark === "custom" ? (
-                                <Ionicon name="options-outline" size={22} />
+                                <Ionicon name="key" size={22} />
                             ) : (
                                 <AssistantMark name={assistant.mark} size={22} />
                             )}
