@@ -808,8 +808,12 @@ export function MessageList(props: MessageListProps) {
     /* The content height the unscrollable list last asked about, so a commit
        that brought nothing new does not ask again. */
     const startReportedHeight = useRef(-1);
-    const rowWidthModel = useRef(restore.current?.rowWidth ?? 0);
     const expectedScrollTop = useRef<number | undefined>(undefined);
+    /* The reader's opening position — the newest content, or the restored
+       one — is written once, by the first commit whose DOM carries the real
+       row model. Writing it earlier would clamp it against placeholder
+       geometry. */
+    const initialPositionApplied = useRef(false);
     const scrollHeightBaseline = useRef(0);
     const readerScrollTop = useRef(restore.current?.scrollTop ?? 0);
     const viewportGeometry = useRef({ height: 0, width: 0 });
@@ -894,19 +898,17 @@ export function MessageList(props: MessageListProps) {
      * This keyed map is the only row-geometry authority. TanStack reads it to
      * build offsets, but no mounted row can write back into it. New data or a
      * changed container width replaces the whole map in one layout transaction.
+     *
+     * Nothing is modeled until the scrollport reports the width rows actually
+     * occupy: a row estimated at any other width is work thrown away, and at
+     * width zero every word overflows the measure and is laid out grapheme by
+     * grapheme. Until then the list renders no rows at all.
      */
-    const [rowSizeModel] = useState(() => {
-        const sizes = new Map<Key, number>();
-        const starts: number[] = [];
-        let start = MESSAGE_LIST_PADDING_START;
-        for (let index = 0; index < items.length; index += 1) {
-            const size = estimateItemSize(index, rowWidthModel.current);
-            sizes.set(itemKeyAt(index), size);
-            starts.push(start);
-            start += size;
-        }
-        return { sizes, starts };
-    });
+    const [rowSizeModel] = useState(() => ({
+        sizes: new Map<Key, number>(),
+        starts: [] as number[],
+        width: undefined as number | undefined,
+    }));
     const rowSizeModelBuild = (rowWidth: number) => {
         const sizes = new Map<Key, number>();
         const starts: number[] = [];
@@ -919,28 +921,31 @@ export function MessageList(props: MessageListProps) {
         }
         rowSizeModel.sizes = sizes;
         rowSizeModel.starts = starts;
+        rowSizeModel.width = rowWidth;
     };
-    /**
-     * Total modeled height of every row. This is the offset a list opens at when
-     * it has no position to restore.
-     */
+    /** Total modeled height of every row. */
     const estimatedContentHeight = () => {
-        const rowWidth =
-            list.current === null
-                ? (restore.current?.rowWidth ?? 0)
-                : messageListRowWidth(list.current.clientWidth, estimateRowWidth);
         let total = MESSAGE_LIST_PADDING_START + paddingEnd;
         for (let index = 0; index < items.length; index += 1)
-            total += rowSizeModel.sizes.get(itemKeyAt(index)) ?? estimateItemSize(index, rowWidth);
+            total += rowSizeModel.sizes.get(itemKeyAt(index)) ?? ROW_SIZE_FALLBACK;
         return total;
     };
+    /**
+     * Where the list opens: the restored reader position, or the newest
+     * content. TanStack reads this once, after the scrollport has reported its
+     * box and the row model exists, so its first range is the one painted.
+     */
+    const initialScrollTop = () =>
+        following.current || restore.current === undefined
+            ? Math.max(0, estimatedContentHeight() - viewportGeometry.current.height)
+            : restore.current.scrollTop;
     const positionReport = () => {
         const element = list.current;
         if (!element) return;
         positionChange.current?.({
             scrollTop: element.scrollTop,
             following: following.current,
-            rowWidth: rowWidthModel.current,
+            ...(rowSizeModel.width === undefined ? {} : { rowWidth: rowSizeModel.width }),
         });
     };
     function modeledItemAtIndex(index: number) {
@@ -1013,16 +1018,24 @@ export function MessageList(props: MessageListProps) {
         return true;
     }
     function rowSizeModelRecalculate(nextRowWidth: number) {
-        rowWidthModel.current = nextRowWidth;
         rowSizeModelBuild(nextRowWidth);
         if (virtualized) virtualizer.measure();
     }
     function viewportGeometryCommit(nextWidth: number, nextHeight: number) {
         const previous = viewportGeometry.current;
         if (previous.width === nextWidth && previous.height === nextHeight) return;
-        const previousHeight = previous.height || nextHeight;
         const nextRowWidth = messageListRowWidth(nextWidth, estimateRowWidth);
-        const widthChanged = nextRowWidth !== rowWidthModel.current;
+        if (rowSizeModel.width === undefined) {
+            /* The first report: there is no earlier geometry to keep a reader
+               anchored in, only the model to build at its real width. A
+               scrollport with no width yet has nothing to model rows at. */
+            if (nextRowWidth <= 0) return;
+            viewportGeometry.current = { height: nextHeight, width: nextWidth };
+            rowSizeModelRecalculate(nextRowWidth);
+            return;
+        }
+        const previousHeight = previous.height || nextHeight;
+        const widthChanged = nextRowWidth !== rowSizeModel.width;
         const anchor = readerAnchor.current ?? modelAnchorCapture(previousHeight);
         viewportGeometry.current = { height: nextHeight, width: nextWidth };
         if (anchor) pendingAnchor.current = { anchor, viewportHeight: nextHeight };
@@ -1104,10 +1117,9 @@ export function MessageList(props: MessageListProps) {
            every row at the generic fallback got that badly wrong whenever real
            rows were taller — the list opened part way up its own history — so
            the caller's model answers for each row exactly as it does for every
-           later layout. */
-        initialOffset: virtualized
-            ? () => restore.current?.scrollTop ?? estimatedContentHeight()
-            : 0,
+           later layout. The list reads no virtual items before that model
+           exists, which is what keeps TanStack from asking for this early. */
+        initialOffset: virtualized ? initialScrollTop : 0,
         overscan: 12,
         /*
          * These are the same visual clearances the non-virtual list owns in CSS.
@@ -1117,11 +1129,25 @@ export function MessageList(props: MessageListProps) {
         paddingEnd,
         paddingStart: MESSAGE_LIST_PADDING_START,
     });
+    /* Whether this render's DOM carries the row model. A virtual list's first
+       render has no width to model rows at, so it paints no rows and must not
+       position the reader against that placeholder. */
+    const modelRendered = !virtualized || rowSizeModel.width !== undefined;
+    const virtualItems = modelRendered ? virtualizer.getVirtualItems() : [];
     // eslint-disable-next-line happy-react/no-layout-effect -- streaming React commits publish a new modeled scrollHeight; a follower must pin in this same pre-paint commit
     useLayoutEffect(() => {
         const element = list.current;
-        if (!element) return;
-        if (following.current) {
+        if (!element || !modelRendered) return;
+        if (!initialPositionApplied.current) {
+            initialPositionApplied.current = true;
+            pendingAnchor.current = undefined;
+            if (following.current)
+                scrollTopWrite(element, element.scrollHeight - element.clientHeight);
+            else {
+                scrollTopWrite(element, restore.current?.scrollTop ?? 0);
+                readerAnchor.current = modelAnchorCapture(element.clientHeight);
+            }
+        } else if (following.current) {
             pendingAnchor.current = undefined;
             readerAnchor.current = undefined;
             scrollTopWrite(element, element.scrollHeight - element.clientHeight);
@@ -1170,11 +1196,13 @@ export function MessageList(props: MessageListProps) {
             estimateVersion: props.estimateVersion,
             footerHeight,
         };
-        if (!virtualized) return;
+        /* Before the first scrollport report there is no model to update; that
+           report builds it from these same inputs. */
+        if (!virtualized || rowSizeModel.width === undefined) return;
         const viewportHeight = viewportGeometry.current.height || list.current?.clientHeight || 0;
         const anchor = readerAnchor.current ?? modelAnchorCapture(viewportHeight);
         if (anchor) pendingAnchor.current = { anchor, viewportHeight };
-        rowSizeModelRecalculate(rowWidthModel.current);
+        rowSizeModelRecalculate(rowSizeModel.width);
     });
     // eslint-disable-next-line happy-react/no-layout-effect -- the transcript owns live scroll position, ResizeObserver, and scroll listeners whose initial restoration and cleanup must align with the committed list DOM
     useLayoutEffect(() => {
@@ -1211,12 +1239,6 @@ export function MessageList(props: MessageListProps) {
                 }
             }
         };
-        const savedScrollTop = restore.current?.scrollTop;
-        if (following.current) scrollToBottom();
-        else {
-            scrollTopWrite(element, savedScrollTop ?? 0);
-            readerAnchor.current = modelAnchorCapture(element.clientHeight);
-        }
         if (viewportGeometry.current.height === 0)
             viewportGeometry.current = {
                 height: element.clientHeight,
@@ -1335,7 +1357,7 @@ export function MessageList(props: MessageListProps) {
                             data-happy-desktop-ui="message-list-virtual"
                             style={{ height: `${String(virtualizer.getTotalSize())}px` }}
                         >
-                            {virtualizer.getVirtualItems().map((virtualItem) => (
+                            {virtualItems.map((virtualItem) => (
                                 <div
                                     className="happy-message-list__virtual-row"
                                     data-index={virtualItem.index}
