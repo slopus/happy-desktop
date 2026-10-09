@@ -534,6 +534,7 @@ export {
     type LocalOnboardingAgentSetupPhase,
     type LocalOnboardingAssistant,
     type LocalOnboardingAssistantId,
+    type LocalOnboardingCommandCopy,
     type LocalOnboardingCustom,
     type LocalOnboardingDownload,
     type LocalOnboardingScreenProps,

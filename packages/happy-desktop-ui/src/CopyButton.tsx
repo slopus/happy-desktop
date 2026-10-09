@@ -17,6 +17,8 @@ export interface CopyButtonProps {
     readonly style?: CSSProperties;
     /** Exact text handed to the clipboard, read lazily when deriving it is expensive. */
     readonly text: string | (() => string);
+    /** Told once the clipboard has taken the text; never told what the text was. */
+    readonly onCopy?: () => void;
 }
 
 /** How long the copied check stays before the button offers the copy again. */
@@ -38,6 +40,7 @@ export function CopyButton(props: CopyButtonProps) {
             const text = typeof props.text === "function" ? props.text() : props.text;
             await navigator.clipboard.writeText(text);
             setCopied(true);
+            props.onCopy?.();
             if (copiedTimer.current !== undefined) clearTimeout(copiedTimer.current);
             copiedTimer.current = setTimeout(() => {
                 copiedTimer.current = undefined;

@@ -1,5 +1,6 @@
 import type {
     LocalOnboardingAssistant,
+    LocalOnboardingCommandCopy,
     LocalOnboardingCustom,
     LocalOnboardingView,
     OnboardingStage,
@@ -34,6 +35,20 @@ interface ProviderAuthenticationSnapshot {
     readonly key?: string;
 }
 
+/**
+ * A request this window made that did not go through: which of its own calls
+ * it was, and what to tell the person about it.
+ */
+export interface LocalOnboardingFailure {
+    /**
+     * `stateRead` is reading setup, download, or connection state from the
+     * shell; `download` and `start` are the automatic first install; `request`
+     * is any step the person asked for.
+     */
+    readonly cause: "stateRead" | "download" | "start" | "request";
+    readonly message: string;
+}
+
 export interface LocalOnboardingViewSnapshot {
     readonly onboarding?: LocalOnboardingSnapshot;
     readonly daemon?: DesktopDaemonSnapshot;
@@ -45,7 +60,7 @@ export interface LocalOnboardingViewSnapshot {
     /** True while a request this window made is still in flight. */
     readonly pending: boolean;
     /** Why the last request could not be delivered, until another is made. */
-    readonly failure?: string;
+    readonly failure?: LocalOnboardingFailure;
     /** The optional mobile steps, materialized only until setup completes. */
     readonly happyMobile?: HappyMobileOnboardingSnapshot;
     readonly chiefOfStaffReady: boolean;
@@ -59,6 +74,11 @@ export interface LocalOnboardingStore {
     agentSetupBegin(): void;
     chiefOfStaffSetup(): void;
     assistantsContinue(): void;
+    /**
+     * The person copied a Subscriptions card's command or prompt. Setup keeps
+     * nothing of it; it is here so whoever owns the window can count it.
+     */
+    commandCopied(copy: LocalOnboardingCommandCopy): void;
     stepBack(step: LocalOnboardingStepBack): void;
     happyMobileConnect(): void;
     happyMobileSkip(): void;
@@ -194,7 +214,7 @@ export function localOnboardingStoreCreate(
                 inFlight -= 1;
                 publish({
                     ...snapshot,
-                    failure: `${failure} ${errorMessage(error)}`,
+                    failure: { cause: "request", message: `${failure} ${errorMessage(error)}` },
                     pending: inFlight > 0,
                 });
             },
@@ -216,7 +236,10 @@ export function localOnboardingStoreCreate(
             .catch((error: unknown) => {
                 publish({
                     ...snapshot,
-                    failure: `Happy could not download Happy Agent. ${errorMessage(error)}`,
+                    failure: {
+                        cause: "download",
+                        message: `Happy could not download Happy Agent. ${errorMessage(error)}`,
+                    },
                 });
             })
             .finally(() => {
@@ -273,7 +296,10 @@ export function localOnboardingStoreCreate(
             .catch((error: unknown) => {
                 publish({
                     ...snapshot,
-                    failure: `Happy could not start Happy Agent. ${errorMessage(error)}`,
+                    failure: {
+                        cause: "start",
+                        message: `Happy could not start Happy Agent. ${errorMessage(error)}`,
+                    },
                 });
             })
             .finally(() => {
@@ -719,7 +745,10 @@ export function localOnboardingStoreCreate(
                     (error: unknown) => {
                         publish({
                             ...snapshot,
-                            failure: `Happy could not read the state of first-run setup. ${errorMessage(error)}`,
+                            failure: {
+                                cause: "stateRead",
+                                message: `Happy could not read the state of first-run setup. ${errorMessage(error)}`,
+                            },
                         });
                     },
                 );
@@ -730,7 +759,10 @@ export function localOnboardingStoreCreate(
                     (error: unknown) => {
                         publish({
                             ...snapshot,
-                            failure: `Happy could not read Happy Agent download state. ${errorMessage(error)}`,
+                            failure: {
+                                cause: "stateRead",
+                                message: `Happy could not read Happy Agent download state. ${errorMessage(error)}`,
+                            },
                         });
                     },
                 );
@@ -741,7 +773,10 @@ export function localOnboardingStoreCreate(
                     (error: unknown) => {
                         publish({
                             ...snapshot,
-                            failure: `Happy could not read Happy Agent connection state. ${errorMessage(error)}`,
+                            failure: {
+                                cause: "stateRead",
+                                message: `Happy could not read Happy Agent connection state. ${errorMessage(error)}`,
+                            },
                         });
                     },
                 );
@@ -785,6 +820,7 @@ export function localOnboardingStoreCreate(
         assistantsContinue() {
             attempt(bridge.onboardingAssistantsContinue(), "Happy could not continue setup.");
         },
+        commandCopied() {},
         stepBack(step) {
             attempt(bridge.onboardingStepBack(step), "Happy could not go back to that step.");
         },
@@ -814,11 +850,14 @@ export function localOnboardingView(
 ): LocalOnboardingView | undefined {
     const onboarding = snapshot.onboarding;
     if (!onboarding)
-        return { kind: "checking", ...(snapshot.failure ? { message: snapshot.failure } : {}) };
+        return {
+            kind: "checking",
+            ...(snapshot.failure ? { message: snapshot.failure.message } : {}),
+        };
     // What the shell reported about the step comes first; a request this window
     // could not even deliver is the fallback, so one failure is never shown as
     // if it were the other.
-    const message = onboarding.message ?? snapshot.failure;
+    const message = onboarding.message ?? snapshot.failure?.message;
     const busy = onboarding.busy || snapshot.pending;
     switch (onboarding.stage) {
         case "inactive":

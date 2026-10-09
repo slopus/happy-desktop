@@ -20,6 +20,16 @@ import type { ThemeMode } from "./ThemeScope";
 export type LocalOnboardingAssistantId = "claude" | "codex" | "grok";
 
 /**
+ * One Subscriptions card's command the person copied: whose card, and whether
+ * it installs, signs in, or is a prompt for their own coding agent. Never the
+ * text itself.
+ */
+export interface LocalOnboardingCommandCopy {
+    readonly assistant: LocalOnboardingAssistantId | "custom";
+    readonly kind: "install" | "sign-in" | "agent-prompt";
+}
+
+/**
  * One of them as the machine answered for it: the command is here, or it is
  * not. Whether a command that is here can actually run is the connected Happy Agent's
  * answer rather than the shell's, and the screen showing this carries it.
@@ -134,6 +144,8 @@ export interface LocalOnboardingScreenProps {
     onStageSelect?(stage: OnboardingStage): void;
     /** Opens an external page: the host owns how a link leaves the app. */
     onExternalOpen?(url: string): void;
+    /** A Subscriptions card's command or prompt was copied. */
+    onCommandCopy?(copy: LocalOnboardingCommandCopy): void;
     onHappyMobileConnect(): void;
     onHappyMobileSkip(): void;
     onHappyMobilePlatformSelect?(platform: "ios" | "android"): void;
@@ -247,7 +259,10 @@ const ASSISTANTS: Record<
  * somebody has about a machine that "has" a command is which one it found —
  * two versions on a PATH is the ordinary case, not the exotic one.
  */
-function assistantAuthenticationEntry(assistant: LocalOnboardingAssistant): SetupAssistantEntry {
+function assistantAuthenticationEntry(
+    assistant: LocalOnboardingAssistant,
+    onCommandCopy?: (copy: LocalOnboardingCommandCopy) => void,
+): SetupAssistantEntry {
     const vendor = ASSISTANTS[assistant.id];
     const detail = (() => {
         switch (assistant.authentication) {
@@ -272,12 +287,24 @@ function assistantAuthenticationEntry(assistant: LocalOnboardingAssistant): Setu
                     command: vendor.install,
                     kind: "command",
                     label: `${vendor.name} install command`,
+                    ...(onCommandCopy
+                        ? {
+                              onCopy: () =>
+                                  onCommandCopy({ assistant: assistant.id, kind: "install" }),
+                          }
+                        : {}),
                 };
             case "invalid":
                 return {
                     command: vendor.signIn,
                     kind: "command",
                     label: `${vendor.name} sign-in command`,
+                    ...(onCommandCopy
+                        ? {
+                              onCopy: () =>
+                                  onCommandCopy({ assistant: assistant.id, kind: "sign-in" }),
+                          }
+                        : {}),
                 };
             case "error":
             case "checking":
@@ -328,6 +355,7 @@ const CUSTOM_NAME = "Custom configuration";
 function customAuthenticationEntry(
     custom: LocalOnboardingCustom,
     promptsOpen = false,
+    onCommandCopy?: (copy: LocalOnboardingCommandCopy) => void,
 ): SetupAssistantEntry {
     switch (custom.authentication) {
         case "valid":
@@ -360,6 +388,12 @@ function customAuthenticationEntry(
                     ...(promptsOpen ? { defaultOpen: true } : {}),
                     kind: "prompts",
                     label: "Set up with your agent",
+                    ...(onCommandCopy
+                        ? {
+                              onCopy: () =>
+                                  onCommandCopy({ assistant: "custom", kind: "agent-prompt" }),
+                          }
+                        : {}),
                     prompts: AGENT_PROMPTS,
                     title: "Paste one into the coding agent you already use",
                 },
@@ -401,6 +435,7 @@ const SUBSCRIPTIONS_COPY = "Looking for Claude, Codex, and Grok.";
 function machineSetupProject(
     view: LocalOnboardingView,
     promptsOpen: boolean,
+    onCommandCopy?: (copy: LocalOnboardingCommandCopy) => void,
 ): MachineSetupProjection | undefined {
     if (view.kind === "agent-setup")
         return {
@@ -430,8 +465,10 @@ function machineSetupProject(
             view.custom.authentication,
         ];
         const assistants = [
-            ...view.assistants.map(assistantAuthenticationEntry),
-            customAuthenticationEntry(view.custom, promptsOpen),
+            ...view.assistants.map((assistant) =>
+                assistantAuthenticationEntry(assistant, onCommandCopy),
+            ),
+            customAuthenticationEntry(view.custom, promptsOpen, onCommandCopy),
         ];
         if (states.includes("valid"))
             return {
@@ -524,7 +561,11 @@ export function LocalOnboardingScreen(props: LocalOnboardingScreenProps) {
             />
         ) : undefined,
     } as const;
-    const machineSetup = machineSetupProject(view, props.agentPromptsOpen === true);
+    const machineSetup = machineSetupProject(
+        view,
+        props.agentPromptsOpen === true,
+        props.onCommandCopy,
+    );
 
     if (machineSetup)
         return (

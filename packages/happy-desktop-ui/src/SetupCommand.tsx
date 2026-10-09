@@ -6,6 +6,8 @@ export interface SetupCommandProps {
     /** Names this particular command for assistive technology. */
     readonly label: string;
     readonly "data-testid"?: string;
+    /** Told when the command has been copied. */
+    readonly onCopy?: () => void;
 }
 
 /**
@@ -52,6 +54,7 @@ export function SetupCommand(props: SetupCommandProps) {
                 className="happy-setup-command__copy"
                 data-happy-desktop-ui="setup-command-copy"
                 label={`Copy ${props.label}`}
+                {...(props.onCopy ? { onCopy: props.onCopy } : {})}
                 text={props.command}
             />
         </div>

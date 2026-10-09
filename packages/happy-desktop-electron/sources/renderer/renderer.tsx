@@ -399,6 +399,7 @@ function DesktopOnboardingGate(props: {
             appearance={appearance.mode}
             showSteps
             onAssistantsContinue={() => props.store.assistantsContinue()}
+            onCommandCopy={(copy) => props.store.commandCopied(copy)}
             onConnectRetry={() => props.store.connectRetry()}
             onHappyMobileConnect={() => props.store.happyMobileConnect()}
             onHappyMobileSkip={() => props.store.happyMobileSkip()}

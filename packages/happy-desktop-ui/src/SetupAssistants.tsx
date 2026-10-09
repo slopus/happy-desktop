@@ -25,6 +25,8 @@ export type SetupAssistantAction =
           /** Names this command for assistive technology, e.g. "Codex install command". */
           readonly label: string;
           readonly note?: string;
+          /** Told when the command has been copied. */
+          readonly onCopy?: () => void;
       }
     | { readonly kind: "link"; readonly label: string; readonly href: string }
     | {
@@ -35,6 +37,8 @@ export type SetupAssistantAction =
           readonly prompts: readonly SetupAgentPrompt[];
           /** Opens with the page, for the Blueprint. */
           readonly defaultOpen?: boolean;
+          /** Told when any one of the prompts has been copied. */
+          readonly onCopy?: () => void;
       };
 
 /** What setup found out about one assistant on this machine. */
@@ -162,6 +166,9 @@ export function SetupAssistants(props: SetupAssistantsProps) {
                                               <SetupCommand
                                                   command={action.command}
                                                   label={action.label}
+                                                  {...(action.onCopy
+                                                      ? { onCopy: action.onCopy }
+                                                      : {})}
                                               />
                                               {action.note === undefined ? null : (
                                                   <span className="happy-setup-assistants__note">
@@ -257,7 +264,11 @@ function SetupAssistantPrompts(props: {
                                         {prompt.text}
                                     </span>
                                 </span>
-                                <CopyButton label={`Copy "${prompt.label}"`} text={prompt.text} />
+                                <CopyButton
+                                    label={`Copy "${prompt.label}"`}
+                                    {...(action.onCopy ? { onCopy: action.onCopy } : {})}
+                                    text={prompt.text}
+                                />
                             </span>
                         ))}
                     </span>
