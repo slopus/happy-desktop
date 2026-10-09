@@ -491,6 +491,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         const projection = projectionOf(entry);
         if (projection === undefined) return;
         let session = projectSession(projection);
+        if (!entry.historyLoaded) session = { ...session, historyLoading: true };
         if (entry.loadingMore) session = { ...session, loadingMore: true };
         if (entry.loadMoreError !== undefined) {
             session = { ...session, loadMoreError: entry.loadMoreError };
@@ -861,6 +862,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         }
         entry.hydrating = true;
         const revision = entry.loadRequestedRevision;
+        const draftRevision = draftRevisions.get(entry.id);
         const signal = deadlineSignal(SNAPSHOT_RESPONSE_TIMEOUT_MS);
         const loading = Promise.all([
             client.getMessages(
@@ -868,7 +870,21 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                 { limit: DEFAULT_HISTORY_LIMIT, omitToolData: false },
                 { signal },
             ),
-            client.getAgentBootstrap(entry.id, { signal }),
+            client.getAgentBootstrap(entry.id, { signal }).then((bootstrap) => {
+                if (closed || entry.loading !== loading || sessions.get(entry.id) !== entry)
+                    return bootstrap;
+                // The controls need the session's own selection, not its history.
+                // Keep local draft edits made while this snapshot was in flight.
+                entry.agent = bootstrap.agent;
+                entry.workspace = workspaceOf(bootstrap.agent.workspaceId);
+                agentModes.set(entry.id, bootstrap.mode);
+                entry.mode = bootstrap.mode;
+                if (draftRevisions.get(entry.id) === draftRevision && !intendedModes.has(entry.id))
+                    adoptDraft(entry.id, bootstrap.draft);
+                entry.draft = agentDrafts.get(entry.id);
+                publishSession(entry, true);
+                return bootstrap;
+            }),
             optional(() => client.getAgentActivity(entry.id, { signal })),
             optional(() => client.getPendingQuestion(entry.id, { signal })),
         ])
@@ -881,12 +897,10 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                 entry.agent = bootstrap.agent;
                 entry.workspace = workspaceOf(bootstrap.agent.workspaceId);
                 entry.context = bootstrap.context;
-                entry.draft = bootstrap.draft;
-                entry.mode = bootstrap.mode;
+                entry.draft = agentDrafts.get(entry.id);
+                entry.mode = agentModes.get(entry.id);
                 entry.slashCommands = bootstrap.slashCommands;
                 entry.usage = bootstrap.usage;
-                agentDrafts.set(entry.id, bootstrap.draft);
-                agentModes.set(entry.id, bootstrap.mode);
                 const pendingSends = [...entry.messages.values()].filter(
                     (message) => message.pendingSend,
                 );
@@ -2514,6 +2528,8 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                 if (known !== undefined) {
                     entry.agent = known;
                     entry.workspace = workspaceOf(known.workspaceId);
+                    entry.draft = agentDrafts.get(subscription.sessionId);
+                    entry.mode = agentModes.get(subscription.sessionId);
                 }
                 sessions.set(subscription.sessionId, entry);
             }
@@ -2522,7 +2538,6 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
             entry.subscribers.add(subscriber);
             if (
                 wasInactive &&
-                entry.historyLoaded &&
                 !entry.reconcileRequired &&
                 entry.agent !== undefined &&
                 config !== undefined

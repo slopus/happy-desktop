@@ -146,6 +146,11 @@ export function projectSession(input: SessionProjectionInput): SessionState {
               }),
         modelId: mode.modelId,
         providerId: mode.providerId,
+        selectionKnown:
+            input.intendedMode !== undefined ||
+            input.draft?.value != null ||
+            input.mode != null ||
+            (input.mode === null && agent.parentAgentId === null),
         ...(agent.title === null ? {} : { title: agent.title }),
         titleStatus: agent.titleStatus,
         effort: mode.effort,

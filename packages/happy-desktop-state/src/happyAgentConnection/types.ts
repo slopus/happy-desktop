@@ -371,8 +371,10 @@ export interface SessionUsage {
 }
 
 export interface SessionState {
-    /** The connection's placeholder before the first durable history snapshot arrives. */
+    /** True until the first durable history snapshot arrives, even if selection is already known. */
     historyLoading?: boolean;
+    /** Whether this session's own mode or draft is available, rather than a catalog fallback. */
+    selectionKnown?: boolean;
     activity: {
         kind:
             | "idle"

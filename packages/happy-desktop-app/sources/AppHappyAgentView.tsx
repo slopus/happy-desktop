@@ -5545,10 +5545,6 @@ function HappyAgentConversationSurface(props: {
                                 sessionId: conversation.conversationId as HappyAgentSessionId,
                                 onChiefOfStaffAsk: (request) =>
                                     workspace.chiefOfStaffDraftAppend(request),
-                                // The daemon refuses a model change while a run
-                                // is active or queued behind it, so the control
-                                // says so rather than accepting a choice the
-                                // next message could not apply.
                                 disabled: !configurable || conversation.modelLocked,
                                 onEffortChange: (effort?: HappyAgentThinkingLevel) => {
                                     if (props.happyAgentOnline())

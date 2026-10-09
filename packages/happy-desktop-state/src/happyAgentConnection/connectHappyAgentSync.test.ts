@@ -1,5 +1,8 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { connectHappyAgent } from "./connectHappyAgent.js";
+import { happyAgentChatStoreCreate } from "../happyAgent/happyAgentChatStore.js";
+import { happyAgentModelCatalogProject } from "../happyAgent/happyAgentProject.js";
+import type { HappyAgentSessionId } from "../happyAgent/happyAgentTypes.js";
 import { MINIMUM_HAPPY_AGENT_VERSION } from "./compatibility.js";
 import { HAPPY_AGENT_PROTOCOL_VERSION, HappyAgentApiError } from "@slopus/happy-agent-client";
 import type {
@@ -129,6 +132,146 @@ async function liveHarness(): Promise<
     });
     return { ...harness, groups, chat, sessionId: agent.id };
 }
+
+it("shows a delegated session's own speed choices while history and activity are still loading", async () => {
+    const daemon = fakeHappyAgentDaemonCreate();
+    const config = daemon.configGet();
+    const selectedModel = config.defaults.modelId;
+    const selectedProvider = config.defaults.providerId;
+    daemon.configSet({
+        ...config,
+        defaults: { ...config.defaults, modelId: "regular-only" },
+        models: {
+            ...config.models,
+            [selectedModel]: {
+                ...config.models[selectedModel]!,
+                serviceTierOptions: [
+                    { id: null, label: "Regular" },
+                    { id: "priority", label: "Fast" },
+                ],
+            },
+            "regular-only": {
+                ...config.models[selectedModel]!,
+                name: "Regular only",
+                serviceTierOptions: [{ id: null, label: "Regular" }],
+            },
+        },
+        providers: {
+            ...config.providers,
+            [selectedProvider]: {
+                ...config.providers[selectedProvider]!,
+                models: [
+                    ...config.providers[selectedProvider]!.models,
+                    { id: "regular-only", enabled: true },
+                ],
+            },
+        },
+    });
+    const project = daemon.projectSeed({ id: "project-speed" });
+    const parent = daemon.agentSeed(project.id, { id: "parent-speed" });
+    const child = daemon.agentSeed(project.id, {
+        id: "child-speed",
+        parentAgentId: parent.id,
+    });
+    daemon.modeSeed(child.id, {
+        ...config.defaults,
+        modelId: selectedModel,
+        providerId: selectedProvider,
+        serviceTier: "priority",
+    });
+    const releaseHistory = daemon.pause("getMessages");
+    const releaseActivity = daemon.pause("getAgentActivity");
+    const releaseQuestion = daemon.pause("getPendingQuestion");
+    const { connection } = harnessOpen(daemon);
+    const groups = groupsWatch(connection);
+    const chat = happyAgentChatStoreCreate(child.id as HappyAgentSessionId, {
+        catalog: happyAgentModelCatalogProject(daemon.configGet()),
+        connectActions: connection,
+        connectMutationSubscribe: () => () => undefined,
+        transcriptConnect: ({ sessionId, onChange, onError }) => {
+            const transcript = connection.connectSession({
+                sessionId,
+                onChange: (elements, session) => onChange(elements, session, []),
+                onError,
+            });
+            return {
+                close: () => transcript.close(),
+                loadMore: (token) => transcript.loadMore(token),
+            };
+        },
+    });
+    const unsubscribe = chat.subscribe(() => undefined);
+    try {
+        expect(chat.get().menus).toBeUndefined();
+        await vi.waitFor(() => {
+            expect(chat.get().menus?.currentModelId).toBe(selectedModel);
+            expect(chat.get().menus?.serviceTierOptions).toEqual([
+                { tier: null, label: "Regular", current: false },
+                { tier: "priority", label: "Fast", current: true },
+            ]);
+        });
+        expect(chat.get().ready).toBe(false);
+        expect(chat.get().modelLocked).toBe(false);
+        expect(chat.get().entries).toEqual([]);
+        expect(chat.get().menus?.currentProviderId).toBe(selectedProvider);
+        expect(chat.get().menus?.currentPermissionMode).toBe(config.defaults.permissionMode);
+        expect(
+            groups.projects[0]?.sessions.find((session) => session.id === child.id)
+                ?.parentSessionId,
+        ).toBe(parent.id);
+        releaseHistory();
+        releaseActivity();
+        releaseQuestion();
+        await vi.waitFor(() => expect(chat.get().ready).toBe(true));
+        expect(chat.get().menus?.currentServiceTier).toBe("priority");
+        expect(chat.get().modelLocked).toBe(false);
+    } finally {
+        releaseHistory();
+        releaseActivity();
+        releaseQuestion();
+        unsubscribe();
+        chat[Symbol.dispose]();
+    }
+});
+
+it("keeps local speed edits through stale bootstrap and deferred history snapshots", async () => {
+    const daemon = fakeHappyAgentDaemonCreate();
+    const project = daemon.projectSeed({ id: "project-speed-race" });
+    const agent = daemon.agentSeed(project.id, { id: "agent-speed-race" });
+    const getBootstrap = daemon.client.getAgentBootstrap.bind(daemon.client);
+    let releaseBootstrap!: () => void;
+    const bootstrapGate = new Promise<void>((resolve) => {
+        releaseBootstrap = resolve;
+    });
+    let bootstrapCaptured!: () => void;
+    const captured = new Promise<void>((resolve) => {
+        bootstrapCaptured = resolve;
+    });
+    vi.spyOn(daemon.client, "getAgentBootstrap").mockImplementation(async (...args) => {
+        const snapshot = await getBootstrap(...args);
+        bootstrapCaptured();
+        await bootstrapGate;
+        return snapshot;
+    });
+    const releaseHistory = daemon.pause("getMessages");
+    const { connection } = harnessOpen(daemon);
+    const groups = groupsWatch(connection);
+    const chat = sessionWatch(connection, agent.id);
+    await captured;
+    await vi.waitFor(() => expect(groups.state.connection).toBe("live"));
+    connection.setServiceTier(agent.id, "ultrafast");
+    await vi.waitFor(() => {
+        expect(chat.session?.serviceTier).toBe("ultrafast");
+        expect(daemon.callCount("saveAgentDraft")).toBe(1);
+    });
+    releaseBootstrap();
+    await vi.waitFor(() => expect(chat.session?.selectionKnown).toBe(true));
+    expect(chat.session?.historyLoading).toBe(true);
+    expect(chat.session?.serviceTier).toBe("ultrafast");
+    releaseHistory();
+    await vi.waitFor(() => expect(chat.session?.historyLoading).not.toBe(true));
+    expect(chat.session?.serviceTier).toBe("ultrafast");
+});
 
 // --- startup and SSE reconnection ---------------------------------------
 

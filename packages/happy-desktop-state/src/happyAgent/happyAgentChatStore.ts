@@ -855,7 +855,7 @@ export function happyAgentChatStoreCreate(
             ),
             activityPanelOpen,
             ...(openImage === undefined ? {} : { openImage }),
-            ...(connected === undefined
+            ...(connected === undefined || connected.selectionKnown === false
                 ? {}
                 : {
                       menus: happyAgentMenusDerive(

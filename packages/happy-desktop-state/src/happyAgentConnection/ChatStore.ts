@@ -106,6 +106,7 @@ function withoutGoal(
 function emptySession(sessionId: string): SessionState {
     return {
         historyLoading: true,
+        selectionKnown: false,
         activity: { kind: "idle", label: "Idle", since: 0 },
         status: "idle",
         archived: false,
