@@ -5,6 +5,14 @@ const INSTALL_LOCK_TIMEOUT_MS = 15 * 60_000;
 const INCOMPLETE_LOCK_GRACE_MS = 5_000;
 const LOCK_POLL_MS = 100;
 
+/** Another process held the install lock for the whole wait. */
+export class HappyAgentInstallLockTimeoutError extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = "HappyAgentInstallLockTimeoutError";
+    }
+}
+
 interface InstallLockRecord {
     readonly pid: number;
     readonly token: string;
@@ -64,7 +72,9 @@ export async function happyAgentInstallLockAcquire(
             continue;
         }
         if (Date.now() >= deadline) {
-            throw new Error("Timed out waiting for another process to install Happy Agent.");
+            throw new HappyAgentInstallLockTimeoutError(
+                "Timed out waiting for another process to install Happy Agent.",
+            );
         }
         await delay(LOCK_POLL_MS);
     }

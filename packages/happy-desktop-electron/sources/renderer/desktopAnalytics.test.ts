@@ -14,7 +14,7 @@ import {
     type AnalyticsTrackOptions,
 } from "happy-desktop-analytics";
 import type { HappyAgentActivity, WelcomeStore } from "happy-desktop-state";
-import { desktopAnalyticsCreate, setupFailureOf } from "./desktopAnalytics";
+import { desktopAnalyticsCreate, setupDownloadFailureOf, setupFailureOf } from "./desktopAnalytics";
 
 type CaptureResult = NonNullable<Parameters<typeof analyticsBeforeSend>[0]>;
 
@@ -407,7 +407,12 @@ it("never sends free text, whatever the machine says about its failures", async 
     publish(
         view({
             onboarding: onboarding("daemonDownload", { message: PRIVATE_TEXT }),
-            daemon: daemon({ error: PRIVATE_TEXT, message: PRIVATE_TEXT }),
+            daemon: daemon({
+                error: PRIVATE_TEXT,
+                errorCode: "filesystem_locked",
+                downloadFailure: { attempts: 1, receivedBytes: 10, totalBytes: 10 },
+                message: PRIVATE_TEXT,
+            }),
         }),
     );
     publish(
@@ -546,4 +551,119 @@ it("reports a Setup still running at close as failed, with the last failure it m
         options: { beacon: true },
     });
     expect(results[0]?.properties.duration_ms).toEqual(expect.any(Number));
+});
+
+it("details a download failure by the shell's code, attempts, and how much arrived", () => {
+    const failed = (
+        errorCode: DesktopDaemonSnapshot["errorCode"],
+        downloadFailure?: DesktopDaemonSnapshot["downloadFailure"],
+    ) =>
+        setupDownloadFailureOf(
+            view({
+                onboarding: onboarding("daemonDownload"),
+                daemon: daemon({
+                    error: PRIVATE_TEXT,
+                    ...(errorCode ? { errorCode } : {}),
+                    ...(downloadFailure ? { downloadFailure } : {}),
+                }),
+            }),
+        );
+    expect(failed("release_lookup_rate_limited")).toEqual({
+        error_detail: "release_lookup_rate_limited",
+        attempt_count: 0,
+        transfer_percent_bucket: "none",
+    });
+    expect(
+        failed("transfer_interrupted", { attempts: 6, receivedBytes: 40, totalBytes: 100 }),
+    ).toEqual({
+        error_detail: "transfer_interrupted",
+        attempt_count: 6,
+        transfer_percent_bucket: "under_half",
+    });
+    expect(
+        failed("transfer_timeout", { attempts: 2, receivedBytes: 50, totalBytes: 100 }),
+    ).toMatchObject({ transfer_percent_bucket: "over_half" });
+    expect(
+        failed("filesystem_locked", { attempts: 1, receivedBytes: 100, totalBytes: 100 }),
+    ).toMatchObject({ error_detail: "filesystem_locked", transfer_percent_bucket: "complete" });
+    // An older shell sends no code, and a start timeout is not a download's.
+    expect(failed(undefined)).toBeUndefined();
+    expect(failed("start_timeout")).toBeUndefined();
+    expect(
+        setupDownloadFailureOf(
+            view({
+                onboarding: onboarding("daemonDownload"),
+                daemon: daemon({ errorCode: "disk_full" }),
+            }),
+        ),
+    ).toBeUndefined();
+});
+
+it("sends the download detail with a download failure at close, and only with one", () => {
+    const client = clientCreate();
+    const analytics = desktopAnalyticsCreate({
+        development: false,
+        happyAgents: directoryCreate(),
+        client,
+    });
+    const { store, welcome, publish } = onboardingCreate();
+    const unsubscribe = analytics.onboardingObserve(store, welcome).subscribe(() => undefined);
+    publish(
+        view({
+            onboarding: onboarding("daemonDownload"),
+            daemon: daemon({
+                error: PRIVATE_TEXT,
+                errorCode: "transfer_interrupted",
+                downloadFailure: { attempts: 6, receivedBytes: 70, totalBytes: 100 },
+            }),
+        }),
+    );
+    // The retry clears the shell's error first; the window's own failure stays.
+    publish(
+        view({
+            onboarding: onboarding("daemonDownload"),
+            daemon: daemon({ operation: "downloading" }),
+            failure: { cause: "download", message: PRIVATE_TEXT },
+        }),
+    );
+    window.dispatchEvent(new Event("pagehide"));
+    unsubscribe();
+    analytics.dispose();
+
+    const results = client.captured.filter((c) => c.event === "onboarding_setup_result");
+    expect(results).toHaveLength(1);
+    expect(results[0]?.properties).toMatchObject({
+        result: "failed",
+        error_code: "download_failed",
+        error_detail: "transfer_interrupted",
+        attempt_count: 6,
+        transfer_percent_bucket: "over_half",
+    });
+
+    const later = clientCreate();
+    const second = desktopAnalyticsCreate({
+        development: false,
+        happyAgents: directoryCreate(),
+        client: later,
+    });
+    const next = onboardingCreate();
+    const stop = second.onboardingObserve(next.store, next.welcome).subscribe(() => undefined);
+    next.publish(
+        view({
+            onboarding: onboarding("daemonDownload"),
+            daemon: daemon({ error: PRIVATE_TEXT, errorCode: "disk_full" }),
+        }),
+    );
+    next.publish(
+        view({ onboarding: onboarding("connectFailed"), runtime: runtimeError("start_timeout") }),
+    );
+    window.dispatchEvent(new Event("pagehide"));
+    stop();
+    second.dispose();
+    const properties = later.captured.find(
+        (c) => c.event === "onboarding_setup_result",
+    )?.properties;
+    expect(properties).toMatchObject({ error_code: "start_timeout" });
+    expect(properties).not.toHaveProperty("error_detail");
+    expect(properties).not.toHaveProperty("attempt_count");
 });

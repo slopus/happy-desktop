@@ -28,6 +28,7 @@ import {
     type HappyDaemonPaths,
 } from "./happyAgentBinaryPaths";
 import {
+    HappyAgentDownloadError,
     happyAgentReleaseDownload,
     happyAgentReleaseLatest,
     happyAgentReleasesList,
@@ -43,6 +44,8 @@ const RECONNECT_TIMEOUT_MS = 60_000;
 export interface DesktopDaemonControllerOptions {
     readonly channel?: HappyAgentUpdateChannel;
     readonly environment?: NodeJS.ProcessEnv;
+    /** Carries release lookups and downloads; Node's own `fetch` when absent. */
+    readonly fetch?: typeof globalThis.fetch;
     readonly launchEnvironment?: () => Promise<NodeJS.ProcessEnv>;
     readonly managed?: boolean;
     readonly paths?: HappyDaemonPaths;
@@ -56,6 +59,8 @@ export class DesktopDaemonController {
     private readonly listeners = new Set<(snapshot: DesktopDaemonSnapshot) => void>();
     private operation = Promise.resolve();
     private publishedCatalog: readonly HappyAgentRelease[] = [];
+    /** Whether this channel's whole catalog has been read since the app started. */
+    private catalogRead = false;
     /** Removing superseded versions waits for the first connection, which names the one running. */
     private pruned = false;
     /** What the daemon reported when this window last connected to it. */
@@ -68,6 +73,7 @@ export class DesktopDaemonController {
         private readonly managed: boolean,
         private channel: HappyAgentUpdateChannel,
         selected: HappyAgentBinary | undefined,
+        private readonly fetch: typeof globalThis.fetch | undefined,
     ) {
         this.snapshotValue = {
             install: { phase: "idle" },
@@ -92,6 +98,7 @@ export class DesktopDaemonController {
             options.managed ?? true,
             options.channel ?? "stable",
             selected,
+            options.fetch,
         );
     }
 
@@ -118,6 +125,7 @@ export class DesktopDaemonController {
         this.channel = channel;
         this.latestRelease = undefined;
         this.publishedCatalog = [];
+        this.catalogRead = false;
         this.publish({
             ...this.snapshotValue,
             availableVersion: undefined,
@@ -140,7 +148,16 @@ export class DesktopDaemonController {
         });
     }
 
-    checkForUpdate(): Promise<void> {
+    /**
+     * Looks for a newer release, and downloads it if there is one.
+     *
+     * Checks Happy makes on its own ask only for the latest release: every
+     * request spends the per-address GitHub budget that first-run setup also
+     * needs, and the whole catalog is megabytes. The catalog the version picker
+     * offers is read when somebody asks for a check, and once per launch on a
+     * machine that already has Happy Agent; first-run setup never waits on it.
+     */
+    checkForUpdate(catalog: "latest" | "full" = "latest"): Promise<void> {
         return this.serial(async () => {
             if (!this.managed) return;
             const selected = await happyAgentBinarySelected(this.paths);
@@ -152,14 +169,20 @@ export class DesktopDaemonController {
             });
             try {
                 const channel = this.channel;
-                const catalog = await happyAgentReleasesList({ channel });
+                const full = catalog === "full" || (!this.catalogRead && selected !== undefined);
+                const found = await happyAgentReleasesList({
+                    catalog: full ? "full" : "latest",
+                    channel,
+                    ...this.fetchOption(),
+                });
                 if (channel !== this.channel) {
                     this.publish({ ...this.snapshotValue, operation: "idle" });
                     return;
                 }
-                const release = catalog[0]!;
+                const release = found[0]!;
                 this.latestRelease = release;
-                this.publishedCatalog = catalog;
+                if (full) this.catalogRead = true;
+                this.publishedCatalog = full ? found : catalogMerge(this.publishedCatalog, found);
                 const installedVersion = selected?.version;
                 const updateAvailable =
                     installedVersion !== undefined &&
@@ -187,16 +210,14 @@ export class DesktopDaemonController {
                 if (updateAvailable && happyAgentVersionAllowed(release.version, this.channel))
                     await this.stage(release).catch((error: unknown) => {
                         this.publish({
-                            ...this.snapshotValue,
-                            error: displayError(error),
+                            ...failureProject(this.snapshotValue, error),
                             message: undefined,
                             operation: "idle",
                         });
                     });
             } catch (error) {
                 this.publish({
-                    ...this.snapshotValue,
-                    error: displayError(error),
+                    ...failureProject(this.snapshotValue, error),
                     message: undefined,
                     operation: "idle",
                     versions: await this.versionsProject(),
@@ -225,7 +246,10 @@ export class DesktopDaemonController {
         // Deliberately not serialized: every caller already holds the lock, and
         // taking it again here would make this wait on the work calling it.
         if (!happyAgentVersionAllowed(release.version, this.channel))
-            throw new Error("This Happy Agent version is not available on this update channel.");
+            throw new HappyAgentDownloadError(
+                "This Happy Agent version is not available on this update channel.",
+                "release_unavailable",
+            );
         if ((await happyAgentBinaryDownloaded(this.paths)).includes(release.version)) {
             this.publish({ ...this.snapshotValue, ...(await this.readyVersionRead()) });
             return;
@@ -239,6 +263,7 @@ export class DesktopDaemonController {
         });
         try {
             await happyAgentReleaseDownload(release, this.paths, {
+                ...this.fetchOption(),
                 onProgress: this.downloadReport(),
                 onStatus: (message) =>
                     this.publish({ ...this.snapshotValue, message, operation: "downloading" }),
@@ -272,7 +297,12 @@ export class DesktopDaemonController {
             throw new Error("This Happy Agent version is not available on this update channel.");
         }
         if ((await happyAgentBinaryDownloaded(this.paths)).includes(version)) return;
-        await this.stage(await happyAgentReleaseVersion(version, { channel: this.channel }));
+        await this.stage(
+            await happyAgentReleaseVersion(version, {
+                channel: this.channel,
+                ...this.fetchOption(),
+            }),
+        );
     }
 
     /**
@@ -290,8 +320,7 @@ export class DesktopDaemonController {
             return await work();
         } catch (error) {
             this.publish({
-                ...this.snapshotValue,
-                error: displayError(error),
+                ...failureProject(this.snapshotValue, error),
                 message: undefined,
                 operation: "idle",
             });
@@ -441,10 +470,12 @@ export class DesktopDaemonController {
                     selectedAfter?.version ?? this.snapshotValue.installedVersion;
                 const availableVersion = this.snapshotValue.availableVersion;
                 this.publish({
-                    ...(selectedAfter
-                        ? installationProject(this.snapshotValue, selectedAfter)
-                        : this.snapshotValue),
-                    error: message,
+                    ...failureProject(
+                        selectedAfter
+                            ? installationProject(this.snapshotValue, selectedAfter)
+                            : this.snapshotValue,
+                        error,
+                    ),
                     install: { failedAt: step, message, phase: "error", reason, version: selected },
                     operation: "idle",
                     updateAvailable:
@@ -528,7 +559,11 @@ export class DesktopDaemonController {
                     (this.latestRelease &&
                     happyAgentVersionAllowed(this.latestRelease.version, this.channel)
                         ? this.latestRelease
-                        : undefined) ?? (await happyAgentReleaseLatest({ channel: this.channel }));
+                        : undefined) ??
+                    (await happyAgentReleaseLatest({
+                        channel: this.channel,
+                        ...this.fetchOption(),
+                    }));
                 this.latestRelease = found;
                 await this.stage(found);
                 return found;
@@ -594,8 +629,7 @@ export class DesktopDaemonController {
                 const selected = await happyAgentBinarySelected(this.paths).catch(() => undefined);
                 const timedOut = commandTimedOut(error);
                 this.publish({
-                    ...installationProject(this.snapshotValue, selected),
-                    error: displayError(error),
+                    ...failureProject(installationProject(this.snapshotValue, selected), error),
                     ...(timedOut ? { errorCode: "start_timeout" as const } : {}),
                     message: undefined,
                     operation: "idle",
@@ -661,7 +695,11 @@ export class DesktopDaemonController {
                     (this.latestRelease &&
                     happyAgentVersionAllowed(this.latestRelease.version, this.channel)
                         ? this.latestRelease
-                        : undefined) ?? (await happyAgentReleaseLatest({ channel: this.channel }));
+                        : undefined) ??
+                    (await happyAgentReleaseLatest({
+                        channel: this.channel,
+                        ...this.fetchOption(),
+                    }));
                 this.latestRelease = found;
                 await this.stage(found);
                 return found;
@@ -779,12 +817,23 @@ export class DesktopDaemonController {
             ),
         };
         // A code describes the error it was published with and nothing after.
-        if (snapshot.error === undefined && snapshot.errorCode !== undefined) {
-            const { errorCode: _errorCode, ...current } = snapshot;
+        if (
+            snapshot.error === undefined &&
+            (snapshot.errorCode !== undefined || snapshot.downloadFailure !== undefined)
+        ) {
+            const {
+                errorCode: _errorCode,
+                downloadFailure: _downloadFailure,
+                ...current
+            } = snapshot;
             snapshot = current;
         }
         this.snapshotValue = snapshot;
         for (const listener of this.listeners) listener(snapshot);
+    }
+
+    private fetchOption(): { readonly fetch?: typeof globalThis.fetch } {
+        return this.fetch ? { fetch: this.fetch } : {};
     }
 
     private serial(work: () => Promise<void>): Promise<void> {
@@ -795,6 +844,22 @@ export class DesktopDaemonController {
         );
         return next;
     }
+}
+
+/** An earlier catalog with newly found releases added, newest first. */
+function catalogMerge(
+    catalog: readonly HappyAgentRelease[],
+    found: readonly HappyAgentRelease[],
+): HappyAgentRelease[] {
+    const releases = new Map(catalog.map((release) => [release.version, release]));
+    for (const release of found) releases.set(release.version, release);
+    return [...releases.values()].sort((left, right) =>
+        versionNewer(left.version, right.version)
+            ? -1
+            : versionNewer(right.version, left.version)
+              ? 1
+              : 0,
+    );
 }
 
 function installationProject(
@@ -837,6 +902,21 @@ function commandTimedOut(error: unknown): boolean {
     return (
         typeof cause === "object" && cause !== null && "killed" in cause && cause.killed === true
     );
+}
+
+/**
+ * The snapshot with `error` set from a failure, and the failure's fixed code and
+ * progress when it is a download's, replacing whatever an earlier error left.
+ */
+function failureProject(snapshot: DesktopDaemonSnapshot, error: unknown): DesktopDaemonSnapshot {
+    const { errorCode: _errorCode, downloadFailure: _downloadFailure, ...current } = snapshot;
+    return {
+        ...current,
+        error: displayError(error),
+        ...(error instanceof HappyAgentDownloadError
+            ? { errorCode: error.code, downloadFailure: error.progress }
+            : {}),
+    };
 }
 
 function displayError(error: unknown): string {

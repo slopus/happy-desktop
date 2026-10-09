@@ -240,6 +240,47 @@ export interface DesktopDaemonDownload {
  */
 export type DesktopStartFailureCode = "start_timeout";
 
+/**
+ * Why finding or fetching a Happy Agent release failed, by where it stopped.
+ * Set where the failure is raised, never read from its message.
+ */
+export type DesktopDownloadFailureCode =
+    /** GitHub's API refused the release lookup for its rate limit. */
+    | "release_lookup_rate_limited"
+    /** The release lookup answered with another HTTP error, timed out, or was unreadable. */
+    | "release_lookup_failed"
+    /** GitHub lists no usable release for this machine and channel. */
+    | "release_unavailable"
+    /** The request never got a response: DNS, connect, proxy, or TLS. */
+    | "network_unreachable"
+    /** The archive stopped arriving part-way and every resume failed. */
+    | "transfer_interrupted"
+    /** The archive stalled or ran out of time on every attempt. */
+    | "transfer_timeout"
+    /** The archive's host answered with an HTTP error. */
+    | "transfer_http_error"
+    /** The archive's size or checksum did not match its release. */
+    | "integrity_mismatch"
+    /** The disk is full. */
+    | "disk_full"
+    /** A file was locked or access was denied, as an antivirus scan does to a new executable. */
+    | "filesystem_locked"
+    /** Unpacking the archive failed or found something other than one binary. */
+    | "extract_failed"
+    /** Another process held the install lock for the whole wait. */
+    | "install_lock_timeout"
+    /** A failure of this download with no closer code. */
+    | "unclassified";
+
+/** How far a failed download got before it stopped. */
+export interface DesktopDaemonDownloadFailure {
+    /** Requests made for the archive, resumes included; 0 when it failed before asking. */
+    readonly attempts: number;
+    readonly receivedBytes: number;
+    /** The archive's declared size; 0 when it failed before one was known. */
+    readonly totalBytes: number;
+}
+
 /** The machine the shell runs on, as far as anything may know it. */
 export interface DesktopSystem {
     /** The bare OS version number (`15.6.0`, `10.0.26100`); null where the OS reports more than a number. */
@@ -255,7 +296,9 @@ export interface DesktopDaemonSnapshot {
     readonly download?: DesktopDaemonDownload;
     readonly error?: string;
     /** The fixed code for `error`, when it has one. Cleared with `error`. */
-    readonly errorCode?: DesktopStartFailureCode;
+    readonly errorCode?: DesktopStartFailureCode | DesktopDownloadFailureCode;
+    /** How far the download behind `error` got, when a download failed. Cleared with `error`. */
+    readonly downloadFailure?: DesktopDaemonDownloadFailure;
     readonly installation: "missing" | "installed";
     readonly installedVersion?: string;
     readonly managed: boolean;

@@ -9,7 +9,9 @@ import {
     type AnalyticsEvents,
     type AnalyticsOs,
     type AnalyticsOutcome,
+    type AnalyticsSetupDownloadFailure,
     type AnalyticsSetupErrorCode,
+    type AnalyticsTransferPercentBucket,
     type AnalyticsTrackOptions,
 } from "happy-desktop-analytics";
 import {
@@ -212,6 +214,40 @@ export function setupFailureOf(
         default:
             return protocolMismatch ? "version_mismatch" : undefined;
     }
+}
+
+/**
+ * Where the download behind a `download_failed` stopped, from the code the
+ * shell gave its error. Absent when the shell gave none, as older shells do.
+ */
+export function setupDownloadFailureOf(
+    snapshot: LocalOnboardingViewSnapshot,
+): AnalyticsSetupDownloadFailure | undefined {
+    const daemon = snapshot.daemon;
+    if (
+        daemon?.error === undefined ||
+        daemon.errorCode === undefined ||
+        daemon.errorCode === "start_timeout"
+    )
+        return undefined;
+    const progress = daemon.downloadFailure;
+    return {
+        error_detail: daemon.errorCode,
+        attempt_count: progress?.attempts ?? 0,
+        transfer_percent_bucket: transferPercentBucket(
+            progress?.receivedBytes ?? 0,
+            progress?.totalBytes ?? 0,
+        ),
+    };
+}
+
+function transferPercentBucket(
+    receivedBytes: number,
+    totalBytes: number,
+): AnalyticsTransferPercentBucket {
+    if (receivedBytes <= 0 || totalBytes <= 0) return "none";
+    if (receivedBytes >= totalBytes) return "complete";
+    return receivedBytes * 2 < totalBytes ? "under_half" : "over_half";
 }
 
 /** The Setup step as the step bar draws it, and not a finished Setup being looked at again. */
@@ -433,12 +469,20 @@ export function desktopAnalyticsCreate(options: {
         onboardingObserve(store, welcome) {
             /** One pass through Setup in this window, from its first showing to its end. */
             let setup:
-                | { readonly startedAt: number; failure?: AnalyticsSetupErrorCode }
+                | {
+                      readonly startedAt: number;
+                      failure?: AnalyticsSetupErrorCode;
+                      /** Where the download stopped, kept only beside a `download_failed`. */
+                      download?: AnalyticsSetupDownloadFailure;
+                  }
                 | undefined;
             const setupEnd = (
                 outcome:
                     | { readonly result: "ok" }
-                    | { readonly result: "failed"; readonly error_code: AnalyticsSetupErrorCode },
+                    | ({
+                          readonly result: "failed";
+                          readonly error_code: AnalyticsSetupErrorCode;
+                      } & Partial<AnalyticsSetupDownloadFailure>),
                 trackOptions?: AnalyticsTrackOptions,
             ): void => {
                 if (!setup) return;
@@ -456,7 +500,13 @@ export function desktopAnalyticsCreate(options: {
                 // is still running when the window goes is reported here, with
                 // the last failure it met if it met one.
                 setupEnd(
-                    { result: "failed", error_code: setup?.failure ?? "closed_during_setup" },
+                    {
+                        result: "failed",
+                        error_code: setup?.failure ?? "closed_during_setup",
+                        ...(setup?.failure === "download_failed" && setup.download
+                            ? setup.download
+                            : {}),
+                    },
                     { beacon: true },
                 );
             const subscriptionsClose = (): void => {
@@ -502,7 +552,16 @@ export function desktopAnalyticsCreate(options: {
                 }
                 if (setup) {
                     const failure = setupFailureOf(snapshot, localProtocolMismatch());
-                    if (failure) setup.failure = failure;
+                    if (failure) {
+                        // A retry clears the shell's error before the window's
+                        // own failure, so a download failure seen again without
+                        // its code keeps the one it had.
+                        if (failure !== "download_failed") setup.download = undefined;
+                        else if (setup.failure !== "download_failed")
+                            setup.download = setupDownloadFailureOf(snapshot);
+                        else setup.download = setupDownloadFailureOf(snapshot) ?? setup.download;
+                        setup.failure = failure;
+                    }
                     const stage = snapshot.onboarding?.stage;
                     // Setup ends when Happy Agent answers and setup moves on to
                     // what the machine has. Leaving local setup altogether is

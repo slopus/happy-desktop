@@ -97,6 +97,36 @@ export type AnalyticsSetupErrorCode =
     /** The window closed while setup was still working, with no failure seen. */
     | "closed_during_setup";
 
+/**
+ * Where a `download_failed` stopped, as the shell coded it where the failure
+ * was raised. Absent from shells too old to say.
+ */
+export type AnalyticsSetupErrorDetail =
+    | "release_lookup_rate_limited"
+    | "release_lookup_failed"
+    | "release_unavailable"
+    | "network_unreachable"
+    | "transfer_interrupted"
+    | "transfer_timeout"
+    | "transfer_http_error"
+    | "integrity_mismatch"
+    | "disk_full"
+    | "filesystem_locked"
+    | "extract_failed"
+    | "install_lock_timeout"
+    | "unclassified";
+
+/** How much of the archive had arrived when a download failed, as a percentage band. */
+export type AnalyticsTransferPercentBucket = "none" | "under_half" | "over_half" | "complete";
+
+/** What a shell that codes its download failures adds to a `download_failed`. */
+export interface AnalyticsSetupDownloadFailure {
+    readonly error_detail: AnalyticsSetupErrorDetail;
+    /** Requests made for the archive, resumes included; 0 when it failed before asking. */
+    readonly attempt_count: number;
+    readonly transfer_percent_bucket: AnalyticsTransferPercentBucket;
+}
+
 /** Event-specific properties, by event name. */
 export interface AnalyticsEvents {
     readonly app_opened: { readonly launch_count: number };
@@ -105,7 +135,10 @@ export interface AnalyticsEvents {
     };
     readonly onboarding_setup_result: (
         | { readonly result: "ok" }
-        | { readonly result: "failed"; readonly error_code: AnalyticsSetupErrorCode }
+        | ({
+              readonly result: "failed";
+              readonly error_code: AnalyticsSetupErrorCode;
+          } & Partial<AnalyticsSetupDownloadFailure>)
     ) & {
         /** From the Setup step first showing in this window to its end. */
         readonly duration_ms: number;
@@ -177,6 +210,9 @@ export const ANALYTICS_PROPERTY_NAMES: ReadonlySet<string> = new Set([
     "source",
     "result",
     "error_code",
+    "error_detail",
+    "attempt_count",
+    "transfer_percent_bucket",
     "client",
     "target",
     "session_client",
@@ -190,6 +226,7 @@ export const ANALYTICS_PROPERTY_NAMES: ReadonlySet<string> = new Set([
     | keyof AnalyticsCommonProperties
     | { [E in AnalyticsEventName]: keyof AnalyticsEvents[E] }[AnalyticsEventName]
     | "error_code"
+    | keyof AnalyticsSetupDownloadFailure
 )[]);
 
 /** Maps an operating system as Node names it (`process.platform`) to the shared family. */
