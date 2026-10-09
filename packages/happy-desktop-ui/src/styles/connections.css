@@ -9,6 +9,7 @@
     background: var(--surface);
 }
 .happy-connections__rail {
+    position: relative;
     display: flex;
     flex-direction: column;
     /* Tiles start on the traffic lights' own x=14 and leave 6px on the trailing
@@ -17,40 +18,42 @@
     flex: 0 0 56px;
     min-height: 0;
     box-sizing: border-box;
-    background: var(--rail-background);
+    /* The sidebar's own tone: rail and sidebar are one column split by a
+       hairline, and the title band above them reads as one unbroken strip. */
+    background: var(--groupped-background);
 }
 .happy-connections__rail[data-window-controls] {
     /* Matches the 40px hidden title bar the macOS traffic lights are centred in. */
     padding-top: 40px;
 }
-/* The halo behind the traffic lights. The lights are 14px discs centred on
-   y=20 and spanning x=14…76, with the rail ending at 56, so the green one
-   would sit on the seam between the rail's tone and the sidebar's. A solid
-   capsule of the rail's tone stands under the whole cluster instead, with
-   2px of clear ground around every disc — 18px tall with a 9px radius (2 +
-   the 7px disc radius), from 2px before the red light to 2px after the green
-   — so nothing changes shade right against a light. The fade is the shape
-   itself blurred, so no edge anywhere can read as a line: a 4px blur keeps a
-   shape solid to about 8px inside its edge and is gone about 8px outside
-   it, so the shape is drawn 8px larger all round than the solid core it is
-   meant to leave, and its fade runs 16px out from that core. Where the
-   halo lies on the rail it is the rail's own colour and so invisible; the
-   tiles stand above its fade. */
-.happy-connections:has(> .happy-connections__rail[data-window-controls]) {
-    position: relative;
-}
-.happy-connections:has(> .happy-connections__rail[data-window-controls])::before {
+/* The hairline between the rail and the sidebar beside it. In a window it
+   starts below the title band, so the band the traffic lights sit in stays one
+   continuous strip across rail and sidebar. */
+.happy-connections__rail::after {
     content: "";
     position: absolute;
     z-index: 1;
-    top: 3px;
-    left: 4px;
-    width: 82px;
-    height: 34px;
-    border-radius: 17px;
-    background: var(--rail-background);
-    filter: blur(4px);
-    opacity: 0.8;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 1px;
+    background: var(--divider);
+    pointer-events: none;
+}
+.happy-connections__rail[data-window-controls]::after {
+    top: 40px;
+}
+/* The title band is fixed while the tiles scroll beneath it, so it closes on
+   the same hairline the sidebar heading beside it does, on the same line. */
+.happy-connections__rail[data-window-controls]::before {
+    content: "";
+    position: absolute;
+    z-index: 1;
+    top: 39px;
+    right: 0;
+    left: 0;
+    height: 1px;
+    background: var(--divider);
     pointer-events: none;
 }
 .happy-connections__rail > .happy-scroll-area {
@@ -83,7 +86,8 @@
     align-items: center;
     justify-content: center;
     position: relative;
-    /* Above the halo's tail, so its last few percent never tint a tile. */
+    /* Above the rail's hairlines, so a tile held in a drag is never struck
+       through by one. */
     z-index: 2;
     width: 36px;
     height: 36px;
@@ -158,7 +162,7 @@
     height: 8px;
     border-radius: var(--happy-radius-pill);
     background: var(--status-error);
-    box-shadow: 0 0 0 2px var(--rail-background);
+    box-shadow: 0 0 0 2px var(--groupped-background);
 }
 .happy-connections__items[data-reordering] .happy-connections__item {
     transition:

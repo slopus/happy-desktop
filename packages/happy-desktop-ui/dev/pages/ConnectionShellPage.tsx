@@ -1,10 +1,12 @@
 import { useState } from "react";
+import { AppShell } from "../../src/AppShell";
 import { ConnectionShell, type ConnectionShellItem } from "../../src/ConnectionShell";
 import { ConnectionSurface } from "../../src/ConnectionSurface";
 import { ProfileSetupScreen } from "../../src/ProfileSetupScreen";
 import { SplashScreen } from "../../src/SplashScreen";
 import { Sidebar } from "../../src/Sidebar";
 import { Button } from "../../src/Button";
+import { ThemeScope } from "../../src/ThemeScope";
 import { ComponentPage, Specimen } from "../kit";
 
 export const componentNumber = "C-280";
@@ -34,6 +36,50 @@ const workingItems: readonly ConnectionShellItem[] = [
     { id: "idle", label: "Idle server", local: false, status: "connected" },
     { ...items[2]!, working: true },
 ];
+/** The rail as the window shows it: beside an AppShell sidebar, under the traffic lights. */
+function WindowedBesideSidebar() {
+    return (
+        <ConnectionShell items={items} selectedId="local" onSelect={() => undefined} windowControls>
+            <ConnectionSurface active>
+                <AppShell
+                    connectionRail
+                    sidebar={
+                        <Sidebar
+                            activeItemId="growth"
+                            onItemSelect={() => undefined}
+                            onSectionAction={() => undefined}
+                            sections={[
+                                {
+                                    action: { icon: "plus", label: "Create bot" },
+                                    id: "bots",
+                                    label: "Bots",
+                                    items: [
+                                        {
+                                            id: "chief-of-staff",
+                                            kind: "agent",
+                                            label: "Chief of Staff",
+                                            icon: "chat",
+                                        },
+                                        {
+                                            id: "growth",
+                                            kind: "agent",
+                                            label: "Growth",
+                                            icon: "chat",
+                                        },
+                                    ],
+                                },
+                            ]}
+                        />
+                    }
+                    sidebarCollapsible
+                    windowControls
+                >
+                    <p>The workspace.</p>
+                </AppShell>
+            </ConnectionSurface>
+        </ConnectionShell>
+    );
+}
 export function ConnectionShellPage() {
     const [selected, select] = useState("local");
     const [connectingSelected, connectingSelect] = useState("starting");
@@ -207,6 +253,23 @@ export function ConnectionShellPage() {
                         <p>Saving the remote connection order.</p>
                     </ConnectionShell>
                 </div>
+            </Specimen>
+            <Specimen
+                number="11"
+                label="Windowed · beside a sidebar"
+                detail="Rail and sidebar share one tone. The 40px title band runs unbroken across both and closes on one hairline; the rail's own hairline starts below it."
+                stage="surface"
+            >
+                {(["light", "dark"] as const).map((mode) => (
+                    <ThemeScope key={mode} mode={mode}>
+                        <div
+                            data-screen={`windowed-beside-sidebar-${mode}`}
+                            style={{ display: "flex", width: 900, height: 640 }}
+                        >
+                            <WindowedBesideSidebar />
+                        </div>
+                    </ThemeScope>
+                ))}
             </Specimen>
             <Specimen
                 number="07"
