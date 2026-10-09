@@ -15,6 +15,7 @@ import {
     type DesktopMediaPreview,
     type DesktopRuntimeSnapshot,
     type DesktopStartRequest,
+    type DesktopSystem,
     type DesktopWindowState,
     type HappyDesktopBridge,
     type HappyMediaPreviewBridge,
@@ -42,6 +43,21 @@ function buildIdentityRead(): DesktopBuildIdentity | undefined {
     }
 }
 
+/**
+ * The OS version as a bare number and the shell's architecture. Linux reports
+ * a kernel release rather than an OS version, so it reports none.
+ */
+function systemRead(): DesktopSystem {
+    const version = process.getSystemVersion();
+    return {
+        osVersion:
+            process.platform !== "linux" && /^[0-9]+(\.[0-9]+){0,3}$/.test(version)
+                ? version
+                : null,
+        arch: process.arch === "arm64" || process.arch === "x64" ? process.arch : "other",
+    };
+}
+
 const identity = buildIdentityRead();
 const debugMetricsEnabled = process.argv.includes(debugMetricsArgument);
 
@@ -52,6 +68,7 @@ const bridge: HappyDesktopBridge = {
     liveMicrophoneStart: (input) => ipcRenderer.invoke(desktopIpc.liveMicrophoneStart, input),
     liveMicrophoneRevoke: () => ipcRenderer.invoke(desktopIpc.liveMicrophoneRevoke),
     ...(identity ? { buildIdentity: identity } : {}),
+    system: systemRead(),
     debugMetricsEnabled,
     appearanceSet: (mode) => ipcRenderer.send(desktopIpc.appearanceSet, mode),
     attachmentSourcePath(file: File) {

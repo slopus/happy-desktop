@@ -21,6 +21,7 @@ import {
     desktopTopologyTarget,
 } from "./runtimeValidation";
 import {
+    HappyAgentStartTimeoutError,
     localHappyAgentConnectorCreate,
     type LocalHappyAgentConnection,
     type LocalHappyAgentConnector,
@@ -537,6 +538,9 @@ export class DesktopRuntime implements AsyncDisposable {
             this.publish({
                 phase: "error",
                 message: displayError(error),
+                ...(error instanceof HappyAgentStartTimeoutError
+                    ? { code: "start_timeout" as const }
+                    : {}),
                 request,
                 retryable: true,
                 targets: this.targets(),

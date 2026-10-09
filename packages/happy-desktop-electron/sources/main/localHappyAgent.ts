@@ -79,6 +79,14 @@ export class HappyAgentBinaryMissingError extends Error {
     }
 }
 
+/** Happy Agent was started but never answered within the wait for it. */
+export class HappyAgentStartTimeoutError extends Error {
+    constructor(message: string, options?: ErrorOptions) {
+        super(message, options);
+        this.name = "HappyAgentStartTimeoutError";
+    }
+}
+
 export interface HappyAgentProcessResult {
     readonly stdout: string;
     readonly stderr: string;
@@ -269,12 +277,19 @@ export function localHappyAgentConnectorCreate(
                 }
                 const daemon = await sharedDaemonAttach(daemonPaths, clientCreate, wait, 10_000);
                 if (!daemon) {
-                    throw new Error(
-                        startError
-                            ? `Happy Agent could not be started: ${errorMessage(startError)}`
-                            : "Timed out while waiting for Happy Agent.",
-                        startError ? { cause: startError } : undefined,
-                    );
+                    const message = startError
+                        ? `Happy Agent could not be started: ${errorMessage(startError)}`
+                        : "Timed out while waiting for Happy Agent.";
+                    const options = startError ? { cause: startError } : undefined;
+                    // No answer at all, or a start command its timeout killed.
+                    const timedOut =
+                        !startError ||
+                        (typeof startError === "object" &&
+                            "killed" in startError &&
+                            startError.killed === true);
+                    throw timedOut
+                        ? new HappyAgentStartTimeoutError(message, options)
+                        : new Error(message, options);
                 }
                 return localHappyAgentConnectionCreate(daemon, wait);
             }
@@ -493,7 +508,7 @@ async function readyHealthWait(
         if (health.status === "ready") return health;
         await wait(50);
     }
-    throw new Error("The shared Happy Agent daemon did not become ready.");
+    throw new HappyAgentStartTimeoutError("The shared Happy Agent daemon did not become ready.");
 }
 
 function errorMessage(error: unknown): string {

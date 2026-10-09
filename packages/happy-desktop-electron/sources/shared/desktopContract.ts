@@ -234,12 +234,28 @@ export interface DesktopDaemonDownload {
     readonly totalBytes: number;
 }
 
+/**
+ * Why starting Happy Agent failed, as a fixed code beside the displayable
+ * error. Absent where no fixed code applies; the message is never classified.
+ */
+export type DesktopStartFailureCode = "start_timeout";
+
+/** The machine the shell runs on, as far as anything may know it. */
+export interface DesktopSystem {
+    /** The bare OS version number (`15.6.0`, `10.0.26100`); null where the OS reports more than a number. */
+    readonly osVersion: string | null;
+    /** The shell's own architecture. */
+    readonly arch: "arm64" | "x64" | "other";
+}
+
 /** The machine-local Happy Agent installation and the daemon currently serving it. */
 export interface DesktopDaemonSnapshot {
     readonly availableVersion?: string;
     /** The archive on its way here, while `operation` is `downloading`. */
     readonly download?: DesktopDaemonDownload;
     readonly error?: string;
+    /** The fixed code for `error`, when it has one. Cleared with `error`. */
+    readonly errorCode?: DesktopStartFailureCode;
     readonly installation: "missing" | "installed";
     readonly installedVersion?: string;
     readonly managed: boolean;
@@ -295,6 +311,8 @@ export type DesktopRuntimeSnapshot =
     | {
           phase: "error";
           message: string;
+          /** The fixed code for `message`, when it has one. */
+          code?: DesktopStartFailureCode;
           request: DesktopStartRequest;
           retryable: boolean;
           /**
@@ -643,6 +661,8 @@ export interface HappyDesktopBridge {
      * whole life: the shell has it before the first frame and it never changes.
      */
     readonly buildIdentity?: DesktopBuildIdentity;
+    /** The machine the shell runs on. Absent from shells older than this field. */
+    readonly system?: DesktopSystem;
     /**
      * Whether this window was explicitly launched with desktop debug tooling.
      * This is fixed for the window's life and is separate from `buildIdentity`:

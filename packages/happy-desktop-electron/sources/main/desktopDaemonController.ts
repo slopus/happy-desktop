@@ -592,9 +592,11 @@ export class DesktopDaemonController {
                 });
             } catch (error) {
                 const selected = await happyAgentBinarySelected(this.paths).catch(() => undefined);
+                const timedOut = commandTimedOut(error);
                 this.publish({
                     ...installationProject(this.snapshotValue, selected),
                     error: displayError(error),
+                    ...(timedOut ? { errorCode: "start_timeout" as const } : {}),
                     message: undefined,
                     operation: "idle",
                     versions: await this.versionsProject(),
@@ -776,6 +778,11 @@ export class DesktopDaemonController {
                     version === snapshot.installedVersion,
             ),
         };
+        // A code describes the error it was published with and nothing after.
+        if (snapshot.error === undefined && snapshot.errorCode !== undefined) {
+            const { errorCode: _errorCode, ...current } = snapshot;
+            snapshot = current;
+        }
         this.snapshotValue = snapshot;
         for (const listener of this.listeners) listener(snapshot);
     }
@@ -822,6 +829,14 @@ function daemonCommandRun(
             },
         );
     });
+}
+
+/** Whether `execFile` killed the command because its own timeout ran out. */
+function commandTimedOut(error: unknown): boolean {
+    const cause = error instanceof Error && error.cause !== undefined ? error.cause : error;
+    return (
+        typeof cause === "object" && cause !== null && "killed" in cause && cause.killed === true
+    );
 }
 
 function displayError(error: unknown): string {
