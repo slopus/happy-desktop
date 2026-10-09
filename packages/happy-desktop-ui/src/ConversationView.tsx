@@ -231,6 +231,30 @@ export type ConversationViewProps = {
     style?: CSSProperties;
 };
 
+/** How many recently opened conversations keep their prepared row layout. */
+const ROW_HEIGHT_CACHE_LIMIT = 4;
+/*
+ * One row-layout cache per recently opened conversation. The owner remounts
+ * this view for every conversation it opens, so the registry belongs to the
+ * module rather than to one view's lifetime: returning to a conversation reuses
+ * its prepared text layout instead of laying its whole history out again.
+ * These are memo caches, not product state — retaining a calculation never
+ * drives a render — and Map insertion order is the bounded LRU.
+ */
+const rowHeightCaches = new Map<string, ConversationRowHeightCache>();
+function conversationRowHeightCacheGet(key: string): ConversationRowHeightCache {
+    const cache = rowHeightCaches.get(key) ?? conversationRowHeightCacheCreate();
+    // The conversation being read is touched last and so survives the evictions below.
+    rowHeightCaches.delete(key);
+    rowHeightCaches.set(key, cache);
+    while (rowHeightCaches.size > ROW_HEIGHT_CACHE_LIMIT) {
+        const oldest = rowHeightCaches.keys().next().value as string | undefined;
+        if (oldest === undefined || oldest === key) break;
+        rowHeightCaches.delete(oldest);
+    }
+    return cache;
+}
+
 /** Whether the turn this row carries the trace control for is currently open. */
 function conversationEntryTraceOpen(
     entry: ConversationEntry,
@@ -339,17 +363,6 @@ export function ConversationView(props: ConversationViewProps) {
         messageTextLayoutFontGenerationGet,
         messageTextLayoutFontGenerationGet,
     );
-    /*
-     * One row-layout cache per recent conversation: leaving a conversation and
-     * coming back reuses prepared text layout without retaining every session
-     * ever visited by this mounted view. This Map and its values are
-     * component-lifetime memo caches, not product state: retaining a calculation
-     * never drives another render.
-     * The row estimator needs the active cache while rendering, so lazy state
-     * initialization gives the registry one stable owner without reading or
-     * writing a ref during render.
-     */
-    const [rowHeightCaches] = useState(() => new Map<string, ConversationRowHeightCache>());
     const conversationCacheKey =
         props.conversationId === undefined ? "anonymous" : `conversation:${props.conversationId}`;
     const [rowExpansion, setRowExpansion] = useState(() => new Map<string, boolean>());
@@ -367,20 +380,7 @@ export function ConversationView(props: ConversationViewProps) {
             return next;
         });
     };
-    const cachedRowHeights = rowHeightCaches.get(conversationCacheKey);
-    const rowHeightCache = cachedRowHeights ?? conversationRowHeightCacheCreate();
-    if (cachedRowHeights === undefined) rowHeightCaches.set(conversationCacheKey, rowHeightCache);
-    else {
-        // Map insertion order is the tiny LRU; the current conversation is
-        // always touched last and therefore survives a later navigation.
-        rowHeightCaches.delete(conversationCacheKey);
-        rowHeightCaches.set(conversationCacheKey, cachedRowHeights);
-    }
-    while (rowHeightCaches.size > 4) {
-        const oldest = rowHeightCaches.keys().next().value as string | undefined;
-        if (oldest === undefined || oldest === conversationCacheKey) break;
-        rowHeightCaches.delete(oldest);
-    }
+    const rowHeightCache = conversationRowHeightCacheGet(conversationCacheKey);
     const { transcript, queued } = conversationPendingSteering(props.entries);
     const awaitingInput = transcript.some(
         (entry) =>

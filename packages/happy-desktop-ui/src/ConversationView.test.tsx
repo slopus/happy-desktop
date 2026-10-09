@@ -104,7 +104,7 @@ function harnessStoreCreate() {
     };
 }
 
-it("keeps one row-height cache per conversation for the mounted view lifetime", () => {
+it("keeps one row-height cache per conversation across view lifetimes", () => {
     cacheProbe.created.length = 0;
     cacheProbe.used.length = 0;
     const store = harnessStoreCreate();
@@ -179,18 +179,16 @@ it("keeps one row-height cache per conversation for the mounted view lifetime", 
             .every((use) => use.cache === firstCache && use.entryId === "entry-a"),
     ).toBe(true);
 
+    /* The owner remounts the view for every conversation it opens; a remount
+       must not throw away the layout already prepared for this one. */
     flushSync(() => store.set({ mounted: false }));
     const remountStart = cacheProbe.used.length;
     flushSync(() => store.set({ mounted: true }));
-    const remountedCache = cacheProbe.created[2];
-    expect(cacheProbe.created).toHaveLength(3);
-    expect(remountedCache).toBeDefined();
-    expect(remountedCache).not.toBe(firstCache);
-    expect(remountedCache).not.toBe(secondCache);
+    expect(cacheProbe.created).toHaveLength(2);
     expect(cacheProbe.used.length).toBeGreaterThan(remountStart);
     expect(
         cacheProbe.used
             .slice(remountStart)
-            .every((use) => use.cache === remountedCache && use.entryId === "entry-a"),
+            .every((use) => use.cache === firstCache && use.entryId === "entry-a"),
     ).toBe(true);
 });
