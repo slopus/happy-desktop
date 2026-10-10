@@ -42,6 +42,17 @@ function listCreate(initial: readonly HappyAgentTask[]) {
     let mutation = 0;
     const actions = {
         archiveTask: vi.fn(() => `mut_${String(++mutation)}`),
+        createTask: vi.fn(
+            (): {
+                taskId: string;
+                workspaceId: string;
+                agentId: string;
+                task: Promise<unknown>;
+            } => {
+                throw new Error("No create was expected.");
+            },
+        ),
+        renameTask: vi.fn(() => `mut_${String(++mutation)}`),
         joinTask: vi.fn(() => `mut_${String(++mutation)}`),
         leaveTask: vi.fn(() => `mut_${String(++mutation)}`),
         reorderTask: vi.fn(() => `mut_${String(++mutation)}`),
@@ -191,4 +202,69 @@ it("joins once, marking the task as joining until the host lists the membership"
     harness.hostAnswers([task("open", { orderKey: "a0" })]);
     await vi.waitFor(() => expect(ids(harness.list.get().tasks)).toEqual(["open"]));
     expect(harness.list.get().tasksJoining.size).toBe(0);
+});
+
+it("creates a task, answering with its conversation once the host lists it at the top", async () => {
+    using harness = listCreate([task("a", { orderKey: "a1" })]);
+    await vi.waitFor(() => expect(harness.list.get().tasks).toHaveLength(1));
+    harness.actions.createTask.mockImplementation(() => ({
+        taskId: "new",
+        workspaceId: "ws_new",
+        agentId: "ses_new",
+        task: Promise.resolve({ id: "new", workspaceId: "ws_new", agent: { id: "ses_new" } }),
+    }));
+
+    let settled = false;
+    const creation = harness.list.taskCreate({ name: "  Invoice rounding  " }).then((value) => {
+        settled = true;
+        return value;
+    });
+    expect(harness.actions.createTask).toHaveBeenCalledWith("Invoice rounding");
+    // Not answered until the list carries it: the window must not turn to a
+    // conversation the sidebar does not have yet.
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(settled).toBe(false);
+
+    harness.hostAnswers([task("new", { orderKey: "a0" }), task("a", { orderKey: "a1" })]);
+    await expect(creation).resolves.toEqual({
+        taskId: "new",
+        location: { groupId: "ws_new", sessionId: "ses_new" },
+    });
+    expect(ids(harness.list.get().tasks)).toEqual(["new", "a"]);
+
+    // A blank name is left out, for the host to name the task from its first message.
+    harness.actions.createTask.mockImplementation(() => ({
+        taskId: "other",
+        workspaceId: "ws_other",
+        agentId: "ses_other",
+        task: Promise.reject(new Error("The task's folder could not be created.")),
+    }));
+    await expect(harness.list.taskCreate({ name: "   " })).rejects.toThrow(
+        "The task's folder could not be created.",
+    );
+    expect(harness.actions.createTask).toHaveBeenLastCalledWith(undefined);
+    expect(harness.list.get().mutationError?.message).toBe(
+        "The task's folder could not be created.",
+    );
+});
+
+it("renames at once, and states the host's refusal under the task", async () => {
+    using harness = listCreate([task("a", { orderKey: "a1" })]);
+    await vi.waitFor(() => expect(harness.list.get().tasks).toHaveLength(1));
+
+    await harness.list.taskRename("a" as HappyAgentTaskId, "Alpha");
+    expect(harness.actions.renameTask).toHaveBeenCalledWith("a", "Alpha");
+    expect(harness.list.get().tasks[0]?.name).toBe("Alpha");
+
+    harness.reject({
+        type: "mutation_rejected",
+        action: "rename_task",
+        message: "“a” changed while you were renaming it. Try again.",
+        mutationId: "mut_1",
+    });
+    expect(harness.list.get().taskFailures.get("a" as HappyAgentTaskId)).toMatchObject({
+        action: "rename",
+        error: { message: "“a” changed while you were renaming it. Try again." },
+    });
 });

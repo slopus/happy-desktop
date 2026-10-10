@@ -216,3 +216,72 @@ it("archives against the task's version and states a refusal or a stale version 
     await vi.waitFor(() => expect(taskIn(watch.tasks, "task_owned")?.archived).toBe(true));
     expect(rejections).toHaveLength(2);
 });
+
+it("creates a task under the ids it chose, joined at the top of the viewer's list", async () => {
+    const daemon = fakeHappyAgentDaemonCreate();
+    daemon.taskSeed({ id: "task_a", joinedKey: "a1" });
+    const { connection, watch } = harnessOpen(daemon);
+    await vi.waitFor(() => expect(watch.tasks).toHaveLength(1));
+
+    const creation = connection.createTask("Invoice rounding");
+    const task = await creation.task;
+    expect(task).toMatchObject({
+        id: creation.taskId,
+        name: "Invoice rounding",
+        workspaceId: creation.workspaceId,
+    });
+    expect(task.agent.id).toBe(creation.agentId);
+    // The task's own id is the retry key, so a resent create makes nothing new.
+    expect(daemon.calls.find((call) => call.method === "createTask")?.args[0]).toMatchObject({
+        agentId: creation.agentId,
+        id: creation.taskId,
+        mutationId: creation.taskId,
+        name: "Invoice rounding",
+        workspaceId: creation.workspaceId,
+    });
+    await vi.waitFor(() => expect(taskIn(watch.tasks, creation.taskId)?.membership).toBeDefined());
+    expect(taskIn(watch.tasks, creation.taskId)!.membership!.orderKey < "a1").toBe(true);
+
+    // Without a name the host gives one, and names it again from its first message.
+    const unnamed = connection.createTask();
+    expect((await unnamed.task).name).toBe("New Task");
+    expect(
+        daemon.calls.filter((call) => call.method === "createTask")[1]?.args[0],
+    ).not.toHaveProperty("name");
+});
+
+it("rejects a refused create with the host's reason and lists nothing", async () => {
+    const daemon = fakeHappyAgentDaemonCreate();
+    daemon.failOnce("createTask", new Error("The task's folder could not be created."));
+    const { connection, watch } = harnessOpen(daemon);
+    await vi.waitFor(() => expect(daemon.streamLiveCount()).toBe(1));
+
+    await expect(connection.createTask("Nope").task).rejects.toThrow(
+        "The task's folder could not be created.",
+    );
+    expect(watch.tasks).toHaveLength(0);
+});
+
+it("renames against the task's version and says so when the version moved", async () => {
+    const daemon = fakeHappyAgentDaemonCreate();
+    daemon.taskSeed({ id: "task_a", name: "Alpha", joinedKey: "a1" });
+    const { connection, rejections, watch } = harnessOpen(daemon);
+    await vi.waitFor(() => expect(watch.tasks).toHaveLength(1));
+
+    const before = daemon.taskGet("task_a");
+    connection.renameTask("task_a", "Alpha prime");
+    await vi.waitFor(() => expect(taskIn(watch.tasks, "task_a")?.name).toBe("Alpha prime"));
+    expect(daemon.calls.find((call) => call.method === "renameTask")?.args).toMatchObject([
+        "task_a",
+        { name: "Alpha prime" },
+        { ifMatch: before.version },
+    ]);
+
+    // Stale: the 409 reads the task again and asks for another try.
+    daemon.taskReplace({ ...daemon.taskGet("task_a"), version: daemon.versionNext() });
+    connection.renameTask("task_a", "Alpha again");
+    await vi.waitFor(() => expect(rejections).toHaveLength(1));
+    expect(rejections[0]).toMatchObject({ action: "rename_task" });
+    expect(rejections[0]!.message).toContain("changed while you were renaming it");
+    expect(taskIn(watch.tasks, "task_a")?.name).toBe("Alpha prime");
+});

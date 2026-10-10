@@ -42,7 +42,9 @@ export type HappyAgentRoute =
     | { readonly kind: "inbox"; readonly happyAgentId: string }
     | { readonly kind: "happyAgent"; readonly happyAgentId: string }
     | { readonly kind: "settings" }
-    | { readonly kind: "settingsSection"; readonly section: string };
+    | { readonly kind: "settingsSection"; readonly section: string }
+    /** Where a new task is made, on the machine it will live on, as a bot is. */
+    | { readonly kind: "taskCreate"; readonly happyAgentId: string };
 
 /** The place a window opens on before it has been anywhere. */
 export const HAPPY_AGENT_ROUTE_HOME: HappyAgentRoute = { kind: "home" };
@@ -79,6 +81,8 @@ export function happyAgentRoutePath(route: HappyAgentRoute): string {
             return "/settings";
         case "settingsSection":
             return `/settings/${part(route.section)}`;
+        case "taskCreate":
+            return `/tasks/new/${part(route.happyAgentId)}`;
     }
 }
 
@@ -159,6 +163,10 @@ export function happyAgentRoutePathParse(pathname: string): HappyAgentRoute | un
         case "settings":
             if (first === undefined) return { kind: "settings" };
             return segments.length === 2 ? { kind: "settingsSection", section: first } : undefined;
+        case "tasks":
+            return first === "new" && second !== undefined && segments.length === 3
+                ? { kind: "taskCreate", happyAgentId: second }
+                : undefined;
         default:
             return undefined;
     }
@@ -232,6 +240,10 @@ export function happyAgentRouteParse(value: unknown): HappyAgentRoute | undefine
         case "settingsSection": {
             const section = fieldOf(record, "section");
             return section ? { kind: "settingsSection", section } : undefined;
+        }
+        case "taskCreate": {
+            const happyAgentId = fieldOf(record, "happyAgentId");
+            return happyAgentId ? { kind: "taskCreate", happyAgentId } : undefined;
         }
         default:
             return undefined;

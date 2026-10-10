@@ -68,6 +68,7 @@ export { happyAgentBotSubtasks, happyAgentTaskDepths } from "./happyAgent/happyA
 export type { HappyAgentSubtaskRoot } from "./happyAgent/happyAgentBotSubtasks.js";
 export {
     HAPPY_AGENT_TASKS_VERSION,
+    HAPPY_AGENT_TASK_CREATE_VERSION,
     happyAgentTasksBrowsable,
     happyAgentTasksJoined,
 } from "./happyAgent/happyAgentTasks.js";

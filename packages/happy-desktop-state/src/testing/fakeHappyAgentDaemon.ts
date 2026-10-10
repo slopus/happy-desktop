@@ -545,6 +545,81 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
             await record("getTask", [taskId, ...rest]);
             return taskResponse(taskId);
         },
+        async createTask(
+            request: {
+                readonly id?: string;
+                readonly workspaceId?: string;
+                readonly agentId?: string;
+                readonly name?: string;
+            } = {},
+            ...rest: unknown[]
+        ) {
+            await record("createTask", [request, ...rest]);
+            // Retried with the same id, the task already made is answered again.
+            if (request.id !== undefined && tasks.has(request.id)) return taskResponse(request.id);
+            const id = request.id ?? `task-${String((idCounter += 1))}`;
+            const workspaceId = request.workspaceId ?? `taskws-${id}`;
+            const name = request.name ?? "New Task";
+            const agent = seedAgent(workspaceId, {
+                ...(request.agentId === undefined ? {} : { id: request.agentId }),
+                title: name,
+            });
+            const task: Task = {
+                archivedAt: null,
+                canArchive: profile.userId !== undefined,
+                compute: { path: `/tmp/tasks/${id}`, type: "host" },
+                createdAt: 1,
+                creatorAgentId: null,
+                folderName: id,
+                name,
+                ownerUserId: profile.userId ?? null,
+                status: "active",
+                updatedAt: 1,
+                version: versionOf((versionCounter += 1)),
+                agent,
+                id,
+                workspaceId,
+            };
+            tasks.set(id, task);
+            // The maker joins it, at the top of their own list.
+            const first = membershipsOrdered()[0];
+            const membership: TaskMembership = {
+                joinedAt: 1,
+                orderKey: generateKeyBetween(null, first?.orderKey ?? null),
+                taskId: id,
+                userId: profile.userId ?? null,
+            };
+            memberships.set(id, membership);
+            emit("task.created", { task });
+            emit("agent.created", { agent });
+            emit("task.joined", { membership });
+            return taskResponse(id);
+        },
+        async renameTask(
+            taskId: string,
+            request: { readonly name: string },
+            options: { readonly ifMatch: string },
+        ) {
+            await record("renameTask", [taskId, request, options]);
+            const current = taskRequired(taskId);
+            if (current.version !== options.ifMatch)
+                throw new HappyAgentApiError(409, "The task changed.", "conflict", null);
+            const agent = agentBump(current.agent.id, { title: request.name });
+            const changes = { name: request.name, agent };
+            const next: Task = {
+                ...current,
+                ...changes,
+                version: versionOf((versionCounter += 1)),
+            };
+            tasks.set(taskId, next);
+            emit("task.updated", {
+                taskId,
+                previousVersion: current.version,
+                version: next.version,
+                changes,
+            });
+            return taskResponse(taskId);
+        },
         async joinTask(taskId: string, ...rest: unknown[]) {
             await record("joinTask", [taskId, ...rest]);
             taskRequired(taskId);

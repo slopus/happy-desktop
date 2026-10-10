@@ -90,6 +90,7 @@ import {
     projectsVisibilityStoreNoop,
     happyAgentVersionAtLeast,
     HAPPY_AGENT_TASKS_VERSION,
+    HAPPY_AGENT_TASK_CREATE_VERSION,
     happyAgentInboxStoreNoop,
     happyAgentNavigationOrderApply,
     happyAgentAvailabilityProject,
@@ -161,6 +162,7 @@ import {
     type FileTreeExpansion,
     type FileTreeBuildEntry,
     HappyAgentCreateBotPage,
+    HappyAgentCreateTaskPage,
     HappyAgentProjectCloneDialog,
     HappyAgentTaskBrowseDialog,
     HappyAgentProjectSettingsDialog,
@@ -326,13 +328,13 @@ export interface AppHappyAgentEntry {
      */
     readonly tasks?: readonly HappyAgentTask[];
     /**
-     * Task acts the host refused — a join, leave, move, or archive — by task.
-     * The reason is stated under the Tasks heading. Absent reads as none.
+     * Task acts the host refused — a join, leave, move, archive, or rename —
+     * by task. The reason is stated under the Tasks heading. Absent reads as none.
      */
     readonly taskFailures?: ReadonlyMap<
         string,
         {
-            readonly action: "join" | "leave" | "reorder" | "archive" | "unarchive";
+            readonly action: "join" | "leave" | "reorder" | "archive" | "unarchive" | "rename";
             readonly error: { readonly message: string };
         }
     >;
@@ -592,6 +594,10 @@ export interface AppHappyAgentViewProps {
     botCreateOpen?: boolean;
     /** Addresses that surface on one machine. Absent in a host with nowhere to put it. */
     onBotCreateOpen?(happyAgentId: string): void;
+    /** Whether the URL addresses the surface for a new task. */
+    taskCreateOpen?: boolean;
+    /** Addresses that surface on one machine. Absent in a host with nowhere to put it. */
+    onTaskCreateOpen?(happyAgentId: string): void;
     /** Whether the URL addresses the addressed Happy Agent's inbox of agent questions. */
     inboxOpen?: boolean;
     /** Addresses that inbox. */
@@ -1012,6 +1018,8 @@ function rowMenuItems(
     bots: readonly HappyAgentBot[],
     tasks: readonly HappyAgentTask[],
     item: SidebarItem,
+    /** Whether the Happy Agent renames tasks; one from before that cannot. */
+    taskRenamable = false,
 ): MenuItem[] {
     // A subtask's title is the daemon's to write, so archiving is all its row
     // offers. The task stops and leaves its bot; its history and its worktree
@@ -1032,6 +1040,11 @@ function rowMenuItems(
     const task = tasks.find((entry) => entry.workspaceId === item.id);
     if (task)
         return [
+            ...(taskRenamable
+                ? ([
+                      { kind: "item", id: ROW_MENU_RENAME, label: "Rename task", icon: "edit" },
+                  ] as const)
+                : []),
             { kind: "item", id: ROW_MENU_LEAVE, label: "Leave task", icon: "close" },
             ...(task.canArchive
                 ? ([
@@ -1801,23 +1814,45 @@ function happyAgentTasksSection(
                 id: happyAgentItemId(happyAgent.id, item.id),
                 ...happyAgentSidebarItemAvailability(item, happyAgent),
             })),
-        ...(connected
+        // The heading makes a task the way the Bots heading makes a bot, with
+        // browsing beside it. A Happy Agent from before task creation only
+        // browses, so its search stands where the + would.
+        ...(connected && happyAgentTaskCreateSupported(happyAgent)
             ? {
                   action: {
+                      icon: "plus" as const,
+                      label: "New task",
+                      reveal: "always" as const,
+                  },
+                  secondaryAction: {
                       icon: "search" as const,
                       label: "Browse tasks",
                       reveal: "always" as const,
                   },
-                  // Nothing joined yet says so under the heading, with the way
-                  // to find something to join right beside it.
+                  // Nothing joined yet says so under the heading, with making
+                  // the first one right beside it.
                   empty: {
-                      actionLabel: "Browse tasks",
-                      description: "Join a task to keep it here.",
+                      actionLabel: "New task",
+                      description: "Start a task, or browse to join one.",
                       icon: "tasks" as const,
                       title: "No tasks yet",
                   },
               }
-            : {}),
+            : connected
+              ? {
+                    action: {
+                        icon: "search" as const,
+                        label: "Browse tasks",
+                        reveal: "always" as const,
+                    },
+                    empty: {
+                        actionLabel: "Browse tasks",
+                        description: "Join a task to keep it here.",
+                        icon: "tasks" as const,
+                        title: "No tasks yet",
+                    },
+                }
+              : {}),
         ...taskFailureError(happyAgent),
         ...(taskFailureError(happyAgent).error === undefined
             ? subtaskFailureError(happyAgent, happyAgent.tasks ?? [])
@@ -1835,6 +1870,11 @@ function happyAgentTasksSupported(happyAgent: AppHappyAgentEntry): boolean {
         (happyAgent.tasks?.length ?? 0) > 0 ||
         happyAgentVersionAtLeast(happyAgent.version, HAPPY_AGENT_TASKS_VERSION)
     );
+}
+
+/** Whether this Happy Agent makes and renames tasks: `HAPPY_AGENT_TASK_CREATE_VERSION` onwards. */
+function happyAgentTaskCreateSupported(happyAgent: AppHappyAgentEntry): boolean {
+    return happyAgentVersionAtLeast(happyAgent.version, HAPPY_AGENT_TASK_CREATE_VERSION);
 }
 
 /**
@@ -1857,7 +1897,9 @@ function taskFailureError(happyAgent: AppHappyAgentEntry): Pick<SidebarSection, 
     return {};
 }
 
-function taskFailureVerb(action: "join" | "leave" | "reorder" | "archive" | "unarchive"): string {
+function taskFailureVerb(
+    action: "join" | "leave" | "reorder" | "archive" | "unarchive" | "rename",
+): string {
     if (action === "reorder") return "move";
     return action;
 }
@@ -2334,10 +2376,13 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                 const row = happyAgentItemParse(item.id);
                 const happyAgent = happyAgentOf(row.happyAgentId);
                 if (happyAgent?.status !== "connected") return [];
-                return rowMenuItems(happyAgent.projects, happyAgent.bots, happyAgent.tasks ?? [], {
-                    ...item,
-                    id: row.id,
-                });
+                return rowMenuItems(
+                    happyAgent.projects,
+                    happyAgent.bots,
+                    happyAgent.tasks ?? [],
+                    { ...item, id: row.id },
+                    happyAgentTaskCreateSupported(happyAgent),
+                );
             }}
             // Each heading makes its own kind of thing on the Happy Agent it
             // names: a bot is named on a surface of its own, a project is chosen
@@ -2346,8 +2391,9 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                 const section = happyAgentSectionParse(sectionId);
                 if (!section) return;
                 // Folding the list is this window's own record, whatever the
-                // machine behind it is doing.
-                if (source === "secondary") {
+                // machine behind it is doing. The Tasks heading's second
+                // control browses instead, below.
+                if (source === "secondary" && section.kind !== "tasks") {
                     sidebarCollapseStore.rowCollapseToggle(sectionId);
                     return;
                 }
@@ -2359,8 +2405,11 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                 const workspace = happyAgent.session?.workspace;
                 if (!workspace) return;
                 if (section.kind === "bots") props.onBotCreateOpen?.(happyAgent.id);
-                else if (section.kind === "tasks") workspace.taskBrowseOpen();
-                else workspace.projectAdd();
+                else if (section.kind === "tasks") {
+                    if (source !== "secondary" && happyAgentTaskCreateSupported(happyAgent))
+                        props.onTaskCreateOpen?.(happyAgent.id);
+                    else workspace.taskBrowseOpen();
+                } else workspace.projectAdd();
             }}
             onItemMenuSelect={(item, actionId) => {
                 const row = happyAgentItemParse(item.id);
@@ -2386,6 +2435,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                     // No navigation either way: the task leaves the list when
                     // the host's own catalog stops listing it, and the
                     // workspace follows that, so a refusal strands nobody.
+                    if (actionId === ROW_MENU_RENAME) workspace.taskRenameOpen(task.id);
                     if (actionId === ROW_MENU_LEAVE)
                         void workspace.taskLeave(task.id).catch(() => undefined);
                     if (actionId === ROW_MENU_ARCHIVE && task.canArchive)
@@ -2683,6 +2733,22 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                         // so it goes to the machine's own browser where the
                         // host can send it there.
                         onExternalLinkOpen={props.onExternalLinkOpen ?? openExternalLink}
+                        workspace={active.session.workspace}
+                        {...(activeAvailability?.refusal === undefined
+                            ? {}
+                            : { unavailable: activeAvailability.refusal })}
+                    />
+                </>
+            );
+
+        // A task is made on the addressed machine, as a bot is.
+        if (props.taskCreateOpen && active?.session?.workspace)
+            return (
+                <>
+                    {desktop ? <WindowDragRegion /> : null}
+                    <HappyAgentCreateTaskSurface
+                        happyAgentOnline={activeHappyAgentOnline}
+                        providerUsage={active.session.providerUsage}
                         workspace={active.session.workspace}
                         {...(activeAvailability?.refusal === undefined
                             ? {}
@@ -6615,6 +6681,112 @@ function HappyAgentCreateBotSurface(props: {
             }}
             onComposerValueChange={(value) =>
                 reactFrameInputUpdate(store, () => store.botCreateTaskUpdate(value))
+            }
+        />
+    );
+}
+
+/**
+ * Where a task is made, as a bot is: the conversation it is about to become,
+ * with the name and Create in the body and the task's own composer under it.
+ * Sending makes the task and says the first thing to it; Create makes it and
+ * carries the words into the conversation as its draft. The composer is the
+ * draft's own, for the reason the bot surface gives.
+ */
+function HappyAgentCreateTaskSurface(props: {
+    happyAgentOnline: () => boolean;
+    providerUsage?: HappyAgentProviderUsageStore;
+    unavailable?: string;
+    workspace: HappyAgentWorkspaceStore;
+}) {
+    const taskCreate = useSyncExternalStore(
+        reactFrameSubscribe(props.workspace),
+        props.workspace.get,
+        props.workspace.get,
+    ).taskCreate;
+    const modelUsageWatch = useComposerModelUsageWatch(props.providerUsage);
+    if (!taskCreate) return null;
+    const store = props.workspace;
+    const menus = taskCreate.menus;
+    return (
+        <ConversationView
+            agentAuthor={agentAuthor}
+            composer={taskCreate.composer}
+            composerFocusOnType
+            composerFocusKey={taskCreate.composer.scopeId}
+            composerControls={
+                menus ? (
+                    <ComposerModelControl
+                        {...happyAgentComposerModelControlProps(menus, {
+                            usageWatch: modelUsageWatch,
+                            onChiefOfStaffAsk: (request) => store.chiefOfStaffDraftAppend(request),
+                            onEffortChange: (effort?: HappyAgentThinkingLevel) =>
+                                store.taskCreateEffortUpdate(effort),
+                            onModelChange: (selection: HappyAgentModelSelection) =>
+                                store.taskCreateModelUpdate(selection),
+                        })}
+                    />
+                ) : undefined
+            }
+            composerFooterControl={
+                <ComposerFooterBar
+                    leading={
+                        menus ? (
+                            <HappyAgentSessionControls
+                                fields={["permission", "tier"]}
+                                menuPlacement="above"
+                                variant="ghost"
+                                menus={menus}
+                                onEffortChange={(effort?: HappyAgentThinkingLevel) =>
+                                    store.taskCreateEffortUpdate(effort)
+                                }
+                                onModelChange={(selection: HappyAgentModelSelection) =>
+                                    store.taskCreateModelUpdate(selection)
+                                }
+                                onPermissionModeChange={(mode: HappyAgentPermissionMode) =>
+                                    store.taskCreatePermissionModeUpdate(mode)
+                                }
+                                onServiceTierChange={(tier?: HappyAgentServiceTier) =>
+                                    store.taskCreateServiceTierUpdate(tier)
+                                }
+                            />
+                        ) : undefined
+                    }
+                    note="Sending also creates the task"
+                />
+            }
+            composerPlaceholder="What should it work on?"
+            composerSubmitDisabled={props.unavailable !== undefined}
+            emptyContent={
+                <HappyAgentCreateTaskPage
+                    {...(taskCreate.error === undefined ? {} : { error: taskCreate.error })}
+                    name={taskCreate.name}
+                    // Controlled, so the value reaches React inside its event,
+                    // as the bot's name does.
+                    onNameChange={(name) =>
+                        reactFrameInputUpdate(store, () => store.taskCreateNameUpdate(name))
+                    }
+                    onSubmit={() => {
+                        if (props.happyAgentOnline())
+                            void store.taskCreateSubmit().catch(() => undefined);
+                    }}
+                    submitting={taskCreate.submitting}
+                    {...(props.unavailable === undefined
+                        ? {}
+                        : { submitDisabledReason: props.unavailable })}
+                />
+            }
+            entries={NO_ENTRIES}
+            onComposerAttachmentRemove={(attachmentId) =>
+                store.taskCreateAttachmentRemove(attachmentId)
+            }
+            onComposerAttachmentsSelect={(files) => store.taskCreateAttachmentsAdd(files)}
+            onComposerFocusChange={(focused) => store.taskCreateMessageFocusUpdate(focused)}
+            onComposerSend={() => {
+                if (props.happyAgentOnline()) store.taskCreateMessageSend();
+            }}
+            onComposerValueChange={(value) =>
+                reactFrameInputUpdate(store, () => store.taskCreateMessageUpdate(value))
             }
         />
     );

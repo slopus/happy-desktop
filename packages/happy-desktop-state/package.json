@@ -21,7 +21,7 @@
     },
     "dependencies": {
         "@sinclair/typebox": "^0.34.49",
-        "@slopus/happy-agent-client": "0.0.76",
+        "@slopus/happy-agent-client": "0.0.77",
         "yjs": "^13.6.31",
         "zustand": "5.0.14"
     },

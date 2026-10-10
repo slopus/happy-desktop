@@ -8,6 +8,7 @@ import type {
     MutationId,
     Project,
     SlashCommand,
+    Task,
 } from "@slopus/happy-agent-client";
 import type { HappyAgentDebugLogInput } from "../happyAgent/happyAgentDebugLogStore.js";
 import type { HappyAgentAvatarImage } from "../happyAgent/happyAgentTypes.js";
@@ -719,6 +720,7 @@ export type MutationAction =
     | "reorder_session"
     | "reorder_subtask"
     | "join_task"
+    | "rename_task"
     | "leave_task"
     | "reorder_task"
     | "archive_task"
@@ -832,6 +834,18 @@ export interface BotCreationRequest {
     readonly workspaceId: string;
     readonly agentId: string;
     readonly bot: Promise<Bot>;
+}
+
+/**
+ * A task being created: its three identities, named by this client before the
+ * host is asked, and the host's answer. The host puts the caller's membership
+ * at the top of their list; both are adopted before `task` settles.
+ */
+export interface TaskCreationRequest {
+    readonly taskId: string;
+    readonly workspaceId: string;
+    readonly agentId: string;
+    readonly task: Promise<Task>;
 }
 
 export interface ProjectAddOptions {
@@ -960,6 +974,14 @@ export interface HappyAgentConnection {
     /** Archives a task for everyone; only a caller the task reports `canArchive` for may. */
     archiveTask(taskId: string): MutationId;
     unarchiveTask(taskId: string): MutationId;
+    /**
+     * Creates a task owned by the caller and joined at the top of their list.
+     * Without a name the host calls it "New Task" and names it from its first
+     * message. The task id doubles as the retry key.
+     */
+    createTask(name?: string): TaskCreationRequest;
+    /** Renames a task for everyone, guarded by its version; ends automatic naming. */
+    renameTask(taskId: string, name: string): MutationId;
     close(): void;
 }
 

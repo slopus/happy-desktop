@@ -139,7 +139,7 @@ export interface HappyAgentSessionListSnapshot {
 
 /** A refused act on one task, and the host's reason. */
 export interface HappyAgentTaskFailure {
-    readonly action: "join" | "leave" | "reorder" | "archive" | "unarchive";
+    readonly action: "join" | "leave" | "reorder" | "archive" | "unarchive" | "rename";
     readonly error: UserError;
 }
 
@@ -231,6 +231,28 @@ export interface HappyAgentBotCreateInput {
     readonly selection?: HappyAgentSelection;
 }
 
+/**
+ * What `taskCreate` answers with: the task, and the address of its one
+ * conversation. The list carries the task, at the top of the reader's own list,
+ * by the time this is handed back.
+ */
+export interface HappyAgentTaskCreation {
+    readonly taskId: HappyAgentTaskId;
+    readonly location: HappyAgentSessionLocation;
+}
+
+/**
+ * Everything decided about a task before the host is asked for it. Nothing is
+ * required: an absent name has the host call it "New Task" until its first
+ * message says what it is for; an absent selection leaves the conversation on
+ * the host's own defaults.
+ */
+export interface HappyAgentTaskCreateInput {
+    readonly name?: string;
+    /** The model, effort, access mode, and speed its conversation starts with. */
+    readonly selection?: HappyAgentSelection;
+}
+
 export type HappyAgentSessionListOutput = {
     readonly type: "sessionCreated";
     readonly location: HappyAgentSessionLocation;
@@ -313,6 +335,14 @@ export interface HappyAgentSessionListStore {
     botArchive(botId: HappyAgentBotId): Promise<void>;
     /** Moves one bot after `afterId`, or to the front of the bot list when null. */
     botReorder(botId: HappyAgentBotId, afterId: HappyAgentBotId | null): Promise<void>;
+    /**
+     * Creates a task owned by the reader, which the host puts at the top of
+     * their own list. Resolves once this list carries it, with the address of
+     * its conversation; rejects with a displayable reason when the host refuses.
+     */
+    taskCreate(input: HappyAgentTaskCreateInput): Promise<HappyAgentTaskCreation>;
+    /** Renames a task for everyone. The row wears the new name at once. */
+    taskRename(taskId: HappyAgentTaskId, name: string): Promise<void>;
     /** Joins a task, which the host puts at the top of the reader's own list. */
     taskJoin(taskId: HappyAgentTaskId): Promise<void>;
     /**
@@ -506,6 +536,7 @@ export interface HappyAgentSessionListDeps {
         | "archiveWorkspace"
         | "createBot"
         | "createSession"
+        | "createTask"
         | "createWorkspace"
         | "joinTask"
         | "leaveTask"
@@ -519,6 +550,7 @@ export interface HappyAgentSessionListDeps {
         | "reorderSubtask"
         | "reorderTask"
         | "reorderWorkspace"
+        | "renameTask"
         | "setBotAvatar"
         | "setEffort"
         | "setPermissionMode"
@@ -809,6 +841,8 @@ export function happyAgentSessionListStoreCreate(
         readonly reject: (error: Error) => void;
     }
     const botWaiters = new Map<HappyAgentBotId, HappyAgentBotWaiter[]>();
+    /** Callers waiting for this list to carry a task it was just told about. */
+    const taskWaiters = new Map<HappyAgentTaskId, HappyAgentBotWaiter[]>();
     /** Takes every waiter on one worktree out of the registry, ready to settle. */
     const worktreeWaitersTake = (
         worktreeId: HappyAgentWorktreeId,
@@ -1416,6 +1450,7 @@ export function happyAgentSessionListStoreCreate(
                 publish(projected, pending.archivedSessions);
                 worktreesSettle();
                 botsSettle();
+                tasksSettle();
                 projectArchivesConfirmAbsent();
                 worktreeArchivesConfirmAbsent();
             }
@@ -1484,6 +1519,29 @@ export function happyAgentSessionListStoreCreate(
             botWaiters.delete(bot.id);
             for (const waiter of waiting) waiter.resolve();
         }
+    };
+
+    /** Settles everyone waiting on a joined task this list now carries. */
+    const tasksSettle = (): void => {
+        if (taskWaiters.size === 0) return;
+        for (const task of store.getState().tasks) {
+            const waiting = taskWaiters.get(task.id);
+            if (!waiting) continue;
+            taskWaiters.delete(task.id);
+            for (const waiter of waiting) waiter.resolve();
+        }
+    };
+
+    /** Resolves once the reader's own list carries the task, as `botListed` does for a bot. */
+    const taskListed = (taskId: HappyAgentTaskId): Promise<void> => {
+        if (store.getState().tasks.some((task) => task.id === taskId)) return Promise.resolve();
+        return new Promise<void>((resolve, reject) => {
+            const waiting = taskWaiters.get(taskId);
+            const waiter: HappyAgentBotWaiter = { resolve, reject };
+            if (waiting) waiting.push(waiter);
+            else taskWaiters.set(taskId, [waiter]);
+            void reconcile();
+        });
     };
 
     /**
@@ -2478,6 +2536,52 @@ export function happyAgentSessionListStoreCreate(
                 publish();
                 connectMutationTrack(deps.connectActions.reorderBot(botId, afterId));
             }),
+        taskCreate: async (input) => {
+            store.setState({ ...store.getState(), mutationError: undefined });
+            const name = input.name?.trim();
+            const request = deps.connectActions.createTask(
+                name === undefined || name.length === 0 ? undefined : name,
+            );
+            const taskId = request.taskId as HappyAgentTaskId;
+            try {
+                const task = await request.task;
+                // What the composer showed while the first message was written
+                // is what the conversation runs with, applied the way a new
+                // bot's is.
+                if (input.selection !== undefined)
+                    botSelectionApply(task.agent.id, input.selection);
+                await taskListed(taskId);
+                return {
+                    taskId,
+                    location: {
+                        groupId: task.workspaceId as HappyAgentGroupId,
+                        sessionId: task.agent.id as HappyAgentSessionId,
+                    },
+                };
+            } catch (error) {
+                const failure = happyAgentUserError(error);
+                if (!disposed) store.setState({ ...store.getState(), mutationError: failure });
+                throw failure;
+            }
+        },
+        taskRename: (taskId, name) =>
+            mutate(async () => {
+                if (!internal.getState().catalog.tasks.some((task) => task.id === taskId)) return;
+                taskFailureWithdraw(taskId);
+                internal.setState((state) => ({
+                    catalog: {
+                        ...state.catalog,
+                        tasks: state.catalog.tasks.map((task) =>
+                            task.id === taskId ? { ...task, name } : task,
+                        ),
+                    },
+                }));
+                publish();
+                const mutationId = connectMutationTrack(
+                    deps.connectActions.renameTask(taskId, name),
+                );
+                taskMutations.set(mutationId, { taskId, action: "rename" });
+            }),
         taskJoin: (taskId) =>
             mutate(async () => {
                 const task = internal.getState().catalog.tasks.find((entry) => entry.id === taskId);
@@ -2652,8 +2756,9 @@ export function happyAgentSessionListStoreCreate(
             const waiters = [...worktreeWaiters.values()].flat();
             worktreeWaiters.clear();
             for (const waiter of waiters) waiter.reject(cancelled);
-            const botWaiting = [...botWaiters.values()].flat();
+            const botWaiting = [...botWaiters.values(), ...taskWaiters.values()].flat();
             botWaiters.clear();
+            taskWaiters.clear();
             for (const waiter of botWaiting) waiter.reject(cancelled);
             for (const mutationId of projectArchiveWaiters.keys()) {
                 projectArchiveSettle(mutationId, {

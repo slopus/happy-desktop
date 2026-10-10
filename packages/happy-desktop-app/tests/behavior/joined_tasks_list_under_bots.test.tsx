@@ -126,6 +126,7 @@ interface TaskActions {
     taskArchive: (taskId: string) => Promise<void>;
     taskReorder: (taskId: string, afterId: string | null) => Promise<void>;
     taskBrowseOpen: () => void;
+    taskRenameOpen: (taskId: string) => void;
 }
 
 interface Listing {
@@ -216,6 +217,7 @@ function view(
         actions?: Partial<TaskActions>;
         entries?: (actions: TaskActions) => readonly AppHappyAgentEntry[];
         projectsVisibility?: ProjectsVisibilityStore;
+        onTaskCreateOpen?: (happyAgentId: string) => void;
     } = {},
 ) {
     const actions: TaskActions = {
@@ -223,6 +225,7 @@ function view(
         taskArchive: vi.fn(() => Promise.resolve()),
         taskReorder: vi.fn(() => Promise.resolve()),
         taskBrowseOpen: vi.fn(),
+        taskRenameOpen: vi.fn(),
         ...options.actions,
     };
     const snapshot: AppHappyAgentDirectorySnapshot = {
@@ -245,6 +248,7 @@ function view(
             {...(options.projectsVisibility
                 ? { projectsVisibility: options.projectsVisibility }
                 : {})}
+            {...(options.onTaskCreateOpen ? { onTaskCreateOpen: options.onTaskCreateOpen } : {})}
         />,
     );
     return { ...rendered, actions };
@@ -446,4 +450,60 @@ it("leaves the Tasks section out entirely on a Happy Agent from before tasks", (
     });
     expect(sectionLabels(container)).toEqual(["Bots", "Projects"]);
     expect(container.querySelector('[aria-label="Browse tasks"]')).toBeNull();
+});
+
+/** A Happy Agent that makes and renames tasks, not only lists them. */
+const CREATES = "0.4.87-preview.6";
+
+it("makes a task from the + on the Tasks heading, with Browse beside it", () => {
+    const onTaskCreateOpen = vi.fn();
+    const { container, actions } = view({
+        onTaskCreateOpen,
+        entries: (actions) => [entry("local", actions, { version: CREATES })],
+    });
+    const create = container.querySelector<HTMLButtonElement>(
+        '[aria-label="New task"][data-happy-desktop-ui="sidebar-section-action"]',
+    )!;
+    const browse = container.querySelector<HTMLButtonElement>(
+        '[aria-label="Browse tasks"][data-happy-desktop-ui="sidebar-section-secondary-action"]',
+    )!;
+    expect(create).not.toBeNull();
+    expect(browse).not.toBeNull();
+
+    fireEvent.click(create);
+    expect(onTaskCreateOpen).toHaveBeenCalledWith("local");
+    expect(actions.taskBrowseOpen).not.toHaveBeenCalled();
+
+    fireEvent.click(browse);
+    expect(actions.taskBrowseOpen).toHaveBeenCalledTimes(1);
+    expect(onTaskCreateOpen).toHaveBeenCalledTimes(1);
+});
+
+it("offers New task in the empty Tasks section on a Happy Agent that makes them", () => {
+    const onTaskCreateOpen = vi.fn();
+    const { container } = view({
+        onTaskCreateOpen,
+        entries: (actions) => [entry("local", actions, { tasks: [], version: CREATES })],
+    });
+    const empty = container.querySelector('[data-happy-desktop-ui="sidebar-section-empty"]')!;
+    expect(empty.textContent).toContain("Start a task, or browse to join one.");
+    const button = empty.querySelector("button")!;
+    expect(button.textContent).toBe("New task");
+    fireEvent.click(button);
+    expect(onTaskCreateOpen).toHaveBeenCalledWith("local");
+});
+
+it("renames a task from its context menu on a Happy Agent that renames them", () => {
+    const { container, actions } = view({
+        entries: (actions) => [entry("local", actions, { version: CREATES })],
+    });
+    fireEvent.contextMenu(row(container, "ws_billing"), { clientX: 40, clientY: 40 });
+    expect(menuLabels()).toEqual(["Rename task", "Leave task"]);
+    fireEvent.click(
+        document.querySelector(
+            '[data-happy-desktop-ui="sidebar-item-menu"] [data-item-id="rename"]',
+        )!,
+    );
+    expect(actions.taskRenameOpen).toHaveBeenCalledWith("billing");
+    expect(actions.taskLeave).not.toHaveBeenCalled();
 });

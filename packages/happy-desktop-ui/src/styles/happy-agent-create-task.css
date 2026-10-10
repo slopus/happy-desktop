@@ -1,0 +1,106 @@
+/*
+ * C-287 HappyAgentCreateTaskPage — what is decided about a task before it
+ * exists, standing in the body of the conversation it is about to become.
+ *
+ * The panel is the empty content of a conversation view: one centred column,
+ * the title and lede over the name, with Create beside the name. The column
+ * is the vertical middle of the body. The well, radius and placeholder are
+ * TextField's and Button's own; the name answers focus the way the composer
+ * under it does, as on the bot page.
+ */
+
+.happy-agent-create-task,
+.happy-agent-create-task * {
+    box-sizing: border-box;
+}
+
+.happy-agent-create-task {
+    display: flex;
+    flex: 1 0 auto;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 24px;
+    margin: 0 auto;
+    padding: 32px 24px;
+    width: 100%;
+    max-width: var(--happy-chat-measure);
+    color: var(--text);
+    font-family: var(--happy-font-ui);
+    font-synthesis: none;
+}
+
+.happy-agent-create-task__header {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    text-align: center;
+}
+
+.happy-agent-create-task__title {
+    margin: 0;
+    color: var(--text);
+    font-family: var(--happy-font-ui);
+    font-size: 24px;
+    font-weight: 600;
+    line-height: 32px;
+    letter-spacing: -0.2px;
+}
+
+.happy-agent-create-task__lede {
+    margin: 0;
+    max-width: 440px;
+    color: var(--text-secondary);
+    font-family: var(--happy-font-ui);
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 20px;
+    letter-spacing: 0;
+}
+
+/* The name and Create, and what is said about them, 8px apart. */
+.happy-agent-create-task__below {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    width: 100%;
+    max-width: 360px;
+}
+
+.happy-agent-create-task__row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.happy-agent-create-task__name {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.happy-agent-create-task__name .happy-text-field__control {
+    border-color: transparent;
+}
+
+.happy-agent-create-task__name .happy-text-field__control:focus-within {
+    border-color: var(--divider);
+    outline: none;
+}
+
+.happy-agent-create-task__create {
+    flex: none;
+}
+
+.happy-agent-create-task__reason {
+    margin: 0;
+    color: var(--text-secondary);
+    font-family: var(--happy-font-ui);
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 18px;
+    text-align: center;
+}

@@ -148,6 +148,7 @@
 @import "./styles/happy-agent-inbox.css";
 @import "./styles/happy-agent-project-settings.css";
 @import "./styles/happy-agent-create-bot.css";
+@import "./styles/happy-agent-create-task.css";
 @import "./styles/happy-agent-project-clone-dialog.css";
 @import "./styles/happy-agent-task-browse-dialog.css";
 @import "./styles/workspace-lifecycle-notice.css";

@@ -3719,6 +3719,63 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         unarchiveTask(taskId) {
             return taskArchivalSet(taskId, false);
         },
+        createTask(name) {
+            // As with a bot, all three identities are named here, and the task
+            // id doubles as the mutation key so a request repeated after a
+            // dropped answer settles on the task already made.
+            const taskId = nextId();
+            const workspaceId = nextId();
+            const agentId = nextId();
+            const task = (async () => {
+                const response = await client.createTask(
+                    {
+                        agentId,
+                        id: taskId,
+                        mutationId: taskId,
+                        // Left out rather than sent blank: an absent name is
+                        // what asks the host to name it from the first message.
+                        ...(name === undefined ? {} : { name }),
+                        workspaceId,
+                    },
+                    { signal: rootController.signal },
+                );
+                // The task and the caller's place at the top of their list,
+                // adopted now so the caller about to open it finds it listed.
+                taskResponseAdopt(response);
+                return response.task;
+            })();
+            return { agentId, task, taskId, workspaceId };
+        },
+        renameTask(taskId, name) {
+            const mutationId = nextId();
+            return mutation(
+                "rename_task",
+                mutationId,
+                async () => {
+                    const task = taskOf(taskId);
+                    if (task === undefined) throw new Error("The task is not loaded.");
+                    try {
+                        return await client.renameTask(
+                            taskId,
+                            { mutationId, name },
+                            { ifMatch: task.version, signal: deadlineSignal() },
+                        );
+                    } catch (error) {
+                        if (error instanceof HappyAgentApiError && error.status === 409) {
+                            taskRefetch(taskId);
+                            throw new Error(
+                                `“${task.name}” changed while you were renaming it. Try again.`,
+                            );
+                        }
+                        throw error;
+                    }
+                },
+                taskResponseAdopt,
+                undefined,
+                undefined,
+                `task:${taskId}`,
+            );
+        },
         reorderProject(projectId, afterId) {
             const mutationId = nextId();
             const project = groupsStore

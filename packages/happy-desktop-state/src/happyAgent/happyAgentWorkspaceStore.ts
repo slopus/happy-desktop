@@ -754,6 +754,8 @@ export interface HappyAgentWorkspaceSnapshot {
     readonly workspaceFilesLoading: boolean;
     /** The bot being made, while that surface is open. */
     readonly botCreate?: HappyAgentBotCreateSnapshot;
+    /** The task being made, while that surface is open. */
+    readonly taskCreate?: HappyAgentTaskCreateSnapshot;
     /** Present while the list of every task is open for the reader to join one. */
     readonly taskBrowseOpen?: true;
     /** Where adding a folder to this machine as a project stands. */
@@ -845,6 +847,25 @@ export interface HappyAgentBotCreateSnapshot {
      */
     readonly menus?: HappyAgentMenusSnapshot;
     /** True while the bot is being made; the surface stays up and inert. */
+    readonly submitting: boolean;
+    /** A refused creation, said on the surface rather than thrown away. */
+    readonly error?: string;
+}
+
+/**
+ * A task being made. It is made the way a bot is — a name that may be left
+ * blank for the host to give from the first message, and the first message
+ * written in the composer its conversation will have — but a task has no face
+ * of its own, so there is nothing to pick.
+ */
+export interface HappyAgentTaskCreateSnapshot {
+    /** The chosen name. Blank, the host names the task from its first message. */
+    readonly name: string;
+    /** The composer the first message is written in; see `HappyAgentBotCreateSnapshot`. */
+    readonly composer: ComposerSnapshot;
+    /** The pickers the task's conversation will start with, once the catalog is read. */
+    readonly menus?: HappyAgentMenusSnapshot;
+    /** True while the task is being made; the surface stays up and inert. */
     readonly submitting: boolean;
     /** A refused creation, said on the surface rather than thrown away. */
     readonly error?: string;
@@ -1167,6 +1188,7 @@ export type HappyAgentRenameSnapshot = {
     readonly submitting: boolean;
 } & (
     | { readonly kind: "bot"; readonly botId: string }
+    | { readonly kind: "task"; readonly taskId: HappyAgentTaskId }
     | { readonly kind: "project"; readonly projectId: HappyAgentProjectId }
     | {
           readonly kind: "workspace";
@@ -1821,6 +1843,39 @@ export interface HappyAgentWorkspaceStore {
      * what they were writing. A refused creation is reported on the surface.
      */
     botCreateSubmit(): Promise<void>;
+    /**
+     * Opens the surface a task is made on, or comes back to the one already
+     * open. It is the bot's surface without a face: a name, and the first
+     * message in the composer the task's conversation will have. Opening it
+     * puts down a bot being made, since one surface is made on at a time.
+     */
+    taskCreateOpen(): void;
+    /** Edits the name of the task being made. */
+    taskCreateNameUpdate(name: string): void;
+    /** Edits the first message, in the composer that will become the conversation's. */
+    taskCreateMessageUpdate(text: string): void;
+    /** Whether that composer's text control owns focus. */
+    taskCreateMessageFocusUpdate(focused: boolean): void;
+    /** Attaches files to the first message, as `botCreateAttachmentsAdd` does. */
+    taskCreateAttachmentsAdd(files: readonly File[]): void;
+    /** Removes one attachment from the first message. */
+    taskCreateAttachmentRemove(attachmentId: string): void;
+    /** Chooses the model the task's conversation starts on; effort and speed follow it. */
+    taskCreateModelUpdate(input: HappyAgentModelSelection): void;
+    taskCreateEffortUpdate(effort?: HappyAgentThinkingLevel): void;
+    taskCreatePermissionModeUpdate(permissionMode: HappyAgentPermissionMode): void;
+    taskCreateServiceTierUpdate(serviceTier?: HappyAgentServiceTier): void;
+    /**
+     * Sends the first message, which makes the task on the way, exactly as
+     * `botCreateTaskSend` makes a bot: the host puts the new task at the top of
+     * the reader's own list, and its conversation is reported through
+     * `conversationOpenRequested` with that message already in it.
+     */
+    taskCreateMessageSend(): void;
+    /** Makes the task without saying anything to it, as `botCreateSubmit` does a bot. */
+    taskCreateSubmit(): Promise<void>;
+    /** Opens the name dialog for a task. Any member may rename it. */
+    taskRenameOpen(taskId: HappyAgentTaskId): void;
     /** Starts renaming a project, or one of its worktrees, from its current name. */
     renameOpen(projectId: HappyAgentProjectId, worktreeId: HappyAgentWorktreeId | undefined): void;
     /** Opens the same name dialog for a bot's persistent identity. */
@@ -2261,6 +2316,12 @@ export function happyAgentWorkspaceStoreCreate(
         readonly error?: string;
     }
     let botCreateDraft: BotCreateDraft | undefined;
+    /**
+     * What the draft is making. A task is made on the bot's own machinery —
+     * the same name, composer, and pickers — less the face, so one draft
+     * serves both and this says which surface it is published as.
+     */
+    let createKind: "bot" | "task" = "bot";
     let botCreateComposer: ComposerStore | undefined;
     let unsubscribeBotCreateComposer: (() => void) | undefined;
     /**
@@ -2277,6 +2338,7 @@ export function happyAgentWorkspaceStoreCreate(
     let botCreatePaint: HappyAgentBotFacePaint | undefined;
     /** The parts composed for the snapshot, rebuilt only when one has changed. */
     let botCreate: HappyAgentBotCreateSnapshot | undefined;
+    let taskCreate: HappyAgentTaskCreateSnapshot | undefined;
     let botCreateComposedFrom:
         | {
               readonly draft: BotCreateDraft;
@@ -2909,6 +2971,7 @@ export function happyAgentWorkspaceStoreCreate(
                 snapshot.workspaceFiles === workspaceFiles &&
                 snapshot.workspaceFilesLoading === workspaceFilesLoading &&
                 snapshot.botCreate === botCreate &&
+                snapshot.taskCreate === taskCreate &&
                 (snapshot.taskBrowseOpen === true) === taskBrowseOpen &&
                 snapshot.projectAdd === projectAdd &&
                 snapshot.projectClone === projectClone
@@ -2941,6 +3004,7 @@ export function happyAgentWorkspaceStoreCreate(
                           projectAdd,
                           ...(projectClone ? { projectClone } : {}),
                           ...(botCreate ? { botCreate } : {}),
+                          ...(taskCreate ? { taskCreate } : {}),
                           ...(taskBrowseOpen ? { taskBrowseOpen: true as const } : {}),
                           ...(activeMainViewId ? { activeMainViewId } : {}),
                           ...(displayedMainViewId ? { displayedMainViewId } : {}),
@@ -5093,6 +5157,7 @@ export function happyAgentWorkspaceStoreCreate(
         const composerState = botCreateComposer?.getState();
         if (botCreateDraft === undefined || composerState === undefined) {
             botCreate = undefined;
+            taskCreate = undefined;
             botCreateComposedFrom = undefined;
             return;
         }
@@ -5104,11 +5169,20 @@ export function happyAgentWorkspaceStoreCreate(
         )
             return;
         botCreateComposedFrom = { draft: botCreateDraft, composer: composerState, session };
-        botCreate = {
-            ...botCreateDraft,
-            composer: composerState,
-            ...(session === undefined ? {} : { menus: session.menus }),
-        };
+        const menus = session === undefined ? {} : { menus: session.menus };
+        if (createKind === "task") {
+            botCreate = undefined;
+            taskCreate = {
+                name: botCreateDraft.name,
+                submitting: botCreateDraft.submitting,
+                ...(botCreateDraft.error === undefined ? {} : { error: botCreateDraft.error }),
+                composer: composerState,
+                ...menus,
+            };
+            return;
+        }
+        taskCreate = undefined;
+        botCreate = { ...botCreateDraft, composer: composerState, ...menus };
     };
 
     /**
@@ -5210,10 +5284,12 @@ export function happyAgentWorkspaceStoreCreate(
     const botCreateRun = async (message: BotCreateMessage | undefined): Promise<void> => {
         const pending = botCreateDraft;
         const paint = botCreatePaint;
+        const kind = createKind;
         // Thrown rather than returned: a send that resolved here would be
         // taken by its composer as confirmed, and clear the words it holds.
-        if (!pending || paint === undefined) throw new Error("No bot is being made.");
-        if (pending.submitting) throw new Error("The bot is already being made.");
+        if (!pending || (kind === "bot" && paint === undefined))
+            throw new Error(`No ${kind} is being made.`);
+        if (pending.submitting) throw new Error(`The ${kind} is already being made.`);
         // Judged before anything is made, as a group's first message is: a
         // file too large to carry, found out once the bot exists, would leave
         // a bot behind that nobody asked for.
@@ -5228,34 +5304,49 @@ export function happyAgentWorkspaceStoreCreate(
         // what lets the new row wear its face from its first frame. A face
         // that cannot be painted is the one thing here allowed to fail
         // quietly: it leaves a working bot.
+        // A task has no face, so there is nothing to paint.
         let avatar: HappyAgentAvatarImage | undefined;
-        try {
-            avatar = await paint(seed);
-        } catch {
-            avatar = undefined;
+        if (kind === "bot" && paint !== undefined) {
+            try {
+                avatar = await paint(seed);
+            } catch {
+                avatar = undefined;
+            }
         }
         if (disposed) return;
-        let created: HappyAgentBotCreation;
+        let created: { readonly location: HappyAgentSessionLocation };
         try {
             // Blank is left out, not sent: an absent name is what asks the
-            // host to name the bot from its first message.
-            created = await list.botCreate({
-                ...(name.length === 0 ? {} : { name }),
-                ...(avatar === undefined ? {} : { avatar }),
-                ...(selection === undefined ? {} : { selection }),
-            });
+            // host to name it from its first message.
+            created =
+                kind === "task"
+                    ? await list.taskCreate({
+                          ...(name.length === 0 ? {} : { name }),
+                          ...(selection === undefined ? {} : { selection }),
+                      })
+                    : await list.botCreate({
+                          ...(name.length === 0 ? {} : { name }),
+                          ...(avatar === undefined ? {} : { avatar }),
+                          ...(selection === undefined ? {} : { selection }),
+                      });
         } catch (error) {
-            activityRecord({
-                kind: "botCreated",
-                source: "sidebar",
-                result: happyAgentActionFailed(error),
-            });
+            if (kind === "bot")
+                activityRecord({
+                    kind: "botCreated",
+                    source: "sidebar",
+                    result: happyAgentActionFailed(error),
+                });
             if (disposed) return;
             botCreateDraft = { ...pending, submitting: false };
             recompute();
             throw happyAgentUserError(error);
         }
-        activityRecord({ kind: "botCreated", source: "sidebar", result: HAPPY_AGENT_ACTION_OK });
+        if (kind === "bot")
+            activityRecord({
+                kind: "botCreated",
+                source: "sidebar",
+                result: HAPPY_AGENT_ACTION_OK,
+            });
         if (disposed) return;
         const { location } = created;
         // The surface stays up, composer and all, until the window turns to
@@ -5306,7 +5397,7 @@ export function happyAgentWorkspaceStoreCreate(
             activityRecord({
                 kind: "messageSent",
                 // A bot made from here is always the reader's own, never a system bot.
-                target: "bot",
+                target: kind === "bot" ? "bot" : "session",
                 botSystemKey: null,
                 taskDepth: 0,
                 source: "new_session",
@@ -5326,6 +5417,68 @@ export function happyAgentWorkspaceStoreCreate(
         }
         if (disposed) return;
         turn();
+    };
+
+    /**
+     * Materializes the draft a bot or a task is made from, or comes back to the
+     * one already open. Asking for the surface while it is already materialized
+     * — coming back to it, or the heading action behind it — must not throw away
+     * what is being written into it; asking for the other kind puts it down,
+     * because one surface is made on at a time.
+     */
+    const createDraftOpen = (kind: "bot" | "task"): void => {
+        if (disposed) return;
+        if (botCreateDraft && createKind === kind) return;
+        if (botCreateDraft) {
+            if (botCreateDraft.submitting) return;
+            botCreateRelease(true);
+        }
+        createKind = kind;
+        botCreateDraft = {
+            name: "",
+            faces: botFaceSeedsRoll(),
+            faceSlot: 0,
+            submitting: false,
+        };
+        const created: ComposerStore = composerStoreCreate(BOT_CREATE_COMPOSER_SCOPE, {
+            capabilities: { shellMode: false, commands: [], mentions: false },
+            output: (event) => {
+                if (event.type !== "textSubmitted") return;
+                // The composer's own submission lifecycle carries the
+                // whole act: pending while the bot is made and the message
+                // sent, and failed — with the host's reason and a retry —
+                // when the bot could not be made.
+                submitting(
+                    created,
+                    event.revision,
+                    () => botCreateRun({ text: event.text, attachments: event.attachments }),
+                    event.attachments,
+                );
+            },
+        });
+        botCreateComposer = created;
+        unsubscribeBotCreateComposer = created.subscribe(recompute);
+        botCreateSessionDraftEnsure();
+        recompute();
+    };
+
+    const createDraftNameUpdate = (name: string): void => {
+        if (!botCreateDraft || botCreateDraft.submitting) return;
+        botCreateDraft = { ...botCreateDraft, name };
+        recompute();
+    };
+
+    const createDraftSubmit = async (): Promise<void> => {
+        try {
+            await botCreateRun(undefined);
+        } catch (error) {
+            // The surface stays up holding what was typed. It is the only
+            // copy of it, and something that failed to be made is something
+            // the reader will want to try again rather than retype.
+            if (disposed || !botCreateDraft) return;
+            botCreateDraft = { ...botCreateDraft, error: happyAgentUserError(error).message };
+            recompute();
+        }
     };
 
     const releaseGroup = (): void => {
@@ -5989,6 +6142,7 @@ export function happyAgentWorkspaceStoreCreate(
                     projectAdd,
                     ...(projectClone ? { projectClone } : {}),
                     ...(botCreate ? { botCreate } : {}),
+                    ...(taskCreate ? { taskCreate } : {}),
                     ...(activeMainViewId ? { activeMainViewId } : {}),
                     ...(displayedMainViewId ? { displayedMainViewId } : {}),
                 },
@@ -7350,37 +7504,60 @@ export function happyAgentWorkspaceStoreCreate(
             return client.openIn(groupId, target);
         },
         botCreateOpen(paint) {
-            if (disposed) return;
             botCreatePaint = paint;
-            // Asking for the surface while it is already materialized — coming
-            // back to it, or the heading action behind it — must not throw away
-            // what is being written into it.
-            if (botCreateDraft) return;
-            botCreateDraft = {
-                name: "",
-                faces: botFaceSeedsRoll(),
-                faceSlot: 0,
+            createDraftOpen("bot");
+        },
+        taskCreateOpen() {
+            createDraftOpen("task");
+        },
+        taskCreateNameUpdate(name) {
+            if (createKind === "task") createDraftNameUpdate(name);
+        },
+        taskCreateMessageUpdate(text) {
+            if (createKind === "task") botCreateComposer?.getState().textUpdate(text);
+        },
+        taskCreateMessageFocusUpdate(focused) {
+            if (createKind === "task") botCreateComposer?.getState().focusUpdate(focused);
+        },
+        taskCreateAttachmentsAdd(files) {
+            if (createKind === "task" && botCreateComposer && !botCreateDraft?.submitting)
+                attachmentsAddTo(botCreateComposer, files);
+        },
+        taskCreateAttachmentRemove(attachmentId) {
+            if (createKind === "task" && botCreateComposer && !botCreateDraft?.submitting)
+                attachmentRemoveFrom(botCreateComposer, attachmentId);
+        },
+        taskCreateModelUpdate(input) {
+            if (createKind === "task") botCreateSessionDraft?.modelUpdate(input);
+        },
+        taskCreateEffortUpdate(effort) {
+            if (createKind === "task") botCreateSessionDraft?.effortUpdate(effort);
+        },
+        taskCreatePermissionModeUpdate(mode) {
+            if (createKind === "task") botCreateSessionDraft?.permissionModeUpdate(mode);
+        },
+        taskCreateServiceTierUpdate(tier) {
+            if (createKind === "task") botCreateSessionDraft?.serviceTierUpdate(tier);
+        },
+        taskCreateMessageSend() {
+            if (createKind !== "task" || botCreateDraft?.submitting) return;
+            botCreateComposer?.getState().textSubmit();
+        },
+        async taskCreateSubmit() {
+            if (createKind === "task") await createDraftSubmit();
+        },
+        taskRenameOpen(taskId) {
+            if (projectArchive?.submitting) return;
+            const task = list.get().tasks.find((candidate) => candidate.id === taskId);
+            if (!task) return;
+            rename = {
+                kind: "task",
+                taskId,
+                currentName: task.name,
+                draft: task.name,
                 submitting: false,
             };
-            const created: ComposerStore = composerStoreCreate(BOT_CREATE_COMPOSER_SCOPE, {
-                capabilities: { shellMode: false, commands: [], mentions: false },
-                output: (event) => {
-                    if (event.type !== "textSubmitted") return;
-                    // The composer's own submission lifecycle carries the
-                    // whole act: pending while the bot is made and the message
-                    // sent, and failed — with the host's reason and a retry —
-                    // when the bot could not be made.
-                    submitting(
-                        created,
-                        event.revision,
-                        () => botCreateRun({ text: event.text, attachments: event.attachments }),
-                        event.attachments,
-                    );
-                },
-            });
-            botCreateComposer = created;
-            unsubscribeBotCreateComposer = created.subscribe(recompute);
-            botCreateSessionDraftEnsure();
+            projectSettingsClose();
             recompute();
         },
         botCreateModelUpdate: (input) => botCreateSessionDraft?.modelUpdate(input),
@@ -7388,9 +7565,7 @@ export function happyAgentWorkspaceStoreCreate(
         botCreatePermissionModeUpdate: (mode) => botCreateSessionDraft?.permissionModeUpdate(mode),
         botCreateServiceTierUpdate: (tier) => botCreateSessionDraft?.serviceTierUpdate(tier),
         botCreateNameUpdate(name) {
-            if (!botCreateDraft || botCreateDraft.submitting) return;
-            botCreateDraft = { ...botCreateDraft, name };
-            recompute();
+            if (createKind === "bot") createDraftNameUpdate(name);
         },
         botCreateFacePick(slot) {
             if (!botCreateDraft || botCreateDraft.submitting || botCreateDraft.faceSlot === slot)
@@ -7418,16 +7593,7 @@ export function happyAgentWorkspaceStoreCreate(
             botCreateComposer?.getState().textSubmit();
         },
         async botCreateSubmit() {
-            try {
-                await botCreateRun(undefined);
-            } catch (error) {
-                // The surface stays up holding what was typed. It is the only
-                // copy of it, and something that failed to be made is something
-                // the reader will want to try again rather than retype.
-                if (disposed || !botCreateDraft) return;
-                botCreateDraft = { ...botCreateDraft, error: happyAgentUserError(error).message };
-                recompute();
-            }
+            if (createKind === "bot") await createDraftSubmit();
         },
         botRenameOpen(botId) {
             if (projectArchive?.submitting) return;
@@ -7486,7 +7652,7 @@ export function happyAgentWorkspaceStoreCreate(
             // down with it. Never while the host is being told: that request is
             // already gone and still has an answer to report.
             if (
-                rename.kind !== "bot" &&
+                (rename.kind === "project" || rename.kind === "workspace") &&
                 projectArchive?.projectId === rename.projectId &&
                 !projectArchive.submitting
             )
@@ -7504,7 +7670,10 @@ export function happyAgentWorkspaceStoreCreate(
             const name = pending.draft.trim();
             // Explicitly saving a bot name, even its current placeholder, ends
             // auto-naming eligibility on the daemon.
-            if (name.length === 0 || (pending.kind !== "bot" && name === pending.currentName)) {
+            if (
+                name.length === 0 ||
+                (pending.kind !== "bot" && pending.kind !== "task" && name === pending.currentName)
+            ) {
                 rename = undefined;
                 recompute();
                 return;
@@ -7515,9 +7684,11 @@ export function happyAgentWorkspaceStoreCreate(
             try {
                 await (pending.kind === "bot"
                     ? list.botRename(pending.botId, name)
-                    : pending.kind === "workspace"
-                      ? list.worktreeRename(pending.projectId, pending.worktreeId, name)
-                      : list.projectRename(pending.projectId, name));
+                    : pending.kind === "task"
+                      ? list.taskRename(pending.taskId, name)
+                      : pending.kind === "workspace"
+                        ? list.worktreeRename(pending.projectId, pending.worktreeId, name)
+                        : list.projectRename(pending.projectId, name));
             } finally {
                 // Closed either way: the list store reports a failed rename by
                 // reconciling the old name back, which says more than a dialog
@@ -7640,7 +7811,10 @@ export function happyAgentWorkspaceStoreCreate(
                 // this confirmation is describing a project that no longer
                 // exists, so it closes with it.
                 projectArchive = undefined;
-                if (rename && rename.kind !== "bot" && rename.projectId === pending.projectId) {
+                if (
+                    (rename?.kind === "project" || rename?.kind === "workspace") &&
+                    rename.projectId === pending.projectId
+                ) {
                     rename = undefined;
                     projectSettingsClose();
                 }

@@ -3,6 +3,9 @@ import type { HappyAgentTask } from "./happyAgentTypes.js";
 /** The first Happy Agent that serves tasks and the task routes. */
 export const HAPPY_AGENT_TASKS_VERSION = "0.4.87-preview.5";
 
+/** The first Happy Agent that creates and renames tasks. */
+export const HAPPY_AGENT_TASK_CREATE_VERSION = "0.4.87-preview.6";
+
 /**
  * The reader's own task list: the active tasks they have joined, in their own
  * order. The order is the membership's `orderKey`, compared as plain strings —

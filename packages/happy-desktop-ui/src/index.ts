@@ -384,6 +384,10 @@ export {
     type HappyAgentCreateBotPageProps,
 } from "./HappyAgentCreateBotPage";
 export {
+    HappyAgentCreateTaskPage,
+    type HappyAgentCreateTaskPageProps,
+} from "./HappyAgentCreateTaskPage";
+export {
     HappyAgentProjectCloneDialog,
     type HappyAgentProjectCloneDialogProps,
 } from "./HappyAgentProjectCloneDialog";
