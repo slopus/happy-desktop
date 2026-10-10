@@ -270,6 +270,30 @@ function conversationEntryTraceOpen(
 }
 
 /**
+ * Boundary classes a transcript row takes from its neighbours, or `undefined`
+ * when it takes none.
+ */
+function conversationRowClassName(
+    entries: readonly ConversationEntry[],
+    index: number,
+    liveStatus: boolean,
+): string | undefined {
+    const classNames: string[] = [];
+    if (
+        entries[index]?.kind === "turnStatus" &&
+        conversationTurnStatusAfterActivity(entries, index)
+    )
+        classNames.push("happy-turn-status--after-trace");
+    if (conversationEntryResumesAfterActivity(entries, index))
+        classNames.push("happy-conversation__resumed");
+    if (conversationEntryPrecedesActivity(entries, index))
+        classNames.push("happy-conversation__continues");
+    if (conversationMessageClosedByStatus(entries, index, liveStatus))
+        classNames.push("happy-conversation__closing");
+    return classNames.length === 0 ? undefined : classNames.join(" ");
+}
+
+/**
  * Splits off the queued steering waiting at the end of the transcript.
  *
  * Steering is the one thing in a conversation that has not happened yet: the
@@ -685,29 +709,11 @@ export function ConversationView(props: ConversationViewProps) {
                                         ? props.agentAuthor
                                         : undefined
                                 }
-                                className={
-                                    [
-                                        entry.kind === "turnStatus" &&
-                                        conversationTurnStatusAfterActivity(transcript, index)
-                                            ? "happy-turn-status--after-trace"
-                                            : undefined,
-                                        conversationEntryResumesAfterActivity(transcript, index)
-                                            ? "happy-conversation__resumed"
-                                            : undefined,
-                                        conversationEntryPrecedesActivity(transcript, index)
-                                            ? "happy-conversation__continues"
-                                            : undefined,
-                                        conversationMessageClosedByStatus(
-                                            transcript,
-                                            index,
-                                            statusVisible,
-                                        )
-                                            ? "happy-conversation__closing"
-                                            : undefined,
-                                    ]
-                                        .filter(Boolean)
-                                        .join(" ") || undefined
-                                }
+                                className={conversationRowClassName(
+                                    transcript,
+                                    index,
+                                    statusVisible,
+                                )}
                                 entry={entry}
                                 grouped={
                                     entry.kind === "message"
