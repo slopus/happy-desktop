@@ -638,12 +638,6 @@ interface OpenGroup {
     readonly lifecycle?: HappyAgentGroupLifecycle;
     /** The checkout's path, so a notice about it can name the directory. */
     readonly path: string;
-    /**
-     * The host serves no files, terminal, or git for this group's workspace —
-     * a task's, today — so the panel and every control that reads the
-     * checkout are withheld rather than offered to fail.
-     */
-    readonly workspaceUnavailable?: true;
 }
 
 /** What the window reads when the host supplies no settings store: the product defaults, unchanging. */
@@ -1472,9 +1466,6 @@ function openGroupFind(
     );
     const bot = bots.find((candidate) => candidate.workspaceId === groupId);
     const rootTask = rootTasks.find((candidate) => candidate.workspaceId === groupId);
-    // A task's workspace answers none of the workspace routes, and neither does
-    // a subtask working in that same folder.
-    const workspaceUnavailable = rootTask !== undefined;
     const task =
         tasks.find((entry) => entry.conversation.id === conversationId) ??
         (conversationId === undefined && bot === undefined && rootTask === undefined
@@ -1497,10 +1488,10 @@ function openGroupFind(
             ...(worktree === undefined ? {} : { lifecycle: worktree.lifecycle }),
             create: { cwd: task.path, worktreeId: task.workspaceId },
             path: task.path,
-            ...(workspaceUnavailable ? { workspaceUnavailable: true as const } : {}),
         };
     }
-    // A task opens the way a bot does: its one conversation, pinned.
+    // A task opens the way a bot does: its one conversation, pinned, with its
+    // folder's files, terminals, and git in the panel beside it.
     if (rootTask)
         return {
             id: rootTask.workspaceId,
@@ -1511,7 +1502,6 @@ function openGroupFind(
             changes: [],
             create: { cwd: rootTask.path, worktreeId: rootTask.workspaceId },
             path: rootTask.displayPath,
-            workspaceUnavailable: true,
         };
     if (bot)
         return {
@@ -3805,9 +3795,8 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
     // there is nothing behind them to act on until the checkout arrives.
     const openGroupPreparing = openGroupPhase === "creating";
     // Whether there is a checkout here to read at all: not while it is being
-    // prepared, and never for a workspace the host serves no files, terminal,
-    // or git for. Every control that reads the checkout keys off this one fact.
-    const checkoutClosed = openGroupPreparing || openGroup?.workspaceUnavailable === true;
+    // prepared. Every control that reads the checkout keys off this one fact.
+    const checkoutClosed = openGroupPreparing;
     const panelCloseTarget = checkoutClosed ? undefined : panelCloseTargetFind(panel);
     // The address the reader was sent to when a creation was accepted locally
     // and then refused. There is no row at it any more — happy-agent-connect withdrew
