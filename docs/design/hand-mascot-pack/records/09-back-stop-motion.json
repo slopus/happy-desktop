@@ -1,0 +1,57 @@
+{
+  "name": "09-back-stop-motion",
+  "model": "fal-ai/kling-video/o3/pro/reference-to-video",
+  "input": {
+    "prompt": "@Image1 defines permanent mascot identity: happy palm and frowny back. @Image2 contains the actual Telegram hand frame on LEFT and robot frame on RIGHT for style ONLY, never inherit robot nose, teeth, colors or large eyes. Exactly FIVE digits in EVERY frame. Thumb never swells or merges into a fist. No new digits appear. Preserve each digit as a continuous anatomical part. Locked stationary orthographic camera; single short continuous shot of the exact butter-yellow 3D hand in the supplied image. Match material, proportions and small chocolate-brown face. Exactly five anatomical digits throughout every frame: thumb, index, middle, ring, pinky. The face is physically attached low on the surface of the hand, does not float or migrate. Palm has a fixed happy smile and back has a fixed frown. Never change a smile into a frown on the same physical surface. Soft toy-like Telegram animated emoji timing: the supplied open-hands asset is 60fps frames 0-178, about 2.98sec, open at frame0, edge-on near frame45, open/spread at frame90, settle at frame135. Use clear anticipation, quick elastic finger articulation near 0.75s and 1.5s, gentle settling near 2.25s, steady final pose by 3s. Animate actual finger joints and hand volume, not a still image sliding or rotating flat in the picture plane. Calm ivory studio background, no text, camera changes, audio or new props. MOVEMENT: The back-facing hand makes a firm little refusal: fingers tighten their spread, hand leans forward slightly as if saying stop, gives one small side-to-side wrist wag, then settles. Back remains facing camera, tiny dorsal frown stays fixed, five fingers. Avoid: extra fingers, missing fingers, fused fingers, six digits, face morphing, face sliding, smiling dorsal face, frowny palm, camera motion, zoom, multiple hands, scene cuts, text, flat still image.",
+    "duration": "3",
+    "generate_audio": false,
+    "start_image_url": "Local native-generated image; see local_sources",
+    "aspect_ratio": "1:1",
+    "image_urls": {
+      "start": "images/09-back-stop.png",
+      "end": "images/09-back-stop.png",
+      "identity_style_refs": [
+        "images/native-turnaround.png",
+        "references/telegram-style-pair.png"
+      ]
+    },
+    "local_sources": {
+      "start": "images/09-back-stop.png",
+      "end": "images/09-back-stop.png",
+      "identity_style_refs": [
+        "images/native-turnaround.png",
+        "references/telegram-style-pair.png"
+      ]
+    }
+  },
+  "queue": {
+    "status": "IN_QUEUE",
+    "request_id": "01a0fbdf-a2ef-7b63-b12e-e1b24f275ca9",
+    "response_url": "https://queue.fal.run/fal-ai/kling-video/requests/01a0fbdf-a2ef-7b63-b12e-e1b24f275ca9",
+    "status_url": "https://queue.fal.run/fal-ai/kling-video/requests/01a0fbdf-a2ef-7b63-b12e-e1b24f275ca9/status",
+    "cancel_url": "https://queue.fal.run/fal-ai/kling-video/requests/01a0fbdf-a2ef-7b63-b12e-e1b24f275ca9/cancel",
+    "logs": null,
+    "metrics": {},
+    "queue_position": 0
+  },
+  "status": {
+    "status": "COMPLETED",
+    "request_id": "01a0fbdf-a2ef-7b63-b12e-e1b24f275ca9",
+    "response_url": "https://queue.fal.run/fal-ai/kling-video/requests/01a0fbdf-a2ef-7b63-b12e-e1b24f275ca9",
+    "status_url": "https://queue.fal.run/fal-ai/kling-video/requests/01a0fbdf-a2ef-7b63-b12e-e1b24f275ca9/status",
+    "cancel_url": "https://queue.fal.run/fal-ai/kling-video/requests/01a0fbdf-a2ef-7b63-b12e-e1b24f275ca9/cancel",
+    "logs": null,
+    "metrics": {
+      "inference_time": 315.28400015830994
+    }
+  },
+  "result": {
+    "video": {
+      "url": "https://v3b.fal.media/files/b/0aacbefc/4-W26PKDFAyWUZDRPCxzz_output.mp4",
+      "content_type": "video/mp4",
+      "file_name": "output.mp4",
+      "file_size": 2501599
+    }
+  },
+  "local_output": "/Users/kirilldubovitskiy/Happy/Workspaces/happy-desktop/hand-mascot-pack/.context/hand-mascot-pack/videos/09-back-stop-motion.mp4"
+}

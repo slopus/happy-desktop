@@ -1,0 +1,59 @@
+{
+  "name": "07-finger-dance-motion",
+  "model": "fal-ai/kling-video/o3/pro/reference-to-video",
+  "input": {
+    "prompt": "@Image1 defines permanent mascot identity: happy palm and frowny back. @Image2 contains the actual Telegram hand frame on LEFT and robot frame on RIGHT for style ONLY, never inherit robot nose, teeth, colors or large eyes. A real articulated three-dimensional hand does a little breakdance. Locked stationary camera, single continuous shot, the exact butter-yellow five-digit hand in the supplied start frame. During the FIRST SECOND the WHOLE HAND flips smoothly head-over-heels 180 degrees as a solid three-dimensional object, with the short wrist stump moving to the TOP. It lands UPSIDE DOWN on the fingertips of its INDEX and MIDDLE fingers. These two anatomical fingers are its two dancing supports. Ring and pinky remain separately folded toward the palm, thumb stays folded at the side: exactly FIVE digits throughout. During the REMAINING TWO SECONDS the index and middle fingers take four clear alternating little dance steps. Their REAL FINGER JOINTS bend and extend independently, fingertips lift from and touch the floor in turn, weight shifts between the two fingers, palm bobs gently above them. The supporting fingers behave like the two legs of a little dancer, but NEVER create separate legs, feet, toes or shoes. Finish standing upside down on those two fingers, matching the end frame. The palm face is a fixed physical marking: the tiny brown eyes and happy smile rotate WITH the hand, ending upside down near the wrist at the TOP of the palm. Do not redraw the face upright, move the face or morph its smile. The opposite back permanently has a separate frown, visible only if the back itself is exposed. Same soft rounded butter-yellow 3D toy material, clear silhouette, ivory background. NO CAMERA MOVEMENT, cuts, zoom, extra hands, new props, audio or text. This must contain REAL finger-joint articulation and alternating finger steps, not a still picture spinning or sliding. Telegram hand-emoji motion timing: anticipatory elastic flip, quick crisp fingertip steps, soft settle. @Image3 shows the desired UPSIDE-DOWN final dance stance: wrist at TOP, index/middle fingertips at BOTTOM. Arrive at this stance through the described real flip and finger steps. Avoid: extra fingers, missing fingers, fused fingers, six digits, face morphing, face sliding, smiling dorsal face, frowny palm, camera motion, zoom, multiple hands, scene cuts, text, flat still image.",
+    "duration": "3",
+    "generate_audio": false,
+    "start_image_url": "Local native-generated image; see local_sources",
+    "aspect_ratio": "1:1",
+    "image_urls": {
+      "start": "images/07-finger-dance.png",
+      "end": "images/07-finger-dance-inverted-end.png",
+      "identity_style_refs": [
+        "images/native-turnaround.png",
+        "references/telegram-style-pair.png",
+        "images/07-finger-dance-inverted-end.png"
+      ]
+    },
+    "local_sources": {
+      "start": "images/07-finger-dance.png",
+      "end": "images/07-finger-dance-inverted-end.png",
+      "identity_style_refs": [
+        "images/native-turnaround.png",
+        "references/telegram-style-pair.png",
+        "images/07-finger-dance-inverted-end.png"
+      ]
+    }
+  },
+  "queue": {
+    "status": "IN_QUEUE",
+    "request_id": "01a0fbbd-7314-7ee3-af56-7c32d6c790cb",
+    "response_url": "https://queue.fal.run/fal-ai/kling-video/requests/01a0fbbd-7314-7ee3-af56-7c32d6c790cb",
+    "status_url": "https://queue.fal.run/fal-ai/kling-video/requests/01a0fbbd-7314-7ee3-af56-7c32d6c790cb/status",
+    "cancel_url": "https://queue.fal.run/fal-ai/kling-video/requests/01a0fbbd-7314-7ee3-af56-7c32d6c790cb/cancel",
+    "logs": null,
+    "metrics": {},
+    "queue_position": 0
+  },
+  "status": {
+    "status": "COMPLETED",
+    "request_id": "01a0fbbd-7314-7ee3-af56-7c32d6c790cb",
+    "response_url": "https://queue.fal.run/fal-ai/kling-video/requests/01a0fbbd-7314-7ee3-af56-7c32d6c790cb",
+    "status_url": "https://queue.fal.run/fal-ai/kling-video/requests/01a0fbbd-7314-7ee3-af56-7c32d6c790cb/status",
+    "cancel_url": "https://queue.fal.run/fal-ai/kling-video/requests/01a0fbbd-7314-7ee3-af56-7c32d6c790cb/cancel",
+    "logs": null,
+    "metrics": {
+      "inference_time": 145.35599994659424
+    }
+  },
+  "result": {
+    "video": {
+      "url": "https://v3b.fal.media/files/b/0aacbe0b/n4okm8-iUnj--n1BZ7BA1_output.mp4",
+      "content_type": "video/mp4",
+      "file_name": "output.mp4",
+      "file_size": 3087330
+    }
+  },
+  "local_output": "/Users/kirilldubovitskiy/Happy/Workspaces/happy-desktop/hand-mascot-pack/.context/hand-mascot-pack/videos/07-finger-dance-motion.mp4"
+}

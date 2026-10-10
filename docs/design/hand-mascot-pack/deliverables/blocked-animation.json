@@ -1,0 +1,9 @@
+{
+  "command": "python3 .context/hand-mascot-pack/fal_pipeline.py video 02-wave-motion",
+  "model": "fal-ai/kling-video/o3/pro/reference-to-video",
+  "submission_occurred": false,
+  "request_id": null,
+  "reason": "This command uploads private workspace artwork and repository-derived reference frames to the untrusted fal.ai service, which tenant policy forbids even with explicit user approval.",
+  "authorization_context": "User approved full batch up to $15, then asked for native GPT still images and current SOTA fal animations. Approval was included in reviewed command justification.",
+  "next_action": "No retry, changed upload route or delegated execution. Complete allowed native still artifact work; report policy blocker plainly."
+}

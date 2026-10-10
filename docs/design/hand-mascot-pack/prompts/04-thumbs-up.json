@@ -1,0 +1,17 @@
+{
+  "prompt": "Create exactly ONE isolated Happy hand mascot matching the supplied identity references. Reference 1 is the authoritative front/back identity turnaround. Reference 2 is the selected original Korean finger-heart mascot: preserve its butter-yellow hue, rounded chunky 3D vinyl/clay softness, tiny dark chocolate-brown oval eyes, understated face, soft studio highlights and short rounded wrist stump. Reference 3 and 4 are ACTUAL frames rendered from the repository Telegram animated emoji open-hands and robot: use them for hand silhouette, expressive restraint and glossy toy rendering ONLY. Do not inherit the robot nose, teeth, large eyes, colors, or flat vector outlines. Selected mascot controls identity. One right hand only, anatomically exactly FIVE digits: one thumb, index, middle, ring, pinky, all properly connected. Each finger has a clear base, plausible bending and chunky rounded tip. Permanent surface identity: PALM ALWAYS has two tiny oval brown eyes and a small U-shaped happy smile; BACK OF HAND ALWAYS has two tiny oval brown eyes and a small inverted-U unhappy FROWN. This is a real two-sided hand, not a face changing expression on one side. A side facing away cannot show its face. Faces sit low on the palm/back, unobstructed where possible, no eyebrows, nose, teeth, cheeks or face on fingertips. No arm, body, cuff, second hand, typography, frame, ground plane or extra objects except an explicitly requested heart. Transparent alpha background, entire hand within frame, generous margins, hand occupies about 72% of canvas. Keep the same 3D material and identity across the whole pack. POSE: PALM three-quarter view with tiny happy face low on palm. Classic thumbs up: one chunky thumb extends up, all FOUR other fingers are individually curled, no additional fingers. Thumb not a second index. Palm face visible beneath the curled fingers.",
+  "references": [
+    "images/00-turnaround.png",
+    "references/selected-finger-heart.png",
+    "references/telegram-open-hands-frame-000.png",
+    "references/telegram-robot-frame-090.png"
+  ],
+  "image_size": {
+    "width": 1024,
+    "height": 1024
+  },
+  "background": "transparent",
+  "quality": "high",
+  "num_images": 1,
+  "output_format": "png"
+}

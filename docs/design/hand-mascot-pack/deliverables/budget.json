@@ -1,0 +1,11 @@
+{
+  "approved_usd_cap": 15,
+  "submitted_fal_image_count": 1,
+  "completed_fal_image_count": 1,
+  "submitted_video_count": 0,
+  "video_generation_charges_usd": 0,
+  "image_generation_charge_usd": null,
+  "image_charge_note": "The one completed GPT Image 2.5 fal request returned images only and exposed no token usage or billing amount. Its exact metered charge has not been measured.",
+  "native_image_billing_note": "Native GPT image-generation cost is not billed through this fal key; native tool did not expose billing.",
+  "further_fal_generation": "Stopped after automatic review denied private-artwork video uploads even with user approval."
+}

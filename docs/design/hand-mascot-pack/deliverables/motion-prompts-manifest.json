@@ -1,0 +1,124 @@
+{
+  "motions": [
+    {
+      "id": "01-finger-heart",
+      "status": "NOT GENERATED \u2014 upload blocked by tenant policy",
+      "intended_model": "fal-ai/kling-video/o3/pro/reference-to-video",
+      "duration_seconds": 3,
+      "generate_audio": false,
+      "start_still": "01-finger-heart.png",
+      "end_still": "01-finger-heart.png",
+      "prompt_file": "motion-prompts/01-finger-heart.json",
+      "request_id": null,
+      "video_file": null
+    },
+    {
+      "id": "02-wave",
+      "status": "NOT GENERATED \u2014 upload blocked by tenant policy",
+      "intended_model": "fal-ai/kling-video/o3/pro/reference-to-video",
+      "duration_seconds": 3,
+      "generate_audio": false,
+      "start_still": "02-wave.png",
+      "end_still": "02-wave.png",
+      "prompt_file": "motion-prompts/02-wave.json",
+      "request_id": null,
+      "video_file": null
+    },
+    {
+      "id": "03-crossed-fingers",
+      "status": "NOT GENERATED \u2014 upload blocked by tenant policy",
+      "intended_model": "fal-ai/kling-video/o3/pro/reference-to-video",
+      "duration_seconds": 3,
+      "generate_audio": false,
+      "start_still": "03-crossed-fingers.png",
+      "end_still": "03-crossed-fingers.png",
+      "prompt_file": "motion-prompts/03-crossed-fingers.json",
+      "request_id": null,
+      "video_file": null
+    },
+    {
+      "id": "04-thumbs-up",
+      "status": "NOT GENERATED \u2014 upload blocked by tenant policy",
+      "intended_model": "fal-ai/kling-video/o3/pro/reference-to-video",
+      "duration_seconds": 3,
+      "generate_audio": false,
+      "start_still": "04-thumbs-up.png",
+      "end_still": "04-thumbs-up.png",
+      "prompt_file": "motion-prompts/04-thumbs-up.json",
+      "request_id": null,
+      "video_file": null
+    },
+    {
+      "id": "05-holding-heart",
+      "status": "NOT GENERATED \u2014 upload blocked by tenant policy",
+      "intended_model": "fal-ai/kling-video/o3/pro/reference-to-video",
+      "duration_seconds": 3,
+      "generate_audio": false,
+      "start_still": "05-holding-heart.png",
+      "end_still": "05-holding-heart.png",
+      "prompt_file": "motion-prompts/05-holding-heart.json",
+      "request_id": null,
+      "video_file": null
+    },
+    {
+      "id": "06-beckoning",
+      "status": "NOT GENERATED \u2014 upload blocked by tenant policy",
+      "intended_model": "fal-ai/kling-video/o3/pro/reference-to-video",
+      "duration_seconds": 3,
+      "generate_audio": false,
+      "start_still": "06-beckoning.png",
+      "end_still": "06-beckoning.png",
+      "prompt_file": "motion-prompts/06-beckoning.json",
+      "request_id": null,
+      "video_file": null
+    },
+    {
+      "id": "07-finger-dance",
+      "status": "NOT GENERATED \u2014 upload blocked by tenant policy",
+      "intended_model": "fal-ai/kling-video/o3/pro/reference-to-video",
+      "duration_seconds": 3,
+      "generate_audio": false,
+      "start_still": "07-finger-dance.png",
+      "end_still": "07-finger-dance.png",
+      "prompt_file": "motion-prompts/07-finger-dance.json",
+      "request_id": null,
+      "video_file": null
+    },
+    {
+      "id": "08-turnaround-back",
+      "status": "NOT GENERATED \u2014 upload blocked by tenant policy",
+      "intended_model": "fal-ai/kling-video/o3/pro/reference-to-video",
+      "duration_seconds": 3,
+      "generate_audio": false,
+      "start_still": "02-wave.png",
+      "end_still": "08-turnaround-back.png",
+      "prompt_file": "motion-prompts/08-turnaround-back.json",
+      "request_id": null,
+      "video_file": null
+    },
+    {
+      "id": "09-back-stop",
+      "status": "NOT GENERATED \u2014 upload blocked by tenant policy",
+      "intended_model": "fal-ai/kling-video/o3/pro/reference-to-video",
+      "duration_seconds": 3,
+      "generate_audio": false,
+      "start_still": "09-back-stop.png",
+      "end_still": "09-back-stop.png",
+      "prompt_file": "motion-prompts/09-back-stop.json",
+      "request_id": null,
+      "video_file": null
+    },
+    {
+      "id": "10-back-middle-finger",
+      "status": "NOT GENERATED \u2014 upload blocked by tenant policy",
+      "intended_model": "fal-ai/kling-video/o3/pro/reference-to-video",
+      "duration_seconds": 3,
+      "generate_audio": false,
+      "start_still": "10-back-middle-finger.png",
+      "end_still": "10-back-middle-finger.png",
+      "prompt_file": "motion-prompts/10-back-middle-finger.json",
+      "request_id": null,
+      "video_file": null
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "provider": "native GPT image tool",
+  "exact_model_version": "Not exposed by native tool",
+  "original_output": "/Users/kirilldubovitskiy/Happy/Generated/ev19bb0y5cofzttb5t7amx4d.png",
+  "sha256": "5ec05d938db3a73efdf34853bda8dbdd1d7b9a58bf7e6c7fb43c4e1c9808e2e4",
+  "derivatives": {
+    "02-wave.png": "Left front/palm view, cropped and padded",
+    "08-turnaround-back.png": "Right back/dorsal view, cropped and padded"
+  },
+  "note": "No finger edits, recoloring or facial changes in crops. Same source opposite views."
+}

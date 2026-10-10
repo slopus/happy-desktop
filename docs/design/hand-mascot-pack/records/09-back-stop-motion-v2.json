@@ -1,0 +1,56 @@
+{
+  "name": "09-back-stop-motion-v2",
+  "model": "fal-ai/kling-video/o3/pro/reference-to-video",
+  "input": {
+    "prompt": "@Image1 is the permanent mascot identity: smiling face on the PALM, frowning face on the BACK. Locked stationary camera, one continuous 3-second shot of the exact butter-yellow 3D hand from the start frame, same material, proportions and small chocolate-brown face. Exactly FIVE digits in EVERY frame (thumb, index, middle, ring, pinky); no digit ever swells, melts, splits, merges or disappears. The face stays painted on the same spot of the hand and never changes expression type. MOVEMENT: The back of the hand faces the camera the whole clip. Fingers stay spread and never close into a fist. One firm small push toward the camera, a short hold, then ease back to the start pose. The frowning face (two eyes and a downturned mouth) is clearly visible in EVERY frame. Avoid: extra fingers, missing fingers, swelling, melting, morphing, open mouth, tongue, blank face, missing mouth, second rotation, camera movement, zoom, new props, text.",
+    "duration": "3",
+    "generate_audio": false,
+    "aspect_ratio": "1:1",
+    "start_image_url": "Local native-generated image; see local_sources",
+    "end_image_url": "Local native-generated image; see local_sources",
+    "image_urls": {
+      "start": "images/09-back-stop.png",
+      "end": "images/09-back-stop.png",
+      "identity_style_refs": [
+        "images/native-turnaround.png"
+      ]
+    },
+    "local_sources": {
+      "start": "images/09-back-stop.png",
+      "end": "images/09-back-stop.png",
+      "identity_style_refs": [
+        "images/native-turnaround.png"
+      ]
+    }
+  },
+  "queue": {
+    "status": "IN_QUEUE",
+    "request_id": "01a0fbf8-2879-7c42-a4f7-a28372fdbbac",
+    "response_url": "https://queue.fal.run/fal-ai/kling-video/requests/01a0fbf8-2879-7c42-a4f7-a28372fdbbac",
+    "status_url": "https://queue.fal.run/fal-ai/kling-video/requests/01a0fbf8-2879-7c42-a4f7-a28372fdbbac/status",
+    "cancel_url": "https://queue.fal.run/fal-ai/kling-video/requests/01a0fbf8-2879-7c42-a4f7-a28372fdbbac/cancel",
+    "logs": null,
+    "metrics": {},
+    "queue_position": 0
+  },
+  "status": {
+    "status": "COMPLETED",
+    "request_id": "01a0fbf8-2879-7c42-a4f7-a28372fdbbac",
+    "response_url": "https://queue.fal.run/fal-ai/kling-video/requests/01a0fbf8-2879-7c42-a4f7-a28372fdbbac",
+    "status_url": "https://queue.fal.run/fal-ai/kling-video/requests/01a0fbf8-2879-7c42-a4f7-a28372fdbbac/status",
+    "cancel_url": "https://queue.fal.run/fal-ai/kling-video/requests/01a0fbf8-2879-7c42-a4f7-a28372fdbbac/cancel",
+    "logs": null,
+    "metrics": {
+      "inference_time": 200.13499999046326
+    }
+  },
+  "result": {
+    "video": {
+      "url": "https://v3b.fal.media/files/b/0aacbf91/A_RIO_x8tzrnQynVu1D-k_output.mp4",
+      "content_type": "video/mp4",
+      "file_name": "output.mp4",
+      "file_size": 2604179
+    }
+  },
+  "local_output": "/Users/kirilldubovitskiy/Happy/Workspaces/happy-desktop/hand-mascot-pack/.context/hand-mascot-pack/videos/09-back-stop-motion-v2.mp4"
+}

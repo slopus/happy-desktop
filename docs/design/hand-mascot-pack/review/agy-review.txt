@@ -1,0 +1,73 @@
+Here is the visual quality review for the 10 mascot clips based on the 4fps temporal grids.
+
+---
+
+### Clip Summary
+
+| Clip | Motion | Verdict | Key Issues |
+| :--- | :--- | :---: | :--- |
+| **01** | `01-finger-heart-motion` | **NEEDS FIX** | Choreography collapse to open palm; detached floating prop; snap transition |
+| **02** | `02-wave-motion` | **NEEDS FIX** | Severe thumb swelling and grotesque arm-like mutation (1.75s–2.25s) |
+| **03** | `03-crossed-fingers-motion` | **NEEDS FIX** | Frown on palm; rapid 2-frame toggling/flicker; thumb elongation; tip blur |
+| **04** | `04-thumbs-up-motion` | **NEEDS FIX** | Missing thumb at 0.25s; breaks into full 5-finger open splay twice |
+| **05** | `05-holding-heart-motion` | **NEEDS FIX** | Digit count drops from 5 to 4; heart drops and occludes mouth/eyes |
+| **06** | `06-beckoning-motion` | **NEEDS FIX** | 0.75s phantom/split digit anomaly across face; mouth flattens to dash |
+| **07** | `07-finger-dance-motion` | **PASS** | Flips upside down (wrist at top); clean 2-finger walking steps; strict 5 digits |
+| **08** | `08-turnaround-back-motion` | **NEEDS FIX** | Back of hand completely blank (0.75s–1.75s); frown only pops in after second spin |
+| **09** | `09-back-stop-motion` | **NEEDS FIX** | Mouth completely disappears after uncurling; blank dot eyes from 1.25s–2.75s |
+| **10** | `10-back-middle-finger-motion` | **PASS** | Correct frowny back; strict 5-digit fist; clean wagging motion and blink timing |
+
+---
+
+### Detailed Clip Evaluations
+
+#### 1. `01-finger-heart-motion` — **NEEDS FIX**
+* **Choreography Collapse (0.75s – 1.50s):** The hand abandons the finger heart gesture and flattens out into an open 5-finger splayed palm / wave.
+* **Detached Prop (0.75s – 1.50s):** During the open-palm phase, the pink heart floats detached in empty space beside the thumb.
+* **Flicker / Snapping (1.75s):** The hand pops abruptly back from the open palm into the finger heart gesture without a smooth transition.
+
+#### 2. `02-wave-motion` — **NEEDS FIX**
+* **Thumb Mutation & Severe Swelling (1.75s – 2.25s):** At 1.75s the thumb curls forward into a bulbous knob; at 2.00s it elongates into a foot-like appendage; at 2.25s it grotesquely swells into a massive, muscular horizontal arm / bicep shape extending off the side.
+* **Morph Snapping (2.50s):** Abruptly shrinks back into a stubby hand before recovering at 2.75s.
+
+#### 3. `03-crossed-fingers-motion` — **NEEDS FIX**
+* **Surface / Face Identity Swap (0.00s – 2.75s):** The palm side displays a downturned frowny mouth instead of the fixed smiling palm required by the mascot identity spec.
+* **Violent Uncrossing Flicker (1.00s – 2.25s):** Toggles violently between crossed fingers and an uncrossed "peace sign" every frame (uncrossed at 1.00s, crossed at 1.25s, uncrossed at 1.50s, crossed at 1.75s, uncrossed at 2.00s, crossed at 2.25s).
+* **Thumb Elongation (1.00s, 1.50s):** Thumb stretches straight up into an unnatural third tall vertical finger.
+* **Melting / Smearing (2.00s):** Severe ghosting blur and melting artifact between the two extended finger tips.
+
+#### 4. `04-thumbs-up-motion` — **NEEDS FIX**
+* **Missing Thumb (0.25s):** Thumb retracts completely into the fist, leaving a thumbless 4-knuckle ball.
+* **Choreography Breakdown (0.75s – 1.00s & 2.25s – 2.50s):** Rather than maintaining a thumbs-up pose, the hand twice violently bursts open into a wide 5-finger splayed palm.
+* **Unstable Hand Identity (1.25s, 2.75s):** Thumb points sideways like a hitchhiker rather than vertically upward.
+
+#### 5. `05-holding-heart-motion` — **NEEDS FIX**
+* **Digit Count Loss (2.00s – 2.50s):** Digit count drops from 5 to 4 (only 3 upper/side fingers plus thumb are visible; the fifth digit vanishes or merges into the palm).
+* **Face Occlusion / Melting (2.25s – 2.50s):** The heart slides down too far, completely covering the mascot's mouth and partially submerging the right eye.
+
+#### 6. `06-beckoning-motion` — **NEEDS FIX**
+* **Phantom Digit / Split Glitch (0.75s):** The articulating finger splits/deforms into two simultaneous digits: an upright vertical digit on the far right and a separate horizontal finger curling flat across the mascot's forehead/eyes.
+* **Facial Expression Degradation (2.75s):** The smiling mouth degrades into an expressionless flat dash (`-`).
+
+#### 7. `07-finger-dance-motion` — **PASS**
+* **Choreography & Inversion:** Accurately flips upside down by 0.75s with the wrist cleanly positioned at the **TOP**.
+* **Walking Steps:** Accurately lands on index and middle fingertips and executes continuous alternating walking steps across 1.00s – 2.75s.
+* **Digit Integrity:** Remaining digits stay folded (thumb extended outward for balance, ring/pinky folded). Strict 5-digit count maintained throughout; no extra limbs, feet, or digits.
+* **Face Orientation:** The smiling face remains physically anchored to the palm, rotating upside-down naturally with the hand geometry.
+
+#### 8. `08-turnaround-back-motion` — **NEEDS FIX**
+* **Missing Face Texture (0.75s – 1.75s):** When the hand completes its first 180° rotation to reveal the back surface, the back is completely blank yellow with no frowny face.
+* **Erratic Spin & Popping (2.00s – 2.50s):** The hand executes an unprompted second rotation, and the frowny face abruptly pops onto the back at 2.50s.
+
+#### 9. `09-back-stop-motion` — **NEEDS FIX**
+* **Facial Feature Erasure (1.25s – 2.75s):** After clenching into a fist at 0.50s and opening back up, the frowny mouth completely disappears. For more than half the clip (1.25s through 2.75s), the mascot has only two blank dot eyes (`. .`) and no mouth.
+
+#### 10. `10-back-middle-finger-motion` — **PASS**
+* **Identity & Geometry:** Back of hand correctly displays the frowny face (eyes + downturned mouth) on the dorsal side.
+* **Digit Count & Shape:** Exactly 5 digits maintained throughout (2 folded on left, middle extended, 2 folded on right). No thumb swelling, melting, or anatomical distortions.
+* **Animation:** Rhythmic side-to-side wagging of the extended finger with clean, synchronized squint/blink keyframes (1.00s – 1.25s, 2.25s).
+
+---
+
+### Limits of Sampling Notice
+These assessments are based on temporal contact sheets sampled at **4 fps (250 ms intervals)** across each 3.0-second video. Brief sub-frame glitches, intra-frame jitter/micro-flicker, or lighting strobing occurring strictly between sampled 250 ms intervals cannot be detected from static temporal grids alone.

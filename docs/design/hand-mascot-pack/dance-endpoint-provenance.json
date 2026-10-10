@@ -1,0 +1,8 @@
+{
+  "source": "/Users/kirilldubovitskiy/Happy/Workspaces/happy-desktop/hand-mascot-pack/.context/hand-mascot-pack/images/07-finger-dance.png",
+  "end_still": "/Users/kirilldubovitskiy/Happy/Workspaces/happy-desktop/hand-mascot-pack/.context/hand-mascot-pack/images/07-finger-dance-inverted-end.png",
+  "operation": "180-degree local rotation of an existing genuine five-digit native pose",
+  "purpose": "End-frame conditioning only, NOT an animation or a newly generated image",
+  "actual_animation_provider": "fal Kling O3 Pro reference-to-video, after reviewed submission",
+  "user_choreography": "Hand flips over to stand on its fingers and dances on its fingers"
+}

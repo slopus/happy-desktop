@@ -1,0 +1,119 @@
+{
+  "identity": "front-back-turnaround.png",
+  "stills": [
+    {
+      "id": "01-finger-heart",
+      "label": "Finger heart",
+      "file": "01-finger-heart.png",
+      "dimensions": [
+        1024,
+        1024
+      ],
+      "alpha": true,
+      "sha256": "1c0cfab9ef0f83786fc8e17aa79bbecd26fc065f92831b004cc3a2c4fe66afd3"
+    },
+    {
+      "id": "02-wave",
+      "label": "Wave",
+      "file": "02-wave.png",
+      "dimensions": [
+        1024,
+        1024
+      ],
+      "alpha": true,
+      "sha256": "1cc962bb7172862547072e68c5774d3db9294fac6d5c4972cc3e932ce2231680"
+    },
+    {
+      "id": "03-crossed-fingers",
+      "label": "Crossed fingers",
+      "file": "03-crossed-fingers.png",
+      "dimensions": [
+        1024,
+        1024
+      ],
+      "alpha": true,
+      "sha256": "dc76bbb6a2cd6e8f9374fc2cfcffc0b63540852b843cf3664f5baa89ac204988"
+    },
+    {
+      "id": "04-thumbs-up",
+      "label": "Thumbs up",
+      "file": "04-thumbs-up.png",
+      "dimensions": [
+        1024,
+        1024
+      ],
+      "alpha": true,
+      "sha256": "b5b8c1879c36b86c82a8648eb4b6bbc6c77c743e42fd52e7ff520b31339e8728"
+    },
+    {
+      "id": "05-holding-heart",
+      "label": "Holding a heart",
+      "file": "05-holding-heart.png",
+      "dimensions": [
+        1024,
+        1024
+      ],
+      "alpha": true,
+      "sha256": "6b0ab26e6ae2a43223077a19004a45a612d187fcc98914f758758bb2c0731381"
+    },
+    {
+      "id": "06-beckoning",
+      "label": "Beckoning",
+      "file": "06-beckoning.png",
+      "dimensions": [
+        1024,
+        1024
+      ],
+      "alpha": true,
+      "sha256": "0033ee0c6f819299ea424bc05f170f64ca99a2e9ad9f52ed098ffe2061e116c7"
+    },
+    {
+      "id": "07-finger-dance",
+      "label": "Finger dance",
+      "file": "07-finger-dance.png",
+      "dimensions": [
+        1024,
+        1024
+      ],
+      "alpha": true,
+      "sha256": "cca3930d9804ef060c5d7d75baa6fc54de3bc0948bad940e63558ae26b7eea14"
+    },
+    {
+      "id": "08-turnaround-back",
+      "label": "Turn to frowny back",
+      "file": "08-turnaround-back.png",
+      "dimensions": [
+        1024,
+        1024
+      ],
+      "alpha": true,
+      "sha256": "ea68e0aab8ceb1e09ba80e8a73d25cd809a228021c1d9d8fbcd1898a06f20014"
+    },
+    {
+      "id": "09-back-stop",
+      "label": "Back: stop / refusal",
+      "file": "09-back-stop.png",
+      "dimensions": [
+        1024,
+        1024
+      ],
+      "alpha": true,
+      "sha256": "562f7710df2b3f81b673f39e555d8e208a3555f5319fb7a14bb0f73b69a58355"
+    },
+    {
+      "id": "10-back-middle-finger",
+      "label": "Back: middle finger",
+      "file": "10-back-middle-finger.png",
+      "dimensions": [
+        1024,
+        1024
+      ],
+      "alpha": true,
+      "sha256": "a7218c0381724a8a7721fce01d098613b3a97f28447287f578fdc10bbdfe6bc1"
+    }
+  ],
+  "stills_provider": "native GPT image tool",
+  "exact_native_model_version": "Not exposed by native tool",
+  "animations_generated": 0,
+  "app_changes": false
+}

@@ -1,0 +1,55 @@
+{
+  "name": "07-finger-dance-motion",
+  "model": "fal-ai/kling-video/o3/pro/reference-to-video",
+  "input": {
+    "prompt": "@Image1 defines permanent mascot identity: happy palm and frowny back. @Image2 and @Image3 are actual Telegram animated emoji frames for style ONLY, never inherit robot nose, teeth, colors or large eyes. A real articulated three-dimensional hand does a little breakdance. Locked stationary camera, single continuous shot, the exact butter-yellow five-digit hand in the supplied start frame. During the FIRST SECOND the WHOLE HAND flips smoothly head-over-heels 180 degrees as a solid three-dimensional object, with the short wrist stump moving to the TOP. It lands UPSIDE DOWN on the fingertips of its INDEX and MIDDLE fingers. These two anatomical fingers are its two dancing supports. Ring and pinky remain separately folded toward the palm, thumb stays folded at the side: exactly FIVE digits throughout. During the REMAINING TWO SECONDS the index and middle fingers take four clear alternating little dance steps. Their REAL FINGER JOINTS bend and extend independently, fingertips lift from and touch the floor in turn, weight shifts between the two fingers, palm bobs gently above them. The supporting fingers behave like the two legs of a little dancer, but NEVER create separate legs, feet, toes or shoes. Finish standing upside down on those two fingers, matching the end frame. The palm face is a fixed physical marking: the tiny brown eyes and happy smile rotate WITH the hand, ending upside down near the wrist at the TOP of the palm. Do not redraw the face upright, move the face or morph its smile. The opposite back permanently has a separate frown, visible only if the back itself is exposed. Same soft rounded butter-yellow 3D toy material, clear silhouette, ivory background. NO CAMERA MOVEMENT, cuts, zoom, extra hands, new props, audio or text. This must contain REAL finger-joint articulation and alternating finger steps, not a still picture spinning or sliding. Telegram hand-emoji motion timing: anticipatory elastic flip, quick crisp fingertip steps, soft settle. Avoid: extra fingers, missing fingers, fused fingers, six digits, face morphing, face sliding, smiling dorsal face, frowny palm, camera motion, zoom, multiple hands, scene cuts, text, flat still image.",
+    "duration": "3",
+    "generate_audio": false,
+    "start_image_url": "Local native-generated image; see local_sources",
+    "end_image_url": "Local native-generated image; see local_sources",
+    "aspect_ratio": "1:1",
+    "image_urls": {
+      "start": "images/07-finger-dance.png",
+      "end": "images/07-finger-dance-inverted-end.png",
+      "identity_style_refs": [
+        "images/native-turnaround.png",
+        "references/telegram-open-hands-frame-000.png",
+        "references/telegram-robot-frame-090.png"
+      ]
+    },
+    "local_sources": {
+      "start": "images/07-finger-dance.png",
+      "end": "images/07-finger-dance-inverted-end.png",
+      "identity_style_refs": [
+        "images/native-turnaround.png",
+        "references/telegram-open-hands-frame-000.png",
+        "references/telegram-robot-frame-090.png"
+      ]
+    }
+  },
+  "queue": {
+    "status": "IN_QUEUE",
+    "request_id": "01a0fbb8-8cf6-7473-aac0-c9720c7e04d8",
+    "response_url": "https://queue.fal.run/fal-ai/kling-video/requests/01a0fbb8-8cf6-7473-aac0-c9720c7e04d8",
+    "status_url": "https://queue.fal.run/fal-ai/kling-video/requests/01a0fbb8-8cf6-7473-aac0-c9720c7e04d8/status",
+    "cancel_url": "https://queue.fal.run/fal-ai/kling-video/requests/01a0fbb8-8cf6-7473-aac0-c9720c7e04d8/cancel",
+    "logs": null,
+    "metrics": {},
+    "queue_position": 0
+  },
+  "status": {
+    "status": "COMPLETED",
+    "request_id": "01a0fbb8-8cf6-7473-aac0-c9720c7e04d8",
+    "response_url": "https://queue.fal.run/fal-ai/kling-video/requests/01a0fbb8-8cf6-7473-aac0-c9720c7e04d8",
+    "status_url": "https://queue.fal.run/fal-ai/kling-video/requests/01a0fbb8-8cf6-7473-aac0-c9720c7e04d8/status",
+    "cancel_url": "https://queue.fal.run/fal-ai/kling-video/requests/01a0fbb8-8cf6-7473-aac0-c9720c7e04d8/cancel",
+    "logs": null,
+    "metrics": {
+      "inference_time": 0.38299989700317383
+    }
+  },
+  "response_error": {
+    "http_status": 422,
+    "detail": "{\"detail\":[{\"type\":\"value_error\",\"loc\":[\"body\"],\"msg\":\"Value error, Setting end image is not supported when there are more than 2 images.\",\"input\":{\"prompt\":\"@Image1 defines permanent mascot identity: happy palm and frowny back. @Image2 and @Image3 are actual Telegram animated emoji frames for style ONLY, never inherit robot nose, teeth, colors or large eyes. A real articulated three-dimensional hand does a little breakdance. Locked stationary camera, single continuous shot, the exact butter-yellow five-digit hand in the supplied start frame. During the FIRST SECOND the WHOLE HAND flips smoothly head-over-heels 180 degrees as a solid three-dimensional object, with the short wrist stump moving to the TOP. It lands UPSIDE DOWN on the fingertips of its INDEX and MIDDLE fingers. These two anatomical fingers are its two dancing supports. Ring and pinky remain separately folded toward the palm, thumb stays folded at the side: exactly FIVE digits throughout. During the REMAINING TWO SECONDS the index and middle fingers take four clear alternating little dance steps. Their REAL FINGER JOINTS bend and extend independently, fingertips lift from and touch the floor in turn, weight shifts between the two fingers, palm bobs gently above them. The supporting fingers behave like the two legs of a little dancer, but NEVER create separate legs, feet, toes or shoes. Finish standing upside down on those two fingers, matching the end frame. The palm face is a fixed physical marking: the tiny brown eyes and happy smile rotate WITH the hand, ending upside down near the wrist at the TOP of the palm. Do not redraw the face upright, move the face or morph its smile. The opposite back permanently has a separate frown, visible only if the back itself is exposed. Same soft rounded butter-yellow 3D toy material, clear silhouette, ivory background. NO CAMERA MOVEMENT, cuts, zoom, extra hands, new props, audio or text. This must contain REAL finger-joint articulation and alternating finger steps, not a still picture spinning or sliding. Telegram hand-emoji motion timing: anticipatory elastic flip, quick crisp fingertip steps, soft settle. Avoid: extra fingers, missing fingers, fused fingers, six digits, face morphing, face sliding, smiling dorsal face, frowny palm, camera motion, zoom, multiple hands, scene cuts, text, flat still image.\",\"duration\":\"3\",\"generate_audio\":false,\"start_image_url\":\"[artwork data URI omitted]\",\"end_image_url\":\"[artwork data URI omitted]\",\"aspect_ratio\":\"1:1\",\"image_urls\":[\"[artwork data URI omitted]\",\"[artwork data URI omitted]\",\"[artwork data URI omitted]\"]},\"ctx\":{\"error\":\"Setting end image is not supported when there are more than 2 images.\"}}]}"
+  }
+}

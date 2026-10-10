@@ -1,0 +1,9 @@
+{
+  "approved_usd_cap": 15,
+  "already_inflight_metered_image_reserve_usd": 10,
+  "video_unit_price_usd": 0.336,
+  "submitted_video_count": 10,
+  "failed_validation_request_count": 2,
+  "total_reserved_usd": 14.032,
+  "note": "Image $10 is a conservative allowance, not measured billing. Video official $0.112/s, 3s, audio off."
+}

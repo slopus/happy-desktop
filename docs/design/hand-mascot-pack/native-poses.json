@@ -1,0 +1,122 @@
+{
+  "01-finger-heart": {
+    "source": "/Users/kirilldubovitskiy/Happy/Bots/new_happy_mascot/mascot/selected-c/finger-heart.png",
+    "local_file": "/Users/kirilldubovitskiy/Happy/Workspaces/happy-desktop/hand-mascot-pack/.context/hand-mascot-pack/images/01-finger-heart.png",
+    "provider": "native GPT image generation",
+    "exact_model_version": "Not exposed by native tool",
+    "sha256": "cb54c657e9c1dd6876beb323bd6ffd1b9e7ea371c827b2b656ea4dad9a97a106",
+    "dimensions": [
+      1254,
+      1254
+    ],
+    "mode": "RGBA"
+  },
+  "03-crossed-fingers": {
+    "source": "/Users/kirilldubovitskiy/Happy/Generated/zvh9pswguejvucd36tbv0xgf.png",
+    "local_file": "/Users/kirilldubovitskiy/Happy/Workspaces/happy-desktop/hand-mascot-pack/.context/hand-mascot-pack/images/03-crossed-fingers.png",
+    "provider": "native GPT image generation",
+    "exact_model_version": "Not exposed by native tool",
+    "sha256": "b7bd9920869491b979feb1ae1b32481c6336acb0c3cdc229f471bff1e12c8a94",
+    "dimensions": [
+      1254,
+      1254
+    ],
+    "mode": "RGBA"
+  },
+  "05-holding-heart": {
+    "source": "/Users/kirilldubovitskiy/Happy/Generated/k3g1l7ius9ek6tqavrmvvn4r.png",
+    "local_file": "/Users/kirilldubovitskiy/Happy/Workspaces/happy-desktop/hand-mascot-pack/.context/hand-mascot-pack/images/05-holding-heart.png",
+    "provider": "native GPT image generation",
+    "exact_model_version": "Not exposed by native tool",
+    "sha256": "f97b2145c2b313edf34bfdfa1cb35a583d95383faf20007e8cc30cc0c2d12bd1",
+    "dimensions": [
+      1254,
+      1254
+    ],
+    "mode": "RGBA"
+  },
+  "04-thumbs-up": {
+    "source": "/Users/kirilldubovitskiy/Happy/Generated/jm3joxoeb6hof4jds9l3qgxv.png",
+    "local_file": "/Users/kirilldubovitskiy/Happy/Workspaces/happy-desktop/hand-mascot-pack/.context/hand-mascot-pack/images/04-thumbs-up.png",
+    "provider": "native GPT image generation",
+    "exact_model_version": "Not exposed by native tool",
+    "sha256": "7e210671637915226dd7a36c259a43262c07d1f556591490b089f86f398525ac",
+    "dimensions": [
+      1254,
+      1254
+    ],
+    "mode": "RGBA"
+  },
+  "06-beckoning": {
+    "source": "/Users/kirilldubovitskiy/Happy/Generated/i665tf5zj6eq52rcfdz3huo9.png",
+    "local_file": "/Users/kirilldubovitskiy/Happy/Workspaces/happy-desktop/hand-mascot-pack/.context/hand-mascot-pack/images/06-beckoning.png",
+    "provider": "native GPT image generation",
+    "exact_model_version": "Not exposed by native tool",
+    "sha256": "9c2cd1b4d57f260808b97685f464cd88b03c6c43ddfb4652cacf480f7f172a0d",
+    "dimensions": [
+      1254,
+      1254
+    ],
+    "mode": "RGBA"
+  },
+  "07-finger-dance": {
+    "source": "/Users/kirilldubovitskiy/Happy/Generated/a6y25h8h5c0akrienux4ujkn.png",
+    "local_file": "/Users/kirilldubovitskiy/Happy/Workspaces/happy-desktop/hand-mascot-pack/.context/hand-mascot-pack/images/07-finger-dance.png",
+    "provider": "native GPT image generation",
+    "exact_model_version": "Not exposed by native tool",
+    "sha256": "802eff446a438a5b708b78d9306a43b0c3d1e59c9351a59cfda1781b14fa10b5",
+    "dimensions": [
+      1254,
+      1254
+    ],
+    "mode": "RGBA"
+  },
+  "09-back-stop": {
+    "source": "/Users/kirilldubovitskiy/Happy/Generated/f3ids8d4pmpgu6xed3d130or.png",
+    "local_file": "/Users/kirilldubovitskiy/Happy/Workspaces/happy-desktop/hand-mascot-pack/.context/hand-mascot-pack/images/09-back-stop.png",
+    "provider": "native GPT image generation",
+    "exact_model_version": "Not exposed by native tool",
+    "sha256": "10abad056a4b32ce96e6775c626542add8c5d5b99888e64ec1e1a00e691ea409",
+    "dimensions": [
+      1254,
+      1254
+    ],
+    "mode": "RGBA"
+  },
+  "10-back-middle-finger": {
+    "source": "/Users/kirilldubovitskiy/Happy/Generated/kc0qgxf80n3952d4fnux5gxq.png",
+    "local_file": "/Users/kirilldubovitskiy/Happy/Workspaces/happy-desktop/hand-mascot-pack/.context/hand-mascot-pack/images/10-back-middle-finger.png",
+    "provider": "native GPT image generation",
+    "exact_model_version": "Not exposed by native tool",
+    "sha256": "8f710543b1b28c6ef9ddae0fb8f4b987d6f862d7b47decc0c33604d3e096be8d",
+    "dimensions": [
+      1254,
+      1254
+    ],
+    "mode": "RGBA"
+  },
+  "10-back-middle-finger-v2": {
+    "source": "/Users/kirilldubovitskiy/Happy/Generated/dzshc3eho5kvt7zqo5jffpel.png",
+    "local_file": "/Users/kirilldubovitskiy/Happy/Workspaces/happy-desktop/hand-mascot-pack/.context/hand-mascot-pack/images/10-back-middle-finger-v2.png",
+    "provider": "native GPT image generation",
+    "exact_model_version": "Not exposed by native tool",
+    "sha256": "5c62cfd0689511ab65621a37b1178b697ce9b8bf9c58913c23ea1b23f2f8da52",
+    "dimensions": [
+      1254,
+      1254
+    ],
+    "mode": "RGBA"
+  },
+  "10-back-middle-finger-v3": {
+    "source": "/Users/kirilldubovitskiy/Happy/Generated/eifo1qmq1zpr53ue8brxn7ia.png",
+    "local_file": "/Users/kirilldubovitskiy/Happy/Workspaces/happy-desktop/hand-mascot-pack/.context/hand-mascot-pack/images/10-back-middle-finger-v3.png",
+    "provider": "native GPT image generation",
+    "exact_model_version": "Not exposed by native tool",
+    "sha256": "0ff05c997b53e0e9b9223b1e719075c086fbc91a5f558d977a1de4391949c8cd",
+    "dimensions": [
+      1254,
+      1254
+    ],
+    "mode": "RGBA"
+  }
+}

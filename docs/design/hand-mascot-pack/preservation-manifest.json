@@ -1,0 +1,3894 @@
+{
+  "files": [
+    {
+      "source_group": "completed-pack",
+      "source_file": ".build_review_v3.sh",
+      "saved_file": "build_review_v3.sh",
+      "source_sha256": "10b06f11db5503aa623a234e56100a83cd69baa2be3f5291b32074275c974be9",
+      "source_bytes": 1219,
+      "saved_sha256": "c82c1b18720fceaf197129b229eef3ecf138b3de0ff59f7ab994f3d3793e5b7c",
+      "saved_bytes": 1249,
+      "adapted": true
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": ".build_review_v4.sh",
+      "saved_file": "build_review_v4.sh",
+      "source_sha256": "f48fc388b085bcdaceef6e359e26f7d454401a310df7263349ea93d9307ea5ad",
+      "source_bytes": 1219,
+      "saved_sha256": "b49ddefde96e472a10e4fe367aff89ce1324a43ca40ce1e6f92ce7ea6870513a",
+      "saved_bytes": 1249,
+      "adapted": true
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": ".build_review_videos.sh",
+      "saved_file": "build_review_videos.sh",
+      "source_sha256": "8e214cfade592dad1c89d8ef689285d27196865cf62efe2c6a2906d2b866be90",
+      "source_bytes": 1995,
+      "saved_sha256": "8a4615e9cd5da2d86ab645269fbe2e6a96bcf4505234dc444edb57796d8b7581",
+      "saved_bytes": 2025,
+      "adapted": true
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "README.md",
+      "saved_file": "HISTORY.md",
+      "source_sha256": "31688f2beb3d3f011d7bf144d133bfc89f4935d17d06b78f872097b691f11970",
+      "source_bytes": 6490,
+      "saved_sha256": "31688f2beb3d3f011d7bf144d133bfc89f4935d17d06b78f872097b691f11970",
+      "saved_bytes": 6490,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "blocked-animation.json",
+      "saved_file": "blocked-animation.json",
+      "source_sha256": "b720523ad77d560ff8c19bd2132ae0cf3dcb41465fad26d88a9a9c54156a90c9",
+      "source_bytes": 1171,
+      "saved_sha256": "b720523ad77d560ff8c19bd2132ae0cf3dcb41465fad26d88a9a9c54156a90c9",
+      "saved_bytes": 1171,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "budget.json",
+      "saved_file": "budget.json",
+      "source_sha256": "00723b8dbcd87dff8540ced6a811ae49e7e1715e75570faf04c1b1749d5e2425",
+      "source_bytes": 331,
+      "saved_sha256": "00723b8dbcd87dff8540ced6a811ae49e7e1715e75570faf04c1b1749d5e2425",
+      "saved_bytes": 331,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "build_prompts.py",
+      "saved_file": "build_prompts.py",
+      "source_sha256": "42077e69cc54fa50deeef0ead323ec393c7fa063b8d044376b924772a6a43c5d",
+      "source_bytes": 10839,
+      "saved_sha256": "42077e69cc54fa50deeef0ead323ec393c7fa063b8d044376b924772a6a43c5d",
+      "saved_bytes": 10839,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "dance-endpoint-provenance.json",
+      "saved_file": "dance-endpoint-provenance.json",
+      "source_sha256": "24d9ae1789369bb1609d4465962150c528180770f62e2b14b7149c08cdca3aff",
+      "source_bytes": 669,
+      "saved_sha256": "24d9ae1789369bb1609d4465962150c528180770f62e2b14b7149c08cdca3aff",
+      "saved_bytes": 669,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "deliverables/01-finger-heart.png",
+      "saved_file": "deliverables/01-finger-heart.png",
+      "source_sha256": "1c0cfab9ef0f83786fc8e17aa79bbecd26fc065f92831b004cc3a2c4fe66afd3",
+      "source_bytes": 403596,
+      "saved_sha256": "1c0cfab9ef0f83786fc8e17aa79bbecd26fc065f92831b004cc3a2c4fe66afd3",
+      "saved_bytes": 403596,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "deliverables/02-wave.png",
+      "saved_file": "deliverables/02-wave.png",
+      "source_sha256": "1cc962bb7172862547072e68c5774d3db9294fac6d5c4972cc3e932ce2231680",
+      "source_bytes": 501365,
+      "saved_sha256": "1cc962bb7172862547072e68c5774d3db9294fac6d5c4972cc3e932ce2231680",
+      "saved_bytes": 501365,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "deliverables/03-crossed-fingers.png",
+      "saved_file": "deliverables/03-crossed-fingers.png",
+      "source_sha256": "dc76bbb6a2cd6e8f9374fc2cfcffc0b63540852b843cf3664f5baa89ac204988",
+      "source_bytes": 436551,
+      "saved_sha256": "dc76bbb6a2cd6e8f9374fc2cfcffc0b63540852b843cf3664f5baa89ac204988",
+      "saved_bytes": 436551,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "deliverables/04-thumbs-up.png",
+      "saved_file": "deliverables/04-thumbs-up.png",
+      "source_sha256": "b5b8c1879c36b86c82a8648eb4b6bbc6c77c743e42fd52e7ff520b31339e8728",
+      "source_bytes": 588546,
+      "saved_sha256": "b5b8c1879c36b86c82a8648eb4b6bbc6c77c743e42fd52e7ff520b31339e8728",
+      "saved_bytes": 588546,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "deliverables/05-holding-heart.png",
+      "saved_file": "deliverables/05-holding-heart.png",
+      "source_sha256": "6b0ab26e6ae2a43223077a19004a45a612d187fcc98914f758758bb2c0731381",
+      "source_bytes": 572402,
+      "saved_sha256": "6b0ab26e6ae2a43223077a19004a45a612d187fcc98914f758758bb2c0731381",
+      "saved_bytes": 572402,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "deliverables/06-beckoning.png",
+      "saved_file": "deliverables/06-beckoning.png",
+      "source_sha256": "0033ee0c6f819299ea424bc05f170f64ca99a2e9ad9f52ed098ffe2061e116c7",
+      "source_bytes": 465177,
+      "saved_sha256": "0033ee0c6f819299ea424bc05f170f64ca99a2e9ad9f52ed098ffe2061e116c7",
+      "saved_bytes": 465177,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "deliverables/07-finger-dance.png",
+      "saved_file": "deliverables/07-finger-dance.png",
+      "source_sha256": "cca3930d9804ef060c5d7d75baa6fc54de3bc0948bad940e63558ae26b7eea14",
+      "source_bytes": 489987,
+      "saved_sha256": "cca3930d9804ef060c5d7d75baa6fc54de3bc0948bad940e63558ae26b7eea14",
+      "saved_bytes": 489987,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "deliverables/08-turnaround-back.png",
+      "saved_file": "deliverables/08-turnaround-back.png",
+      "source_sha256": "ea68e0aab8ceb1e09ba80e8a73d25cd809a228021c1d9d8fbcd1898a06f20014",
+      "source_bytes": 488979,
+      "saved_sha256": "ea68e0aab8ceb1e09ba80e8a73d25cd809a228021c1d9d8fbcd1898a06f20014",
+      "saved_bytes": 488979,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "deliverables/09-back-stop.png",
+      "saved_file": "deliverables/09-back-stop.png",
+      "source_sha256": "562f7710df2b3f81b673f39e555d8e208a3555f5319fb7a14bb0f73b69a58355",
+      "source_bytes": 592218,
+      "saved_sha256": "562f7710df2b3f81b673f39e555d8e208a3555f5319fb7a14bb0f73b69a58355",
+      "saved_bytes": 592218,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "deliverables/10-back-middle-finger.png",
+      "saved_file": "deliverables/10-back-middle-finger.png",
+      "source_sha256": "a7218c0381724a8a7721fce01d098613b3a97f28447287f578fdc10bbdfe6bc1",
+      "source_bytes": 482532,
+      "saved_sha256": "a7218c0381724a8a7721fce01d098613b3a97f28447287f578fdc10bbdfe6bc1",
+      "saved_bytes": 482532,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "deliverables/README.md",
+      "saved_file": "deliverables/README.md",
+      "source_sha256": "beafc2db77f69035466fff8c218457447e47ae514d469cee15714f0aeb64ee42",
+      "source_bytes": 1154,
+      "saved_sha256": "beafc2db77f69035466fff8c218457447e47ae514d469cee15714f0aeb64ee42",
+      "saved_bytes": 1154,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "deliverables/artwork-manifest.json",
+      "saved_file": "deliverables/artwork-manifest.json",
+      "source_sha256": "5098683056a66d4da204294688a769532cc86e3d35066e48a27e45adb4252aab",
+      "source_bytes": 2971,
+      "saved_sha256": "5098683056a66d4da204294688a769532cc86e3d35066e48a27e45adb4252aab",
+      "saved_bytes": 2971,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "deliverables/blocked-animation.json",
+      "saved_file": "deliverables/blocked-animation.json",
+      "source_sha256": "01c1b23fd141d3a2777073ddc21c3aad9c3cf6194879a431bcba8b40f4e7b2a5",
+      "source_bytes": 745,
+      "saved_sha256": "01c1b23fd141d3a2777073ddc21c3aad9c3cf6194879a431bcba8b40f4e7b2a5",
+      "saved_bytes": 745,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "deliverables/budget.json",
+      "saved_file": "deliverables/budget.json",
+      "source_sha256": "8e53b88df6f26e7cfd57624767a186f5b03beed4ee5d975de4aedad7fb3ed8d5",
+      "source_bytes": 650,
+      "saved_sha256": "8e53b88df6f26e7cfd57624767a186f5b03beed4ee5d975de4aedad7fb3ed8d5",
+      "saved_bytes": 650,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "deliverables/contact-sheet.jpg",
+      "saved_file": "deliverables/contact-sheet.jpg",
+      "source_sha256": "c833be810791f23e4822292f9a87f97321ce291435aef18c00bd3383c04f8f84",
+      "source_bytes": 194607,
+      "saved_sha256": "c833be810791f23e4822292f9a87f97321ce291435aef18c00bd3383c04f8f84",
+      "saved_bytes": 194607,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "deliverables/front-back-turnaround.png",
+      "saved_file": "deliverables/front-back-turnaround.png",
+      "source_sha256": "7ef4d2b4509a7a1b035c50702ef89e480ee2122618e40404d960a5c3b6a32b40",
+      "source_bytes": 898001,
+      "saved_sha256": "7ef4d2b4509a7a1b035c50702ef89e480ee2122618e40404d960a5c3b6a32b40",
+      "saved_bytes": 898001,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "deliverables/motion-prompts/01-finger-heart.json",
+      "saved_file": "deliverables/motion-prompts/01-finger-heart.json",
+      "source_sha256": "9468f02874410843af5a0fc0580401238ead33e10c6f8fcf398c59bb34222f3b",
+      "source_bytes": 2169,
+      "saved_sha256": "9468f02874410843af5a0fc0580401238ead33e10c6f8fcf398c59bb34222f3b",
+      "saved_bytes": 2169,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "deliverables/motion-prompts/02-wave.json",
+      "saved_file": "deliverables/motion-prompts/02-wave.json",
+      "source_sha256": "62c9d8e82d1a325aeac92d6320789c3668c698495eea130886e59554936f4fdb",
+      "source_bytes": 2132,
+      "saved_sha256": "62c9d8e82d1a325aeac92d6320789c3668c698495eea130886e59554936f4fdb",
+      "saved_bytes": 2132,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "deliverables/motion-prompts/03-crossed-fingers.json",
+      "saved_file": "deliverables/motion-prompts/03-crossed-fingers.json",
+      "source_sha256": "d3f48a78a8d01542f9208b9a057e90eea7d97132e2cd9e907c89177c57cd680a",
+      "source_bytes": 2161,
+      "saved_sha256": "d3f48a78a8d01542f9208b9a057e90eea7d97132e2cd9e907c89177c57cd680a",
+      "saved_bytes": 2161,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "deliverables/motion-prompts/04-thumbs-up.json",
+      "saved_file": "deliverables/motion-prompts/04-thumbs-up.json",
+      "source_sha256": "a0e57dc8791e67b4351d4662b3208a707a70bf2ed499a05f8a6cacef0c4942d9",
+      "source_bytes": 2134,
+      "saved_sha256": "a0e57dc8791e67b4351d4662b3208a707a70bf2ed499a05f8a6cacef0c4942d9",
+      "saved_bytes": 2134,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "deliverables/motion-prompts/05-holding-heart.json",
+      "saved_file": "deliverables/motion-prompts/05-holding-heart.json",
+      "source_sha256": "4820f5d67f1afecc0a8eb2003392c5f19310fa2b2cbe8dff75ebca2dbc07825e",
+      "source_bytes": 2151,
+      "saved_sha256": "4820f5d67f1afecc0a8eb2003392c5f19310fa2b2cbe8dff75ebca2dbc07825e",
+      "saved_bytes": 2151,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "deliverables/motion-prompts/06-beckoning.json",
+      "saved_file": "deliverables/motion-prompts/06-beckoning.json",
+      "source_sha256": "c3b301689dbeb011a1effe3913f59b82d3ceae703260469c8990eeef2993ca9f",
+      "source_bytes": 2131,
+      "saved_sha256": "c3b301689dbeb011a1effe3913f59b82d3ceae703260469c8990eeef2993ca9f",
+      "saved_bytes": 2131,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "deliverables/motion-prompts/07-finger-dance.json",
+      "saved_file": "deliverables/motion-prompts/07-finger-dance.json",
+      "source_sha256": "a95ddfe6ef16d51859b7583cf9cda78124ac54810acddaf6eaf7fc61760fe198",
+      "source_bytes": 2206,
+      "saved_sha256": "a95ddfe6ef16d51859b7583cf9cda78124ac54810acddaf6eaf7fc61760fe198",
+      "saved_bytes": 2206,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "deliverables/motion-prompts/08-turnaround-back.json",
+      "saved_file": "deliverables/motion-prompts/08-turnaround-back.json",
+      "source_sha256": "741cb70a789691a56d0703425f218623e539589df4cbb345ecbc4eab795cb24f",
+      "source_bytes": 2391,
+      "saved_sha256": "741cb70a789691a56d0703425f218623e539589df4cbb345ecbc4eab795cb24f",
+      "saved_bytes": 2391,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "deliverables/motion-prompts/09-back-stop.json",
+      "saved_file": "deliverables/motion-prompts/09-back-stop.json",
+      "source_sha256": "460f232f396d93968d19852a94edea8fc59f75e329e7d777422908a78a09170b",
+      "source_bytes": 2148,
+      "saved_sha256": "460f232f396d93968d19852a94edea8fc59f75e329e7d777422908a78a09170b",
+      "saved_bytes": 2148,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "deliverables/motion-prompts/10-back-middle-finger.json",
+      "saved_file": "deliverables/motion-prompts/10-back-middle-finger.json",
+      "source_sha256": "91a9dfa2c875c83c27fb83e762f35bfb55ac3fddbc4ddc7f16fa74e71c39e6fc",
+      "source_bytes": 2203,
+      "saved_sha256": "91a9dfa2c875c83c27fb83e762f35bfb55ac3fddbc4ddc7f16fa74e71c39e6fc",
+      "saved_bytes": 2203,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "deliverables/motion-prompts-manifest.json",
+      "saved_file": "deliverables/motion-prompts-manifest.json",
+      "source_sha256": "2a4eb39dc6796d1fc185198f7ab05857cdf5ff6f927598112e00d5465cea305c",
+      "source_bytes": 4445,
+      "saved_sha256": "2a4eb39dc6796d1fc185198f7ab05857cdf5ff6f927598112e00d5465cea305c",
+      "saved_bytes": 4445,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "deliverables/native-poses.json",
+      "saved_file": "deliverables/native-poses.json",
+      "source_sha256": "819f2ea00ad378c0d169be1583fc83b08db33669171b24a73068c51b77d0d803",
+      "source_bytes": 4159,
+      "saved_sha256": "819f2ea00ad378c0d169be1583fc83b08db33669171b24a73068c51b77d0d803",
+      "saved_bytes": 4159,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "deliverables/native-provenance.json",
+      "saved_file": "deliverables/native-provenance.json",
+      "source_sha256": "4b909492d3f197f94cec8438530d4aec605133a11a65aecad554c0ff95ade4ad",
+      "source_bytes": 530,
+      "saved_sha256": "4b909492d3f197f94cec8438530d4aec605133a11a65aecad554c0ff95ade4ad",
+      "saved_bytes": 530,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "deliverables/references/telegram-open-hands-frame-000.png",
+      "saved_file": "deliverables/references/telegram-open-hands-frame-000.png",
+      "source_sha256": "13ed54c4ff27939ba77865b3ab94da7ae53ecf13bbf87c842fb60045817138a6",
+      "source_bytes": 50762,
+      "saved_sha256": "13ed54c4ff27939ba77865b3ab94da7ae53ecf13bbf87c842fb60045817138a6",
+      "saved_bytes": 50762,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "deliverables/references/telegram-robot-frame-090.png",
+      "saved_file": "deliverables/references/telegram-robot-frame-090.png",
+      "source_sha256": "1545952a5009d874368915918591e5eae1a7283989bbaba48580ce2b65ef8d0c",
+      "source_bytes": 57556,
+      "saved_sha256": "1545952a5009d874368915918591e5eae1a7283989bbaba48580ce2b65ef8d0c",
+      "saved_bytes": 57556,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "deliverables/source-manifest.json",
+      "saved_file": "deliverables/source-manifest.json",
+      "source_sha256": "a9bddaa7b7b685a26403bdf97298442d17fa9e236ff0480206cff510b8173bda",
+      "source_bytes": 2400,
+      "saved_sha256": "a9bddaa7b7b685a26403bdf97298442d17fa9e236ff0480206cff510b8173bda",
+      "saved_bytes": 2400,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "fal_pipeline.py",
+      "saved_file": "fal_pipeline.py",
+      "source_sha256": "755bf22e11f654138f683946726a4480ac598de438134d69e647b3f9f08ad2fd",
+      "source_bytes": 8736,
+      "saved_sha256": "7caa2b21da4ef6348b9730821685e46bab3010695babbb87840ce89c12b8456f",
+      "saved_bytes": 8580,
+      "adapted": true
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "fix_preview_inputs.py",
+      "saved_file": "fix_preview_inputs.py",
+      "source_sha256": "2c40b9371ce3563910f02533bc6baa5fcdc270898467e77b3875096ba0c336ff",
+      "source_bytes": 1362,
+      "saved_sha256": "2c40b9371ce3563910f02533bc6baa5fcdc270898467e77b3875096ba0c336ff",
+      "saved_bytes": 1362,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "images/00-turnaround.png",
+      "saved_file": "images/00-turnaround.png",
+      "source_sha256": "c8a1e4188eb20e52526d7d1f14179d1aff51bf8a51397ef06f9bcdb14e30cbe4",
+      "source_bytes": 1534251,
+      "saved_sha256": "c8a1e4188eb20e52526d7d1f14179d1aff51bf8a51397ef06f9bcdb14e30cbe4",
+      "saved_bytes": 1534251,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "images/01-finger-heart.png",
+      "saved_file": "images/01-finger-heart.png",
+      "source_sha256": "cb54c657e9c1dd6876beb323bd6ffd1b9e7ea371c827b2b656ea4dad9a97a106",
+      "source_bytes": 580586,
+      "saved_sha256": "cb54c657e9c1dd6876beb323bd6ffd1b9e7ea371c827b2b656ea4dad9a97a106",
+      "saved_bytes": 580586,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "images/02-wave.png",
+      "saved_file": "images/02-wave.png",
+      "source_sha256": "1cc962bb7172862547072e68c5774d3db9294fac6d5c4972cc3e932ce2231680",
+      "source_bytes": 501365,
+      "saved_sha256": "1cc962bb7172862547072e68c5774d3db9294fac6d5c4972cc3e932ce2231680",
+      "saved_bytes": 501365,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "images/03-crossed-fingers.png",
+      "saved_file": "images/03-crossed-fingers.png",
+      "source_sha256": "b7bd9920869491b979feb1ae1b32481c6336acb0c3cdc229f471bff1e12c8a94",
+      "source_bytes": 632936,
+      "saved_sha256": "b7bd9920869491b979feb1ae1b32481c6336acb0c3cdc229f471bff1e12c8a94",
+      "saved_bytes": 632936,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "images/04-thumbs-up.png",
+      "saved_file": "images/04-thumbs-up.png",
+      "source_sha256": "7e210671637915226dd7a36c259a43262c07d1f556591490b089f86f398525ac",
+      "source_bytes": 851833,
+      "saved_sha256": "7e210671637915226dd7a36c259a43262c07d1f556591490b089f86f398525ac",
+      "saved_bytes": 851833,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "images/05-holding-heart.png",
+      "saved_file": "images/05-holding-heart.png",
+      "source_sha256": "f97b2145c2b313edf34bfdfa1cb35a583d95383faf20007e8cc30cc0c2d12bd1",
+      "source_bytes": 832844,
+      "saved_sha256": "f97b2145c2b313edf34bfdfa1cb35a583d95383faf20007e8cc30cc0c2d12bd1",
+      "saved_bytes": 832844,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "images/06-beckoning.png",
+      "saved_file": "images/06-beckoning.png",
+      "source_sha256": "9c2cd1b4d57f260808b97685f464cd88b03c6c43ddfb4652cacf480f7f172a0d",
+      "source_bytes": 678355,
+      "saved_sha256": "9c2cd1b4d57f260808b97685f464cd88b03c6c43ddfb4652cacf480f7f172a0d",
+      "saved_bytes": 678355,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "images/07-finger-dance-inverted-end.png",
+      "saved_file": "images/07-finger-dance-inverted-end.png",
+      "source_sha256": "fac2f699cab592b6a0eb18bb833d3f0c60ffb09e6b275b451d4bf45d680e1373",
+      "source_bytes": 681956,
+      "saved_sha256": "fac2f699cab592b6a0eb18bb833d3f0c60ffb09e6b275b451d4bf45d680e1373",
+      "saved_bytes": 681956,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "images/07-finger-dance.png",
+      "saved_file": "images/07-finger-dance.png",
+      "source_sha256": "802eff446a438a5b708b78d9306a43b0c3d1e59c9351a59cfda1781b14fa10b5",
+      "source_bytes": 704898,
+      "saved_sha256": "802eff446a438a5b708b78d9306a43b0c3d1e59c9351a59cfda1781b14fa10b5",
+      "saved_bytes": 704898,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "images/08-turnaround-back.png",
+      "saved_file": "images/08-turnaround-back.png",
+      "source_sha256": "ea68e0aab8ceb1e09ba80e8a73d25cd809a228021c1d9d8fbcd1898a06f20014",
+      "source_bytes": 488979,
+      "saved_sha256": "ea68e0aab8ceb1e09ba80e8a73d25cd809a228021c1d9d8fbcd1898a06f20014",
+      "saved_bytes": 488979,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "images/09-back-stop.png",
+      "saved_file": "images/09-back-stop.png",
+      "source_sha256": "10abad056a4b32ce96e6775c626542add8c5d5b99888e64ec1e1a00e691ea409",
+      "source_bytes": 853685,
+      "saved_sha256": "10abad056a4b32ce96e6775c626542add8c5d5b99888e64ec1e1a00e691ea409",
+      "saved_bytes": 853685,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "images/10-back-middle-finger-v2.png",
+      "saved_file": "images/10-back-middle-finger-v2.png",
+      "source_sha256": "5c62cfd0689511ab65621a37b1178b697ce9b8bf9c58913c23ea1b23f2f8da52",
+      "source_bytes": 634589,
+      "saved_sha256": "5c62cfd0689511ab65621a37b1178b697ce9b8bf9c58913c23ea1b23f2f8da52",
+      "saved_bytes": 634589,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "images/10-back-middle-finger-v3.png",
+      "saved_file": "images/10-back-middle-finger-v3.png",
+      "source_sha256": "0ff05c997b53e0e9b9223b1e719075c086fbc91a5f558d977a1de4391949c8cd",
+      "source_bytes": 574524,
+      "saved_sha256": "0ff05c997b53e0e9b9223b1e719075c086fbc91a5f558d977a1de4391949c8cd",
+      "saved_bytes": 574524,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "images/10-back-middle-finger.png",
+      "saved_file": "images/10-back-middle-finger.png",
+      "source_sha256": "8f710543b1b28c6ef9ddae0fb8f4b987d6f862d7b47decc0c33604d3e096be8d",
+      "source_bytes": 697825,
+      "saved_sha256": "8f710543b1b28c6ef9ddae0fb8f4b987d6f862d7b47decc0c33604d3e096be8d",
+      "saved_bytes": 697825,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "images/native-turnaround.png",
+      "saved_file": "images/native-turnaround.png",
+      "source_sha256": "5ec05d938db3a73efdf34853bda8dbdd1d7b9a58bf7e6c7fb43c4e1c9808e2e4",
+      "source_bytes": 919894,
+      "saved_sha256": "5ec05d938db3a73efdf34853bda8dbdd1d7b9a58bf7e6c7fb43c4e1c9808e2e4",
+      "saved_bytes": 919894,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "import_native.py",
+      "saved_file": "import_native.py",
+      "source_sha256": "0a50704854e5d5489d303c1c504678d796e2cae8ae01c0ef05bdbe9ea6a2ff30",
+      "source_bytes": 1723,
+      "saved_sha256": "0a50704854e5d5489d303c1c504678d796e2cae8ae01c0ef05bdbe9ea6a2ff30",
+      "saved_bytes": 1723,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "import_poses.py",
+      "saved_file": "import_poses.py",
+      "source_sha256": "e71b990ee225be2f388894fc925027ac8716447e3f7fabefbe0647e05837dfb8",
+      "source_bytes": 1078,
+      "saved_sha256": "e71b990ee225be2f388894fc925027ac8716447e3f7fabefbe0647e05837dfb8",
+      "saved_bytes": 1078,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "model-comparison.md",
+      "saved_file": "model-comparison.md",
+      "source_sha256": "fe8f70f3223f4d0fdd26dae996b0bd524bc4d33a33ef509cae5a6957b9974092",
+      "source_bytes": 1977,
+      "saved_sha256": "fe8f70f3223f4d0fdd26dae996b0bd524bc4d33a33ef509cae5a6957b9974092",
+      "saved_bytes": 1977,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "motion_contact_sheet.py",
+      "saved_file": "motion_contact_sheet.py",
+      "source_sha256": "988e3064b393358afb553cb0267f9336f7b28345875122b5d440dfe185621399",
+      "source_bytes": 2191,
+      "saved_sha256": "988e3064b393358afb553cb0267f9336f7b28345875122b5d440dfe185621399",
+      "saved_bytes": 2191,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "native-poses.json",
+      "saved_file": "native-poses.json",
+      "source_sha256": "f5d5608df31aa0aecf7242d810039b7241b523d435d11185b5b4866743404446",
+      "source_bytes": 5229,
+      "saved_sha256": "f5d5608df31aa0aecf7242d810039b7241b523d435d11185b5b4866743404446",
+      "saved_bytes": 5229,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "native-provenance.json",
+      "saved_file": "native-provenance.json",
+      "source_sha256": "4b909492d3f197f94cec8438530d4aec605133a11a65aecad554c0ff95ade4ad",
+      "source_bytes": 530,
+      "saved_sha256": "4b909492d3f197f94cec8438530d4aec605133a11a65aecad554c0ff95ade4ad",
+      "saved_bytes": 530,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "package_stills.py",
+      "saved_file": "package_stills.py",
+      "source_sha256": "ac8b6d474c13bed287f53a273d43b252382064c67d8e2791459b1d4a520b56ea",
+      "source_bytes": 8438,
+      "saved_sha256": "ac8b6d474c13bed287f53a273d43b252382064c67d8e2791459b1d4a520b56ea",
+      "saved_bytes": 8438,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "prepare_agy_direct_review.py",
+      "saved_file": "prepare_agy_direct_review.py",
+      "source_sha256": "a32a8fe7fba0a655ab156875dbc5e99368556a86b6b47b8a7d14b2340ac80c75",
+      "source_bytes": 1891,
+      "saved_sha256": "a32a8fe7fba0a655ab156875dbc5e99368556a86b6b47b8a7d14b2340ac80c75",
+      "saved_bytes": 1891,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "prepare_dance.py",
+      "saved_file": "prepare_dance.py",
+      "source_sha256": "5b5dd0f5b70bacf7374c63c9a8ac7d621254d14649dbcecaf5a0651432369377",
+      "source_bytes": 3106,
+      "saved_sha256": "5b5dd0f5b70bacf7374c63c9a8ac7d621254d14649dbcecaf5a0651432369377",
+      "saved_bytes": 3106,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "prepare_references.py",
+      "saved_file": "prepare_references.py",
+      "source_sha256": "df5cb4471b16256f04097576af5c767ce47f4fb5fd54a97b5d1dbb2c27413f23",
+      "source_bytes": 2102,
+      "saved_sha256": "ff9c19e220561fac7f70925e1efd3665572e191eff4464d06db86d540ba18a0f",
+      "saved_bytes": 2068,
+      "adapted": true
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "prepare_review.py",
+      "saved_file": "prepare_review.py",
+      "source_sha256": "cdb936ce02b1124a60ae0fc23e71882631958000af0619c28e8e2022ad4abb32",
+      "source_bytes": 3785,
+      "saved_sha256": "cdb936ce02b1124a60ae0fc23e71882631958000af0619c28e8e2022ad4abb32",
+      "saved_bytes": 3785,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "preview.py",
+      "saved_file": "preview.py",
+      "source_sha256": "f799cb37a0f16805856dcf6c7ca0ed5273a212375e5354d6bac53eabd72637fe",
+      "source_bytes": 2186,
+      "saved_sha256": "f799cb37a0f16805856dcf6c7ca0ed5273a212375e5354d6bac53eabd72637fe",
+      "saved_bytes": 2186,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "previews/01-finger-heart-motion-frames.jpg",
+      "saved_file": "previews/01-finger-heart-motion-frames.jpg",
+      "source_sha256": "65243c215788dff017fd391d8a22ff9529d80f2c08dbf2620c775c24a735e182",
+      "source_bytes": 21049,
+      "saved_sha256": "65243c215788dff017fd391d8a22ff9529d80f2c08dbf2620c775c24a735e182",
+      "saved_bytes": 21049,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "previews/01-finger-heart-motion.gif",
+      "saved_file": "previews/01-finger-heart-motion.gif",
+      "source_sha256": "e7dd662a2f0ed0e5357593028d11439d371ca7389be6371ff4c5632c311a82f8",
+      "source_bytes": 1339898,
+      "saved_sha256": "e7dd662a2f0ed0e5357593028d11439d371ca7389be6371ff4c5632c311a82f8",
+      "saved_bytes": 1339898,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "previews/02-wave-motion-frames.jpg",
+      "saved_file": "previews/02-wave-motion-frames.jpg",
+      "source_sha256": "7a94b75749f596b3ee0d75cbc53a0a8cd5e762ac1c66ae46aad0da25186f8f52",
+      "source_bytes": 22163,
+      "saved_sha256": "7a94b75749f596b3ee0d75cbc53a0a8cd5e762ac1c66ae46aad0da25186f8f52",
+      "saved_bytes": 22163,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "previews/02-wave-motion.gif",
+      "saved_file": "previews/02-wave-motion.gif",
+      "source_sha256": "2b146e00ff3cf83892b7a917961be5b5683e6f35b15033de5e2817cf84b14b83",
+      "source_bytes": 1783920,
+      "saved_sha256": "2b146e00ff3cf83892b7a917961be5b5683e6f35b15033de5e2817cf84b14b83",
+      "saved_bytes": 1783920,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "previews/03-crossed-fingers-motion-frames.jpg",
+      "saved_file": "previews/03-crossed-fingers-motion-frames.jpg",
+      "source_sha256": "dd4f544025ed43df6709831218db4a8dfee3219b8072948619eac100564b0576",
+      "source_bytes": 19928,
+      "saved_sha256": "dd4f544025ed43df6709831218db4a8dfee3219b8072948619eac100564b0576",
+      "saved_bytes": 19928,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "previews/03-crossed-fingers-motion.gif",
+      "saved_file": "previews/03-crossed-fingers-motion.gif",
+      "source_sha256": "23a38551e3c014d70161dafb7a7d9118e39b0aef4d86500055d819c4494fec8c",
+      "source_bytes": 1314640,
+      "saved_sha256": "23a38551e3c014d70161dafb7a7d9118e39b0aef4d86500055d819c4494fec8c",
+      "saved_bytes": 1314640,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "previews/04-thumbs-up-motion-frames.jpg",
+      "saved_file": "previews/04-thumbs-up-motion-frames.jpg",
+      "source_sha256": "beb651bf36275a56ded0ee136c4f2ae4a4ffe8a88c4595c284672dab60e7c193",
+      "source_bytes": 26464,
+      "saved_sha256": "beb651bf36275a56ded0ee136c4f2ae4a4ffe8a88c4595c284672dab60e7c193",
+      "saved_bytes": 26464,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "previews/04-thumbs-up-motion.gif",
+      "saved_file": "previews/04-thumbs-up-motion.gif",
+      "source_sha256": "8f47d8bf20ceec2d8cfa4b50c68596c35e7ac3da986567bb2918cef26fd6644f",
+      "source_bytes": 1599862,
+      "saved_sha256": "8f47d8bf20ceec2d8cfa4b50c68596c35e7ac3da986567bb2918cef26fd6644f",
+      "saved_bytes": 1599862,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "previews/05-holding-heart-motion-frames.jpg",
+      "saved_file": "previews/05-holding-heart-motion-frames.jpg",
+      "source_sha256": "2143240e01e19dd5ce401e3a608b8117d1d88c8d9bf5b746d8248512519ac933",
+      "source_bytes": 21686,
+      "saved_sha256": "2143240e01e19dd5ce401e3a608b8117d1d88c8d9bf5b746d8248512519ac933",
+      "saved_bytes": 21686,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "previews/05-holding-heart-motion.gif",
+      "saved_file": "previews/05-holding-heart-motion.gif",
+      "source_sha256": "0136e8ee2978f03fbed300e86f864f0ef52b0589774a3ba603cef78e224e4811",
+      "source_bytes": 1453336,
+      "saved_sha256": "0136e8ee2978f03fbed300e86f864f0ef52b0589774a3ba603cef78e224e4811",
+      "saved_bytes": 1453336,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "previews/06-beckoning-motion-frames.jpg",
+      "saved_file": "previews/06-beckoning-motion-frames.jpg",
+      "source_sha256": "4478a98e774355b4861be276926788d5f52ea6adfc4bbce727801a04ed02544b",
+      "source_bytes": 20041,
+      "saved_sha256": "4478a98e774355b4861be276926788d5f52ea6adfc4bbce727801a04ed02544b",
+      "saved_bytes": 20041,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "previews/06-beckoning-motion.gif",
+      "saved_file": "previews/06-beckoning-motion.gif",
+      "source_sha256": "f003d07cb62d9e901238957aa111c84e54162fed7de17347f404068c7a661bd3",
+      "source_bytes": 1515707,
+      "saved_sha256": "f003d07cb62d9e901238957aa111c84e54162fed7de17347f404068c7a661bd3",
+      "saved_bytes": 1515707,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "previews/07-finger-dance-motion-frames.jpg",
+      "saved_file": "previews/07-finger-dance-motion-frames.jpg",
+      "source_sha256": "48cfd743c83abed02d297cb93ddad088aced2a747079f5a8bf28a1e640332108",
+      "source_bytes": 21302,
+      "saved_sha256": "48cfd743c83abed02d297cb93ddad088aced2a747079f5a8bf28a1e640332108",
+      "saved_bytes": 21302,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "previews/07-finger-dance-motion.gif",
+      "saved_file": "previews/07-finger-dance-motion.gif",
+      "source_sha256": "2663442a7b90d69a67b118731b227745c1adb83704b83c8ec19f4d9a2e4bdbcc",
+      "source_bytes": 1661919,
+      "saved_sha256": "2663442a7b90d69a67b118731b227745c1adb83704b83c8ec19f4d9a2e4bdbcc",
+      "saved_bytes": 1661919,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "previews/08-turnaround-back-motion-frames.jpg",
+      "saved_file": "previews/08-turnaround-back-motion-frames.jpg",
+      "source_sha256": "189a21169383f2c11be247d9a14f47e03e677a36bfcfcd5b3cab30e87d9820dd",
+      "source_bytes": 19835,
+      "saved_sha256": "189a21169383f2c11be247d9a14f47e03e677a36bfcfcd5b3cab30e87d9820dd",
+      "saved_bytes": 19835,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "previews/08-turnaround-back-motion.gif",
+      "saved_file": "previews/08-turnaround-back-motion.gif",
+      "source_sha256": "2e6da63a6d0d710a1130625880da0d577b101d6f5b5daf73e438bf75898c6e4a",
+      "source_bytes": 1506835,
+      "saved_sha256": "2e6da63a6d0d710a1130625880da0d577b101d6f5b5daf73e438bf75898c6e4a",
+      "saved_bytes": 1506835,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "previews/09-back-stop-motion-frames.jpg",
+      "saved_file": "previews/09-back-stop-motion-frames.jpg",
+      "source_sha256": "ac589b49067cb92358ad9aa0b478103abec1564a671d8d34c986f6cc45c691b6",
+      "source_bytes": 22775,
+      "saved_sha256": "ac589b49067cb92358ad9aa0b478103abec1564a671d8d34c986f6cc45c691b6",
+      "saved_bytes": 22775,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "previews/09-back-stop-motion.gif",
+      "saved_file": "previews/09-back-stop-motion.gif",
+      "source_sha256": "ddb63ed8e8fb8b5f2e03618266aa502860ca4df345c98a771e91c70ab59b1f87",
+      "source_bytes": 1451837,
+      "saved_sha256": "ddb63ed8e8fb8b5f2e03618266aa502860ca4df345c98a771e91c70ab59b1f87",
+      "saved_bytes": 1451837,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "previews/10-back-middle-finger-motion-frames.jpg",
+      "saved_file": "previews/10-back-middle-finger-motion-frames.jpg",
+      "source_sha256": "997619d4e667b886c5f360d9e9427d8edde047f67ab3b5f1893d678a815f5f35",
+      "source_bytes": 21119,
+      "saved_sha256": "997619d4e667b886c5f360d9e9427d8edde047f67ab3b5f1893d678a815f5f35",
+      "saved_bytes": 21119,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "previews/10-back-middle-finger-motion.gif",
+      "saved_file": "previews/10-back-middle-finger-motion.gif",
+      "source_sha256": "89158f77fe9e6f6debb23d31e438a3b50063d5dab90b2ece910d2e0bddb56836",
+      "source_bytes": 1535420,
+      "saved_sha256": "89158f77fe9e6f6debb23d31e438a3b50063d5dab90b2ece910d2e0bddb56836",
+      "saved_bytes": 1535420,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "previews/10-middle-finger-before-after.mp4",
+      "saved_file": "previews/10-middle-finger-before-after.mp4",
+      "source_sha256": "23c4173e559db41792bc9573990acc841ac583f19feb6ffa3b861761cfd8ed75",
+      "source_bytes": 673639,
+      "saved_sha256": "23c4173e559db41792bc9573990acc841ac583f19feb6ffa3b861761cfd8ed75",
+      "saved_bytes": 673639,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "previews/all-ten-motions-v2.mp4",
+      "saved_file": "previews/all-ten-motions-v2.mp4",
+      "source_sha256": "184b759db6f75def20def37b17cb4d4faaf8591e72d3bccc76033cbdb9de15ac",
+      "source_bytes": 2896708,
+      "saved_sha256": "184b759db6f75def20def37b17cb4d4faaf8591e72d3bccc76033cbdb9de15ac",
+      "saved_bytes": 2896708,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "previews/all-ten-motions-v3.mp4",
+      "saved_file": "previews/all-ten-motions-v3.mp4",
+      "source_sha256": "b6d0dd3bc3af3b61ce87fcd9ecff8707bc97f7779f9ee7dabdf7bd91b48ab14d",
+      "source_bytes": 2902668,
+      "saved_sha256": "b6d0dd3bc3af3b61ce87fcd9ecff8707bc97f7779f9ee7dabdf7bd91b48ab14d",
+      "saved_bytes": 2902668,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "previews/all-ten-motions-v4.mp4",
+      "saved_file": "previews/all-ten-motions-v4.mp4",
+      "source_sha256": "f66020bc0525d8eb8b4b8081cb25c757d96c35c5928948138bc0f05561a1c45c",
+      "source_bytes": 2895843,
+      "saved_sha256": "f66020bc0525d8eb8b4b8081cb25c757d96c35c5928948138bc0f05561a1c45c",
+      "saved_bytes": 2895843,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "previews/all-ten-motions.gif",
+      "saved_file": "previews/all-ten-motions.gif",
+      "source_sha256": "222a42cb702375c1efb5240e1eb8ff4c87aa27e09a2fccdda0fbcf01708c7790",
+      "source_bytes": 3115396,
+      "saved_sha256": "222a42cb702375c1efb5240e1eb8ff4c87aa27e09a2fccdda0fbcf01708c7790",
+      "saved_bytes": 3115396,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "previews/all-ten-motions.mp4",
+      "saved_file": "previews/all-ten-motions.mp4",
+      "source_sha256": "195a7a2502731a4dd37dd4e2eb702bdd006d7ed9c911d106b89310726b4e0b2a",
+      "source_bytes": 633299,
+      "saved_sha256": "195a7a2502731a4dd37dd4e2eb702bdd006d7ed9c911d106b89310726b4e0b2a",
+      "saved_bytes": 633299,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "previews/redo-before-after.mp4",
+      "saved_file": "previews/redo-before-after.mp4",
+      "source_sha256": "f0c5f1db70b73dd936555348ae0a1ef989148c3035b2de1693c6cf4d5996df06",
+      "source_bytes": 2440382,
+      "saved_sha256": "f0c5f1db70b73dd936555348ae0a1ef989148c3035b2de1693c6cf4d5996df06",
+      "saved_bytes": 2440382,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "previews/ten-gestures-contact-sheet.jpg",
+      "saved_file": "previews/ten-gestures-contact-sheet.jpg",
+      "source_sha256": "4b805de07aedd827baef55f007633c1708f7f14aeaf1ebf129bea4f676408a6f",
+      "source_bytes": 145858,
+      "saved_sha256": "4b805de07aedd827baef55f007633c1708f7f14aeaf1ebf129bea4f676408a6f",
+      "saved_bytes": 145858,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "prompts/00-turnaround.json",
+      "saved_file": "prompts/00-turnaround.json",
+      "source_sha256": "40b25addd5c15348c6b0ac4d43b276f774e10fa31e90e32b3c8ed115e7757ed0",
+      "source_bytes": 1895,
+      "saved_sha256": "40b25addd5c15348c6b0ac4d43b276f774e10fa31e90e32b3c8ed115e7757ed0",
+      "saved_bytes": 1895,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "prompts/01-finger-heart-motion.json",
+      "saved_file": "prompts/01-finger-heart-motion.json",
+      "source_sha256": "5e49f7e7b1aec73f575d5faaaae1c148de8ed00a1bcea9d0eac71b7beaf4c5d5",
+      "source_bytes": 1614,
+      "saved_sha256": "5e49f7e7b1aec73f575d5faaaae1c148de8ed00a1bcea9d0eac71b7beaf4c5d5",
+      "saved_bytes": 1614,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "prompts/01-finger-heart.json",
+      "saved_file": "prompts/01-finger-heart.json",
+      "source_sha256": "c7072fbc47a99c703492129c7cff1dd5b0b5cd92de297594456671a8203812a1",
+      "source_bytes": 2321,
+      "saved_sha256": "c7072fbc47a99c703492129c7cff1dd5b0b5cd92de297594456671a8203812a1",
+      "saved_bytes": 2321,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "prompts/02-wave-motion.json",
+      "saved_file": "prompts/02-wave-motion.json",
+      "source_sha256": "697b150cccb273f9e27ce28305c9bfeb2480a1b55964e7aef1536111e61efe74",
+      "source_bytes": 1585,
+      "saved_sha256": "697b150cccb273f9e27ce28305c9bfeb2480a1b55964e7aef1536111e61efe74",
+      "saved_bytes": 1585,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "prompts/02-wave.json",
+      "saved_file": "prompts/02-wave.json",
+      "source_sha256": "e2ca7b230c68b164b5d51317f3ed5de29b8285b734ea2636525d636e43670a02",
+      "source_bytes": 2163,
+      "saved_sha256": "e2ca7b230c68b164b5d51317f3ed5de29b8285b734ea2636525d636e43670a02",
+      "saved_bytes": 2163,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "prompts/03-crossed-fingers-motion.json",
+      "saved_file": "prompts/03-crossed-fingers-motion.json",
+      "source_sha256": "843681abf8a683410edfc66aaf932f8ba7c04362c706d02493238f623aa192fc",
+      "source_bytes": 1603,
+      "saved_sha256": "843681abf8a683410edfc66aaf932f8ba7c04362c706d02493238f623aa192fc",
+      "saved_bytes": 1603,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "prompts/03-crossed-fingers.json",
+      "saved_file": "prompts/03-crossed-fingers.json",
+      "source_sha256": "c5cb9e84ce7b0d7dee21cd5c7837cdc8f25e22013761ac47847ca475cdd572b1",
+      "source_bytes": 2303,
+      "saved_sha256": "c5cb9e84ce7b0d7dee21cd5c7837cdc8f25e22013761ac47847ca475cdd572b1",
+      "saved_bytes": 2303,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "prompts/04-thumbs-up-motion.json",
+      "saved_file": "prompts/04-thumbs-up-motion.json",
+      "source_sha256": "d2c9f499f93a641a405638df691418869187b6c552f89efe8e9983e6e3082965",
+      "source_bytes": 1582,
+      "saved_sha256": "d2c9f499f93a641a405638df691418869187b6c552f89efe8e9983e6e3082965",
+      "saved_bytes": 1582,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "prompts/04-thumbs-up.json",
+      "saved_file": "prompts/04-thumbs-up.json",
+      "source_sha256": "9122e360946e896b27312cc301a74fabf28b0cbc42aabab2abe262c219b6f920",
+      "source_bytes": 2242,
+      "saved_sha256": "9122e360946e896b27312cc301a74fabf28b0cbc42aabab2abe262c219b6f920",
+      "saved_bytes": 2242,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "prompts/05-holding-heart-motion.json",
+      "saved_file": "prompts/05-holding-heart-motion.json",
+      "source_sha256": "61f0c6a514a6638778b497758ad7f65e2a02b9ed3dda60107f2d38872c9ae4ab",
+      "source_bytes": 1595,
+      "saved_sha256": "61f0c6a514a6638778b497758ad7f65e2a02b9ed3dda60107f2d38872c9ae4ab",
+      "saved_bytes": 1595,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "prompts/05-holding-heart.json",
+      "saved_file": "prompts/05-holding-heart.json",
+      "source_sha256": "db3088f9dfcf7e74fd9bd4e61edd56abe6be61de666fcbcafe8b43c1f5f346d4",
+      "source_bytes": 2240,
+      "saved_sha256": "db3088f9dfcf7e74fd9bd4e61edd56abe6be61de666fcbcafe8b43c1f5f346d4",
+      "saved_bytes": 2240,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "prompts/06-beckoning-motion.json",
+      "saved_file": "prompts/06-beckoning-motion.json",
+      "source_sha256": "7abfaf19c9b933b0d3fa57a08cfcd4b48f553999a52560387b615ac49585a3bc",
+      "source_bytes": 1579,
+      "saved_sha256": "7abfaf19c9b933b0d3fa57a08cfcd4b48f553999a52560387b615ac49585a3bc",
+      "saved_bytes": 1579,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "prompts/06-beckoning.json",
+      "saved_file": "prompts/06-beckoning.json",
+      "source_sha256": "8cd380aee90c53f56af2bc5f40e8781c8c29b94b3ece5482a7818c762830dd76",
+      "source_bytes": 2265,
+      "saved_sha256": "8cd380aee90c53f56af2bc5f40e8781c8c29b94b3ece5482a7818c762830dd76",
+      "saved_bytes": 2265,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "prompts/07-finger-dance-motion.json",
+      "saved_file": "prompts/07-finger-dance-motion.json",
+      "source_sha256": "314bce6ddb0d2b7dd08fc6f622beb2e639fbc0dddc5c5b19cb362077b072cc4f",
+      "source_bytes": 2165,
+      "saved_sha256": "314bce6ddb0d2b7dd08fc6f622beb2e639fbc0dddc5c5b19cb362077b072cc4f",
+      "saved_bytes": 2165,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "prompts/07-finger-dance.json",
+      "saved_file": "prompts/07-finger-dance.json",
+      "source_sha256": "c0145ef88b6ad6288ad52f288baf937fa9958a7503259153813b0ee7f13f03d6",
+      "source_bytes": 2273,
+      "saved_sha256": "c0145ef88b6ad6288ad52f288baf937fa9958a7503259153813b0ee7f13f03d6",
+      "saved_bytes": 2273,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "prompts/08-turnaround-back-motion.json",
+      "saved_file": "prompts/08-turnaround-back-motion.json",
+      "source_sha256": "7dc62975950f01be93e61353ed92a838a601fca53d5d477d9494e451d22a7441",
+      "source_bytes": 1871,
+      "saved_sha256": "7dc62975950f01be93e61353ed92a838a601fca53d5d477d9494e451d22a7441",
+      "saved_bytes": 1871,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "prompts/08-turnaround-back.json",
+      "saved_file": "prompts/08-turnaround-back.json",
+      "source_sha256": "ff7f48007efc42776c715316540a74b2a589872c05906fe6d0e9795c624143f9",
+      "source_bytes": 2306,
+      "saved_sha256": "ff7f48007efc42776c715316540a74b2a589872c05906fe6d0e9795c624143f9",
+      "saved_bytes": 2306,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "prompts/09-back-stop-motion.json",
+      "saved_file": "prompts/09-back-stop-motion.json",
+      "source_sha256": "6305461a0608a86226ca9835bec6897a11f693d2e016b692d21b82fc86a9c156",
+      "source_bytes": 1596,
+      "saved_sha256": "6305461a0608a86226ca9835bec6897a11f693d2e016b692d21b82fc86a9c156",
+      "saved_bytes": 1596,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "prompts/09-back-stop.json",
+      "saved_file": "prompts/09-back-stop.json",
+      "source_sha256": "5b15d725aad81d204e8fc3c5828e025bac629b5cfcd1433be5bab35ac777422e",
+      "source_bytes": 2235,
+      "saved_sha256": "5b15d725aad81d204e8fc3c5828e025bac629b5cfcd1433be5bab35ac777422e",
+      "saved_bytes": 2235,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "prompts/10-back-middle-finger-motion.json",
+      "saved_file": "prompts/10-back-middle-finger-motion.json",
+      "source_sha256": "da63411c3d48ef38153c152bc6a30a1d4012e931458dd6318a9aac5b1a29f617",
+      "source_bytes": 1642,
+      "saved_sha256": "da63411c3d48ef38153c152bc6a30a1d4012e931458dd6318a9aac5b1a29f617",
+      "saved_bytes": 1642,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "prompts/10-back-middle-finger.json",
+      "saved_file": "prompts/10-back-middle-finger.json",
+      "source_sha256": "0786de9c7d21b9043fcbe2634c39831718a6b91ff8eb495a25ee89f3dd6ed41c",
+      "source_bytes": 2336,
+      "saved_sha256": "0786de9c7d21b9043fcbe2634c39831718a6b91ff8eb495a25ee89f3dd6ed41c",
+      "saved_bytes": 2336,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "records/00-turnaround.json",
+      "saved_file": "records/00-turnaround.json",
+      "source_sha256": "dad09cce1fbd2bd9513a2f13116b5fb711043e785ed63379d4b2ec6c8b36d4e9",
+      "source_bytes": 3551,
+      "saved_sha256": "dad09cce1fbd2bd9513a2f13116b5fb711043e785ed63379d4b2ec6c8b36d4e9",
+      "saved_bytes": 3551,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "records/01-finger-heart-motion.json",
+      "saved_file": "records/01-finger-heart-motion.json",
+      "source_sha256": "15f964b94e52724aa779d7218b88f3640354591c9aae48dd10fa3a2f388df9f5",
+      "source_bytes": 4030,
+      "saved_sha256": "15f964b94e52724aa779d7218b88f3640354591c9aae48dd10fa3a2f388df9f5",
+      "saved_bytes": 4030,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "records/02-wave-motion-v2.json",
+      "saved_file": "records/02-wave-motion-v2.json",
+      "source_sha256": "e7a8816a91b565680995d9ebbb52ab7f45cde25b6e23edb68d307b566acd43f4",
+      "source_bytes": 3102,
+      "saved_sha256": "e7a8816a91b565680995d9ebbb52ab7f45cde25b6e23edb68d307b566acd43f4",
+      "saved_bytes": 3102,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "records/02-wave-motion.json",
+      "saved_file": "records/02-wave-motion.json",
+      "source_sha256": "9eb051dc454bbbc61bc297b93f189f804297d45ce1dfba378fb9b80a9856449f",
+      "source_bytes": 3809,
+      "saved_sha256": "9eb051dc454bbbc61bc297b93f189f804297d45ce1dfba378fb9b80a9856449f",
+      "saved_bytes": 3809,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "records/03-crossed-fingers-motion.json",
+      "saved_file": "records/03-crossed-fingers-motion.json",
+      "source_sha256": "5fc6384b847af7d4473e48c1b3bdbf71885069fe5724fe538eb62dc739e1cf7f",
+      "source_bytes": 4035,
+      "saved_sha256": "5fc6384b847af7d4473e48c1b3bdbf71885069fe5724fe538eb62dc739e1cf7f",
+      "saved_bytes": 4035,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "records/04-thumbs-up-motion-v2.json",
+      "saved_file": "records/04-thumbs-up-motion-v2.json",
+      "source_sha256": "0841abac3e5589dc5539235480131139e985625b006af3f5f14fa38c11ceab9c",
+      "source_bytes": 3049,
+      "saved_sha256": "0841abac3e5589dc5539235480131139e985625b006af3f5f14fa38c11ceab9c",
+      "saved_bytes": 3049,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "records/04-thumbs-up-motion.json",
+      "saved_file": "records/04-thumbs-up-motion.json",
+      "source_sha256": "85aff9841e222fc0600e1347e32554f7bc8e93711933d7dfbac2186ceaa7c0b3",
+      "source_bytes": 3983,
+      "saved_sha256": "85aff9841e222fc0600e1347e32554f7bc8e93711933d7dfbac2186ceaa7c0b3",
+      "saved_bytes": 3983,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "records/05-holding-heart-motion.json",
+      "saved_file": "records/05-holding-heart-motion.json",
+      "source_sha256": "214c9731896697500b6e4fa85d5768eb7ce0567ef67ab75393e11d795947a4b5",
+      "source_bytes": 4017,
+      "saved_sha256": "214c9731896697500b6e4fa85d5768eb7ce0567ef67ab75393e11d795947a4b5",
+      "saved_bytes": 4017,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "records/06-beckoning-motion.json",
+      "saved_file": "records/06-beckoning-motion.json",
+      "source_sha256": "04fd3b2b16ce29db1bb159c12e7b0f942c35687e02b88221e1b4744f7836cedb",
+      "source_bytes": 3979,
+      "saved_sha256": "04fd3b2b16ce29db1bb159c12e7b0f942c35687e02b88221e1b4744f7836cedb",
+      "saved_bytes": 3979,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "records/07-finger-dance-motion.json",
+      "saved_file": "records/07-finger-dance-motion.json",
+      "source_sha256": "622b0968df902073fd87bbfcbedc857174320ca9f92789b240e923cf5b9366d8",
+      "source_bytes": 4688,
+      "saved_sha256": "622b0968df902073fd87bbfcbedc857174320ca9f92789b240e923cf5b9366d8",
+      "saved_bytes": 4688,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "records/08-turnaround-back-motion-v2.json",
+      "saved_file": "records/08-turnaround-back-motion-v2.json",
+      "source_sha256": "4285675b303ccaacc2bc94d707f19c663051f50798bfe7a42af61bf23374406d",
+      "source_bytes": 3081,
+      "saved_sha256": "4285675b303ccaacc2bc94d707f19c663051f50798bfe7a42af61bf23374406d",
+      "saved_bytes": 3081,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "records/08-turnaround-back-motion.json",
+      "saved_file": "records/08-turnaround-back-motion.json",
+      "source_sha256": "c221794af882772018816f0a92529b063c70d852a35b34fba533b22ea774c31a",
+      "source_bytes": 4437,
+      "saved_sha256": "c221794af882772018816f0a92529b063c70d852a35b34fba533b22ea774c31a",
+      "saved_bytes": 4437,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "records/09-back-stop-motion-v2.json",
+      "saved_file": "records/09-back-stop-motion-v2.json",
+      "source_sha256": "3590100bc72645fb1fc729ed84ea23a7b35102e99c2b05c663c5ac71bd5cc2bd",
+      "source_bytes": 3083,
+      "saved_sha256": "3590100bc72645fb1fc729ed84ea23a7b35102e99c2b05c663c5ac71bd5cc2bd",
+      "saved_bytes": 3083,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "records/09-back-stop-motion.json",
+      "saved_file": "records/09-back-stop-motion.json",
+      "source_sha256": "db43eaa327c2ec6dc11374d310d0d70cd59f0235017614f9cbf851daabc60996",
+      "source_bytes": 3998,
+      "saved_sha256": "db43eaa327c2ec6dc11374d310d0d70cd59f0235017614f9cbf851daabc60996",
+      "saved_bytes": 3998,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "records/10-back-middle-finger-motion-v2.json",
+      "saved_file": "records/10-back-middle-finger-motion-v2.json",
+      "source_sha256": "9d7daf4ba386ea40f42861a4a4b78f294ed48b6aa1554333f01ec6fb6b449421",
+      "source_bytes": 3400,
+      "saved_sha256": "9d7daf4ba386ea40f42861a4a4b78f294ed48b6aa1554333f01ec6fb6b449421",
+      "saved_bytes": 3400,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "records/10-back-middle-finger-motion-v3.json",
+      "saved_file": "records/10-back-middle-finger-motion-v3.json",
+      "source_sha256": "d8278278e6f21738ce4d8bb54f2c05b1ab65e788f783ea2b1ef24a32694ef1b8",
+      "source_bytes": 3492,
+      "saved_sha256": "d8278278e6f21738ce4d8bb54f2c05b1ab65e788f783ea2b1ef24a32694ef1b8",
+      "saved_bytes": 3492,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "records/10-back-middle-finger-motion-v4.json",
+      "saved_file": "records/10-back-middle-finger-motion-v4.json",
+      "source_sha256": "d732a033d51506eadc67cdf6664f679d6f00411476774fd26540712d74248499",
+      "source_bytes": 3415,
+      "saved_sha256": "d732a033d51506eadc67cdf6664f679d6f00411476774fd26540712d74248499",
+      "saved_bytes": 3415,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "records/10-back-middle-finger-motion.json",
+      "saved_file": "records/10-back-middle-finger-motion.json",
+      "source_sha256": "e86bda9d45bf7921829a7d3f6c7a07023563e5f602a35831d5eeb9489af79246",
+      "source_bytes": 4088,
+      "saved_sha256": "e86bda9d45bf7921829a7d3f6c7a07023563e5f602a35831d5eeb9489af79246",
+      "saved_bytes": 4088,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "records/failures/02-wave-motion.json",
+      "saved_file": "records/failures/02-wave-motion.json",
+      "source_sha256": "6aa979866ade9b70321befecbe3078de3c11f6f539de0e0a2a2b31c6a888facc",
+      "source_bytes": 3582,
+      "saved_sha256": "6aa979866ade9b70321befecbe3078de3c11f6f539de0e0a2a2b31c6a888facc",
+      "saved_bytes": 3582,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "records/failures/07-finger-dance-motion.json",
+      "saved_file": "records/failures/07-finger-dance-motion.json",
+      "source_sha256": "aa286795f204275777c7d163f5ad3729e17c2cc0141a854526577dd864e60c0b",
+      "source_bytes": 7019,
+      "saved_sha256": "aa286795f204275777c7d163f5ad3729e17c2cc0141a854526577dd864e60c0b",
+      "saved_bytes": 7019,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "redo_v2.py",
+      "saved_file": "redo_v2.py",
+      "source_sha256": "8025f7bf753571ca6f3ab976a2d24bf8a41861d9b2dc7f79b9da56335fcc2047",
+      "source_bytes": 5608,
+      "saved_sha256": "8025f7bf753571ca6f3ab976a2d24bf8a41861d9b2dc7f79b9da56335fcc2047",
+      "saved_bytes": 5608,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "references/apple-middle-finger-emoji.png",
+      "saved_file": "references/apple-middle-finger-emoji.png",
+      "source_sha256": "13f2860ff0d6a564a90bb2ef02ad93580772d5b4979af56fba5c058184d473ca",
+      "source_bytes": 150919,
+      "saved_sha256": "13f2860ff0d6a564a90bb2ef02ad93580772d5b4979af56fba5c058184d473ca",
+      "saved_bytes": 150919,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "references/selected-finger-heart.png",
+      "saved_file": "references/selected-finger-heart.png",
+      "source_sha256": "cb54c657e9c1dd6876beb323bd6ffd1b9e7ea371c827b2b656ea4dad9a97a106",
+      "source_bytes": 580586,
+      "saved_sha256": "cb54c657e9c1dd6876beb323bd6ffd1b9e7ea371c827b2b656ea4dad9a97a106",
+      "saved_bytes": 580586,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "references/telegram-open-hands-frame-000.png",
+      "saved_file": "references/telegram-open-hands-frame-000.png",
+      "source_sha256": "13ed54c4ff27939ba77865b3ab94da7ae53ecf13bbf87c842fb60045817138a6",
+      "source_bytes": 50762,
+      "saved_sha256": "13ed54c4ff27939ba77865b3ab94da7ae53ecf13bbf87c842fb60045817138a6",
+      "saved_bytes": 50762,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "references/telegram-robot-frame-090.png",
+      "saved_file": "references/telegram-robot-frame-090.png",
+      "source_sha256": "1545952a5009d874368915918591e5eae1a7283989bbaba48580ce2b65ef8d0c",
+      "source_bytes": 57556,
+      "saved_sha256": "1545952a5009d874368915918591e5eae1a7283989bbaba48580ce2b65ef8d0c",
+      "saved_bytes": 57556,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "references/telegram-style-pair.png",
+      "saved_file": "references/telegram-style-pair.png",
+      "source_sha256": "f81866005ae8e538018139e44022a6469c103425625fbbee979c7dd1895a8b3c",
+      "source_bytes": 121363,
+      "saved_sha256": "f81866005ae8e538018139e44022a6469c103425625fbbee979c7dd1895a8b3c",
+      "saved_bytes": 121363,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/01-finger-heart-motion/clip.mp4",
+      "saved_file": "review/01-finger-heart-motion/clip.mp4",
+      "source_sha256": "c8318d74633e794944f482c17b8068a90835cb43dba51742c32e7a8607c3d944",
+      "source_bytes": 2326492,
+      "saved_sha256": "c8318d74633e794944f482c17b8068a90835cb43dba51742c32e7a8607c3d944",
+      "saved_bytes": 2326492,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/01-finger-heart-motion/frame-01.png",
+      "saved_file": "review/01-finger-heart-motion/frame-01.png",
+      "source_sha256": "9641ba1d6a95525c92bbdb7486dadb65a5955e3510dd65e468f525906f39a751",
+      "source_bytes": 71514,
+      "saved_sha256": "9641ba1d6a95525c92bbdb7486dadb65a5955e3510dd65e468f525906f39a751",
+      "saved_bytes": 71514,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/01-finger-heart-motion/frame-02.png",
+      "saved_file": "review/01-finger-heart-motion/frame-02.png",
+      "source_sha256": "93613184044b23e8d222e4a92f5f8d88fd4a932a824d37a4b8118d1c03b3765a",
+      "source_bytes": 74030,
+      "saved_sha256": "93613184044b23e8d222e4a92f5f8d88fd4a932a824d37a4b8118d1c03b3765a",
+      "saved_bytes": 74030,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/01-finger-heart-motion/frame-03.png",
+      "saved_file": "review/01-finger-heart-motion/frame-03.png",
+      "source_sha256": "84be2ca5150338aee2372af11d7f69f3f019af20950ac1dddd68f92a1a7066a6",
+      "source_bytes": 74500,
+      "saved_sha256": "84be2ca5150338aee2372af11d7f69f3f019af20950ac1dddd68f92a1a7066a6",
+      "saved_bytes": 74500,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/01-finger-heart-motion/frame-04.png",
+      "saved_file": "review/01-finger-heart-motion/frame-04.png",
+      "source_sha256": "e3f3bac41ff852cabdce9b9f5cd993154e6d3eb2f3343a6d78ff914a2b1fe1d7",
+      "source_bytes": 87072,
+      "saved_sha256": "e3f3bac41ff852cabdce9b9f5cd993154e6d3eb2f3343a6d78ff914a2b1fe1d7",
+      "saved_bytes": 87072,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/01-finger-heart-motion/frame-05.png",
+      "saved_file": "review/01-finger-heart-motion/frame-05.png",
+      "source_sha256": "8dd91e4d7a6d7f69e61bf58ee40a3f6d0fb60cc6eab7041c0fb2d4c3d0ea7b43",
+      "source_bytes": 88078,
+      "saved_sha256": "8dd91e4d7a6d7f69e61bf58ee40a3f6d0fb60cc6eab7041c0fb2d4c3d0ea7b43",
+      "saved_bytes": 88078,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/01-finger-heart-motion/frame-06.png",
+      "saved_file": "review/01-finger-heart-motion/frame-06.png",
+      "source_sha256": "76ac4018b5a7c8a7f749d24837a31c048696de44f52a3b21a00215c32edd043e",
+      "source_bytes": 86816,
+      "saved_sha256": "76ac4018b5a7c8a7f749d24837a31c048696de44f52a3b21a00215c32edd043e",
+      "saved_bytes": 86816,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/01-finger-heart-motion/frame-07.png",
+      "saved_file": "review/01-finger-heart-motion/frame-07.png",
+      "source_sha256": "25eda2671bc834526b6dc46ff4ad049e1b89fd74f1db1300b903f2a7b4bea172",
+      "source_bytes": 86099,
+      "saved_sha256": "25eda2671bc834526b6dc46ff4ad049e1b89fd74f1db1300b903f2a7b4bea172",
+      "saved_bytes": 86099,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/01-finger-heart-motion/frame-08.png",
+      "saved_file": "review/01-finger-heart-motion/frame-08.png",
+      "source_sha256": "c8200df50b85724dc5beab4f6cc75a1c88a8265763cc1abf3c6d07f26878789a",
+      "source_bytes": 80022,
+      "saved_sha256": "c8200df50b85724dc5beab4f6cc75a1c88a8265763cc1abf3c6d07f26878789a",
+      "saved_bytes": 80022,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/01-finger-heart-motion/frame-09.png",
+      "saved_file": "review/01-finger-heart-motion/frame-09.png",
+      "source_sha256": "3a2e217b35d7786e7f0e686795cd674d76ae0a763b34b1e5b726596b7a75e84f",
+      "source_bytes": 79252,
+      "saved_sha256": "3a2e217b35d7786e7f0e686795cd674d76ae0a763b34b1e5b726596b7a75e84f",
+      "saved_bytes": 79252,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/01-finger-heart-motion/frame-10.png",
+      "saved_file": "review/01-finger-heart-motion/frame-10.png",
+      "source_sha256": "7f1be08407bb333a5e149069de82d75f55eb26f30f1c2e992f2d693dfc80b5db",
+      "source_bytes": 79250,
+      "saved_sha256": "7f1be08407bb333a5e149069de82d75f55eb26f30f1c2e992f2d693dfc80b5db",
+      "saved_bytes": 79250,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/01-finger-heart-motion/frame-11.png",
+      "saved_file": "review/01-finger-heart-motion/frame-11.png",
+      "source_sha256": "ae7402f1fc86ac5affca035d1d8fdec85b741213e5c72f302c7ae269769fa33b",
+      "source_bytes": 77673,
+      "saved_sha256": "ae7402f1fc86ac5affca035d1d8fdec85b741213e5c72f302c7ae269769fa33b",
+      "saved_bytes": 77673,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/01-finger-heart-motion/frame-12.png",
+      "saved_file": "review/01-finger-heart-motion/frame-12.png",
+      "source_sha256": "77d6b6adea7bbc022a2d553fe423fe666f12e78364c1bc3c9efb1d2205b952a5",
+      "source_bytes": 73638,
+      "saved_sha256": "77d6b6adea7bbc022a2d553fe423fe666f12e78364c1bc3c9efb1d2205b952a5",
+      "saved_bytes": 73638,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/01-finger-heart-motion/metadata.json",
+      "saved_file": "review/01-finger-heart-motion/metadata.json",
+      "source_sha256": "cd333063ad655c5a0f1b164b24da7df0f28692d8cedcdc31522d6111dc1f2368",
+      "source_bytes": 2566,
+      "saved_sha256": "cd333063ad655c5a0f1b164b24da7df0f28692d8cedcdc31522d6111dc1f2368",
+      "saved_bytes": 2566,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/01-finger-heart-motion/temporal-grid.jpg",
+      "saved_file": "review/01-finger-heart-motion/temporal-grid.jpg",
+      "source_sha256": "c57f8b93190a9c9467a87902698bf00f96e195b75e3c142119a7e57ea292f924",
+      "source_bytes": 237507,
+      "saved_sha256": "c57f8b93190a9c9467a87902698bf00f96e195b75e3c142119a7e57ea292f924",
+      "saved_bytes": 237507,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/02-wave-motion/clip.mp4",
+      "saved_file": "review/02-wave-motion/clip.mp4",
+      "source_sha256": "0ab299bbf9e4fdf1339147ecdaf83cfb65d6e0a8495d5022c414ff5fa272d0e3",
+      "source_bytes": 3045461,
+      "saved_sha256": "0ab299bbf9e4fdf1339147ecdaf83cfb65d6e0a8495d5022c414ff5fa272d0e3",
+      "saved_bytes": 3045461,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/02-wave-motion/frame-01.png",
+      "saved_file": "review/02-wave-motion/frame-01.png",
+      "source_sha256": "ef04a1f835171fc76c2214f5e7ed4feff59efee46272edc5a0a58500fb6045b7",
+      "source_bytes": 79765,
+      "saved_sha256": "ef04a1f835171fc76c2214f5e7ed4feff59efee46272edc5a0a58500fb6045b7",
+      "saved_bytes": 79765,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/02-wave-motion/frame-02.png",
+      "saved_file": "review/02-wave-motion/frame-02.png",
+      "source_sha256": "d9154ba419e1d06d40656c30bad2c2d4d06398bac699cbe35bcd6d69c68c14ee",
+      "source_bytes": 86564,
+      "saved_sha256": "d9154ba419e1d06d40656c30bad2c2d4d06398bac699cbe35bcd6d69c68c14ee",
+      "saved_bytes": 86564,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/02-wave-motion/frame-03.png",
+      "saved_file": "review/02-wave-motion/frame-03.png",
+      "source_sha256": "e4dcf6b9d1a6ec6eb780eba8605c0b5a4e7c76cfeaddfe7e4795e76d6104cfe6",
+      "source_bytes": 85454,
+      "saved_sha256": "e4dcf6b9d1a6ec6eb780eba8605c0b5a4e7c76cfeaddfe7e4795e76d6104cfe6",
+      "saved_bytes": 85454,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/02-wave-motion/frame-04.png",
+      "saved_file": "review/02-wave-motion/frame-04.png",
+      "source_sha256": "9d9797ec57f8401232c38f8b323799531d8b1a380f078dd4dcccbbd3e009da72",
+      "source_bytes": 85065,
+      "saved_sha256": "9d9797ec57f8401232c38f8b323799531d8b1a380f078dd4dcccbbd3e009da72",
+      "saved_bytes": 85065,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/02-wave-motion/frame-05.png",
+      "saved_file": "review/02-wave-motion/frame-05.png",
+      "source_sha256": "9f8b99aa425889535e9bc9e1ae55ffd0e8e7784d1477f3bd240fdb888115d49d",
+      "source_bytes": 88657,
+      "saved_sha256": "9f8b99aa425889535e9bc9e1ae55ffd0e8e7784d1477f3bd240fdb888115d49d",
+      "saved_bytes": 88657,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/02-wave-motion/frame-06.png",
+      "saved_file": "review/02-wave-motion/frame-06.png",
+      "source_sha256": "d62c3458a77d63b0e3e06feef4a16cf15efbf3c2dd65c5fd0167e560fa6fd81a",
+      "source_bytes": 84808,
+      "saved_sha256": "d62c3458a77d63b0e3e06feef4a16cf15efbf3c2dd65c5fd0167e560fa6fd81a",
+      "saved_bytes": 84808,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/02-wave-motion/frame-07.png",
+      "saved_file": "review/02-wave-motion/frame-07.png",
+      "source_sha256": "1c112c3d49491201f36a6553d35ba9b43aa754f37bd4bf339f4d2553d3f19f87",
+      "source_bytes": 87247,
+      "saved_sha256": "1c112c3d49491201f36a6553d35ba9b43aa754f37bd4bf339f4d2553d3f19f87",
+      "saved_bytes": 87247,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/02-wave-motion/frame-08.png",
+      "saved_file": "review/02-wave-motion/frame-08.png",
+      "source_sha256": "93c4bcbabfa63fb9098ec487ae59d02631ffc32f63e25f8d1d46347f970b2904",
+      "source_bytes": 92822,
+      "saved_sha256": "93c4bcbabfa63fb9098ec487ae59d02631ffc32f63e25f8d1d46347f970b2904",
+      "saved_bytes": 92822,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/02-wave-motion/frame-09.png",
+      "saved_file": "review/02-wave-motion/frame-09.png",
+      "source_sha256": "f6a7c28fd8ebd3b4820bf5794b75ae7cddb73808b8f1d34fb308138e49e454da",
+      "source_bytes": 90096,
+      "saved_sha256": "f6a7c28fd8ebd3b4820bf5794b75ae7cddb73808b8f1d34fb308138e49e454da",
+      "saved_bytes": 90096,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/02-wave-motion/frame-10.png",
+      "saved_file": "review/02-wave-motion/frame-10.png",
+      "source_sha256": "3fd7f4a27f48037bf77688989da3d09d63cc0fdda58f7af1f33bfbf298104185",
+      "source_bytes": 91821,
+      "saved_sha256": "3fd7f4a27f48037bf77688989da3d09d63cc0fdda58f7af1f33bfbf298104185",
+      "saved_bytes": 91821,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/02-wave-motion/frame-11.png",
+      "saved_file": "review/02-wave-motion/frame-11.png",
+      "source_sha256": "10cd3d9ed4b73da9a368709b18eb7870ed8ea6cb49f2fe7f65e92fe83743c93e",
+      "source_bytes": 82465,
+      "saved_sha256": "10cd3d9ed4b73da9a368709b18eb7870ed8ea6cb49f2fe7f65e92fe83743c93e",
+      "saved_bytes": 82465,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/02-wave-motion/frame-12.png",
+      "saved_file": "review/02-wave-motion/frame-12.png",
+      "source_sha256": "2685b487ae207ce3d77ab55aac196f53c76b296aa24e12c2cda8b85cfb7e7ede",
+      "source_bytes": 84302,
+      "saved_sha256": "2685b487ae207ce3d77ab55aac196f53c76b296aa24e12c2cda8b85cfb7e7ede",
+      "saved_bytes": 84302,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/02-wave-motion/metadata.json",
+      "saved_file": "review/02-wave-motion/metadata.json",
+      "source_sha256": "27eba7f6a3553798ae77d96dd9337efbc006781e27f6cdc6ec82dfe6703860c3",
+      "source_bytes": 2558,
+      "saved_sha256": "27eba7f6a3553798ae77d96dd9337efbc006781e27f6cdc6ec82dfe6703860c3",
+      "saved_bytes": 2558,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/02-wave-motion/temporal-grid.jpg",
+      "saved_file": "review/02-wave-motion/temporal-grid.jpg",
+      "source_sha256": "1fb819eaa78b2fdaa106e6632dde27567b0a28894d41c4be6f2672471387f6fa",
+      "source_bytes": 249401,
+      "saved_sha256": "1fb819eaa78b2fdaa106e6632dde27567b0a28894d41c4be6f2672471387f6fa",
+      "saved_bytes": 249401,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/02-wave-v2-grid.jpg",
+      "saved_file": "review/02-wave-v2-grid.jpg",
+      "source_sha256": "fa324e5a985c16f30ec793c911aee5479560751d207bb128041c0298f49798b8",
+      "source_bytes": 47364,
+      "saved_sha256": "fa324e5a985c16f30ec793c911aee5479560751d207bb128041c0298f49798b8",
+      "saved_bytes": 47364,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/03-crossed-fingers-motion/clip.mp4",
+      "saved_file": "review/03-crossed-fingers-motion/clip.mp4",
+      "source_sha256": "0deffe7366f687de665e11c9d39ec849dd663d50c1f0145a3e96c400463a3cd6",
+      "source_bytes": 2275310,
+      "saved_sha256": "0deffe7366f687de665e11c9d39ec849dd663d50c1f0145a3e96c400463a3cd6",
+      "saved_bytes": 2275310,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/03-crossed-fingers-motion/frame-01.png",
+      "saved_file": "review/03-crossed-fingers-motion/frame-01.png",
+      "source_sha256": "6a74aa1f5f7bf91c78b67671c5f950fb823612c9ad668bae9c165410ba51ebb6",
+      "source_bytes": 73121,
+      "saved_sha256": "6a74aa1f5f7bf91c78b67671c5f950fb823612c9ad668bae9c165410ba51ebb6",
+      "saved_bytes": 73121,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/03-crossed-fingers-motion/frame-02.png",
+      "saved_file": "review/03-crossed-fingers-motion/frame-02.png",
+      "source_sha256": "5cedd79a48a1923ae2d9ac2e6b4c3aaf208a0e9023ddd22449f2fdc2baf13d73",
+      "source_bytes": 79295,
+      "saved_sha256": "5cedd79a48a1923ae2d9ac2e6b4c3aaf208a0e9023ddd22449f2fdc2baf13d73",
+      "saved_bytes": 79295,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/03-crossed-fingers-motion/frame-03.png",
+      "saved_file": "review/03-crossed-fingers-motion/frame-03.png",
+      "source_sha256": "f9b7fa58123c182cb5b1383a4c81a361e874726052b721fb66c7241ad27f6b96",
+      "source_bytes": 77861,
+      "saved_sha256": "f9b7fa58123c182cb5b1383a4c81a361e874726052b721fb66c7241ad27f6b96",
+      "saved_bytes": 77861,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/03-crossed-fingers-motion/frame-04.png",
+      "saved_file": "review/03-crossed-fingers-motion/frame-04.png",
+      "source_sha256": "21b3b0fb42b6b9017512ee445e0c2af53dc9736d70d71d3db1bae29369e7a404",
+      "source_bytes": 76509,
+      "saved_sha256": "21b3b0fb42b6b9017512ee445e0c2af53dc9736d70d71d3db1bae29369e7a404",
+      "saved_bytes": 76509,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/03-crossed-fingers-motion/frame-05.png",
+      "saved_file": "review/03-crossed-fingers-motion/frame-05.png",
+      "source_sha256": "a5d6e19ff339c96a55df76be14561b734e472428b9e51143a7aa55ed2b1d4ee7",
+      "source_bytes": 77260,
+      "saved_sha256": "a5d6e19ff339c96a55df76be14561b734e472428b9e51143a7aa55ed2b1d4ee7",
+      "saved_bytes": 77260,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/03-crossed-fingers-motion/frame-06.png",
+      "saved_file": "review/03-crossed-fingers-motion/frame-06.png",
+      "source_sha256": "33cf3036947fb131617c8895ad8cc4bb8645f5069a1bc4b4166dbf9284bdce17",
+      "source_bytes": 77099,
+      "saved_sha256": "33cf3036947fb131617c8895ad8cc4bb8645f5069a1bc4b4166dbf9284bdce17",
+      "saved_bytes": 77099,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/03-crossed-fingers-motion/frame-07.png",
+      "saved_file": "review/03-crossed-fingers-motion/frame-07.png",
+      "source_sha256": "bf0654a4c784249526ab4d995f55415fcd8a2553627a1c2feda9d53f0700b058",
+      "source_bytes": 75631,
+      "saved_sha256": "bf0654a4c784249526ab4d995f55415fcd8a2553627a1c2feda9d53f0700b058",
+      "saved_bytes": 75631,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/03-crossed-fingers-motion/frame-08.png",
+      "saved_file": "review/03-crossed-fingers-motion/frame-08.png",
+      "source_sha256": "cb4827eb3830facfe90a4dc5720f6ed85b42aadb7e0f09f504bc4dd0d750c3f2",
+      "source_bytes": 75103,
+      "saved_sha256": "cb4827eb3830facfe90a4dc5720f6ed85b42aadb7e0f09f504bc4dd0d750c3f2",
+      "saved_bytes": 75103,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/03-crossed-fingers-motion/frame-09.png",
+      "saved_file": "review/03-crossed-fingers-motion/frame-09.png",
+      "source_sha256": "0f289ad59ffe4a22f1183627aeceabe1882f9c5fd8b789da28173fa27d8cbaa2",
+      "source_bytes": 76001,
+      "saved_sha256": "0f289ad59ffe4a22f1183627aeceabe1882f9c5fd8b789da28173fa27d8cbaa2",
+      "saved_bytes": 76001,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/03-crossed-fingers-motion/frame-10.png",
+      "saved_file": "review/03-crossed-fingers-motion/frame-10.png",
+      "source_sha256": "f8ad5bc996cdc6cbf2165600b412771f4fd9473d2d5e92003e403c35dc53d3d0",
+      "source_bytes": 73423,
+      "saved_sha256": "f8ad5bc996cdc6cbf2165600b412771f4fd9473d2d5e92003e403c35dc53d3d0",
+      "saved_bytes": 73423,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/03-crossed-fingers-motion/frame-11.png",
+      "saved_file": "review/03-crossed-fingers-motion/frame-11.png",
+      "source_sha256": "a6247447b5fdba592a8a85bc00d3d183a80224349d9a5da312453b795b46356b",
+      "source_bytes": 70334,
+      "saved_sha256": "a6247447b5fdba592a8a85bc00d3d183a80224349d9a5da312453b795b46356b",
+      "saved_bytes": 70334,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/03-crossed-fingers-motion/frame-12.png",
+      "saved_file": "review/03-crossed-fingers-motion/frame-12.png",
+      "source_sha256": "28cf89b8c4acfd73c30e011dc81d482ed672f6416bcc70468e8bf86014d83a1f",
+      "source_bytes": 75525,
+      "saved_sha256": "28cf89b8c4acfd73c30e011dc81d482ed672f6416bcc70468e8bf86014d83a1f",
+      "saved_bytes": 75525,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/03-crossed-fingers-motion/metadata.json",
+      "saved_file": "review/03-crossed-fingers-motion/metadata.json",
+      "source_sha256": "b499b3782e75b2b6c87d4fbe0598645d2ed5f2f7761fb74a7cca47034c45f9ca",
+      "source_bytes": 2569,
+      "saved_sha256": "b499b3782e75b2b6c87d4fbe0598645d2ed5f2f7761fb74a7cca47034c45f9ca",
+      "saved_bytes": 2569,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/03-crossed-fingers-motion/temporal-grid.jpg",
+      "saved_file": "review/03-crossed-fingers-motion/temporal-grid.jpg",
+      "source_sha256": "4a48369d00e3593212f17fbf1145e1cc39dae9a8a08298b70604ee2cd0de11a8",
+      "source_bytes": 227054,
+      "saved_sha256": "4a48369d00e3593212f17fbf1145e1cc39dae9a8a08298b70604ee2cd0de11a8",
+      "saved_bytes": 227054,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/04-thumbs-up-motion/clip.mp4",
+      "saved_file": "review/04-thumbs-up-motion/clip.mp4",
+      "source_sha256": "670a077bd13800dfb2d55f293facc804d7e46ae5589a56b813509bc7dc04a5d0",
+      "source_bytes": 2758474,
+      "saved_sha256": "670a077bd13800dfb2d55f293facc804d7e46ae5589a56b813509bc7dc04a5d0",
+      "saved_bytes": 2758474,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/04-thumbs-up-motion/frame-01.png",
+      "saved_file": "review/04-thumbs-up-motion/frame-01.png",
+      "source_sha256": "04c02523fd31341de4d5e7388d71b60225aca53ac9c40ff78ed21ec0008228df",
+      "source_bytes": 88594,
+      "saved_sha256": "04c02523fd31341de4d5e7388d71b60225aca53ac9c40ff78ed21ec0008228df",
+      "saved_bytes": 88594,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/04-thumbs-up-motion/frame-02.png",
+      "saved_file": "review/04-thumbs-up-motion/frame-02.png",
+      "source_sha256": "c1251d307c900c137da93bc33dc92827c7fd9b5ca4635a4e8f5b7b9c432829f3",
+      "source_bytes": 94973,
+      "saved_sha256": "c1251d307c900c137da93bc33dc92827c7fd9b5ca4635a4e8f5b7b9c432829f3",
+      "saved_bytes": 94973,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/04-thumbs-up-motion/frame-03.png",
+      "saved_file": "review/04-thumbs-up-motion/frame-03.png",
+      "source_sha256": "0952b8b4d72f91dfba20abd0a7439a15e959b1a6efbe96d0c7eebd1eb2bb8602",
+      "source_bytes": 95516,
+      "saved_sha256": "0952b8b4d72f91dfba20abd0a7439a15e959b1a6efbe96d0c7eebd1eb2bb8602",
+      "saved_bytes": 95516,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/04-thumbs-up-motion/frame-04.png",
+      "saved_file": "review/04-thumbs-up-motion/frame-04.png",
+      "source_sha256": "6202e7633808972715772ab2f810db15ec3846f13695aef1a6440678cde855eb",
+      "source_bytes": 112142,
+      "saved_sha256": "6202e7633808972715772ab2f810db15ec3846f13695aef1a6440678cde855eb",
+      "saved_bytes": 112142,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/04-thumbs-up-motion/frame-05.png",
+      "saved_file": "review/04-thumbs-up-motion/frame-05.png",
+      "source_sha256": "db9af6478f7feea06a39960d2c39beb8d987313b616f9a18ef10680ceb96f4be",
+      "source_bytes": 114853,
+      "saved_sha256": "db9af6478f7feea06a39960d2c39beb8d987313b616f9a18ef10680ceb96f4be",
+      "saved_bytes": 114853,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/04-thumbs-up-motion/frame-06.png",
+      "saved_file": "review/04-thumbs-up-motion/frame-06.png",
+      "source_sha256": "3c4a563803b21146058ba10736685157f2fc781f3f38717a131b4c17210b9ef3",
+      "source_bytes": 98812,
+      "saved_sha256": "3c4a563803b21146058ba10736685157f2fc781f3f38717a131b4c17210b9ef3",
+      "saved_bytes": 98812,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/04-thumbs-up-motion/frame-07.png",
+      "saved_file": "review/04-thumbs-up-motion/frame-07.png",
+      "source_sha256": "23394ee323da6a91938b1d23e90e12169cf5a6e39538c848758bc6849b6033b3",
+      "source_bytes": 92973,
+      "saved_sha256": "23394ee323da6a91938b1d23e90e12169cf5a6e39538c848758bc6849b6033b3",
+      "saved_bytes": 92973,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/04-thumbs-up-motion/frame-08.png",
+      "saved_file": "review/04-thumbs-up-motion/frame-08.png",
+      "source_sha256": "ac4561428aeaeef066aa6d9714ec0e8ec8476df264774cb0362284f615202d49",
+      "source_bytes": 95137,
+      "saved_sha256": "ac4561428aeaeef066aa6d9714ec0e8ec8476df264774cb0362284f615202d49",
+      "saved_bytes": 95137,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/04-thumbs-up-motion/frame-09.png",
+      "saved_file": "review/04-thumbs-up-motion/frame-09.png",
+      "source_sha256": "a03f5948d47d1c9a8bea606ee17578afd0adbf1ea615ec9f4100e715fccf4dbd",
+      "source_bytes": 93080,
+      "saved_sha256": "a03f5948d47d1c9a8bea606ee17578afd0adbf1ea615ec9f4100e715fccf4dbd",
+      "saved_bytes": 93080,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/04-thumbs-up-motion/frame-10.png",
+      "saved_file": "review/04-thumbs-up-motion/frame-10.png",
+      "source_sha256": "c7436083a117b7a3bba87407a3d8f2d68d5bc4befad6b0ae4e0c1d91eb633d14",
+      "source_bytes": 110282,
+      "saved_sha256": "c7436083a117b7a3bba87407a3d8f2d68d5bc4befad6b0ae4e0c1d91eb633d14",
+      "saved_bytes": 110282,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/04-thumbs-up-motion/frame-11.png",
+      "saved_file": "review/04-thumbs-up-motion/frame-11.png",
+      "source_sha256": "c6399afa400763348e9d40caa32629c102bdd15541701d577d06a3fdcb5520d6",
+      "source_bytes": 112118,
+      "saved_sha256": "c6399afa400763348e9d40caa32629c102bdd15541701d577d06a3fdcb5520d6",
+      "saved_bytes": 112118,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/04-thumbs-up-motion/frame-12.png",
+      "saved_file": "review/04-thumbs-up-motion/frame-12.png",
+      "source_sha256": "c134d0566d8faf01a3e7e4968ab5729d428a74a316399202a244337a90733539",
+      "source_bytes": 97567,
+      "saved_sha256": "c134d0566d8faf01a3e7e4968ab5729d428a74a316399202a244337a90733539",
+      "saved_bytes": 97567,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/04-thumbs-up-motion/metadata.json",
+      "saved_file": "review/04-thumbs-up-motion/metadata.json",
+      "source_sha256": "6548bf725b4e5df5f026e05cf338cc74b9c0c3709ddda16fe23e80dd42b3e5ba",
+      "source_bytes": 2563,
+      "saved_sha256": "6548bf725b4e5df5f026e05cf338cc74b9c0c3709ddda16fe23e80dd42b3e5ba",
+      "saved_bytes": 2563,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/04-thumbs-up-motion/temporal-grid.jpg",
+      "saved_file": "review/04-thumbs-up-motion/temporal-grid.jpg",
+      "source_sha256": "24d35136bf34a3cc60c032e9d042e4f894fe6bc4de0a10800250d185a9e5c95a",
+      "source_bytes": 283071,
+      "saved_sha256": "24d35136bf34a3cc60c032e9d042e4f894fe6bc4de0a10800250d185a9e5c95a",
+      "saved_bytes": 283071,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/04-thumbs-up-v2-grid.jpg",
+      "saved_file": "review/04-thumbs-up-v2-grid.jpg",
+      "source_sha256": "37ab2f3b71421246a1e1bc259626283165c1d270e3eea5c24d33f34a2f789b73",
+      "source_bytes": 50646,
+      "saved_sha256": "37ab2f3b71421246a1e1bc259626283165c1d270e3eea5c24d33f34a2f789b73",
+      "saved_bytes": 50646,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/05-holding-heart-motion/clip.mp4",
+      "saved_file": "review/05-holding-heart-motion/clip.mp4",
+      "source_sha256": "4754222a6f9b3913f151d1e6049b28adb712c16864bc24136601ed87f8004752",
+      "source_bytes": 2572026,
+      "saved_sha256": "4754222a6f9b3913f151d1e6049b28adb712c16864bc24136601ed87f8004752",
+      "saved_bytes": 2572026,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/05-holding-heart-motion/frame-01.png",
+      "saved_file": "review/05-holding-heart-motion/frame-01.png",
+      "source_sha256": "c145fb608f56a86793880c7165435c117ba07c3a2de71b073c81837e96d91b01",
+      "source_bytes": 84196,
+      "saved_sha256": "c145fb608f56a86793880c7165435c117ba07c3a2de71b073c81837e96d91b01",
+      "saved_bytes": 84196,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/05-holding-heart-motion/frame-02.png",
+      "saved_file": "review/05-holding-heart-motion/frame-02.png",
+      "source_sha256": "f106105649e8bfe972ae7fb9f907dedd3fe5ac2e7622fc5d1d0e584e850a49b6",
+      "source_bytes": 84051,
+      "saved_sha256": "f106105649e8bfe972ae7fb9f907dedd3fe5ac2e7622fc5d1d0e584e850a49b6",
+      "saved_bytes": 84051,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/05-holding-heart-motion/frame-03.png",
+      "saved_file": "review/05-holding-heart-motion/frame-03.png",
+      "source_sha256": "52262ce7b77bbce39a3da79149adba9bd4861ce082216b137f26620a4eac9938",
+      "source_bytes": 82113,
+      "saved_sha256": "52262ce7b77bbce39a3da79149adba9bd4861ce082216b137f26620a4eac9938",
+      "saved_bytes": 82113,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/05-holding-heart-motion/frame-04.png",
+      "saved_file": "review/05-holding-heart-motion/frame-04.png",
+      "source_sha256": "c7b7853494b3406f6364f05de966ae848a0048dfd6fe08fa0cb0010a18de858f",
+      "source_bytes": 81871,
+      "saved_sha256": "c7b7853494b3406f6364f05de966ae848a0048dfd6fe08fa0cb0010a18de858f",
+      "saved_bytes": 81871,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/05-holding-heart-motion/frame-05.png",
+      "saved_file": "review/05-holding-heart-motion/frame-05.png",
+      "source_sha256": "a897f283af1aed9d6a6daa6700e5c70484d82c6affa1ecc4ae5cae3ba327423f",
+      "source_bytes": 80152,
+      "saved_sha256": "a897f283af1aed9d6a6daa6700e5c70484d82c6affa1ecc4ae5cae3ba327423f",
+      "saved_bytes": 80152,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/05-holding-heart-motion/frame-06.png",
+      "saved_file": "review/05-holding-heart-motion/frame-06.png",
+      "source_sha256": "2442172a4cfeb8a6cbe1c704462302d7566eaf4bab397d5fe8fcab5137fd31bd",
+      "source_bytes": 95088,
+      "saved_sha256": "2442172a4cfeb8a6cbe1c704462302d7566eaf4bab397d5fe8fcab5137fd31bd",
+      "saved_bytes": 95088,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/05-holding-heart-motion/frame-07.png",
+      "saved_file": "review/05-holding-heart-motion/frame-07.png",
+      "source_sha256": "a1c3cef1a7e61e824dca4a2bc0811cd5173713b29161c85a2500674428ec4115",
+      "source_bytes": 97302,
+      "saved_sha256": "a1c3cef1a7e61e824dca4a2bc0811cd5173713b29161c85a2500674428ec4115",
+      "saved_bytes": 97302,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/05-holding-heart-motion/frame-08.png",
+      "saved_file": "review/05-holding-heart-motion/frame-08.png",
+      "source_sha256": "e34f5d4f3b244e4dc934b350265ab72a6abd826411c94c1551d88dd1ca76b228",
+      "source_bytes": 92982,
+      "saved_sha256": "e34f5d4f3b244e4dc934b350265ab72a6abd826411c94c1551d88dd1ca76b228",
+      "saved_bytes": 92982,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/05-holding-heart-motion/frame-09.png",
+      "saved_file": "review/05-holding-heart-motion/frame-09.png",
+      "source_sha256": "970b295ce94dc65ecd7abb873ba2e3a7ea73ba44c1de79a73b5014352b2d179f",
+      "source_bytes": 96134,
+      "saved_sha256": "970b295ce94dc65ecd7abb873ba2e3a7ea73ba44c1de79a73b5014352b2d179f",
+      "saved_bytes": 96134,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/05-holding-heart-motion/frame-10.png",
+      "saved_file": "review/05-holding-heart-motion/frame-10.png",
+      "source_sha256": "07067051b48b14523d27d6d5d06ff37c1ab51037beacfffc3bfe6a0e3578719a",
+      "source_bytes": 87571,
+      "saved_sha256": "07067051b48b14523d27d6d5d06ff37c1ab51037beacfffc3bfe6a0e3578719a",
+      "saved_bytes": 87571,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/05-holding-heart-motion/frame-11.png",
+      "saved_file": "review/05-holding-heart-motion/frame-11.png",
+      "source_sha256": "4c964c87c3d2949b8021b0e517396b3e2b3686ca81a1becbab20c0d0a04c49da",
+      "source_bytes": 88504,
+      "saved_sha256": "4c964c87c3d2949b8021b0e517396b3e2b3686ca81a1becbab20c0d0a04c49da",
+      "saved_bytes": 88504,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/05-holding-heart-motion/frame-12.png",
+      "saved_file": "review/05-holding-heart-motion/frame-12.png",
+      "source_sha256": "77d78c2ede7ce96b93b904a6ac38369eb0a162658b05c2cd779be50a09debd73",
+      "source_bytes": 91269,
+      "saved_sha256": "77d78c2ede7ce96b93b904a6ac38369eb0a162658b05c2cd779be50a09debd73",
+      "saved_bytes": 91269,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/05-holding-heart-motion/metadata.json",
+      "saved_file": "review/05-holding-heart-motion/metadata.json",
+      "source_sha256": "50b138c0724d232925d8d0a40151712ac11be4cec24478f5690c88a6d4964f30",
+      "source_bytes": 2567,
+      "saved_sha256": "50b138c0724d232925d8d0a40151712ac11be4cec24478f5690c88a6d4964f30",
+      "saved_bytes": 2567,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/05-holding-heart-motion/temporal-grid.jpg",
+      "saved_file": "review/05-holding-heart-motion/temporal-grid.jpg",
+      "source_sha256": "c92ad83def3cc2c6d32ec4d1ee311034aef5880de59a3959899a27f7b55edaf7",
+      "source_bytes": 252339,
+      "saved_sha256": "c92ad83def3cc2c6d32ec4d1ee311034aef5880de59a3959899a27f7b55edaf7",
+      "saved_bytes": 252339,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/06-beckoning-motion/clip.mp4",
+      "saved_file": "review/06-beckoning-motion/clip.mp4",
+      "source_sha256": "ca51c2b8b348e9d862b9c21f6e4635fcbf244df5f38aa115fae3663768ce1ce1",
+      "source_bytes": 2521352,
+      "saved_sha256": "ca51c2b8b348e9d862b9c21f6e4635fcbf244df5f38aa115fae3663768ce1ce1",
+      "saved_bytes": 2521352,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/06-beckoning-motion/frame-01.png",
+      "saved_file": "review/06-beckoning-motion/frame-01.png",
+      "source_sha256": "dd1b4fc3cd52736aeba432a6df8c701d9755f3d526f018f79b072c2f1000cfb5",
+      "source_bytes": 73430,
+      "saved_sha256": "dd1b4fc3cd52736aeba432a6df8c701d9755f3d526f018f79b072c2f1000cfb5",
+      "saved_bytes": 73430,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/06-beckoning-motion/frame-02.png",
+      "saved_file": "review/06-beckoning-motion/frame-02.png",
+      "source_sha256": "4884b296adf2cf400636462cdef55aef67ceaa6bf13b94ec8c368e88c8220d9a",
+      "source_bytes": 77885,
+      "saved_sha256": "4884b296adf2cf400636462cdef55aef67ceaa6bf13b94ec8c368e88c8220d9a",
+      "saved_bytes": 77885,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/06-beckoning-motion/frame-03.png",
+      "saved_file": "review/06-beckoning-motion/frame-03.png",
+      "source_sha256": "49eaa794ce94b4a44bc2c471ae6cbbd33ba46b84b9d66f6c0fed3ccb39aa4520",
+      "source_bytes": 79006,
+      "saved_sha256": "49eaa794ce94b4a44bc2c471ae6cbbd33ba46b84b9d66f6c0fed3ccb39aa4520",
+      "saved_bytes": 79006,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/06-beckoning-motion/frame-04.png",
+      "saved_file": "review/06-beckoning-motion/frame-04.png",
+      "source_sha256": "94b45be25c5c86bd2e84f0d2167c3e73e93371e72e0204be42a6b3ff5679e3ba",
+      "source_bytes": 76413,
+      "saved_sha256": "94b45be25c5c86bd2e84f0d2167c3e73e93371e72e0204be42a6b3ff5679e3ba",
+      "saved_bytes": 76413,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/06-beckoning-motion/frame-05.png",
+      "saved_file": "review/06-beckoning-motion/frame-05.png",
+      "source_sha256": "1a9b6a6dc8dc29891ba861d54f8a4ffec31b59c57ffafece035287d5d707b12f",
+      "source_bytes": 77355,
+      "saved_sha256": "1a9b6a6dc8dc29891ba861d54f8a4ffec31b59c57ffafece035287d5d707b12f",
+      "saved_bytes": 77355,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/06-beckoning-motion/frame-06.png",
+      "saved_file": "review/06-beckoning-motion/frame-06.png",
+      "source_sha256": "87d0ba08bbbac50c5bc2d73545176a03863003354d67179f11574dcef682ec86",
+      "source_bytes": 79851,
+      "saved_sha256": "87d0ba08bbbac50c5bc2d73545176a03863003354d67179f11574dcef682ec86",
+      "saved_bytes": 79851,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/06-beckoning-motion/frame-07.png",
+      "saved_file": "review/06-beckoning-motion/frame-07.png",
+      "source_sha256": "a3b0bf31f738b4e51c2c002c1f67a4ac66035796fd72cb0b70f16844adb2dd16",
+      "source_bytes": 79594,
+      "saved_sha256": "a3b0bf31f738b4e51c2c002c1f67a4ac66035796fd72cb0b70f16844adb2dd16",
+      "saved_bytes": 79594,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/06-beckoning-motion/frame-08.png",
+      "saved_file": "review/06-beckoning-motion/frame-08.png",
+      "source_sha256": "cd2192865e626b5855806a70a26259fb86a176ac0793ec3e5e805a77a9c8f991",
+      "source_bytes": 76438,
+      "saved_sha256": "cd2192865e626b5855806a70a26259fb86a176ac0793ec3e5e805a77a9c8f991",
+      "saved_bytes": 76438,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/06-beckoning-motion/frame-09.png",
+      "saved_file": "review/06-beckoning-motion/frame-09.png",
+      "source_sha256": "1f913c6fcd9025b1026ea5b5411f7f053a8d41a9984ad2411274fb951e431774",
+      "source_bytes": 77605,
+      "saved_sha256": "1f913c6fcd9025b1026ea5b5411f7f053a8d41a9984ad2411274fb951e431774",
+      "saved_bytes": 77605,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/06-beckoning-motion/frame-10.png",
+      "saved_file": "review/06-beckoning-motion/frame-10.png",
+      "source_sha256": "8e27d555a4c36b503b8493e990e6e8cafb40f0fcf8cf76c702eda64b5b100a90",
+      "source_bytes": 78035,
+      "saved_sha256": "8e27d555a4c36b503b8493e990e6e8cafb40f0fcf8cf76c702eda64b5b100a90",
+      "saved_bytes": 78035,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/06-beckoning-motion/frame-11.png",
+      "saved_file": "review/06-beckoning-motion/frame-11.png",
+      "source_sha256": "2acead5c931def14133b4e6d9057399dd9b3c0d3815db779c4899d538479ac38",
+      "source_bytes": 82278,
+      "saved_sha256": "2acead5c931def14133b4e6d9057399dd9b3c0d3815db779c4899d538479ac38",
+      "saved_bytes": 82278,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/06-beckoning-motion/frame-12.png",
+      "saved_file": "review/06-beckoning-motion/frame-12.png",
+      "source_sha256": "637a78cd589515f18fc1f4045d32cc0ce2f0a3f5671effb350c58183bd8d6b12",
+      "source_bytes": 78820,
+      "saved_sha256": "637a78cd589515f18fc1f4045d32cc0ce2f0a3f5671effb350c58183bd8d6b12",
+      "saved_bytes": 78820,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/06-beckoning-motion/metadata.json",
+      "saved_file": "review/06-beckoning-motion/metadata.json",
+      "source_sha256": "8f85b3368b3945f792b0f9a79399fe47cc017e0f861b207a53cd67e80f7cf870",
+      "source_bytes": 2563,
+      "saved_sha256": "8f85b3368b3945f792b0f9a79399fe47cc017e0f861b207a53cd67e80f7cf870",
+      "saved_bytes": 2563,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/06-beckoning-motion/temporal-grid.jpg",
+      "saved_file": "review/06-beckoning-motion/temporal-grid.jpg",
+      "source_sha256": "52582c2fbaf0ea9bf6573eaace40df01f91e26ab7ddbf5632d52093d1c9240c8",
+      "source_bytes": 226614,
+      "saved_sha256": "52582c2fbaf0ea9bf6573eaace40df01f91e26ab7ddbf5632d52093d1c9240c8",
+      "saved_bytes": 226614,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/07-finger-dance-motion/clip.mp4",
+      "saved_file": "review/07-finger-dance-motion/clip.mp4",
+      "source_sha256": "130c444a7a5122ced9a99dad1e163cb4d3b34cebaded2fe38800887341c275b3",
+      "source_bytes": 3087330,
+      "saved_sha256": "130c444a7a5122ced9a99dad1e163cb4d3b34cebaded2fe38800887341c275b3",
+      "saved_bytes": 3087330,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/07-finger-dance-motion/frame-01.png",
+      "saved_file": "review/07-finger-dance-motion/frame-01.png",
+      "source_sha256": "82257a8a7f2f8748cc0ad70f83951c892152a3dcc352eed14d7c79a37cc7a299",
+      "source_bytes": 77111,
+      "saved_sha256": "82257a8a7f2f8748cc0ad70f83951c892152a3dcc352eed14d7c79a37cc7a299",
+      "saved_bytes": 77111,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/07-finger-dance-motion/frame-02.png",
+      "saved_file": "review/07-finger-dance-motion/frame-02.png",
+      "source_sha256": "a9c75b34de1fd23739ea43d1ba76b7df96d039ebaedd2d19b897c90d0a2e55df",
+      "source_bytes": 72169,
+      "saved_sha256": "a9c75b34de1fd23739ea43d1ba76b7df96d039ebaedd2d19b897c90d0a2e55df",
+      "saved_bytes": 72169,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/07-finger-dance-motion/frame-03.png",
+      "saved_file": "review/07-finger-dance-motion/frame-03.png",
+      "source_sha256": "b28e21b1b045e21ca595e14223371d8623f2ebd75cdef6e0d6b4f4ea5b373213",
+      "source_bytes": 67872,
+      "saved_sha256": "b28e21b1b045e21ca595e14223371d8623f2ebd75cdef6e0d6b4f4ea5b373213",
+      "saved_bytes": 67872,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/07-finger-dance-motion/frame-04.png",
+      "saved_file": "review/07-finger-dance-motion/frame-04.png",
+      "source_sha256": "80ee0dae8f0de54015d28423374533cdd6b84e59cb08cf92dbd9581b4192d8bf",
+      "source_bytes": 79249,
+      "saved_sha256": "80ee0dae8f0de54015d28423374533cdd6b84e59cb08cf92dbd9581b4192d8bf",
+      "saved_bytes": 79249,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/07-finger-dance-motion/frame-05.png",
+      "saved_file": "review/07-finger-dance-motion/frame-05.png",
+      "source_sha256": "1954ca29fb1b8214675778b158e4516236f48561df508b0df31afbde4ce8ec5e",
+      "source_bytes": 84503,
+      "saved_sha256": "1954ca29fb1b8214675778b158e4516236f48561df508b0df31afbde4ce8ec5e",
+      "saved_bytes": 84503,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/07-finger-dance-motion/frame-06.png",
+      "saved_file": "review/07-finger-dance-motion/frame-06.png",
+      "source_sha256": "12a5b20401ae1bf39d78c77abf50896dea5678d44ee5edcbd5f6e841bd276c84",
+      "source_bytes": 80142,
+      "saved_sha256": "12a5b20401ae1bf39d78c77abf50896dea5678d44ee5edcbd5f6e841bd276c84",
+      "saved_bytes": 80142,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/07-finger-dance-motion/frame-07.png",
+      "saved_file": "review/07-finger-dance-motion/frame-07.png",
+      "source_sha256": "c5a5256b0dfaa24a30194248afea33d5ebf7bc78463615c40d7d0b856d14d2a0",
+      "source_bytes": 86469,
+      "saved_sha256": "c5a5256b0dfaa24a30194248afea33d5ebf7bc78463615c40d7d0b856d14d2a0",
+      "saved_bytes": 86469,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/07-finger-dance-motion/frame-08.png",
+      "saved_file": "review/07-finger-dance-motion/frame-08.png",
+      "source_sha256": "33f6391c6910bb05d9bb39a6a33cf54eb74eaafb9d75d01c7a05155c2d8206a9",
+      "source_bytes": 82115,
+      "saved_sha256": "33f6391c6910bb05d9bb39a6a33cf54eb74eaafb9d75d01c7a05155c2d8206a9",
+      "saved_bytes": 82115,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/07-finger-dance-motion/frame-09.png",
+      "saved_file": "review/07-finger-dance-motion/frame-09.png",
+      "source_sha256": "9db94106ae4cf50701fd79be0a000fea16fee664b5243af5369e266614738257",
+      "source_bytes": 83101,
+      "saved_sha256": "9db94106ae4cf50701fd79be0a000fea16fee664b5243af5369e266614738257",
+      "saved_bytes": 83101,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/07-finger-dance-motion/frame-10.png",
+      "saved_file": "review/07-finger-dance-motion/frame-10.png",
+      "source_sha256": "14b475c6f9e9dcd4299d25381c7c4d704e9e65dae8faeb040447125a50c0c021",
+      "source_bytes": 81533,
+      "saved_sha256": "14b475c6f9e9dcd4299d25381c7c4d704e9e65dae8faeb040447125a50c0c021",
+      "saved_bytes": 81533,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/07-finger-dance-motion/frame-11.png",
+      "saved_file": "review/07-finger-dance-motion/frame-11.png",
+      "source_sha256": "9e5420147fe4ecccc6a909ddcc42fb568220bf27ffe3ba2792c247e854a50a14",
+      "source_bytes": 83203,
+      "saved_sha256": "9e5420147fe4ecccc6a909ddcc42fb568220bf27ffe3ba2792c247e854a50a14",
+      "saved_bytes": 83203,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/07-finger-dance-motion/frame-12.png",
+      "saved_file": "review/07-finger-dance-motion/frame-12.png",
+      "source_sha256": "e77a52bc680c04b6ba45fb009ab95e4fd3323e72ed9fec1421dddedf032f8e1f",
+      "source_bytes": 80198,
+      "saved_sha256": "e77a52bc680c04b6ba45fb009ab95e4fd3323e72ed9fec1421dddedf032f8e1f",
+      "saved_bytes": 80198,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/07-finger-dance-motion/metadata.json",
+      "saved_file": "review/07-finger-dance-motion/metadata.json",
+      "source_sha256": "894a6fa79ef20fb005083c9dc1c6e96f00e0308a89da7a7c1004615c5a36bd52",
+      "source_bytes": 2566,
+      "saved_sha256": "894a6fa79ef20fb005083c9dc1c6e96f00e0308a89da7a7c1004615c5a36bd52",
+      "saved_bytes": 2566,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/07-finger-dance-motion/temporal-grid.jpg",
+      "saved_file": "review/07-finger-dance-motion/temporal-grid.jpg",
+      "source_sha256": "a783740bc95f62af33d7695dbe645d28344af93ff8f5167dc289c1be734b1f99",
+      "source_bytes": 234997,
+      "saved_sha256": "a783740bc95f62af33d7695dbe645d28344af93ff8f5167dc289c1be734b1f99",
+      "saved_bytes": 234997,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/08-turnaround-back-motion/clip.mp4",
+      "saved_file": "review/08-turnaround-back-motion/clip.mp4",
+      "source_sha256": "8cac7044c096f6843fc7b02189c968016ece206e6c92fcad82d32075e36b5c9e",
+      "source_bytes": 2564156,
+      "saved_sha256": "8cac7044c096f6843fc7b02189c968016ece206e6c92fcad82d32075e36b5c9e",
+      "saved_bytes": 2564156,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/08-turnaround-back-motion/frame-01.png",
+      "saved_file": "review/08-turnaround-back-motion/frame-01.png",
+      "source_sha256": "bd3077480c6921bdbe485885596a3345722c76843d551c9f101346313cf018b6",
+      "source_bytes": 84550,
+      "saved_sha256": "bd3077480c6921bdbe485885596a3345722c76843d551c9f101346313cf018b6",
+      "saved_bytes": 84550,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/08-turnaround-back-motion/frame-02.png",
+      "saved_file": "review/08-turnaround-back-motion/frame-02.png",
+      "source_sha256": "2a876ba9c55d4b9fcd8850786723f4e71903ee66bfa0e7afd25e9a017b247d45",
+      "source_bytes": 74624,
+      "saved_sha256": "2a876ba9c55d4b9fcd8850786723f4e71903ee66bfa0e7afd25e9a017b247d45",
+      "saved_bytes": 74624,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/08-turnaround-back-motion/frame-03.png",
+      "saved_file": "review/08-turnaround-back-motion/frame-03.png",
+      "source_sha256": "adec60253f8739ccd4d056179ff8146e1c7e3b2ad77641c66e72f8b9ee333232",
+      "source_bytes": 54123,
+      "saved_sha256": "adec60253f8739ccd4d056179ff8146e1c7e3b2ad77641c66e72f8b9ee333232",
+      "saved_bytes": 54123,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/08-turnaround-back-motion/frame-04.png",
+      "saved_file": "review/08-turnaround-back-motion/frame-04.png",
+      "source_sha256": "2de8a4328a50edebcaa4b36316bc1ef70efc9d18a465962776d4c8b4cb0eb8b3",
+      "source_bytes": 59709,
+      "saved_sha256": "2de8a4328a50edebcaa4b36316bc1ef70efc9d18a465962776d4c8b4cb0eb8b3",
+      "saved_bytes": 59709,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/08-turnaround-back-motion/frame-05.png",
+      "saved_file": "review/08-turnaround-back-motion/frame-05.png",
+      "source_sha256": "055c82bff79b355d765b2fe927ef114155c676811290fb03e15c5112be4e53d1",
+      "source_bytes": 70898,
+      "saved_sha256": "055c82bff79b355d765b2fe927ef114155c676811290fb03e15c5112be4e53d1",
+      "saved_bytes": 70898,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/08-turnaround-back-motion/frame-06.png",
+      "saved_file": "review/08-turnaround-back-motion/frame-06.png",
+      "source_sha256": "45c416e69db98639e2a5b36a0d1e1b2108056966a6e1299ec804cf2f95f24520",
+      "source_bytes": 76708,
+      "saved_sha256": "45c416e69db98639e2a5b36a0d1e1b2108056966a6e1299ec804cf2f95f24520",
+      "saved_bytes": 76708,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/08-turnaround-back-motion/frame-07.png",
+      "saved_file": "review/08-turnaround-back-motion/frame-07.png",
+      "source_sha256": "ad3a939cd3aece8917a54713cf62274dbce3cfa021bdce75fc20f7a4b4072700",
+      "source_bytes": 78221,
+      "saved_sha256": "ad3a939cd3aece8917a54713cf62274dbce3cfa021bdce75fc20f7a4b4072700",
+      "saved_bytes": 78221,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/08-turnaround-back-motion/frame-08.png",
+      "saved_file": "review/08-turnaround-back-motion/frame-08.png",
+      "source_sha256": "a04e55072f3711a86c740ed2b2475e814fb9baad4c2d8d31f8a9e45387c28655",
+      "source_bytes": 72004,
+      "saved_sha256": "a04e55072f3711a86c740ed2b2475e814fb9baad4c2d8d31f8a9e45387c28655",
+      "saved_bytes": 72004,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/08-turnaround-back-motion/frame-09.png",
+      "saved_file": "review/08-turnaround-back-motion/frame-09.png",
+      "source_sha256": "2970c84bcda311558bfdf0f8b590f14417fd5c2488103e9ce557bf73d1bf8b2c",
+      "source_bytes": 56342,
+      "saved_sha256": "2970c84bcda311558bfdf0f8b590f14417fd5c2488103e9ce557bf73d1bf8b2c",
+      "saved_bytes": 56342,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/08-turnaround-back-motion/frame-10.png",
+      "saved_file": "review/08-turnaround-back-motion/frame-10.png",
+      "source_sha256": "8739aedff1abebceee63b86142c6e038ba5db33979303587ea095c92ce2f6ced",
+      "source_bytes": 58340,
+      "saved_sha256": "8739aedff1abebceee63b86142c6e038ba5db33979303587ea095c92ce2f6ced",
+      "saved_bytes": 58340,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/08-turnaround-back-motion/frame-11.png",
+      "saved_file": "review/08-turnaround-back-motion/frame-11.png",
+      "source_sha256": "225ed910976508e7c9edb27a5708ec9579b080d835aba01b0c0905ff46d5393b",
+      "source_bytes": 71972,
+      "saved_sha256": "225ed910976508e7c9edb27a5708ec9579b080d835aba01b0c0905ff46d5393b",
+      "saved_bytes": 71972,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/08-turnaround-back-motion/frame-12.png",
+      "saved_file": "review/08-turnaround-back-motion/frame-12.png",
+      "source_sha256": "11bfcf3b72d80a459f8d19ff71b2fd44448f315213005d9b7ded17b8809f1b96",
+      "source_bytes": 78381,
+      "saved_sha256": "11bfcf3b72d80a459f8d19ff71b2fd44448f315213005d9b7ded17b8809f1b96",
+      "saved_bytes": 78381,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/08-turnaround-back-motion/metadata.json",
+      "saved_file": "review/08-turnaround-back-motion/metadata.json",
+      "source_sha256": "aa45254276d3a63595a447733b222dd6c3aae40e739bf2adcf9b0655e575cd70",
+      "source_bytes": 2569,
+      "saved_sha256": "aa45254276d3a63595a447733b222dd6c3aae40e739bf2adcf9b0655e575cd70",
+      "saved_bytes": 2569,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/08-turnaround-back-motion/temporal-grid.jpg",
+      "saved_file": "review/08-turnaround-back-motion/temporal-grid.jpg",
+      "source_sha256": "5ca3fd9a48e3a08b265c18195d40e0e96876fd0d35087edd700d45671392f42a",
+      "source_bytes": 204051,
+      "saved_sha256": "5ca3fd9a48e3a08b265c18195d40e0e96876fd0d35087edd700d45671392f42a",
+      "saved_bytes": 204051,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/08-turnaround-back-v2-grid.jpg",
+      "saved_file": "review/08-turnaround-back-v2-grid.jpg",
+      "source_sha256": "6997be5c077222187f9ccff4a8468af3f4399dd6b17acaef3dde8e3456f1becc",
+      "source_bytes": 44132,
+      "saved_sha256": "6997be5c077222187f9ccff4a8468af3f4399dd6b17acaef3dde8e3456f1becc",
+      "saved_bytes": 44132,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/09-back-stop-motion/clip.mp4",
+      "saved_file": "review/09-back-stop-motion/clip.mp4",
+      "source_sha256": "93ad2fbfdd410e56ef655ef824542037c21647265ffe0e9b18ab79e6700ed331",
+      "source_bytes": 2501599,
+      "saved_sha256": "93ad2fbfdd410e56ef655ef824542037c21647265ffe0e9b18ab79e6700ed331",
+      "saved_bytes": 2501599,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/09-back-stop-motion/frame-01.png",
+      "saved_file": "review/09-back-stop-motion/frame-01.png",
+      "source_sha256": "7404f582b87cb27a0a824cf5fb7e4b91793fb7c8b8c3df2cdca70bfd41849b71",
+      "source_bytes": 91293,
+      "saved_sha256": "7404f582b87cb27a0a824cf5fb7e4b91793fb7c8b8c3df2cdca70bfd41849b71",
+      "saved_bytes": 91293,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/09-back-stop-motion/frame-02.png",
+      "saved_file": "review/09-back-stop-motion/frame-02.png",
+      "source_sha256": "f9c6afdad4c741f2c0e8064aee56161e7555eece7b1b025642b36b2702567771",
+      "source_bytes": 89210,
+      "saved_sha256": "f9c6afdad4c741f2c0e8064aee56161e7555eece7b1b025642b36b2702567771",
+      "saved_bytes": 89210,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/09-back-stop-motion/frame-03.png",
+      "saved_file": "review/09-back-stop-motion/frame-03.png",
+      "source_sha256": "876bf2f9c3318d1825aee6c278e04126fdff82b2916f5d198e96336bae678d3d",
+      "source_bytes": 58641,
+      "saved_sha256": "876bf2f9c3318d1825aee6c278e04126fdff82b2916f5d198e96336bae678d3d",
+      "saved_bytes": 58641,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/09-back-stop-motion/frame-04.png",
+      "saved_file": "review/09-back-stop-motion/frame-04.png",
+      "source_sha256": "72d071dfcfe6f12a211c8b5c98fb05b31aee79c821c3396cecd1dc46568d16df",
+      "source_bytes": 54098,
+      "saved_sha256": "72d071dfcfe6f12a211c8b5c98fb05b31aee79c821c3396cecd1dc46568d16df",
+      "saved_bytes": 54098,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/09-back-stop-motion/frame-05.png",
+      "saved_file": "review/09-back-stop-motion/frame-05.png",
+      "source_sha256": "9481afd171a76df85bab516dc7129b4f31e10d4c36cf2b1592a33112cd7bb657",
+      "source_bytes": 61378,
+      "saved_sha256": "9481afd171a76df85bab516dc7129b4f31e10d4c36cf2b1592a33112cd7bb657",
+      "saved_bytes": 61378,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/09-back-stop-motion/frame-06.png",
+      "saved_file": "review/09-back-stop-motion/frame-06.png",
+      "source_sha256": "471103faa5df6b2d539aecd4308c9e6d7b90f1ca1004badc2826f19faff8e474",
+      "source_bytes": 85736,
+      "saved_sha256": "471103faa5df6b2d539aecd4308c9e6d7b90f1ca1004badc2826f19faff8e474",
+      "saved_bytes": 85736,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/09-back-stop-motion/frame-07.png",
+      "saved_file": "review/09-back-stop-motion/frame-07.png",
+      "source_sha256": "174dd2b8656de1d846dda58602da221068d6ee68f61b917b4b811cdd70bd2e22",
+      "source_bytes": 89279,
+      "saved_sha256": "174dd2b8656de1d846dda58602da221068d6ee68f61b917b4b811cdd70bd2e22",
+      "saved_bytes": 89279,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/09-back-stop-motion/frame-08.png",
+      "saved_file": "review/09-back-stop-motion/frame-08.png",
+      "source_sha256": "5342cefc87da1a68c91919a9c145aad15453dfbe317d0e15900a5c73be3cbb43",
+      "source_bytes": 88026,
+      "saved_sha256": "5342cefc87da1a68c91919a9c145aad15453dfbe317d0e15900a5c73be3cbb43",
+      "saved_bytes": 88026,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/09-back-stop-motion/frame-09.png",
+      "saved_file": "review/09-back-stop-motion/frame-09.png",
+      "source_sha256": "4eeb315019cd3aed14d47c18dcb3bd19653389bd6337f7bf24ed0cd2f8d5eca1",
+      "source_bytes": 88476,
+      "saved_sha256": "4eeb315019cd3aed14d47c18dcb3bd19653389bd6337f7bf24ed0cd2f8d5eca1",
+      "saved_bytes": 88476,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/09-back-stop-motion/frame-10.png",
+      "saved_file": "review/09-back-stop-motion/frame-10.png",
+      "source_sha256": "61ca068bbd3f3d4bcd5f71406f28d3d7165ea850fc0b8114fed5ac2781c03d97",
+      "source_bytes": 85305,
+      "saved_sha256": "61ca068bbd3f3d4bcd5f71406f28d3d7165ea850fc0b8114fed5ac2781c03d97",
+      "saved_bytes": 85305,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/09-back-stop-motion/frame-11.png",
+      "saved_file": "review/09-back-stop-motion/frame-11.png",
+      "source_sha256": "9771b5f3b6a280eec5d54722260fc879e601a029b636b9a3a0d3a916150a34ca",
+      "source_bytes": 86539,
+      "saved_sha256": "9771b5f3b6a280eec5d54722260fc879e601a029b636b9a3a0d3a916150a34ca",
+      "saved_bytes": 86539,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/09-back-stop-motion/frame-12.png",
+      "saved_file": "review/09-back-stop-motion/frame-12.png",
+      "source_sha256": "f9ce49214cb4fb00b8eb55cdcfceee0f9c9ec2e10d773070f498b78d3fa581bd",
+      "source_bytes": 89430,
+      "saved_sha256": "f9ce49214cb4fb00b8eb55cdcfceee0f9c9ec2e10d773070f498b78d3fa581bd",
+      "saved_bytes": 89430,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/09-back-stop-motion/metadata.json",
+      "saved_file": "review/09-back-stop-motion/metadata.json",
+      "source_sha256": "c12bd6fbb8a57ee020080e6b6435f28f1fd0b19e605eeb6d8180d69dfd5a0cda",
+      "source_bytes": 2563,
+      "saved_sha256": "c12bd6fbb8a57ee020080e6b6435f28f1fd0b19e605eeb6d8180d69dfd5a0cda",
+      "saved_bytes": 2563,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/09-back-stop-motion/temporal-grid.jpg",
+      "saved_file": "review/09-back-stop-motion/temporal-grid.jpg",
+      "source_sha256": "a0cea239f2f4deb59c7915c3ec2b2109aba40d17fe91e4961f07618cdd684711",
+      "source_bytes": 229321,
+      "saved_sha256": "a0cea239f2f4deb59c7915c3ec2b2109aba40d17fe91e4961f07618cdd684711",
+      "saved_bytes": 229321,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/09-back-stop-v2-grid.jpg",
+      "saved_file": "review/09-back-stop-v2-grid.jpg",
+      "source_sha256": "72450fe588de195088ad494c76fcdfd6f822219d2dcc4f96eb1839d515af6e9c",
+      "source_bytes": 56578,
+      "saved_sha256": "72450fe588de195088ad494c76fcdfd6f822219d2dcc4f96eb1839d515af6e9c",
+      "saved_bytes": 56578,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/10-back-middle-finger-motion/clip.mp4",
+      "saved_file": "review/10-back-middle-finger-motion/clip.mp4",
+      "source_sha256": "3317ee91c1f7e66d567d46c2e3a7c6cad039cf27649f45cdcf620c210897cf00",
+      "source_bytes": 2409268,
+      "saved_sha256": "3317ee91c1f7e66d567d46c2e3a7c6cad039cf27649f45cdcf620c210897cf00",
+      "saved_bytes": 2409268,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/10-back-middle-finger-motion/frame-01.png",
+      "saved_file": "review/10-back-middle-finger-motion/frame-01.png",
+      "source_sha256": "6a3ca26c61770837d566c7544b0c3ec12c6675efb069381d5bc8d5f77db3fee6",
+      "source_bytes": 77897,
+      "saved_sha256": "6a3ca26c61770837d566c7544b0c3ec12c6675efb069381d5bc8d5f77db3fee6",
+      "saved_bytes": 77897,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/10-back-middle-finger-motion/frame-02.png",
+      "saved_file": "review/10-back-middle-finger-motion/frame-02.png",
+      "source_sha256": "c400b116c4d56fb582793e8ba0629b5237b748ea43f64e6a5f7ed4706c4b03bb",
+      "source_bytes": 85449,
+      "saved_sha256": "c400b116c4d56fb582793e8ba0629b5237b748ea43f64e6a5f7ed4706c4b03bb",
+      "saved_bytes": 85449,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/10-back-middle-finger-motion/frame-03.png",
+      "saved_file": "review/10-back-middle-finger-motion/frame-03.png",
+      "source_sha256": "5b162ae90fcb510d45dcb0ec7f9c475fc6a4d4ed8fe5f9e3b2f719422c7a5fb0",
+      "source_bytes": 87011,
+      "saved_sha256": "5b162ae90fcb510d45dcb0ec7f9c475fc6a4d4ed8fe5f9e3b2f719422c7a5fb0",
+      "saved_bytes": 87011,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/10-back-middle-finger-motion/frame-04.png",
+      "saved_file": "review/10-back-middle-finger-motion/frame-04.png",
+      "source_sha256": "6abccaac1ad6296052ebb0c2058f5233dc71cec8bbc9eaa74dd42c1c91d57354",
+      "source_bytes": 84675,
+      "saved_sha256": "6abccaac1ad6296052ebb0c2058f5233dc71cec8bbc9eaa74dd42c1c91d57354",
+      "saved_bytes": 84675,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/10-back-middle-finger-motion/frame-05.png",
+      "saved_file": "review/10-back-middle-finger-motion/frame-05.png",
+      "source_sha256": "9af14e6172a546e69a5eb09c2bf7a8edd20d3e76627d1a0bf65c7f9f9350dee0",
+      "source_bytes": 86221,
+      "saved_sha256": "9af14e6172a546e69a5eb09c2bf7a8edd20d3e76627d1a0bf65c7f9f9350dee0",
+      "saved_bytes": 86221,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/10-back-middle-finger-motion/frame-06.png",
+      "saved_file": "review/10-back-middle-finger-motion/frame-06.png",
+      "source_sha256": "b8e37f364b7f83f3a6e93526dea5a3e5b5fbdc173c284758ae849bcffe815b5c",
+      "source_bytes": 85586,
+      "saved_sha256": "b8e37f364b7f83f3a6e93526dea5a3e5b5fbdc173c284758ae849bcffe815b5c",
+      "saved_bytes": 85586,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/10-back-middle-finger-motion/frame-07.png",
+      "saved_file": "review/10-back-middle-finger-motion/frame-07.png",
+      "source_sha256": "34248098c333e905e604473f59f5f80963b2f8fa30e6c5c178112c7eb3aa03e0",
+      "source_bytes": 82095,
+      "saved_sha256": "34248098c333e905e604473f59f5f80963b2f8fa30e6c5c178112c7eb3aa03e0",
+      "saved_bytes": 82095,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/10-back-middle-finger-motion/frame-08.png",
+      "saved_file": "review/10-back-middle-finger-motion/frame-08.png",
+      "source_sha256": "54519579c8fb0034d73902b182c2f14c52acc5156707d154c0e4c54443dfe412",
+      "source_bytes": 83895,
+      "saved_sha256": "54519579c8fb0034d73902b182c2f14c52acc5156707d154c0e4c54443dfe412",
+      "saved_bytes": 83895,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/10-back-middle-finger-motion/frame-09.png",
+      "saved_file": "review/10-back-middle-finger-motion/frame-09.png",
+      "source_sha256": "ed69eea68b9b0ee1daafb3e7d76f96d81f74f06d79165e054ab5a3105f4452fc",
+      "source_bytes": 88332,
+      "saved_sha256": "ed69eea68b9b0ee1daafb3e7d76f96d81f74f06d79165e054ab5a3105f4452fc",
+      "saved_bytes": 88332,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/10-back-middle-finger-motion/frame-10.png",
+      "saved_file": "review/10-back-middle-finger-motion/frame-10.png",
+      "source_sha256": "7daf1dbc46bef207b8efbfc064ef096f17c6ddc5555b88c837f484b5a55c9d92",
+      "source_bytes": 85997,
+      "saved_sha256": "7daf1dbc46bef207b8efbfc064ef096f17c6ddc5555b88c837f484b5a55c9d92",
+      "saved_bytes": 85997,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/10-back-middle-finger-motion/frame-11.png",
+      "saved_file": "review/10-back-middle-finger-motion/frame-11.png",
+      "source_sha256": "d5ecb0687787b510044900288d910b82dc1916e3da160e0d0456e59a5e62d12a",
+      "source_bytes": 78698,
+      "saved_sha256": "d5ecb0687787b510044900288d910b82dc1916e3da160e0d0456e59a5e62d12a",
+      "saved_bytes": 78698,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/10-back-middle-finger-motion/frame-12.png",
+      "saved_file": "review/10-back-middle-finger-motion/frame-12.png",
+      "source_sha256": "bc8b515ea93c5532a6843bd5ba37f236c7efbaafc91a886420121181c895b1c4",
+      "source_bytes": 78259,
+      "saved_sha256": "bc8b515ea93c5532a6843bd5ba37f236c7efbaafc91a886420121181c895b1c4",
+      "saved_bytes": 78259,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/10-back-middle-finger-motion/metadata.json",
+      "saved_file": "review/10-back-middle-finger-motion/metadata.json",
+      "source_sha256": "0551da91392dfafed8c83b9f0dba62c50f29a967ce9a75aba02cf44f17898d13",
+      "source_bytes": 2572,
+      "saved_sha256": "0551da91392dfafed8c83b9f0dba62c50f29a967ce9a75aba02cf44f17898d13",
+      "saved_bytes": 2572,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/10-back-middle-finger-motion/temporal-grid.jpg",
+      "saved_file": "review/10-back-middle-finger-motion/temporal-grid.jpg",
+      "source_sha256": "637d9f13442cdb0dce135172c6d8ba23da3b8e11205ec3dc1a167cb2970ab1ac",
+      "source_bytes": 240638,
+      "saved_sha256": "637d9f13442cdb0dce135172c6d8ba23da3b8e11205ec3dc1a167cb2970ab1ac",
+      "saved_bytes": 240638,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/10-back-middle-finger-v2-grid.jpg",
+      "saved_file": "review/10-back-middle-finger-v2-grid.jpg",
+      "source_sha256": "01f4827e62a38d60361fad4527330bf9093a765f73453e63567e86740e270009",
+      "source_bytes": 43008,
+      "saved_sha256": "01f4827e62a38d60361fad4527330bf9093a765f73453e63567e86740e270009",
+      "saved_bytes": 43008,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/10-back-middle-finger-v3-grid.jpg",
+      "saved_file": "review/10-back-middle-finger-v3-grid.jpg",
+      "source_sha256": "f41612b3c7c855356c57f76a7735abcc5b15c850ebfc8aac90e43a4e2bf02a6f",
+      "source_bytes": 40720,
+      "saved_sha256": "f41612b3c7c855356c57f76a7735abcc5b15c850ebfc8aac90e43a4e2bf02a6f",
+      "saved_bytes": 40720,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/10-back-middle-finger-v4-grid.jpg",
+      "saved_file": "review/10-back-middle-finger-v4-grid.jpg",
+      "source_sha256": "57bef3f96d474c26db37fcc9cec190cdec70b3885d26168fa613c642ac169d1f",
+      "source_bytes": 41800,
+      "saved_sha256": "57bef3f96d474c26db37fcc9cec190cdec70b3885d26168fa613c642ac169d1f",
+      "saved_bytes": 41800,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/agy-first-two-review.txt",
+      "saved_file": "review/agy-first-two-review.txt",
+      "source_sha256": "e2993654e50f1477c900ad614818d18c35f111f75f4d6419c88852a4972ad5a7",
+      "source_bytes": 2804,
+      "saved_sha256": "e2993654e50f1477c900ad614818d18c35f111f75f4d6419c88852a4972ad5a7",
+      "saved_bytes": 2804,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/agy-review-v2.txt",
+      "saved_file": "review/agy-review-v2.txt",
+      "source_sha256": "963083e1e502a2f6194a6db48ffef9c142e468244bc191d7627f891298b57c7f",
+      "source_bytes": 2873,
+      "saved_sha256": "963083e1e502a2f6194a6db48ffef9c142e468244bc191d7627f891298b57c7f",
+      "saved_bytes": 2873,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/agy-review.txt",
+      "saved_file": "review/agy-review.txt",
+      "source_sha256": "72f1c42e4ae5dc570b20cb669e3f6201c0de0320d42ec56aca79716b7363709a",
+      "source_bytes": 6522,
+      "saved_sha256": "72f1c42e4ae5dc570b20cb669e3f6201c0de0320d42ec56aca79716b7363709a",
+      "saved_bytes": 6522,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/agy-stderr-v2.txt",
+      "saved_file": "review/agy-stderr-v2.txt",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source_bytes": 0,
+      "saved_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "saved_bytes": 0,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/agy-stderr.txt",
+      "saved_file": "review/agy-stderr.txt",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source_bytes": 0,
+      "saved_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "saved_bytes": 0,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/all-ten-v2-still.jpg",
+      "saved_file": "review/all-ten-v2-still.jpg",
+      "source_sha256": "5a57b02aafb2a71a34769896ecbcd4944fa96fd2d138f3e10e47b601c7ebcebd",
+      "source_bytes": 65944,
+      "saved_sha256": "5a57b02aafb2a71a34769896ecbcd4944fa96fd2d138f3e10e47b601c7ebcebd",
+      "saved_bytes": 65944,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/all-ten-v4-still.jpg",
+      "saved_file": "review/all-ten-v4-still.jpg",
+      "source_sha256": "365c77ff70bd74bae5d68f53cf2046932ff91cad5277c675cdf233114d81937c",
+      "source_bytes": 65098,
+      "saved_sha256": "365c77ff70bd74bae5d68f53cf2046932ff91cad5277c675cdf233114d81937c",
+      "saved_bytes": 65098,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/manifest.json",
+      "saved_file": "review/manifest.json",
+      "source_sha256": "979531f76f85fe155a6875b4c275f4ee087b569534bd5153dd5873896367ab4a",
+      "source_bytes": 4281,
+      "saved_sha256": "979531f76f85fe155a6875b4c275f4ee087b569534bd5153dd5873896367ab4a",
+      "saved_bytes": 4281,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/review-request-v2.md",
+      "saved_file": "review/review-request-v2.md",
+      "source_sha256": "d3c61442a9af31d59777cc4e0fbdd5f99426182e1b6069bd61736588356b1f93",
+      "source_bytes": 1700,
+      "saved_sha256": "d3c61442a9af31d59777cc4e0fbdd5f99426182e1b6069bd61736588356b1f93",
+      "saved_bytes": 1700,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review/review-request.md",
+      "saved_file": "review/review-request.md",
+      "source_sha256": "b6744dae23be961003a20eb071f75f188685b19fe7362dbe922511777fee8cb5",
+      "source_bytes": 2806,
+      "saved_sha256": "b6744dae23be961003a20eb071f75f188685b19fe7362dbe922511777fee8cb5",
+      "saved_bytes": 2806,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review_with_agy.py",
+      "saved_file": "review_with_agy.py",
+      "source_sha256": "2c2cdfd6d4cd35fc315566c15b919a87e475dbd7ce8cc835de35cf76ad9a0c0b",
+      "source_bytes": 791,
+      "saved_sha256": "32f12c98b07a980dd35b654c96ced7666e7f46f6f7223fc2d069791721e8e430",
+      "saved_bytes": 755,
+      "adapted": true
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "review_with_agy_v2.py",
+      "saved_file": "review_with_agy_v2.py",
+      "source_sha256": "e5f697e96a8fa99d4f75df9033dbf974f4c1334b07e95fc10f4e2e5eadd4cd7f",
+      "source_bytes": 800,
+      "saved_sha256": "a0b78fb52d85a8c7d01467eab53ee08abf57cf0315ee655352f86b8728f620cc",
+      "saved_bytes": 764,
+      "adapted": true
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "source-manifest.json",
+      "saved_file": "source-manifest.json",
+      "source_sha256": "a9bddaa7b7b685a26403bdf97298442d17fa9e236ff0480206cff510b8173bda",
+      "source_bytes": 2400,
+      "saved_sha256": "a9bddaa7b7b685a26403bdf97298442d17fa9e236ff0480206cff510b8173bda",
+      "saved_bytes": 2400,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "video-inputs/01-finger-heart-ivory.png",
+      "saved_file": "video-inputs/01-finger-heart-ivory.png",
+      "source_sha256": "9ab2d0666e9611e0c2ec746f0b4fc7693a00bedaa82fdac6597b8210c7dd63df",
+      "source_bytes": 461264,
+      "saved_sha256": "9ab2d0666e9611e0c2ec746f0b4fc7693a00bedaa82fdac6597b8210c7dd63df",
+      "saved_bytes": 461264,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "video-inputs/02-wave-ivory.png",
+      "saved_file": "video-inputs/02-wave-ivory.png",
+      "source_sha256": "b7af9523be562d353e2451905cf22e34ec9315986e5be61dde71c969e1b23fd9",
+      "source_bytes": 412294,
+      "saved_sha256": "b7af9523be562d353e2451905cf22e34ec9315986e5be61dde71c969e1b23fd9",
+      "saved_bytes": 412294,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "video-inputs/03-crossed-fingers-ivory.png",
+      "saved_file": "video-inputs/03-crossed-fingers-ivory.png",
+      "source_sha256": "a05fd9557a6fb778207930189d595c1ec762d0e7d9eaea48ac83679595a467d2",
+      "source_bytes": 505876,
+      "saved_sha256": "a05fd9557a6fb778207930189d595c1ec762d0e7d9eaea48ac83679595a467d2",
+      "saved_bytes": 505876,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "video-inputs/04-thumbs-up-ivory.png",
+      "saved_file": "video-inputs/04-thumbs-up-ivory.png",
+      "source_sha256": "62de6d2a2b4040c466c26327841a0b004214f6cdd6c01665161e7644e041dcad",
+      "source_bytes": 690945,
+      "saved_sha256": "62de6d2a2b4040c466c26327841a0b004214f6cdd6c01665161e7644e041dcad",
+      "saved_bytes": 690945,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "video-inputs/05-holding-heart-ivory.png",
+      "saved_file": "video-inputs/05-holding-heart-ivory.png",
+      "source_sha256": "0b9dffde66201d59fed3e5e76e9fe2b45d7cfc4adaccc59e4fc4a92895c66ca1",
+      "source_bytes": 680050,
+      "saved_sha256": "0b9dffde66201d59fed3e5e76e9fe2b45d7cfc4adaccc59e4fc4a92895c66ca1",
+      "saved_bytes": 680050,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "video-inputs/06-beckoning-ivory.png",
+      "saved_file": "video-inputs/06-beckoning-ivory.png",
+      "source_sha256": "e2eb7864adb803207afd13b2692d6dadc109bdd8475c27152962637cadd7c2fc",
+      "source_bytes": 544453,
+      "saved_sha256": "e2eb7864adb803207afd13b2692d6dadc109bdd8475c27152962637cadd7c2fc",
+      "saved_bytes": 544453,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "video-inputs/07-finger-dance-inverted-end-ivory.png",
+      "saved_file": "video-inputs/07-finger-dance-inverted-end-ivory.png",
+      "source_sha256": "a493d2ae6f7d01f365d6bb646af927f7d99718abe02c78632d03a24838e40eb5",
+      "source_bytes": 569882,
+      "saved_sha256": "a493d2ae6f7d01f365d6bb646af927f7d99718abe02c78632d03a24838e40eb5",
+      "saved_bytes": 569882,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "video-inputs/07-finger-dance-ivory.png",
+      "saved_file": "video-inputs/07-finger-dance-ivory.png",
+      "source_sha256": "1cf9d8f96fafc9482bcb330748043b9adb56d2b25a426923a7cef44b8ca7e69c",
+      "source_bytes": 567090,
+      "saved_sha256": "1cf9d8f96fafc9482bcb330748043b9adb56d2b25a426923a7cef44b8ca7e69c",
+      "saved_bytes": 567090,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "video-inputs/08-turnaround-back-ivory.png",
+      "saved_file": "video-inputs/08-turnaround-back-ivory.png",
+      "source_sha256": "63922a74d5533298dfcbaac09b3a67adcccf0e680f8b27c1bdbb102bd3dc7cfb",
+      "source_bytes": 403426,
+      "saved_sha256": "63922a74d5533298dfcbaac09b3a67adcccf0e680f8b27c1bdbb102bd3dc7cfb",
+      "saved_bytes": 403426,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "video-inputs/09-back-stop-ivory.png",
+      "saved_file": "video-inputs/09-back-stop-ivory.png",
+      "source_sha256": "01177d2aa36efa7eebf311cb9174d0335af9cc46677e538478765bbe5666060f",
+      "source_bytes": 688948,
+      "saved_sha256": "01177d2aa36efa7eebf311cb9174d0335af9cc46677e538478765bbe5666060f",
+      "saved_bytes": 688948,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "video-inputs/10-back-middle-finger-ivory.png",
+      "saved_file": "video-inputs/10-back-middle-finger-ivory.png",
+      "source_sha256": "35bfa6ff8cbc007979bfcfff45dfbb78a759c598035c475c6381110ce434c2c1",
+      "source_bytes": 559497,
+      "saved_sha256": "35bfa6ff8cbc007979bfcfff45dfbb78a759c598035c475c6381110ce434c2c1",
+      "saved_bytes": 559497,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "video-inputs/10-back-middle-finger-v2-ivory.png",
+      "saved_file": "video-inputs/10-back-middle-finger-v2-ivory.png",
+      "source_sha256": "55ac6fc05b16cae48dcc40fc89bd01697d3a665361abfdff70e11e78a42828f5",
+      "source_bytes": 508723,
+      "saved_sha256": "55ac6fc05b16cae48dcc40fc89bd01697d3a665361abfdff70e11e78a42828f5",
+      "saved_bytes": 508723,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "video-inputs/10-back-middle-finger-v3-ivory.png",
+      "saved_file": "video-inputs/10-back-middle-finger-v3-ivory.png",
+      "source_sha256": "8790251b334a72535113e80b90d78497d1e88056549742895e8645e07db3f29e",
+      "source_bytes": 461198,
+      "saved_sha256": "8790251b334a72535113e80b90d78497d1e88056549742895e8645e07db3f29e",
+      "saved_bytes": 461198,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "video-inputs/native-turnaround-ivory.png",
+      "saved_file": "video-inputs/native-turnaround-ivory.png",
+      "source_sha256": "f0b899baeb16f283e64f260eaccb655ad4cb234af553daf9e2d97b21edee178a",
+      "source_bytes": 743452,
+      "saved_sha256": "f0b899baeb16f283e64f260eaccb655ad4cb234af553daf9e2d97b21edee178a",
+      "saved_bytes": 743452,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "video-inputs/telegram-open-hands-frame-000-ivory.png",
+      "saved_file": "video-inputs/telegram-open-hands-frame-000-ivory.png",
+      "source_sha256": "13ed54c4ff27939ba77865b3ab94da7ae53ecf13bbf87c842fb60045817138a6",
+      "source_bytes": 50762,
+      "saved_sha256": "13ed54c4ff27939ba77865b3ab94da7ae53ecf13bbf87c842fb60045817138a6",
+      "saved_bytes": 50762,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "video-inputs/telegram-robot-frame-090-ivory.png",
+      "saved_file": "video-inputs/telegram-robot-frame-090-ivory.png",
+      "source_sha256": "1545952a5009d874368915918591e5eae1a7283989bbaba48580ce2b65ef8d0c",
+      "source_bytes": 57556,
+      "saved_sha256": "1545952a5009d874368915918591e5eae1a7283989bbaba48580ce2b65ef8d0c",
+      "saved_bytes": 57556,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "video-inputs/telegram-style-pair-ivory.png",
+      "saved_file": "video-inputs/telegram-style-pair-ivory.png",
+      "source_sha256": "ac578dcda96eacc267061bee7aa1e7524fccb86a43261ca4c55a0caaf0fc8d44",
+      "source_bytes": 111522,
+      "saved_sha256": "ac578dcda96eacc267061bee7aa1e7524fccb86a43261ca4c55a0caaf0fc8d44",
+      "saved_bytes": 111522,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "videos/01-finger-heart-motion.mp4",
+      "saved_file": "videos/01-finger-heart-motion.mp4",
+      "source_sha256": "c8318d74633e794944f482c17b8068a90835cb43dba51742c32e7a8607c3d944",
+      "source_bytes": 2326492,
+      "saved_sha256": "c8318d74633e794944f482c17b8068a90835cb43dba51742c32e7a8607c3d944",
+      "saved_bytes": 2326492,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "videos/02-wave-motion-v2.mp4",
+      "saved_file": "videos/02-wave-motion-v2.mp4",
+      "source_sha256": "46c9dd632028d714d9d34cc0bafb8bda2f6e2b7b6569c07cada63a8aaf9cb14a",
+      "source_bytes": 2920878,
+      "saved_sha256": "46c9dd632028d714d9d34cc0bafb8bda2f6e2b7b6569c07cada63a8aaf9cb14a",
+      "saved_bytes": 2920878,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "videos/02-wave-motion.mp4",
+      "saved_file": "videos/02-wave-motion.mp4",
+      "source_sha256": "0ab299bbf9e4fdf1339147ecdaf83cfb65d6e0a8495d5022c414ff5fa272d0e3",
+      "source_bytes": 3045461,
+      "saved_sha256": "0ab299bbf9e4fdf1339147ecdaf83cfb65d6e0a8495d5022c414ff5fa272d0e3",
+      "saved_bytes": 3045461,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "videos/03-crossed-fingers-motion.mp4",
+      "saved_file": "videos/03-crossed-fingers-motion.mp4",
+      "source_sha256": "0deffe7366f687de665e11c9d39ec849dd663d50c1f0145a3e96c400463a3cd6",
+      "source_bytes": 2275310,
+      "saved_sha256": "0deffe7366f687de665e11c9d39ec849dd663d50c1f0145a3e96c400463a3cd6",
+      "saved_bytes": 2275310,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "videos/04-thumbs-up-motion-v2.mp4",
+      "saved_file": "videos/04-thumbs-up-motion-v2.mp4",
+      "source_sha256": "074e280ab01dadbed69ad85c6d3b0d8c8978d8b3d4fa4f5246252f7361807990",
+      "source_bytes": 3767481,
+      "saved_sha256": "074e280ab01dadbed69ad85c6d3b0d8c8978d8b3d4fa4f5246252f7361807990",
+      "saved_bytes": 3767481,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "videos/04-thumbs-up-motion.mp4",
+      "saved_file": "videos/04-thumbs-up-motion.mp4",
+      "source_sha256": "670a077bd13800dfb2d55f293facc804d7e46ae5589a56b813509bc7dc04a5d0",
+      "source_bytes": 2758474,
+      "saved_sha256": "670a077bd13800dfb2d55f293facc804d7e46ae5589a56b813509bc7dc04a5d0",
+      "saved_bytes": 2758474,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "videos/05-holding-heart-motion.mp4",
+      "saved_file": "videos/05-holding-heart-motion.mp4",
+      "source_sha256": "4754222a6f9b3913f151d1e6049b28adb712c16864bc24136601ed87f8004752",
+      "source_bytes": 2572026,
+      "saved_sha256": "4754222a6f9b3913f151d1e6049b28adb712c16864bc24136601ed87f8004752",
+      "saved_bytes": 2572026,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "videos/06-beckoning-motion.mp4",
+      "saved_file": "videos/06-beckoning-motion.mp4",
+      "source_sha256": "ca51c2b8b348e9d862b9c21f6e4635fcbf244df5f38aa115fae3663768ce1ce1",
+      "source_bytes": 2521352,
+      "saved_sha256": "ca51c2b8b348e9d862b9c21f6e4635fcbf244df5f38aa115fae3663768ce1ce1",
+      "saved_bytes": 2521352,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "videos/07-finger-dance-motion.mp4",
+      "saved_file": "videos/07-finger-dance-motion.mp4",
+      "source_sha256": "130c444a7a5122ced9a99dad1e163cb4d3b34cebaded2fe38800887341c275b3",
+      "source_bytes": 3087330,
+      "saved_sha256": "130c444a7a5122ced9a99dad1e163cb4d3b34cebaded2fe38800887341c275b3",
+      "saved_bytes": 3087330,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "videos/08-turnaround-back-motion-v2.mp4",
+      "saved_file": "videos/08-turnaround-back-motion-v2.mp4",
+      "source_sha256": "255a67cb8fef797126f9c348605ea97296d0cd902a46ebc3c4a2d32c8fcc4c1e",
+      "source_bytes": 2443474,
+      "saved_sha256": "255a67cb8fef797126f9c348605ea97296d0cd902a46ebc3c4a2d32c8fcc4c1e",
+      "saved_bytes": 2443474,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "videos/08-turnaround-back-motion.mp4",
+      "saved_file": "videos/08-turnaround-back-motion.mp4",
+      "source_sha256": "8cac7044c096f6843fc7b02189c968016ece206e6c92fcad82d32075e36b5c9e",
+      "source_bytes": 2564156,
+      "saved_sha256": "8cac7044c096f6843fc7b02189c968016ece206e6c92fcad82d32075e36b5c9e",
+      "saved_bytes": 2564156,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "videos/09-back-stop-motion-v2.mp4",
+      "saved_file": "videos/09-back-stop-motion-v2.mp4",
+      "source_sha256": "c8c6432f79d58723b5023e2e433e0506e0ecf8b2274936e0b57094af867bcab6",
+      "source_bytes": 2604179,
+      "saved_sha256": "c8c6432f79d58723b5023e2e433e0506e0ecf8b2274936e0b57094af867bcab6",
+      "saved_bytes": 2604179,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "videos/09-back-stop-motion.mp4",
+      "saved_file": "videos/09-back-stop-motion.mp4",
+      "source_sha256": "93ad2fbfdd410e56ef655ef824542037c21647265ffe0e9b18ab79e6700ed331",
+      "source_bytes": 2501599,
+      "saved_sha256": "93ad2fbfdd410e56ef655ef824542037c21647265ffe0e9b18ab79e6700ed331",
+      "saved_bytes": 2501599,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "videos/10-back-middle-finger-motion-v2.mp4",
+      "saved_file": "videos/10-back-middle-finger-motion-v2.mp4",
+      "source_sha256": "62cc22bba2de882982de7737f62fa722c0724dec16024811d84081ccda2f2eff",
+      "source_bytes": 2226069,
+      "saved_sha256": "62cc22bba2de882982de7737f62fa722c0724dec16024811d84081ccda2f2eff",
+      "saved_bytes": 2226069,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "videos/10-back-middle-finger-motion-v3.mp4",
+      "saved_file": "videos/10-back-middle-finger-motion-v3.mp4",
+      "source_sha256": "7a235580c76492fae87afa598a751144bbfa3ddc270887a979befbef7e1b7815",
+      "source_bytes": 2493397,
+      "saved_sha256": "7a235580c76492fae87afa598a751144bbfa3ddc270887a979befbef7e1b7815",
+      "saved_bytes": 2493397,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "videos/10-back-middle-finger-motion-v4.mp4",
+      "saved_file": "videos/10-back-middle-finger-motion-v4.mp4",
+      "source_sha256": "18e5261b7c55dfcc510b44b6a086e9b7d8e898ba75bc260cd223967c62117dc7",
+      "source_bytes": 2438647,
+      "saved_sha256": "18e5261b7c55dfcc510b44b6a086e9b7d8e898ba75bc260cd223967c62117dc7",
+      "saved_bytes": 2438647,
+      "adapted": false
+    },
+    {
+      "source_group": "completed-pack",
+      "source_file": "videos/10-back-middle-finger-motion.mp4",
+      "saved_file": "videos/10-back-middle-finger-motion.mp4",
+      "source_sha256": "3317ee91c1f7e66d567d46c2e3a7c6cad039cf27649f45cdcf620c210897cf00",
+      "source_bytes": 2409268,
+      "saved_sha256": "3317ee91c1f7e66d567d46c2e3a7c6cad039cf27649f45cdcf620c210897cf00",
+      "saved_bytes": 2409268,
+      "adapted": false
+    },
+    {
+      "source_group": "initial-exploration",
+      "source_file": "README.md",
+      "saved_file": "initial-exploration/README.md",
+      "source_sha256": "1b9d88b5958f64260189849a5f34b8364309c8bc5fb86067bfebe1b59bc260df",
+      "source_bytes": 4340,
+      "saved_sha256": "1b9d88b5958f64260189849a5f34b8364309c8bc5fb86067bfebe1b59bc260df",
+      "saved_bytes": 4340,
+      "adapted": false
+    },
+    {
+      "source_group": "initial-exploration",
+      "source_file": "concepts.png",
+      "saved_file": "initial-exploration/concepts.png",
+      "source_sha256": "a652e5f81085e090e3e3a4490a806b6e0ec5334e83046bb4f3fa8f022d0fee7b",
+      "source_bytes": 1072337,
+      "saved_sha256": "a652e5f81085e090e3e3a4490a806b6e0ec5334e83046bb4f3fa8f022d0fee7b",
+      "saved_bytes": 1072337,
+      "adapted": false
+    },
+    {
+      "source_group": "initial-exploration",
+      "source_file": "fal-request.json",
+      "saved_file": "initial-exploration/fal-request.json",
+      "source_sha256": "eb7a1a4bf8379b8478c8e20b379b4a27dc329ee3e325aedad2079e0e55184f2d",
+      "source_bytes": 1034,
+      "saved_sha256": "eb7a1a4bf8379b8478c8e20b379b4a27dc329ee3e325aedad2079e0e55184f2d",
+      "saved_bytes": 1034,
+      "adapted": false
+    },
+    {
+      "source_group": "initial-exploration",
+      "source_file": "gestures.png",
+      "saved_file": "initial-exploration/gestures.png",
+      "source_sha256": "36cd09f8152e1fb6768e5041b023225eb1389066a7d4efc1869012ef9e754562",
+      "source_bytes": 1298467,
+      "saved_sha256": "36cd09f8152e1fb6768e5041b023225eb1389066a7d4efc1869012ef9e754562",
+      "saved_bytes": 1298467,
+      "adapted": false
+    },
+    {
+      "source_group": "initial-exploration",
+      "source_file": "prompt-research-x.md",
+      "saved_file": "initial-exploration/prompt-research-x.md",
+      "source_sha256": "8163c128388d0c2e941d5b7cd9c912633325e3aaf83721a05dbbf7c6bd27fc9f",
+      "source_bytes": 2636,
+      "saved_sha256": "8163c128388d0c2e941d5b7cd9c912633325e3aaf83721a05dbbf7c6bd27fc9f",
+      "saved_bytes": 2636,
+      "adapted": false
+    },
+    {
+      "source_group": "initial-exploration",
+      "source_file": "selected-c/cheeky-pose.png",
+      "saved_file": "initial-exploration/selected-c/cheeky-pose.png",
+      "source_sha256": "336c7db77ed34795a94f92294ea07f1d584fedf0a0075644f3313432e4b3d56b",
+      "source_bytes": 150629,
+      "saved_sha256": "336c7db77ed34795a94f92294ea07f1d584fedf0a0075644f3313432e4b3d56b",
+      "saved_bytes": 150629,
+      "adapted": false
+    },
+    {
+      "source_group": "initial-exploration",
+      "source_file": "selected-c/dance-pose.png",
+      "saved_file": "initial-exploration/selected-c/dance-pose.png",
+      "source_sha256": "07cd7546f66846b719fc3874c165d6cd992fd7e5be56a8d0e22dbd96236d57ea",
+      "source_bytes": 170154,
+      "saved_sha256": "07cd7546f66846b719fc3874c165d6cd992fd7e5be56a8d0e22dbd96236d57ea",
+      "saved_bytes": 170154,
+      "adapted": false
+    },
+    {
+      "source_group": "initial-exploration",
+      "source_file": "selected-c/finger-heart-512.png",
+      "saved_file": "initial-exploration/selected-c/finger-heart-512.png",
+      "source_sha256": "41cc554fe8f88908302a3d65c5265c663b20ecb00f849ed077ccd5e4eecf8a4a",
+      "source_bytes": 111481,
+      "saved_sha256": "41cc554fe8f88908302a3d65c5265c663b20ecb00f849ed077ccd5e4eecf8a4a",
+      "saved_bytes": 111481,
+      "adapted": false
+    },
+    {
+      "source_group": "initial-exploration",
+      "source_file": "selected-c/finger-heart.png",
+      "saved_file": "initial-exploration/selected-c/finger-heart.png",
+      "source_sha256": "cb54c657e9c1dd6876beb323bd6ffd1b9e7ea371c827b2b656ea4dad9a97a106",
+      "source_bytes": 580586,
+      "saved_sha256": "cb54c657e9c1dd6876beb323bd6ffd1b9e7ea371c827b2b656ea4dad9a97a106",
+      "saved_bytes": 580586,
+      "adapted": false
+    },
+    {
+      "source_group": "initial-exploration",
+      "source_file": "selected-c/gesture-sheet.png",
+      "saved_file": "initial-exploration/selected-c/gesture-sheet.png",
+      "source_sha256": "039e25ae03311bc1ebac63422432f502a1d98090dab14f947eb07a8595bc6872",
+      "source_bytes": 1401990,
+      "saved_sha256": "039e25ae03311bc1ebac63422432f502a1d98090dab14f947eb07a8595bc6872",
+      "saved_bytes": 1401990,
+      "adapted": false
+    },
+    {
+      "source_group": "initial-exploration",
+      "source_file": "selected-c/heart-pose.png",
+      "saved_file": "initial-exploration/selected-c/heart-pose.png",
+      "source_sha256": "98ed3b86403b5e0a29886f265b3ecee7ae73c23ecfff74c84c23782b9cdad754",
+      "source_bytes": 191035,
+      "saved_sha256": "98ed3b86403b5e0a29886f265b3ecee7ae73c23ecfff74c84c23782b9cdad754",
+      "saved_bytes": 191035,
+      "adapted": false
+    },
+    {
+      "source_group": "initial-exploration",
+      "source_file": "selected-c/hello-pose.png",
+      "saved_file": "initial-exploration/selected-c/hello-pose.png",
+      "source_sha256": "9fcd062e8cb53a94a0f471e18778ae810e41065dc570673d4cd7159efdd2bc7b",
+      "source_bytes": 173569,
+      "saved_sha256": "9fcd062e8cb53a94a0f471e18778ae810e41065dc570673d4cd7159efdd2bc7b",
+      "saved_bytes": 173569,
+      "adapted": false
+    },
+    {
+      "source_group": "initial-exploration",
+      "source_file": "selected-c/hold-pose.png",
+      "saved_file": "initial-exploration/selected-c/hold-pose.png",
+      "source_sha256": "6ff3c602e1276e959dcf8754da808bcba14b1f34fe071dcd5bdca3792ea2263d",
+      "source_bytes": 185223,
+      "saved_sha256": "6ff3c602e1276e959dcf8754da808bcba14b1f34fe071dcd5bdca3792ea2263d",
+      "saved_bytes": 185223,
+      "adapted": false
+    },
+    {
+      "source_group": "initial-exploration",
+      "source_file": "selected-c/luck-pose.png",
+      "saved_file": "initial-exploration/selected-c/luck-pose.png",
+      "source_sha256": "a8806714abfc10f355b01491417c50b67652d6a5affde507ed8a2b9a2fed6b72",
+      "source_bytes": 180495,
+      "saved_sha256": "a8806714abfc10f355b01491417c50b67652d6a5affde507ed8a2b9a2fed6b72",
+      "saved_bytes": 180495,
+      "adapted": false
+    },
+    {
+      "source_group": "original-telegram-references",
+      "source_file": "open-hands-frame-000.png",
+      "saved_file": "original-telegram-references/open-hands-frame-000.png",
+      "source_sha256": "13ed54c4ff27939ba77865b3ab94da7ae53ecf13bbf87c842fb60045817138a6",
+      "source_bytes": 50762,
+      "saved_sha256": "13ed54c4ff27939ba77865b3ab94da7ae53ecf13bbf87c842fb60045817138a6",
+      "saved_bytes": 50762,
+      "adapted": false
+    },
+    {
+      "source_group": "original-telegram-references",
+      "source_file": "open-hands-frame-045.png",
+      "saved_file": "original-telegram-references/open-hands-frame-045.png",
+      "source_sha256": "7a8732c0fd85d1b34c6a38bda705c63af140dc1068a7ec1f8a89403c428c4304",
+      "source_bytes": 18682,
+      "saved_sha256": "7a8732c0fd85d1b34c6a38bda705c63af140dc1068a7ec1f8a89403c428c4304",
+      "saved_bytes": 18682,
+      "adapted": false
+    },
+    {
+      "source_group": "original-telegram-references",
+      "source_file": "open-hands-frame-090.png",
+      "saved_file": "original-telegram-references/open-hands-frame-090.png",
+      "source_sha256": "3e4bda5dce20fdabf6888ad7218e459b6474fc1849212436d49a89826d7e95c6",
+      "source_bytes": 47515,
+      "saved_sha256": "3e4bda5dce20fdabf6888ad7218e459b6474fc1849212436d49a89826d7e95c6",
+      "saved_bytes": 47515,
+      "adapted": false
+    },
+    {
+      "source_group": "original-telegram-references",
+      "source_file": "open-hands-frame-135.png",
+      "saved_file": "original-telegram-references/open-hands-frame-135.png",
+      "source_sha256": "8f2142691590a890b0f7b3c99e72f4c9dc6fd3348733ce75becd2aea9d7f38a4",
+      "source_bytes": 48744,
+      "saved_sha256": "8f2142691590a890b0f7b3c99e72f4c9dc6fd3348733ce75becd2aea9d7f38a4",
+      "saved_bytes": 48744,
+      "adapted": false
+    },
+    {
+      "source_group": "original-telegram-references",
+      "source_file": "open-hands-frames.jpg",
+      "saved_file": "original-telegram-references/open-hands-frames.jpg",
+      "source_sha256": "b17267a1d22ab4bee5276893622f166a61ca0f7f1b67c1e3fed659dc01d230eb",
+      "source_bytes": 64716,
+      "saved_sha256": "b17267a1d22ab4bee5276893622f166a61ca0f7f1b67c1e3fed659dc01d230eb",
+      "saved_bytes": 64716,
+      "adapted": false
+    },
+    {
+      "source_group": "original-telegram-references",
+      "source_file": "open-hands-motion.gif",
+      "saved_file": "original-telegram-references/open-hands-motion.gif",
+      "source_sha256": "3793ae74b49a85cac71fe7beece311d2839aef0ab8d02f674540163c098e32db",
+      "source_bytes": 880518,
+      "saved_sha256": "3793ae74b49a85cac71fe7beece311d2839aef0ab8d02f674540163c098e32db",
+      "saved_bytes": 880518,
+      "adapted": false
+    },
+    {
+      "source_group": "original-telegram-references",
+      "source_file": "robot-frame-000.png",
+      "saved_file": "original-telegram-references/robot-frame-000.png",
+      "source_sha256": "d51de6fc6613fa187394df722072714487c4b1f9a5be5c8f8b9665b47d739ee8",
+      "source_bytes": 42764,
+      "saved_sha256": "d51de6fc6613fa187394df722072714487c4b1f9a5be5c8f8b9665b47d739ee8",
+      "saved_bytes": 42764,
+      "adapted": false
+    },
+    {
+      "source_group": "original-telegram-references",
+      "source_file": "robot-frame-045.png",
+      "saved_file": "original-telegram-references/robot-frame-045.png",
+      "source_sha256": "a18ce14c9ea6d54957d9a4e8da1d247c1f719345273b927a91e943cd4ecd0bc0",
+      "source_bytes": 58932,
+      "saved_sha256": "a18ce14c9ea6d54957d9a4e8da1d247c1f719345273b927a91e943cd4ecd0bc0",
+      "saved_bytes": 58932,
+      "adapted": false
+    },
+    {
+      "source_group": "original-telegram-references",
+      "source_file": "robot-frame-090.png",
+      "saved_file": "original-telegram-references/robot-frame-090.png",
+      "source_sha256": "1545952a5009d874368915918591e5eae1a7283989bbaba48580ce2b65ef8d0c",
+      "source_bytes": 57556,
+      "saved_sha256": "1545952a5009d874368915918591e5eae1a7283989bbaba48580ce2b65ef8d0c",
+      "saved_bytes": 57556,
+      "adapted": false
+    },
+    {
+      "source_group": "original-telegram-references",
+      "source_file": "robot-frame-135.png",
+      "saved_file": "original-telegram-references/robot-frame-135.png",
+      "source_sha256": "9e1c92c0ea05d19a34d6deec1f995a2a378d5d0c597f5189e6bbdefcd19e9478",
+      "source_bytes": 53855,
+      "saved_sha256": "9e1c92c0ea05d19a34d6deec1f995a2a378d5d0c597f5189e6bbdefcd19e9478",
+      "saved_bytes": 53855,
+      "adapted": false
+    },
+    {
+      "source_group": "original-telegram-references",
+      "source_file": "robot-frames.jpg",
+      "saved_file": "original-telegram-references/robot-frames.jpg",
+      "source_sha256": "25504edca257ec2eb30fb1464488e93081e09e19919f8032996269cd3954d357",
+      "source_bytes": 89944,
+      "saved_sha256": "25504edca257ec2eb30fb1464488e93081e09e19919f8032996269cd3954d357",
+      "saved_bytes": 89944,
+      "adapted": false
+    },
+    {
+      "source_group": "original-telegram-references",
+      "source_file": "robot-motion.gif",
+      "saved_file": "original-telegram-references/robot-motion.gif",
+      "source_sha256": "7c59c1b59351307ba134d90d6a6dc26516ffc94b19dfad63e3e3ac929ce0597e",
+      "source_bytes": 981976,
+      "saved_sha256": "7c59c1b59351307ba134d90d6a6dc26516ffc94b19dfad63e3e3ac929ce0597e",
+      "saved_bytes": 981976,
+      "adapted": false
+    },
+    {
+      "source_group": "original-telegram-references",
+      "source_file": "snail-frame-000.png",
+      "saved_file": "original-telegram-references/snail-frame-000.png",
+      "source_sha256": "1525ef31351bce6275b9b4e62fb80e302fb7f7798e72795570a888d4f776931a",
+      "source_bytes": 123190,
+      "saved_sha256": "1525ef31351bce6275b9b4e62fb80e302fb7f7798e72795570a888d4f776931a",
+      "saved_bytes": 123190,
+      "adapted": false
+    },
+    {
+      "source_group": "original-telegram-references",
+      "source_file": "snail-frame-045.png",
+      "saved_file": "original-telegram-references/snail-frame-045.png",
+      "source_sha256": "c0ce3c9119aeea2789a06de115490e90169867e29977921fdda73eee54bbb9aa",
+      "source_bytes": 120886,
+      "saved_sha256": "c0ce3c9119aeea2789a06de115490e90169867e29977921fdda73eee54bbb9aa",
+      "saved_bytes": 120886,
+      "adapted": false
+    },
+    {
+      "source_group": "original-telegram-references",
+      "source_file": "snail-frame-090.png",
+      "saved_file": "original-telegram-references/snail-frame-090.png",
+      "source_sha256": "6f6620f6ddaacda39fd191bf9f938211f6e1218aaafe389164d16ec0ed793afb",
+      "source_bytes": 119399,
+      "saved_sha256": "6f6620f6ddaacda39fd191bf9f938211f6e1218aaafe389164d16ec0ed793afb",
+      "saved_bytes": 119399,
+      "adapted": false
+    },
+    {
+      "source_group": "original-telegram-references",
+      "source_file": "snail-frame-135.png",
+      "saved_file": "original-telegram-references/snail-frame-135.png",
+      "source_sha256": "12d571548e4097cb8935f7999a76350cce55301b14e26ae257c94c9229e2076d",
+      "source_bytes": 121292,
+      "saved_sha256": "12d571548e4097cb8935f7999a76350cce55301b14e26ae257c94c9229e2076d",
+      "saved_bytes": 121292,
+      "adapted": false
+    },
+    {
+      "source_group": "original-telegram-references",
+      "source_file": "snail-frames.jpg",
+      "saved_file": "original-telegram-references/snail-frames.jpg",
+      "source_sha256": "513a274fb92232258f7396b7dc63b8b7fb559970ac277c2ca2e2dd98f64ee591",
+      "source_bytes": 91793,
+      "saved_sha256": "513a274fb92232258f7396b7dc63b8b7fb559970ac277c2ca2e2dd98f64ee591",
+      "saved_bytes": 91793,
+      "adapted": false
+    },
+    {
+      "source_group": "original-telegram-references",
+      "source_file": "source-reference-board.jpg",
+      "saved_file": "original-telegram-references/source-reference-board.jpg",
+      "source_sha256": "391f9b9db8c8192de7feb13c3677880354b8026841e6b9a7ac8c119813a6ad81",
+      "source_bytes": 76858,
+      "saved_sha256": "391f9b9db8c8192de7feb13c3677880354b8026841e6b9a7ac8c119813a6ad81",
+      "saved_bytes": 76858,
+      "adapted": false
+    },
+    {
+      "source_group": "original-telegram-references",
+      "source_file": "sparkles-frame-000.png",
+      "saved_file": "original-telegram-references/sparkles-frame-000.png",
+      "source_sha256": "55767a4c60da1d438a0aeb220213f44704be50daadc07354505742df41d973ce",
+      "source_bytes": 22432,
+      "saved_sha256": "55767a4c60da1d438a0aeb220213f44704be50daadc07354505742df41d973ce",
+      "saved_bytes": 22432,
+      "adapted": false
+    },
+    {
+      "source_group": "original-telegram-references",
+      "source_file": "sparkles-frame-045.png",
+      "saved_file": "original-telegram-references/sparkles-frame-045.png",
+      "source_sha256": "51e37579fa25c1662ea26e0890b2cf54ee72a9e7067b0eceef581f2232ec5b02",
+      "source_bytes": 15556,
+      "saved_sha256": "51e37579fa25c1662ea26e0890b2cf54ee72a9e7067b0eceef581f2232ec5b02",
+      "saved_bytes": 15556,
+      "adapted": false
+    },
+    {
+      "source_group": "original-telegram-references",
+      "source_file": "sparkles-frame-090.png",
+      "saved_file": "original-telegram-references/sparkles-frame-090.png",
+      "source_sha256": "cc163fa450ccfc9bf4d19ae61c030537a56b9a5875238c42d66d83498894a6d0",
+      "source_bytes": 15632,
+      "saved_sha256": "cc163fa450ccfc9bf4d19ae61c030537a56b9a5875238c42d66d83498894a6d0",
+      "saved_bytes": 15632,
+      "adapted": false
+    },
+    {
+      "source_group": "original-telegram-references",
+      "source_file": "sparkles-frame-135.png",
+      "saved_file": "original-telegram-references/sparkles-frame-135.png",
+      "source_sha256": "48863208985ef04d8bd9d78297003c0aed993eaf69df66b9b8ff9dd9216dab78",
+      "source_bytes": 18863,
+      "saved_sha256": "48863208985ef04d8bd9d78297003c0aed993eaf69df66b9b8ff9dd9216dab78",
+      "saved_bytes": 18863,
+      "adapted": false
+    },
+    {
+      "source_group": "original-telegram-references",
+      "source_file": "sparkles-frames.jpg",
+      "saved_file": "original-telegram-references/sparkles-frames.jpg",
+      "source_sha256": "87226800440d490b4196233f0867014658e4cd4a06a7fd3283b040e4c7f1d172",
+      "source_bytes": 43498,
+      "saved_sha256": "87226800440d490b4196233f0867014658e4cd4a06a7fd3283b040e4c7f1d172",
+      "saved_bytes": 43498,
+      "adapted": false
+    },
+    {
+      "source_group": "historical-exploration-tools",
+      "source_file": "render_reference.py",
+      "saved_file": "initial-exploration/tools/render_reference.py",
+      "source_sha256": "373d5d2d1ebd1d4a7e9e73919ca17724741187f03af750c04dcff0085460cd4c",
+      "source_bytes": 3177,
+      "saved_sha256": "373d5d2d1ebd1d4a7e9e73919ca17724741187f03af750c04dcff0085460cd4c",
+      "saved_bytes": 3177,
+      "adapted": false
+    },
+    {
+      "source_group": "historical-exploration-tools",
+      "source_file": "make_reference_board.py",
+      "saved_file": "initial-exploration/tools/make_reference_board.py",
+      "source_sha256": "0ed3609a1024e80c96fbf94204cf19f013f3b67ebab595b5ac9fedaf5bd6077b",
+      "source_bytes": 1171,
+      "saved_sha256": "0ed3609a1024e80c96fbf94204cf19f013f3b67ebab595b5ac9fedaf5bd6077b",
+      "saved_bytes": 1171,
+      "adapted": false
+    },
+    {
+      "source_group": "historical-exploration-tools",
+      "source_file": "export_selected.py",
+      "saved_file": "initial-exploration/tools/export_selected.py",
+      "source_sha256": "e31e8945fb9c35f962996976bf74358f5d8f0050353c729bacaf799c3264d055",
+      "source_bytes": 1255,
+      "saved_sha256": "e31e8945fb9c35f962996976bf74358f5d8f0050353c729bacaf799c3264d055",
+      "saved_bytes": 1255,
+      "adapted": false
+    }
+  ],
+  "omitted": [
+    ".DS_Store",
+    "__pycache__/build_prompts.cpython-314.pyc",
+    "__pycache__/fal_pipeline.cpython-314.pyc",
+    "__pycache__/import_poses.cpython-314.pyc",
+    "__pycache__/package_stills.cpython-314.pyc",
+    "__pycache__/preview.cpython-314.pyc",
+    "__pycache__/redo_v2.cpython-314.pyc"
+  ],
+  "note": "Source artwork copied byte-for-byte. Only seven script files adapted for portability. Historical source paths in provenance retained as historical evidence."
+}

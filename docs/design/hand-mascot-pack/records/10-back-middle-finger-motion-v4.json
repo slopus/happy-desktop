@@ -1,0 +1,56 @@
+{
+  "name": "10-back-middle-finger-motion-v4",
+  "model": "fal-ai/kling-video/o3/pro/reference-to-video",
+  "input": {
+    "prompt": "@Image1 is the permanent mascot identity: smiling face on the PALM, frowning face on the BACK. Locked stationary camera, one continuous 3-second shot of the exact butter-yellow 3D hand from the start frame, same material, proportions and small chocolate-brown face. Exactly FIVE digits in EVERY frame (thumb, index, middle, ring, pinky); no digit ever swells, melts, splits, merges or disappears. The face stays painted on the same spot of the hand and never changes expression type. MOVEMENT: The BACK of the hand faces the camera the whole clip. The closed fist stays ONE smooth rounded mitten-like mass with NO lines, creases, folds or separate curled-finger shapes in ANY frame; the thumb is one smooth lobe on the left. The middle finger stays fully extended, straight UP, the SAME length in every frame; it never bends, tilts toward the camera or shortens. Motion: two small sassy up-down bounces of the whole hand with a slight side tilt, then settle back to the start pose. The frowning face keeps its eyes open and blinks once. Avoid: extra fingers, missing fingers, swelling, melting, morphing, open mouth, tongue, blank face, missing mouth, second rotation, camera movement, zoom, new props, text.",
+    "duration": "3",
+    "generate_audio": false,
+    "aspect_ratio": "1:1",
+    "start_image_url": "Local native-generated image; see local_sources",
+    "end_image_url": "Local native-generated image; see local_sources",
+    "image_urls": {
+      "start": "images/10-back-middle-finger-v3.png",
+      "end": "images/10-back-middle-finger-v3.png",
+      "identity_style_refs": [
+        "images/native-turnaround.png"
+      ]
+    },
+    "local_sources": {
+      "start": "images/10-back-middle-finger-v3.png",
+      "end": "images/10-back-middle-finger-v3.png",
+      "identity_style_refs": [
+        "images/native-turnaround.png"
+      ]
+    }
+  },
+  "queue": {
+    "status": "IN_QUEUE",
+    "request_id": "01a0fc0d-5e5f-7222-83de-bc7ce770f2bc",
+    "response_url": "https://queue.fal.run/fal-ai/kling-video/requests/01a0fc0d-5e5f-7222-83de-bc7ce770f2bc",
+    "status_url": "https://queue.fal.run/fal-ai/kling-video/requests/01a0fc0d-5e5f-7222-83de-bc7ce770f2bc/status",
+    "cancel_url": "https://queue.fal.run/fal-ai/kling-video/requests/01a0fc0d-5e5f-7222-83de-bc7ce770f2bc/cancel",
+    "logs": null,
+    "metrics": {},
+    "queue_position": 0
+  },
+  "status": {
+    "status": "COMPLETED",
+    "request_id": "01a0fc0d-5e5f-7222-83de-bc7ce770f2bc",
+    "response_url": "https://queue.fal.run/fal-ai/kling-video/requests/01a0fc0d-5e5f-7222-83de-bc7ce770f2bc",
+    "status_url": "https://queue.fal.run/fal-ai/kling-video/requests/01a0fc0d-5e5f-7222-83de-bc7ce770f2bc/status",
+    "cancel_url": "https://queue.fal.run/fal-ai/kling-video/requests/01a0fc0d-5e5f-7222-83de-bc7ce770f2bc/cancel",
+    "logs": null,
+    "metrics": {
+      "inference_time": 356.12400007247925
+    }
+  },
+  "result": {
+    "video": {
+      "url": "https://v3b.fal.media/files/b/0aacc02c/OAd0q09tRSBfAPx5dFuQF_output.mp4",
+      "content_type": "video/mp4",
+      "file_name": "output.mp4",
+      "file_size": 2438647
+    }
+  },
+  "local_output": "/Users/kirilldubovitskiy/Happy/Workspaces/happy-desktop/hand-mascot-pack/.context/hand-mascot-pack/videos/10-back-middle-finger-motion-v4.mp4"
+}

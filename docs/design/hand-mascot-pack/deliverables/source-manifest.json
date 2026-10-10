@@ -1,0 +1,46 @@
+{
+  "identity_reference": {
+    "file": "/Users/kirilldubovitskiy/Happy/Workspaces/happy-desktop/hand-mascot-pack/.context/hand-mascot-pack/references/selected-finger-heart.png",
+    "sha256": "cb54c657e9c1dd6876beb323bd6ffd1b9e7ea371c827b2b656ea4dad9a97a106",
+    "role": "AUTHORITATIVE selected C mascot identity and material"
+  },
+  "telegram_references": [
+    {
+      "asset": "open-hands",
+      "role": "STYLE AND MOTION ONLY; five-digit silhouette and 3sec motion rhythm",
+      "original_source": "/Users/kirilldubovitskiy/Happy/Workspaces/happy-desktop/hand-mascot-pack/packages/happy-desktop-ui/src/assets/animations/open-hands.json",
+      "original_sha256": "7b5b9d98156057d2fb4cb895f0a462e943942be190dd0a302935e2ef306420b4",
+      "frame_rate": 60,
+      "in_frame": 0,
+      "out_frame": 179,
+      "duration_seconds": 2.9833333333333334,
+      "dimensions": [
+        512,
+        512
+      ],
+      "reference_frame": 0,
+      "local_upload_file": "/Users/kirilldubovitskiy/Happy/Workspaces/happy-desktop/hand-mascot-pack/.context/hand-mascot-pack/references/telegram-open-hands-frame-000.png",
+      "frame_sha256": "13ed54c4ff27939ba77865b3ab94da7ae53ecf13bbf87c842fb60045817138a6"
+    },
+    {
+      "asset": "robot",
+      "role": "STYLE ONLY; gloss and restrained expression, no robot anatomy",
+      "original_source": "/Users/kirilldubovitskiy/Happy/Workspaces/happy-desktop/hand-mascot-pack/packages/happy-desktop-ui/src/assets/animations/robot.json",
+      "original_sha256": "cf9305d6603c9102817b47237f29c53b7101e3128edac370204544ae2109fbf1",
+      "frame_rate": 60,
+      "in_frame": 0,
+      "out_frame": 180,
+      "duration_seconds": 3.0,
+      "dimensions": [
+        512,
+        512
+      ],
+      "reference_frame": 90,
+      "local_upload_file": "/Users/kirilldubovitskiy/Happy/Workspaces/happy-desktop/hand-mascot-pack/.context/hand-mascot-pack/references/telegram-robot-frame-090.png",
+      "frame_sha256": "1545952a5009d874368915918591e5eae1a7283989bbaba48580ce2b65ef8d0c"
+    }
+  ],
+  "additional_generated_reference": "images/00-turnaround.png (fal-generated after approval; reused in 10 gesture calls)",
+  "credential_source": "Authorized exact local .env.mascot.local; credentials never uploaded as artwork or recorded",
+  "upload_scope": "Only the three approved artwork images and the generated turnaround, never repository source JSON or other files"
+}

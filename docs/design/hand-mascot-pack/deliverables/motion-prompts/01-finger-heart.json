@@ -1,0 +1,15 @@
+{
+  "status": "NOT GENERATED \u2014 upload blocked by tenant policy",
+  "intended_model": "fal-ai/kling-video/o3/pro/reference-to-video",
+  "duration_seconds": 3,
+  "generate_audio": false,
+  "aspect_ratio": "1:1",
+  "prompt": "@Image1 is the authoritative two-sided hand identity. @Image2 and @Image3 are actual Telegram reference frames for style only; do not inherit robot anatomy, nose, teeth, colors or large eyes. Locked stationary orthographic camera; single short continuous shot of the exact butter-yellow 3D hand in the supplied image. Match material, proportions and small chocolate-brown face. Exactly five anatomical digits throughout every frame: thumb, index, middle, ring, pinky. The face is physically attached low on the surface of the hand, does not float or migrate. Palm has a fixed happy smile and back has a fixed frown. Never change a smile into a frown on the same physical surface. Soft toy-like Telegram animated emoji timing: the supplied open-hands asset is 60fps frames 0-178, about 2.98sec, open at frame0, edge-on near frame45, open/spread at frame90, settle at frame135. Use clear anticipation, quick elastic finger articulation near 0.75s and 1.5s, gentle settling near 2.25s, steady final pose by 3s. Animate actual finger joints and hand volume, not a still image sliding or rotating flat in the picture plane. Calm ivory studio background, no text, camera changes, audio or new props. MOVEMENT: Thumb and index gently uncross a little, cross again into the Korean finger-heart gesture with a soft squeeze, then relax and squeeze once more. The other three fingers stay folded but flex subtly. The existing little coral heart gives one soft pulse; no extra hearts. Avoid: extra fingers, missing fingers, fused fingers, six digits, face morphing, face sliding, smiling dorsal face, frowny palm, camera motion, zoom, multiple hands, scene cuts, text, flat still image.",
+  "start_still": "01-finger-heart.png",
+  "end_still": "01-finger-heart.png",
+  "identity_reference": "front-back-turnaround.png",
+  "style_reference_files": [
+    "references/telegram-open-hands-frame-000.png",
+    "references/telegram-robot-frame-090.png"
+  ]
+}

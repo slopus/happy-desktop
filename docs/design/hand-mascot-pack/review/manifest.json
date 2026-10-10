@@ -1,0 +1,72 @@
+[
+  {
+    "clip": "01-finger-heart-motion",
+    "video": "/Users/kirilldubovitskiy/Happy/Workspaces/happy-desktop/hand-mascot-pack/.context/hand-mascot-pack/review/01-finger-heart-motion/clip.mp4",
+    "frames_per_second_sampled": 4,
+    "sampled_frame_count": 12,
+    "grid": "/Users/kirilldubovitskiy/Happy/Workspaces/happy-desktop/hand-mascot-pack/.context/hand-mascot-pack/review/01-finger-heart-motion/temporal-grid.jpg"
+  },
+  {
+    "clip": "02-wave-motion",
+    "video": "/Users/kirilldubovitskiy/Happy/Workspaces/happy-desktop/hand-mascot-pack/.context/hand-mascot-pack/review/02-wave-motion/clip.mp4",
+    "frames_per_second_sampled": 4,
+    "sampled_frame_count": 12,
+    "grid": "/Users/kirilldubovitskiy/Happy/Workspaces/happy-desktop/hand-mascot-pack/.context/hand-mascot-pack/review/02-wave-motion/temporal-grid.jpg"
+  },
+  {
+    "clip": "03-crossed-fingers-motion",
+    "video": "/Users/kirilldubovitskiy/Happy/Workspaces/happy-desktop/hand-mascot-pack/.context/hand-mascot-pack/review/03-crossed-fingers-motion/clip.mp4",
+    "frames_per_second_sampled": 4,
+    "sampled_frame_count": 12,
+    "grid": "/Users/kirilldubovitskiy/Happy/Workspaces/happy-desktop/hand-mascot-pack/.context/hand-mascot-pack/review/03-crossed-fingers-motion/temporal-grid.jpg"
+  },
+  {
+    "clip": "04-thumbs-up-motion",
+    "video": "/Users/kirilldubovitskiy/Happy/Workspaces/happy-desktop/hand-mascot-pack/.context/hand-mascot-pack/review/04-thumbs-up-motion/clip.mp4",
+    "frames_per_second_sampled": 4,
+    "sampled_frame_count": 12,
+    "grid": "/Users/kirilldubovitskiy/Happy/Workspaces/happy-desktop/hand-mascot-pack/.context/hand-mascot-pack/review/04-thumbs-up-motion/temporal-grid.jpg"
+  },
+  {
+    "clip": "05-holding-heart-motion",
+    "video": "/Users/kirilldubovitskiy/Happy/Workspaces/happy-desktop/hand-mascot-pack/.context/hand-mascot-pack/review/05-holding-heart-motion/clip.mp4",
+    "frames_per_second_sampled": 4,
+    "sampled_frame_count": 12,
+    "grid": "/Users/kirilldubovitskiy/Happy/Workspaces/happy-desktop/hand-mascot-pack/.context/hand-mascot-pack/review/05-holding-heart-motion/temporal-grid.jpg"
+  },
+  {
+    "clip": "06-beckoning-motion",
+    "video": "/Users/kirilldubovitskiy/Happy/Workspaces/happy-desktop/hand-mascot-pack/.context/hand-mascot-pack/review/06-beckoning-motion/clip.mp4",
+    "frames_per_second_sampled": 4,
+    "sampled_frame_count": 12,
+    "grid": "/Users/kirilldubovitskiy/Happy/Workspaces/happy-desktop/hand-mascot-pack/.context/hand-mascot-pack/review/06-beckoning-motion/temporal-grid.jpg"
+  },
+  {
+    "clip": "07-finger-dance-motion",
+    "video": "/Users/kirilldubovitskiy/Happy/Workspaces/happy-desktop/hand-mascot-pack/.context/hand-mascot-pack/review/07-finger-dance-motion/clip.mp4",
+    "frames_per_second_sampled": 4,
+    "sampled_frame_count": 12,
+    "grid": "/Users/kirilldubovitskiy/Happy/Workspaces/happy-desktop/hand-mascot-pack/.context/hand-mascot-pack/review/07-finger-dance-motion/temporal-grid.jpg"
+  },
+  {
+    "clip": "08-turnaround-back-motion",
+    "video": "/Users/kirilldubovitskiy/Happy/Workspaces/happy-desktop/hand-mascot-pack/.context/hand-mascot-pack/review/08-turnaround-back-motion/clip.mp4",
+    "frames_per_second_sampled": 4,
+    "sampled_frame_count": 12,
+    "grid": "/Users/kirilldubovitskiy/Happy/Workspaces/happy-desktop/hand-mascot-pack/.context/hand-mascot-pack/review/08-turnaround-back-motion/temporal-grid.jpg"
+  },
+  {
+    "clip": "09-back-stop-motion",
+    "video": "/Users/kirilldubovitskiy/Happy/Workspaces/happy-desktop/hand-mascot-pack/.context/hand-mascot-pack/review/09-back-stop-motion/clip.mp4",
+    "frames_per_second_sampled": 4,
+    "sampled_frame_count": 12,
+    "grid": "/Users/kirilldubovitskiy/Happy/Workspaces/happy-desktop/hand-mascot-pack/.context/hand-mascot-pack/review/09-back-stop-motion/temporal-grid.jpg"
+  },
+  {
+    "clip": "10-back-middle-finger-motion",
+    "video": "/Users/kirilldubovitskiy/Happy/Workspaces/happy-desktop/hand-mascot-pack/.context/hand-mascot-pack/review/10-back-middle-finger-motion/clip.mp4",
+    "frames_per_second_sampled": 4,
+    "sampled_frame_count": 12,
+    "grid": "/Users/kirilldubovitskiy/Happy/Workspaces/happy-desktop/hand-mascot-pack/.context/hand-mascot-pack/review/10-back-middle-finger-motion/temporal-grid.jpg"
+  }
+]

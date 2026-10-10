@@ -1,0 +1,9 @@
+{
+  "prompt": "Create the definitive two-view character identity turnaround of the mascot in reference image 1. Exactly two matching views side by side on transparent background: left PALM FRONT view, right BACK/DORSAL view of the SAME single right hand in relaxed open-hand pose, all five digits gently spread. Same butter-yellow soft rounded three-dimensional vinyl/clay hand, chunky short smooth fingers, subtle warm golden shading and soft studio highlights as image 1. On FRONT PALM: exactly two tiny dark chocolate-brown oval eyes and a tiny curved happy smile, low on palm. On BACK OF HAND: exactly two tiny dark chocolate-brown oval eyes and a tiny DOWNWARD-CURVING FROWN, low on the dorsal surface. Back's frown resembles a small inverted U, clearly unhappy. Both sides permanently have distinct faces: happy palm; frowny back. Tiny faces, no eyebrows, no nose, no cheeks. Front thumb is on viewer right, back thumb on viewer left, proving true opposite views. Anatomically exactly FIVE digits on each view: one thumb plus four fingers. No extra digits, no fused fingers. Short rounded wrist stump, no arm, no body, no glove cuff. Use reference 2 real Telegram open-hands animation frames for appealing silhouette and soft rounded readable hand anatomy; reference 3 real Telegram robot frames for toy-like expression restraint. Keep actual chosen 3D style from reference 1, not flat 2D. Equal scale, consistent surface and proportions in both views. Entire hands visible, generous transparent margins. No heart, no objects, no text, no labels, no arrows, no checkerboard drawn into image.",
+  "references": ["references/selected-finger-heart.png", "references/telegram-open-hands-frame-000.png", "references/telegram-robot-frame-090.png"],
+  "image_size": {"width": 1536, "height": 1024},
+  "background": "transparent",
+  "quality": "high",
+  "num_images": 1,
+  "output_format": "png"
+}

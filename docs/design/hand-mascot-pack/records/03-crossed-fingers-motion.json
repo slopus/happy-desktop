@@ -1,0 +1,57 @@
+{
+  "name": "03-crossed-fingers-motion",
+  "model": "fal-ai/kling-video/o3/pro/reference-to-video",
+  "input": {
+    "prompt": "@Image1 defines permanent mascot identity: happy palm and frowny back. @Image2 contains the actual Telegram hand frame on LEFT and robot frame on RIGHT for style ONLY, never inherit robot nose, teeth, colors or large eyes. Exactly FIVE digits in EVERY frame. Thumb never swells or merges into a fist. No new digits appear. Preserve each digit as a continuous anatomical part. Locked stationary orthographic camera; single short continuous shot of the exact butter-yellow 3D hand in the supplied image. Match material, proportions and small chocolate-brown face. Exactly five anatomical digits throughout every frame: thumb, index, middle, ring, pinky. The face is physically attached low on the surface of the hand, does not float or migrate. Palm has a fixed happy smile and back has a fixed frown. Never change a smile into a frown on the same physical surface. Soft toy-like Telegram animated emoji timing: the supplied open-hands asset is 60fps frames 0-178, about 2.98sec, open at frame0, edge-on near frame45, open/spread at frame90, settle at frame135. Use clear anticipation, quick elastic finger articulation near 0.75s and 1.5s, gentle settling near 2.25s, steady final pose by 3s. Animate actual finger joints and hand volume, not a still image sliding or rotating flat in the picture plane. Calm ivory studio background, no text, camera changes, audio or new props. MOVEMENT: The two extended index and middle fingers separate slightly and cross again twice. Ring and pinky stay folded; thumb adjusts minutely. The back of the hand remains facing the camera and the dorsal tiny frown stays unchanged. End with the fingers crossed. Avoid: extra fingers, missing fingers, fused fingers, six digits, face morphing, face sliding, smiling dorsal face, frowny palm, camera motion, zoom, multiple hands, scene cuts, text, flat still image.",
+    "duration": "3",
+    "generate_audio": false,
+    "start_image_url": "Local native-generated image; see local_sources",
+    "aspect_ratio": "1:1",
+    "image_urls": {
+      "start": "images/03-crossed-fingers.png",
+      "end": "images/03-crossed-fingers.png",
+      "identity_style_refs": [
+        "images/native-turnaround.png",
+        "references/telegram-style-pair.png"
+      ]
+    },
+    "local_sources": {
+      "start": "images/03-crossed-fingers.png",
+      "end": "images/03-crossed-fingers.png",
+      "identity_style_refs": [
+        "images/native-turnaround.png",
+        "references/telegram-style-pair.png"
+      ]
+    }
+  },
+  "queue": {
+    "status": "IN_QUEUE",
+    "request_id": "01a0fbcc-1ed8-7eb0-acf8-c49c86bd7b1e",
+    "response_url": "https://queue.fal.run/fal-ai/kling-video/requests/01a0fbcc-1ed8-7eb0-acf8-c49c86bd7b1e",
+    "status_url": "https://queue.fal.run/fal-ai/kling-video/requests/01a0fbcc-1ed8-7eb0-acf8-c49c86bd7b1e/status",
+    "cancel_url": "https://queue.fal.run/fal-ai/kling-video/requests/01a0fbcc-1ed8-7eb0-acf8-c49c86bd7b1e/cancel",
+    "logs": null,
+    "metrics": {},
+    "queue_position": 0
+  },
+  "status": {
+    "status": "COMPLETED",
+    "request_id": "01a0fbcc-1ed8-7eb0-acf8-c49c86bd7b1e",
+    "response_url": "https://queue.fal.run/fal-ai/kling-video/requests/01a0fbcc-1ed8-7eb0-acf8-c49c86bd7b1e",
+    "status_url": "https://queue.fal.run/fal-ai/kling-video/requests/01a0fbcc-1ed8-7eb0-acf8-c49c86bd7b1e/status",
+    "cancel_url": "https://queue.fal.run/fal-ai/kling-video/requests/01a0fbcc-1ed8-7eb0-acf8-c49c86bd7b1e/cancel",
+    "logs": null,
+    "metrics": {
+      "inference_time": 400.40000009536743
+    }
+  },
+  "result": {
+    "video": {
+      "url": "https://v3b.fal.media/files/b/0aacbe85/zK3Dpb9r1Hq9JDaiiIGTE_output.mp4",
+      "content_type": "video/mp4",
+      "file_name": "output.mp4",
+      "file_size": 2275310
+    }
+  },
+  "local_output": "/Users/kirilldubovitskiy/Happy/Workspaces/happy-desktop/hand-mascot-pack/.context/hand-mascot-pack/videos/03-crossed-fingers-motion.mp4"
+}

@@ -1,0 +1,37 @@
+### Visual Review: Mascot Motion Clips
+
+---
+
+### Clip 1: `02-wave-motion`
+**Verdict: NEEDS FIX**
+
+* **Thumb Swelling & Melting (1.75s – 2.25s)**:
+  * **1.75s**: The thumb abruptly curls inward into a bulbous, swollen knot.
+  * **2.00s**: The thumb collapses and sags downward into a heavy, melted lump along the base/wrist.
+  * **2.25s**: Severe physical deformation — the thumb balloons and melts outward into an elongated, grotesque fleshy club/tentacle.
+  * **2.50s**: Snaps abruptly back into a compressed, stubby thumb shape (geometry pop).
+* **Flicker / Eye Style Instability (0.00s – 2.75s)**:
+  * Eyes repeatedly flip between two conflicting art styles: squinting curved happy arches at **0.00s** and **1.75s – 2.50s**, vs. open solid round dots at **0.25s – 1.50s** and **2.75s**.
+* **Missed Choreography**:
+  * The wave lacks natural articulation. The hand merely tilts slightly from 0.00s to 1.50s, then structurally collapses on the thumb side rather than performing a clean, articulated hand wave.
+* **Digit Count**:
+  * Maintains 5 digits throughout, but fails identity consistency due to the severe thumb melting between 1.75s and 2.25s.
+
+---
+
+### Clip 2: `07-finger-dance-motion`
+**Verdict: NEEDS FIX**
+
+* **Digit Count & Extra Digits (1.00s – 2.75s)**:
+  * **Extra folded fingers (1.00s, 1.50s – 2.75s)**: The folded cluster on the right consistently shows **3 distinct folded finger loops/knuckles** rather than 2 (ring + pinky). With 2 walking legs and the protruding thumb, this manifests as **6 digits**.
+  * **Sprouting leg/digit (1.25s, 2.25s)**: A third downward-pointing digit/stump briefly sprouts or splits between the two walking legs.
+* **Missed Choreography & Unfolded Digits (0.75s – 2.75s)**:
+  * **Thumb fails to fold**: The thumb extends stiffly outward to the left across all inverted frames (0.75s – 2.75s) like a handle, violating the rule that all non-walking digits remain folded.
+  * **Lack of alternating steps**: There is no genuine alternating walking gait. The lead leg stays extended forward while the trailing leg hitches and drags behind with minimal step cycle progression.
+* **Face Drift / Surface & Inversion**:
+  * Inverted orientation correctly places the wrist at the top with face inverted (appearing as a world-space frown as expected for a rotating rigid toy). However, facial placement and alignment jitter noticeably across frames 1.25s – 1.75s.
+
+---
+
+### Sampling Limitations
+* The temporal grids sample at **4 fps (12 static frames over 3.0s, every 250ms)**. While sufficient to identify major structural breakdown, extra digits, melting, and missed choreography, discrete sampling cannot assess high-frequency inter-frame jitter, motion blur artifacts, sub-frame flicker, or transition smoothness between sample intervals.

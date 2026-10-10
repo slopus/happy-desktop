@@ -1,0 +1,56 @@
+{
+  "name": "02-wave-motion-v2",
+  "model": "fal-ai/kling-video/o3/pro/reference-to-video",
+  "input": {
+    "prompt": "@Image1 is the permanent mascot identity: smiling face on the PALM, frowning face on the BACK. Locked stationary camera, one continuous 3-second shot of the exact butter-yellow 3D hand from the start frame, same material, proportions and small chocolate-brown face. Exactly FIVE digits in EVERY frame (thumb, index, middle, ring, pinky); no digit ever swells, melts, splits, merges or disappears. The face stays painted on the same spot of the hand and never changes expression type. MOVEMENT: The palm faces the camera the whole time. Wave ONLY by rocking from the wrist: two gentle side-to-side sways, then settle back to the start pose. All five fingers stay extended and spread; the thumb keeps exactly the same size and shape in every frame and never curls or forms a lump. The smile stays; the eyes may blink once. Avoid: extra fingers, missing fingers, swelling, melting, morphing, open mouth, tongue, blank face, missing mouth, second rotation, camera movement, zoom, new props, text.",
+    "duration": "3",
+    "generate_audio": false,
+    "aspect_ratio": "1:1",
+    "start_image_url": "Local native-generated image; see local_sources",
+    "end_image_url": "Local native-generated image; see local_sources",
+    "image_urls": {
+      "start": "images/02-wave.png",
+      "end": "images/02-wave.png",
+      "identity_style_refs": [
+        "images/native-turnaround.png"
+      ]
+    },
+    "local_sources": {
+      "start": "images/02-wave.png",
+      "end": "images/02-wave.png",
+      "identity_style_refs": [
+        "images/native-turnaround.png"
+      ]
+    }
+  },
+  "queue": {
+    "status": "IN_QUEUE",
+    "request_id": "01a0fbf7-95ea-7803-8942-cdfad96b653f",
+    "response_url": "https://queue.fal.run/fal-ai/kling-video/requests/01a0fbf7-95ea-7803-8942-cdfad96b653f",
+    "status_url": "https://queue.fal.run/fal-ai/kling-video/requests/01a0fbf7-95ea-7803-8942-cdfad96b653f/status",
+    "cancel_url": "https://queue.fal.run/fal-ai/kling-video/requests/01a0fbf7-95ea-7803-8942-cdfad96b653f/cancel",
+    "logs": null,
+    "metrics": {},
+    "queue_position": 0
+  },
+  "status": {
+    "status": "COMPLETED",
+    "request_id": "01a0fbf7-95ea-7803-8942-cdfad96b653f",
+    "response_url": "https://queue.fal.run/fal-ai/kling-video/requests/01a0fbf7-95ea-7803-8942-cdfad96b653f",
+    "status_url": "https://queue.fal.run/fal-ai/kling-video/requests/01a0fbf7-95ea-7803-8942-cdfad96b653f/status",
+    "cancel_url": "https://queue.fal.run/fal-ai/kling-video/requests/01a0fbf7-95ea-7803-8942-cdfad96b653f/cancel",
+    "logs": null,
+    "metrics": {
+      "inference_time": 232.6599998474121
+    }
+  },
+  "result": {
+    "video": {
+      "url": "https://v3b.fal.media/files/b/0aacbf91/pSJWvPQ9i6GqWQ6eRMX1W_output.mp4",
+      "content_type": "video/mp4",
+      "file_name": "output.mp4",
+      "file_size": 2920878
+    }
+  },
+  "local_output": "/Users/kirilldubovitskiy/Happy/Workspaces/happy-desktop/hand-mascot-pack/.context/hand-mascot-pack/videos/02-wave-motion-v2.mp4"
+}
