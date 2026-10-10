@@ -37,13 +37,20 @@ it("installs a release whose download drops part-way, by resuming it", async () 
     temporaryRoots.push(root);
     const source = join(root, "source");
     await mkdir(source);
-    const archivedBinaryName = "happy-agent-test";
+    const archivedBinaryName = "happy-agent-test.exe";
     // Random bytes do not compress, so the archive is several megabytes and
     // the drop lands well inside the body rather than in one write.
     const contents = randomBytes(4 * 1024 * 1024);
     await writeFile(join(source, archivedBinaryName), contents);
     const archivePath = join(root, "release.tar.gz");
-    await promisify(execFile)("tar", ["-czf", archivePath, "-C", source, archivedBinaryName]);
+    // Git Bash's GNU tar reads a drive-letter path as a remote host; use Windows' own.
+    const tar =
+        process.platform === "win32"
+            ? join(process.env.SystemRoot ?? "C:\\Windows", "System32", "tar.exe")
+            : "tar";
+    await promisify(execFile)(tar, ["-czf", archivePath, "-C", source, archivedBinaryName], {
+        windowsHide: true,
+    });
     const archive = await readFile(archivePath);
     const dropAt = Math.floor(archive.length * 0.6);
 
