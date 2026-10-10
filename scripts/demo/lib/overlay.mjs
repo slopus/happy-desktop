@@ -33,8 +33,13 @@ export function overlayInstall(options) {
             },
             install() {
                 daemon.installAsked = true;
-                return Promise.resolve();
+                return options.realDaemonUpgrade
+                    ? window.happyDemoUpgradeInstall()
+                    : Promise.resolve();
             },
+            ...(options.realDaemonUpgrade
+                ? { connectionReport: (report) => window.happyDemoUpgradeConnectionReport(report) }
+                : {}),
         };
         window.__happyDemoDaemon = {
             installAsked: () => daemon.installAsked,

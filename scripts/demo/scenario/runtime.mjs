@@ -10,6 +10,7 @@ import {
 import { gatewayCreate } from "./inference.mjs";
 import * as defaultWorld from "./world.mjs";
 import { nativeCredentialPrepare } from "./native-credential.mjs";
+import { daemonUpgradePrepare } from "./daemon-upgrade.mjs";
 
 const execFile = promisify(execFileCallback);
 const workspace = resolve(import.meta.dirname, "../../..");
@@ -163,8 +164,16 @@ function processBaseEnvironment(p) {
     };
 }
 
-async function daemonStart(p, gateway, mobileServerUrl, models, nativeCodex, nativeEffort) {
-    const executable = await happyAgentExecutableResolve();
+async function daemonStart(
+    p,
+    gateway,
+    mobileServerUrl,
+    models,
+    nativeCodex,
+    nativeEffort,
+    selectedExecutable,
+) {
+    const executable = selectedExecutable ?? (await happyAgentExecutableResolve());
     const command = join(p.bin, "happy-agent");
     await unlink(command).catch(() => undefined);
     await symlink(executable, command);
@@ -548,6 +557,13 @@ export async function gymOpen(options = {}) {
               screenplay: definition.reply,
               turnFind: definition.turnFind,
           });
+    const daemonUpgrade = definition.daemonUpgrade
+        ? await daemonUpgradePrepare(
+              p,
+              environment(p, gateway, mobileServerUrl),
+              definition.daemonUpgrade,
+          )
+        : undefined;
     const daemon = await daemonStart(
         p,
         gateway,
@@ -555,6 +571,7 @@ export async function gymOpen(options = {}) {
         definition.models,
         options.nativeCodex,
         definition.effort,
+        daemonUpgrade?.executable,
     );
     let client = await clientCreate(p, daemon.token);
     await healthWait(client, 30_000);
@@ -630,6 +647,7 @@ export async function gymOpen(options = {}) {
         nativeEffort: native ? definition.effort : undefined,
         paths: p,
         world,
+        daemonUpgrade,
         get client() {
             return client;
         },
@@ -654,6 +672,12 @@ export async function gymOpen(options = {}) {
         daemonDrainBegin: () => client.drain(),
         /** The authoritative daemon health report, including real drain stages. */
         daemonHealth: () => client.getHealth(),
+        async daemonReconnect() {
+            const token = await tokenWait(p.tokenPath, 30_000);
+            client = await clientCreate(p, token);
+            await healthWait(client, 30_000);
+            return client.getHealth();
+        },
         /**
          * Restarts the daemon under the running app — the exact thing a Happy
          * Agent update does. The gateway keeps running; the new daemon
@@ -687,6 +711,7 @@ export async function gymOpen(options = {}) {
                 return;
             }
             gateway?.release();
+            await daemonUpgrade?.close();
             const env = environment(p, gateway, mobileServerUrl);
             await execFile(daemon.command, ["stop"], {
                 cwd: p.root,

@@ -1,0 +1,43 @@
+diff --git a/packages/happy-desktop-electron/sources/renderer/browserDevBridge.ts b/packages/happy-desktop-electron/sources/renderer/browserDevBridge.ts
+--- a/packages/happy-desktop-electron/sources/renderer/browserDevBridge.ts
++++ b/packages/happy-desktop-electron/sources/renderer/browserDevBridge.ts
+@@ -32,6 +32,12 @@ export interface BrowserDemoDaemon {
+     get(): DesktopDaemonSnapshot;
+     subscribe(listener: (snapshot: DesktopDaemonSnapshot) => void): () => void;
+     install(): Promise<void>;
++    connectionReport?(report: {
++        status: "connecting" | "connected" | "disconnected" | "error";
++        catalogReady: boolean;
++        version?: string;
++        runtime: Extract<DesktopRuntimeSnapshot, { phase: "ready" }>;
++    }): Promise<void>;
+ }
+ 
+ declare global {
+diff --git a/packages/happy-desktop-electron/sources/renderer/renderer.tsx b/packages/happy-desktop-electron/sources/renderer/renderer.tsx
+--- a/packages/happy-desktop-electron/sources/renderer/renderer.tsx
++++ b/packages/happy-desktop-electron/sources/renderer/renderer.tsx
+@@ -1151,6 +1151,23 @@ if (mediaPreviewBridge) {
+             daemon: daemon ?? unavailableDaemonStore,
+             happyAgents,
+         });
++        // This recording replaces native IPC with a binding to the real
++        // installer in its private Node world. Report actual UI readiness.
++        const demoConnectionReport = (): void => {
++            const local = happyAgents.get().happyAgents.find(
++                (entry) => entry.id === LOCAL_HAPPY_AGENT_ID,
++            );
++            const runtime = runtimeStore.get();
++            if (!local || runtime?.phase !== "ready") return;
++            void window.happyDemoDaemon?.connectionReport?.({
++                status: local.status,
++                catalogReady: local.projectsStatus === "ready",
++                ...(local.version === undefined ? {} : { version: local.version }),
++                runtime,
++            });
++        };
++        appDisposers.push(happyAgents.subscribe(demoConnectionReport));
++        demoConnectionReport();
+         function activeRouter(): HappyAgentRouter {
+             return (
+                 connectionUis.get(happyAgents.get().activeHappyAgentId ?? LOCAL_HAPPY_AGENT_ID)

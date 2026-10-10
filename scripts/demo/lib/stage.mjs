@@ -51,6 +51,7 @@ async function patchedSourcePrepare(patches, assets) {
         await copyFile(join(workspace, file), join(mirror, file));
     }
     for (const name of [
+        "happy-desktop-analytics",
         "happy-desktop-app",
         "happy-desktop-electron",
         "happy-desktop-gym",
@@ -274,6 +275,7 @@ export async function stageOpen(options) {
     let browser;
     let context;
     let offline;
+    let upgradeUnsubscribe;
     try {
         browser = await chromium.launch({
             args: [
@@ -343,9 +345,26 @@ export async function stageOpen(options) {
         }
         await context.addInitScript(overlayInstall, {
             ...overlayOptions(options.appearance),
-            daemon: demoDaemonBaseline,
+            daemon: options.gym?.daemonUpgrade?.controller.get() ?? demoDaemonBaseline,
+            realDaemonUpgrade: options.gym?.daemonUpgrade !== undefined,
         });
         const page = await context.newPage();
+        if (options.gym?.daemonUpgrade) {
+            const upgrade = options.gym.daemonUpgrade;
+            await page.exposeFunction("happyDemoUpgradeInstall", () => upgrade.install());
+            await page.exposeFunction("happyDemoUpgradeConnectionReport", (report) =>
+                upgrade.connectionReport(report),
+            );
+            // Preserve every real installer report in order; these replace
+            // only the host IPC delivery, not the lifecycle or its timings.
+            let delivery = Promise.resolve();
+            upgradeUnsubscribe = upgrade.controller.subscribe((snapshot) => {
+                delivery = delivery.then(() =>
+                    page.evaluate((value) => window.__happyDemoDaemon.publish(value), snapshot),
+                );
+                void delivery.catch(() => undefined);
+            });
+        }
         page.on("pageerror", (error) => {
             if (options.verbose) process.stderr.write(`  page error: ${error.message}\n`);
         });
@@ -356,6 +375,8 @@ export async function stageOpen(options) {
             source,
             url,
             async close() {
+                await options.gym?.daemonUpgrade?.close();
+                upgradeUnsubscribe?.();
                 offline?.close();
                 await context.close().catch(() => undefined);
                 await browser.close().catch(() => undefined);
@@ -370,6 +391,7 @@ export async function stageOpen(options) {
             },
         };
     } catch (error) {
+        upgradeUnsubscribe?.();
         offline?.close();
         await context?.close().catch(() => undefined);
         await browser?.close().catch(() => undefined);

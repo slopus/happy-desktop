@@ -34,7 +34,7 @@ export async function gatewayCreate(options) {
     // tool result is durable. Production keeps draining across the inference
     // and every later tool in the same turn; the gate only lets the camera see
     // that causal hand-off clearly.
-    let hold;
+    const holds = new Map();
 
     const server = createServer((request, response) => {
         void respond(request, response);
@@ -54,7 +54,8 @@ export async function gatewayCreate(options) {
             const sessionId =
                 typeof payload.options?.sessionId === "string" ? payload.options.sessionId : "";
             const latestMessage = payload.context?.messages?.at(-1);
-            if (hold && sessionId === hold.sessionId && latestMessage?.role === "tool") {
+            const hold = holds.get(sessionId);
+            if (hold && latestMessage?.role === "tool") {
                 hold.arrived();
                 await hold.released;
                 // A daemon killed mid-hold abandons its request; computing a
@@ -101,6 +102,8 @@ export async function gatewayCreate(options) {
          * tool result is reliable even when startup and streaming speed vary.
          */
         holdSet(sessionId) {
+            if (holds.has(sessionId))
+                throw new Error(`Inference is already held for ${sessionId}.`);
             let arrived;
             let release;
             const arrivedPromise = new Promise((settle) => {
@@ -109,13 +112,13 @@ export async function gatewayCreate(options) {
             const released = new Promise((settle) => {
                 release = settle;
             });
-            hold = { arrived, released, release, sessionId };
+            holds.set(sessionId, { arrived, released, release });
             return arrivedPromise;
         },
         /** Lets every held request proceed and clears the hold. */
         release() {
-            hold?.release();
-            hold = undefined;
+            for (const hold of holds.values()) hold.release();
+            holds.clear();
         },
         close: () =>
             new Promise((settle) => {

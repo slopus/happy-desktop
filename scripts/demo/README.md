@@ -13,6 +13,15 @@ It is a copy of the original `demos/resume/artifacts/v13/resume.mp4`; the
 original and other generated takes remain gitignored. Recording a new take
 does not overwrite this selected video.
 
+The short desktop-only update-card story is scaffolded in
+[`demos/seamless-update/BRIEF.md`](./demos/seamless-update/BRIEF.md) and
+[`SCRIPT.md`](./demos/seamless-update/SCRIPT.md). It is selected explicitly with
+`pnpm demo record seamless-update`; it does not run in `--all`. Record only
+after the update-card feature is on current main. Its evidence distinguishes
+scripted inference/installation snapshots from the real private-daemon drain,
+restart, retained draft, and resumed durable run. Its export script produces a
+1600×1000 X-ready MP4 and an evidence-selected poster in `.context/demo-out/`.
+
 The native Astra speed comparison is preserved in
 [`demos/astra-speed/README.md`](./demos/astra-speed/README.md), including its
 selected video, sanitized native-run evidence, capture prerequisites and portable
