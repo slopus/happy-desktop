@@ -17,7 +17,7 @@ import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
 /** The component plan this page documents. The selector and the page header read the same value. */
 export const componentNumber = "C-009";
-const workspaceShortcut = commandShortcut("n");
+const workspaceShortcut = commandShortcut("n", { shift: true });
 const workspaceSections: SidebarSection[] = [
     {
         id: "views",
@@ -118,7 +118,7 @@ const workspaceSections: SidebarSection[] = [
         label: "Humans",
     },
     {
-        action: { icon: "plus", label: "Add agent" },
+        action: { icon: "plus", label: "Add agent", shortcut: commandShortcut("n") },
         id: "agents",
         items: [
             {
@@ -1516,7 +1516,7 @@ export function SidebarPage() {
             </Specimen>
 
             <Specimen
-                detail="rest and held-Command states · the current project's main checkout is Cmd-1, then its workspaces, then other projects; its plus keeps Cmd-N as a delayed floating hover hint"
+                detail="rest and held-Command states · the current project's main checkout is Cmd-1, then its workspaces, then other projects; its plus keeps Shift-Cmd-N as a delayed floating hover hint, and the Agents heading's plus Cmd-N"
                 label="Number shortcuts"
                 number="04b"
                 stage="app"

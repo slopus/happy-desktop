@@ -17,7 +17,7 @@ export const componentNumber = "C-273";
 const BODY_WIDTH = 622;
 
 const SESSION_SHORTCUT = commandShortcut("t");
-const WORKSPACE_SHORTCUT = commandShortcut("n");
+const WORKSPACE_SHORTCUT = commandShortcut("n", { shift: true });
 
 const suggestions: CommandPaletteResultsSection[] = [
     {

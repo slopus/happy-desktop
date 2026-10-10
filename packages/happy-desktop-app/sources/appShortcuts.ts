@@ -13,5 +13,7 @@ export const APP_SHORTCUTS = {
     panelToggleAlternate: commandShortcut("b", { alt: true }),
     sessionCreate: commandShortcut("t"),
     tabClose: commandShortcut("w"),
-    workspaceCreate: commandShortcut("n"),
+    /** Opens the new-task surface on the active Happy Agent, as its Tasks heading's + does. */
+    taskCreate: commandShortcut("n"),
+    workspaceCreate: commandShortcut("n", { shift: true }),
 } as const;

@@ -3,6 +3,7 @@ import type { ConversationAuthor } from "../conversation/conversationAuthor.js";
 import {
     noticeInformational,
     type ConversationActivityPresentation,
+    type ConversationAgentIdentity,
     type ConversationAttachment,
     type ConversationEntry,
     type ConversationJson,
@@ -69,6 +70,7 @@ interface ConversationContext {
     readonly expandedGroupIds: ReadonlySet<string>;
     readonly subagents: readonly SubagentSummary[];
     readonly sentImages?: HappyAgentConversationInput["sentImages"];
+    readonly agentIdentities?: HappyAgentConversationInput["agentIdentities"];
 }
 
 /**
@@ -97,6 +99,13 @@ export interface HappyAgentConversationInput {
     readonly expandedGroupIds: ReadonlySet<string>;
     /** Children delegated from this session, matched to the call that spawned each. */
     readonly subagents: readonly SubagentSummary[];
+    /**
+     * The agents that sent messages into this transcript, by agent id, as the
+     * rest of the window names and pictures them. An agent missing here is
+     * shown by its id. Compared by identity, so the owner keeps one map while
+     * nothing in it changed.
+     */
+    readonly agentIdentities?: ReadonlyMap<string, ConversationAgentIdentity>;
     /**
      * Images this window sent, by message identity. A message is shown from the
      * prediction made when it was submitted, and that prediction is text alone,
@@ -163,6 +172,7 @@ export function happyAgentConversationProject(
         expandedGroupIds: input.expandedGroupIds,
         subagents: input.subagents,
         ...(input.sentImages === undefined ? {} : { sentImages: input.sentImages }),
+        ...(input.agentIdentities === undefined ? {} : { agentIdentities: input.agentIdentities }),
     };
     const contextStands =
         cache?.context !== undefined && conversationContextEqual(cache.context, context);
@@ -303,11 +313,27 @@ function sameElements(
  * than tracked. Anything here changing rebuilds the transcript once, which is
  * exactly the moment a rebuild is warranted.
  */
+/**
+ * The name and face a sending agent is shown with: what the window knows the
+ * agent as, else the description this session gave a child it delegated to,
+ * else nothing, which leaves the row to show the agent's id.
+ */
+function senderOf(
+    input: HappyAgentConversationInput,
+    agentId: string,
+): { readonly agentName?: string; readonly agentFace?: ConversationAgentIdentity["face"] } {
+    const known = input.agentIdentities?.get(agentId);
+    if (known !== undefined) return { agentName: known.name, agentFace: known.face };
+    const description = input.subagents.find((child) => child.id === agentId)?.description;
+    return description === undefined ? {} : { agentName: description };
+}
+
 function conversationContextEqual(left: ConversationContext, right: ConversationContext): boolean {
     return (
         left.sessionId === right.sessionId &&
         left.showReasoning === right.showReasoning &&
         left.sentImages === right.sentImages &&
+        left.agentIdentities === right.agentIdentities &&
         listEqual(left.ephemeral, right.ephemeral, referenceEqual) &&
         setEqual(left.expandedGroupIds, right.expandedGroupIds) &&
         listEqual(left.pendingUserInputs, right.pendingUserInputs, userInputRequestEqual) &&
@@ -535,9 +561,6 @@ function happyAgentConnectGroupProject(
                 // turn's work does.
                 const collaborator = element.senderAgent;
                 if (collaborator !== undefined && collaborator.relation === "other") {
-                    const name = input.subagents.find(
-                        (child) => child.id === collaborator.agentId,
-                    )?.description;
                     entries.push({
                         kind: "agentActivity",
                         id: element.id,
@@ -546,7 +569,7 @@ function happyAgentConnectGroupProject(
                         activity: {
                             kind: "agentMessage",
                             agentId: collaborator.agentId,
-                            ...(name === undefined ? {} : { agentName: name }),
+                            ...senderOf(input, collaborator.agentId),
                             text: element.text,
                         },
                     });
@@ -586,9 +609,8 @@ function happyAgentConnectGroupProject(
                  * the work and takes the compact activity row the rest of the
                  * turn's steps take.
                  */
-                const name = input.subagents.find(
-                    (child) => child.id === element.agentId,
-                )?.description;
+                const sender = senderOf(input, element.agentId);
+                const name = sender.agentName;
                 if (element.relation === "parent") {
                     entries.push({
                         kind: "message",
@@ -618,7 +640,7 @@ function happyAgentConnectGroupProject(
                     activity: {
                         kind: "agentMessage",
                         agentId: element.agentId,
-                        ...(name === undefined ? {} : { agentName: name }),
+                        ...sender,
                         text: element.text,
                     },
                 });

@@ -226,7 +226,7 @@ export function AgentActivityRowPage() {
             </Specimen>
 
             <Specimen
-                detail="a collaborator's message collapsed to one line, and expanded onto the message it delivered · an unnamed sender falls back to its agent id"
+                detail="a collaborator's message collapsed to one line, and expanded onto the message it delivered · the sender named and pictured as its own row is: a subtask's generated mark, a bot's picture, a team task's owner initials, a standalone task's glyph · a sender nobody can name falls back to the start of its agent id"
                 label="Agent message"
                 number="06"
                 stage="surface"
@@ -244,6 +244,7 @@ export function AgentActivityRowPage() {
                             kind: "agentMessage",
                             agentId: "v2eibi1k9zgwde56wwuhrbku",
                             agentName: "Retry policy rewrite",
+                            agentFace: { kind: "generated", seed: "v2eibi1k9zgwde56wwuhrbku" },
                             text: AGENT_MESSAGE_TEXT,
                         }}
                     />
@@ -252,9 +253,37 @@ export function AgentActivityRowPage() {
                             kind: "agentMessage",
                             agentId: "v2eibi1k9zgwde56wwuhrbku",
                             agentName: "Retry policy rewrite",
+                            agentFace: { kind: "generated", seed: "v2eibi1k9zgwde56wwuhrbku" },
                             text: AGENT_MESSAGE_TEXT,
                         }}
                         defaultExpanded
+                    />
+                    <AgentActivityRow
+                        activity={{
+                            kind: "agentMessage",
+                            agentId: "byf9avtdw66p0lmixwkcut57",
+                            agentName: "Release helper",
+                            agentFace: { kind: "image", url: BOT_PICTURE },
+                            text: AGENT_MESSAGE_TEXT,
+                        }}
+                    />
+                    <AgentActivityRow
+                        activity={{
+                            kind: "agentMessage",
+                            agentId: "k3n2b8x0q1w9e7r6t5y4u3i2",
+                            agentName: "Fix invoice rounding",
+                            agentFace: { kind: "initials", initials: "AL" },
+                            text: AGENT_MESSAGE_TEXT,
+                        }}
+                    />
+                    <AgentActivityRow
+                        activity={{
+                            kind: "agentMessage",
+                            agentId: "p0o9i8u7y6t5r4e3w2q1a2s3",
+                            agentName: "Ship the launch checklist",
+                            agentFace: { kind: "task" },
+                            text: AGENT_MESSAGE_TEXT,
+                        }}
                     />
                     <AgentActivityRow
                         activity={{
@@ -268,6 +297,11 @@ export function AgentActivityRowPage() {
         </ComponentPage>
     );
 }
+
+/** A bot's own picture, small and plain, as a bot's row would carry it. */
+const BOT_PICTURE = `data:image/svg+xml,${encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"><rect width="32" height="32" fill="#2563eb"/><circle cx="16" cy="13" r="6" fill="#fde68a"/><rect x="8" y="22" width="16" height="6" rx="3" fill="#fde68a"/></svg>',
+)}`;
 
 /** One collaborator's delivered message, envelope and all, as Happy Agent writes it. */
 const AGENT_MESSAGE_TEXT = [

@@ -26,6 +26,11 @@ import {
     happyAgentSelectionServiceTierUpdate,
 } from "./happyAgentSessionDraftStore.js";
 import { deepEqual, happyAgentUserError } from "./happyAgentSupport.js";
+import {
+    happyAgentTranscriptSenderIds,
+    type HappyAgentAgentIdentitySource,
+} from "./happyAgentAgentIdentities.js";
+import type { ConversationAgentIdentity } from "../conversation/conversationEntry.js";
 import type {
     HappyAgentAnsweredUserInput,
     HappyAgentBackgroundProcess,
@@ -615,6 +620,8 @@ export interface HappyAgentChatDeps {
     ) => HappyAgentSelection;
     readonly output?: (event: HappyAgentChatOutput) => void;
     readonly effortRemembered?: HappyAgentModelEffortRemembered;
+    /** Names the agents that send messages into this conversation. */
+    readonly agentIdentities?: HappyAgentAgentIdentitySource;
 }
 
 export interface HappyAgentChatTranscriptConnection {
@@ -696,6 +703,45 @@ export function happyAgentChatStoreCreate(
     let sentImages: ReadonlyMap<string, readonly HappyAgentImageInput[]> = new Map();
     let sentImageBytes = 0;
     const conversationCache = happyAgentConversationCacheCreate();
+    /* The agents that sent messages into this transcript, as the window knows
+       them. One map is kept while none of them changed, because the projection
+       compares it by identity and a new one rebuilds every turn. */
+    let senderIdsFrom: readonly ChatElement[] | undefined;
+    let senderIds: ReadonlySet<string> = new Set();
+    let senders: ReadonlyMap<string, ConversationAgentIdentity> = new Map();
+    let unsubscribeSenders: (() => void) | undefined;
+    const sendersResolve = (): boolean => {
+        const source = deps.agentIdentities;
+        if (source === undefined || senderIds.size === 0) return false;
+        const next = new Map<string, ConversationAgentIdentity>();
+        for (const agentId of senderIds) {
+            const known = source.lookup(agentId);
+            if (known === undefined) source.request(agentId);
+            else next.set(agentId, known);
+        }
+        if (
+            next.size === senders.size &&
+            [...next].every(([agentId, known]) => deepEqual(known, senders.get(agentId)))
+        )
+            return false;
+        senders = next;
+        return true;
+    };
+    const sendersFollow = (elements: readonly ChatElement[]): void => {
+        if (elements === senderIdsFrom) return;
+        senderIdsFrom = elements;
+        const ids = happyAgentTranscriptSenderIds(elements);
+        if (ids.size === senderIds.size && [...ids].every((agentId) => senderIds.has(agentId)))
+            return;
+        senderIds = ids;
+        sendersResolve();
+        // Followed only once someone has written in: a transcript nobody else
+        // speaks in has nothing to name, and needs no word of the list moving.
+        if (senderIds.size > 0 && deps.agentIdentities !== undefined)
+            unsubscribeSenders ??= deps.agentIdentities.subscribe(() => {
+                if (!disposed && sendersResolve()) commit();
+            });
+    };
     /* Nothing is projected into this conversation from outside it, and the
        projection compares what it was given last time, so the empty list is one
        object rather than a new one per commit. */
@@ -735,6 +781,7 @@ export function happyAgentChatStoreCreate(
             }));
         }
         const subagents = connected === undefined ? [] : transcriptSubagentsProject(connected);
+        sendersFollow(elements);
         const tasks = connected === undefined ? [] : transcriptTasksProject(connected);
         const goal = connected === undefined ? undefined : transcriptGoalProject(connected);
         const backgroundProcesses =
@@ -753,6 +800,7 @@ export function happyAgentChatStoreCreate(
                       answeredUserInputs: transcriptAnsweredUserInputs,
                       expandedGroupIds: expandedTurnIds,
                       subagents,
+                      agentIdentities: senders,
                   });
         const withHistory: readonly ConversationEntry[] =
             connected?.loadingMore === true
@@ -1303,6 +1351,7 @@ export function happyAgentChatStoreCreate(
             stop();
             unsubscribeMutationRejections();
             unsubscribeCatalog?.();
+            unsubscribeSenders?.();
             storeUnsubscribe();
             listeners.clear();
             pendingMutationIds.clear();

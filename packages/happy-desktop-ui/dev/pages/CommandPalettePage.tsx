@@ -64,7 +64,7 @@ const suggestions: CommandPaletteResultsSection[] = [
                 kind: "command",
                 id: "workspace-new",
                 icon: "branch",
-                shortcut: commandShortcut("n"),
+                shortcut: commandShortcut("n", { shift: true }),
                 title: "New workspace",
             },
             { kind: "command", id: "settings-open", icon: "settings", title: "Open settings" },

@@ -22,6 +22,7 @@ import {
     HAPPY_AGENT_GROUP_UNLISTED_REFUSAL,
     projectsVisibilityStoreCreate,
 } from "happy-desktop-state";
+import { commandPaletteSuggestionRows } from "../../sources/commandPaletteResults";
 import {
     AppHappyAgentView,
     type AppHappyAgentDirectorySnapshot,
@@ -506,4 +507,68 @@ it("renames a task from its context menu on a Happy Agent that renames them", ()
     );
     expect(actions.taskRenameOpen).toHaveBeenCalledWith("billing");
     expect(actions.taskLeave).not.toHaveBeenCalled();
+});
+
+const commandN = (target: Element | Window = window) =>
+    fireEvent.keyDown(target, { key: "n", code: "KeyN", metaKey: true });
+
+it("opens New task on the machine on screen with Command-N, and shows the chord on its +", () => {
+    const onTaskCreateOpen = vi.fn();
+    const { container } = view({
+        onTaskCreateOpen,
+        entries: (actions) => [entry("local", actions, { version: CREATES })],
+    });
+    const create = container.querySelector<HTMLButtonElement>(
+        '[aria-label="New task"][data-happy-desktop-ui="sidebar-section-action"]',
+    )!;
+    expect(create.getAttribute("aria-keyshortcuts")).toBe("Meta+N");
+    expect(create.querySelector('[data-happy-desktop-ui="key-cap"]')).not.toBeNull();
+
+    commandN();
+    expect(onTaskCreateOpen).toHaveBeenCalledWith("local");
+    // Shift-Command-N is the new workspace's chord now, not this one.
+    fireEvent.keyDown(window, { key: "N", code: "KeyN", metaKey: true, shiftKey: true });
+    expect(onTaskCreateOpen).toHaveBeenCalledTimes(1);
+
+    // Typing does not hold it back, as with every window chord: a chord is not text.
+    const field = document.createElement("textarea");
+    document.body.append(field);
+    field.focus();
+    commandN(field);
+    expect(onTaskCreateOpen).toHaveBeenCalledTimes(2);
+    field.remove();
+});
+
+it("leaves Command-N alone on a Happy Agent that cannot make tasks", () => {
+    const onTaskCreateOpen = vi.fn();
+    const { container } = view({
+        onTaskCreateOpen,
+        entries: (actions) => [entry("local", actions)],
+    });
+    commandN();
+    expect(onTaskCreateOpen).not.toHaveBeenCalled();
+    expect(container.querySelector('[aria-keyshortcuts="Meta+N"]')).toBeNull();
+});
+
+it("offers New task in the command palette with its chord, only where a task can be made", () => {
+    const context = {
+        archivedSessions: [],
+        happyAgentId: "local",
+        projects: [],
+        sessionCreateAvailable: false,
+        tabs: [],
+        workspaceCreateAvailable: false,
+    };
+    const rows = commandPaletteSuggestionRows({ ...context, taskCreateAvailable: true });
+    const task = rows.find((candidate) => candidate.id === "action:task-create");
+    expect(task).toMatchObject({
+        title: "New task",
+        shortcut: { caps: "⌘N" },
+        command: { kind: "taskCreate" },
+    });
+    expect(
+        commandPaletteSuggestionRows({ ...context, taskCreateAvailable: false }).some(
+            (candidate) => candidate.id === "action:task-create",
+        ),
+    ).toBe(false);
 });

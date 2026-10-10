@@ -338,6 +338,11 @@
    region that overlapped this heading would otherwise hand the press to the
    window manager instead of to the button. Stated here rather than relying on
    the shell so the guarantee travels with the control. */
+/* The anchor for a chord's floating key cap under the control. */
+.happy-sidebar__section-action[data-shortcut-hint] {
+    position: relative;
+}
+
 .happy-sidebar__section-action {
     display: flex;
     flex: none;

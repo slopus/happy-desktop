@@ -86,6 +86,24 @@ export interface ConversationMessageProjection {
     readonly createdAt: string;
 }
 
+/**
+ * How an agent is pictured, the same way its own row pictures it: a bot's
+ * picture, a team task's owner's photo or initials, the tasks glyph for a task
+ * on a standalone machine, or the mark generated from a seed for anything with
+ * no picture of its own.
+ */
+export type ConversationAgentFace =
+    | { readonly kind: "image"; readonly url: string }
+    | { readonly kind: "initials"; readonly initials: string }
+    | { readonly kind: "task" }
+    | { readonly kind: "generated"; readonly seed: string };
+
+/** A known agent as a transcript names it. */
+export interface ConversationAgentIdentity {
+    readonly name: string;
+    readonly face: ConversationAgentFace;
+}
+
 /** Lifecycle of one piece of agent activity, shared by tool calls and shell runs. */
 export type ConversationActivityStatus =
     | "running"
@@ -227,8 +245,10 @@ export type ConversationActivity =
           readonly kind: "agentMessage";
           /** The sending agent, exactly as Happy Agent identified it. */
           readonly agentId: string;
-          /** That agent's title, when this session knows the agent by one. */
+          /** That agent's name — a bot's, a task's, or a session's title — when known. */
           readonly agentName?: string;
+          /** How that agent is pictured wherever else it is listed, when known. */
+          readonly agentFace?: ConversationAgentFace;
           /** The message as it arrived, addressing envelope included. */
           readonly text: string;
       }

@@ -63,6 +63,7 @@ export type CommandPaletteCommand =
       }
     | { readonly kind: "sessionCreate" }
     | { readonly kind: "workspaceCreate" }
+    | { readonly kind: "taskCreate" }
     | { readonly kind: "settingsOpen" }
     | { readonly kind: "settingsSectionOpen"; readonly section: string }
     | { readonly kind: "updateApply" };
@@ -214,6 +215,8 @@ export interface CommandPaletteContext {
     readonly sessionCreateAvailable: boolean;
     /** Whether a new workspace can be made in the addressed project. */
     readonly workspaceCreateAvailable: boolean;
+    /** Whether a new task can be made on the addressed Happy Agent. */
+    readonly taskCreateAvailable: boolean;
 }
 
 export interface CommandPaletteInput extends CommandPaletteContext {
@@ -820,6 +823,18 @@ function actionRows(
                       glyph: { kind: "icon" as const, name: "plus" as const },
                       shortcut: APP_SHORTCUTS.sessionCreate,
                       command: { kind: "sessionCreate" as const },
+                  },
+              ]
+            : []),
+        ...(context.taskCreateAvailable
+            ? [
+                  {
+                      kind: "command" as const,
+                      id: "action:task-create",
+                      title: "New task",
+                      glyph: { kind: "icon" as const, name: "tasks" as const },
+                      shortcut: APP_SHORTCUTS.taskCreate,
+                      command: { kind: "taskCreate" as const },
                   },
               ]
             : []),

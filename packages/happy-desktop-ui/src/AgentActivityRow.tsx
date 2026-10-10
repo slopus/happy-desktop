@@ -2,6 +2,7 @@ import { useState, type CSSProperties } from "react";
 import type {
     ConversationActivity,
     ConversationActivityPresentation,
+    ConversationAgentFace,
     ConversationActivityReview,
     ConversationActivityStatus,
     ConversationFileDiff,
@@ -9,6 +10,8 @@ import type {
     ConversationToolCall,
 } from "happy-desktop-state";
 import { compactCount, changeCountLabel } from "./countText";
+import { Avatar } from "./Avatar";
+import { AvatarBrutalist } from "./AvatarBrutalist";
 import { CopyButton } from "./CopyButton";
 import { DiffSnippet, type DiffLine } from "./DiffSnippet";
 import { filePreviewKind } from "./FilePreview";
@@ -1067,6 +1070,7 @@ function AgentReasoningActivity(props: {
 function AgentMessageActivity(props: {
     agentId: string;
     agentName?: string;
+    agentFace?: ConversationAgentFace;
     text: string;
     defaultExpanded?: boolean;
     expanded?: boolean;
@@ -1098,6 +1102,7 @@ function AgentMessageActivity(props: {
                     disclosureAnchor?.(event.currentTarget);
                     setExpanded(!expanded);
                 }}
+                title={props.agentName === undefined ? props.agentId : undefined}
                 type="button"
             >
                 <span
@@ -1105,7 +1110,11 @@ function AgentMessageActivity(props: {
                     className="happy-agent-activity__glyph"
                     data-happy-desktop-ui="agent-activity-glyph"
                 >
-                    <Icon name="agents" size={12} />
+                    {props.agentFace === undefined ? (
+                        <Icon name="agents" size={12} />
+                    ) : (
+                        <AgentMessageFace face={props.agentFace} />
+                    )}
                 </span>
                 <span
                     className="happy-agent-activity__verb"
@@ -1117,7 +1126,7 @@ function AgentMessageActivity(props: {
                     className="happy-agent-activity__text"
                     data-happy-desktop-ui="agent-activity-text"
                 >
-                    from {props.agentName ?? props.agentId}
+                    from {props.agentName ?? agentIdShort(props.agentId)}
                 </ScrollingText>
                 {hasBody ? (
                     <span aria-hidden="true" className="happy-agent-activity__chevron">
@@ -1136,6 +1145,44 @@ function AgentMessageActivity(props: {
             ) : null}
         </div>
     );
+}
+
+/** The edge of a sender's face: the glyph lane's own, so a face never moves the verb. */
+const AGENT_MESSAGE_FACE_SIZE = 14;
+
+/**
+ * The sender's face, as its own row elsewhere pictures it, shrunk to the glyph
+ * lane: a picture, initials, the tasks glyph, or the generated mark.
+ */
+function AgentMessageFace(props: { face: ConversationAgentFace }) {
+    const face = props.face;
+    if (face.kind === "generated")
+        return <AvatarBrutalist id={face.seed} size={AGENT_MESSAGE_FACE_SIZE} />;
+    return (
+        <Avatar
+            {...(face.kind === "image" ? { imageUrl: face.url } : {})}
+            {...(face.kind === "task" ? { icon: "tasks" as const } : {})}
+            initials={face.kind === "initials" ? face.initials : ""}
+            size="xs"
+            style={{
+                borderRadius: 4,
+                fontSize: 7,
+                height: AGENT_MESSAGE_FACE_SIZE,
+                width: AGENT_MESSAGE_FACE_SIZE,
+            }}
+            type="agent"
+        />
+    );
+}
+
+/**
+ * An agent nobody here can name — deleted, or not visible to this reader — by
+ * the start of its id: enough to tell two apart, short enough for one row. The
+ * whole id stays in the message, where the receiving model replies to it, and
+ * on the row's tooltip.
+ */
+function agentIdShort(agentId: string): string {
+    return agentId.length > 10 ? `${agentId.slice(0, 8)}…` : agentId;
 }
 
 /** A shell-mode run: the command line, its exit state, and its captured output. */
@@ -1328,6 +1375,7 @@ export function AgentActivityRow(props: AgentActivityRowProps) {
                 <AgentMessageActivity
                     agentId={activity.agentId}
                     {...(activity.agentName === undefined ? {} : { agentName: activity.agentName })}
+                    {...(activity.agentFace === undefined ? {} : { agentFace: activity.agentFace })}
                     defaultExpanded={props.defaultExpanded}
                     expanded={props.expanded}
                     onExpandedChange={props.onExpandedChange}

@@ -6,6 +6,7 @@ import "./styles/icon.css";
 import "./styles/vector-icon.css";
 import "./styles/diff-snippet.css";
 import "./styles/agent-activity-row.css";
+import "./styles/avatar.css";
 import "./styles/typed-text.css";
 import { AgentActivityRow } from "./AgentActivityRow";
 import { createRenderer } from "./testing";
@@ -368,4 +369,60 @@ it("seats a verb on the same line whichever motion profile renders it", async ()
     const typedLabel = bounds('[data-testid="typed-line"] .happy-typed-text');
     const stillLabel = bounds('[data-testid="still-line"] .happy-agent-activity__still-text');
     expect(stillLabel.height).toBe(typedLabel.height);
+}, 120_000);
+
+it("names a message's sender with its face, and an unnamed one by the start of its id", async () => {
+    const text = "Message from agent byf9avtdw66p0lmixwkcut57:\n\nThe build is green.";
+    const view = createRenderer();
+    view.render(
+        () => (
+            <div>
+                <AgentActivityRow
+                    activity={{
+                        kind: "agentMessage",
+                        agentId: "byf9avtdw66p0lmixwkcut57",
+                        agentName: "Release helper",
+                        agentFace: { kind: "initials", initials: "RH" },
+                        text,
+                    }}
+                    data-testid="named"
+                />
+                <AgentActivityRow
+                    activity={{
+                        kind: "agentMessage",
+                        agentId: "p0o9i8u7y6t5r4e3w2q1a2s3",
+                        agentName: "Ship the launch",
+                        agentFace: { kind: "task" },
+                        text,
+                    }}
+                    data-testid="task"
+                />
+                <AgentActivityRow
+                    activity={{ kind: "agentMessage", agentId: "byf9avtdw66p0lmixwkcut57", text }}
+                    data-testid="unnamed"
+                />
+            </div>
+        ),
+        { width: 520, height: 320, padding: 16 },
+    );
+    await view.ready();
+    const part = (row: string, name: string) =>
+        view.container.querySelector(`[data-testid="${row}"] [data-happy-desktop-ui="${name}"]`);
+
+    expect(part("named", "agent-activity-text")?.textContent).toBe("from Release helper");
+    expect(part("named", "avatar-initials")?.textContent).toBe("RH");
+    expect(part("task", "agent-activity-text")?.textContent).toBe("from Ship the launch");
+    expect(part("task", "avatar-glyph")).not.toBeNull();
+    expect(part("task", "avatar-initials")).toBeNull();
+
+    expect(part("unnamed", "agent-activity-text")?.textContent).toBe("from byf9avtd…");
+    const header = part("unnamed", "agent-activity-header") as HTMLButtonElement;
+    expect(header.title).toBe("byf9avtdw66p0lmixwkcut57");
+    // The message itself keeps the whole id: the receiving model replies to it.
+    header.click();
+    await vi.waitFor(() =>
+        expect(part("unnamed", "agent-activity-message-body")?.textContent).toContain(
+            "Message from agent byf9avtdw66p0lmixwkcut57:",
+        ),
+    );
 }, 120_000);

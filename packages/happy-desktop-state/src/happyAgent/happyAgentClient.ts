@@ -4,6 +4,10 @@ import type {
 } from "../modules/terminal/terminalState.js";
 import type { HappyAgentClient } from "@slopus/happy-agent-client";
 import { happyAgentProjectAddError } from "./happyAgentProjectRegistration.js";
+import {
+    happyAgentAgentIdentitySourceCreate,
+    type HappyAgentAgentIdentitySource,
+} from "./happyAgentAgentIdentities.js";
 import type { MutationRejectedDelta } from "../happyAgentConnection/index.js";
 import type { HappyAgentConnection } from "../happyAgentConnection/index.js";
 import {
@@ -435,6 +439,7 @@ export function happyAgentWorkspaceClientCreate(
     });
     const memory = happyAgentWorkspaceMemoryStoreCreate(deps.workspaceMemoryPersistence);
     let sessionListStore: HappyAgentSessionListStore | undefined;
+    let agentIdentities: HappyAgentAgentIdentitySource | undefined;
     let inboxStore: HappyAgentInboxStore | undefined;
     let providerUsageStore: HappyAgentProviderUsageStore | undefined;
     let happyIntegrationStore: HappyAgentIntegrationStore | undefined;
@@ -538,7 +543,7 @@ export function happyAgentWorkspaceClientCreate(
         archivedRead();
     };
 
-    return {
+    const workspace: HappyAgentWorkspaceClient = {
         models,
         memory,
         catalogRead: () => models.load().then((snapshot) => snapshot.catalog),
@@ -714,6 +719,13 @@ export function happyAgentWorkspaceClientCreate(
                         modelSelect: (current, input) => models.modelSelect(current, input),
                         effortRemembered: (providerId, modelId) =>
                             models.effortRemembered(providerId, modelId),
+                        // A conversation is opened through the workspace that
+                        // already lists everything, so the list is there to
+                        // name whoever writes into it.
+                        agentIdentities: (agentIdentities ??= happyAgentAgentIdentitySourceCreate({
+                            client: deps.client,
+                            list: workspace.sessionList(),
+                        })),
                         output: deps.chatOutput
                             ? (event) => deps.chatOutput?.(sessionId, event)
                             : undefined,
@@ -826,4 +838,5 @@ export function happyAgentWorkspaceClientCreate(
             chats.clear();
         },
     };
+    return workspace;
 }

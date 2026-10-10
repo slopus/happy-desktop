@@ -37,7 +37,7 @@ export type SidebarItemAction = {
     /** Keeps the control visible in its lane while refusing an unavailable action. */
     disabled?: boolean;
     reveal?: "hover";
-    /** Command-N discovery for the current project's new-workspace control. */
+    /** Shift-Command-N discovery for the current project's new-workspace control. */
     shortcut?: KeyboardShortcut;
 };
 export type SidebarItem = {
@@ -208,6 +208,8 @@ export type SidebarSectionAction = {
      * default because that is what a heading control has always done here.
      */
     reveal?: "hover" | "always";
+    /** The window chord that does the same thing, shown under the control on hover. */
+    shortcut?: KeyboardShortcut;
 };
 
 /**
@@ -2240,9 +2242,15 @@ export function Sidebar(props: SidebarProps) {
                                                             aria-busy={
                                                                 action.busy ? true : undefined
                                                             }
+                                                            aria-keyshortcuts={
+                                                                action.shortcut?.aria
+                                                            }
                                                             aria-label={action.label}
                                                             className="happy-sidebar__section-action"
                                                             data-busy={action.busy ? "" : undefined}
+                                                            data-shortcut-hint={
+                                                                action.shortcut ? "" : undefined
+                                                            }
                                                             data-happy-desktop-ui={
                                                                 source === "heading"
                                                                     ? "sidebar-section-action"
@@ -2270,6 +2278,13 @@ export function Sidebar(props: SidebarProps) {
                                                                     size={12}
                                                                 />
                                                             )}
+                                                            {action.shortcut ? (
+                                                                <KeyCap
+                                                                    className="happy-shortcut-hint--floating"
+                                                                    decorative
+                                                                    keys={action.shortcut.caps}
+                                                                />
+                                                            ) : null}
                                                         </button>
                                                     ) : null,
                                                 )}

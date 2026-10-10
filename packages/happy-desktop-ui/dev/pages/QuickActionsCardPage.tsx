@@ -8,7 +8,12 @@ export const componentNumber = "C-274";
 const items: QuickActionsCardItem[] = [
     { id: "update", emphasis: "update", title: "Update Happy" },
     { id: "chat-new", icon: "plus", shortcut: commandShortcut("t"), title: "New chat" },
-    { id: "workspace-new", icon: "branch", shortcut: commandShortcut("n"), title: "New workspace" },
+    {
+        id: "workspace-new",
+        icon: "branch",
+        shortcut: commandShortcut("n", { shift: true }),
+        title: "New workspace",
+    },
     { id: "tab-close", icon: "close", shortcut: commandShortcut("w"), title: "Close tab" },
     {
         id: "panel-toggle",

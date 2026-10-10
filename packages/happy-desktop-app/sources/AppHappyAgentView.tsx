@@ -1726,6 +1726,8 @@ function happyAgentSections(
     projectsHidden: boolean,
     shortcutProject?: { readonly projectId: HappyAgentProjectId; readonly happyAgentId: string },
     folded?: ReadonlySet<string>,
+    /** The machine Cmd-N makes a task on, whose Tasks heading wears the chord. */
+    shortcutHappyAgentId?: string,
 ): SidebarSection[] {
     return directory.happyAgents.flatMap((happyAgent) => [
         // Keep the heading even with no bots: its action is where the first
@@ -1772,7 +1774,7 @@ function happyAgentSections(
         // A Happy Agent from before tasks has no task list to show, so it
         // offers no heading that could only ever stand empty.
         ...(happyAgentTasksSupported(happyAgent)
-            ? [happyAgentTasksSection(happyAgent, titleShimmerEnabled)]
+            ? [happyAgentTasksSection(happyAgent, titleShimmerEnabled, shortcutHappyAgentId)]
             : []),
         // The reader's own choice in settings, for every connection alike: the
         // section goes entirely, heading and all, rather than folding.
@@ -1799,6 +1801,7 @@ function happyAgentSections(
 function happyAgentTasksSection(
     happyAgent: AppHappyAgentEntry,
     titleShimmerEnabled: boolean,
+    shortcutHappyAgentId?: string,
 ): SidebarSection {
     const connected = happyAgent.status === "connected" && happyAgent.session !== undefined;
     return {
@@ -1823,6 +1826,11 @@ function happyAgentTasksSection(
                       icon: "plus" as const,
                       label: "New task",
                       reveal: "always" as const,
+                      // The chord answers for the machine on screen, so only
+                      // that machine's heading shows it.
+                      ...(shortcutHappyAgentId === happyAgent.id
+                          ? { shortcut: APP_SHORTCUTS.taskCreate }
+                          : {}),
                   },
                   secondaryAction: {
                       icon: "search" as const,
@@ -2213,6 +2221,16 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
     const workspaceCreateTarget =
         active && shortcutProject?.lifecycle.phase === "ready"
             ? { projectId: shortcutProject.id, happyAgentId: active.id }
+            : undefined;
+    // Cmd-N makes a task where the Tasks heading's + would: on the machine on
+    // screen, once it is up and new enough to make them. Anywhere else the
+    // chord is left alone rather than answered with an error.
+    const taskCreateTarget =
+        active?.session?.workspace &&
+        activeAvailability?.online === true &&
+        props.onTaskCreateOpen &&
+        happyAgentTaskCreateSupported(active)
+            ? active.id
             : undefined;
     const activeHappyAgentOnline = (): boolean => {
         const current = props.happyAgents.get();
@@ -2654,6 +2672,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                     projectsHidden,
                     workspaceCreateTarget,
                     props.sidebarCollapse ? sidebarCollapse.collapsed : undefined,
+                    taskCreateTarget,
                 ),
                 sidebarCollapse.collapsed,
             )}
@@ -2677,6 +2696,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                 : undefined,
         workspace: active?.session?.workspace,
         workspaceCreateProjectId: workspaceCreateTarget?.projectId,
+        taskCreateAvailable: taskCreateTarget !== undefined,
     };
     // The same suggestions the empty palette offers, on the gesture the reader
     // already has for discovering chords. The shell mounts it only while
@@ -2697,6 +2717,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
         onSettingsOpen: props.onSettingsOpen,
         onSettingsSectionOpen: props.onSettingsSectionOpen,
         onUpdateApply: props.onUpdateApply,
+        onTaskCreateOpen: props.onTaskCreateOpen,
         store: commandPaletteStore,
         settings: settingsStore,
         titleShimmer: titleShimmerStore,
@@ -2893,6 +2914,20 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                     ]}
                 />
             ) : null}
+            {/* Cmd-N belongs to the window too: a task is made from wherever
+                the reader is, as the Tasks heading's + makes one. Bound only
+                while the machine on screen can make one, so an older Happy
+                Agent leaves the chord to do nothing at all. */}
+            {taskCreateTarget !== undefined ? (
+                <WindowShortcuts
+                    actions={[
+                        {
+                            run: () => props.onTaskCreateOpen?.(taskCreateTarget),
+                            shortcut: APP_SHORTCUTS.taskCreate,
+                        },
+                    ]}
+                />
+            ) : null}
             {/* The window's own dialogs, mounted once beside whatever screen is
                 showing rather than inside one of them. Naming a row belongs to
                 the sidebar, and Create belongs to the window: both are reached
@@ -2953,6 +2988,8 @@ interface HappyAgentPaletteSubject {
     online: boolean;
     /** The project a new workspace would be made in, when there is one. */
     workspaceCreateProjectId?: HappyAgentProjectId;
+    /** Whether a new task can be made on this machine right now. */
+    taskCreateAvailable: boolean;
     updateReady?: { readonly action: "refresh" | "restart"; readonly version?: string };
     workspace?: HappyAgentWorkspaceStore;
 }
@@ -2976,6 +3013,7 @@ interface HappyAgentPaletteActions {
     onSettingsOpen(): void;
     onSettingsSectionOpen?(section: string): void;
     onUpdateApply?(): void;
+    onTaskCreateOpen?(happyAgentId: string): void;
 }
 
 /**
@@ -3119,6 +3157,7 @@ function paletteContext(
             subject.online &&
             subject.workspace !== undefined &&
             subject.workspaceCreateProjectId !== undefined,
+        taskCreateAvailable: subject.taskCreateAvailable,
     };
 }
 
@@ -3493,6 +3532,9 @@ function paletteCommandRun(
             void workspace.worktreeCreate(projectId).catch(() => undefined);
             return;
         }
+        case "taskCreate":
+            if (props.taskCreateAvailable) props.onTaskCreateOpen?.(props.happyAgentId);
+            return;
         case "settingsOpen":
             props.onSettingsOpen();
             return;
@@ -3606,7 +3648,7 @@ interface HappyAgentWorkspaceSurfaceProps {
     viewerId: string;
     groupId?: string;
     chatId?: string;
-    /** Ready online project that Cmd-N and its sidebar cap both address. */
+    /** Ready online project that Shift-Cmd-N and its sidebar cap both address. */
     workspaceCreateProjectId?: HappyAgentProjectId;
     onChatSelect(groupId: string | undefined, chatId?: string, replace?: boolean): void;
     onChatClose(groupId: string, chatId: string, fallbackChatId?: string): boolean;
