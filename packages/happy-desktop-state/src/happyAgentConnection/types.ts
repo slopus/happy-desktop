@@ -622,6 +622,56 @@ export interface BotSubtaskGroup {
     subtasks: readonly BotSubtaskGroup[];
 }
 
+/**
+ * Who a task belongs to, as far as this connection can say.
+ *
+ * A task has no face of its own, so its row wears its owner's. In team mode the
+ * owner is a team member resolved through the user directory; in standalone
+ * mode it is the one local person, whose profile this connection already reads.
+ * Either may carry no picture, and a team task may name nobody at all, so every
+ * field is optional and a row falls back to what is present.
+ */
+export interface TaskOwner {
+    /** The team member, absent in standalone mode or when nobody was identified. */
+    userId?: string;
+    /** The owner's display name, once it is known. */
+    name?: string;
+    /** The owner's photo; the bytes are fetched separately. */
+    avatar?: { url: string; thumbhash: string };
+}
+
+/**
+ * A task: a bot-like conversation for one piece of work, with an owner and a
+ * place in each member's own list.
+ *
+ * Every task the host holds is stated here, joined or not, so a surface can
+ * offer the ones the reader has not joined. `membership` is the caller's own
+ * place in it and is what decides whether it is in their list and where.
+ */
+export interface TaskGroup {
+    id: string;
+    /** The task's dedicated workspace, which is what its conversation addresses. */
+    workspaceId: string;
+    name: string;
+    path: string;
+    createdAt: number;
+    archived: boolean;
+    /**
+     * Whether the caller may archive and unarchive it. False when the host has
+     * not said: a task only known from `task.created` carries no answer until
+     * it is read whole.
+     */
+    canArchive: boolean;
+    /** The caller's place in the task, present only while they have joined it. */
+    membership?: { orderKey: string; joinedAt: number };
+    owner: TaskOwner;
+    /** The task's one conversation. */
+    session: GroupSession;
+    /** Active, user-interactive child tasks in the daemon's explicit tree order. */
+    subtasks: readonly BotSubtaskGroup[];
+    unread: { count: number; attentionCount: number; reason?: string; since?: number };
+}
+
 export interface GroupsState {
     connection: ConnectionState;
     sessionsComplete: boolean;
@@ -663,7 +713,12 @@ export type MutationAction =
     | "reorder_group"
     | "reorder_bot"
     | "reorder_session"
-    | "reorder_subtask";
+    | "reorder_subtask"
+    | "join_task"
+    | "leave_task"
+    | "reorder_task"
+    | "archive_task"
+    | "unarchive_task";
 
 export interface MutationRejectedDelta {
     action: string;
@@ -697,6 +752,7 @@ export interface HappyAgentGroupsSubscriptionOptions {
         projects: readonly ProjectGroup[],
         state: GroupsState,
         bots: readonly BotGroup[],
+        tasks: readonly TaskGroup[],
     ) => void;
     onDelta?: (delta: GroupDelta) => void;
     onError?: (error: unknown) => void;
@@ -705,6 +761,8 @@ export interface HappyAgentGroupsSubscriptionOptions {
 export interface HappyAgentGroupsConnection {
     projects: () => readonly ProjectGroup[];
     bots: () => readonly BotGroup[];
+    /** Every task the host holds, oldest first, each with the caller's membership. */
+    tasks: () => readonly TaskGroup[];
     state: () => GroupsState;
     close: () => void;
 }
@@ -889,6 +947,15 @@ export interface HappyAgentConnection {
     reorderSession(sessionId: string, afterId: string | null): MutationId;
     /** Moves one bot subtask among its siblings, after `afterId` or first when null. */
     reorderSubtask(sessionId: string, afterId: string | null): MutationId;
+    /** Joins a task, putting it at the top of the caller's own list. */
+    joinTask(taskId: string): MutationId;
+    /** Takes a task out of the caller's own list. It never archives the task. */
+    leaveTask(taskId: string): MutationId;
+    /** Moves one joined task after `afterId` in the caller's list, or first when null. */
+    reorderTask(taskId: string, afterId: string | null): MutationId;
+    /** Archives a task for everyone; only a caller the task reports `canArchive` for may. */
+    archiveTask(taskId: string): MutationId;
+    unarchiveTask(taskId: string): MutationId;
     close(): void;
 }
 

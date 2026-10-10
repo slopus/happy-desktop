@@ -32,6 +32,8 @@ import type { DesktopRuntimeStore } from "./runtimeStore";
 export const LOCAL_HAPPY_AGENT_ID = "local";
 const PROJECT_ADD_IDLE: HappyAgentProjectAddSnapshot = { pending: false };
 const NO_SUBTASK_FAILURES: HappyAgentSessionListSnapshot["subtaskFailures"] = new Map();
+const NO_TASKS: HappyAgentSessionListSnapshot["tasks"] = [];
+const NO_TASK_FAILURES: HappyAgentSessionListSnapshot["taskFailures"] = new Map();
 
 export interface HappyAgentDirectoryEntry {
     readonly id: string;
@@ -52,6 +54,10 @@ export interface HappyAgentDirectoryEntry {
     readonly projectAdd: HappyAgentProjectAddSnapshot;
     /** Bot subtasks whose archive or move the host refused, with the reason to show. */
     readonly subtaskFailures: HappyAgentSessionListSnapshot["subtaskFailures"];
+    /** This Happy Agent's tasks the reader has joined, in the reader's own order. */
+    readonly tasks: HappyAgentSessionListSnapshot["tasks"];
+    /** Task acts the host refused, with the reason to show. */
+    readonly taskFailures: HappyAgentSessionListSnapshot["taskFailures"];
     readonly session?: HappyAgentSession;
     readonly setup?: HappyAgentConnectionHandle["setup"];
 }
@@ -133,7 +139,14 @@ function projectsRead(
     session: HappyAgentSession,
 ): Pick<
     HappyAgentDirectoryEntry,
-    "bots" | "botsCreating" | "projects" | "projectsStatus" | "projectAdd" | "subtaskFailures"
+    | "bots"
+    | "botsCreating"
+    | "projects"
+    | "projectsStatus"
+    | "projectAdd"
+    | "subtaskFailures"
+    | "tasks"
+    | "taskFailures"
 > {
     const workspace = session.workspace.get();
     const projects = workspace.list.projects;
@@ -145,6 +158,8 @@ function projectsRead(
             projects.type === "ready" ? "ready" : projects.type === "error" ? "error" : "loading",
         projectAdd: workspace.projectAdd,
         subtaskFailures: workspace.list.subtaskFailures,
+        tasks: workspace.list.tasks,
+        taskFailures: workspace.list.taskFailures,
     };
 }
 
@@ -152,7 +167,14 @@ function projectsMatch(
     entry: HappyAgentDirectoryEntry,
     next: Pick<
         HappyAgentDirectoryEntry,
-        "bots" | "botsCreating" | "projects" | "projectsStatus" | "projectAdd" | "subtaskFailures"
+        | "bots"
+        | "botsCreating"
+        | "projects"
+        | "projectsStatus"
+        | "projectAdd"
+        | "subtaskFailures"
+        | "tasks"
+        | "taskFailures"
     >,
 ): boolean {
     return (
@@ -161,7 +183,9 @@ function projectsMatch(
         entry.projects === next.projects &&
         entry.projectsStatus === next.projectsStatus &&
         entry.projectAdd === next.projectAdd &&
-        entry.subtaskFailures === next.subtaskFailures
+        entry.subtaskFailures === next.subtaskFailures &&
+        entry.tasks === next.tasks &&
+        entry.taskFailures === next.taskFailures
     );
 }
 
@@ -223,6 +247,8 @@ export function happyAgentDirectoryStoreCreate(
             projectsStatus: "loading",
             projectAdd: PROJECT_ADD_IDLE,
             subtaskFailures: NO_SUBTASK_FAILURES,
+            tasks: NO_TASKS,
+            taskFailures: NO_TASK_FAILURES,
             status: "connecting",
         },
     };
@@ -288,6 +314,8 @@ export function happyAgentDirectoryStoreCreate(
             projectsStatus: "loading",
             projectAdd: PROJECT_ADD_IDLE,
             subtaskFailures: NO_SUBTASK_FAILURES,
+            tasks: NO_TASKS,
+            taskFailures: NO_TASK_FAILURES,
             session: undefined,
             setup: undefined,
         };
@@ -534,6 +562,8 @@ export function happyAgentDirectoryStoreCreate(
                                 projectsStatus: "loading",
                                 projectAdd: PROJECT_ADD_IDLE,
                                 subtaskFailures: NO_SUBTASK_FAILURES,
+                                tasks: NO_TASKS,
+                                taskFailures: NO_TASK_FAILURES,
                                 status: "connecting",
                             },
                         };

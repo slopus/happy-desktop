@@ -15,6 +15,7 @@ declare const happyAgentProjectIdBrand: unique symbol;
 declare const happyAgentWorktreeIdBrand: unique symbol;
 declare const happyAgentTerminalIdBrand: unique symbol;
 declare const happyAgentBotIdBrand: unique symbol;
+declare const happyAgentTaskIdBrand: unique symbol;
 
 /** Branded session identifier (CUID2 on the wire) so ids are not interchangeable with plain strings. */
 export type HappyAgentSessionId = string & { readonly [happyAgentSessionIdBrand]: true };
@@ -37,6 +38,9 @@ export type HappyAgentTerminalId = string & { readonly [happyAgentTerminalIdBran
 
 /** Branded identifier of a bot the daemon owns durably (CUID2 on the wire). */
 export type HappyAgentBotId = string & { readonly [happyAgentBotIdBrand]: true };
+
+/** Branded identifier of a task the daemon owns durably (CUID2 on the wire). */
+export type HappyAgentTaskId = string & { readonly [happyAgentTaskIdBrand]: true };
 
 /**
  * A bot: one persistent assistant, one dedicated workspace, one conversation
@@ -103,6 +107,45 @@ export interface HappyAgentBotCreating {
     readonly name: string;
     /** The face painted for it, as a URL the row can draw without the host. */
     readonly avatar?: { readonly url: string };
+}
+
+/**
+ * Who a task belongs to. A task has no face of its own, so its row wears this
+ * person's. Every field is optional: a team task may name nobody, and a named
+ * owner may have no picture or not have been read yet.
+ */
+export interface HappyAgentTaskOwner {
+    /** The team member; absent in standalone mode or when nobody was identified. */
+    readonly userId?: string;
+    readonly name?: string;
+    /** The owner's photo, drawn at whatever size the row is. */
+    readonly avatar?: { readonly url: string; readonly thumbhash: string };
+}
+
+/**
+ * A task: one piece of work with one permanent conversation, like a bot, but
+ * with no avatar of its own, an owner, and a place in each member's own list.
+ *
+ * The workspace is what the conversation is addressed through, so `workspaceId`
+ * is the group id a route names — a task is opened the way a bot is. Unlike a
+ * bot's, that workspace cannot be browsed yet: the host answers its file,
+ * terminal, and git routes with 404, so a task is never offered those panels.
+ */
+export interface HappyAgentTask {
+    readonly id: HappyAgentTaskId;
+    readonly workspaceId: HappyAgentWorktreeId;
+    readonly name: string;
+    readonly conversation: ConversationSummary;
+    readonly subtasks: readonly HappyAgentBotSubtask[];
+    readonly owner: HappyAgentTaskOwner;
+    readonly path: string;
+    readonly displayPath: string;
+    readonly createdAt: number;
+    readonly archived: boolean;
+    /** Whether the reader may archive and unarchive it. */
+    readonly canArchive: boolean;
+    /** The reader's place in it; absent until they join. */
+    readonly membership?: { readonly orderKey: string };
 }
 
 /** An active interactive task; its workspace may be shared with its parent. */
@@ -285,7 +328,7 @@ export interface HappyAgentUserInputRequest {
 // Tasks, goals, subagents, background processes
 // ---------------------------------------------------------------------------
 
-export interface HappyAgentTask {
+export interface HappyAgentTodo {
     readonly id: string;
     readonly subject: string;
     readonly description: string;
@@ -642,6 +685,12 @@ export interface HappyAgentProjectCatalog {
     readonly worktrees: readonly HappyAgentWorktree[];
     /** Every active bot, in the order the host keeps them. */
     readonly bots: readonly HappyAgentBot[];
+    /**
+     * Every task the host holds, oldest first, archived ones included. Each
+     * carries the reader's membership when they have joined it; the reader's
+     * own list is these, sorted by that membership.
+     */
+    readonly tasks: readonly HappyAgentTask[];
 }
 
 // ---------------------------------------------------------------------------
@@ -731,7 +780,7 @@ export interface HappyAgentSession {
     readonly queuedMessages: readonly HappyAgentQueuedMessage[];
     readonly pendingUserInputs: readonly HappyAgentUserInputRequest[];
     readonly goal?: HappyAgentGoal;
-    readonly tasks: readonly HappyAgentTask[];
+    readonly tasks: readonly HappyAgentTodo[];
     readonly subagents: readonly SubagentSummary[];
     readonly backgroundProcesses: readonly HappyAgentBackgroundProcess[];
     readonly createdAt: number;

@@ -2,6 +2,7 @@ import { useSyncExternalStore } from "react";
 import type {
     AppearanceStore,
     ExperimentsStore,
+    ProjectsVisibilityStore,
     GptLiveStore,
     HappyAgentInstructionsSnapshot,
     HappyAgentDebugLogSnapshot,
@@ -25,6 +26,7 @@ import {
     happyAgentPermissionLabel,
     happyAgentThinkingLabel,
     experimentsStoreNoop,
+    projectsVisibilityStoreNoop,
     gptLiveStoreNoop,
     happyAgentCloudStoreNoop,
     happyAgentAvailabilityProject,
@@ -300,6 +302,11 @@ export interface AppHappyAgentSettingsViewProps {
      * in a host that remembers no such choice, which withholds them.
      */
     experiments?: ExperimentsStore;
+    /**
+     * Whether this window hides every connection's Projects section. Absent in a
+     * host that remembers no such choice, which offers no control for it.
+     */
+    projectsVisibility?: ProjectsVisibilityStore;
     /** Whether this window sends product analytics events. Absent where it sends none. */
     usageAnalytics?: UsageAnalyticsStore;
     gptLive?: GptLiveStore;
@@ -343,6 +350,12 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
         experimentsStore.subscribe,
         experimentsStore.get,
         experimentsStore.get,
+    );
+    const projectsVisibilityStore = props.projectsVisibility ?? projectsVisibilityStoreNoop;
+    const projectsVisibility = useSyncExternalStore(
+        projectsVisibilityStore.subscribe,
+        projectsVisibilityStore.get,
+        projectsVisibilityStore.get,
     );
     const usageAnalyticsStore = props.usageAnalytics ?? usageAnalyticsAbsent;
     const usageAnalytics = useSyncExternalStore(
@@ -851,6 +864,13 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                     onTitleShimmerChange={(enabled) =>
                         titleShimmerStore.titleShimmerUpdate(enabled)
                     }
+                    {...(props.projectsVisibility
+                        ? {
+                              projectsHidden: projectsVisibility.projectsHidden,
+                              onProjectsHiddenChange: (hidden: boolean) =>
+                                  projectsVisibilityStore.projectsHiddenUpdate(hidden),
+                          }
+                        : {})}
                     onDefaultModelChange={(key) => {
                         const [providerId, ...rest] = key.split(":");
                         const modelId = rest.join(":");

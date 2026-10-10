@@ -36,6 +36,12 @@ export type HappyAgentGeneralSettingsProps = {
     experimentalFeaturesEnabled: boolean;
     /** Whether active session, project, and workspace titles shimmer. */
     titleShimmerEnabled: boolean;
+    /**
+     * Whether the sidebar leaves out every connection's Projects section. Absent
+     * where the host keeps no such choice, which offers no control.
+     */
+    projectsHidden?: boolean;
+    onProjectsHiddenChange?: (hidden: boolean) => void;
     /** Whether this window sends product analytics events. Absent where the host sends none. */
     usageAnalyticsEnabled?: boolean;
     onUsageAnalyticsChange?: (enabled: boolean) => void;
@@ -164,6 +170,22 @@ export function HappyAgentGeneralSettings(props: HappyAgentGeneralSettingsProps)
                     htmlFor="happy-agent-settings-title-shimmer"
                     label="Shimmer active titles"
                 />
+                {props.onProjectsHiddenChange ? (
+                    <FormRow
+                        control={
+                            <Switch
+                                aria-label="Hide projects"
+                                checked={props.projectsHidden === true}
+                                id="happy-agent-settings-projects-hidden"
+                                onChange={props.onProjectsHiddenChange}
+                                size="small"
+                            />
+                        }
+                        description="Leaves the Projects section out of the sidebar for every connection, team and local. Bots and tasks stay listed."
+                        htmlFor="happy-agent-settings-projects-hidden"
+                        label="Hide projects"
+                    />
+                ) : null}
             </HappyAgentSettingsSection>
             <HappyAgentSettingsSection
                 description="Where a web link goes when it is clicked. A link's own menu can always choose the other."

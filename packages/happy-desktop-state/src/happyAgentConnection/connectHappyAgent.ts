@@ -21,6 +21,8 @@ import {
     type SendMessageRequest,
     type SendMessageResponse,
     type SlashCommand,
+    type Task,
+    type TaskMembership,
     type UsageBreakdown,
     type Workspace,
 } from "@slopus/happy-agent-client";
@@ -47,6 +49,7 @@ import {
     projectGroups,
     projectNumericIdentity,
     projectSession,
+    projectTasks,
     replaceResource,
     type SessionProjectionInput,
     type TranscriptMessage,
@@ -64,6 +67,7 @@ import type {
     HappyAgentGroupsSubscriptionOptions,
     HappyAgentSessionSubscriptionOptions,
     ServerCompatibility,
+    TaskOwner,
 } from "./types.js";
 
 const INITIAL_RECONNECT_MS = 250;
@@ -200,6 +204,10 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
             for (const entry of userSessions.get(id) ?? []) {
                 if (!entry.hydrating) publishSession(entry, true);
             }
+            // A task row wears its owner's face, so the catalog is published
+            // again when the person who owns one changes.
+            if (groupsStore.getState().tasks.some((task) => task.ownerUserId === id))
+                publishGroups();
         },
     });
     const ensureMessageUsers = (messages: readonly Message[]): Promise<void> =>
@@ -291,6 +299,12 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
     const processOwners = new Map<string, string>();
     let config: DaemonConfig | undefined;
     let currentUserId: string | undefined;
+    /**
+     * The viewer's own profile, as bootstrap and the profile route last said.
+     * A standalone daemon's tasks belong to this one person, so it is the face
+     * and name their rows wear.
+     */
+    let viewerProfile: Profile | undefined;
     let viewerProfileLoading: Promise<void> | undefined;
     let cursor: string | undefined;
     let resyncTask: Promise<void> | undefined;
@@ -308,11 +322,17 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         readonly projects: readonly Project[];
         readonly workspaces: readonly Workspace[];
         readonly bots: readonly Bot[];
+        /** Every task the host holds, archived ones included. */
+        readonly tasks: readonly Task[];
+        /** The caller's own memberships; order is by `orderKey`, not array position. */
+        readonly taskMemberships: readonly TaskMembership[];
         readonly connection: GroupsState["connection"];
         /** The published group projection, rebuilt by `publishGroups`. */
         readonly groups: ReturnType<typeof projectGroups>;
         /** The published bot projection, rebuilt beside `groups`. */
         readonly botGroups: ReturnType<typeof projectBots>;
+        /** The published task projection, rebuilt beside `groups`. */
+        readonly taskGroups: ReturnType<typeof projectTasks>;
     }
 
     const groupsStore = createStore<GroupsStoreState>()(() => ({
@@ -321,6 +341,9 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         connection: "connecting",
         groups: [],
         projects: [],
+        taskGroups: [],
+        taskMemberships: [],
+        tasks: [],
         workspaces: [],
     }));
 
@@ -403,6 +426,58 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         sessionsComplete: config !== undefined,
     });
 
+    /**
+     * The person a task belongs to, as this connection can name them.
+     *
+     * A team task names its owner, who is resolved through the user directory
+     * like any other identity this connection renders. A standalone daemon has
+     * one person and names nobody, so its tasks are that person's — the viewer.
+     * A team task that names nobody is left without a face rather than given
+     * the viewer's, because in a team the viewer is not everybody.
+     */
+    const taskOwnerOf = (task: Task): TaskOwner => {
+        const base = endpoint.replace(/\/$/, "");
+        if (task.ownerUserId !== null) {
+            const profile = users.profiles.get(task.ownerUserId);
+            return {
+                userId: task.ownerUserId,
+                ...(profile === undefined || profile.name === "DELETED"
+                    ? {}
+                    : { name: profile.name }),
+                ...(profile?.avatar
+                    ? {
+                          avatar: {
+                              url: `${base}/v0/users/${encodeURIComponent(task.ownerUserId)}/photo`,
+                              thumbhash: profile.avatar.thumbhash,
+                          },
+                      }
+                    : {}),
+            };
+        }
+        if (currentUserId !== undefined || viewerProfile === undefined) return {};
+        return {
+            ...(viewerProfile.name === null ? {} : { name: viewerProfile.name }),
+            ...(viewerProfile.photo === null
+                ? {}
+                : {
+                      avatar: {
+                          url: `${base}/v0/profile/photo`,
+                          thumbhash: viewerProfile.photo.thumbhash,
+                      },
+                  }),
+        };
+    };
+
+    /** Reads the people who own tasks, so their rows can wear their faces. */
+    const taskOwnersEnsure = (tasks: readonly Task[]): void => {
+        const ids = [
+            ...new Set(
+                tasks.flatMap((task) => (task.ownerUserId === null ? [] : [task.ownerUserId])),
+            ),
+        ].filter((id) => !users.profiles.has(id));
+        if (ids.length > 0) background(users.ensure(ids));
+    };
+
     const publishGroupDeltas = (deltas: readonly GroupDelta[]): void => {
         for (const subscriber of groupSubscribers) {
             if (subscriber.closed) continue;
@@ -431,13 +506,23 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                     agentDrafts,
                     agentModes,
                 ),
+                taskGroups: projectTasks(
+                    current.tasks,
+                    current.taskMemberships,
+                    current.workspaces,
+                    endpoint,
+                    daemonConfig,
+                    taskOwnerOf,
+                    agentDrafts,
+                    agentModes,
+                ),
             }));
         }
         const state = groupState();
-        const { botGroups, groups } = groupsStore.getState();
+        const { botGroups, groups, taskGroups } = groupsStore.getState();
         for (const subscriber of groupSubscribers) {
             if (subscriber.closed) continue;
-            subscriber.onChange(groups, state, botGroups);
+            subscriber.onChange(groups, state, botGroups, taskGroups);
             for (const delta of deltas) subscriber.onDelta?.(delta);
         }
     };
@@ -510,18 +595,29 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
 
     /** Ownership is scoped to this authenticated connection, never the host's account. */
     const viewerIdentityUpdate = (profile: Profile): void => {
+        const previousProfile = viewerProfile;
+        viewerProfile = profile;
         const next = profile.userId ?? undefined;
-        if (next === currentUserId) return;
-        const previous = currentUserId;
-        currentUserId = next;
-        const affected = new Set<SessionEntry>();
-        for (const id of [previous, next]) {
-            if (id === undefined) continue;
-            for (const entry of userSessions.get(id) ?? []) affected.add(entry);
+        // Standalone tasks wear the viewer's own face and name, and whether
+        // there is a viewer user at all decides whose tasks those are.
+        const taskOwnersChanged =
+            previousProfile?.name !== profile.name ||
+            previousProfile?.photo?.thumbhash !== profile.photo?.thumbhash ||
+            next !== currentUserId;
+        if (next !== currentUserId) {
+            const previous = currentUserId;
+            currentUserId = next;
+            const affected = new Set<SessionEntry>();
+            for (const id of [previous, next]) {
+                if (id === undefined) continue;
+                for (const entry of userSessions.get(id) ?? []) affected.add(entry);
+            }
+            for (const entry of affected) {
+                if (!entry.hydrating) publishSession(entry, true);
+            }
         }
-        for (const entry of affected) {
-            if (!entry.hydrating) publishSession(entry, true);
-        }
+        if (taskOwnersChanged && config !== undefined && groupsStore.getState().tasks.length > 0)
+            publishGroups();
     };
 
     const reloadViewerProfile = (): Promise<void> => {
@@ -587,10 +683,17 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
     const botOf = (botId: string): Bot | undefined =>
         groupsStore.getState().bots.find((candidate) => candidate.id === botId);
 
+    const taskOf = (taskId: string): Task | undefined =>
+        groupsStore.getState().tasks.find((candidate) => candidate.id === taskId);
+
     const agentOf = (agentId: string): Agent | undefined => {
-        const { bots, projects, workspaces } = groupsStore.getState();
+        const { bots, projects, tasks, workspaces } = groupsStore.getState();
         for (const bot of bots) {
             const agent = agentTreeFind(bot.agent, agentId);
+            if (agent !== undefined) return agent;
+        }
+        for (const task of tasks) {
+            const agent = agentTreeFind(task.agent, agentId);
             if (agent !== undefined) return agent;
         }
         for (const workspace of workspaces) {
@@ -638,6 +741,11 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
             bots: current.bots.map((bot) => {
                 const next = agentTreeUpdate(bot.agent, agent);
                 return next === bot.agent ? bot : { ...bot, agent: next };
+            }),
+            // A task's row is drawn from its embedded agent the same way.
+            tasks: current.tasks.map((task) => {
+                const next = agentTreeUpdate(task.agent, agent);
+                return next === task.agent ? task : { ...task, agent: next };
             }),
         }));
         const entry = sessions.get(agent.id);
@@ -1060,8 +1168,12 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                 // which is an empty catalog rather than an unknown one.
                 bots: bootstrap.bots ?? [],
                 projects: owners.projects,
+                // The same for tasks: absent together on a daemon that predates them.
+                taskMemberships: bootstrap.taskMemberships ?? [],
+                tasks: bootstrap.tasks ?? [],
                 workspaces: owners.workspaces,
             });
+            taskOwnersEnsure(bootstrap.tasks ?? []);
             const gitWorkspaceIds = new Set(
                 activeGitWorkspaceIds(bootstrap.projects, bootstrap.workspaces),
             );
@@ -1277,6 +1389,58 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         refetchResource(read().finally(() => agentRefetches.delete(agentId)));
     };
 
+    /**
+     * Reads one task whole and adopts it with the caller's membership. It is
+     * how a task known only from an event learns whether the caller may
+     * archive it, and how a broken version chain is repaired.
+     */
+    const taskRefetch = (taskId: string): void =>
+        refetchResource(
+            client
+                .getTask(taskId, { signal: deadlineSignal(SNAPSHOT_RESPONSE_TIMEOUT_MS) })
+                .then(taskResponseAdopt),
+        );
+
+    /** Adopts a task route's answer: the task, and the caller's place in it or none. */
+    const taskResponseAdopt = ({
+        task,
+        membership,
+    }: {
+        readonly task: Task;
+        readonly membership: TaskMembership | null;
+    }): void => {
+        const latest = taskOf(task.id);
+        const adoptTask =
+            latest === undefined ||
+            latest.version.localeCompare(task.version) <= 0 ||
+            (latest.canArchive === undefined && task.canArchive !== undefined);
+        groupsStore.setState((state) => ({
+            ...(adoptTask ? { tasks: replaceResource(state.tasks, task) } : {}),
+            taskMemberships:
+                membership === null
+                    ? state.taskMemberships.filter((entry) => entry.taskId !== task.id)
+                    : taskMembershipsReplace(state.taskMemberships, membership),
+        }));
+        taskOwnersEnsure([task]);
+        publishGroups();
+    };
+
+    const taskMembershipAdopt = (membership: TaskMembership): void => {
+        groupsStore.setState((state) => ({
+            taskMemberships: taskMembershipsReplace(state.taskMemberships, membership),
+        }));
+        publishGroups();
+    };
+
+    const taskMembershipRemove = (taskId: string): void => {
+        if (!groupsStore.getState().taskMemberships.some((entry) => entry.taskId === taskId))
+            return;
+        groupsStore.setState((state) => ({
+            taskMemberships: state.taskMemberships.filter((entry) => entry.taskId !== taskId),
+        }));
+        publishGroups();
+    };
+
     const reloadConfig = async (): Promise<void> => {
         const response = await client.getConfig({
             signal: deadlineSignal(SNAPSHOT_RESPONSE_TIMEOUT_MS),
@@ -1412,6 +1576,51 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                 publishGroups();
                 return;
             }
+            case "task.created":
+                // The event carries no `canArchive`: that answer is the caller's
+                // own and only the task route states it. The task is listed at
+                // once and read whole for the rest.
+                groupsStore.setState((state) => {
+                    const known = state.tasks.find(
+                        (candidate) => candidate.id === event.payload.task.id,
+                    )?.canArchive;
+                    return {
+                        tasks: replaceResource(
+                            state.tasks,
+                            known === undefined
+                                ? event.payload.task
+                                : { ...event.payload.task, canArchive: known },
+                        ),
+                    };
+                });
+                taskOwnersEnsure([event.payload.task]);
+                publishGroups();
+                taskRefetch(event.payload.task.id);
+                return;
+            case "task.updated": {
+                const current = taskOf(event.payload.taskId);
+                if (current === undefined || current.version !== event.payload.previousVersion) {
+                    taskRefetch(event.payload.taskId);
+                    return;
+                }
+                const updated: Task = {
+                    ...applyChanges(current, event.payload.changes),
+                    version: event.payload.version,
+                };
+                groupsStore.setState((state) => ({ tasks: replaceResource(state.tasks, updated) }));
+                taskOwnersEnsure([updated]);
+                publishGroups();
+                return;
+            }
+            case "task.joined":
+            case "task.reordered":
+                taskMembershipAdopt(event.payload.membership);
+                if (taskOf(event.payload.membership.taskId) === undefined)
+                    taskRefetch(event.payload.membership.taskId);
+                return;
+            case "task.left":
+                taskMembershipRemove(event.payload.membership.taskId);
+                return;
             case "workspace.updated": {
                 const current = workspaceOf(event.payload.workspaceId);
                 if (current === undefined) {
@@ -2360,6 +2569,51 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         return mutationId;
     };
 
+    /**
+     * Archives or unarchives a task for everyone, guarded by the version this
+     * connection holds. The host refuses a caller it does not let archive the
+     * task, and a version someone else has already moved past; both refusals
+     * are reworded here because the host's own message names neither the task
+     * nor what to do next.
+     */
+    const taskArchivalSet = (taskId: string, archived: boolean): string => {
+        const mutationId = nextId();
+        const action = archived ? "archive_task" : "unarchive_task";
+        const verb = archived ? "archive" : "unarchive";
+        return mutation(
+            action,
+            mutationId,
+            async () => {
+                const task = taskOf(taskId);
+                if (task === undefined) throw new Error("The task is not loaded.");
+                const options = { ifMatch: task.version, mutationId, signal: deadlineSignal() };
+                try {
+                    return await (archived
+                        ? client.archiveTask(taskId, options)
+                        : client.unarchiveTask(taskId, options));
+                } catch (error) {
+                    if (error instanceof HappyAgentApiError && error.status === 403)
+                        throw new Error(
+                            `You can’t ${verb} “${task.name}”. Only its owner or the team owner can.`,
+                        );
+                    if (error instanceof HappyAgentApiError && error.status === 409) {
+                        // The version moved under us; read the task again so a
+                        // second try is made against what the host now holds.
+                        taskRefetch(taskId);
+                        throw new Error(
+                            `“${task.name}” changed while you were looking at it. Try again.`,
+                        );
+                    }
+                    throw error;
+                }
+            },
+            taskResponseAdopt,
+            undefined,
+            undefined,
+            `task:${taskId}`,
+        );
+    };
+
     const draftSave = (sessionId: string, save: DraftSave): string =>
         mutation(
             "set_draft",
@@ -2482,10 +2736,12 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                 groupsStore.getState().groups,
                 groupState(),
                 groupsStore.getState().botGroups,
+                groupsStore.getState().taskGroups,
             );
             return {
                 projects: () => groupsStore.getState().groups,
                 bots: () => groupsStore.getState().botGroups,
+                tasks: () => groupsStore.getState().taskGroups,
                 state: groupState,
                 close: () => {
                     subscriber.closed = true;
@@ -3430,6 +3686,61 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                 `bot:${botId}`,
             );
         },
+        joinTask(taskId) {
+            const mutationId = nextId();
+            return mutation(
+                "join_task",
+                mutationId,
+                () =>
+                    client.joinTask(taskId, {
+                        mutationId,
+                        signal: deadlineSignal(),
+                    }),
+                taskResponseAdopt,
+                undefined,
+                undefined,
+                `task:${taskId}`,
+            );
+        },
+        leaveTask(taskId) {
+            const mutationId = nextId();
+            return mutation(
+                "leave_task",
+                mutationId,
+                () =>
+                    client.leaveTask(taskId, {
+                        mutationId,
+                        signal: deadlineSignal(),
+                    }),
+                taskResponseAdopt,
+                undefined,
+                undefined,
+                `task:${taskId}`,
+            );
+        },
+        reorderTask(taskId, afterId) {
+            const mutationId = nextId();
+            return mutation(
+                "reorder_task",
+                mutationId,
+                () =>
+                    client.reorderTask(
+                        taskId,
+                        { afterId, mutationId },
+                        { signal: deadlineSignal() },
+                    ),
+                taskResponseAdopt,
+                undefined,
+                undefined,
+                `task:${taskId}`,
+            );
+        },
+        archiveTask(taskId) {
+            return taskArchivalSet(taskId, true);
+        },
+        unarchiveTask(taskId) {
+            return taskArchivalSet(taskId, false);
+        },
         reorderProject(projectId, afterId) {
             const mutationId = nextId();
             const project = groupsStore
@@ -3869,6 +4180,24 @@ function activeGitWorkspaceIds(
                 .map((workspace) => workspace.id),
         ]),
     ];
+}
+
+/**
+ * The caller's memberships with one replaced or added. Order is carried by the
+ * membership's own `orderKey`, so the array position means nothing.
+ */
+function taskMembershipsReplace(
+    memberships: readonly TaskMembership[],
+    membership: TaskMembership,
+): readonly TaskMembership[] {
+    const index = memberships.findIndex((entry) => entry.taskId === membership.taskId);
+    if (index < 0) return [...memberships, membership];
+    const current = memberships[index]!;
+    if (current.orderKey === membership.orderKey && current.joinedAt === membership.joinedAt)
+        return memberships;
+    const next = [...memberships];
+    next[index] = membership;
+    return next;
 }
 
 function agentIdOfEvent(event: HappyAgentEvent): string | undefined {

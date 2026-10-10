@@ -14,6 +14,8 @@ import type {
     Question,
     Run,
     SlashCommand,
+    Task,
+    TaskMembership,
     UsageBreakdown,
     Workspace,
 } from "@slopus/happy-agent-client";
@@ -27,6 +29,8 @@ import type {
     ProjectGroup,
     SessionState,
     SessionUsage,
+    TaskGroup,
+    TaskOwner,
     ToolPresentation,
     UserInputRequest,
     WorkspaceGroup,
@@ -541,27 +545,7 @@ export function projectBots(
 ): readonly BotGroup[] {
     const workspaceById = new Map(workspaces.map((workspace) => [workspace.id, workspace]));
     const subtasksProject = (agent: Agent, bot: Bot): readonly BotSubtaskGroup[] =>
-        (agent.subtasks ?? [])
-            .filter((child) => child.archivedAt === null)
-            .map((child) => {
-                const workspace = workspaceById.get(child.workspaceId);
-                return {
-                    workspaceId: child.workspaceId,
-                    path:
-                        child.workspaceId === bot.workspaceId
-                            ? computePath(bot.compute)
-                            : workspacePath(workspace),
-                    session: projectAgent(
-                        child,
-                        workspace,
-                        endpoint,
-                        config,
-                        drafts.get(child.id),
-                        modes.get(child.id),
-                    ),
-                    subtasks: subtasksProject(child, bot),
-                };
-            });
+        agentSubtasksProject(agent, bot, workspaceById, endpoint, config, drafts, modes);
     return bots
         .filter((bot) => bot.archivedAt === null && bot.status === "active")
         .sort(orderCompare)
@@ -593,6 +577,128 @@ export function projectBots(
                 ),
                 unread: unreadOf([bot.agent]),
                 subtasks: subtasksProject(bot.agent, bot),
+            };
+        });
+}
+
+/**
+ * The active, user-interactive children of one bot or task conversation, in the
+ * daemon's explicit tree order. A child sharing its owner's folder reports the
+ * owner's path; one with a worktree of its own reports that checkout's.
+ */
+function agentSubtasksProject(
+    agent: Agent,
+    owner: { readonly workspaceId: string; readonly compute: Bot["compute"] },
+    workspaceById: ReadonlyMap<string, Workspace>,
+    endpoint: string,
+    config: DaemonConfig,
+    drafts: ReadonlyMap<string, AgentDraftSnapshot>,
+    modes: ReadonlyMap<string, MessageMode | null>,
+): readonly BotSubtaskGroup[] {
+    return (agent.subtasks ?? [])
+        .filter((child) => child.archivedAt === null)
+        .map((child) => {
+            const workspace = workspaceById.get(child.workspaceId);
+            return {
+                workspaceId: child.workspaceId,
+                path:
+                    child.workspaceId === owner.workspaceId
+                        ? computePath(owner.compute)
+                        : workspacePath(workspace),
+                session: projectAgent(
+                    child,
+                    workspace,
+                    endpoint,
+                    config,
+                    drafts.get(child.id),
+                    modes.get(child.id),
+                ),
+                subtasks: agentSubtasksProject(
+                    child,
+                    owner,
+                    workspaceById,
+                    endpoint,
+                    config,
+                    drafts,
+                    modes,
+                ),
+            };
+        });
+}
+
+/**
+ * Every task the host holds, oldest first, each carrying the caller's own
+ * membership when they have joined it.
+ *
+ * The caller's list is not ordered here: membership order is the caller's, and
+ * the surface that lists joined tasks sorts them by it. Archived tasks are kept,
+ * marked, because a membership outlives an archive and the host says so.
+ *
+ * `ownerOf` resolves the person a task belongs to. It is supplied by the
+ * connection, which is what knows whether this is a team or a standalone
+ * daemon and which user profiles it has read.
+ */
+export function projectTasks(
+    tasks: readonly Task[],
+    memberships: readonly TaskMembership[],
+    workspaces: readonly Workspace[],
+    endpoint: string,
+    config: DaemonConfig,
+    ownerOf: (task: Task) => TaskOwner,
+    drafts: ReadonlyMap<string, AgentDraftSnapshot> = new Map(),
+    modes: ReadonlyMap<string, MessageMode | null> = new Map(),
+): readonly TaskGroup[] {
+    const workspaceById = new Map(workspaces.map((workspace) => [workspace.id, workspace]));
+    const membershipByTask = new Map(
+        memberships.map((membership) => [membership.taskId, membership]),
+    );
+    return [...tasks]
+        .sort((left, right) =>
+            left.createdAt === right.createdAt
+                ? left.id < right.id
+                    ? -1
+                    : left.id > right.id
+                      ? 1
+                      : 0
+                : left.createdAt - right.createdAt,
+        )
+        .map((task) => {
+            const membership = membershipByTask.get(task.id);
+            return {
+                id: task.id,
+                workspaceId: task.workspaceId,
+                name: task.name,
+                path: computePath(task.compute),
+                createdAt: task.createdAt,
+                archived: task.status === "archived" || task.archivedAt !== null,
+                canArchive: task.canArchive === true,
+                ...(membership === undefined
+                    ? {}
+                    : {
+                          membership: {
+                              orderKey: membership.orderKey,
+                              joinedAt: membership.joinedAt,
+                          },
+                      }),
+                owner: ownerOf(task),
+                session: projectAgent(
+                    task.agent,
+                    workspaceById.get(task.workspaceId),
+                    endpoint,
+                    config,
+                    drafts.get(task.agent.id),
+                    modes.get(task.agent.id),
+                ),
+                subtasks: agentSubtasksProject(
+                    task.agent,
+                    task,
+                    workspaceById,
+                    endpoint,
+                    config,
+                    drafts,
+                    modes,
+                ),
+                unread: unreadOf([task.agent]),
             };
         });
 }
@@ -1262,7 +1368,14 @@ function workspacePath(workspace: Workspace | undefined): string {
 }
 
 function computePath(compute: Project["compute"]): string {
-    return compute.type === "host" ? compute.path : `/docker/${compute.image}`;
+    switch (compute.type) {
+        case "host":
+            return compute.path;
+        case "docker":
+            return `/docker/${compute.image}`;
+        case "runner":
+            return compute.path ?? "";
+    }
 }
 
 function newestRunningRun(runs: readonly Run[]): Run | undefined {

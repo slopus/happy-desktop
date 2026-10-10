@@ -81,10 +81,16 @@ export function happyAgentProjectSettingsProject(project: Project): HappyAgentPr
         // second counter for one setting. The UI uses this only as opaque
         // confirmed-state metadata.
         generation: project.initialization.attempt,
-        compute:
-            selected.type === "host"
-                ? { type: "local" }
-                : { type: "docker", image: selected.image },
+        // A runner is a place Happy cannot name or choose yet, so a project on
+        // one states nothing here rather than being shown as this machine.
+        ...(selected.type === "runner"
+            ? {}
+            : {
+                  compute:
+                      selected.type === "host"
+                          ? ({ type: "local" } as const)
+                          : ({ type: "docker", image: selected.image } as const),
+              }),
         // An older daemon does not report the list; nothing is shown rather than
         // a guess.
         setupCommands: project.workspaceSetupCommands ?? [],

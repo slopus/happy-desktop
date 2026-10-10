@@ -48,7 +48,7 @@ function listCreate(
         catalogSource: {
             read: () =>
                 Promise.resolve({
-                    catalog: { bots: [BOT], projects: [], worktrees: [] },
+                    catalog: { bots: [BOT], projects: [], tasks: [], worktrees: [] },
                     sessions: [],
                     archivedSessions: [],
                 }),
@@ -132,7 +132,7 @@ it("moves a bot subtask among its own siblings only, then asks the host to keep 
         catalogSource: {
             read: () =>
                 Promise.resolve({
-                    catalog: { bots: hostBots, projects: [], worktrees: [] },
+                    catalog: { bots: hostBots, projects: [], tasks: [], worktrees: [] },
                     sessions: [],
                     archivedSessions: [],
                 }),

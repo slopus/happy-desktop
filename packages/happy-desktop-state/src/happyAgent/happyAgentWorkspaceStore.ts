@@ -1,5 +1,9 @@
 import { createStore } from "zustand/vanilla";
-import { happyAgentBotSubtasks, happyAgentTaskDepths } from "./happyAgentBotSubtasks.js";
+import {
+    happyAgentBotSubtasks,
+    happyAgentTaskDepths,
+    type HappyAgentSubtaskRoot,
+} from "./happyAgentBotSubtasks.js";
 import type {
     ConversationEntry,
     ConversationErrorAssistance,
@@ -98,6 +102,7 @@ import type {
     HappyAgentChangedFileDocument,
     HappyAgentFileSearchResult,
     HappyAgentBotId,
+    HappyAgentTaskId,
     HappyAgentGitChangedFile,
     HappyAgentGoal,
     HappyAgentGroupId,
@@ -122,7 +127,7 @@ import type {
     HappyAgentSessionId,
     HappyAgentSessionUsage,
     SubagentSummary,
-    HappyAgentTask,
+    HappyAgentTodo,
     HappyAgentThinkingLevel,
     HappyAgentUserInputAnswers,
     HappyAgentWorkingPhase,
@@ -232,7 +237,7 @@ export interface HappyAgentConversationSnapshot {
     readonly queuedMessages: readonly HappyAgentQueuedMessage[];
     readonly requestSubmissions: HappyAgentChatSnapshot["requestSubmissions"];
     readonly requestSelections: HappyAgentChatSnapshot["requestSelections"];
-    readonly tasks: readonly HappyAgentTask[];
+    readonly tasks: readonly HappyAgentTodo[];
     readonly goal?: HappyAgentGoal;
     readonly subagents: readonly SubagentSummary[];
     readonly backgroundProcesses: readonly HappyAgentBackgroundProcess[];
@@ -749,6 +754,8 @@ export interface HappyAgentWorkspaceSnapshot {
     readonly workspaceFilesLoading: boolean;
     /** The bot being made, while that surface is open. */
     readonly botCreate?: HappyAgentBotCreateSnapshot;
+    /** Present while the list of every task is open for the reader to join one. */
+    readonly taskBrowseOpen?: true;
     /** Where adding a folder to this machine as a project stands. */
     readonly projectAdd: HappyAgentProjectAddSnapshot;
     /** GitHub project being cloned onto a peer Happy Agent, while its dialog is open. */
@@ -1476,6 +1483,17 @@ export interface HappyAgentWorkspaceStore {
     botArchive(botId: HappyAgentBotId): Promise<void>;
     /** Moves one bot after `afterId`, or to the front of the bot list when null. */
     botReorder(botId: HappyAgentBotId, afterId: HappyAgentBotId | null): Promise<void>;
+    /** Joins a task; the host puts it at the top of the reader's own list. */
+    taskJoin(taskId: HappyAgentTaskId): Promise<void>;
+    /** Leaves a task, taking it out of the reader's list. It never archives the task. */
+    taskLeave(taskId: HappyAgentTaskId): Promise<void>;
+    /** Moves one joined task after `afterId` in the reader's list, or first when null. */
+    taskReorder(taskId: HappyAgentTaskId, afterId: HappyAgentTaskId | null): Promise<void>;
+    /** Archives a task for everyone, when the host says the reader may. */
+    taskArchive(taskId: HappyAgentTaskId): Promise<void>;
+    /** Opens the list of every task this Happy Agent holds, to join one. */
+    taskBrowseOpen(): void;
+    taskBrowseClose(): void;
     /** Archives one bot subtask by its conversation, keeping its history and workspace. */
     subtaskArchive(sessionId: HappyAgentSessionId): Promise<void>;
     /** Moves one bot subtask among its siblings, after `afterId` or first when null. */
@@ -1907,7 +1925,7 @@ function githubRepositoryParse(
  * conversation it was made by — a bot's own, or another task's.
  */
 function subtaskIndex(
-    bots: readonly HappyAgentBot[],
+    bots: readonly HappyAgentSubtaskRoot[],
 ): ReadonlyMap<
     string,
     { readonly location: HappyAgentSessionLocation; readonly parentId: string }
@@ -2026,7 +2044,9 @@ export function happyAgentWorkspaceStoreCreate(
                 botSystemKey: bot.systemKey ?? null,
                 taskDepth: 0,
             };
-        const depth = happyAgentTaskDepths(snapshot.bots).get(conversationId);
+        const depth = happyAgentTaskDepths([...snapshot.bots, ...snapshot.tasks]).get(
+            conversationId,
+        );
         if (depth !== undefined) return { target: "session", botSystemKey: null, taskDepth: depth };
         const projects = snapshot.projects;
         const listed =
@@ -2102,6 +2122,7 @@ export function happyAgentWorkspaceStoreCreate(
     let openInTargetsReading = false;
     let openInTargetsTimer: ReturnType<typeof setInterval> | undefined;
     let rename: HappyAgentRenameSnapshot | undefined;
+    let taskBrowseOpen = false;
     let projectArchive: HappyAgentProjectArchiveSnapshot | undefined;
     let groupArchive: HappyAgentGroupArchiveSnapshot | undefined;
     /** Which submission owns the empty-group confirmation. */
@@ -2888,6 +2909,7 @@ export function happyAgentWorkspaceStoreCreate(
                 snapshot.workspaceFiles === workspaceFiles &&
                 snapshot.workspaceFilesLoading === workspaceFilesLoading &&
                 snapshot.botCreate === botCreate &&
+                (snapshot.taskBrowseOpen === true) === taskBrowseOpen &&
                 snapshot.projectAdd === projectAdd &&
                 snapshot.projectClone === projectClone
                     ? snapshot
@@ -2919,6 +2941,7 @@ export function happyAgentWorkspaceStoreCreate(
                           projectAdd,
                           ...(projectClone ? { projectClone } : {}),
                           ...(botCreate ? { botCreate } : {}),
+                          ...(taskBrowseOpen ? { taskBrowseOpen: true as const } : {}),
                           ...(activeMainViewId ? { activeMainViewId } : {}),
                           ...(displayedMainViewId ? { displayedMainViewId } : {}),
                           ...(panelFile ? { panelFile } : {}),
@@ -4511,8 +4534,10 @@ export function happyAgentWorkspaceStoreCreate(
         const snapshot = list.get();
         const bot = snapshot.bots.find((entry) => entry.conversation.id === conversationId);
         if (bot) return bot.workspaceId;
-        const subtask = happyAgentBotSubtasks(snapshot.bots).find(
-            (task) => task.conversation.id === conversationId,
+        const task = snapshot.tasks.find((entry) => entry.conversation.id === conversationId);
+        if (task) return task.workspaceId;
+        const subtask = happyAgentBotSubtasks([...snapshot.bots, ...snapshot.tasks]).find(
+            (entry) => entry.conversation.id === conversationId,
         );
         if (subtask) return subtask.workspaceId;
         const projects = snapshot.projects;
@@ -4536,8 +4561,10 @@ export function happyAgentWorkspaceStoreCreate(
         // chat could be, and the loop below would never reach it.
         const bot = listSnapshot.bots.find((entry) => entry.conversation.id === conversationId);
         if (bot) return bot.conversation;
-        const subtask = happyAgentBotSubtasks(listSnapshot.bots).find(
-            (task) => task.conversation.id === conversationId,
+        const task = listSnapshot.tasks.find((entry) => entry.conversation.id === conversationId);
+        if (task) return task.conversation;
+        const subtask = happyAgentBotSubtasks([...listSnapshot.bots, ...listSnapshot.tasks]).find(
+            (entry) => entry.conversation.id === conversationId,
         );
         if (subtask) return subtask.conversation;
         const projects = listSnapshot.projects;
@@ -5644,17 +5671,17 @@ export function happyAgentWorkspaceStoreCreate(
         const snapshot = list.get();
         if (snapshot.projects.type !== "ready") return;
         const previous = subtasksListed;
-        const current = subtaskIndex(snapshot.bots);
+        const current = subtaskIndex([...snapshot.bots, ...snapshot.tasks]);
         subtasksListed = current;
         if (previous === undefined) return;
         const removed = [...previous].filter(([id]) => !current.has(id));
         if (removed.length === 0) return;
         const bots = new Map(
-            snapshot.bots.map((bot) => [
-                bot.conversation.id,
+            [...snapshot.bots, ...snapshot.tasks].map((root) => [
+                root.conversation.id,
                 {
-                    groupId: bot.workspaceId,
-                    sessionId: bot.conversation.id as HappyAgentSessionId,
+                    groupId: root.workspaceId,
+                    sessionId: root.conversation.id as HappyAgentSessionId,
                 },
             ]),
         );
@@ -5691,7 +5718,10 @@ export function happyAgentWorkspaceStoreCreate(
         // than as an address the host has never answered for, and so archiving
         // one moves the reader off it the way archiving a project does.
         for (const bot of listSnapshot.bots) listedIds.add(bot.workspaceId);
-        for (const subtask of happyAgentBotSubtasks(listSnapshot.bots))
+        // A joined task is addressed the same way; leaving one moves the reader
+        // off it the way archiving a bot does.
+        for (const task of listSnapshot.tasks) listedIds.add(task.workspaceId);
+        for (const subtask of happyAgentBotSubtasks([...listSnapshot.bots, ...listSnapshot.tasks]))
             listedIds.add(subtask.workspaceId);
         authoritativeGroupIds = listedIds;
         if (addressedGroupId !== undefined) {
@@ -6762,6 +6792,20 @@ export function happyAgentWorkspaceStoreCreate(
         botReorder: (botId, afterId) => list.botReorder(botId, afterId),
         subtaskArchive: (sessionId) => list.subtaskArchive(sessionId),
         subtaskReorder: (sessionId, afterId) => list.subtaskReorder(sessionId, afterId),
+        taskJoin: (taskId) => list.taskJoin(taskId),
+        taskLeave: (taskId) => list.taskLeave(taskId),
+        taskReorder: (taskId, afterId) => list.taskReorder(taskId, afterId),
+        taskArchive: (taskId) => list.taskArchive(taskId),
+        taskBrowseOpen() {
+            if (taskBrowseOpen) return;
+            taskBrowseOpen = true;
+            recompute();
+        },
+        taskBrowseClose() {
+            if (!taskBrowseOpen) return;
+            taskBrowseOpen = false;
+            recompute();
+        },
         projectArchive: (projectId) => list.projectArchive(projectId),
         async worktreeCreate(projectId) {
             // The new checkout is forked from the project's own folder, so a
@@ -7852,7 +7896,7 @@ const NO_ERROR_ASSISTANCE: readonly ConversationErrorAssistanceEntry[] = [];
 const NO_QUEUED: readonly HappyAgentQueuedMessage[] = [];
 const NO_SUBMISSIONS: HappyAgentChatSnapshot["requestSubmissions"] = [];
 const NO_SELECTIONS: HappyAgentChatSnapshot["requestSelections"] = new Map();
-const NO_TASKS: readonly HappyAgentTask[] = [];
+const NO_TASKS: readonly HappyAgentTodo[] = [];
 const NO_SUBAGENTS: readonly SubagentSummary[] = [];
 const NO_PROCESSES: readonly HappyAgentBackgroundProcess[] = [];
 const NO_PROCESS_IDS: ReadonlySet<number> = new Set();

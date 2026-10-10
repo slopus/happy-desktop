@@ -125,7 +125,7 @@ function workspace(actions: {
     subtaskReorder: (sessionId: string, afterId: string | null) => Promise<void>;
 }): HappyAgentWorkspaceStore {
     const snapshot = {
-        list: { bots: BOTS, projects: { type: "ready" as const, value: PROJECTS } },
+        list: { bots: BOTS, tasks: [], projects: { type: "ready" as const, value: PROJECTS } },
         conversation: { type: "unloaded" as const },
         address: {},
         groupAccess: happyAgentGroupAccessRefused(HAPPY_AGENT_GROUP_UNLISTED_REFUSAL),

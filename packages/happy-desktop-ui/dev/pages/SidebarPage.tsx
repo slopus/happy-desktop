@@ -153,6 +153,72 @@ const workspaceSections: SidebarSection[] = [
 const PHOTO =
     "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAT0lEQVR4nGPorvk+ufrTrOp3i6perqx8srHiwY6K2wfKrzNgFT1edokBq+j5srMMWEWvlZ5kwCp6r+QIA1bRp8X7GbCKvi3ezYBV9EvRNgD7aoNVazUeBQAAAABJRU5ErkJggg==";
 /*
+ * One Happy Agent as the app lists it: its bots, then the reader's joined tasks
+ * in their own order, then its projects. A task is a bot's row worn by its
+ * owner's face — their photo, their initials without one, and the bot
+ * placeholder when nobody was identified — with Leave as its hover control and
+ * its delegated subtasks nested under it the way a bot's are.
+ */
+const agentSections: SidebarSection[] = [
+    {
+        action: { icon: "plus", label: "New bot", reveal: "always" },
+        id: "agent-bots",
+        items: [{ avatarId: "bot-nova", id: "bot-nova", kind: "project", label: "Nova" }],
+        label: "Bots",
+    },
+    {
+        action: { icon: "search", label: "Browse tasks", reveal: "always" },
+        id: "agent-tasks",
+        items: [
+            {
+                action: { icon: "close", label: "Leave Ship the launch", reveal: "hover" },
+                id: "task-launch",
+                imageUrl: PHOTO,
+                initials: "AL",
+                kind: "project",
+                label: "Ship the launch",
+                status: "working",
+            },
+            {
+                depth: 1,
+                id: "task-launch-checklist",
+                kind: "workspace",
+                label: "Write the checklist",
+            },
+            {
+                action: { icon: "close", label: "Leave Fix invoice rounding", reveal: "hover" },
+                id: "task-billing",
+                initials: "BD",
+                kind: "project",
+                label: "Fix invoice rounding",
+                unread: true,
+            },
+            {
+                action: { icon: "close", label: "Leave Triage nightly failures", reveal: "hover" },
+                avatarId: "task-orphan",
+                id: "task-orphan",
+                kind: "project",
+                label: "Triage nightly failures",
+            },
+        ],
+        label: "Tasks",
+    },
+    {
+        action: { icon: "plus", label: "Add project", reveal: "always" },
+        id: "agent-projects",
+        items: [
+            {
+                action: { icon: "plus", label: "New workspace", reveal: "hover" },
+                id: "agent-project",
+                initials: "H",
+                kind: "project",
+                label: "happy",
+            },
+        ],
+        label: "Projects",
+    },
+];
+/*
  * A project whose worktrees are in every phase of their own life at once. Each
  * row is the same workspace row, so the specimen shows what the reader actually
  * compares: the leading slot and the trailing word change while the row's name,
@@ -1320,6 +1386,27 @@ export function SidebarPage() {
                             <DimensionRule label={state.rule} />
                         </div>
                     ))}
+                </div>
+            </Specimen>
+
+            <Specimen
+                detail="Bots, then the reader's joined tasks in their own order, then projects. A task wears its owner's photo, their initials, or the bot placeholder; Leave waits for hover, and Browse tasks heads the list."
+                label="Bots, tasks, and projects"
+                number="02f"
+                stage="app"
+            >
+                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                    <Frame height={420}>
+                        <Sidebar
+                            activeItemId="task-billing"
+                            onItemAction={() => {}}
+                            onItemSelect={() => {}}
+                            onSectionAction={() => {}}
+                            sections={agentSections}
+                            title="This Mac"
+                        />
+                    </Frame>
+                    <DimensionRule label="task row = bot row · 32 px · owner face 16 px · leave on hover" />
                 </div>
             </Specimen>
 

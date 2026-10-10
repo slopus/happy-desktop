@@ -47,7 +47,7 @@ import type {
     HappyAgentSessionUsage,
     HappyAgentSlashCommand,
     SubagentSummary,
-    HappyAgentTask,
+    HappyAgentTodo,
     HappyAgentThinkingLevel,
     HappyAgentUserInputAnswers,
     HappyAgentUserInputRequest,
@@ -216,7 +216,7 @@ function transcriptQueuedMessagesProject(
     }));
 }
 
-function transcriptTasksProject(session: SessionState): readonly HappyAgentTask[] {
+function transcriptTasksProject(session: SessionState): readonly HappyAgentTodo[] {
     return session.tasks.map((task) => ({
         id: task.id,
         subject: task.subject,
@@ -509,7 +509,7 @@ export interface HappyAgentChatSnapshot {
     readonly queuedMessages: readonly HappyAgentQueuedMessage[];
     /** Complete ordered slash-command catalog projected from the focused agent. */
     readonly slashCommands: readonly HappyAgentSlashCommand[];
-    readonly tasks: readonly HappyAgentTask[];
+    readonly tasks: readonly HappyAgentTodo[];
     readonly goal?: HappyAgentGoal;
     readonly subagents: readonly SubagentSummary[];
     readonly backgroundProcesses: readonly HappyAgentBackgroundProcess[];

@@ -17,6 +17,7 @@ import type {
     AppearanceStore,
     CommandPaletteStore,
     ExperimentsStore,
+    ProjectsVisibilityStore,
     GptLiveStore,
     HappyAgentGroupId,
     UsageAnalyticsStore,
@@ -111,6 +112,11 @@ export interface HappyAgentRouterContext {
      * in a host that remembers no such choice, which withholds them.
      */
     readonly experiments?: ExperimentsStore;
+    /**
+     * Whether the sidebar leaves the Projects sections out, for every
+     * connection. Absent in a host that remembers no such choice, which shows them.
+     */
+    readonly projectsVisibility?: ProjectsVisibilityStore;
     /** Whether this window sends product analytics events. Absent where it sends none. */
     readonly usageAnalytics?: UsageAnalyticsStore;
     /** Window-owned GPT-Live opt-in; unrelated to coding-provider settings. */
@@ -479,6 +485,9 @@ function HappyAgentWorkspaceLayout(
             groupId={params.groupId}
             {...(context.daemon ? { daemon: context.daemon } : {})}
             {...(context.experiments ? { experiments: context.experiments } : {})}
+            {...(context.projectsVisibility
+                ? { projectsVisibility: context.projectsVisibility }
+                : {})}
             {...(context.gptLive ? { gptLive: context.gptLive } : {})}
             {...(context.keepAwake ? { keepAwake: context.keepAwake } : {})}
             {...(context.titleShimmer ? { titleShimmer: context.titleShimmer } : {})}
@@ -600,6 +609,9 @@ function HappyAgentSettingsRoute() {
             {...(context.debug ? { debug: context.debug } : {})}
             {...(context.profiler ? { profiler: context.profiler } : {})}
             {...(context.experiments ? { experiments: context.experiments } : {})}
+            {...(context.projectsVisibility
+                ? { projectsVisibility: context.projectsVisibility }
+                : {})}
             {...(context.usageAnalytics ? { usageAnalytics: context.usageAnalytics } : {})}
             {...(context.gptLive ? { gptLive: context.gptLive } : {})}
             {...(context.keepAwake ? { keepAwake: context.keepAwake } : {})}

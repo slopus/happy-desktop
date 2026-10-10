@@ -1,0 +1,68 @@
+/*
+ * C-286 HappyAgentTaskBrowseDialog — the active tasks on one Happy Agent in the
+ * medium form card. Each row is a 28px face, the name over its owner, and one
+ * trailing small button, on 8px row gaps. A long list scrolls in the modal's
+ * own body, so the card never grows past the window.
+ */
+
+.happy-agent-task-browse-dialog {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-width: 0;
+    color: var(--text);
+    font-family: var(--happy-font-ui);
+    font-synthesis: none;
+}
+
+.happy-agent-task-browse-dialog__empty {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 400;
+    line-height: 20px;
+}
+
+.happy-agent-task-browse-dialog__list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.happy-agent-task-browse-dialog__row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+    min-height: 40px;
+}
+
+.happy-agent-task-browse-dialog__text {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.happy-agent-task-browse-dialog__name,
+.happy-agent-task-browse-dialog__owner {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-agent-task-browse-dialog__name {
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 20px;
+}
+
+.happy-agent-task-browse-dialog__owner {
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 16px;
+}

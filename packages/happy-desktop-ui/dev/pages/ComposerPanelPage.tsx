@@ -3,7 +3,7 @@ import type {
     HappyAgentGoal,
     HappyAgentSessionUsage,
     SubagentSummary,
-    HappyAgentTask,
+    HappyAgentTodo,
 } from "happy-desktop-state";
 import { ComposerPanel } from "../../src/ComposerPanel";
 import { HappyAgentActivityPanel } from "../../src/HappyAgentActivityPanel";
@@ -23,7 +23,7 @@ const goal: HappyAgentGoal = {
     updatedAt: NOW - 60_000,
 };
 
-const tasks: readonly HappyAgentTask[] = [
+const tasks: readonly HappyAgentTodo[] = [
     {
         id: "t1",
         subject: "Move the readouts above the composer",

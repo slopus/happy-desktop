@@ -3,7 +3,7 @@ import type {
     HappyAgentBackgroundProcess,
     HappyAgentGoal,
     SubagentSummary,
-    HappyAgentTask,
+    HappyAgentTodo,
 } from "happy-desktop-state";
 import { Button } from "../../src/Button";
 import { HappyAgentActivityPanel } from "../../src/HappyAgentActivityPanel";
@@ -23,7 +23,7 @@ const goal: HappyAgentGoal = {
     updatedAt: NOW - 60_000,
 };
 
-const tasks: readonly HappyAgentTask[] = [
+const tasks: readonly HappyAgentTodo[] = [
     {
         id: "t1",
         subject: "Design the usage API",

@@ -71,6 +71,10 @@ function store(bots: readonly HappyAgentBot[]) {
         worktreeCreateFailures: new Map(),
         projectCreateFailures: new Map(),
         subtaskFailures: new Map(),
+        tasks: [],
+        taskDirectory: [],
+        tasksJoining: new Set(),
+        taskFailures: new Map(),
     } as unknown as HappyAgentSessionListSnapshot;
     const listeners = new Set<() => void>();
     const loading = { type: "loading" } as const;

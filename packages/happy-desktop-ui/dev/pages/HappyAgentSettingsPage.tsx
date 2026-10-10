@@ -489,8 +489,10 @@ export function HappyAgentSettingsBlueprintPage() {
                         onLinkOpenPlacementChange={noop}
                         linkOpenPlacement="panel"
                         onTitleShimmerChange={noop}
+                        onProjectsHiddenChange={noop}
                         permissionMode="auto"
                         permissionModeOptions={permissionModeOptions}
+                        projectsHidden
                         scrollbarVisibility="automatic"
                         titleShimmerEnabled={false}
                     />

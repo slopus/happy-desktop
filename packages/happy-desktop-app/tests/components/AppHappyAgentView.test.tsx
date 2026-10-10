@@ -69,6 +69,7 @@ function workspace(): HappyAgentWorkspaceStore {
     const snapshot = {
         list: {
             bots: [],
+            tasks: [],
             projects: {
                 type: "ready" as const,
                 value: [

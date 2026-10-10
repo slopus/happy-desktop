@@ -4,7 +4,7 @@ import type {
     HappyAgentGoal,
     HappyAgentGoalStatus,
     SubagentSummary,
-    HappyAgentTask,
+    HappyAgentTodo,
     HappyAgentTaskStatus,
 } from "happy-desktop-state";
 import { Button } from "./Button";
@@ -19,7 +19,7 @@ export type HappyAgentActivityPanelProps = {
     /** The session's persistent goal, when one is set (`/goal`). */
     goal?: HappyAgentGoal;
     /** The session task list in display order (`/tasks`). */
-    tasks: readonly HappyAgentTask[];
+    tasks: readonly HappyAgentTodo[];
     /** Delegated subagents for the live monitor (`/agents`). */
     subagents: readonly SubagentSummary[];
     /** Running background terminals (`/ps`). */
@@ -59,7 +59,7 @@ function priorityOrdered<T>(items: readonly T[], priority: (item: T) => number):
         .map(({ item }) => item);
 }
 
-function taskPriority(task: HappyAgentTask): number {
+function taskPriority(task: HappyAgentTodo): number {
     return task.status === "in_progress" ? 0 : task.status === "pending" ? 1 : 2;
 }
 
@@ -123,7 +123,7 @@ function GoalSection(props: { goal: HappyAgentGoal }) {
     );
 }
 
-function TaskRow(props: { task: HappyAgentTask }) {
+function TaskRow(props: { task: HappyAgentTodo }) {
     const { task } = props;
     const label = task.status === "in_progress" && task.activeForm ? task.activeForm : task.subject;
     return (

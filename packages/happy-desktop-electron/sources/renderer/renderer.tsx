@@ -23,6 +23,7 @@ import {
     type KeepAwakeStore,
     commandPaletteStoreCreate,
     experimentsStoreCreate,
+    projectsVisibilityStoreCreate,
     gptLiveStoreCreate,
     gptLiveExperimentsConnect,
     titleShimmerStoreCreate,
@@ -34,6 +35,7 @@ import {
     type AppearanceStore,
     type CommandPaletteStore,
     type ExperimentsStore,
+    type ProjectsVisibilityStore,
     type UsageAnalyticsStore,
     type GptLiveStore,
     type WelcomeStore,
@@ -107,6 +109,7 @@ import { desktopProfilerStoreCreate } from "./desktopProfilerStore";
 import { desktopMetricsStoreCreate } from "./desktopMetricsStore";
 import { desktopDaemonStoreCreate } from "./desktopDaemonStore";
 import { desktopExperimentsPersistence } from "./desktopExperiments";
+import { desktopProjectsVisibilityPersistence } from "./desktopProjectsVisibility";
 import { desktopGptLivePersistence } from "./desktopGptLive";
 import { desktopGptLiveRuntimeCreate } from "./desktopGptLiveRuntime";
 import { desktopWelcomePersistence } from "./desktopWelcome";
@@ -289,6 +292,7 @@ function HappyAgentBoundary(props: {
     htmlPreview?: HtmlPreviewRenderer;
     mediaWindow?: MediaWindowOpener;
     experiments: ExperimentsStore;
+    projectsVisibility: ProjectsVisibilityStore;
     keepAwake: KeepAwakeStore;
     platform: "desktop" | "web";
     gptLive: GptLiveStore;
@@ -336,6 +340,7 @@ function HappyAgentBoundary(props: {
                       }
                     : {}),
                 experiments: props.experiments,
+                projectsVisibility: props.projectsVisibility,
                 gptLive: props.gptLive,
                 usageAnalytics: props.usageAnalytics,
                 keepAwake: props.keepAwake,
@@ -455,6 +460,7 @@ interface DesktopRendererProps {
     mediaWindow?: MediaWindowOpener;
     bridge: HappyDesktopBridge;
     experiments: ExperimentsStore;
+    projectsVisibility: ProjectsVisibilityStore;
     gptLive: GptLiveStore;
     usageAnalytics: UsageAnalyticsStore;
     keepAwake: KeepAwakeStore;
@@ -638,6 +644,7 @@ function DesktopScreens(props: DesktopRendererProps) {
                                 commandPalette={ui.commandPalette}
                                 connectionOnboarding
                                 experiments={props.experiments}
+                                projectsVisibility={props.projectsVisibility}
                                 gptLive={props.gptLive}
                                 usageAnalytics={props.usageAnalytics}
                                 keepAwake={props.keepAwake}
@@ -894,6 +901,7 @@ function DesktopRuntimeContent(
             htmlPreview={props.htmlPreview}
             mediaWindow={props.mediaWindow}
             experiments={props.experiments}
+            projectsVisibility={props.projectsVisibility}
             keepAwake={props.keepAwake}
             gptLive={props.gptLive}
             usageAnalytics={props.usageAnalytics}
@@ -1070,6 +1078,12 @@ if (mediaPreviewBridge) {
         // is kept beside the arrangement above and for the same reason: it says
         // what this installation shows, so no machine has a say in it.
         const experiments = experimentsStoreCreate(desktopExperimentsPersistence());
+        // Whether the sidebar leaves the Projects sections out. Like the
+        // experiments switch it is this window's own choice, so it covers every
+        // connection — team and local — and is never asked of a machine.
+        const projectsVisibility = projectsVisibilityStoreCreate(
+            desktopProjectsVisibilityPersistence(),
+        );
         // Active-title motion is also this window's own choice. The store keeps
         // the product default in memory and writes only after the reader changes
         // the switch, so untouched installations follow future defaults.
@@ -1331,6 +1345,7 @@ if (mediaPreviewBridge) {
                             browserLocal ? undefined : desktopMediaWindowOpen(desktopBridge)
                         }
                         experiments={experiments}
+                        projectsVisibility={projectsVisibility}
                         gptLive={gptLive}
                         usageAnalytics={analytics.preference}
                         keepAwake={keepAwake}

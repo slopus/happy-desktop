@@ -388,6 +388,11 @@ export {
     type HappyAgentProjectCloneDialogProps,
 } from "./HappyAgentProjectCloneDialog";
 export {
+    HappyAgentTaskBrowseDialog,
+    type HappyAgentTaskBrowseDialogProps,
+    type HappyAgentTaskBrowseEntry,
+} from "./HappyAgentTaskBrowseDialog";
+export {
     HappyAgentActivityPanel,
     type HappyAgentActivityPanelProps,
 } from "./HappyAgentActivityPanel";
