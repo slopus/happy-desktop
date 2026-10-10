@@ -712,9 +712,19 @@ export type MessageListProps = {
     /**
      * Values read by `estimateRowSize`, compared by identity. Change one when
      * the caller's row data changes; ordinary parent renders with the same
-     * values leave the geometry model intact.
+     * values leave the geometry model intact. A change re-asks every row.
      */
     estimateDependencies?: readonly unknown[];
+    /**
+     * The value each row is estimated from, one per child in order, compared
+     * by identity. A row's estimate may read every row before it, the row after
+     * it, and whether it is the last row — nothing further ahead. When only
+     * these values change, the model keeps every row before the one preceding
+     * the first changed value and re-asks the rest, so appending to a long
+     * transcript costs the rows that changed rather than the whole history.
+     * Without it, row data belongs in `estimateDependencies`.
+     */
+    estimateRows?: readonly unknown[];
     /** Restores a previously detached reader position on this list's first layout. */
     initialScrollPosition?: MessageListScrollPosition;
     /** Reports user scrolling and the final position before this list detaches. */
@@ -914,6 +924,12 @@ export function MessageList(props: MessageListProps) {
         const item = items[index];
         return isValidElement(item) && item.key !== null ? item.key : index;
     };
+    /* TanStack recomputes every offset whenever its key function changes, so it
+       gets one for the list's lifetime. Every model update that changes a row
+       calls `measure`, which is what tells TanStack the rows moved. */
+    const itemKeyAtCurrent = useRef(itemKeyAt);
+    itemKeyAtCurrent.current = itemKeyAt;
+    const [virtualItemKey] = useState(() => (index: number) => itemKeyAtCurrent.current(index));
     const virtualized = props.virtualize === true;
     const paddingEnd = props.paddingEnd ?? MESSAGE_LIST_PADDING_END_DEFAULT;
     const estimateItemSize = (index: number, rowWidth: number) =>
@@ -940,17 +956,22 @@ export function MessageList(props: MessageListProps) {
      * cannot see keeps a parked reader's anchor, or a follower's tail, fixed.
      */
     const [rowSizeModel] = useState(() => ({
+        /* Index-aligned with `items` after every model update. */
         keys: [] as Key[],
-        sizes: new Map<Key, number>(),
+        sizes: [] as number[],
         starts: [] as number[],
+        /* Whether each size was laid out at `width`, rather than a placeholder. */
+        exact: [] as boolean[],
+        /* How many rows are still placeholders. */
+        pending: 0,
         width: undefined as number | undefined,
-        pending: new Set<Key>(),
     }));
     /**
-     * Rebuilds the model at `rowWidth`. Rows before `from` kept their inputs
-     * and keep their size; every later row is asked again. The rows `focus`
-     * names are laid out exactly, then rows outward from them until `budget`
-     * runs out, and whatever is left becomes pending.
+     * Updates the model at `rowWidth`, in place. Rows before `from` kept their
+     * inputs and keep their size; every later row is asked again. The rows
+     * `focus` names are laid out exactly, then rows outward from them until
+     * `budget` runs out, and whatever is left becomes pending. Offsets are
+     * rewritten only from the first row whose size or position moved.
      */
     function rowSizeModelLayout(
         rowWidth: number,
@@ -960,27 +981,57 @@ export function MessageList(props: MessageListProps) {
     ) {
         /* A list that is not virtualized mounts every row, so it models them all. */
         const deadline = virtualized ? performance.now() + budget : Infinity;
-        const previous = rowSizeModel;
+        const model = rowSizeModel;
+        const { keys, sizes, starts, exact } = model;
         const count = items.length;
-        const kept = previous.width === rowWidth ? Math.max(0, Math.min(from, count)) : 0;
-        const keys = new Array<Key>(count);
-        const sizes = new Array<number>(count);
-        const exact = new Array<boolean>(count);
-        for (let index = 0; index < count; index += 1) {
+        const previousCount = keys.length;
+        const kept =
+            model.width === rowWidth ? Math.max(0, Math.min(from, count, previousCount)) : 0;
+        /* Rows from `kept` on carry their previous size, found by key, as the
+           placeholder they keep until they are asked again. */
+        const tailKeys = keys.slice(kept);
+        const tailSizes = sizes.slice(kept);
+        let tailPending = 0;
+        for (let index = kept; index < previousCount; index += 1)
+            if (!exact[index]) tailPending += 1;
+        let tailIndex: Map<Key, number> | undefined;
+        let pending = model.pending - tailPending + (count - kept);
+        keys.length = count;
+        sizes.length = count;
+        exact.length = count;
+        let unsized = false;
+        for (let index = kept; index < count; index += 1) {
             const key = itemKeyAt(index);
-            const size = previous.sizes.get(key);
+            let previous: number | undefined = index - kept;
+            if (tailKeys[previous] !== key) {
+                if (!tailIndex) {
+                    tailIndex = new Map();
+                    for (let tail = 0; tail < tailKeys.length; tail += 1)
+                        tailIndex.set(tailKeys[tail]!, tail);
+                }
+                previous = tailIndex.get(key);
+            }
             keys[index] = key;
-            sizes[index] = size ?? -1;
-            exact[index] = index < kept && size !== undefined && !previous.pending.has(key);
+            sizes[index] = previous === undefined ? -1 : tailSizes[previous]!;
+            exact[index] = false;
+            if (previous === undefined) unsized = true;
         }
+        let moved = kept;
         const layout = (index: number) => {
             if (!exact[index]) {
-                sizes[index] = estimateItemSize(index, rowWidth);
+                const size = estimateItemSize(index, rowWidth);
+                if (size !== sizes[index]) moved = Math.min(moved, index);
+                sizes[index] = size;
                 exact[index] = true;
+                pending -= 1;
             }
             return sizes[index]!;
         };
-        if (footerIndex !== undefined) layout(footerIndex);
+        if (footerIndex !== undefined) {
+            if (exact[footerIndex]) pending += 1;
+            exact[footerIndex] = false;
+            layout(footerIndex);
+        }
         const viewportHeight = viewportGeometry.current.height || list.current?.clientHeight || 0;
         let first = 0;
         let last = count - 1;
@@ -1015,55 +1066,42 @@ export function MessageList(props: MessageListProps) {
         }
         for (let index = Math.max(0, first); index <= Math.min(count - 1, last); index += 1)
             layout(index);
-        for (let distance = 1; performance.now() < deadline; distance += 1) {
+        for (let distance = 1; pending > 0 && performance.now() < deadline; distance += 1) {
             const above = center - distance;
             const below = center + distance;
             if (above < 0 && below >= count) break;
             if (above >= 0) layout(above);
             if (below < count) layout(below);
         }
-        let exactTotal = 0;
-        let exactCount = 0;
-        for (let index = 0; index < count; index += 1) {
-            if (!exact[index]) continue;
-            exactTotal += sizes[index]!;
-            exactCount += 1;
-        }
-        const placeholder =
-            exactCount > 0 ? Math.round(exactTotal / exactCount) : ROW_SIZE_FALLBACK;
-        const nextSizes = new Map<Key, number>();
-        const pending = new Set<Key>();
-        for (let index = 0; index < count; index += 1) {
-            if (!exact[index]) {
-                if (sizes[index]! < 0) sizes[index] = placeholder;
-                pending.add(keys[index]!);
+        if (unsized) {
+            /* A row never sized before and not reached in this update takes the
+               mean of the rows that are. */
+            let exactTotal = 0;
+            let exactCount = 0;
+            for (let index = 0; index < count; index += 1) {
+                if (!exact[index]) continue;
+                exactTotal += sizes[index]!;
+                exactCount += 1;
             }
-            nextSizes.set(keys[index]!, sizes[index]!);
+            const placeholder =
+                exactCount > 0 ? Math.round(exactTotal / exactCount) : ROW_SIZE_FALLBACK;
+            for (let index = kept; index < count; index += 1) {
+                if (sizes[index]! >= 0) continue;
+                sizes[index] = placeholder;
+                moved = Math.min(moved, index);
+            }
         }
-        /* Offsets before the first row whose key or size moved are unchanged. */
-        let changed = 0;
-        while (
-            changed < count &&
-            changed < previous.keys.length &&
-            previous.keys[changed] === keys[changed] &&
-            previous.sizes.get(keys[changed]!) === sizes[changed]
-        )
-            changed += 1;
-        const starts = previous.starts;
         starts.length = count;
         let start =
-            changed === 0 ? MESSAGE_LIST_PADDING_START : starts[changed - 1]! + sizes[changed - 1]!;
-        for (let index = changed; index < count; index += 1) {
+            moved === 0 ? MESSAGE_LIST_PADDING_START : starts[moved - 1]! + sizes[moved - 1]!;
+        for (let index = moved; index < count; index += 1) {
             starts[index] = start;
             start += sizes[index]!;
         }
-        rowSizeModel.keys = keys;
-        rowSizeModel.sizes = nextSizes;
-        rowSizeModel.starts = starts;
-        rowSizeModel.width = rowWidth;
-        rowSizeModel.pending = pending;
+        model.pending = pending;
+        model.width = rowWidth;
         if (virtualized) virtualizer.measure();
-        if (pending.size > 0) refinementSchedule();
+        if (pending > 0) refinementSchedule();
     }
     /** Lays out pending rows in the browser's idle time, one bounded slice at a time. */
     const refinementSchedule = () => {
@@ -1087,10 +1125,12 @@ export function MessageList(props: MessageListProps) {
     };
     /** Total modeled height of every row. */
     const estimatedContentHeight = () => {
-        let total = MESSAGE_LIST_PADDING_START + paddingEnd;
-        for (let index = 0; index < items.length; index += 1)
-            total += rowSizeModel.sizes.get(itemKeyAt(index)) ?? ROW_SIZE_FALLBACK;
-        return total;
+        const last = rowSizeModel.keys.length - 1;
+        return (
+            (last < 0
+                ? MESSAGE_LIST_PADDING_START
+                : rowSizeModel.starts[last]! + rowSizeModel.sizes[last]!) + paddingEnd
+        );
     };
     /**
      * Where the list opens: the restored reader position, or the newest
@@ -1113,10 +1153,8 @@ export function MessageList(props: MessageListProps) {
     /* Model lookups use the model's own row order, which matches `items`
        except inside the commit that changed them, before the model follows. */
     function modeledItemAtIndex(index: number) {
-        const key = rowSizeModel.keys[index];
-        if (key === undefined) return undefined;
-        const size = rowSizeModel.sizes.get(key) ?? ROW_SIZE_FALLBACK;
-        return { size, start: rowSizeModel.starts[index] ?? MESSAGE_LIST_PADDING_START };
+        if (index < 0 || index >= rowSizeModel.keys.length) return undefined;
+        return { size: rowSizeModel.sizes[index]!, start: rowSizeModel.starts[index]! };
     }
     function modeledItemAtOffset(offset: number) {
         const keys = rowSizeModel.keys;
@@ -1124,12 +1162,11 @@ export function MessageList(props: MessageListProps) {
         let upper = keys.length - 1;
         while (lower <= upper) {
             const index = Math.floor((lower + upper) / 2);
-            const key = keys[index]!;
-            const start = rowSizeModel.starts[index] ?? MESSAGE_LIST_PADDING_START;
-            const size = rowSizeModel.sizes.get(key) ?? ROW_SIZE_FALLBACK;
+            const start = rowSizeModel.starts[index]!;
+            const size = rowSizeModel.sizes[index]!;
             if (offset < start) upper = index - 1;
             else if (offset > start + size) lower = index + 1;
-            else return { index, key, size, start };
+            else return { index, key: keys[index]!, size, start };
         }
         const index = lower;
         const item = modeledItemAtIndex(index);
@@ -1200,7 +1237,7 @@ export function MessageList(props: MessageListProps) {
     function rowSizeModelRefine(budget: number) {
         const element = list.current;
         const rowWidth = rowSizeModel.width;
-        if (!element || rowWidth === undefined || rowSizeModel.pending.size === 0) return;
+        if (!element || rowWidth === undefined || rowSizeModel.pending === 0) return;
         const viewportHeight = viewportGeometry.current.height || element.clientHeight;
         flushSync(() => {
             const scrollTopAnchor = readerAnchor.current?.type === "scrollTop";
@@ -1311,8 +1348,11 @@ export function MessageList(props: MessageListProps) {
            parked reader; the semantic bottom-edge anchor below owns that case. */
         anchorTo: "start",
         count: virtualized ? items.length : 0,
-        estimateSize: (index) => rowSizeModel.sizes.get(itemKeyAt(index)) ?? ROW_SIZE_FALLBACK,
-        getItemKey: itemKeyAt,
+        estimateSize: (index) =>
+            rowSizeModel.keys[index] === itemKeyAt(index)
+                ? rowSizeModel.sizes[index]!
+                : ROW_SIZE_FALLBACK,
+        getItemKey: virtualItemKey,
         getScrollElement: () => list.current,
         observeElementRect: observeScrollportRect,
         /* Opening a conversation lands on its newest content, which means the
@@ -1380,61 +1420,84 @@ export function MessageList(props: MessageListProps) {
             ? [...props.estimateDependencies]
             : [props.children],
         estimateVersion: props.estimateVersion,
-        footerHeight: typeof props.footerHeight === "number" ? props.footerHeight : undefined,
+        rows: props.estimateRows,
     });
-    // eslint-disable-next-line happy-react/no-layout-effect -- authoritative row data changes rebuild all modeled offsets before the browser can paint the new rows; the caller supplies the semantic dependency list
+    // eslint-disable-next-line happy-react/no-layout-effect -- authoritative row data changes rebuild modeled offsets before the browser can paint the new rows; the caller supplies the semantic dependency list
     useLayoutEffect(() => {
         const dependencies = props.estimateDependencies ?? [props.children];
+        const rows = props.estimateRows;
         const previous = modelInputs.current;
-        const footerHeight =
-            typeof props.footerHeight === "number" ? props.footerHeight : undefined;
-        const dependenciesChanged =
+        modelInputs.current = {
+            dependencies: previous.dependencies,
+            estimateVersion: props.estimateVersion,
+            rows,
+        };
+        /* The first row whose estimate may differ from the model's, or the
+           row count when none can. */
+        let from = items.length;
+        if (
+            previous.estimateVersion !== props.estimateVersion ||
             previous.dependencies.length !== dependencies.length ||
             previous.dependencies.some(
                 (dependency, index) => !Object.is(dependency, dependencies[index]),
-            );
-        if (
-            !dependenciesChanged &&
-            previous.estimateVersion === props.estimateVersion &&
-            previous.footerHeight === footerHeight
+            )
         ) {
-            /* A pending row TanStack has just rendered is laid out now, before
-               this commit can paint it at its placeholder size. */
-            const element = list.current;
-            const rowWidth = rowSizeModel.width;
-            if (!element || rowWidth === undefined || rowSizeModel.pending.size === 0) return;
-            let first = -1;
-            let last = -1;
-            for (const item of virtualItems) {
-                if (!rowSizeModel.pending.has(item.key)) continue;
-                if (first < 0) first = item.index;
-                last = item.index;
+            modelInputs.current.dependencies = [...dependencies];
+            from = 0;
+        } else if (rows !== previous.rows) {
+            if (rows === undefined || previous.rows === undefined) from = 0;
+            else {
+                const shared = Math.min(rows.length, previous.rows.length);
+                let changed = 0;
+                while (changed < shared && Object.is(rows[changed], previous.rows[changed]))
+                    changed += 1;
+                /* The row before the first change reads it as its successor. */
+                if (changed < shared || rows.length !== previous.rows.length)
+                    from = Math.max(0, changed - 1);
             }
-            if (first < 0) return;
-            const viewportHeight = viewportGeometry.current.height || element.clientHeight;
-            const scrollTopAnchor = readerAnchor.current?.type === "scrollTop";
-            const anchor = modelAnchorCapture(viewportHeight, element.scrollTop);
-            rowSizeModelLayout(rowWidth, items.length, { type: "rows", first, last }, 0);
-            if (anchor) pendingAnchor.current = { anchor, viewportHeight, scrollTopAnchor };
-            return;
         }
-        modelInputs.current = {
-            dependencies: [...dependencies],
-            estimateVersion: props.estimateVersion,
-            footerHeight,
-        };
         /* Before the first scrollport report there is no model to update; that
            report builds it from these same inputs. */
-        if (!virtualized || rowSizeModel.width === undefined) return;
-        const viewportHeight = viewportGeometry.current.height || list.current?.clientHeight || 0;
-        const anchor = readerAnchor.current ?? modelAnchorCapture(viewportHeight);
-        if (anchor) pendingAnchor.current = { anchor, viewportHeight };
-        rowSizeModelLayout(
-            rowSizeModel.width,
-            0,
-            readerFocus(viewportHeight),
-            ROW_LAYOUT_BUDGET_MS,
-        );
+        const element = list.current;
+        const rowWidth = rowSizeModel.width;
+        if (!virtualized || !element || rowWidth === undefined) return;
+        /* The model holds one size per row, whatever the caller reported. */
+        if (items.length !== rowSizeModel.keys.length)
+            from = Math.min(
+                from,
+                Math.max(0, Math.min(items.length, rowSizeModel.keys.length) - 1),
+            );
+        /* The footer reads state outside the rows, so it is asked on every commit. */
+        if (
+            footerIndex !== undefined &&
+            from > footerIndex &&
+            (rowSizeModel.keys[footerIndex] !== MESSAGE_LIST_FOOTER_KEY ||
+                rowSizeModel.sizes[footerIndex] !== estimateItemSize(footerIndex, rowWidth))
+        )
+            from = footerIndex;
+        const viewportHeight = viewportGeometry.current.height || element.clientHeight;
+        if (from < items.length) {
+            const anchor = readerAnchor.current ?? modelAnchorCapture(viewportHeight);
+            if (anchor) pendingAnchor.current = { anchor, viewportHeight };
+            rowSizeModelLayout(rowWidth, from, readerFocus(viewportHeight), ROW_LAYOUT_BUDGET_MS);
+            return;
+        }
+        /* A pending row TanStack has just rendered is laid out now, before this
+           commit can paint it at its placeholder size. */
+        if (rowSizeModel.pending === 0) return;
+        let first = -1;
+        let last = -1;
+        for (const item of virtualItems) {
+            if (rowSizeModel.keys[item.index] !== item.key || rowSizeModel.exact[item.index])
+                continue;
+            if (first < 0) first = item.index;
+            last = item.index;
+        }
+        if (first < 0) return;
+        const scrollTopAnchor = readerAnchor.current?.type === "scrollTop";
+        const anchor = modelAnchorCapture(viewportHeight, element.scrollTop);
+        rowSizeModelLayout(rowWidth, items.length, { type: "rows", first, last }, 0);
+        if (anchor) pendingAnchor.current = { anchor, viewportHeight, scrollTopAnchor };
     });
     // eslint-disable-next-line happy-react/no-layout-effect -- the transcript owns live scroll position, ResizeObserver, and scroll listeners whose initial restoration and cleanup must align with the committed list DOM
     useLayoutEffect(() => {

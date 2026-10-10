@@ -590,7 +590,6 @@ export function ConversationView(props: ConversationViewProps) {
             ) : (
                 <MessageList
                     estimateDependencies={[
-                        props.entries,
                         props.errorAssistance,
                         props.errorAssistanceUnavailable,
                         props.viewerId,
@@ -619,6 +618,7 @@ export function ConversationView(props: ConversationViewProps) {
                             rowHeightCache,
                         )
                     }
+                    estimateRows={transcript}
                     estimateRowWidth={contentWidth}
                     estimateVersion={textLayoutGeneration}
                     footer={
@@ -692,6 +692,10 @@ export function ConversationView(props: ConversationViewProps) {
                                 : undefined;
                         return (
                             <ConversationEntryView
+                                /* The key leads the spread props below so React
+                                   takes its direct element path for each of the
+                                   transcript's rows instead of copying props. */
+                                key={entry.kind === "message" ? entry.message.id : entry.id}
                                 errorAssistance={errorAssistanceFor(entry)}
                                 onErrorAssistanceRequest={props.onErrorAssistanceRequest}
                                 activityMotion={props.motion}
@@ -719,13 +723,6 @@ export function ConversationView(props: ConversationViewProps) {
                                     entry.kind === "message"
                                         ? conversationMessageGrouped(transcript, index)
                                         : undefined
-                                }
-                                key={
-                                    entry.kind === "message"
-                                        ? entry.message.id
-                                        : entry.kind === "turnStatus"
-                                          ? entry.id
-                                          : entry.id
                                 }
                                 onImageOpen={props.onImageOpen}
                                 onAttachmentOpen={props.onAttachmentOpen}
