@@ -538,6 +538,7 @@ export function desktopAnalyticsCreate(options: {
             closers.add(setupClose);
             closers.add(subscriptionsClose);
             let step: AnalyticsEvents["onboarding_step_viewed"]["step"] | undefined;
+            let localAppsSent = false;
             let mobile: string | undefined;
             let stage: string | undefined;
             const observe = (snapshot: LocalOnboardingViewSnapshot): void => {
@@ -549,6 +550,21 @@ export function desktopAnalyticsCreate(options: {
                         track(LOCAL_HAPPY_AGENT_ID, "onboarding_step_viewed", { step: next });
                     }
                     if (setupLive(snapshot, view)) setup ??= { startedAt: performance.now() };
+                    if (next === "subscriptions" && !localAppsSent) {
+                        const onboarding = snapshot.onboarding;
+                        const apps = onboarding?.localApps;
+                        // A shell that names no install shell predates the
+                        // look entirely, so it will never answer: unknown.
+                        if (apps || (onboarding?.assistants && !onboarding.installShell)) {
+                            localAppsSent = true;
+                            track(LOCAL_HAPPY_AGENT_ID, "onboarding_local_apps", {
+                                claude_desktop_app: apps?.claudeDesktop ?? null,
+                                codex_desktop_app: apps?.codexDesktop ?? null,
+                                antigravity_app: apps?.antigravityApp ?? null,
+                                agy_cli: apps?.agyCli ?? null,
+                            });
+                        }
+                    }
                 }
                 if (setup) {
                     const failure = setupFailureOf(snapshot, localProtocolMismatch());
@@ -607,14 +623,20 @@ export function desktopAnalyticsCreate(options: {
                     return unsubscribe;
                 },
                 assistantsContinue() {
-                    const view = localOnboardingView(store.get());
+                    const snapshot = store.get();
+                    const view = localOnboardingView(snapshot);
                     if (view?.kind === "provider-authentication") {
+                        const found = snapshot.onboarding?.assistants ?? [];
                         for (const assistant of view.assistants) {
                             const status = assistantStatus(assistant.authentication);
                             if (status)
                                 track(LOCAL_HAPPY_AGENT_ID, "onboarding_assistant_status", {
                                     assistant: assistant.id,
                                     status,
+                                    path_refreshed:
+                                        status !== "not_installed" &&
+                                        found.find((item) => item.id === assistant.id)
+                                            ?.pathRefreshed === true,
                                 });
                         }
                         const custom = assistantStatus(view.custom.authentication);
@@ -622,14 +644,19 @@ export function desktopAnalyticsCreate(options: {
                             track(LOCAL_HAPPY_AGENT_ID, "onboarding_assistant_status", {
                                 assistant: "custom",
                                 status: custom,
+                                path_refreshed: false,
                             });
                     }
                     store.assistantsContinue();
                 },
                 commandCopied(copy) {
+                    const view = localOnboardingView(store.get());
                     track(LOCAL_HAPPY_AGENT_ID, "onboarding_command_copied", {
                         assistant: copy.assistant,
                         kind: commandKindOf(copy.kind),
+                        // The variant on screen when it was copied.
+                        shell:
+                            view?.kind === "provider-authentication" ? view.installShell : "posix",
                     });
                     store.commandCopied(copy);
                 },

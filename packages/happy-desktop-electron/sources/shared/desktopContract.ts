@@ -547,7 +547,29 @@ export interface LocalAssistantState {
      * `providersMissing` is itself Happy Agent's answer that none of them works.
      */
     readonly status: "found" | "missing";
+    /**
+     * Found only through a PATH entry this process did not start with, or at
+     * its installer's default location: an install made while Happy was open.
+     */
+    readonly pathRefreshed?: true;
 }
+
+/**
+ * Which other coding apps this machine has, from bounded read-only file checks.
+ * `null` means Happy could not tell, or has no verified signal on this OS.
+ */
+export interface LocalAppsSnapshot {
+    readonly claudeDesktop: boolean | null;
+    /** The Codex desktop app, now the ChatGPT app; ChatGPT Classic does not count. */
+    readonly codexDesktop: boolean | null;
+    /** Google Antigravity or Antigravity IDE. */
+    readonly antigravityApp: boolean | null;
+    /** Google Antigravity's `agy` command. */
+    readonly agyCli: boolean | null;
+}
+
+/** The shell the official install commands are written for on this machine. */
+export type LocalInstallShell = "powershell" | "posix";
 
 export interface LocalOnboardingSnapshot {
     readonly stage: LocalOnboardingStage;
@@ -577,6 +599,10 @@ export interface LocalOnboardingSnapshot {
      * and what Happy Agent can do with it. Present only at `providersMissing`.
      */
     readonly assistants?: readonly LocalAssistantState[];
+    /** Present with `assistants`: the shell their install commands are written for. */
+    readonly installShell?: LocalInstallShell;
+    /** Present with `assistants` once this machine's other coding apps were looked for. */
+    readonly localApps?: LocalAppsSnapshot;
     /** An attempt to reach Happy Agent is running, started from a failed stage. */
     readonly retrying?: boolean;
     /**

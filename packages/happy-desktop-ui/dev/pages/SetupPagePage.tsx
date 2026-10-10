@@ -382,6 +382,7 @@ export function SetupPagePage() {
                                 ],
                                 custom: { authentication: "checking", providers: [] },
                                 kind: "provider-authentication",
+                                installShell: "posix",
                             }}
                         />
                     </ThemeScope>
@@ -424,6 +425,7 @@ export function SetupPagePage() {
                                 ],
                                 custom: { authentication: "invalid", providers: [] },
                                 kind: "provider-authentication",
+                                installShell: "posix",
                             }}
                         />
                     </ThemeScope>
@@ -464,6 +466,7 @@ export function SetupPagePage() {
                                 ],
                                 custom: { authentication: "invalid", providers: [] },
                                 kind: "provider-authentication",
+                                installShell: "posix",
                             }}
                         />
                     </ThemeScope>
@@ -531,6 +534,7 @@ export function SetupPagePage() {
                                 ],
                                 custom: { authentication: "invalid", providers: [] },
                                 kind: "provider-authentication",
+                                installShell: "posix",
                             }}
                         />
                     </ThemeScope>

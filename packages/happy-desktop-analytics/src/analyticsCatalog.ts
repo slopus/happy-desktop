@@ -147,11 +147,29 @@ export interface AnalyticsEvents {
         readonly assistant: "claude" | "codex" | "grok" | "custom";
         /** For `custom`, `signed_in` means a valid custom configuration. */
         readonly status: AnalyticsAssistantStatus;
+        /**
+         * The command was found only on a PATH entry added after the shell
+         * started, or at its installer's default location; false for `custom`
+         * and for an assistant that is not installed.
+         */
+        readonly path_refreshed: boolean;
     };
     readonly onboarding_command_copied: {
         readonly assistant: "claude" | "codex" | "grok" | "custom";
         /** `agent_prompt` is one of the Custom card's prompts for the person's own coding agent. */
         readonly kind: "install" | "sign_in" | "agent_prompt";
+        /** Which variant of the commands the screen showed: Windows PowerShell, or POSIX shell. */
+        readonly shell: "powershell" | "posix";
+    };
+    /**
+     * Subscriptions first showed in this window: which other coding apps the
+     * machine has. Null when unknown, or when there is no verified signal on this OS.
+     */
+    readonly onboarding_local_apps: {
+        readonly claude_desktop_app: boolean | null;
+        readonly codex_desktop_app: boolean | null;
+        readonly antigravity_app: boolean | null;
+        readonly agy_cli: boolean | null;
     };
     /** The window closed on Subscriptions without Continue: what each card said then. */
     readonly onboarding_subscriptions_exit: {
@@ -201,7 +219,13 @@ export const ANALYTICS_PROPERTY_NAMES: ReadonlySet<string> = new Set([
     "duration_ms",
     "assistant",
     "status",
+    "path_refreshed",
     "kind",
+    "shell",
+    "claude_desktop_app",
+    "codex_desktop_app",
+    "antigravity_app",
+    "agy_cli",
     "claude_status",
     "codex_status",
     "grok_status",

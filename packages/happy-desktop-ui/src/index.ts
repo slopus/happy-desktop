@@ -530,11 +530,13 @@ export {
 } from "./StatTile";
 export {
     LocalOnboardingScreen,
+    localOnboardingInstallCommand,
     localOnboardingStage,
     type LocalOnboardingAgentSetupPhase,
     type LocalOnboardingAssistant,
     type LocalOnboardingAssistantId,
     type LocalOnboardingCommandCopy,
+    type LocalOnboardingInstallShell,
     type LocalOnboardingCustom,
     type LocalOnboardingDownload,
     type LocalOnboardingScreenProps,

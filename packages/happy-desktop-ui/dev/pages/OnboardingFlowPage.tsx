@@ -66,6 +66,7 @@ const mixedSubscriptions: LocalOnboardingView = {
     ],
     custom: { authentication: "invalid", providers: [] },
     kind: "provider-authentication",
+    installShell: "posix",
 };
 
 const screens: readonly {
@@ -126,6 +127,7 @@ const screens: readonly {
                 ],
                 custom: { authentication: "invalid", providers: [] },
                 kind: "provider-authentication",
+                installShell: "posix",
             }),
     },
     {
@@ -140,6 +142,7 @@ const screens: readonly {
                 ],
                 custom: { authentication: "invalid", providers: [] },
                 kind: "provider-authentication",
+                installShell: "posix",
             }),
     },
     {
@@ -155,6 +158,7 @@ const screens: readonly {
                     ],
                     custom: { authentication: "invalid", providers: [] },
                     kind: "provider-authentication",
+                    installShell: "posix",
                 },
                 undefined,
                 true,
@@ -172,6 +176,7 @@ const screens: readonly {
                 ],
                 custom: { authentication: "valid", providers: ["Bedrock"] },
                 kind: "provider-authentication",
+                installShell: "posix",
             }),
     },
     {
@@ -191,6 +196,7 @@ const screens: readonly {
                 ],
                 custom: { authentication: "invalid", providers: [] },
                 kind: "provider-authentication",
+                installShell: "posix",
             }),
     },
     {

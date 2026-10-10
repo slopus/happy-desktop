@@ -28,7 +28,13 @@ import type {
     HappyAgentDirectorySnapshot,
     HappyAgentDirectoryStore,
 } from "./happyAgentDirectoryStore";
-import type { LocalOnboardingStore, LocalOnboardingViewSnapshot } from "./localOnboardingStore";
+import {
+    localOnboardingView,
+    rendererInstallShell,
+    type LocalOnboardingStore,
+    type LocalOnboardingViewSnapshot,
+} from "./localOnboardingStore";
+import { localOnboardingInstallCommand } from "../../../happy-desktop-ui/src/LocalOnboardingScreen";
 import type {
     DesktopDaemonSnapshot,
     DesktopRuntimeSnapshot,
@@ -425,10 +431,17 @@ it("never sends free text, whatever the machine says about its failures", async 
         view({
             onboarding: onboarding("providersMissing", {
                 assistants: [
-                    { id: "claude", status: "found", command: PRIVATE[0] },
+                    { id: "claude", status: "found", command: PRIVATE[0], pathRefreshed: true },
                     { id: "codex", status: "missing" },
                     { id: "grok", status: "missing" },
                 ],
+                installShell: "powershell",
+                localApps: {
+                    agyCli: true,
+                    antigravityApp: null,
+                    claudeDesktop: true,
+                    codexDesktop: false,
+                },
             }),
         }),
     );
@@ -478,6 +491,7 @@ it("never sends free text, whatever the machine says about its failures", async 
             "onboarding_setup_result",
             "onboarding_command_copied",
             "onboarding_assistant_status",
+            "onboarding_local_apps",
             "onboarding_subscriptions_exit",
             "message_sent",
             "conversation_created",
@@ -666,4 +680,145 @@ it("sends the download detail with a download failure at close, and only with on
     expect(properties).toMatchObject({ error_code: "start_timeout" });
     expect(properties).not.toHaveProperty("error_detail");
     expect(properties).not.toHaveProperty("attempt_count");
+});
+
+it("shows Windows the vendors' PowerShell installers and every other OS their shell one-liners", () => {
+    expect(localOnboardingInstallCommand("claude", "powershell")).toBe(
+        "irm https://claude.ai/install.ps1 | iex",
+    );
+    expect(localOnboardingInstallCommand("grok", "powershell")).toBe(
+        "irm https://x.ai/cli/install.ps1 | iex",
+    );
+    expect(localOnboardingInstallCommand("codex", "powershell")).toBe("npm i -g @openai/codex");
+    expect(localOnboardingInstallCommand("claude", "posix")).toBe(
+        "curl -fsSL https://claude.ai/install.sh | bash",
+    );
+    expect(localOnboardingInstallCommand("grok", "posix")).toBe(
+        "curl -fsSL https://x.ai/cli/install.sh | bash",
+    );
+    expect(localOnboardingInstallCommand("codex", "posix")).toBe("npm i -g @openai/codex");
+});
+
+it("takes the install shell from the desktop, and from the renderer's OS only on an older shell", () => {
+    const subscriptions = (extra: Partial<LocalOnboardingSnapshot>) =>
+        localOnboardingView(
+            view({
+                onboarding: onboarding("assistantsFound", {
+                    assistants: [{ id: "claude", status: "missing" }],
+                    ...extra,
+                }),
+            }),
+        );
+    expect(subscriptions({ installShell: "powershell" })).toMatchObject({
+        installShell: "powershell",
+    });
+    expect(subscriptions({ installShell: "posix" })).toMatchObject({ installShell: "posix" });
+    expect(rendererInstallShell("Win32")).toBe("powershell");
+    expect(rendererInstallShell("Windows")).toBe("powershell");
+    expect(rendererInstallShell("MacIntel")).toBe("posix");
+    expect(rendererInstallShell("macOS")).toBe("posix");
+    expect(rendererInstallShell("Linux x86_64")).toBe("posix");
+    vi.stubGlobal("navigator", { platform: "Win32" });
+    expect(subscriptions({})).toMatchObject({ installShell: "powershell" });
+    vi.stubGlobal("navigator", { platform: "MacIntel", userAgentData: { platform: "macOS" } });
+    expect(subscriptions({})).toMatchObject({ installShell: "posix" });
+});
+
+it("reports the machine's other apps once, and which installs only a refreshed PATH found", () => {
+    const client = clientCreate();
+    const analytics = desktopAnalyticsCreate({
+        development: false,
+        happyAgents: directoryCreate([{ id: "local", status: "connected", bots: [] }]),
+        client,
+    });
+    const { store, welcome, publish } = onboardingCreate();
+    const observed = analytics.onboardingObserve(store, welcome);
+    const unsubscribe = observed.subscribe(() => undefined);
+    const subscriptions = (localApps?: LocalOnboardingSnapshot["localApps"]) =>
+        view({
+            onboarding: onboarding("assistantsFound", {
+                assistants: [
+                    { id: "claude", status: "found", command: "C:\\x", pathRefreshed: true },
+                    { id: "codex", status: "found", command: "C:\\y" },
+                    { id: "grok", status: "missing" },
+                ],
+                installShell: "powershell",
+                ...(localApps ? { localApps } : {}),
+            }),
+            providerAuthentication: {
+                claude: "invalid",
+                codex: "valid",
+                complete: true,
+                custom: { providers: [], result: "invalid" },
+                grok: "invalid",
+            },
+        });
+    // Still looking: nothing is sent until the answer arrives.
+    publish(subscriptions());
+    expect(client.captured.filter((c) => c.event === "onboarding_local_apps")).toEqual([]);
+    const apps = { agyCli: false, antigravityApp: null, claudeDesktop: true, codexDesktop: false };
+    publish(subscriptions(apps));
+    publish(subscriptions({ ...apps, agyCli: true }));
+    expect(
+        client.captured.filter((c) => c.event === "onboarding_local_apps").map((c) => c.properties),
+    ).toEqual([
+        expect.objectContaining({
+            claude_desktop_app: true,
+            codex_desktop_app: false,
+            antigravity_app: null,
+            agy_cli: false,
+        }),
+    ]);
+
+    observed.commandCopied({ assistant: "claude", kind: "sign-in" });
+    observed.assistantsContinue();
+    expect(
+        client.captured.find((c) => c.event === "onboarding_command_copied")?.properties,
+    ).toMatchObject({ assistant: "claude", kind: "sign_in", shell: "powershell" });
+    expect(
+        client.captured
+            .filter((c) => c.event === "onboarding_assistant_status")
+            .map(({ properties }) => [
+                properties.assistant,
+                properties.status,
+                properties.path_refreshed,
+            ]),
+    ).toEqual([
+        ["claude", "not_signed_in", true],
+        ["codex", "signed_in", false],
+        ["grok", "not_installed", false],
+        ["custom", "not_signed_in", false],
+    ]);
+    unsubscribe();
+    analytics.dispose();
+});
+
+it("sends unknown apps for a shell too old to look for them", () => {
+    const client = clientCreate();
+    const analytics = desktopAnalyticsCreate({
+        development: false,
+        happyAgents: directoryCreate(),
+        client,
+    });
+    const { store, welcome, publish } = onboardingCreate();
+    const unsubscribe = analytics.onboardingObserve(store, welcome).subscribe(() => undefined);
+    publish(
+        view({
+            onboarding: onboarding("assistantsFound", {
+                assistants: [{ id: "claude", status: "missing" }],
+            }),
+        }),
+    );
+    expect(
+        client.captured.filter((c) => c.event === "onboarding_local_apps").map((c) => c.properties),
+    ).toEqual([
+        expect.objectContaining({
+            claude_desktop_app: null,
+            codex_desktop_app: null,
+            antigravity_app: null,
+            agy_cli: null,
+        }),
+    ]);
+    unsubscribe();
+    analytics.dispose();
 });

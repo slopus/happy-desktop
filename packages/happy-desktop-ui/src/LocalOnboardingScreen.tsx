@@ -24,6 +24,9 @@ export type LocalOnboardingAssistantId = "claude" | "codex" | "grok";
  * it installs, signs in, or is a prompt for their own coding agent. Never the
  * text itself.
  */
+/** The shell the official install commands are written for on this machine. */
+export type LocalOnboardingInstallShell = "powershell" | "posix";
+
 export interface LocalOnboardingCommandCopy {
     readonly assistant: LocalOnboardingAssistantId | "custom";
     readonly kind: "install" | "sign-in" | "agent-prompt";
@@ -92,6 +95,8 @@ export type LocalOnboardingView =
           readonly kind: "provider-authentication";
           readonly assistants: readonly LocalOnboardingAssistant[];
           readonly custom: LocalOnboardingCustom;
+          /** Which of each vendor's install commands this machine can run. */
+          readonly installShell: LocalOnboardingInstallShell;
       }
     | {
           /**
@@ -222,28 +227,36 @@ const ASSISTANTS: Record<
         mark: AssistantMarkName;
         name: string;
         /** What the vendor's own install page says to run, when the machine has not got it. */
-        install: string;
+        install: Record<LocalOnboardingInstallShell, string>;
         /** What signs you in, taken from each vendor's own documentation. */
         signIn: string;
     }
 > = {
     claude: {
         command: "claude",
-        install: "curl -fsSL https://claude.ai/install.sh | bash",
+        install: {
+            posix: "curl -fsSL https://claude.ai/install.sh | bash",
+            // code.claude.com/docs/en/setup, for Windows PowerShell.
+            powershell: "irm https://claude.ai/install.ps1 | iex",
+        },
         mark: "claude",
         name: "Claude Code",
         signIn: "claude auth login",
     },
     codex: {
         command: "codex",
-        install: "npm i -g @openai/codex",
+        install: { posix: "npm i -g @openai/codex", powershell: "npm i -g @openai/codex" },
         mark: "openai",
         name: "Codex",
         signIn: "codex login",
     },
     grok: {
         command: "grok",
-        install: "curl -fsSL https://x.ai/cli/install.sh | bash",
+        install: {
+            posix: "curl -fsSL https://x.ai/cli/install.sh | bash",
+            // The header of x.ai/cli/install.ps1.
+            powershell: "irm https://x.ai/cli/install.ps1 | iex",
+        },
         mark: "grok",
         name: "Grok",
         // Grok has no login subcommand: running it is the sign-in.
@@ -259,8 +272,21 @@ const ASSISTANTS: Record<
  * somebody has about a machine that "has" a command is which one it found —
  * two versions on a PATH is the ordinary case, not the exotic one.
  */
+/**
+ * The command that installs one assistant here. Windows gets the vendors'
+ * PowerShell installers: their POSIX one-liners fail there, in PowerShell
+ * because `curl` is not curl and in either shell because there is no `bash`.
+ */
+export function localOnboardingInstallCommand(
+    assistant: LocalOnboardingAssistantId,
+    shell: LocalOnboardingInstallShell,
+): string {
+    return ASSISTANTS[assistant].install[shell];
+}
+
 function assistantAuthenticationEntry(
     assistant: LocalOnboardingAssistant,
+    installShell: LocalOnboardingInstallShell,
     onCommandCopy?: (copy: LocalOnboardingCommandCopy) => void,
 ): SetupAssistantEntry {
     const vendor = ASSISTANTS[assistant.id];
@@ -284,7 +310,7 @@ function assistantAuthenticationEntry(
         switch (assistant.authentication) {
             case "unavailable":
                 return {
-                    command: vendor.install,
+                    command: vendor.install[installShell],
                     kind: "command",
                     label: `${vendor.name} install command`,
                     ...(onCommandCopy
@@ -466,7 +492,7 @@ function machineSetupProject(
         ];
         const assistants = [
             ...view.assistants.map((assistant) =>
-                assistantAuthenticationEntry(assistant, onCommandCopy),
+                assistantAuthenticationEntry(assistant, view.installShell, onCommandCopy),
             ),
             customAuthenticationEntry(view.custom, promptsOpen, onCommandCopy),
         ];

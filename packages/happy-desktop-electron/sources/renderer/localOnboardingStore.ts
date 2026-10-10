@@ -892,6 +892,7 @@ export function localOnboardingView(
                 ),
                 custom: customProject(snapshot),
                 kind: "provider-authentication",
+                installShell: onboarding.installShell ?? rendererInstallShell(),
             };
         case "agentReady":
             return {
@@ -1139,4 +1140,16 @@ function authenticationResultProject(
 
 function errorMessage(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
+}
+
+/**
+ * The install shell for a shell too old to name one. A hosted renderer can
+ * outlive its shell, and the browser's platform string is the only answer it
+ * has; Windows must not be handed POSIX commands that cannot run there.
+ */
+export function rendererInstallShell(
+    platform: string = (navigator as Navigator & { userAgentData?: { platform?: string } })
+        .userAgentData?.platform ?? navigator.platform,
+): "powershell" | "posix" {
+    return platform.toLowerCase().startsWith("win") ? "powershell" : "posix";
 }

@@ -1,9 +1,10 @@
 import { execFile as execFileCallback } from "node:child_process";
-import { realpath } from "node:fs/promises";
+import { realpath, stat } from "node:fs/promises";
 import { userInfo } from "node:os";
-import { isAbsolute, normalize, resolve } from "node:path";
+import { isAbsolute, normalize, resolve, win32 } from "node:path";
 import type { happyAgentProtocol } from "happy-desktop-state";
 import type { LocalAssistantId } from "../shared/desktopContract";
+import { environmentRead } from "./localApps";
 import {
     HappyAgentDaemonClient,
     happyAgentDaemonPathsResolve,
@@ -96,11 +97,11 @@ export interface HappyAgentProcessHost {
     execFile(
         executable: string,
         arguments_: readonly string[],
-        options: { readonly env?: NodeJS.ProcessEnv },
+        options: { readonly env?: NodeJS.ProcessEnv; readonly timeoutMs?: number },
     ): Promise<HappyAgentProcessResult>;
 }
 
-const defaultProcessHost: HappyAgentProcessHost = {
+export const defaultProcessHost: HappyAgentProcessHost = {
     execFile: (executable, arguments_, options) =>
         new Promise((resolvePromise, reject) => {
             execFileCallback(
@@ -113,7 +114,7 @@ const defaultProcessHost: HappyAgentProcessHost = {
                     maxBuffer: maximumOutputBytes,
                     // The launcher supervises a new daemon for up to 60 seconds.
                     // Let it finish startup or report its own bounded failure.
-                    timeout: 75_000,
+                    timeout: options.timeoutMs ?? 75_000,
                 },
                 (error, stdout, stderr) => {
                     if (error) reject(error);
@@ -131,6 +132,12 @@ const defaultProcessHost: HappyAgentProcessHost = {
 export interface LocalRuntimeProbe {
     /** Where this machine keeps each assistant command it has, by assistant. */
     readonly assistants: LocalAssistantCommands;
+    /**
+     * The assistants found only through PATH entries this process did not
+     * start with, or at their installer's default location. Only Windows,
+     * whose GUI processes keep the PATH they were launched with, has any.
+     */
+    readonly assistantsRefreshed: readonly LocalAssistantId[];
     readonly environment: NodeJS.ProcessEnv;
     readonly nodeCommand?: string;
     /** Exactly what `node --version` printed, for example `v22.11.0`. */
@@ -161,6 +168,7 @@ export async function localRuntimeProbe(
     const parsed = discoveryOutputParse(result.stdout);
     return {
         assistants: parsed.assistants,
+        assistantsRefreshed: [],
         environment: parsed.environment,
         ...(parsed.nodeCommand ? { nodeCommand: parsed.nodeCommand } : {}),
         ...(parsed.nodeVersion ? { nodeVersion: parsed.nodeVersion } : {}),
@@ -168,18 +176,145 @@ export async function localRuntimeProbe(
     };
 }
 
+/** The two registry values Windows builds a new process's PATH from, machine then user. */
+const windowsPathRegistryKeys = [
+    "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment",
+    "HKCU\\Environment",
+] as const;
+const windowsRegistryTimeoutMs = 2_000;
+
 /**
- * Windows has no login shell to interrogate: a GUI process already inherits
- * the user's registry-based environment, including installer PATH edits, so
- * this process's own environment is the authoritative answer the POSIX probe
- * reconstructs from a shell. `where.exe` answers the same question
- * `command -v` answers there — which file a bare command name resolves to.
+ * Where each assistant's official Windows install puts its command when the
+ * PATH has not caught up with it — Claude Code's own installer, for one, can
+ * leave adding its folder to the person.
  */
-async function windowsRuntimeProbe(
+function windowsAssistantDefaults(environment: NodeJS.ProcessEnv): LocalAssistantCommands {
+    const profile = environmentRead(environment, "USERPROFILE");
+    const appData = environmentRead(environment, "APPDATA");
+    const at = (root: string | undefined, ...segments: string[]) =>
+        root && win32.isAbsolute(root) ? win32.join(root, ...segments) : undefined;
+    const defaults = {
+        // code.claude.com/docs/en/setup: `irm https://claude.ai/install.ps1 | iex`.
+        claude: at(profile, ".local", "bin", "claude.exe"),
+        // docs.npmjs.com folders: global executables go directly into %AppData%\npm.
+        codex: at(appData, "npm", "codex.cmd"),
+        // x.ai/cli/install.ps1 without GROK_BIN_DIR.
+        grok: at(profile, ".grok", "bin", "grok.exe"),
+    };
+    return Object.fromEntries(
+        Object.entries(defaults).filter((entry): entry is [string, string] => !!entry[1]),
+    );
+}
+
+/**
+ * Reads the PATH Windows would give a process started now.
+ *
+ * A GUI process keeps the environment it was launched with, so a command an
+ * installer added to the PATH while Happy was open stays invisible to it until
+ * a restart. The registry holds the current answer. A value that cannot be read
+ * leaves out only its own entries.
+ */
+async function windowsRegistryPathRead(
     host: HappyAgentProcessHost,
     environment: NodeJS.ProcessEnv,
+): Promise<readonly string[]> {
+    const values = await Promise.all(
+        windowsPathRegistryKeys.map(async (key) => {
+            try {
+                const result = await host.execFile("reg.exe", ["query", key, "/v", "Path"], {
+                    env: environment,
+                    timeoutMs: windowsRegistryTimeoutMs,
+                });
+                const value = windowsRegistryPathParse(result.stdout);
+                return value === undefined
+                    ? []
+                    : windowsPathSplit(windowsExpand(value, environment));
+            } catch {
+                return [];
+            }
+        }),
+    );
+    return values.flat();
+}
+
+/** The `Path` value from `reg.exe query <key> /v Path`, string types only. */
+export function windowsRegistryPathParse(output: string): string | undefined {
+    const match = /^\s+Path\s+REG_(?:EXPAND_)?SZ(?:[ \t]+(.*))?$/imu.exec(output);
+    return match ? (match[1] ?? "").trim() : undefined;
+}
+
+/** Expands `%NAME%` as Windows does for `REG_EXPAND_SZ`; unknown names stay as written. */
+export function windowsExpand(value: string, environment: NodeJS.ProcessEnv): string {
+    return value.replace(
+        /%([^%;]+)%/gu,
+        (written, name: string) => environmentRead(environment, name) ?? written,
+    );
+}
+
+function windowsPathSplit(path: string): readonly string[] {
+    return path
+        .split(";")
+        .map((entry) => entry.trim())
+        .filter((entry) => entry.length > 0);
+}
+
+function windowsPathKey(entry: string): string {
+    return entry.replace(/[\\/]+$/u, "").toLowerCase();
+}
+
+/** The launch PATH first, then what the registry adds, each folder once. */
+export function windowsPathMerge(...paths: readonly (readonly string[])[]): string {
+    const seen = new Set<string>();
+    const merged: string[] = [];
+    for (const entry of paths.flat()) {
+        const key = windowsPathKey(entry);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        merged.push(entry);
+    }
+    return merged.join(";");
+}
+
+/** A copy of `environment` whose PATH is `path`, under exactly one name. */
+function windowsEnvironmentWithPath(
+    environment: NodeJS.ProcessEnv,
+    path: string,
+): NodeJS.ProcessEnv {
+    const next: NodeJS.ProcessEnv = {};
+    for (const [key, value] of Object.entries(environment))
+        if (key.toLowerCase() !== "path") next[key] = value;
+    next.PATH = path;
+    return next;
+}
+
+async function fileExists(path: string): Promise<boolean> {
+    try {
+        return (await stat(path)).isFile();
+    } catch {
+        return false;
+    }
+}
+
+/**
+ * Windows has no login shell to interrogate: a GUI process inherits the
+ * user's registry-based environment, as it was when the process started. The
+ * registry's current PATH is added to it, so an installer run while Happy is
+ * open counts, and `where.exe` answers the same question `command -v` answers
+ * elsewhere — which file a bare command name resolves to.
+ */
+export async function windowsRuntimeProbe(
+    host: HappyAgentProcessHost,
+    launchEnvironment: NodeJS.ProcessEnv,
+    exists: (path: string) => Promise<boolean> = fileExists,
 ): Promise<LocalRuntimeProbe> {
-    if (!environment.PATH) throw new Error("The Windows environment did not include PATH.");
+    const launchPath = environmentRead(launchEnvironment, "PATH");
+    if (!launchPath) throw new Error("The Windows environment did not include PATH.");
+    const launchEntries = windowsPathSplit(launchPath);
+    const launchKeys = new Set(launchEntries.map(windowsPathKey));
+    const environment = windowsEnvironmentWithPath(
+        launchEnvironment,
+        windowsPathMerge(launchEntries, await windowsRegistryPathRead(host, launchEnvironment)),
+    );
     const locate = async (command: string): Promise<string | undefined> => {
         try {
             const result = await host.execFile("where.exe", [command], { env: environment });
@@ -187,7 +322,7 @@ async function windowsRuntimeProbe(
                 .split(/\r?\n/u)
                 .map((line) => line.trim())
                 .find((line) => line.length > 0);
-            return first && isAbsolute(first) ? first : undefined;
+            return first && win32.isAbsolute(first) ? first : undefined;
         } catch {
             return undefined;
         }
@@ -204,12 +339,20 @@ async function windowsRuntimeProbe(
         }
     }
     const assistants: Record<string, string> = {};
-    for (const command of Object.keys(assistantCommands)) {
-        const path = await locate(command);
-        if (path) assistants[command] = path;
+    const assistantsRefreshed: LocalAssistantId[] = [];
+    const defaults = windowsAssistantDefaults(launchEnvironment);
+    for (const command of Object.keys(assistantCommands) as LocalAssistantId[]) {
+        const located = await locate(command);
+        const fallback = defaults[command];
+        const path = located ?? (fallback && (await exists(fallback)) ? fallback : undefined);
+        if (!path) continue;
+        assistants[command] = path;
+        if (!located || !launchKeys.has(windowsPathKey(win32.dirname(path))))
+            assistantsRefreshed.push(command);
     }
     return {
         assistants,
+        assistantsRefreshed,
         environment,
         ...(nodeCommand ? { nodeCommand } : {}),
         ...(nodeVersion ? { nodeVersion } : {}),

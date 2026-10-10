@@ -11,7 +11,8 @@ const PRODUCT_ANALYTICS_DISCLOSURE: readonly DataDisclosureGroup[] = [
         items: [
             "Happy opened, and how many times",
             "Which setup step you reached, how long setup took, and which step failed if it did (a fixed code such as download failed or timed out, never the error message)",
-            "Which subscriptions are signed in, and whether you copied a setup command (never the command)",
+            "Which subscriptions are signed in, and whether you copied a setup command and whether it was the Windows PowerShell version (never the command)",
+            "Whether the Claude, Codex (ChatGPT), or Antigravity desktop apps or the Antigravity command are installed (yes or no only, never where or which version)",
             "A conversation, project, workspace, or bot was created",
             "A message was sent, with its model and effort level, and whether it went to a bot or a subtask",
             "A one-way code that tells two accounts of one provider apart, never the account itself",

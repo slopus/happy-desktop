@@ -6,11 +6,13 @@ import type {
     DesktopDaemonSnapshot,
     DesktopRuntimeSnapshot,
     LocalAssistantId,
+    LocalAppsSnapshot,
     LocalAssistantState,
     LocalOnboardingFreshness,
     LocalOnboardingSnapshot,
     LocalOnboardingStepBack,
 } from "../shared/desktopContract";
+import { localAppsDetect } from "./localApps";
 import { localRuntimeProbe, type LocalRuntimeProbe } from "./localHappyAgent";
 
 const recordVersion = 3;
@@ -197,6 +199,8 @@ export interface LocalOnboardingOptions {
     readonly recordPath: string;
     readonly runtime: LocalOnboardingRuntime;
     readonly probe?: () => Promise<LocalRuntimeProbe>;
+    /** Looks for the machine's other coding apps, given the PATH the probe found. */
+    readonly localAppsDetect?: (path: string | undefined) => Promise<LocalAppsSnapshot>;
     /** Opens the native folder picker; resolves to undefined when cancelled. */
     readonly directoryPick: () => Promise<string | undefined>;
     /**
@@ -241,6 +245,9 @@ export class LocalOnboarding implements Disposable {
     private poll?: ReturnType<typeof setInterval>;
     private probing?: Promise<void>;
     private probed?: LocalRuntimeProbe;
+    /** Looked for once per run, after the first probe that succeeds. */
+    private localApps?: LocalAppsSnapshot;
+    private localAppsDetecting = false;
     private probeRetry?: ReturnType<typeof setTimeout>;
     private probeRetryMs?: number;
     /**
@@ -626,6 +633,7 @@ export class LocalOnboarding implements Disposable {
                 this.probed = probed;
                 this.probeMessage = undefined;
                 this.probeRetryMs = undefined;
+                this.localAppsLook(probed);
             } catch (error) {
                 if (epoch !== this.probeEpoch) return;
                 // A probe that failed says nothing about the machine, and what
@@ -739,13 +747,39 @@ export class LocalOnboarding implements Disposable {
      * means the machine has it but nobody has signed in. That difference belongs
      * to the stage, which is the only thing that knows Happy Agent's answer.
      */
+    /**
+     * Looks once for the machine's other coding apps. They are only counted,
+     * never shown, so one answer per run is enough and a failure stays unknown.
+     */
+    private localAppsLook(probed: LocalRuntimeProbe): void {
+        if (this.localApps || this.localAppsDetecting) return;
+        this.localAppsDetecting = true;
+        const detect = this.options.localAppsDetect ?? ((path) => localAppsDetect({ path }));
+        void detect(probed.environment.PATH)
+            .catch(
+                (): LocalAppsSnapshot => ({
+                    agyCli: null,
+                    antigravityApp: null,
+                    claudeDesktop: null,
+                    codexDesktop: null,
+                }),
+            )
+            .then((found) => {
+                this.localApps = found;
+                this.localAppsDetecting = false;
+                this.publish();
+            });
+    }
+
     private assistantsProject(): readonly LocalAssistantState[] {
         const commands = this.probed?.assistants ?? {};
+        const refreshed = this.probed?.assistantsRefreshed ?? [];
         return LOCAL_ASSISTANT_IDS.map((id) => {
             const command = commands[id];
             return {
                 ...(command ? { command } : {}),
                 id,
+                ...(command && refreshed.includes(id) ? { pathRefreshed: true as const } : {}),
                 status: command ? ("found" as const) : ("missing" as const),
             };
         });
@@ -991,7 +1025,8 @@ export class LocalOnboarding implements Disposable {
             ...(download ? { download } : {}),
             freshness: this.freshness,
             ...(message ? { message } : {}),
-            ...(assistants ? { assistants } : {}),
+            ...(assistants ? { assistants, installShell: localInstallShell() } : {}),
+            ...(assistants && this.localApps ? { localApps: this.localApps } : {}),
             ...(this.liveStage ? { reachedStage: this.liveStage } : {}),
             ...(retrying ? { retrying } : {}),
             ...(node ? { node } : {}),
@@ -1273,4 +1308,9 @@ function displayError(error: unknown): string {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
     return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+/** Windows' official installers are PowerShell one-liners; everywhere else they are POSIX shell. */
+function localInstallShell(): "powershell" | "posix" {
+    return process.platform === "win32" ? "powershell" : "posix";
 }
