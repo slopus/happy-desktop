@@ -847,6 +847,9 @@ export function MessageList(props: MessageListProps) {
        row model. Writing it earlier would clamp it against placeholder
        geometry. */
     const initialPositionApplied = useRef(false);
+    /* A restored scrollTop translated to the current row width, when the
+       position was saved at another one. */
+    const openingScrollTop = useRef<number | undefined>(undefined);
     const scrollHeightBaseline = useRef(0);
     const readerScrollTop = useRef(restore.current?.scrollTop ?? 0);
     const viewportGeometry = useRef({ height: 0, width: 0 });
@@ -939,9 +942,9 @@ export function MessageList(props: MessageListProps) {
                 : (props.footerHeight ?? ROW_SIZE_FALLBACK)
             : (props.estimateRowSize?.(index, rowWidth) ?? ROW_SIZE_FALLBACK);
     /*
-     * This keyed map is the only row-geometry authority. TanStack reads it to
-     * build offsets, but no mounted row can write back into it. New data or a
-     * changed container width replaces the whole map in one layout transaction.
+     * This model is the only row-geometry authority. TanStack reads it to build
+     * offsets, but no mounted row can write back into it. New data or a changed
+     * container width updates it in one layout transaction.
      *
      * Nothing is modeled until the scrollport reports the width rows actually
      * occupy: a row estimated at any other width is work thrown away, and at
@@ -949,8 +952,8 @@ export function MessageList(props: MessageListProps) {
      * grapheme. Until then the list renders no rows at all.
      *
      * Laying out a long cold history is too much work for one task, so a size
-     * may be a placeholder: a row in `pending` keeps its last size, or the mean
-     * of the rows already laid out, until idle time lays it out for real. A
+     * may be a placeholder: a row that is not `exact` keeps its last size, or the
+     * mean of the rows already laid out, until idle time lays it out for real. A
      * pending row is never painted — any that TanStack renders is laid out
      * before that commit can reach the screen — and refining rows the reader
      * cannot see keeps a parked reader's anchor, or a follower's tail, fixed.
@@ -1140,7 +1143,7 @@ export function MessageList(props: MessageListProps) {
     const initialScrollTop = () =>
         following.current || restore.current === undefined
             ? Math.max(0, estimatedContentHeight() - viewportGeometry.current.height)
-            : restore.current.scrollTop;
+            : (openingScrollTop.current ?? restore.current.scrollTop);
     const positionReport = () => {
         const element = list.current;
         if (!element) return;
@@ -1208,6 +1211,21 @@ export function MessageList(props: MessageListProps) {
     }
     const modelAnchorCaptureCurrent = useRef(modelAnchorCapture);
     modelAnchorCaptureCurrent.current = modelAnchorCapture;
+    /** Where an item anchor puts the reader in the current model. */
+    function modelAnchorPlace(
+        anchor: Extract<MessageListVirtualAnchor, { type: "item" }>,
+        viewportHeight: number,
+    ) {
+        const index = itemIndexOf(anchor.key, anchor.index);
+        const item = index === undefined ? undefined : modeledItemAtIndex(index);
+        if (index === undefined || !item) return undefined;
+        const itemOffset = Math.min(anchor.itemOffset, item.size);
+        return {
+            index,
+            itemOffset,
+            scrollTop: item.start + itemOffset - Math.max(0, viewportHeight - anchor.viewportInset),
+        };
+    }
     function modelAnchorRestore(anchor: MessageListVirtualAnchor, viewportHeight: number) {
         const element = list.current;
         if (!element || following.current) return false;
@@ -1216,17 +1234,13 @@ export function MessageList(props: MessageListProps) {
             readerAnchor.current = anchor;
             return true;
         }
-        const index = itemIndexOf(anchor.key, anchor.index);
-        if (index === undefined) {
+        const place = modelAnchorPlace(anchor, viewportHeight);
+        if (!place) {
             readerAnchor.current = undefined;
             return false;
         }
-        const item = modeledItemAtIndex(index);
-        if (!item) return false;
-        const itemOffset = Math.min(anchor.itemOffset, item.size);
-        const point = item.start + itemOffset;
-        scrollTopWrite(element, point - Math.max(0, viewportHeight - anchor.viewportInset));
-        readerAnchor.current = { ...anchor, index, itemOffset, type: "item" };
+        scrollTopWrite(element, place.scrollTop);
+        readerAnchor.current = { ...anchor, index: place.index, itemOffset: place.itemOffset };
         return true;
     }
     /**
@@ -1263,12 +1277,40 @@ export function MessageList(props: MessageListProps) {
                scrollport with no width yet has nothing to model rows at. */
             if (nextRowWidth <= 0) return;
             viewportGeometry.current = { height: nextHeight, width: nextWidth };
+            const opening = following.current ? undefined : restore.current;
+            if (
+                opening?.rowWidth !== undefined &&
+                opening.rowWidth > 0 &&
+                opening.rowWidth !== nextRowWidth
+            ) {
+                /* The position was saved at another width, where its scrollTop
+                   named a row. Find that row at the saved width, then reopen on
+                   it at this one, so the reader returns to what they were
+                   reading rather than to the same pixel offset. */
+                rowSizeModelLayout(
+                    opening.rowWidth,
+                    0,
+                    { type: "offset", offset: opening.scrollTop },
+                    0,
+                );
+                const anchor = modelAnchorCapture(nextHeight, opening.scrollTop);
+                if (anchor?.type === "item") {
+                    rowSizeModelLayout(
+                        nextRowWidth,
+                        0,
+                        { type: "row", index: anchor.index },
+                        ROW_LAYOUT_BUDGET_MS,
+                    );
+                    openingScrollTop.current = modelAnchorPlace(anchor, nextHeight)?.scrollTop;
+                    return;
+                }
+            }
             rowSizeModelLayout(
                 nextRowWidth,
                 0,
-                following.current || restore.current === undefined
+                opening === undefined
                     ? { type: "end" }
-                    : { type: "offset", offset: restore.current.scrollTop },
+                    : { type: "offset", offset: opening.scrollTop },
                 ROW_LAYOUT_BUDGET_MS,
             );
             return;
@@ -1388,7 +1430,10 @@ export function MessageList(props: MessageListProps) {
             if (following.current)
                 scrollTopWrite(element, element.scrollHeight - element.clientHeight);
             else {
-                scrollTopWrite(element, restore.current?.scrollTop ?? 0);
+                scrollTopWrite(
+                    element,
+                    openingScrollTop.current ?? restore.current?.scrollTop ?? 0,
+                );
                 readerAnchor.current = modelAnchorCapture(element.clientHeight);
             }
         } else if (following.current) {
