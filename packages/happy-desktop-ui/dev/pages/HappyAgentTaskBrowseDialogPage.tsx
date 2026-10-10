@@ -41,19 +41,27 @@ const TASKS: readonly HappyAgentTaskBrowseEntry[] = [
         id: "task-launch",
         joined: true,
         name: "Ship the launch checklist",
-        ownerImageUrl: PHOTO,
-        ownerName: "Steve Korshakov",
+        owner: { imageUrl: PHOTO, name: "Steve Korshakov" },
     },
-    { id: "task-billing", joined: false, name: "Fix invoice rounding", ownerName: "Ada Park" },
+    {
+        id: "task-billing",
+        joined: false,
+        name: "Fix invoice rounding",
+        owner: { name: "Ada Park" },
+    },
     {
         id: "task-docs",
         joined: false,
         name: "Rewrite the onboarding guide so it reads well end to end for new members",
-        ownerImageUrl: PHOTO,
-        ownerName: "Grace Lin",
+        owner: { imageUrl: PHOTO, name: "Grace Lin" },
     },
-    { id: "task-orphan", joined: false, name: "Triage nightly failures" },
+    { id: "task-orphan", joined: false, name: "Triage nightly failures", owner: {} },
 ];
+
+/** A standalone Happy Agent: every task is the reader's own, so no owner is shown. */
+const STANDALONE_TASKS: readonly HappyAgentTaskBrowseEntry[] = TASKS.map(
+    ({ owner: _owner, ...task }) => task,
+);
 
 export function HappyAgentTaskBrowseDialogPage() {
     return (
@@ -64,7 +72,7 @@ export function HappyAgentTaskBrowseDialogPage() {
             title="HappyAgentTaskBrowseDialog"
         >
             <Specimen
-                detail="480px · photo, initials, and generated faces · joined row offers Open"
+                detail="480px · team · photo, initials, and generated faces · joined row offers Open"
                 label="Default"
                 number="01"
                 stage="app"
@@ -113,7 +121,16 @@ export function HappyAgentTaskBrowseDialogPage() {
                 )}
             </Specimen>
 
-            <Specimen detail="480px · no active tasks" label="Empty" number="05" stage="app">
+            <Specimen
+                detail="480px · standalone Happy Agent · no owner face or name"
+                label="Standalone"
+                number="05"
+                stage="app"
+            >
+                {frame(<HappyAgentTaskBrowseDialog {...handlers} tasks={STANDALONE_TASKS} />)}
+            </Specimen>
+
+            <Specimen detail="480px · no active tasks" label="Empty" number="06" stage="app">
                 {frame(<HappyAgentTaskBrowseDialog {...handlers} tasks={[]} />)}
             </Specimen>
         </ComponentPage>

@@ -644,7 +644,7 @@ export function projectTasks(
     workspaces: readonly Workspace[],
     endpoint: string,
     config: DaemonConfig,
-    ownerOf: (task: Task) => TaskOwner,
+    ownerOf: (task: Task) => TaskOwner | null,
     drafts: ReadonlyMap<string, AgentDraftSnapshot> = new Map(),
     modes: ReadonlyMap<string, MessageMode | null> = new Map(),
 ): readonly TaskGroup[] {

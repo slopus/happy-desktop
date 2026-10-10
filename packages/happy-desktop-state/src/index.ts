@@ -66,7 +66,11 @@ export * from "./happyAgent/happyAgentHostServices.js";
 export * from "./happyAgent/happyAgentTypes.js";
 export { happyAgentBotSubtasks, happyAgentTaskDepths } from "./happyAgent/happyAgentBotSubtasks.js";
 export type { HappyAgentSubtaskRoot } from "./happyAgent/happyAgentBotSubtasks.js";
-export { happyAgentTasksBrowsable, happyAgentTasksJoined } from "./happyAgent/happyAgentTasks.js";
+export {
+    HAPPY_AGENT_TASKS_VERSION,
+    happyAgentTasksBrowsable,
+    happyAgentTasksJoined,
+} from "./happyAgent/happyAgentTasks.js";
 export * from "./happyAgent/happyAgentWindowStore.js";
 export * from "./happyAgent/happyAgentWorkspaceMemory.js";
 export * from "./happyAgent/happyAgentWorkspaceStore.js";

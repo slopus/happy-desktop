@@ -88,6 +88,8 @@ import {
     commandPaletteStoreNoop,
     experimentsStoreNoop,
     projectsVisibilityStoreNoop,
+    happyAgentVersionAtLeast,
+    HAPPY_AGENT_TASKS_VERSION,
     happyAgentInboxStoreNoop,
     happyAgentNavigationOrderApply,
     happyAgentAvailabilityProject,
@@ -743,10 +745,14 @@ function ownerInitials(name: string): string {
 
 /**
  * A joined task as its row: a bot's row in every respect but the face, which
- * is the owner's rather than the task's own — a task has none. The owner's
- * photo comes first, then their initials, and a task whose owner nobody could
- * identify wears the same generated mark a bot without a picture does, hashed
- * from the task's id so it survives every rename.
+ * in a team is the owner's rather than the task's own — a task has none. The
+ * owner's photo comes first, then their initials, and a task whose owner
+ * nobody could identify wears the same generated mark a bot without a picture
+ * does, hashed from the task's id so it survives every rename.
+ *
+ * On a standalone machine every task is the reader's own, so a face would say
+ * nothing: the row wears the plain tasks glyph in the same tile, the way the
+ * home project wears its house, and its name stays on the bots' column.
  *
  * The trailing control leaves the task. Leaving is the reader's own act on
  * their own list and loses nothing — the task carries on for everyone else and
@@ -756,7 +762,7 @@ function ownerInitials(name: string): string {
 function taskSidebarItem(task: HappyAgentTask, titleShimmerEnabled: boolean): SidebarItem {
     const owner = task.owner;
     const initials =
-        owner.name === undefined || ownerInitials(owner.name) === ""
+        owner?.name === undefined || ownerInitials(owner.name) === ""
             ? undefined
             : ownerInitials(owner.name);
     return {
@@ -764,12 +770,16 @@ function taskSidebarItem(task: HappyAgentTask, titleShimmerEnabled: boolean): Si
         kind: "project",
         label: task.name,
         labelShimmer: titleShimmerEnabled,
-        ...(owner.avatar ? { imageUrl: owner.avatar.url } : {}),
-        ...(initials !== undefined
-            ? { initials }
-            : owner.avatar === undefined
-              ? { avatarId: task.id }
-              : {}),
+        ...(owner === null
+            ? { icon: "tasks" as const }
+            : {
+                  ...(owner.avatar ? { imageUrl: owner.avatar.url } : {}),
+                  ...(initials !== undefined
+                      ? { initials }
+                      : owner.avatar === undefined
+                        ? { avatarId: task.id }
+                        : {}),
+              }),
         action: {
             icon: "close" as const,
             label: `Leave ${task.name}`,
@@ -1746,7 +1756,11 @@ function happyAgentSections(
                 ? { error: happyAgent.message }
                 : {}),
         },
-        happyAgentTasksSection(happyAgent, titleShimmerEnabled),
+        // A Happy Agent from before tasks has no task list to show, so it
+        // offers no heading that could only ever stand empty.
+        ...(happyAgentTasksSupported(happyAgent)
+            ? [happyAgentTasksSection(happyAgent, titleShimmerEnabled)]
+            : []),
         // The reader's own choice in settings, for every connection alike: the
         // section goes entirely, heading and all, rather than folding.
         ...(projectsHidden
@@ -1773,6 +1787,7 @@ function happyAgentTasksSection(
     happyAgent: AppHappyAgentEntry,
     titleShimmerEnabled: boolean,
 ): SidebarSection {
+    const connected = happyAgent.status === "connected" && happyAgent.session !== undefined;
     return {
         id: happyAgentTasksSectionId(happyAgent.id),
         label: "Tasks",
@@ -1786,12 +1801,20 @@ function happyAgentTasksSection(
                 id: happyAgentItemId(happyAgent.id, item.id),
                 ...happyAgentSidebarItemAvailability(item, happyAgent),
             })),
-        ...(happyAgent.status === "connected" && happyAgent.session
+        ...(connected
             ? {
                   action: {
                       icon: "search" as const,
                       label: "Browse tasks",
                       reveal: "always" as const,
+                  },
+                  // Nothing joined yet says so under the heading, with the way
+                  // to find something to join right beside it.
+                  empty: {
+                      actionLabel: "Browse tasks",
+                      description: "Join a task to keep it here.",
+                      icon: "tasks" as const,
+                      title: "No tasks yet",
                   },
               }
             : {}),
@@ -1800,6 +1823,18 @@ function happyAgentTasksSection(
             ? subtaskFailureError(happyAgent, happyAgent.tasks ?? [])
             : {}),
     };
+}
+
+/**
+ * Whether this Happy Agent has tasks at all. The task routes first shipped in
+ * `HAPPY_AGENT_TASKS_VERSION`; a machine that reported an older version, or
+ * none yet, shows the Tasks section only if it already listed tasks.
+ */
+function happyAgentTasksSupported(happyAgent: AppHappyAgentEntry): boolean {
+    return (
+        (happyAgent.tasks?.length ?? 0) > 0 ||
+        happyAgentVersionAtLeast(happyAgent.version, HAPPY_AGENT_TASKS_VERSION)
+    );
 }
 
 /**
@@ -6203,10 +6238,18 @@ function happyAgentTaskBrowseDialog(
                 name: task.name,
                 joined: joined.has(task.id),
                 ...(list.tasksJoining.has(task.id) ? { joining: true } : {}),
-                ...(task.owner.name === undefined ? {} : { ownerName: task.owner.name }),
-                ...(task.owner.avatar === undefined
+                // A standalone machine's tasks are all the reader's own, so
+                // they are listed without anybody's face or name.
+                ...(task.owner === null
                     ? {}
-                    : { ownerImageUrl: task.owner.avatar.url }),
+                    : {
+                          owner: {
+                              ...(task.owner.name === undefined ? {} : { name: task.owner.name }),
+                              ...(task.owner.avatar === undefined
+                                  ? {}
+                                  : { imageUrl: task.owner.avatar.url }),
+                          },
+                      }),
             }))}
             {...(joinFailure?.failure
                 ? { error: `“${joinFailure.task.name}”: ${joinFailure.failure.error.message}` }

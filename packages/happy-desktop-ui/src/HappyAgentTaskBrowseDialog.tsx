@@ -10,10 +10,16 @@ import { ModalOverlay } from "./ModalOverlay";
 export type HappyAgentTaskBrowseEntry = {
     id: string;
     name: string;
-    /** Who owns it, in the owner's own name; absent when nobody was identified. */
-    ownerName?: string;
-    /** The owner's photo. Without one the owner's initials stand in. */
-    ownerImageUrl?: string;
+    /**
+     * The team member who owns it. Absent where every task is the reader's own
+     * — a standalone Happy Agent — and the row then shows no face and no name.
+     */
+    owner?: {
+        /** The owner's name; absent when nobody was identified. */
+        name?: string;
+        /** The owner's photo. Without one the owner's initials stand in. */
+        imageUrl?: string;
+    };
     /** Whether the reader is already a member, which offers Open instead of Join. */
     joined: boolean;
     /** True while a join this window asked for has not been answered. */
@@ -50,11 +56,12 @@ function ownerInitials(name: string): string {
  * C-286 HappyAgentTaskBrowseDialog — every active task on one Happy Agent, to
  * join one or open one already joined.
  *
- * A row is the task's owner and the task's name: the owner's photo, their
- * initials without one, and the generated mark when nobody was identified, the
- * same face the task wears in the sidebar once joined. The caller owns the
- * list, the in-flight joins, and the failure, so every state renders from
- * props alone.
+ * In a team a row is the task's owner and the task's name: the owner's photo,
+ * their initials without one, and the generated mark when nobody was
+ * identified, the same face the task wears in the sidebar once joined. Where
+ * every task is the reader's own there is no owner to show, and a row is the
+ * name alone. The caller owns the list, the in-flight joins, and the failure,
+ * so every state renders from props alone.
  */
 export function HappyAgentTaskBrowseDialog(props: HappyAgentTaskBrowseDialogProps) {
     return (
@@ -106,13 +113,13 @@ export function HappyAgentTaskBrowseDialog(props: HappyAgentTaskBrowseDialogProp
                                     data-happy-desktop-ui="happy-agent-task-browse-dialog-row"
                                     key={task.id}
                                 >
-                                    {task.ownerImageUrl === undefined &&
-                                    task.ownerName === undefined ? (
+                                    {task.owner === undefined ? null : task.owner.imageUrl ===
+                                          undefined && task.owner.name === undefined ? (
                                         <AvatarBrutalist id={task.id} size={28} />
                                     ) : (
                                         <Avatar
-                                            imageUrl={task.ownerImageUrl}
-                                            initials={ownerInitials(task.ownerName ?? "")}
+                                            imageUrl={task.owner.imageUrl}
+                                            initials={ownerInitials(task.owner.name ?? "")}
                                             size="sm"
                                         />
                                     )}
@@ -120,9 +127,9 @@ export function HappyAgentTaskBrowseDialog(props: HappyAgentTaskBrowseDialogProp
                                         <span className="happy-agent-task-browse-dialog__name">
                                             {task.name}
                                         </span>
-                                        {task.ownerName ? (
+                                        {task.owner?.name ? (
                                             <span className="happy-agent-task-browse-dialog__owner">
-                                                {task.ownerName}
+                                                {task.owner.name}
                                             </span>
                                         ) : null}
                                     </span>

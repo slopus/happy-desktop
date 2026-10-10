@@ -128,12 +128,18 @@ interface TaskActions {
     taskBrowseOpen: () => void;
 }
 
-function workspace(actions: TaskActions): HappyAgentWorkspaceStore {
+interface Listing {
+    readonly tasks: readonly HappyAgentTask[];
+    readonly browseOpen?: boolean;
+}
+
+function workspace(actions: TaskActions, listing: Listing): HappyAgentWorkspaceStore {
     const snapshot = {
+        ...(listing.browseOpen ? { taskBrowseOpen: true as const } : {}),
         list: {
             bots: BOTS,
-            tasks: TASKS,
-            taskDirectory: TASKS,
+            tasks: listing.tasks,
+            taskDirectory: listing.tasks,
             tasksJoining: new Set(),
             taskFailures: new Map(),
             projects: { type: "ready" as const, value: PROJECTS },
@@ -171,10 +177,12 @@ function entry(
     id: string,
     actions: TaskActions,
     extra: Partial<AppHappyAgentEntry> = {},
+    listing: Listing = { tasks: extra.tasks ?? TASKS },
 ): AppHappyAgentEntry {
     return {
         bots: BOTS,
-        tasks: TASKS,
+        tasks: listing.tasks,
+        version: "0.4.87-preview.5",
         id,
         label: id,
         projects: PROJECTS,
@@ -196,7 +204,7 @@ function entry(
                 subscribe: () => () => undefined,
                 [Symbol.dispose]: () => undefined,
             } as unknown as HappyAgentModelStore,
-            workspace: workspace(actions),
+            workspace: workspace(actions, listing),
         },
         status: "connected",
         ...extra,
@@ -370,4 +378,72 @@ it("hides the Projects section for team and local connections the moment the set
     act(() => projectsVisibility.projectsHiddenUpdate(false));
     expect(rowIds(container)).toContain("local/prj_one");
     expect(rowIds(container)).toContain("team/prj_one");
+});
+
+const STANDALONE_TASKS: readonly HappyAgentTask[] = TASKS.map((entry) => ({
+    ...entry,
+    owner: null,
+}));
+
+it("shows no owner face on a standalone machine, only the plain tasks glyph", () => {
+    const { container } = view({
+        entries: (actions) => [entry("local", actions, { tasks: STANDALONE_TASKS })],
+    });
+    for (const id of ["ws_launch", "ws_billing", "ws_orphan"]) {
+        const face = row(container, id);
+        expect(face.querySelector('[data-happy-desktop-ui="avatar-image"]')).toBeNull();
+        expect(face.querySelector('[data-happy-desktop-ui="avatar-initials"]')).toBeNull();
+        expect(face.querySelector('[data-happy-desktop-ui="avatar-brutalist"]')).toBeNull();
+        expect(face.querySelector('[data-happy-desktop-ui="avatar-glyph"]')).not.toBeNull();
+    }
+});
+
+it("lists tasks in Browse without a face or name on a standalone machine, and with them in a team", () => {
+    const browse = (tasks: readonly HappyAgentTask[]) => {
+        const { unmount } = view({
+            entries: (actions) => [entry("local", actions, {}, { tasks, browseOpen: true })],
+        });
+        const rows = [
+            ...document.querySelectorAll(
+                '[data-happy-desktop-ui="happy-agent-task-browse-dialog-row"]',
+            ),
+        ];
+        const read = rows.map((node) => ({
+            text: node.textContent,
+            faces: node.querySelectorAll(
+                '[data-happy-desktop-ui="avatar"], [data-happy-desktop-ui="avatar-brutalist"]',
+            ).length,
+        }));
+        unmount();
+        return read;
+    };
+
+    const standalone = browse(STANDALONE_TASKS);
+    expect(standalone).toHaveLength(3);
+    for (const entry of standalone) expect(entry.faces).toBe(0);
+    expect(standalone.map((entry) => entry.text).join(" ")).not.toContain("Ann Lee");
+
+    const team = browse(TASKS);
+    expect(team.map((entry) => entry.faces)).toEqual([1, 1, 1]);
+    expect(team[0]!.text).toContain("Ann Lee");
+    expect(team[1]!.text).toContain("Bo Diaz");
+});
+
+it("says there are no tasks yet, offering Browse, when nothing is joined", () => {
+    const { container, actions } = view({
+        entries: (actions) => [entry("local", actions, { tasks: [] })],
+    });
+    expect(sectionLabels(container)).toEqual(["Bots", "Tasks", "Projects"]);
+    const empty = container.querySelector('[data-happy-desktop-ui="sidebar-section-empty"]')!;
+    expect(empty.textContent).toContain("Join a task to keep it here.");
+    fireEvent.click(empty.querySelector("button")!);
+    expect(actions.taskBrowseOpen).toHaveBeenCalledTimes(1);
+});
+
+it("leaves the Tasks section out entirely on a Happy Agent from before tasks", () => {
+    const { container } = view({
+        entries: (actions) => [entry("local", actions, { tasks: [], version: "0.4.86" })],
+    });
+    expect(sectionLabels(container)).toEqual(["Bots", "Projects"]);
+    expect(container.querySelector('[aria-label="Browse tasks"]')).toBeNull();
 });

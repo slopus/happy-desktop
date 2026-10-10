@@ -623,16 +623,16 @@ export interface BotSubtaskGroup {
 }
 
 /**
- * Who a task belongs to, as far as this connection can say.
+ * Who a team task belongs to, as far as this connection can say.
  *
- * A task has no face of its own, so its row wears its owner's. In team mode the
- * owner is a team member resolved through the user directory; in standalone
- * mode it is the one local person, whose profile this connection already reads.
- * Either may carry no picture, and a team task may name nobody at all, so every
- * field is optional and a row falls back to what is present.
+ * A task has no face of its own, so in a team its row wears its owner's: a team
+ * member resolved through the user directory. The owner may carry no picture,
+ * and a team task may name nobody at all, so every field is optional and a row
+ * falls back to what is present. A standalone daemon has one person, every
+ * task is theirs, and so there is no owner to show — see `TaskGroup.owner`.
  */
 export interface TaskOwner {
-    /** The team member, absent in standalone mode or when nobody was identified. */
+    /** The team member, absent when nobody was identified. */
     userId?: string;
     /** The owner's display name, once it is known. */
     name?: string;
@@ -664,7 +664,11 @@ export interface TaskGroup {
     canArchive: boolean;
     /** The caller's place in the task, present only while they have joined it. */
     membership?: { orderKey: string; joinedAt: number };
-    owner: TaskOwner;
+    /**
+     * The team member the task belongs to, or `null` on a standalone daemon,
+     * where every task is the viewer's own and no owner is shown.
+     */
+    owner: TaskOwner | null;
     /** The task's one conversation. */
     session: GroupSession;
     /** Active, user-interactive child tasks in the daemon's explicit tree order. */

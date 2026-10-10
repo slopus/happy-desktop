@@ -299,12 +299,6 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
     const processOwners = new Map<string, string>();
     let config: DaemonConfig | undefined;
     let currentUserId: string | undefined;
-    /**
-     * The viewer's own profile, as bootstrap and the profile route last said.
-     * A standalone daemon's tasks belong to this one person, so it is the face
-     * and name their rows wear.
-     */
-    let viewerProfile: Profile | undefined;
     let viewerProfileLoading: Promise<void> | undefined;
     let cursor: string | undefined;
     let resyncTask: Promise<void> | undefined;
@@ -430,12 +424,12 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
      * The person a task belongs to, as this connection can name them.
      *
      * A team task names its owner, who is resolved through the user directory
-     * like any other identity this connection renders. A standalone daemon has
-     * one person and names nobody, so its tasks are that person's — the viewer.
-     * A team task that names nobody is left without a face rather than given
-     * the viewer's, because in a team the viewer is not everybody.
+     * like any other identity this connection renders. A team task that names
+     * nobody is left without a face rather than given the viewer's, because in
+     * a team the viewer is not everybody. A standalone daemon has one person,
+     * every task is theirs, and so it shows no owner at all: `null`.
      */
-    const taskOwnerOf = (task: Task): TaskOwner => {
+    const taskOwnerOf = (task: Task): TaskOwner | null => {
         const base = endpoint.replace(/\/$/, "");
         if (task.ownerUserId !== null) {
             const profile = users.profiles.get(task.ownerUserId);
@@ -454,18 +448,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                     : {}),
             };
         }
-        if (currentUserId !== undefined || viewerProfile === undefined) return {};
-        return {
-            ...(viewerProfile.name === null ? {} : { name: viewerProfile.name }),
-            ...(viewerProfile.photo === null
-                ? {}
-                : {
-                      avatar: {
-                          url: `${base}/v0/profile/photo`,
-                          thumbhash: viewerProfile.photo.thumbhash,
-                      },
-                  }),
-        };
+        return currentUserId === undefined ? null : {};
     };
 
     /** Reads the people who own tasks, so their rows can wear their faces. */
@@ -595,15 +578,10 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
 
     /** Ownership is scoped to this authenticated connection, never the host's account. */
     const viewerIdentityUpdate = (profile: Profile): void => {
-        const previousProfile = viewerProfile;
-        viewerProfile = profile;
         const next = profile.userId ?? undefined;
-        // Standalone tasks wear the viewer's own face and name, and whether
-        // there is a viewer user at all decides whose tasks those are.
-        const taskOwnersChanged =
-            previousProfile?.name !== profile.name ||
-            previousProfile?.photo?.thumbhash !== profile.photo?.thumbhash ||
-            next !== currentUserId;
+        // Whether there is a viewer user at all decides whether this is a team,
+        // and so whether task rows show an owner.
+        const taskOwnersChanged = next !== currentUserId;
         if (next !== currentUserId) {
             const previous = currentUserId;
             currentUserId = next;

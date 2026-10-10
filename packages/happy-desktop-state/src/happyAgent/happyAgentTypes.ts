@@ -110,12 +110,12 @@ export interface HappyAgentBotCreating {
 }
 
 /**
- * Who a task belongs to. A task has no face of its own, so its row wears this
- * person's. Every field is optional: a team task may name nobody, and a named
- * owner may have no picture or not have been read yet.
+ * Who a team task belongs to. A task has no face of its own, so in a team its
+ * row wears this person's. Every field is optional: a team task may name
+ * nobody, and a named owner may have no picture or not have been read yet.
  */
 export interface HappyAgentTaskOwner {
-    /** The team member; absent in standalone mode or when nobody was identified. */
+    /** The team member; absent when nobody was identified. */
     readonly userId?: string;
     readonly name?: string;
     /** The owner's photo, drawn at whatever size the row is. */
@@ -137,7 +137,11 @@ export interface HappyAgentTask {
     readonly name: string;
     readonly conversation: ConversationSummary;
     readonly subtasks: readonly HappyAgentBotSubtask[];
-    readonly owner: HappyAgentTaskOwner;
+    /**
+     * The team member it belongs to, or `null` on a standalone Happy Agent,
+     * where every task is the reader's own and no owner is shown.
+     */
+    readonly owner: HappyAgentTaskOwner | null;
     readonly path: string;
     readonly displayPath: string;
     readonly createdAt: number;

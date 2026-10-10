@@ -8,8 +8,9 @@ import {
 
 /* Tasks reach the window through the same groups subscription bots do: the
  * bootstrap lists them with the viewer's memberships, the realtime events keep
- * both current, and each task carries its owner's face — a team member's photo
- * route in team mode, the viewer's own profile photo when standalone. */
+ * both current, and in team mode each task carries its owner's face through the
+ * user directory. A standalone daemon's tasks are all the viewer's own and
+ * carry no owner. */
 
 const openConnections: HappyAgentConnection[] = [];
 
@@ -96,19 +97,17 @@ it("gives a team task its owner's name and photo route, read through getUsers", 
     );
 });
 
-it("gives a standalone task the viewer's own name and profile photo", async () => {
+it("shows no owner for a standalone task, since every task there is the viewer's own", async () => {
     const daemon = fakeHappyAgentDaemonCreate();
     daemon.profileSet({ name: "Steve", photo: { thumbhash: "me-hash" } });
     daemon.taskSeed({ id: "task_mine", ownerUserId: null, joinedKey: "a1" });
     const { watch } = harnessOpen(daemon);
 
-    await vi.waitFor(() =>
-        expect(taskIn(watch.tasks, "task_mine")?.owner).toEqual({
-            name: "Steve",
-            avatar: { url: "http://happy-agent.test/v0/profile/photo", thumbhash: "me-hash" },
-        }),
-    );
+    await vi.waitFor(() => expect(taskIn(watch.tasks, "task_mine")).toBeDefined());
+    expect(taskIn(watch.tasks, "task_mine")?.owner).toBeNull();
+    // No face is resolved for anyone: neither the directory nor a photo route.
     expect(daemon.callCount("getUsers")).toBe(0);
+    expect(JSON.stringify(watch.tasks)).not.toContain("/photo");
 });
 
 it("keeps tasks and memberships current from the realtime events", async () => {

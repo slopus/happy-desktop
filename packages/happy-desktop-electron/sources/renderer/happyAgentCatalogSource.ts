@@ -198,11 +198,14 @@ function catalogProject(
         name: task.name,
         conversation: happyAgentConversationSummaryProject(conversationProject(task.session)),
         subtasks: subtasksProject(task.subtasks),
-        owner: {
-            ...(task.owner.userId === undefined ? {} : { userId: task.owner.userId }),
-            ...(task.owner.name === undefined ? {} : { name: task.owner.name }),
-            ...(task.owner.avatar === undefined ? {} : { avatar: task.owner.avatar }),
-        },
+        owner:
+            task.owner === null
+                ? null
+                : {
+                      ...(task.owner.userId === undefined ? {} : { userId: task.owner.userId }),
+                      ...(task.owner.name === undefined ? {} : { name: task.owner.name }),
+                      ...(task.owner.avatar === undefined ? {} : { avatar: task.owner.avatar }),
+                  },
         path: task.path,
         displayPath: task.path,
         createdAt: task.createdAt,
