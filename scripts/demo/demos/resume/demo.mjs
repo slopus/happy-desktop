@@ -7,6 +7,11 @@ import * as world from "./world.mjs";
 const execFile = promisify(execFileCallback);
 const hook = (name) => `[data-happy-desktop-ui="${name}"]`;
 const card = hook("agent-update-card");
+export const captions = [
+    "Update ready. Agent mid-task.",
+    "Wrapping up the current turn, then restarting.",
+    "Picks up exactly where it left off. No reload.",
+];
 let evidence;
 async function until(demo, read, message, timeout = 45000) {
     const deadline = Date.now() + timeout;
@@ -143,7 +148,7 @@ async function runRead(gym) {
 export default {
     id: "resume",
     title: "Same turn. New version.",
-    subtitle: "A real upgrade while the same turn keeps using tools",
+    subtitle: "A real upgrade, followed by recovery of the same turn",
     inferenceModes: ["screenplay"],
     manualOnly: true,
     rawWindow: true,
@@ -277,7 +282,7 @@ export default {
             )
                 throw new Error("Opening release lacks the expected stable capabilities");
             await sample(demo, "opening mid-turn");
-            await demo.caption("Update ready. Agent mid-task.");
+            await demo.caption(captions[0]);
             await demo.hold(1300);
             await demo.click(
                 demo.page
@@ -320,7 +325,7 @@ export default {
                     ),
                 "Installer did not restart",
             );
-            await demo.caption("Updating. Nothing stops.");
+            await demo.caption(captions[1]);
             await filmed(demo, gym.daemonUpgrade.installed, "Upgrade did not finish");
             evidence.upgradedHealth = await gym.daemonReconnect();
             evidence.upgrade = await gym.daemonUpgrade.evidence();
@@ -368,7 +373,7 @@ export default {
                 "Same turn did not complete",
             );
             await demo.settle({ text: world.finalText }, { after: 0 });
-            await demo.caption("Same turn. New version.");
+            await demo.caption(captions[2]);
             evidence.final = await runRead(gym);
             await sample(demo, "completed original turn");
             await demo.hold(Math.max(2000, 18000 - (demo.timing.frames / 60) * 1000));

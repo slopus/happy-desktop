@@ -118,7 +118,10 @@ async function overlayBuild(appearance) {
 /** The caption pill, drawn at output resolution so its text is never resampled. */
 function captionLayer(text, placement, stripTop, stripHeight) {
     const size = placement === "top" ? 32 : placement === "strip" ? 40 : 42;
-    const width = Math.min(output.width - 200, Math.round(text.length * size * 0.54) + 96);
+    const width = Math.min(
+        output.width - (placement === "strip" ? 64 : 200),
+        Math.round(text.length * size * 0.54) + 96,
+    );
     const height = placement === "top" ? 66 : 84;
     const x = Math.round((output.width - width) / 2);
     const y =

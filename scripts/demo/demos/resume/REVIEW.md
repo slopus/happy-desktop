@@ -1,7 +1,7 @@
-# Square take 02
+# Square take 02, revised captions
 
 The selected take is 18.016667 seconds, recorded from scaffold
-`70bcd4bc223ecd8f21ed270ee8932c1b4be2108b`, on main containing product commit
+`70bcd4bc223ecd8f21ed270ee8932c1b4be2108b`, based on main containing product commit
 `36f103e1` / renderer preview `0.0.94-preview.9`. It uses the current production
 sidebar card, corrected snail aspect and Happy Engineering wordmark. The app is
 captured at 720×640 CSS, 2×, with a genuinely resized 360px sidebar and 360px
@@ -15,9 +15,11 @@ and final completion remain readable.
 
 The selected silent 1080×1080 H.264 MP4 and poster are
 `.context/demo-out/seamless-update-x.mp4` and `seamless-update-poster.png`.
-The root SRT is `seamless-update.srt`. Source video, SRT and evidence remain in
-`square-take-02/resume.*`; `export.json` verifies the final stream, dimensions,
-duration and lack of audio. The H.264 yuv420p MP4 is 824,530 bytes, with its
+The root SRT is `seamless-update.srt`. The original capture and native evidence
+remain in `square-take-02/`. The revised video, SRT, copied native evidence and
+caption revision record are in `square-take-02-captions-02/`; `export.json`
+verifies the final stream, dimensions, duration and lack of audio.
+The H.264 yuv420p MP4 is 839,590 bytes, with its
 `moov` atom preceding `mdat` for fast-start playback. The export copies the
 existing video stream, so it does not alter timing. Generated files remain
 gitignored.
@@ -62,6 +64,10 @@ at 5.600s, reconnecting at 11.367s, and done at 11.917s; the card clears at
 envelope. The genuine success duration reads “Took 10s”. The poster at 4.767s
 shows the Finishing work card, actual waiting agent and running clock.
 Caption intervals are 0–2.233s, 5.600–12.250s and 15.367–18.017s.
+Their exact text is “Update ready. Agent mid-task.”, “Wrapping up the current
+turn, then restarting.” and “Picks up exactly where it left off. No reload.”
+The installer drains current work before restarting; recovery of the same
+durable turn and unchanged UI are the demonstrated behavior.
 
 The production downloader verifies both released archive digests, selects the
 new binary, drains, stops, starts and checks health. Browser bindings replace
@@ -84,6 +90,13 @@ Node syntax, targeted formatting and script lint pass. The real browser take
 passes the director's native/DOM assertions; the encoded 1fps contact sheet,
 poster, new-tool frame at 13.5s and completed-turn frame at 17s were inspected.
 No test suite was added or run. This square take passed on its first run.
+The caption correction was recomposed from its retained raw capture, without
+another recording. All 1,081 frame references and noncaption fields match the
+original timeline, with the same cue presence and intervals. App pixels match
+exactly at seven composed frames across caption intervals and work stages.
+The two longer captions were inspected in the encoded video; they stay centered
+in the bottom strip, at the same 40px size. New subtitle and export metadata
+contain no claim that execution continues during restart.
 
 The user rejected the previous 1600×1000 take 02. Its derivatives now live in
 `review-only-take-02/`, alongside the earlier `review-only-take-01/` folder.
@@ -91,8 +104,10 @@ They are historical review files and are not current delivery. The preceding
 4:5 capture remains in `portrait-take-02/`, with its root derivatives preserved
 in `review-only-portrait-take-02/`. The preceding wider square take remains in
 `square-take-01/`, with its root derivatives preserved in
-`review-only-square-take-01/`. Current root files contain this equal-width,
-square, no-typing take with captions below the app. Finder was opened to the
+`review-only-square-take-01/`. The preceding caption revision's root files
+are preserved in `review-only-square-take-02/`. Current root files contain
+the corrected equal-width, square, no-typing take with captions below the app.
+Finder was opened to the
 final output folder.
 
 The user authorized repeated private recorder runs for this task. All executed
