@@ -1,96 +1,113 @@
-# Recording status
+# Recorded take 02
 
-A real 20.7-second take exists, but it is review-only because inspection found
-two product issues. Do not publish the current media.
+Take 02 is a continuous 26.416667-second capture of released Happy Agent
+`0.4.86` upgrading to `0.4.87-preview.7` through the production installer in
+the private demo world. The source scaffold is
+`f85f98f5bd35523070874e5c885917543f801efc`, based on product fixes
+`21139b0e0883b274d845fa0750cf93276f3f390d`. Those fixes shipped in renderer
+preview `0.0.94-preview.8` through
+[run 38100166448](https://github.com/slopus/happy-desktop/actions/runs/38100166448).
+The recorder builds the checked-out product source rather than loading that
+hosted renderer.
 
-Take 01 was recorded from scaffold `f5024fbc` on feature main `cdf513ef`, using
-private Agent `0.4.87-preview.7`. Evidence records PID `53037` → `53717`, the
-same two durable run IDs still running after restart and both completed at the
-end, a preserved 64-character draft with composer focus and selection, stable
-app-shell/composer nodes, and no full-screen/disconnected takeover. The real
-elapsed card reports “Took 11s,” then clears with its footer after three seconds.
-The main turn's final reply and “Completed in 16s” are visible.
+Final files live in the gitignored `.context/demo-out/` folder:
 
-The default 288px sidebar and fixed 380px card place its right edge at 392px.
-It reaches 104px into the conversation and hides the draft's opening during
-the update. An underlined Ask Chief of Staff action also appears beneath the
-tab bar after reconnect. The recorded take did not capture its title DOM;
-source tracing identifies the likely prepended Action not applied notice from
-a refused debounced draft/read mutation during the daemon's drain. The product
-implementer is fixing both before the next take. New director evidence rejects
-card/composer overlap and any observed error card; after filming it inspects
-both complete, scrolled transcripts in the DOM.
+- `seamless-update-x.mp4`: silent H.264 High, 1600×1000, 60 fps, yuv420p,
+  fast-start, 1,223,090 bytes, 1,585 frames.
+- `seamless-update-poster.png`: the unobscured draft and two waiting-agent
+  links at 6.916667 seconds, with the pointer hidden.
+- `take-02/seamless-update.mp4`, `.srt`, and `.evidence.json`: continuous source
+  video, caption timing, and complete capture evidence.
+- `export.json`: encoded stream and file metadata.
 
-Current generated media in `.context/demo-out/` is all take 01: silent
-1600×1000 H.264 `seamless-update-x.mp4`, full-content padded 1080×1080
-`seamless-update-square.mp4`, `seamless-update-poster.png`, plus source video,
-SRT and evidence under `take-01/`. Both MP4s are 20.7s. Finder was opened.
+Finder has been opened to this folder. The square delivery was dropped by
+the parent. Superseded take 01 derivatives remain under
+`review-only-take-01/`; they are not final delivery files.
 
-The new demo loads through `pnpm demo list`. Targeted formatting, Node syntax
-checks, and script lint pass with zero findings. No test suite was added or
-run. No application package or Electron host code was changed.
+## What the evidence proves
 
-Listener-free dry runs of the actual `demo.run` and evidence reader pass for
-both a fresh welcome (45 actions) and an acknowledged welcome (44 actions),
-with 18.22 virtual seconds each. Both per-session file gates are released and
-both simulated run identities retained. Clearly labelled traces live at
-`.context/director-dry-run/{trace,trace-welcomed}.json`. Their page, transport,
-daemon, PID change, and clock are fixtures. They validate choreography and
-referenced fields only, not actual take duration, rendering, or reconnection.
+The real daemon health version changes from `0.4.86` to `0.4.87-preview.7`,
+and its PID changes from `78286` to `78787`. Both original durable runs are
+still running after the new daemon reconnects, then both complete:
 
-The existing recorder preflight was attempted inside the Auto sandbox:
+| Session                 | Original run ID            | Completed turn shown |
+| ----------------------- | -------------------------- | -------------------- |
+| Animate voice waveform  | `mc6f7c6f69cc74190a6f86dc` | 23.400s              |
+| Preserve message scroll | `m8ca57f76c3d947b582adb3b` | 20.417s              |
 
-```sh
-pnpm demo probe resume --out .context/demo-out/preflight
-```
+The full 64-character draft survives:
+`Also keep the waveform quiet while I am reading another session.`
+Twenty-four characters are entered from 7.300 to 8.183 seconds while both
+the actual installer and the mounted card report `starting`. During the
+update, the app shell and composer retain their DOM identity, focus and
+selection. The later explicit visits to both completed sessions may remount
+their composers; returning to the waveform session still shows the same draft.
 
-It prepared only private repository fixtures, then stopped before starting a
-daemon or browser: the inference gateway could not listen on `127.0.0.1`
-(`EPERM`). The dedicated service tool is unavailable on this macOS compute:
-it requires Linux namespace/cgroup support. No automatic approval rejection
-occurred.
+Observed mounted phase starts are draining at 0.667s, stopping at 7.133s,
+starting at 7.233s, reconnecting at 12.883s, and done at 13.567s. The first
+draining report precedes the card's reveal animation; these are DOM timestamps,
+not claims that every phase was already fully visible. The production success
+card says “Took 13s” and clears with the footer indicator at 16.567s.
 
-The user then approved one reviewed full-access run plus one retry for a
-fixable recording-code failure, as an exception to the master plan. Both
-attempts were reviewed and allowed, using a checksum-matched private copy of
-selected Agent `0.4.87-preview.7` (latest stable checked: `0.4.86`). Its source
-and copy hashes are retained at `.context/demo-agent/provenance.json`. No
-installed Agent/host, human account, or keychain was changed.
+All measured card/composer intersections have zero height and zero area at
+the default 288px sidebar width. No transcript error, full-screen update
+takeover, or disconnected replacement is observed. After capture, the director
+visits both sessions and scrolls each entire virtualized transcript in the DOM;
+both have zero conversation error cards. Encoded source contact frames, the
+final poster, the restart typing frame, and the final draft frame were visually
+inspected. The final product hold lasts at least three seconds.
 
-Both runs stopped before filming. The first exposed a missing analytics
-package in the disposable source mirror. The mirror now includes the real
-package, and its full renderer build passes. The second reached the real
-welcome screen; the director now acknowledges it with the ordinary Go Happy
-action and verifies its stored flag. The complete offline audit is in
-[`PREPARATION.md`](PREPARATION.md), including native setup, local/provider
-sign-in, profile, Chief of Staff, phone, protocol/boot, release notes, sidebar
-folding/navigation, permissions, and browser storage. The user subsequently
-approved up to three further scoped full-access recording runs; the first
-produced take 01. Two remain, each retry only after a demo-code fix. The parent
-instructed the recorder to hold for the production fixes and new preview.
+## Real and scripted boundaries
 
-The feature landed on desktop main as `cdf513ef271d9669de1828851f19117d745b2373`.
-The scaffold was rebased onto that commit. The shared browser-daemon patch
-passes a dry run against the resulting production source. Its real elapsed
-clock requires the opening empty-drain report; the real Install action emits
-that optimistic report before the director publishes the waiting-agent health.
-The implementer confirmed renderer preview `0.0.94-preview.6`, built from that
-feature SHA and deployed by
-[run 38097626082](https://github.com/slopus/happy-desktop/actions/runs/38097626082).
-The recording uses the checked-out product source rather than the hosted
-renderer. This feature does not require a new Happy Agent release.
+Production code downloads both GitHub release archives, verifies their
+published digests, selects the target binary, drains, stops, starts, checks
+health and reconnects. The genuine browser Install action invokes that
+controller. Browser bindings replace native IPC delivery only; installer
+snapshots and renderer connection/catalog readiness are actual observations.
+No phase timing holds or synthetic success reports are injected.
 
-The parent clarified the final timing: the sync icon exists only during update
-progress. The success card and footer indicator disappear together after three
-seconds, or immediately on dismiss. The screenplay follows this confirmed
-product behavior.
+Inference replies and read-only Node tool fixtures are scripted. Both tools
+execute through the actual Agent API in separate private worktrees, with file
+gates controlling when they finish. Post-tool inference is held until the
+new daemon has recovered both original runs, then released. This is evidence
+of update continuity, not a claim of live vendor inference or successful
+implementation of the fictional engineering tasks.
 
-The capture uses real production UI with driven installation snapshots,
-scripted inference, and a real private-daemon drain/restart. It reuses the same
-Agent binary and must not be described as verification of installing a different
-release. Phase envelope holds are explicit in `demo.mjs`; the capture clock
-runs continuously at normal speed, including the genuine reconnect.
+| Release            | Archive bytes | Verified archive SHA-256                                           | Unpacked executable SHA-256                                        |
+| ------------------ | ------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------ |
+| `0.4.86`           | 155510673     | `a022381997a5c1a538cea079a1f36abbb8484b46851cbecaeec866ae74368ff3` | `1f413a8a8001c235438328599acf762352da9789fe2a8ba92fe478a58c8a6091` |
+| `0.4.87-preview.7` | 155645712     | `cc194a63bdb3e7a8d4c2a060356716e7fb507a7c321e4d9fee701c0eabd9e762` | `36a5cd9c4a4710d1dc214a9e41e5dd292712ec4d2f64aa6495c1478d47dd6345` |
 
-Opus and Grok review will be arranged by the parent after a real encoded take
-exists. No independent review, video approval, release, posting, or publication
-is claimed here.
+The exact archive URLs, private paths, controller timeline, health reports and
+run histories are retained in the evidence JSON. The installed Electron host,
+human daemon, account and keychain were untouched. This work does not release,
+push, post or publish anything.
+
+## Validation and review
+
+The demo loads through `pnpm demo list`. Targeted formatting, Node syntax and
+script lint pass. The disposable patched renderer builds, and its source mirror
+typechecks after syncing the lockfile's Agent client dependency. No test suite
+was added or run.
+
+Listener-free director dry runs pass for fresh and acknowledged welcome states
+with 53 and 52 actions respectively, each 22.01 virtual seconds. Their labelled
+traces at `.context/director-dry-run/{trace,trace-welcomed}.json` use fixture
+transport, daemon, DOM and clocks. They verify choreography only. The actual
+take and its evidence provide the update, rendering and reconnection result.
+
+The initial sandbox preflight could not listen locally (`EPERM`), and the
+service tool requires Linux support unavailable on this macOS host. The user
+explicitly allowed one reviewed capture plus one code-fix retry; both stopped
+before filming on preparation defects. The user then allowed up to three more
+scoped recorder runs. The first produced take 01; the second produced this
+actual version upgrade after production and demo fixes. All reviewed runs were
+allowed. One recorder run remains, only after a demo-code fix. This exception
+does not authorize touching the installed host or changing the master plan.
+
+Take 01 used a same-binary private restart and exposed card/composer overlap
+and an Action not applied notice. It remains review-only. The new production
+fixes, stricter director checks and take 02 resolve those observed issues.
+
+Opus and Grok review of the final encoded take is arranged by the parent.
+Independent reviewer sign-off and publication are not claimed here.

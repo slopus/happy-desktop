@@ -18,8 +18,8 @@ The short desktop-only update-card story is scaffolded in
 [`SCRIPT.md`](./demos/seamless-update/SCRIPT.md). It is selected explicitly with
 `pnpm demo record seamless-update`; it does not run in `--all`. Record only
 after the update-card feature is on current main. Its evidence distinguishes
-scripted inference/installation snapshots from the real private-daemon drain,
-restart, retained draft, and resumed durable run. Its export script produces a
+scripted inference from the actual released-version installation, private-daemon
+drain, restart, retained draft, and resumed durable runs. Its export script produces a
 1600×1000 X-ready MP4 and an evidence-selected poster in `.context/demo-out/`.
 
 The native Astra speed comparison is preserved in

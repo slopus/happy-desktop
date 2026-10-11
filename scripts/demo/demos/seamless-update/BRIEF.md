@@ -8,9 +8,8 @@ Use current `origin/main` after the update-card feature has landed. The card
 implementer is agent `be0cy47hxj4p3de3jwgrtdn4`; retain its final source SHA and
 desktop preview version in the recording evidence. The feature landed as
 `cdf513ef`; the recording fixes landed at `21139b0e`, released as renderer-only
-preview `0.0.94-preview.8`.
-Do not release, push to
-main, post, change the installed Electron host, or restart the user's Agent.
+preview `0.0.94-preview.8`. Do not release, push to main, post, change the
+installed Electron host, or restart the user's Agent.
 
 Reuse the existing recorder, real application, private Happy Agent gym, real
 project artwork, and the built-in Chief of Staff bot. The four project

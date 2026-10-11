@@ -28,7 +28,7 @@ the preview. Browser bindings replace native IPC only. Installer snapshots and
 renderer connection/catalog readiness are real; no progress envelope is driven.
 
 Capture validation records source SHA, both Agent versions and archive hashes, two agent/run
-IDs, health reports, old/new daemon PIDs, visible phase timestamps, retained
+IDs, health reports, old/new daemon PIDs, observed DOM phase timestamps, retained
 draft, card geometry, app-shell and composer DOM identity, focus while typing,
 and any disconnect or full-screen takeover. Reject a take that loses a draft,
 replaces the shell, fabricates a waiting agent, covers the composer, displays
@@ -51,13 +51,14 @@ node scripts/demo/demos/seamless-update/export.mjs .context/demo-out/take-02 .co
 The recorder needs local listeners and a headless browser. The master demo
 plan prohibits filming escalation by default. The current task received an
 explicit exception for one reviewed run and one code-fix retry, then three
-more runs. The first later run produced take 01; two approved retries remain,
-each after a demo-code fix. Hold for the implementer's production fixes and
-parent's relayed commit before retrying. Do not edit the master plan or bypass
-review.
+more runs. The first later run produced review-only take 01; the second captured
+the actual version upgrade as take 02 after production and demo fixes. One
+approved retry remains, only after a demo-code fix. See [`REVIEW.md`](REVIEW.md)
+for the capture evidence and delivery files. Do not edit the master plan or
+bypass review.
 
 Inspect encoded playback, not just screenshots: the opening, two waiting
 links, typing through the phases, three-second success hold, preserved draft, and
-continued reply. Review the actual video with the parent agent's Opus/Grok
-reviewers. No reviewer sign-off, shipped version, completed take, or publication
-is implied by this scaffold.
+both completed replies. Review the actual video with the parent agent's
+Opus/Grok reviewers. Recording evidence and reviewer decisions are distinct;
+this scaffold does not imply publication.
