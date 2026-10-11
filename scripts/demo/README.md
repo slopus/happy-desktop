@@ -11,7 +11,10 @@ The selected v13 take is committed as
 [uninterrupted-update-demo.mp4](./demos/resume/uninterrupted-update-demo.mp4).
 It is a copy of the original `demos/resume/artifacts/v13/resume.mp4`; the
 original and other generated takes remain gitignored. Recording a new take
-does not overwrite this selected video.
+does not overwrite this historical video. The current `resume` story records an
+18-second portrait desktop window at 1080×1350, drives an actual released Agent
+upgrade, and proves the original turn starts another tool afterward. See its
+[brief](./demos/resume/BRIEF.md) and [capture evidence notes](./demos/resume/REVIEW.md).
 
 The short desktop-only update-card story is scaffolded in
 [`demos/seamless-update/BRIEF.md`](./demos/seamless-update/BRIEF.md) and

@@ -1,5 +1,10 @@
 # Recorded take 02
 
+The user subsequently rejected this landscape cut. Its root derivatives were
+moved to `.context/demo-out/review-only-take-02/`. The current task and selected
+portrait capture live in [`../resume/BRIEF.md`](../resume/BRIEF.md) and
+[`../resume/REVIEW.md`](../resume/REVIEW.md); the record below is historical.
+
 Take 02 is a continuous 26.416667-second capture of released Happy Agent
 `0.4.86` upgrading to `0.4.87-preview.7` through the production installer in
 the private demo world. The source scaffold is
