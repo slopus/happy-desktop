@@ -116,12 +116,12 @@ async function overlayBuild(appearance) {
 }
 
 /** The caption pill, drawn at output resolution so its text is never resampled. */
-function captionLayer(text) {
-    const size = 42;
+function captionLayer(text, placement) {
+    const size = placement === "top" ? 32 : 42;
     const width = Math.min(output.width - 200, Math.round(text.length * size * 0.54) + 96);
-    const height = 84;
+    const height = placement === "top" ? 66 : 84;
     const x = Math.round((output.width - width) / 2);
-    const y = output.height - height - 48;
+    const y = placement === "top" ? 16 : output.height - height - 48;
     return Buffer.from(
         `<svg xmlns="http://www.w3.org/2000/svg" width="${output.width}" height="${output.height}">
             <rect x="${x}" y="${y}" width="${width}" height="${height}" rx="${height / 2}"
@@ -378,7 +378,10 @@ export async function composeFrames(options) {
         }
         if (entry.caption) {
             if (!captions.has(entry.caption))
-                captions.set(entry.caption, captionLayer(entry.caption));
+                captions.set(
+                    entry.caption,
+                    captionLayer(entry.caption, options.demo.captionPlacement),
+                );
             layers.push({ input: captions.get(entry.caption) });
         }
         if (entry.confetti) {

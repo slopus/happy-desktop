@@ -405,6 +405,7 @@ export class Director {
             output.width = this.#restCrop.width;
             output.height = this.#restCrop.height;
         }
+        if (options.delivery) Object.assign(output, options.delivery);
         return { css, crop, restCrop: this.#restCrop, output: { ...output }, deviceScaleFactor };
     }
 

@@ -32,7 +32,7 @@ export const windowRadius = 28;
  * ones. A compact desktop window at 2.5× keeps controls legible in the delivered
  * video while preserving enough physical pixels for the camera's close-ups.
  */
-export const deviceScaleFactor = 2.5;
+export let deviceScaleFactor = 2.5;
 
 /** Browser viewport, in CSS pixels. A compact laptop layout. */
 export const viewport = {
@@ -41,7 +41,25 @@ export const viewport = {
 };
 
 /** The largest zoom that is still drawn entirely from captured detail. */
-export const maximumZoom = scene.width / output.width;
+export let maximumZoom = scene.width / output.width;
+
+/** One explicit geometry contract shared by browser, capture and composition. */
+export function sceneConfigure(geometry) {
+    deviceScaleFactor = geometry?.deviceScaleFactor ?? 2.5;
+    Object.assign(viewport, geometry?.viewport ?? { width: 1224, height: 664 });
+    Object.assign(output, geometry?.output ?? { width: 1920, height: 1080 });
+    Object.assign(window, {
+        x: margin,
+        y: margin,
+        width: Math.round(viewport.width * deviceScaleFactor),
+        height: Math.round(viewport.height * deviceScaleFactor),
+    });
+    Object.assign(scene, {
+        width: window.width + margin * 2,
+        height: window.height + margin * 2,
+    });
+    maximumZoom = Math.min(scene.width / output.width, scene.height / output.height);
+}
 
 /** Turns a CSS-pixel rectangle from the page into its place in the scene. */
 export function sceneRectangle(cssRectangle) {

@@ -8,7 +8,7 @@ import { Director } from "./lib/director.mjs";
 import { encode } from "./lib/encode.mjs";
 import { soundtrackWrite } from "./lib/sounds.mjs";
 import { stageOpen } from "./lib/stage.mjs";
-import { viewport } from "./lib/scene.mjs";
+import { sceneConfigure, viewport } from "./lib/scene.mjs";
 import { subtitlesSrt, timelineEdit } from "./lib/timeline.mjs";
 import { gymOpen, gymReset, nativeCredentialsClear } from "./scenario/runtime.mjs";
 import { phoneVideoOpen } from "./lib/phone-video.mjs";
@@ -466,6 +466,7 @@ async function demoGymOpen(demo) {
 }
 
 async function demoStageOpen(demo) {
+    sceneConfigure(demo?.geometry);
     const { patches, assets } = demoResourcesResolve(demo);
     const stage = await stageOpen({
         appearance: options.appearance,
