@@ -86,6 +86,8 @@ async function sample(demo, label) {
         (state.card.x < state.sidebar.x - 1 || state.card.right > state.sidebar.right + 1)
     )
         throw new Error("Update card leaves the sidebar");
+    if (state.card && state.card.width / 720 < 0.55)
+        throw new Error("Update card occupies less than 55% of the frame width");
     if (state.snail && Math.abs(state.snail.width - state.snail.height) > 1)
         throw new Error("Snail box is not square");
     evidence.samples.push({ label, frames: demo.timing.frames, at: Date.now(), ...state });
@@ -105,9 +107,9 @@ export default {
     captionPlacement: "top",
     transitions: "none",
     geometry: {
-        viewport: { width: 720, height: 900 },
+        viewport: { width: 720, height: 720 },
         deviceScaleFactor: 2,
-        output: { width: 1080, height: 1350 },
+        output: { width: 1080, height: 1080 },
     },
     patches: [
         { scope: "shared", source: "browser-daemon.patch" },
@@ -127,7 +129,6 @@ export default {
             agentId,
             samples: [],
             phaseStarts: [],
-            downTyping: [],
             clockSamples: [],
             openingUpgrade: await gym.daemonUpgrade.evidence(),
         };
@@ -148,15 +149,14 @@ export default {
         if (await hidePanel.isVisible()) await hidePanel.click();
         // Use the genuine sidebar resize control, retaining the desktop minimum.
         const resize = demo.page.getByRole("separator", { name: "Resize sidebar", exact: true });
-        if (await resize.count()) {
-            await resize.focus();
-            for (let n = 0; n < 9; n++) await demo.page.keyboard.press("ArrowLeft");
-        }
+        await resize.focus();
+        await demo.page.keyboard.press("Home");
+        for (let n = 0; n < 13; n++) await demo.page.keyboard.press("ArrowRight");
         await demo.page.evaluate(() => document.fonts.ready);
         await demo.page.waitForTimeout(900);
         evidence.framing = await demo.framingPrepare(hook("app-shell"), {
             rawWindow: true,
-            delivery: { width: 1080, height: 1350 },
+            delivery: { width: 1080, height: 1080 },
         });
         const heldInference = gym.inferenceHold(agentId);
         let released = false;
@@ -170,8 +170,6 @@ export default {
             evidence.runId = await runIdWait(gym.client, agentId, sent.message.id, sent.cursor);
             await demo.page.getByText(world.firstCommand, { exact: false }).waitFor();
             await demo.page.getByText("Running tools", { exact: true }).waitFor();
-            const composer = demo.page.locator(hook("composer-textarea")).first();
-            await composer.fill(world.draftStart);
             await demo.page.locator(hook("sidebar-update-action-trigger")).click();
             await demo.page.exposeFunction("resumePhaseSeen", (report) =>
                 evidence.phaseStarts.push({
@@ -238,9 +236,7 @@ export default {
             );
             await demo.settle(`${card}[data-phase="draining"]`, { after: 200 });
             await demo.caption(undefined);
-            await demo.click(composer, { after: 0 });
             await demo.pointerVisible(false);
-            await demo.type(world.draftDrain, { perKey: 120, after: 0 });
             await demo.hold(Math.max(0, 5000 - (demo.timing.frames / 60) * 1000));
             evidence.preRestart = await runRead(gym);
             await sample(demo, "before real restart");
@@ -261,19 +257,6 @@ export default {
                 "Installer did not restart",
             );
             await demo.caption("Updating. Nothing stops.");
-            await demo.type(world.draftDown, {
-                perKey: 60,
-                after: 0,
-                afterCharacter: async (characters) => {
-                    const state = await sample(demo, "typing through restart");
-                    evidence.downTyping.push({
-                        characters,
-                        frames: demo.timing.frames,
-                        installerPhase: gym.daemonUpgrade.controller.get().install.phase,
-                        ...state,
-                    });
-                },
-            });
             await filmed(demo, gym.daemonUpgrade.installed, "Upgrade did not finish");
             evidence.upgradedHealth = await gym.daemonReconnect();
             evidence.upgrade = await gym.daemonUpgrade.evidence();
@@ -315,8 +298,7 @@ export default {
             await demo.settle({ text: world.finalText }, { after: 0 });
             await demo.caption("Same turn. New version.");
             evidence.final = await runRead(gym);
-            const end = await sample(demo, "completed with retained draft");
-            if (end.draft !== world.draft) throw new Error("Draft was lost");
+            await sample(demo, "completed original turn");
             await demo.hold(Math.max(2000, 18000 - (demo.timing.frames / 60) * 1000));
             await demo.finish();
             evidence.timing = demo.timing;
@@ -338,12 +320,6 @@ export default {
             !second.result?.output?.includes("Both states verified.")
         )
             throw new Error("Missing new completed streaming tool in original run");
-        if (
-            !evidence.downTyping.some((entry) =>
-                ["stopping", "starting", "reconnecting"].includes(entry.installerPhase),
-            )
-        )
-            throw new Error("No typing during actual restart");
         if (Math.abs(evidence.timing.wallMs - (evidence.timing.frames / 60) * 1000) > 100)
             throw new Error("Video time does not equal wall time");
         if ((evidence.responseStartedFrame - evidence.reconnectedFrame) / 60 > 2.5)
@@ -351,7 +327,8 @@ export default {
         evidence.interruptions = await page.evaluate(() => window.__resumeInterruptions);
         if (evidence.interruptions.length) throw new Error(`Errors: ${evidence.interruptions}`);
         evidence.finalState = await sample({ page, timing: evidence.timing }, "final verification");
-        if (evidence.finalState.draft !== world.draft) throw new Error("Final draft differs");
+        if (evidence.samples.some((entry) => entry.draft !== ""))
+            throw new Error("The composer must remain empty throughout the take");
         const labels = await page.locator(hook("turn-summary-label")).allTextContents();
         evidence.completedLabels = labels;
         if (!labels.some((label) => label.startsWith("Completed in")))

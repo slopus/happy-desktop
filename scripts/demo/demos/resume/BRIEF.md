@@ -1,19 +1,22 @@
 # Same turn. New version.
 
 The current task replaces the old long update story with an approximately
-18-second, silent 1080×1350 video for viewing on a phone. Capture the real
-desktop app in a 720×900 CSS window at 2×, with the sidebar and chat visible
-together, the right panel closed, and no camera moves. Use preview
+18-second, silent 1080×1080 video for viewing on a phone. Capture the real
+desktop app in a 720×720 CSS window at 2×, with the sidebar and chat visible
+together, the right panel closed, and no camera moves. Resize the sidebar using
+its ordinary control to 428px: the 404px update card fills 56.1% of the frame's
+width and leaves 292px for the continuing conversation. Do not type or fill a
+draft; keep the composer empty. Use preview
 `0.0.94-preview.9`'s production source (`36f103e1`), including the sidebar-width
 card, proportionate snail and Happy Engineering wordmark.
 
 | Time   | Action                                                                                                                                    | Caption                       |
 | ------ | ----------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
 | 0–2s   | One original turn is mid-task, its tool running and clock advancing. The real update menu is already open. Click Install.                 | Update ready. Agent mid-task. |
-| 2–6s   | The card waits inside the sidebar while the tool finishes. Keep typing in the genuine draft.                                              | None                          |
-| 6–12s  | Real shutdown, start and reconnect. Keep the chat mounted and type more during the actual restart.                                        | Updating. Nothing stops.      |
+| 2–6s   | The card waits inside the wide sidebar while the tool finishes.                                                                           | None                          |
+| 6–12s  | Real shutdown, start and reconnect. Keep the chat mounted throughout the actual restart.                                                  | Updating. Nothing stops.      |
 | 12–16s | The same durable run is still Working, its clock continues, a new two-second tool starts, the answer streams and the turn completes once. | None                          |
-| 16–18s | Hold the completed turn with the retained draft.                                                                                          | Same turn. New version.       |
+| 16–18s | Hold the completed original turn.                                                                                                         | Same turn. New version.       |
 
 Times describe the shape, not invented installer timing. The production
 downloader verifies released Agent `0.4.86` and `0.4.87-preview.7`; the real
@@ -33,8 +36,9 @@ tool preview panel. The recording preserves that UI behavior.
 The take must prove actual old/new versions and PIDs, original run identity,
 Tool 2 absent before restart and present afterward, one settled duration spanning
 the turn, a visible monotonic running clock at video speed, same app shell and
-composer nodes, actual typing while restarting, the final draft, a sidebar-only
-card and square snail box, zero errors, and one continuous wall-time timeline.
+composer nodes, an untouched empty composer, a sidebar-only card filling at
+least 55% of the frame width, a square snail box, zero errors, and one continuous
+wall-time timeline.
 
 The user gave standing authorization for private recorder runs and fixes for
 this task. No per-run confirmation or run count applies. Auto review still

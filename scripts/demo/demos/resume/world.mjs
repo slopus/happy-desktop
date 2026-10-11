@@ -6,14 +6,10 @@ export { backgroundRepositories, models, seedMode };
 export const id = "resume-portrait-upgrade";
 export const daemonUpgrade = { from: "0.4.86", to: "0.4.87-preview.7" };
 export const prompt = "Check the waveform, then verify the idle state.";
-export const firstCommand = "node scripts/check.mjs";
-export const secondCommand = "node scripts/verify.mjs";
+export const firstCommand = "node check.mjs";
+export const secondCommand = "node verify.mjs";
 export const resumedText = "Speaking is checked. Verifying silence now.";
 export const finalText = "The waveform moves when you speak and stays quiet when idle.";
-export const draftStart = "Keep it ";
-export const draftDrain = "quiet ";
-export const draftDown = "while I read.";
-export const draft = draftStart + draftDrain + draftDown;
 export const worktrees = [];
 export const repository = {
     name: "happy-desktop",
@@ -22,7 +18,7 @@ export const repository = {
         "README.md": "# Happy Desktop\n\nVoice waveform fixture.\n",
         ".gitignore": ".demo/release\n",
         ".demo/.gitkeep": "",
-        "scripts/check.mjs": `import { existsSync } from "node:fs";
+        "check.mjs": `import { existsSync } from "node:fs";
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 console.log("Checking the speaking state…");
 const until = Date.now() + 90000;
@@ -33,7 +29,7 @@ while (!existsSync(".demo/release")) {
 }
 console.log("Speaking state checked.");
 `,
-        "scripts/verify.mjs": `const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+        "verify.mjs": `const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 console.log("Verifying the idle state…");
 await pause(650);
 console.log("Silence: waveform stays quiet.");
