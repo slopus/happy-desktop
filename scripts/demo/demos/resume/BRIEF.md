@@ -2,10 +2,12 @@
 
 The current task replaces the old long update story with an approximately
 18-second, silent 1080×1080 video for viewing on a phone. Capture the real
-desktop app in a 720×720 CSS window at 2×, with the sidebar and chat visible
+desktop app in a 720×640 CSS window at 2×, with the sidebar and chat visible
 together, the right panel closed, and no camera moves. Resize the sidebar using
-its ordinary control to 428px: the 404px update card fills 56.1% of the frame's
-width and leaves 292px for the continuing conversation. Do not type or fill a
+its ordinary control to 360px, leaving 360px for the continuing conversation.
+Keep the app at 1080×960 (1.5 output pixels per CSS pixel), then append a 120px
+bottom strip for large centered captions. Captions never cover app content.
+Do not type or fill a
 draft; keep the composer empty. Use preview
 `0.0.94-preview.9`'s production source (`36f103e1`), including the sidebar-width
 card, proportionate snail and Happy Engineering wordmark.
@@ -19,11 +21,15 @@ card, proportionate snail and Happy Engineering wordmark.
 | 16–18s | Hold the completed original turn.                                                                                                         | Same turn. New version.       |
 
 Times describe the shape, not invented installer timing. The production
-downloader verifies released Agent `0.4.86` and `0.4.87-preview.7`; the real
+downloader verifies released Agent `0.4.87-preview.6` and `0.4.87-preview.7`; the real
 Install action selects and upgrades the binary in the private world. Installer
 reports and actual renderer connection/catalog readiness drive the UI. Native
 IPC alone is replaced by browser bindings. No synthetic phases, skipped
-restart, time compression or “Restart now” action is used.
+restart, time compression or “Restart now” action is used. Both releases use
+protocol 26, support Tasks and task creation, and lack the artifact catalog
+endpoint. Their task/API and run-recovery source is unchanged. Native endpoint
+probes and DOM snapshots must confirm unchanged capabilities, sidebar sections
+and main-pane controls before and after the upgrade.
 
 Inference is scripted. The first actual Node tool streams in its private
 worktree until a file gate releases it. Post-tool inference stays held through
@@ -36,8 +42,8 @@ tool preview panel. The recording preserves that UI behavior.
 The take must prove actual old/new versions and PIDs, original run identity,
 Tool 2 absent before restart and present afterward, one settled duration spanning
 the turn, a visible monotonic running clock at video speed, same app shell and
-composer nodes, an untouched empty composer, a sidebar-only card filling at
-least 55% of the frame width, a square snail box, zero errors, and one continuous
+composer nodes, an untouched empty composer, an exactly 50% sidebar containing
+the update card, a square snail box, zero errors, and one continuous
 wall-time timeline.
 
 The user gave standing authorization for private recorder runs and fixes for

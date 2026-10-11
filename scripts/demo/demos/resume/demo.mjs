@@ -41,6 +41,49 @@ function tools(run) {
         .flatMap((message) => message.content ?? [])
         .filter((block) => block.type === "tool_call");
 }
+async function capabilitiesRead(gym) {
+    const health = await gym.client.getHealth();
+    await gym.client.listTasks();
+    let artifacts;
+    try {
+        await gym.client.listArtifacts({ limit: 1 });
+        artifacts = "supported";
+    } catch (error) {
+        if (error.status !== 404) throw error;
+        artifacts = "unsupported";
+    }
+    return { protocol: health.version.protocol, tasks: "supported", artifacts };
+}
+async function chromeRead(page) {
+    return await page.evaluate(() => {
+        const selector = (name) => `[data-happy-desktop-ui="${name}"]`;
+        const controls = (node) =>
+            [...(node?.querySelectorAll("button") ?? [])].map((button) => ({
+                label: button.getAttribute("aria-label"),
+                title: button.getAttribute("title"),
+                disabled: button.disabled,
+            }));
+        return {
+            sections: [...document.querySelectorAll(selector("sidebar-section"))].map(
+                (section) => ({
+                    id: section.getAttribute("data-section-id"),
+                    label: section.querySelector(selector("sidebar-section-label"))?.textContent,
+                    actions: controls(section.querySelector(selector("sidebar-section-actions"))),
+                }),
+            ),
+            mainPane: {
+                title: document.querySelector(selector("channel-header-title"))?.textContent,
+                headerControls: controls(document.querySelector(selector("channel-header"))),
+                tabs: [...document.querySelectorAll(selector("tab"))].map((tab) => ({
+                    id: tab.getAttribute("data-tab-id"),
+                    label: tab.querySelector(selector("tab-label"))?.textContent,
+                    selected: tab.getAttribute("aria-selected"),
+                })),
+                tabControls: controls(document.querySelector(selector("tabbed-pane-actions"))),
+            },
+        };
+    });
+}
 async function sample(demo, label) {
     const state = await demo.page.evaluate(() => {
         const q = (name) => document.querySelector(`[data-happy-desktop-ui="${name}"]`);
@@ -86,8 +129,8 @@ async function sample(demo, label) {
         (state.card.x < state.sidebar.x - 1 || state.card.right > state.sidebar.right + 1)
     )
         throw new Error("Update card leaves the sidebar");
-    if (state.card && state.card.width / 720 < 0.55)
-        throw new Error("Update card occupies less than 55% of the frame width");
+    if (Math.abs(state.sidebar.width - 360) > 0.5)
+        throw new Error("Sidebar does not occupy exactly half of the 720px app width");
     if (state.snail && Math.abs(state.snail.width - state.snail.height) > 1)
         throw new Error("Snail box is not square");
     evidence.samples.push({ label, frames: demo.timing.frames, at: Date.now(), ...state });
@@ -104,12 +147,14 @@ export default {
     inferenceModes: ["screenplay"],
     manualOnly: true,
     rawWindow: true,
-    captionPlacement: "top",
+    subtitles: "below",
+    captionPlacement: "strip",
+    captionStripHeight: 120,
     transitions: "none",
     geometry: {
-        viewport: { width: 720, height: 720 },
+        viewport: { width: 720, height: 640 },
         deviceScaleFactor: 2,
-        output: { width: 1080, height: 1080 },
+        output: { width: 1080, height: 960 },
     },
     patches: [
         { scope: "shared", source: "browser-daemon.patch" },
@@ -151,12 +196,23 @@ export default {
         const resize = demo.page.getByRole("separator", { name: "Resize sidebar", exact: true });
         await resize.focus();
         await demo.page.keyboard.press("Home");
-        for (let n = 0; n < 13; n++) await demo.page.keyboard.press("ArrowRight");
+        await until(
+            demo,
+            async () => (await resize.getAttribute("aria-valuenow")) === "220",
+            "Sidebar did not reach its ordinary minimum",
+        );
+        const resizeBox = await resize.boundingBox();
+        const resizeX = resizeBox.x + resizeBox.width / 2;
+        const resizeY = resizeBox.y + resizeBox.height / 2;
+        await demo.page.mouse.move(resizeX, resizeY);
+        await demo.page.mouse.down();
+        await demo.page.mouse.move(resizeX + 140, resizeY, { steps: 10 });
+        await demo.page.mouse.up();
         await demo.page.evaluate(() => document.fonts.ready);
         await demo.page.waitForTimeout(900);
         evidence.framing = await demo.framingPrepare(hook("app-shell"), {
             rawWindow: true,
-            delivery: { width: 1080, height: 1080 },
+            delivery: { width: 1080, height: 960 },
         });
         const heldInference = gym.inferenceHold(agentId);
         let released = false;
@@ -210,8 +266,16 @@ export default {
                 });
             });
             evidence.before = await runRead(gym);
+            evidence.beforeCapabilities = await capabilitiesRead(gym);
+            evidence.beforeChrome = await chromeRead(demo.page);
             if (evidence.before.status !== "running")
                 throw new Error("Opening run is not mid-turn");
+            if (
+                evidence.beforeCapabilities.protocol !== 26 ||
+                evidence.beforeCapabilities.artifacts !== "unsupported" ||
+                !evidence.beforeChrome.sections.some((section) => section.label === "Tasks")
+            )
+                throw new Error("Opening release lacks the expected stable capabilities");
             await sample(demo, "opening mid-turn");
             await demo.caption("Update ready. Agent mid-task.");
             await demo.hold(1300);
@@ -260,6 +324,14 @@ export default {
             await filmed(demo, gym.daemonUpgrade.installed, "Upgrade did not finish");
             evidence.upgradedHealth = await gym.daemonReconnect();
             evidence.upgrade = await gym.daemonUpgrade.evidence();
+            evidence.afterCapabilities = await capabilitiesRead(gym);
+            evidence.afterChrome = await chromeRead(demo.page);
+            if (
+                JSON.stringify(evidence.beforeCapabilities) !==
+                    JSON.stringify(evidence.afterCapabilities) ||
+                JSON.stringify(evidence.beforeChrome) !== JSON.stringify(evidence.afterChrome)
+            )
+                throw new Error("Capabilities, sidebar sections or main-pane chrome changed");
             evidence.restored = await runRead(gym);
             if (
                 evidence.restored.status !== "running" ||
@@ -358,6 +430,9 @@ export default {
             throw new Error("Completed clock does not span the original durable turn");
         if (evidence.finalState.card) throw new Error("Success card did not clear before ending");
         evidence.finalHealth = await gym.client.getHealth();
+        evidence.finalChrome = await chromeRead(page);
+        if (JSON.stringify(evidence.beforeChrome) !== JSON.stringify(evidence.finalChrome))
+            throw new Error("Navigation or main-pane chrome changed at completion");
         return evidence;
     },
 };

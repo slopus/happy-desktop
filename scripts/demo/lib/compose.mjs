@@ -116,12 +116,17 @@ async function overlayBuild(appearance) {
 }
 
 /** The caption pill, drawn at output resolution so its text is never resampled. */
-function captionLayer(text, placement) {
-    const size = placement === "top" ? 32 : 42;
+function captionLayer(text, placement, stripTop, stripHeight) {
+    const size = placement === "top" ? 32 : placement === "strip" ? 40 : 42;
     const width = Math.min(output.width - 200, Math.round(text.length * size * 0.54) + 96);
     const height = placement === "top" ? 66 : 84;
     const x = Math.round((output.width - width) / 2);
-    const y = placement === "top" ? 16 : output.height - height - 48;
+    const y =
+        placement === "strip"
+            ? stripTop + Math.round((stripHeight - height) / 2)
+            : placement === "top"
+              ? 16
+              : output.height - height - 48;
     return Buffer.from(
         `<svg xmlns="http://www.w3.org/2000/svg" width="${output.width}" height="${output.height}">
             <rect x="${x}" y="${y}" width="${width}" height="${height}" rx="${height / 2}"
@@ -315,9 +320,12 @@ export async function composeFrames(options) {
     const { appearance, frames, onProgress, sourceDirectory, targetDirectory } = options;
     const rawWindow = options.demo.rawWindow === true;
     const appHeight = output.height;
-    const subtitleStrip = options.demo.subtitles === "below" ? 140 : 0;
+    const subtitleStrip =
+        options.demo.subtitles === "below" ? (options.demo.captionStripHeight ?? 140) : 0;
     if (subtitleStrip && (!rawWindow || options.demo.transitions !== "none"))
         throw new Error("Below-window subtitles require a raw-window take with no transitions.");
+    if (options.demo.captionPlacement === "strip" && subtitleStrip < 84)
+        throw new Error("Strip captions require at least 84 pixels below the app.");
     output.height = appHeight + subtitleStrip;
     const overlay = rawWindow ? undefined : await overlayBuild(appearance);
     const captions = new Map();
@@ -380,7 +388,12 @@ export async function composeFrames(options) {
             if (!captions.has(entry.caption))
                 captions.set(
                     entry.caption,
-                    captionLayer(entry.caption, options.demo.captionPlacement),
+                    captionLayer(
+                        entry.caption,
+                        options.demo.captionPlacement,
+                        appHeight,
+                        subtitleStrip,
+                    ),
                 );
             layers.push({ input: captions.get(entry.caption) });
         }

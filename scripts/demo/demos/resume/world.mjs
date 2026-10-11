@@ -4,7 +4,7 @@ import { backgroundRepositories, models, seedMode } from "../seamless-update/wor
 
 export { backgroundRepositories, models, seedMode };
 export const id = "resume-portrait-upgrade";
-export const daemonUpgrade = { from: "0.4.86", to: "0.4.87-preview.7" };
+export const daemonUpgrade = { from: "0.4.87-preview.6", to: "0.4.87-preview.7" };
 export const prompt = "Check the waveform, then verify the idle state.";
 export const firstCommand = "node check.mjs";
 export const secondCommand = "node verify.mjs";
