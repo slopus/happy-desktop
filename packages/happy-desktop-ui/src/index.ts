@@ -201,6 +201,11 @@ export {
     type FileBrowserProps,
     type FileBrowserScope,
 } from "./FileBrowser";
+export {
+    GitComparisonBase,
+    type GitComparisonBaseProps,
+    type GitComparisonBaseSource,
+} from "./GitComparisonBase";
 export { FilePathLabel, type FilePathLabelProps } from "./FilePathLabel";
 export {
     FilePreview,

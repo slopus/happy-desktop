@@ -1,4 +1,5 @@
 import type { GitState } from "@slopus/happy-agent-client";
+import { gitComparedWithRead } from "./gitComparisonBase.js";
 import type { GitChangeSnapshot } from "./types.js";
 
 /** The latest scan and the last complete comparison belong to one workspace. */
@@ -23,6 +24,9 @@ export function gitSnapshotProject(
 ): GitChangeSnapshot | undefined {
     if (state === undefined) return undefined;
     const git = state.lastReady ?? state.current;
+    // From the scan whose files are listed, so the header always names what
+    // those rows were actually measured against.
+    const comparedWith = gitComparedWithRead(git);
     return {
         comparison:
             !state.invalidated && state.current.comparison === "ready"
@@ -37,5 +41,6 @@ export function gitSnapshotProject(
         generation: `${git.facts.head}:${String(git.scannedAt)}`,
         version: git.scannedAt,
         ...(git.comparison === "ready" && git.base !== null ? { baseRevision: git.base } : {}),
+        ...(comparedWith === undefined ? {} : { comparedWith }),
     };
 }

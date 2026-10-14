@@ -534,6 +534,20 @@ export interface GitChangeSnapshot {
     revision?: string;
     /** Comparison revision already held by the live Git watcher. */
     baseRevision?: string;
+    /** What the changes are measured against; absent from a daemon that does not say. */
+    comparedWith?: GitComparedWith;
+}
+
+/** Where a workspace's comparison branch came from, as the daemon decided it. */
+export type GitComparisonBaseSource = "explicit" | "workspace" | "inferred" | "default";
+
+/** The branch a workspace's changes are measured against, as the daemon reports it. */
+export interface GitComparedWith {
+    /** The ref, e.g. `origin/release-v8.8`; `null` when measured against HEAD or the empty tree. */
+    ref: string | null;
+    source: GitComparisonBaseSource | null;
+    /** The daemon's own sentence about a fallback, when it had to fall back. */
+    notice: string | null;
 }
 
 export interface GroupSession {
