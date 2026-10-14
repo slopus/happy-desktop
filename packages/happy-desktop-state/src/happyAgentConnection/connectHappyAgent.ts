@@ -32,6 +32,7 @@ import { ChatStore } from "./ChatStore.js";
 import { userProfilesCreate } from "./userProfiles.js";
 import { happyAgentSyncCreate } from "./happyAgentSync.js";
 import { happyAgentSyncRead } from "./happyAgentSyncRead.js";
+import { workspaceBranchesList, workspaceComparisonBaseUpdate } from "./gitComparisonBase.js";
 import { gitSnapshotStateUpdate, type GitSnapshotState } from "./gitSnapshotState.js";
 import { CHECKING_SERVER_COMPATIBILITY, serverCompatibility } from "./compatibility.js";
 import { projectRegistrationError } from "./errors.js";
@@ -3625,6 +3626,73 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         },
         renameGroup(target, name) {
             return renameGroup(target, name);
+        },
+        updateWorkspaceComparisonBase(workspaceId, comparisonBase) {
+            const mutationId = nextId();
+            const workspace = workspaceOf(workspaceId);
+            // Queued with the workspace's renames: both are guarded by its
+            // version, and the second must be sent with the first one's answer.
+            const queueKey = `workspace:${workspaceId}`;
+            if (workspace === undefined)
+                return mutation(
+                    "update_workspace_comparison_base",
+                    mutationId,
+                    () => Promise.reject(new Error("The workspace is not loaded.")),
+                    undefined,
+                    undefined,
+                    undefined,
+                    queueKey,
+                );
+            return mutation(
+                "update_workspace_comparison_base",
+                mutationId,
+                () =>
+                    workspaceComparisonBaseUpdate(
+                        client,
+                        workspace.id,
+                        { comparisonBase, mutationId },
+                        {
+                            ifMatch: workspaceOf(workspace.id)?.version ?? workspace.version,
+                            signal: rootController.signal,
+                        },
+                    ),
+                ({ workspace: updated }) => adoptWorkspace(updated),
+                undefined,
+                undefined,
+                queueKey,
+            );
+        },
+        async workspaceBranchesList(workspaceId, query, limit, signal) {
+            // Why the picker fell back is written to the debug log, so a host
+            // that cannot list branches is told apart from one that failed.
+            const unavailable = (reason: string, level: "warning" | "error"): void =>
+                reportDebug({
+                    detail: JSON.stringify({ workspaceId, query, reason }, null, 2),
+                    level,
+                    message: `Branch search unavailable: ${reason}`,
+                    source: "connection",
+                });
+            try {
+                const answer = await workspaceBranchesList(
+                    {
+                        endpoint,
+                        token: options.token,
+                        fetch: options.fetch ?? globalThis.fetch.bind(globalThis),
+                    },
+                    workspaceId,
+                    query,
+                    limit,
+                    signal === undefined
+                        ? rootController.signal
+                        : AbortSignal.any([rootController.signal, signal]),
+                );
+                if (answer.type === "unsupported") unavailable(answer.reason, "warning");
+                return answer;
+            } catch (error) {
+                if (!rootController.signal.aborted && signal?.aborted !== true)
+                    unavailable(error instanceof Error ? error.message : String(error), "error");
+                throw error;
+            }
         },
         createBot(name) {
             // All three identities are named here and handed to the daemon,

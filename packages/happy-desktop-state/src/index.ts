@@ -45,6 +45,7 @@ export * from "./happyAgent/happyAgentGroupAccess.js";
 export * from "./happyAgent/happyAgentHost.js";
 export * from "./happyAgent/happyAgentIntegrationStore.js";
 export * from "./happyAgent/happyAgentCloudStore.js";
+export * from "./happyAgent/happyAgentComparisonBase.js";
 export * from "./happyAgent/happyAgentTeamsStore.js";
 export * from "./happyAgent/happyAgentInboxStore.js";
 export * from "./artifacts/artifactTypes.js";

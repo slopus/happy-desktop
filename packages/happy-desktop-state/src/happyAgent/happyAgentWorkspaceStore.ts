@@ -757,6 +757,8 @@ export interface HappyAgentWorkspaceSnapshot {
     readonly fileLayout: HappyAgentFileLayout;
     /** What the reader is looking for in the file listing, and what was found. */
     readonly fileSearch: HappyAgentFileSearch;
+    /** What the open comparison-branch picker is looking for, and what the host found. */
+    readonly comparisonBranchSearch: HappyAgentComparisonBranchSearch;
     /** Review notes left on this checkout's files, and the one being written. */
     readonly fileComments: HappyAgentFileComments;
     /** The last reference that named a file the checkout does not have, until put away. */
@@ -953,6 +955,31 @@ export interface HappyAgentFileSearch {
     readonly query: string;
     /** Ranked whole-checkout matches, absent until the daemon has answered one. */
     readonly results?: readonly HappyAgentFileSearchResult[];
+    /** True while an answer for the current query is still outstanding. */
+    readonly searching: boolean;
+}
+
+/**
+ * The comparison-branch picker's typeahead: what is typed into it and the
+ * branches the host found for that. It belongs to one open picker, so it is
+ * idle while none is open and is never remembered.
+ */
+export interface HappyAgentComparisonBranchSearch {
+    /** The worktree whose picker is open; absent while none is. */
+    readonly worktreeId?: HappyAgentWorktreeId;
+    readonly query: string;
+    /**
+     * The host's ranked answer for `query`, absent until it has given one and
+     * whenever it cannot list branches; the picker then offers the branches it
+     * already knows.
+     */
+    readonly branches?: readonly string[];
+    /**
+     * Why the host's listing is not what is shown, such as `HTTP 404` from a
+     * host that cannot list branches or `Failed to fetch`; absent while the
+     * last answer was a listing.
+     */
+    readonly unavailable?: string;
     /** True while an answer for the current query is still outstanding. */
     readonly searching: boolean;
 }
@@ -1205,6 +1232,21 @@ const FILE_SEARCH_LIMIT = 50;
 
 /** Nothing typed, nothing found — the listing's resting state. */
 const FILE_SEARCH_IDLE: HappyAgentFileSearch = { query: "", searching: false };
+
+/** How many ranked branches the comparison picker asks the host for. */
+const COMPARISON_BRANCH_LIMIT = 50;
+
+/**
+ * How long typing must pause before the host is asked. The host keeps its
+ * listing for a few seconds, so this spares requests rather than Git.
+ */
+const COMPARISON_BRANCH_DEBOUNCE_MS = 120;
+
+/** No picker open — the typeahead's resting state. */
+const COMPARISON_BRANCH_SEARCH_IDLE: HappyAgentComparisonBranchSearch = {
+    query: "",
+    searching: false,
+};
 
 /**
  * How a changed file is displayed. Mirrors the UI's `ChangedFileDiffMode`.
@@ -1959,6 +2001,22 @@ export interface HappyAgentWorkspaceStore {
     renameCancel(): void;
     /** Commits the pending name; a blank one is not a rename and closes instead. */
     renameSubmit(): Promise<void>;
+    /**
+     * Compares a worktree's changes with `comparisonBase`, or with whatever the
+     * host chooses when it is `null`. A worktree whose host cannot store a
+     * choice is left as it is.
+     */
+    worktreeComparisonBaseUpdate(
+        worktreeId: HappyAgentWorktreeId,
+        comparisonBase: string | null,
+    ): void;
+    /**
+     * Says what the worktree's open comparison picker holds, which opens its
+     * typeahead; the host is asked for matching branches once typing pauses.
+     */
+    comparisonBranchSearchUpdate(worktreeId: HappyAgentWorktreeId, query: string): void;
+    /** The comparison picker closed: its typeahead ends and nothing more is asked. */
+    comparisonBranchSearchClose(): void;
     /** Offers to archive the open empty project or worktree; it archives nothing yet. */
     groupArchiveOpen(groupId: HappyAgentGroupId): void;
     /** Dismisses the empty-group archive confirmation. */
@@ -2309,6 +2367,16 @@ export function happyAgentWorkspaceStoreCreate(
     let fileSearch: HappyAgentFileSearch = FILE_SEARCH_IDLE;
     /** Which search request is still wanted; a later query retires an earlier one. */
     let fileSearchGeneration = 0;
+    let comparisonBranchSearch: HappyAgentComparisonBranchSearch = COMPARISON_BRANCH_SEARCH_IDLE;
+    /** Which branch request is still wanted; a later query or closing retires it. */
+    let comparisonBranchGeneration = 0;
+    let comparisonBranchTimer: ReturnType<typeof setTimeout> | undefined;
+    /**
+     * Why the host cannot list branches, once it has said so, so the rest of
+     * this picker's typing asks nothing. Opening the picker again asks again,
+     * in case the host has since been updated.
+     */
+    let comparisonBranchUnsupported: string | undefined;
     /**
      * Review notes on the addressed checkout. Like the search, this is what the
      * reader is doing rather than how they like things, so it is not persisted.
@@ -2693,6 +2761,7 @@ export function happyAgentWorkspaceStoreCreate(
         fileScope: "changed",
         fileLayout: HAPPY_AGENT_FILE_LAYOUT_DEFAULT,
         fileSearch: FILE_SEARCH_IDLE,
+        comparisonBranchSearch: COMPARISON_BRANCH_SEARCH_IDLE,
         fileComments: FILE_COMMENTS_IDLE,
         reviews: new Map(),
         fileTreeExpanded,
@@ -3044,6 +3113,7 @@ export function happyAgentWorkspaceStoreCreate(
                 snapshot.fileScope === nextFileScope &&
                 snapshot.fileLayout === nextFileLayout &&
                 snapshot.fileSearch === fileSearch &&
+                snapshot.comparisonBranchSearch === comparisonBranchSearch &&
                 snapshot.fileComments === fileComments &&
                 snapshot.fileOpenFailure === fileOpenFailure &&
                 snapshot.reviews === reviews &&
@@ -3074,6 +3144,7 @@ export function happyAgentWorkspaceStoreCreate(
                           fileScope: nextFileScope,
                           fileLayout: nextFileLayout,
                           fileSearch,
+                          comparisonBranchSearch,
                           fileComments,
                           ...(fileOpenFailure === undefined ? {} : { fileOpenFailure }),
                           reviews,
@@ -3409,6 +3480,67 @@ export function happyAgentWorkspaceStoreCreate(
                 recompute();
             },
         );
+    };
+
+    /**
+     * Records what the comparison picker holds and, once typing pauses, asks
+     * the host which branches contain it. The last answer stays while the next
+     * is awaited: the picker narrows it to what is typed meanwhile, so the list
+     * keeps up with the keyboard rather than with the host.
+     *
+     * Does not `recompute` — the caller publishes.
+     */
+    const comparisonBranchAsk = (worktreeId: HappyAgentWorktreeId, query: string): void => {
+        const generation = ++comparisonBranchGeneration;
+        if (comparisonBranchTimer !== undefined) clearTimeout(comparisonBranchTimer);
+        comparisonBranchTimer = undefined;
+        const previous =
+            comparisonBranchSearch.worktreeId === worktreeId
+                ? comparisonBranchSearch.branches
+                : undefined;
+        const settled = (
+            branches: readonly string[] | undefined,
+            unavailable: string | undefined,
+        ): void => {
+            comparisonBranchSearch = {
+                worktreeId,
+                query,
+                ...(branches === undefined ? {} : { branches }),
+                ...(unavailable === undefined ? {} : { unavailable }),
+                searching: false,
+            };
+        };
+        if (comparisonBranchUnsupported !== undefined) {
+            settled(undefined, comparisonBranchUnsupported);
+            return;
+        }
+        comparisonBranchSearch = {
+            worktreeId,
+            query,
+            ...(previous === undefined ? {} : { branches: previous }),
+            searching: true,
+        };
+        comparisonBranchTimer = setTimeout(() => {
+            comparisonBranchTimer = undefined;
+            void client.branchesSearch(worktreeId, query, COMPARISON_BRANCH_LIMIT).then(
+                (answer) => {
+                    if (generation !== comparisonBranchGeneration) return;
+                    if (answer.type === "listed") settled(answer.branches, undefined);
+                    else {
+                        comparisonBranchUnsupported = answer.reason;
+                        settled(undefined, answer.reason);
+                    }
+                    recompute();
+                },
+                (error: unknown) => {
+                    // A failed listing keeps the last answer rather than
+                    // claiming the repository has no such branch, and says why.
+                    if (generation !== comparisonBranchGeneration) return;
+                    settled(previous, error instanceof Error ? error.message : String(error));
+                    recompute();
+                },
+            );
+        }, COMPARISON_BRANCH_DEBOUNCE_MS);
     };
 
     const fileChangeFind = (
@@ -6320,6 +6452,7 @@ export function happyAgentWorkspaceStoreCreate(
                     fileScope: "changed",
                     fileLayout: HAPPY_AGENT_FILE_LAYOUT_DEFAULT,
                     fileSearch,
+                    comparisonBranchSearch,
                     fileComments,
                     ...(fileOpenFailure === undefined ? {} : { fileOpenFailure }),
                     reviews,
@@ -7949,6 +8082,32 @@ export function happyAgentWorkspaceStoreCreate(
                 }
                 recompute();
             }
+        },
+        worktreeComparisonBaseUpdate(worktreeId, comparisonBase) {
+            // A refusal reaches the list's mutation error and the choice is
+            // reconciled back from the host, the same way a refused rename is.
+            void list.worktreeComparisonBaseUpdate(worktreeId, comparisonBase);
+        },
+        comparisonBranchSearchUpdate(worktreeId, query) {
+            if (
+                comparisonBranchSearch.worktreeId === worktreeId &&
+                comparisonBranchSearch.query === query
+            )
+                return;
+            // A picker that opens asks the host afresh, even one that could
+            // not list branches the last time it was asked.
+            if (comparisonBranchSearch.worktreeId !== worktreeId)
+                comparisonBranchUnsupported = undefined;
+            comparisonBranchAsk(worktreeId, query);
+            recompute();
+        },
+        comparisonBranchSearchClose() {
+            if (comparisonBranchSearch === COMPARISON_BRANCH_SEARCH_IDLE) return;
+            comparisonBranchGeneration += 1;
+            if (comparisonBranchTimer !== undefined) clearTimeout(comparisonBranchTimer);
+            comparisonBranchTimer = undefined;
+            comparisonBranchSearch = COMPARISON_BRANCH_SEARCH_IDLE;
+            recompute();
         },
         groupArchiveOpen(groupId) {
             if (groupArchive?.submitting) return;
