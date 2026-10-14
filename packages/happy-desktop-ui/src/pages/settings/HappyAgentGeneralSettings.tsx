@@ -57,6 +57,12 @@ export type HappyAgentGeneralSettingsProps = {
     /** Whether this window sends product analytics events. Absent where the host sends none. */
     usageAnalyticsEnabled?: boolean;
     onUsageAnalyticsChange?: (enabled: boolean) => void;
+    /**
+     * Whether the window draws with the GPU: the choice the next launch uses and
+     * what this one started with. Absent where the host keeps no such choice.
+     */
+    hardwareAcceleration?: { readonly enabled: boolean; readonly active: boolean };
+    onHardwareAccelerationChange?: (enabled: boolean) => void;
     /** Absent where the host does not manage updates. */
     previewUpdatesEnabled?: boolean;
     onPreviewUpdatesChange?: (enabled: boolean) => void;
@@ -209,6 +215,26 @@ export function HappyAgentGeneralSettings(props: HappyAgentGeneralSettingsProps)
                     htmlFor="happy-agent-settings-title-shimmer"
                     label="Shimmer active titles"
                 />
+                {props.hardwareAcceleration && props.onHardwareAccelerationChange ? (
+                    <FormRow
+                        control={
+                            <Switch
+                                aria-label="Hardware acceleration"
+                                checked={props.hardwareAcceleration.enabled}
+                                id="happy-agent-settings-hardware-acceleration"
+                                onChange={props.onHardwareAccelerationChange}
+                                size="small"
+                            />
+                        }
+                        description={
+                            props.hardwareAcceleration.enabled === props.hardwareAcceleration.active
+                                ? "Draws Happy with the graphics card. Turning it off can ease system-wide lag on some displays. Applies the next time Happy starts."
+                                : "Applies the next time Happy starts."
+                        }
+                        htmlFor="happy-agent-settings-hardware-acceleration"
+                        label="Hardware acceleration"
+                    />
+                ) : null}
                 {props.onProjectsHiddenChange ? (
                     <FormRow
                         control={

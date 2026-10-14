@@ -140,6 +140,9 @@ const bridge: HappyDesktopBridge = {
     directoryPick: () => ipcRenderer.invoke(desktopIpc.directoryPick),
     desktopConfigGet: () => ipcRenderer.invoke(desktopIpc.desktopConfigGet),
     desktopConfigWrite: (config) => ipcRenderer.invoke(desktopIpc.desktopConfigWrite, config),
+    hardwareAccelerationGet: () => ipcRenderer.invoke(desktopIpc.hardwareAccelerationGet),
+    hardwareAccelerationSet: (enabled: boolean) =>
+        ipcRenderer.invoke(desktopIpc.hardwareAccelerationSet, enabled),
     daemonCheck: () => ipcRenderer.invoke(desktopIpc.daemonCheck),
     daemonDownload: () => ipcRenderer.invoke(desktopIpc.daemonDownload),
     daemonInstall: () => ipcRenderer.invoke(desktopIpc.daemonInstall),

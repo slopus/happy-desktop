@@ -23,6 +23,17 @@ export function happyAgentModelKey(providerId: string, modelId: string): HappyAg
  */
 export type HappyAgentLinkOpenPlacement = "panel" | "browser";
 
+/**
+ * Whether the desktop shell may draw with the GPU. The choice applies from the
+ * next launch, so it travels with what the running window was started with.
+ */
+export interface HappyAgentHardwareAcceleration {
+    /** The choice the next launch will use. */
+    readonly enabled: boolean;
+    /** What the running window was started with. */
+    readonly active: boolean;
+}
+
 export interface HappyAgentSettingsSnapshot {
     /** Unset until the reader picks a model; the catalog's own default stands in. */
     readonly defaultProviderId?: string;
@@ -34,6 +45,8 @@ export interface HappyAgentSettingsSnapshot {
     readonly linkOpenPlacement: HappyAgentLinkOpenPlacement;
     /** Explicit machine-local opt-in to preview Desktop and Happy Agent releases. */
     readonly previewUpdatesEnabled: boolean;
+    /** Absent where the host keeps no such choice, which offers no control. */
+    readonly hardwareAcceleration?: HappyAgentHardwareAcceleration;
     /** Models switched off for this workspace. Absent from the set means enabled. */
     readonly disabledModels: ReadonlySet<HappyAgentModelKey>;
 }
@@ -54,6 +67,8 @@ export interface HappyAgentSettingsStore {
     defaultPermissionModeUpdate(mode: HappyAgentPermissionMode): void;
     linkOpenPlacementUpdate(placement: HappyAgentLinkOpenPlacement): void;
     previewUpdatesUpdate(enabled: boolean): void;
+    /** Chooses GPU drawing for the next launch; ignored where the host keeps no choice. */
+    hardwareAccelerationUpdate(enabled: boolean): void;
     /** Offers or withholds one model in the session pickers. */
     modelEnabledUpdate(key: HappyAgentModelKey, enabled: boolean): void;
 }
@@ -67,6 +82,7 @@ export interface HappyAgentSettingsInitial {
     readonly defaultPermissionMode?: HappyAgentPermissionMode;
     readonly linkOpenPlacement?: HappyAgentLinkOpenPlacement;
     readonly previewUpdatesEnabled?: boolean;
+    readonly hardwareAcceleration?: HappyAgentHardwareAcceleration;
 }
 
 /** Creates the workspace-lifetime preference store; it opens no transport or timers. */
@@ -121,6 +137,11 @@ export function happyAgentSettingsStoreCreate(
         previewUpdatesUpdate(enabled) {
             if (snapshot.previewUpdatesEnabled === enabled) return;
             publish({ ...snapshot, previewUpdatesEnabled: enabled });
+        },
+        hardwareAccelerationUpdate(enabled) {
+            const current = snapshot.hardwareAcceleration;
+            if (!current || current.enabled === enabled) return;
+            publish({ ...snapshot, hardwareAcceleration: { ...current, enabled } });
         },
     };
 }

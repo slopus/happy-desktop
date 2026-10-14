@@ -51,6 +51,7 @@ import {
     type DesktopCloudAuthConfiguration,
     type DesktopDebugSnapshot,
     type DesktopGuestKeyEvent,
+    type DesktopHardwareAcceleration,
     type DesktopMediaPreview,
     type DesktopNavigationStep,
     type DesktopPreviewNavigation,
@@ -95,6 +96,11 @@ import {
 } from "./happyAgentRendererSession";
 import { HappyAgentServiceBrowser } from "./happyAgentServiceBrowser";
 import { desktopConfigPath, DesktopConfigStore } from "./desktopConfig";
+import {
+    desktopHardwareAccelerationPath,
+    desktopHardwareAccelerationReadSync,
+    desktopHardwareAccelerationWrite,
+} from "./desktopHardwareAcceleration";
 import { DesktopDebugController } from "./desktopDebugController";
 import { desktopMainInspectorStart } from "./desktopInspector";
 import { DesktopProfilerController } from "./desktopProfilerController";
@@ -158,6 +164,11 @@ app.setName(applicationName);
 if (buildIdentity) app.setPath("userData", `${app.getPath("userData")}-${buildIdentity.label}`);
 // Only now is this process identifiable, so only now can it claim to be the one.
 if (!app.requestSingleInstanceLock()) app.quit();
+// Chromium fixes its GPU path before ready, so the stored choice is read now,
+// once, and a change waits for the next launch.
+const hardwareAccelerationPath = desktopHardwareAccelerationPath(app.getPath("userData"));
+const hardwareAccelerationActive = desktopHardwareAccelerationReadSync(hardwareAccelerationPath);
+if (!hardwareAccelerationActive) app.disableHardwareAcceleration();
 
 const dirname = fileURLToPath(new URL(".", import.meta.url));
 const generatedApplicationIconPath = join(
@@ -1672,6 +1683,28 @@ void app
             happyAgentRendererSession?.liveMicrophoneRevoke(event.sender, event.senderFrame);
         });
         ipcMain.handle(desktopIpc.desktopConfigGet, () => desktopConfigStore.get());
+        // The stored choice starts as what this launch read and changes only
+        // through the presenting window; writes queue so the last one wins.
+        let hardwareAccelerationEnabled = hardwareAccelerationActive;
+        let hardwareAccelerationWriting = Promise.resolve();
+        const hardwareAcceleration = (): DesktopHardwareAcceleration => ({
+            enabled: hardwareAccelerationEnabled,
+            active: hardwareAccelerationActive,
+        });
+        ipcMain.handle(desktopIpc.hardwareAccelerationGet, () => hardwareAcceleration());
+        ipcMain.handle(desktopIpc.hardwareAccelerationSet, async (event, raw: unknown) => {
+            const presenting = windowLifecycle.get();
+            if (!presenting || presenting.webContents !== event.sender)
+                throw new Error("Only the Happy window can change hardware acceleration.");
+            if (typeof raw !== "boolean") throw new Error("Invalid hardware acceleration choice.");
+            const writing = hardwareAccelerationWriting.then(async () => {
+                await desktopHardwareAccelerationWrite(hardwareAccelerationPath, raw);
+                hardwareAccelerationEnabled = raw;
+            });
+            hardwareAccelerationWriting = writing.catch(() => undefined);
+            await writing;
+            return hardwareAcceleration();
+        });
         ipcMain.handle(desktopIpc.desktopConfigWrite, async (_event, config: unknown) => {
             await desktopConfigStore.write(config);
             const enabled = desktopConfigStore.get().previewUpdatesEnabled === true;

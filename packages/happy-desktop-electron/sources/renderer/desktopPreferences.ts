@@ -13,6 +13,7 @@ import type {
     DesktopAppearanceMode,
     DesktopConfig,
     DesktopDefaultModel,
+    DesktopHardwareAcceleration,
     DesktopKeepAwakeMode,
     DesktopModelPreference,
     DesktopScrollbarVisibility,
@@ -53,12 +54,18 @@ export interface DesktopPreferences {
  * per-model picker memory. One adapter owns the current document so concurrent
  * store changes preserve each other's fields before the main process serializes
  * their writes.
+ *
+ * Hardware acceleration is the one exception: the host keeps it in its own file
+ * because it is read before the window exists, so it is seeded and saved here
+ * through its own bridge calls rather than as part of the document.
  */
 export function desktopPreferencesCreate(
     bridge: HappyDesktopBridge,
     initial: DesktopConfig,
+    hardwareAcceleration?: DesktopHardwareAcceleration,
 ): DesktopPreferences {
     let config = initial;
+    let hardwareAccelerationEnabled = hardwareAcceleration?.enabled;
     const preferenceListeners = new Set<() => void>();
 
     const commit = (next: DesktopConfig): void => {
@@ -98,7 +105,7 @@ export function desktopPreferencesCreate(
         initialAppearance: config.appearance,
         initialKeepAwake: config.keepAwake,
         initialScrollbarVisibility: config.scrollbarVisibility,
-        initialSettings: settingsInitial(config),
+        initialSettings: settingsInitial(config, hardwareAcceleration),
         preferencePersistence,
         titleShimmerPersistence,
         appearanceChanged(mode, scrollbarVisibility) {
@@ -111,6 +118,18 @@ export function desktopPreferencesCreate(
             commit({ ...config, keepAwake: mode });
         },
         settingsChanged(snapshot) {
+            const nextHardwareAcceleration = snapshot.hardwareAcceleration?.enabled;
+            if (
+                nextHardwareAcceleration !== undefined &&
+                nextHardwareAcceleration !== hardwareAccelerationEnabled
+            ) {
+                hardwareAccelerationEnabled = nextHardwareAcceleration;
+                void bridge
+                    .hardwareAccelerationSet?.(nextHardwareAcceleration)
+                    .catch((error: unknown) => {
+                        console.error("Could not save the hardware acceleration choice.", error);
+                    });
+            }
             const nextEffort = snapshot.defaultEffort;
             const nextPermissionMode = snapshot.defaultPermissionMode;
             const nextDefault =
@@ -182,7 +201,10 @@ export function desktopPreferencesCreate(
     };
 }
 
-function settingsInitial(config: DesktopConfig): HappyAgentSettingsInitial {
+function settingsInitial(
+    config: DesktopConfig,
+    hardwareAcceleration: DesktopHardwareAcceleration | undefined,
+): HappyAgentSettingsInitial {
     const effort =
         thinkingLevel(config.defaultEffort) ??
         thinkingLevel(config.defaultModel?.effort) ??
@@ -198,6 +220,7 @@ function settingsInitial(config: DesktopConfig): HappyAgentSettingsInitial {
         defaultPermissionMode: permissionMode(config.defaultPermissionMode),
         ...(config.linkOpen === undefined ? {} : { linkOpenPlacement: config.linkOpen }),
         previewUpdatesEnabled: config.previewUpdatesEnabled === true,
+        ...(hardwareAcceleration ? { hardwareAcceleration } : {}),
     };
 }
 

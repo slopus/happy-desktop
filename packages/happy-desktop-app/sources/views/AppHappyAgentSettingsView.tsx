@@ -898,6 +898,13 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                               onPreviewUpdatesChange: props.settings.previewUpdatesUpdate,
                           }
                         : {})}
+                    {...(settings.hardwareAcceleration
+                        ? {
+                              hardwareAcceleration: settings.hardwareAcceleration,
+                              onHardwareAccelerationChange:
+                                  props.settings.hardwareAccelerationUpdate,
+                          }
+                        : {})}
                     appearance={appearance.mode}
                     defaultModelKey={
                         selection.modelId

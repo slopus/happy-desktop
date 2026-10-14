@@ -289,6 +289,17 @@ export interface DesktopSystem {
     readonly arch: "arm64" | "x64" | "other";
 }
 
+/**
+ * Whether Chromium may draw with the GPU. The stored choice applies from the
+ * next launch, so it is reported beside what this running process started with.
+ */
+export interface DesktopHardwareAcceleration {
+    /** The stored choice the next launch will use. */
+    readonly enabled: boolean;
+    /** What this running process was started with. */
+    readonly active: boolean;
+}
+
 /** The machine-local Happy Agent installation and the daemon currently serving it. */
 export interface DesktopDaemonSnapshot {
     readonly availableVersion?: string;
@@ -824,6 +835,10 @@ export interface HappyDesktopBridge {
     directoryPick(): Promise<string | undefined>;
     desktopConfigGet(): Promise<DesktopConfig>;
     desktopConfigWrite(config: DesktopConfig): Promise<void>;
+    /** Absent on older native hosts, which keep no hardware-acceleration choice. */
+    hardwareAccelerationGet?(): Promise<DesktopHardwareAcceleration>;
+    /** Stores the choice for the next launch and answers with the resulting state. */
+    hardwareAccelerationSet?(enabled: boolean): Promise<DesktopHardwareAcceleration>;
     /** Asks now for what the background check would otherwise find later. */
     daemonCheck(): Promise<void>;
     /**
@@ -953,6 +968,8 @@ export const desktopIpc = {
     zoomChanged: "happy:zoom:changed",
     desktopConfigGet: "happy:desktop-config:get",
     desktopConfigWrite: "happy:desktop-config:write",
+    hardwareAccelerationGet: "happy:hardware-acceleration:get",
+    hardwareAccelerationSet: "happy:hardware-acceleration:set",
     daemonChanged: "happy:daemon:changed",
     daemonCheck: "happy:daemon:check",
     daemonDownload: "happy:daemon:download",

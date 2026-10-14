@@ -602,6 +602,8 @@ export function HappyAgentSettingsBlueprintPage() {
                         onAgentVersionSelect={noop}
                         onPreviewUpdatesChange={noop}
                         previewUpdatesEnabled
+                        hardwareAcceleration={{ enabled: true, active: true }}
+                        onHardwareAccelerationChange={noop}
                         onUsageAnalyticsChange={noop}
                         usageAnalyticsEnabled
                         onExperimentalFeaturesChange={noop}
@@ -1160,6 +1162,10 @@ export function HappyAgentSettingsBlueprintPage() {
                         unavailable="Happy Agent is offline. Showing the last synced defaults."
                         onPreviewUpdatesChange={noop}
                         previewUpdatesEnabled={false}
+                        // Switched off in this launch: the window still draws
+                        // with the GPU until Happy next starts.
+                        hardwareAcceleration={{ enabled: false, active: true }}
+                        onHardwareAccelerationChange={noop}
                     />
                 </HappyAgentSettingsShell>
             </FullScreenSpecimen>

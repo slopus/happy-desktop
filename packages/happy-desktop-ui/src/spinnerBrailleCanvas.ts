@@ -15,7 +15,14 @@
  * same local time; the only difference is its 100ms phase. That reproduces the
  * existing 800ms waveform exactly — 60ms down, 40ms held dim, 60ms up — while
  * making it impossible for one dot to acquire a different transition program.
- * All mounted canvases in one window share one requestAnimationFrame clock.
+ *
+ * All mounted canvases in one window share one clock. It follows the display
+ * refresh while the window is visible, so the fades are as smooth as the panel
+ * allows, and stops while the window is hidden or minimized. What it does not
+ * do is repaint for nothing: on a 240Hz panel a spinner that redraws every
+ * vsync whether or not it is seen keeps the desktop compositor busy for every
+ * other application on Windows. A canvas that is scrolled away, or whose pixels
+ * would not change, is not repainted at all.
  */
 
 const BRAILLE_FRAME_COUNT = 8;
@@ -23,6 +30,8 @@ const BRAILLE_FRAME_MS = 100;
 const BRAILLE_CYCLE_MS = BRAILLE_FRAME_COUNT * BRAILLE_FRAME_MS;
 const BRAILLE_FADE_MS = 60;
 const BRAILLE_DIM_OPACITY = 0.18;
+/** Where a parked frame samples its cell: past every fade. */
+const BRAILLE_PARKED_OFFSET = 0.75;
 
 /* DOM order is left column top-to-bottom, then right column top-to-bottom.
  * dots2 dims dot1, dot2, dot3, dot7, dot8, dot6, dot5, then dot4. */
@@ -37,7 +46,8 @@ interface BrailleRenderer {
 
 interface BrailleClock {
     readonly renderers: Set<BrailleRenderer>;
-    request: number | undefined;
+    frame: number | undefined;
+    releaseVisibility: (() => void) | undefined;
 }
 
 const clocks = new WeakMap<Window, BrailleClock>();
@@ -144,30 +154,51 @@ function dotOrigins(width: number, height: number, diameter: number): readonly P
 function clockFor(view: Window): BrailleClock {
     const current = clocks.get(view);
     if (current) return current;
-    const created: BrailleClock = { renderers: new Set(), request: undefined };
+    const created: BrailleClock = {
+        renderers: new Set(),
+        frame: undefined,
+        releaseVisibility: undefined,
+    };
     clocks.set(view, created);
     return created;
 }
 
-function clockSchedule(view: Window, clock: BrailleClock): void {
-    if (clock.request !== undefined || clock.renderers.size === 0) return;
-    if (typeof view.requestAnimationFrame !== "function") return;
-    clock.request = view.requestAnimationFrame((now) => {
-        clock.request = undefined;
-        for (const renderer of clock.renderers) renderer.draw(now);
-        clockSchedule(view, clock);
-    });
+function clockStop(view: Window, clock: BrailleClock): void {
+    if (clock.frame === undefined) return;
+    view.cancelAnimationFrame(clock.frame);
+    clock.frame = undefined;
+}
+
+function clockTick(view: Window, clock: BrailleClock): void {
+    clock.frame = undefined;
+    if (clock.renderers.size === 0) return;
+    // A hidden window draws nothing; the visibility change that shows it again
+    // restarts the clock.
+    if (view.document.hidden || typeof view.requestAnimationFrame !== "function") return;
+    const now = view.performance.now();
+    for (const renderer of clock.renderers) renderer.draw(now);
+    clock.frame = view.requestAnimationFrame(() => clockTick(view, clock));
 }
 
 function clockAdd(view: Window, renderer: BrailleRenderer): () => void {
     const clock = clockFor(view);
     clock.renderers.add(renderer);
-    clockSchedule(view, clock);
+    if (!clock.releaseVisibility) {
+        const restart = (): void => {
+            clockStop(view, clock);
+            clockTick(view, clock);
+        };
+        view.document.addEventListener("visibilitychange", restart);
+        clock.releaseVisibility = () =>
+            view.document.removeEventListener("visibilitychange", restart);
+    }
+    if (clock.frame === undefined) clockTick(view, clock);
     return () => {
         clock.renderers.delete(renderer);
-        if (clock.renderers.size !== 0 || clock.request === undefined) return;
-        view.cancelAnimationFrame(clock.request);
-        clock.request = undefined;
+        if (clock.renderers.size !== 0) return;
+        clockStop(view, clock);
+        clock.releaseVisibility?.();
+        clock.releaseVisibility = undefined;
     };
 }
 
@@ -179,6 +210,10 @@ class BrailleCanvasRenderer implements BrailleRenderer {
     readonly #startedAt: number;
     readonly #releaseClock: () => void;
     #observer: ResizeObserver | undefined;
+    #visibility: IntersectionObserver | undefined;
+    #visible = true;
+    /** What the bitmap currently shows, so an identical frame is not repainted. */
+    #drawn: string | undefined;
     #width = 0;
     #height = 0;
 
@@ -211,7 +246,7 @@ class BrailleCanvasRenderer implements BrailleRenderer {
                 } else {
                     this.#resizeFromCss(entry.contentRect);
                 }
-                this.draw(this.#view.performance.now());
+                this.#drawNow();
             });
             try {
                 this.#observer.observe(root, { box: "device-pixel-content-box" });
@@ -220,35 +255,55 @@ class BrailleCanvasRenderer implements BrailleRenderer {
             }
         }
 
+        // A spinner scrolled out of a long sidebar, or inside a hidden panel,
+        // keeps its place on the clock but paints nothing until it is seen.
+        if (typeof view.IntersectionObserver === "function") {
+            this.#visibility = new view.IntersectionObserver((entries) => {
+                const entry = entries[entries.length - 1];
+                if (!entry) return;
+                this.#visible = entry.isIntersecting;
+                if (this.#visible) this.#drawNow();
+            });
+            this.#visibility.observe(canvas);
+        }
+
         this.#releaseClock = clockAdd(view, this);
-        this.draw(this.#startedAt);
+        this.#drawNow();
     }
 
     destroy(): void {
         this.#observer?.disconnect();
+        this.#visibility?.disconnect();
         this.#releaseClock();
     }
 
     draw(now: number): void {
-        if (this.#width === 0 || this.#height === 0) return;
+        if (!this.#visible || this.#width === 0 || this.#height === 0) return;
         const parked = this.#root.hasAttribute("data-paused");
         const parkedFrame = Number(this.#root.getAttribute("data-frame"));
         const elapsed =
             parked && Number.isFinite(parkedFrame)
-                ? (modulo(parkedFrame, BRAILLE_FRAME_COUNT) + 0.75) * BRAILLE_FRAME_MS
+                ? (modulo(parkedFrame, BRAILLE_FRAME_COUNT) + BRAILLE_PARKED_OFFSET) *
+                  BRAILLE_FRAME_MS
                 : now - this.#startedAt;
+
+        const opacities = DOT_PHASES.map((phase) => dotOpacity(elapsed - phase * BRAILLE_FRAME_MS));
+        const color = this.#view.getComputedStyle(this.#canvas).color;
+        const drawn = `${this.#width}x${this.#height} ${color} ${opacities
+            .map((opacity) => opacity.toFixed(3))
+            .join(",")}`;
+        if (drawn === this.#drawn) return;
+        this.#drawn = drawn;
 
         const diameter = dotDiameter(this.#width, this.#height);
         const stamp = dotStamp(diameter);
         const origins = dotOrigins(this.#width, this.#height, diameter);
-        const color = this.#view.getComputedStyle(this.#canvas).color;
 
         this.#context.clearRect(0, 0, this.#width, this.#height);
         this.#context.fillStyle = color;
         for (let dot = 0; dot < origins.length; dot += 1) {
             const origin = origins[dot]!;
-            const phase = DOT_PHASES[dot]! * BRAILLE_FRAME_MS;
-            this.#context.globalAlpha = dotOpacity(elapsed - phase);
+            this.#context.globalAlpha = opacities[dot]!;
             for (let y = 0; y < stamp.length; y += 1) {
                 const [start, length] = stamp[y]!;
                 if (length === 0) continue;
@@ -256,6 +311,10 @@ class BrailleCanvasRenderer implements BrailleRenderer {
             }
         }
         this.#context.globalAlpha = 1;
+    }
+
+    #drawNow(): void {
+        this.draw(this.#view.performance.now());
     }
 
     #resizeFromCss(box: Pick<DOMRectReadOnly, "width" | "height">): void {
@@ -269,6 +328,8 @@ class BrailleCanvasRenderer implements BrailleRenderer {
         if (nextWidth === this.#width && nextHeight === this.#height) return;
         this.#width = nextWidth;
         this.#height = nextHeight;
+        // Resizing clears the bitmap, so the next frame must paint whatever it is.
+        this.#drawn = undefined;
         this.#canvas.width = nextWidth;
         this.#canvas.height = nextHeight;
         this.#context.imageSmoothingEnabled = false;
