@@ -1,0 +1,108 @@
+/*
+ * ReviewFinding and ReviewVerdict — a review's problems and conclusion, in
+ * the flow of the reply.
+ *
+ * A finding has no frame and no rule: its severity, in that severity's
+ * colour, heads it, then 8px between its parts. The verdict is a 20px row
+ * of counts behind 8px dots, then the conclusion.
+ */
+
+.happy-review-finding {
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+    color: var(--text);
+    font-family: var(--happy-font-ui);
+}
+
+.happy-review-finding__header {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.happy-review-finding__severity {
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 16px;
+}
+
+.happy-review-finding[data-severity="high"] .happy-review-finding__severity {
+    color: var(--box-error-text);
+}
+
+.happy-review-finding[data-severity="medium"] .happy-review-finding__severity {
+    color: var(--box-warning-text);
+}
+
+/* Scoped twice so the message body's heading rules do not restyle it. */
+.happy-review-finding .happy-review-finding__title {
+    margin: 0;
+    color: var(--text);
+    font-size: 16px;
+    font-weight: 600;
+    line-height: 24px;
+}
+
+.happy-review-finding__text {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+}
+
+.happy-review-verdict {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+    font-family: var(--happy-font-ui);
+}
+
+.happy-review-verdict__counts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+}
+
+.happy-review-verdict__count {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 20px;
+}
+
+.happy-review-verdict__count::before {
+    content: "";
+    flex: none;
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    background: var(--text-secondary);
+}
+
+.happy-review-verdict__count[data-severity="high"]::before {
+    background: var(--box-error-border);
+}
+
+.happy-review-verdict__count[data-severity="medium"]::before {
+    background: var(--box-warning-border);
+}
+
+.happy-review-verdict__count[data-severity="none"]::before {
+    background: var(--success);
+}
+
+.happy-review-verdict__text {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+}

@@ -13,7 +13,16 @@ import Markdown, { type Components, type ExtraProps, type UrlTransform } from "r
 import { ContextMenu } from "./ContextMenu";
 import { filePreviewKind } from "./FilePreview";
 import { type MenuItem } from "./Menu";
-import { markdownFence, markdownFenceIsMermaid } from "./markdownFence";
+import { markdownFence, markdownFenceIsMermaid, markdownFenceLabel } from "./markdownFence";
+import {
+    guidedReviewDocument,
+    guidedReviewFenceLabel,
+    guidedReviewFenceOpen,
+    remarkGuidedReviewSections,
+    type HappyUiImage,
+} from "./guidedReview";
+import { GuidedReviewFence } from "./GuidedReviewFence";
+import { type HappyUiGrounding } from "./happyUiGrounding";
 import { type FileLinkOpenHandler, type FileOpenHandler } from "./fileReference";
 import { markdownDocumentLinkTarget, markdownFileUrlTransform } from "./MarkdownDocument";
 import { MermaidDiagram } from "./MermaidDiagram";
@@ -172,6 +181,12 @@ const MarkdownReferenceLink = ({
         </a>
     );
 };
+/**
+ * The real change behind the guided review a message draws. Absent, a block
+ * still draws, but claims nothing about files: a transcript read somewhere
+ * with no checkout behind it has no change to check against.
+ */
+const MarkdownHappyUiGroundingContext = createContext<HappyUiGrounding | undefined>(undefined);
 const MarkdownTrailingContext = createContext<{
     endOffset: number;
     node: ReactNode;
@@ -179,7 +194,10 @@ const MarkdownTrailingContext = createContext<{
 const MarkdownGenerationStatusContext = createContext<MessageGenerationStatus | undefined>(
     undefined,
 );
-/** The Markdown being rendered; a table re-reads its own AST from it by offset. */
+/**
+ * The Markdown being rendered, after its references are resolved: a table
+ * re-reads its own AST from it by offset, a guided review its fences.
+ */
 const MarkdownSourceContext = createContext("");
 type MarkdownImageProps = ComponentPropsWithoutRef<"img"> & ExtraProps;
 /**
@@ -401,15 +419,14 @@ const MarkdownPre = ({
 }: ComponentPropsWithoutRef<"pre"> & ExtraProps) => {
     const fence = markdownFence(node);
     const generationStatus = useContext(MarkdownGenerationStatusContext);
-    if (markdownFenceIsMermaid(fence))
-        return (
-            <MermaidDiagram
-                enabled={generationStatus !== "streaming"}
-                source={fence!.text}
-                variant="message"
-            />
-        );
-    return (
+    const grounding = useContext(MarkdownHappyUiGroundingContext);
+    const onFileOpen = useContext(MarkdownFileOpenContext);
+    const onFileLinkOpen = useContext(MarkdownFileLinkOpenContext);
+    const onLinkOpen = useContext(MarkdownLinkOpenContext);
+    const linkOpenDefault = useContext(MarkdownLinkDefaultContext);
+    const references = useContext(MarkdownReferencesContext);
+    const text = useContext(MarkdownSourceContext);
+    const codeBlock = (
         <ScrollArea
             axes="horizontal"
             className="happy-message__code-block"
@@ -419,6 +436,62 @@ const MarkdownPre = ({
             <pre {...props}>{children}</pre>
         </ScrollArea>
     );
+    const reviewLabel = guidedReviewFenceLabel(markdownFenceLabel(node));
+    // A Happy fence is drawn once it closes; until then one quiet line holds
+    // its place, never its half-written fields.
+    if (reviewLabel !== undefined)
+        return (
+            <GuidedReviewFence
+                document={guidedReviewDocument(text)}
+                label={reviewLabel}
+                markdown={(body) => (
+                    <div className="happy-message__body happy-message__body--markdown">
+                        {renderMessageMarkdown(
+                            body,
+                            undefined,
+                            onFileOpen,
+                            "complete",
+                            onLinkOpen,
+                            linkOpenDefault,
+                            references,
+                            onFileLinkOpen,
+                            grounding,
+                        )}
+                    </div>
+                )}
+                open={guidedReviewFenceOpen(
+                    text,
+                    node?.position?.end.offset ?? text.length,
+                    generationStatus === "streaming",
+                )}
+                source={fence?.text ?? ""}
+                sourceBlock={codeBlock}
+                streaming={generationStatus === "streaming"}
+                {...(grounding === undefined ? {} : { grounding })}
+                {...(onFileOpen === undefined ? {} : { onFileOpen })}
+                // A before/after picture is an artifact version; it opens
+                // where that artifact's reference link would open it.
+                {...(references === undefined
+                    ? {}
+                    : {
+                          onImageOpen: (image: HappyUiImage) =>
+                              references.open({
+                                  kind: "artifact",
+                                  id: image.artifact,
+                                  version: image.version,
+                              }),
+                      })}
+            />
+        );
+    if (markdownFenceIsMermaid(fence))
+        return (
+            <MermaidDiagram
+                enabled={generationStatus !== "streaming"}
+                source={fence!.text}
+                variant="message"
+            />
+        );
+    return codeBlock;
 };
 /** Cells in the header row, which is how many columns the table renders. */
 function markdownTableColumnCount(node: ExtraProps["node"]): number {
@@ -534,6 +607,11 @@ const markdownComponents: Components = {
     h5: headingOverride("h5"),
     h6: headingOverride("h6"),
 };
+/** The chat's syntax, then a guided review's chapters grouped for layout. */
+const MESSAGE_MARKDOWN_RENDER_PLUGINS = [
+    ...MESSAGE_MARKDOWN_REMARK_PLUGINS,
+    remarkGuidedReviewSections,
+];
 /** Keeps the reference links this module wrote; every other URL is filtered as before. */
 const messageUrlTransform: UrlTransform = (url, key, node) =>
     key === "href" && node.tagName === "a" && messageReferenceHrefIs(url)
@@ -550,7 +628,8 @@ const messageUrlTransform: UrlTransform = (url, key, node) =>
  * into another agent's or workspace's folder. `onLinkOpen` gives a web link a context menu offering the
  * machine's browser or the side panel. `references` resolves the Happy
  * reference tags an agent wrote to their live titles; without it each reads as
- * inert placeholder text, and a tag never shows raw.
+ * inert placeholder text, and a tag never shows raw. `grounding` is the real
+ * change the body's guided review is checked against.
  */
 export function renderMessageMarkdown(
     source: string,
@@ -561,38 +640,41 @@ export function renderMessageMarkdown(
     linkOpenDefault?: LinkOpenPlacement,
     references?: MessageReferences,
     onFileLinkOpen?: FileLinkOpenHandler,
+    grounding?: HappyUiGrounding,
 ): ReactNode {
     const text = messageReferencesResolve(source, references, generationStatus === "streaming");
     return (
-        <MarkdownSourceContext.Provider value={text}>
-            <MarkdownGenerationStatusContext.Provider value={generationStatus}>
-                <MarkdownTrailingContext.Provider
-                    value={
-                        trailing === undefined
-                            ? null
-                            : { endOffset: text.trimEnd().length, node: trailing }
-                    }
-                >
-                    <MarkdownReferencesContext.Provider value={references}>
-                        <MarkdownFileOpenContext.Provider value={onFileOpen}>
-                            <MarkdownFileLinkOpenContext.Provider value={onFileLinkOpen}>
+        <MarkdownHappyUiGroundingContext.Provider value={grounding}>
+            <MarkdownSourceContext.Provider value={text}>
+                <MarkdownGenerationStatusContext.Provider value={generationStatus}>
+                    <MarkdownTrailingContext.Provider
+                        value={
+                            trailing === undefined
+                                ? null
+                                : { endOffset: text.trimEnd().length, node: trailing }
+                        }
+                    >
+                        <MarkdownReferencesContext.Provider value={references}>
+                            <MarkdownFileOpenContext.Provider value={onFileOpen}>
+                                <MarkdownFileLinkOpenContext.Provider value={onFileLinkOpen}>
                                 <MarkdownLinkOpenContext.Provider value={onLinkOpen}>
                                     <MarkdownLinkDefaultContext.Provider value={linkOpenDefault}>
                                         <MemoMarkdown
                                             components={markdownComponents}
                                             urlTransform={messageUrlTransform}
-                                            remarkPlugins={MESSAGE_MARKDOWN_REMARK_PLUGINS}
+                                            remarkPlugins={MESSAGE_MARKDOWN_RENDER_PLUGINS}
                                             skipHtml
                                         >
                                             {text}
                                         </MemoMarkdown>
                                     </MarkdownLinkDefaultContext.Provider>
                                 </MarkdownLinkOpenContext.Provider>
-                            </MarkdownFileLinkOpenContext.Provider>
-                        </MarkdownFileOpenContext.Provider>
-                    </MarkdownReferencesContext.Provider>
-                </MarkdownTrailingContext.Provider>
-            </MarkdownGenerationStatusContext.Provider>
-        </MarkdownSourceContext.Provider>
+                                </MarkdownFileLinkOpenContext.Provider>
+                            </MarkdownFileOpenContext.Provider>
+                        </MarkdownReferencesContext.Provider>
+                    </MarkdownTrailingContext.Provider>
+                </MarkdownGenerationStatusContext.Provider>
+            </MarkdownSourceContext.Provider>
+        </MarkdownHappyUiGroundingContext.Provider>
     );
 }

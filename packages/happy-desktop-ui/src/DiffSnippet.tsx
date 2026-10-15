@@ -1,5 +1,12 @@
 import { partitionComponentProps } from "./componentProps";
-import { type CSSProperties, type HTMLAttributes } from "react";
+import { type CSSProperties, type HTMLAttributes, useSyncExternalStore } from "react";
+import {
+    diffSnippetHighlight,
+    diffSnippetHighlightGeneration,
+    diffSnippetHighlightSubscribe,
+    diffSnippetTokenColor,
+    type DiffSnippetToken,
+} from "./diffSnippetHighlight";
 import { compactCount, changeCountLabel } from "./countText";
 import { ScrollArea } from "./Scrollbar";
 export type DiffLineKind = "add" | "del" | "context" | "meta";
@@ -18,6 +25,12 @@ export type DiffSnippetProps = Omit<HTMLAttributes<HTMLDivElement>, "style"> & {
     };
     style?: CSSProperties;
     /**
+     * The language its code is in, from `diffSnippetLanguage`. Given one, the
+     * lines are syntax coloured with the palette every code surface here uses;
+     * without one they stay the plain text of their kind.
+     */
+    language?: string;
+    /**
      * Soft-wraps long lines instead of scrolling them sideways. A diff read in a
      * narrow column — an inspector panel rather than a full-width page — has no
      * room to carry a scrollport per block, and a line the reader never sees is
@@ -34,12 +47,31 @@ export function DiffSnippet(props: DiffSnippetProps) {
     const [local, rest] = partitionComponentProps(props, [
         "className",
         "file",
+        "language",
         "lines",
         "stats",
         "style",
         "wrap",
     ]);
     const numbered = () => local.lines.some((line) => line.number !== undefined);
+    /* A grammar arrives over the network; the snippet is drawn plain until it
+       does and colours itself in place when it lands. */
+    useSyncExternalStore(
+        diffSnippetHighlightSubscribe,
+        diffSnippetHighlightGeneration,
+        diffSnippetHighlightGeneration,
+    );
+    const coloured = diffSnippetHighlight(
+        local.lines.filter((line) => line.kind !== "meta").map((line) => line.text),
+        local.language,
+    );
+    // Colours are given for the code lines alone; a meta line has none.
+    const colours = ((lines: readonly DiffLine[]) => {
+        let at = -1;
+        return lines.map((line) =>
+            line.kind === "meta" ? undefined : coloured?.[(at += 1)],
+        ) as readonly (readonly DiffSnippetToken[] | undefined)[];
+    })(local.lines);
     return (
         <div
             {...rest}
@@ -130,7 +162,17 @@ export function DiffSnippet(props: DiffSnippetProps) {
                                 className="happy-diff-snippet__text"
                                 data-happy-desktop-ui="diff-snippet-text"
                             >
-                                {line.text}
+                                {((tokens) =>
+                                    tokens === undefined || tokens.length === 0
+                                        ? line.text
+                                        : tokens.map((token, at) => (
+                                              <span
+                                                  key={at}
+                                                  style={{ color: diffSnippetTokenColor(token) }}
+                                              >
+                                                  {token.text}
+                                              </span>
+                                          )))(colours[index])}
                             </span>
                         </div>
                     ))}

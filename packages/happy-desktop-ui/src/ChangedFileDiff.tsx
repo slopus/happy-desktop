@@ -2,7 +2,7 @@ import { parseDiffFromFile, type SelectedLineRange } from "@pierre/diffs";
 import { FileDiff, useStableCallback } from "@pierre/diffs/react";
 import { useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Button } from "./Button";
-import { CodeEditor } from "./CodeEditor";
+import { CodeEditor, type CodeEditorReveal } from "./CodeEditor";
 import { DiffFileTitle } from "./DiffFileTitle";
 import { CODE_BLOCK_HIGHLIGHT_CACHE_MAX_TEXT_LENGTH } from "./CodeBlock";
 import { ScrollArea } from "./Scrollbar";
@@ -49,6 +49,11 @@ export type ChangedFileDiffProps = {
     /** Stable identity for the working-tree side of the diff, when clean. */
     newCacheKey?: string;
     style?: CSSProperties;
+    /**
+     * Lines a reference asked to see: marked in the diff and scrolled to, or
+     * revealed in the file. A new `requestId` asks again.
+     */
+    reveal?: CodeEditorReveal;
     /** Which view is showing. Defaults to the unified diff. */
     mode?: ChangedFileDiffMode;
     onModeChange?: (mode: ChangedFileDiffMode) => void;
@@ -222,6 +227,60 @@ export function ChangedFileDiff(props: ChangedFileDiffProps) {
     const selectionChanged = useStableCallback((range: SelectedLineRange | null) => {
         selectionSet(range);
     });
+    const viewportRef = useRef<HTMLDivElement>(null);
+    // The region a reference asked for stays marked until lines are selected
+    // by hand: it is what the reader came to look at.
+    const revealStart = props.reveal?.startLine;
+    const revealEnd = props.reveal?.endLine;
+    const revealed = useMemo(
+        (): SelectedLineRange | null =>
+            revealStart === undefined || revealEnd === undefined
+                ? null
+                : { start: revealStart, end: revealEnd, side: "additions" },
+        [revealStart, revealEnd],
+    );
+    /** The last ask that was scrolled to; a new `requestId` asks again. */
+    const revealDone = useRef<number | undefined>(undefined);
+    /**
+     * Brings the asked-for lines into view, a third of the way down the pane,
+     * once the renderer has drawn them. Their rows are read back from what it
+     * drew, in the working-tree column, the side a reference counts lines on.
+     * A region the diff folded away scrolls to the nearest line after it.
+     */
+    const revealScroll = useStableCallback((): void => {
+        const reveal = props.reveal;
+        const viewport = viewportRef.current;
+        if (reveal === undefined || viewport === null || revealDone.current === reveal.requestId)
+            return;
+        const shadow = viewport.querySelector(".happy-changed-file-diff__renderer")?.shadowRoot;
+        if (!shadow) return;
+        const rows = [
+            ...shadow.querySelectorAll<HTMLElement>(
+                "[data-unified] [data-line], [data-additions] [data-line]",
+            ),
+        ].filter((row) => row.getAttribute("data-line-type") !== "change-deletion");
+        if (rows.length === 0) return;
+        const target =
+            rows.find((row) => Number(row.getAttribute("data-line")) >= reveal.startLine) ??
+            rows.at(-1);
+        if (target === undefined) return;
+        revealDone.current = reveal.requestId;
+        const pane = viewport.getBoundingClientRect();
+        viewport.scrollTop += target.getBoundingClientRect().top - pane.top - pane.height / 3;
+    });
+    // An ask arriving at a diff already drawn is scrolled to when this ref
+    // callback, new for each ask, is attached; one that arrives with the file
+    // is scrolled to when the renderer reports it drew.
+    const revealRequest = props.reveal?.requestId;
+    const revealAnchor = useMemo(
+        () =>
+            revealRequest === undefined
+                ? undefined
+                : (): void => {
+                      revealScroll();
+                  },
+        [revealRequest, revealScroll],
+    );
 
     const diffOptions = useMemo(
         () => ({
@@ -253,8 +312,17 @@ export function ChangedFileDiff(props: ChangedFileDiffProps) {
             // settles, so what is marked on screen is what this holds.
             onLineSelectionChange: selectionChanged,
             onLineSelected: selectionChanged,
+            onPostRender: revealScroll,
         }),
-        [commenting, gutterUtilityClicked, mode, props.appearance, props.wrap, selectionChanged],
+        [
+            commenting,
+            gutterUtilityClicked,
+            mode,
+            props.appearance,
+            props.wrap,
+            revealScroll,
+            selectionChanged,
+        ],
     );
     // Walking the change itself, rather than the scrollbar. A long file is
     // mostly unchanged, so scrolling it is scrolling past everything nobody
@@ -265,7 +333,6 @@ export function ChangedFileDiff(props: ChangedFileDiffProps) {
     // computed for a row and hoped to be where it landed. Consecutive changed
     // rows are one change: a deletion and the addition replacing it are the same
     // edit, and counting them apart would make every rewritten line two stops.
-    const viewportRef = useRef<HTMLDivElement>(null);
     /** Drops the marked lines, once the note they were aimed at is done with. */
     const selectionRelease = (): void => {
         selectionSet(null);
@@ -333,6 +400,7 @@ export function ChangedFileDiff(props: ChangedFileDiffProps) {
             data-happy-desktop-ui="changed-file-diff"
             data-mode={mode}
             data-testid={props["data-testid"]}
+            ref={revealAnchor}
             style={props.style}
         >
             <div
@@ -424,6 +492,7 @@ export function ChangedFileDiff(props: ChangedFileDiffProps) {
                             }}
                             onValueChange={(content) => props.onContentChange?.(content)}
                             readOnly={props.saving === true}
+                            {...(props.reveal === undefined ? {} : { reveal: props.reveal })}
                             value={props.newContent}
                             wrap={props.wrap}
                         />
@@ -433,7 +502,7 @@ export function ChangedFileDiff(props: ChangedFileDiffProps) {
                         className="happy-changed-file-diff__renderer happy-diff-surface"
                         fileDiff={diff}
                         options={diffOptions}
-                        selectedLines={selection}
+                        selectedLines={selection ?? revealed}
                         // The whole header name, ours, through the slot the
                         // renderer leaves ahead of its own. The renderer's mark
                         // and title stand down in `PIERRE_DIFF_HEADER_CSS`.

@@ -1,0 +1,185 @@
+/*
+ * ReviewDiff — a few real lines of a change, quoted in a review.
+ *
+ * A hairline well like any code block in the chat: a 36px header (file
+ * glyph, name, folder, status, counts), then 20px mono rows with a 52px
+ * number column. A changed row is a faint tint of its side's colour. A
+ * long line wraps as `pre-wrap` wraps it, so all of it is read
+ * in place; `reviewDiffLayout.ts` counts its rows, so change the number
+ * column or the padding there too.
+ */
+
+.happy-diff-stat {
+    display: flex;
+    flex: none;
+    gap: 6px;
+    font-family: var(--happy-font-mono);
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 16px;
+    font-variant-numeric: tabular-nums;
+}
+
+.happy-diff-stat__added {
+    color: var(--diff-success);
+}
+
+.happy-diff-stat__removed {
+    color: var(--diff-error);
+}
+
+.happy-review-diff {
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    border: 1px solid var(--divider);
+    border-radius: 8px;
+    background: var(--surface);
+    font-family: var(--happy-font-ui);
+    font-synthesis: none;
+}
+
+.happy-review-diff__header {
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    height: 36px;
+    padding: 0 12px;
+    border-bottom: 1px solid var(--divider);
+}
+
+.happy-review-diff__title {
+    display: flex;
+    flex: 0 1 auto;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--text);
+    font: inherit;
+    font-size: 13px;
+    line-height: 20px;
+    text-align: left;
+}
+
+button.happy-review-diff__title {
+    cursor: pointer;
+}
+
+button.happy-review-diff__title:hover .happy-review-diff__name {
+    text-decoration: underline;
+}
+
+.happy-review-diff__name {
+    flex: none;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+/* The folder gives way first and loses its head: the end of a path locates
+   it. `direction: rtl` puts the ellipsis at the start; the `bdi` keeps the
+   characters in order. */
+.happy-review-diff__directory {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    direction: rtl;
+}
+
+.happy-review-diff__status {
+    flex: none;
+    margin-left: auto;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+}
+
+.happy-review-diff__status[data-status="added"] {
+    color: var(--diff-success);
+}
+
+.happy-review-diff__status[data-status="deleted"] {
+    color: var(--diff-error);
+}
+
+/* Without a status the counts take the trailing edge themselves. */
+.happy-review-diff__title + .happy-diff-stat {
+    margin-left: auto;
+}
+
+.happy-review-diff__code {
+    box-sizing: border-box;
+    min-width: 0;
+    padding: 6px 0;
+    font-family: var(--happy-font-mono);
+    font-size: 12px;
+    line-height: 20px;
+    /* A diff is read character by character; ligatures stay off. */
+    font-variant-ligatures: none;
+}
+
+.happy-review-diff__line {
+    box-sizing: border-box;
+    display: flex;
+    min-height: 20px;
+    padding-right: 16px;
+    color: var(--text);
+}
+
+.happy-review-diff__line[data-kind="add"] {
+    background: color-mix(in srgb, var(--diff-added-bg) 60%, transparent);
+}
+
+/* A new file is all additions: its header says so, a tint over every row
+   would only colour the code. */
+.happy-review-diff[data-status="added"] .happy-review-diff__line[data-kind="add"] {
+    background: none;
+}
+
+.happy-review-diff__line[data-kind="del"] {
+    background: color-mix(in srgb, var(--diff-removed-bg) 60%, transparent);
+}
+
+.happy-review-diff__line[data-kind="meta"] {
+    color: var(--text-secondary);
+    font-family: var(--happy-font-ui);
+}
+
+.happy-review-diff__number {
+    box-sizing: border-box;
+    flex: none;
+    width: 52px;
+    padding-right: 16px;
+    color: var(--diff-line-number-text);
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+/* Indentation is kept; a line breaks where a line of prose would, and a word
+   longer than the row breaks where it must. Its later rows hang by the
+   line's own `--review-diff-hang`, under the code they continue. */
+.happy-review-diff__text {
+    flex: 1 1 0;
+    min-width: 0;
+    padding-left: var(--review-diff-hang, 0);
+    text-indent: calc(-1 * var(--review-diff-hang, 0px));
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+}
+
+/* A note is one row, cut short rather than wrapped. */
+.happy-review-diff__line[data-kind="meta"] .happy-review-diff__text {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}

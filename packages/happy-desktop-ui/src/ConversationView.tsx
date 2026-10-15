@@ -2,6 +2,7 @@ import { type CSSProperties, type ReactNode, useState, useSyncExternalStore } fr
 import type { FileLinkOpenHandler, FileOpenHandler } from "./fileReference";
 import type { LinkOpenHandler, LinkOpenPlacement } from "./MessageMarkdown";
 import type { MessageReferences } from "./messageReferences";
+import type { HappyUiGrounding } from "./happyUiGrounding";
 import {
     entryKey,
     type ComposerSnapshot,
@@ -228,6 +229,12 @@ export type ConversationViewProps = {
      * a new value re-renders the references and re-sizes the rows naming them.
      */
     references?: MessageReferences;
+    /**
+     * The real change the Happy UI blocks in message bodies are checked
+     * against: the lines a diff node shows, and whether a file a tour names
+     * is part of the change. A new value re-renders and re-sizes those rows.
+     */
+    grounding?: HappyUiGrounding;
     /** Runs a command chosen from the `/` palette. */
     onCommandInvoke?: (commandId: string) => void;
     /** Stops the current run; the composer's send control becomes this while running. */
@@ -647,6 +654,7 @@ export function ConversationView(props: ConversationViewProps) {
                         props.activityTreatment,
                         rowExpansion,
                         conversationReferencesSignature(transcript, props.references),
+                        props.grounding,
                     ]}
                     estimateRowSize={(index, width) =>
                         conversationRowHeight(
@@ -662,6 +670,7 @@ export function ConversationView(props: ConversationViewProps) {
                                 surface: "conversation",
                                 liveStatus: statusVisible,
                                 ...(props.references ? { references: props.references } : {}),
+                                ...(props.grounding ? { grounding: props.grounding } : {}),
                                 viewerId: props.viewerId,
                                 width,
                             },
@@ -804,6 +813,7 @@ export function ConversationView(props: ConversationViewProps) {
                                     : {})}
                                 {...(props.onLinkOpen ? { onLinkOpen: props.onLinkOpen } : {})}
                                 {...(props.references ? { references: props.references } : {})}
+                                {...(props.grounding ? { grounding: props.grounding } : {})}
                                 {...(props.linkOpenDefault
                                     ? { linkOpenDefault: props.linkOpenDefault }
                                     : {})}

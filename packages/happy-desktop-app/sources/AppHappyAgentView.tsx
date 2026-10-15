@@ -1,6 +1,11 @@
 import { useCallback, useMemo, useRef, useSyncExternalStore, type ReactNode } from "react";
-import { happyAgentBotSubtasks, happyAgentTodoHeading } from "happy-desktop-state";
+import {
+    happyAgentArtifactImagesStoreNoop,
+    happyAgentBotSubtasks,
+    happyAgentTodoHeading,
+} from "happy-desktop-state";
 import { AppGptLivePhone } from "./gptLive/AppGptLivePhone";
+import { happyUiGroundingCreate } from "./happyUiGrounding";
 import {
     ARTIFACT_READING,
     artifactTitlesStoreNoop,
@@ -6725,6 +6730,7 @@ function HappyAgentFileBody(props: {
                     {...(oldCacheKey === undefined ? {} : { oldCacheKey })}
                     oldContent={change.oldContent}
                     oldPath={change.oldPath}
+                    {...(file.reveal === undefined ? {} : { reveal: file.reveal })}
                     {...(writable
                         ? {
                               onContentChange: (content: string) =>
@@ -7448,6 +7454,13 @@ function HappyAgentConversationSurface(props: {
     // reference row fans out from this snapshot rather than subscribing itself.
     const titlesStore = props.artifacts?.titles() ?? artifactTitlesStoreNoop;
     const titles = useSyncExternalStore(titlesStore.subscribe, titlesStore.get, titlesStore.get);
+    // The changes behind the Happy UI blocks the transcript draws, read the
+    // same way: one subscription, every block fanning out from its snapshot.
+    const diffsStore = workspace.changedFileDiffs(props.groupId as HappyAgentGroupId);
+    const diffs = useSyncExternalStore(diffsStore.subscribe, diffsStore.get, diffsStore.get);
+    // And the before/after pictures those blocks show, which are artifacts.
+    const imagesStore = props.artifacts?.images() ?? happyAgentArtifactImagesStoreNoop;
+    const images = useSyncExternalStore(imagesStore.subscribe, imagesStore.get, imagesStore.get);
     // A session that is still being read is not a reason to unmount this
     // surface: the composer is already live, the header already carries the
     // title the list knew, and the transcript fills in underneath. Only a
@@ -7514,9 +7527,17 @@ function HappyAgentConversationSurface(props: {
               }
             : {}),
     });
+    const grounding = happyUiGroundingCreate({
+        diffs,
+        store: diffsStore,
+        ...(props.artifacts === undefined
+            ? {}
+            : { artifacts: { images, imagesStore, titles, titlesStore } }),
+    });
     return (
         <ConversationView
             references={references}
+            grounding={grounding}
             emptyContent={props.emptyContent}
             agentAuthor={agentAuthor}
             activityControl={

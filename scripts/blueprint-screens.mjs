@@ -24,6 +24,9 @@ const { positionals, values } = parseArgs({
         out: { type: "string" },
         scale: { type: "string", default: "2" },
         settle: { type: "string", default: "1500" },
+        /* A screen taller than the window is clipped by the workbench's own
+           scrollport, so a tall specimen asks for a taller window. */
+        height: { type: "string", default: "1000" },
     },
 });
 const page = positionals[0];
@@ -78,7 +81,7 @@ const browser = await chromium.launch();
 try {
     const context = await browser.newContext({
         deviceScaleFactor: Number(values.scale),
-        viewport: { width: 1600, height: 1000 },
+        viewport: { width: 1600, height: Number(values.height) },
     });
     const tab = await context.newPage();
     tab.on("pageerror", (error) => console.error(`page error: ${error.message}`));

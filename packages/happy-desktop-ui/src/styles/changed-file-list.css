@@ -1,0 +1,169 @@
+/*
+ * ChangedFileList — the files a change touched, with their counts.
+ *
+ * No frame: a 20px summary line, 4px, then 28px rows, one per folder and one
+ * per file under it, the files indented 22px so they sit under the folder's
+ * name rather than its glyph; a long list ends, 4px on, in one more 28px row that
+ * opens the rest. `guidedReviewLayout.ts` counts the same rows.
+ */
+
+.happy-changed-file-list {
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+    font-family: var(--happy-font-ui);
+    font-synthesis: none;
+}
+
+.happy-changed-file-list__summary {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 20px;
+}
+
+/* Scoped twice so the message body's list rules (indent, item gaps) do not
+   reach a list drawn inside a reply. */
+.happy-changed-file-list .happy-changed-file-list__rows,
+.happy-changed-file-list .happy-changed-file-list__files {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.happy-changed-file-list .happy-changed-file-list__group,
+.happy-changed-file-list .happy-changed-file-list__row {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+}
+
+.happy-changed-file-list__directory {
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    height: 28px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+}
+
+/* A long folder loses its head: the end of a path locates it. */
+.happy-changed-file-list__directory-path {
+    min-width: 0;
+    overflow: hidden;
+    font-family: var(--happy-font-mono);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    direction: rtl;
+}
+
+.happy-changed-file-list .happy-changed-file-list__files {
+    padding-left: 22px;
+}
+
+.happy-changed-file-list__file {
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    height: 28px;
+    margin: 0 -8px;
+    padding: 0 8px;
+    border: 0;
+    border-radius: 6px;
+    background: none;
+    color: var(--text);
+    font: inherit;
+    font-size: 13px;
+    line-height: 20px;
+    text-align: left;
+}
+
+button.happy-changed-file-list__file {
+    cursor: pointer;
+}
+
+button.happy-changed-file-list__file:hover {
+    background: var(--surface-pressed);
+}
+
+/* What a long list holds back, one quiet row that opens it. */
+.happy-changed-file-list__more {
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    align-self: flex-start;
+    height: 28px;
+    margin: 0 -8px;
+    padding: 0 8px;
+    border: 0;
+    border-radius: 6px;
+    background: none;
+    color: var(--text-secondary);
+    font: inherit;
+    font-size: 13px;
+    line-height: 20px;
+    cursor: pointer;
+}
+
+.happy-changed-file-list__more:hover {
+    background: var(--surface-pressed);
+    color: var(--text);
+}
+
+.happy-changed-file-list__name {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    font-weight: 500;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.happy-changed-file-list__name[data-status="deleted"] {
+    color: var(--text-secondary);
+    text-decoration: line-through;
+}
+
+.happy-changed-file-list__file .happy-diff-stat {
+    margin-left: auto;
+    padding-left: 4px;
+}
+
+.happy-changed-file-list__status {
+    flex: none;
+    width: 12px;
+    font-family: var(--happy-font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 16px;
+    text-align: center;
+}
+
+.happy-changed-file-list__status[data-status="added"] {
+    color: var(--git-status-new);
+}
+
+.happy-changed-file-list__status[data-status="modified"] {
+    color: var(--git-status-modified);
+}
+
+.happy-changed-file-list__status[data-status="deleted"] {
+    color: var(--git-status-deleted);
+}
+
+.happy-changed-file-list__status[data-status="renamed"] {
+    color: var(--git-status-renamed);
+}

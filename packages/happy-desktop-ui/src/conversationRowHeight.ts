@@ -35,6 +35,7 @@ import {
     messageReferencesSignature,
     type MessageReferences,
 } from "./messageReferences";
+import { happyUiSignature, type HappyUiGrounding } from "./happyUiGrounding";
 import { SYSTEM_NOTIFICATION_HEIGHT } from "./systemNotification";
 import { agentTraceMetaStats, agentTraceMetaTitle } from "./agentTraceMeta";
 import { conversationErrorTitle } from "./conversationErrorTitle";
@@ -88,6 +89,11 @@ export type ConversationRowContext = {
      * sized from the same resolution the body renders.
      */
     readonly references?: MessageReferences;
+    /**
+     * The real change the Happy UI blocks in message bodies are checked
+     * against. A diff node is sized from the lines the grounding answers.
+     */
+    readonly grounding?: HappyUiGrounding;
 };
 type CachedRowHeight = { readonly value: number | undefined };
 type Dictionary<T> = Record<string, T | undefined>;
@@ -435,6 +441,7 @@ export function messageRowHeight(input: {
     readonly grouped: boolean;
     readonly mermaidEnabled?: boolean;
     readonly references?: MessageReferences;
+    readonly grounding?: HappyUiGrounding;
     readonly streaming?: boolean;
     readonly trailingExtraWidth: number;
     readonly surface: ConversationSurface;
@@ -462,6 +469,7 @@ export function messageRowHeight(input: {
             input.trailingExtraWidth,
             input.mermaidEnabled,
             input.streaming,
+            input.grounding,
         )
     );
 }
@@ -792,6 +800,9 @@ export function conversationRowHeight(
         precedesActivity ? "continues" : closedByStatus ? "closing" : "open",
         // What the body's references read as: a title changing re-sizes the row.
         messageReferencesSignature(conversationEntryReferences(entry), context.references),
+        // What the body's guided review is grounded in: a change finishing
+        // its read, or a file leaving the change, re-sizes the row.
+        happyUiSignature(message.text, context.grounding),
     ].join(":");
     return rowHeightCached(cache, entry, cacheKey, () => {
         const time = messageTimeSample(message.createdAt);
@@ -801,6 +812,7 @@ export function conversationRowHeight(
             grouped,
             mermaidEnabled: message.generationStatus !== "streaming",
             ...(context.references ? { references: context.references } : {}),
+            ...(context.grounding ? { grounding: context.grounding } : {}),
             streaming: message.generationStatus === "streaming",
             surface: context.surface,
             textCache: cache?.text,

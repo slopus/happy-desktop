@@ -97,6 +97,14 @@ export {
     type HappyAgentTodoListStore,
 } from "./surfaces/surfaceTodoListStore.js";
 export type { HappyAgentSurfaces } from "./surfaces/surfaces.js";
+export {
+    happyAgentArtifactImageKey,
+    happyAgentArtifactImagesStoreNoop,
+    type HappyAgentArtifactImage,
+    type HappyAgentArtifactImageKey,
+    type HappyAgentArtifactImagesSnapshot,
+    type HappyAgentArtifactImagesStore,
+} from "./artifacts/artifactImagesStore.js";
 export type {
     HappyAgentArtifactTitle,
     HappyAgentArtifactTitlesSnapshot,
@@ -166,6 +174,24 @@ export {
 export * from "./happyAgent/happyAgentWindowStore.js";
 export * from "./happyAgent/happyAgentWorkspaceMemory.js";
 export * from "./happyAgent/happyAgentWorkspaceStore.js";
+export {
+    happyAgentChangedFileDiffKey,
+    happyAgentChangedFileDiffsStoreCreate,
+    happyAgentChangedFileDiffsStoreNoop,
+    happyAgentRevisionRangeKey,
+    type HappyAgentRevisionFileEntry,
+    type HappyAgentRevisionFiles,
+    type HappyAgentRevisionRangeKey,
+    type HappyAgentChangedFileDiff,
+    type HappyAgentChangedFileDiffKey,
+    type HappyAgentRevisionRange,
+    type HappyAgentChangedFileDiffsDeps,
+    type HappyAgentChangedFileDiffsSnapshot,
+    type HappyAgentChangedFileDiffsStore,
+    type HappyAgentChangedFileDiffsStoreOwned,
+    type HappyAgentChangedFileEntry,
+    type HappyAgentChangedFiles,
+} from "./happyAgent/happyAgentChangedFileDiffsStore.js";
 export * from "./happyAgent/happyAgentViewPreferences.js";
 export type {
     HappyTerminalCliSnapshot,

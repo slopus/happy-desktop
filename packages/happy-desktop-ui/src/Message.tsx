@@ -29,9 +29,12 @@ import {
     type MediaMosaicTile,
 } from "./mediaMosaic";
 import type { MessageReferences } from "./messageReferences";
+import type { HappyUiGrounding } from "./happyUiGrounding";
 import {
     MessageListDisclosureAnchorProvider,
+    MessageListRevealProvider,
     type MessageListDisclosureAnchor,
+    type MessageListReveal,
 } from "./messageListDisclosureAnchor";
 import {
     renderMessageMarkdown,
@@ -226,6 +229,8 @@ export type MessageProps = Omit<HTMLAttributes<HTMLDivElement>, "style"> & {
      * one goes. Absent, each reference reads as inert placeholder text.
      */
     references?: MessageReferences;
+    /** The real change the body's Happy UI blocks are checked against. */
+    grounding?: HappyUiGrounding;
     /** Makes the avatar and author name clickable to open the author's profile.
      *  Only the leading message of a group renders an avatar/name, so grouped
      *  follow-ups intentionally carry no profile affordance. */
@@ -327,6 +332,7 @@ export function Message(props: MessageProps) {
         "onLinkOpen",
         "linkOpenDefault",
         "references",
+        "grounding",
         "initials",
         "metaAccessory",
         "onAuthorSelect",
@@ -490,6 +496,7 @@ export function Message(props: MessageProps) {
                           local.linkOpenDefault,
                           local.references,
                           local.onFileLinkOpen,
+                          local.grounding,
                       )
                     : null}
                 {/* An empty generated reply keeps a non-breaking-space line box
@@ -793,6 +800,8 @@ const FOLLOW_BOTTOM_THRESHOLD = 8;
 const START_REACHED_THRESHOLD = 64;
 /** Do not expose the final fractional/integer pixels to a further downward wheel. */
 const BOTTOM_WHEEL_EPSILON = 2;
+/** Room left above a part of a row brought to the top (px). */
+const REVEAL_MARGIN = 16;
 /** Transcript clearances represented inside the virtualizer's coordinate space. */
 const MESSAGE_LIST_PADDING_START = 12;
 const MESSAGE_LIST_PADDING_END_DEFAULT = 8;
@@ -932,6 +941,27 @@ export function MessageList(props: MessageListProps) {
         pendingAnchor.current = undefined;
         readerAnchor.current = { scrollTop: element.scrollTop, type: "scrollTop" };
         readerScrollTop.current = element.scrollTop;
+    }).current;
+    /* Same fixed identity. A row asks to show a part of itself — a chapter a
+       review's drawing points at — and the list scrolls there as the reader
+       would have, then holds the place instead of following the tail. */
+    const reveal = useRef<MessageListReveal>((target) => {
+        const element = list.current;
+        if (!element || !element.contains(target)) return;
+        escapedFromFollow.current = true;
+        following.current = false;
+        pendingAnchor.current = undefined;
+        scrollTopWrite(
+            element,
+            Math.max(
+                0,
+                element.scrollTop +
+                    target.getBoundingClientRect().top -
+                    element.getBoundingClientRect().top -
+                    REVEAL_MARGIN,
+            ),
+        );
+        readerAnchor.current = { scrollTop: element.scrollTop, type: "scrollTop" };
     }).current;
     const startReachedReport = (element: HTMLElement) => {
         if (element.scrollTop > START_REACHED_THRESHOLD) return;
@@ -1707,53 +1737,55 @@ export function MessageList(props: MessageListProps) {
     }, [virtualized, virtualizer]);
     return (
         <MessageListDisclosureAnchorProvider value={disclosureAnchor}>
-            <ScrollArea
-                className={["happy-message-list", props.className].filter(Boolean).join(" ")}
-                data-happy-desktop-ui="message-list"
-                style={props.style}
-                viewportClassName="happy-message-list__viewport"
-                viewportRef={list}
-            >
-                <div
-                    className="happy-message-list__content"
-                    data-happy-desktop-ui="message-list-content"
-                    data-virtualized={virtualized ? "" : undefined}
+            <MessageListRevealProvider value={reveal}>
+                <ScrollArea
+                    className={["happy-message-list", props.className].filter(Boolean).join(" ")}
+                    data-happy-desktop-ui="message-list"
+                    style={props.style}
+                    viewportClassName="happy-message-list__viewport"
+                    viewportRef={list}
                 >
                     <div
-                        aria-hidden="true"
-                        className="happy-message-list__spacer"
-                        data-happy-desktop-ui="message-list-spacer"
-                        ref={spacer}
-                    />
-                    {virtualized ? (
+                        className="happy-message-list__content"
+                        data-happy-desktop-ui="message-list-content"
+                        data-virtualized={virtualized ? "" : undefined}
+                    >
                         <div
-                            className="happy-message-list__virtual"
-                            data-happy-desktop-ui="message-list-virtual"
-                            style={{ height: `${String(virtualizer.getTotalSize())}px` }}
-                        >
-                            {virtualItems.map((virtualItem) => (
-                                <div
-                                    className="happy-message-list__virtual-row"
-                                    data-index={virtualItem.index}
-                                    data-item-id={
-                                        virtualItem.index === footerIndex
-                                            ? "working-status"
-                                            : undefined
-                                    }
-                                    key={virtualItem.key}
-                                    style={{
-                                        transform: `translateY(${String(virtualItem.start)}px)`,
-                                    }}
-                                >
-                                    {items[virtualItem.index]}
-                                </div>
-                            ))}
-                        </div>
-                    ) : (
-                        items
-                    )}
-                </div>
-            </ScrollArea>
+                            aria-hidden="true"
+                            className="happy-message-list__spacer"
+                            data-happy-desktop-ui="message-list-spacer"
+                            ref={spacer}
+                        />
+                        {virtualized ? (
+                            <div
+                                className="happy-message-list__virtual"
+                                data-happy-desktop-ui="message-list-virtual"
+                                style={{ height: `${String(virtualizer.getTotalSize())}px` }}
+                            >
+                                {virtualItems.map((virtualItem) => (
+                                    <div
+                                        className="happy-message-list__virtual-row"
+                                        data-index={virtualItem.index}
+                                        data-item-id={
+                                            virtualItem.index === footerIndex
+                                                ? "working-status"
+                                                : undefined
+                                        }
+                                        key={virtualItem.key}
+                                        style={{
+                                            transform: `translateY(${String(virtualItem.start)}px)`,
+                                        }}
+                                    >
+                                        {items[virtualItem.index]}
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            items
+                        )}
+                    </div>
+                </ScrollArea>
+            </MessageListRevealProvider>
         </MessageListDisclosureAnchorProvider>
     );
 }

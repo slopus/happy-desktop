@@ -36,3 +36,15 @@ export function markdownFence(node: ExtraProps["node"]): MarkdownFence | undefin
 export function markdownFenceIsMermaid(fence: MarkdownFence | undefined): boolean {
     return fence?.label?.trim().toLowerCase() === "mermaid";
 }
+
+/** A fence's info label, read even before any of its text has arrived. */
+export function markdownFenceLabel(node: ExtraProps["node"]): string | undefined {
+    const code = node?.children.find(
+        (child) => child.type === "element" && child.tagName === "code",
+    );
+    if (code === undefined || code.type !== "element") return undefined;
+    const names = code.properties["className"];
+    return (Array.isArray(names) ? names.map(String) : [])
+        .find((name) => name.startsWith("language-"))
+        ?.slice("language-".length);
+}

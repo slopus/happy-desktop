@@ -20,6 +20,16 @@ import {
     type MermaidDiagramDimensions,
 } from "./mermaidDiagramRender";
 import { messageMarkdownParse, type MessageMarkdownAst } from "./messageMarkdownAst";
+import {
+    GUIDED_REVIEW_SECTION,
+    guidedReviewDocument,
+    guidedReviewFenceLabel,
+    guidedReviewFenceOpen,
+    guidedReviewSectionsApply,
+    type GuidedReviewSectionParts,
+} from "./guidedReview";
+import { guidedReviewFenceHeight } from "./guidedReviewLayout";
+import { happyUiSignature, type HappyUiGrounding } from "./happyUiGrounding";
 
 /**
  * Height of chat body copy, resolved from the font and the measure instead of
@@ -309,6 +319,47 @@ function runHeight(
     const height = Math.max(lineHeight, layout(value, measure, lineHeight).height);
     layouts[key] = height;
     return height;
+}
+
+/**
+ * Rows of one `pre-wrap` run whose first row is `first` wide and whose later
+ * rows, hanging under it, are `rest` wide; never fewer than one.
+ */
+function hangingRows(
+    text: string,
+    font: string,
+    first: number,
+    rest: number,
+    cache: MessageTextLayoutCache,
+): number {
+    if (first <= 0 || rest <= 0) return 1;
+    const ready = cacheReady(cache);
+    const fontKey = `${font}:hanging`;
+    let byText = ready.runHeights[fontKey];
+    if (!byText) {
+        byText = dictionaryCreate();
+        ready.runHeights[fontKey] = byText;
+    }
+    let layouts = byText[text];
+    if (!layouts) {
+        layouts = dictionaryCreate();
+        byText[text] = layouts;
+    }
+    const key = `${String(first)}:${String(rest)}`;
+    const hit = layouts[key];
+    if (hit !== undefined) return hit;
+    const prepared = prepareWithSegments(text, font, { whiteSpace: "pre-wrap" });
+    let cursor = { segmentIndex: 0, graphemeIndex: 0 };
+    let rows = 0;
+    for (;;) {
+        const line = layoutNextLine(prepared, cursor, rows === 0 ? first : rest);
+        if (line === null) break;
+        rows += 1;
+        cursor = line.end;
+    }
+    const value = Math.max(1, rows);
+    layouts[key] = value;
+    return value;
 }
 
 function preparedRichItems(
@@ -860,6 +911,8 @@ function messageMarkdownTree(text: string, cache: MessageTextLayoutCache): Messa
     const hit = cache.markdownTrees[text];
     if (hit !== undefined) return hit;
     const tree = messageMarkdownParse(text);
+    // A guided review's chapters are grouped exactly as the renderer groups them.
+    guidedReviewSectionsApply(tree as unknown as Parameters<typeof guidedReviewSectionsApply>[0]);
     cache.markdownTrees[text] = tree;
     return tree;
 }
@@ -957,6 +1010,7 @@ function markdownBlocksHeight(
     codeMargins: boolean,
     trailing: MarkdownTrailingInline | undefined,
     mermaidEnabled: boolean,
+    review: MarkdownReview,
 ): number {
     const blocks = nodes
         .map((node) =>
@@ -969,6 +1023,7 @@ function markdownBlocksHeight(
                 trailing,
                 false,
                 mermaidEnabled,
+                review,
             ),
         )
         .filter((block) => block !== undefined);
@@ -994,6 +1049,7 @@ function markdownListHeight(
     footnotes: MarkdownFootnotes,
     trailing: MarkdownTrailingInline | undefined,
     mermaidEnabled: boolean,
+    review: MarkdownReview,
 ): number {
     const itemMeasure = measure - LIST_INDENT;
     let total = 0;
@@ -1009,6 +1065,7 @@ function markdownListHeight(
                     trailing,
                     childIndex === 0 && item.checked !== null,
                     mermaidEnabled,
+                    review,
                 ),
             )
             .filter((block) => block !== undefined);
@@ -1063,6 +1120,69 @@ function mermaidBlockHeight(
     return dimensions === null ? sourceHeight : mermaidDiagramNaturalHeight(dimensions, measure);
 }
 
+/** What a body's Happy fences are read against: the body, and the change behind it. */
+type MarkdownReview = {
+    readonly text: string;
+    readonly streaming: boolean;
+    readonly grounding: HappyUiGrounding | undefined;
+};
+
+/* `guided-review.css`: a chapter's gaps, its number chip, and the column
+   width from which its words and its aside stand side by side. */
+const SECTION_MARGIN = 24;
+const SECTION_GAP = 12;
+const SECTION_WORDS_GAP = 8;
+const SECTION_HEADING_LINE = 24;
+const SECTION_CHIP = 20 + 10;
+const SECTION_WIDE = 720;
+const SECTION_WORDS_WIDTH = 280;
+const SECTION_COLUMN_GAP = 24;
+
+/** A guided review's chapter: its words, the one thing beside them, the rest. */
+function guidedReviewSectionHeight(
+    parts: GuidedReviewSectionParts,
+    measure: number,
+    cache: MessageTextLayoutCache,
+    footnotes: MarkdownFootnotes,
+    trailing: MarkdownTrailingInline | undefined,
+    mermaidEnabled: boolean,
+    review: MarkdownReview,
+): Block {
+    const block = (node: unknown, width: number) =>
+        markdownBlockHeight(
+            node as MarkdownRootContent,
+            width,
+            cache,
+            footnotes,
+            false,
+            trailing,
+            false,
+            mermaidEnabled,
+            review,
+        )?.height ?? 0;
+    const wide = parts.aside !== undefined && measure >= SECTION_WIDE;
+    const wordsWidth = wide ? SECTION_WORDS_WIDTH : measure;
+    const heading = parts.heading as unknown as { children: readonly MarkdownPhrasing[] };
+    let words = Math.max(
+        SECTION_HEADING_LINE,
+        markdownInlineHeight(
+            heading.children,
+            { italic: false, size: 16, weight: 600 },
+            SECTION_HEADING_LINE,
+            wordsWidth - SECTION_CHIP,
+            cache,
+            footnotes,
+        ),
+    );
+    for (const node of parts.prose) words += SECTION_WORDS_GAP + block(node, wordsWidth);
+    const asideWidth = wide ? measure - SECTION_WORDS_WIDTH - SECTION_COLUMN_GAP : measure;
+    const aside = parts.aside === undefined ? undefined : block(parts.aside, asideWidth);
+    let height =
+        aside === undefined ? words : wide ? Math.max(words, aside) : words + SECTION_GAP + aside;
+    for (const node of parts.rest) height += SECTION_GAP + block(node, measure);
+    return { height, marginTop: SECTION_MARGIN, marginBottom: 0 };
+}
+
 /** Measures one actual remark/GFM block node with the same type ramp as its renderer. */
 function markdownBlockHeight(
     node: MarkdownRootContent,
@@ -1073,6 +1193,7 @@ function markdownBlockHeight(
     trailing: MarkdownTrailingInline | undefined,
     task: boolean,
     mermaidEnabled: boolean,
+    review: MarkdownReview,
     suffixText = "",
 ): Block | undefined {
     if (node.type === "paragraph") {
@@ -1107,7 +1228,63 @@ function markdownBlockHeight(
             ),
         );
     }
+    if ((node as { type: string }).type === GUIDED_REVIEW_SECTION)
+        return guidedReviewSectionHeight(
+            (node as unknown as { data: { guidedReview: GuidedReviewSectionParts } }).data
+                .guidedReview,
+            measure,
+            cache,
+            footnotes,
+            trailing,
+            mermaidEnabled,
+            review,
+        );
     if (node.type === "code") {
+        /* A Happy fence is a block of its own; while it is still being
+           written it is the one line that holds its place. */
+        const label = guidedReviewFenceLabel(node.lang);
+        if (label !== undefined)
+            return {
+                height: guidedReviewFenceHeight(
+                    label,
+                    node.value,
+                    guidedReviewFenceOpen(
+                        review.text,
+                        node.position?.end.offset ?? review.text.length,
+                        review.streaming,
+                    ),
+                    review.streaming,
+                    measure,
+                    {
+                        text: (text, size, weight, lineHeight, width) =>
+                            runHeight(
+                                text,
+                                markdownInlineFont({ italic: false, size, weight }),
+                                lineHeight,
+                                width,
+                                cache,
+                            ),
+                        markdown: (text, width) =>
+                            markdownBodyHeight(
+                                text,
+                                width,
+                                cache,
+                                0,
+                                true,
+                                false,
+                                review.grounding,
+                            ),
+                        code: (source) =>
+                            CODE_PADDING * 2 + Math.max(1, source.split("\n").length) * CODE_LINE,
+                        codeRows: (text, first, rest) =>
+                            hangingRows(text, `12px ${MONO_FAMILY}`, first, rest, cache),
+                        document: guidedReviewDocument(review.text),
+                        ...(review.grounding === undefined ? {} : { grounding: review.grounding }),
+                    },
+                ),
+                marginTop: codeMargins ? CODE_GAP : 0,
+                marginBottom: codeMargins ? CODE_GAP : 0,
+            };
         if (node.lang?.trim().toLowerCase() === "mermaid")
             return {
                 height: mermaidBlockHeight(node.value, measure, cache, mermaidEnabled),
@@ -1135,10 +1312,13 @@ function markdownBlockHeight(
                 false,
                 trailing,
                 mermaidEnabled,
+                review,
             ),
         );
     if (node.type === "list")
-        return flow(markdownListHeight(node, measure, cache, footnotes, trailing, mermaidEnabled));
+        return flow(
+            markdownListHeight(node, measure, cache, footnotes, trailing, mermaidEnabled, review),
+        );
     /* Definitions and skipped HTML create no DOM box. That is distinct from
        an empty heading/paragraph: its zero-height element still participates
        in the CSS sibling-margin sequence while the next token is arriving. */
@@ -1464,6 +1644,7 @@ function markdownFootnoteDefinitionHeight(
     cache: MessageTextLayoutCache,
     footnotes: MarkdownFootnotes,
     mermaidEnabled: boolean,
+    review: MarkdownReview,
 ): number {
     const itemMeasure = measure - LIST_INDENT;
     const last = definition.children.at(-1);
@@ -1480,6 +1661,7 @@ function markdownFootnoteDefinitionHeight(
                 undefined,
                 false,
                 mermaidEnabled,
+                review,
                 node === last && suffixAttached ? suffix : "",
             ),
         )
@@ -1499,6 +1681,7 @@ function markdownFootnotesHeight(
     measure: number,
     cache: MessageTextLayoutCache,
     mermaidEnabled: boolean,
+    review: MarkdownReview,
 ): number {
     let total = 0;
     let rendered = 0;
@@ -1513,6 +1696,7 @@ function markdownFootnotesHeight(
             cache,
             footnotes,
             mermaidEnabled,
+            review,
         );
         rendered += 1;
     }
@@ -1533,7 +1717,9 @@ export function markdownBodyHeight(
     trailingExtraWidth = 0,
     mermaidEnabled = true,
     streaming = false,
+    grounding?: HappyUiGrounding,
 ): number {
+    const review: MarkdownReview = { text, streaming, grounding };
     /* A virtual row's size is authoritative even while it streams. Bound the
        lifetime of prefix layout, not its accuracy: use the same Markdown/font
        model in a scratch cache that cannot accumulate in settled history. The
@@ -1544,7 +1730,10 @@ export function markdownBodyHeight(
         byMeasure = dictionaryCreate();
         ready.markdownHeights[text] = byMeasure;
     }
-    const measureKey = `${String(measure)}:${String(trailingExtraWidth)}:${mermaidEnabled ? "diagram" : "source"}`;
+    /* A guided review's height follows what the grounding answers, so a
+       change finishing its read re-sizes the row rather than reusing the
+       height cached while it was loading. */
+    const measureKey = `${String(measure)}:${String(trailingExtraWidth)}:${mermaidEnabled ? "diagram" : "source"}:${happyUiSignature(text, grounding)}`;
     const cached = byMeasure[measureKey];
     if (cached !== undefined) return cached;
     const tree = messageMarkdownTree(text, ready);
@@ -1563,8 +1752,15 @@ export function markdownBodyHeight(
         true,
         trailing,
         mermaidEnabled,
+        review,
     );
-    const footnotesHeight = markdownFootnotesHeight(footnotes, measure, ready, mermaidEnabled);
+    const footnotesHeight = markdownFootnotesHeight(
+        footnotes,
+        measure,
+        ready,
+        mermaidEnabled,
+        review,
+    );
     const height =
         contentHeight +
         (contentHeight > 0 && footnotesHeight > 0 ? BLOCK_GAP : 0) +

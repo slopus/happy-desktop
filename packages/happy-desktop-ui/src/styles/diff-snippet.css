@@ -98,6 +98,9 @@
     font-size: 12px;
     font-weight: 400;
     line-height: 20px;
+    /* A diff is read character by character: `===` drawn as one glyph hides
+       what changed, so the mono face's ligatures stay off here. */
+    font-variant-ligatures: none;
 }
 
 .happy-diff-snippet__line {

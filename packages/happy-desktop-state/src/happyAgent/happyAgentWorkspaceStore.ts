@@ -1,6 +1,13 @@
 import type { HappyAgentDeviceBridgesStore } from "./happyAgentDeviceBridgesStore.js";
 import type { HappyAgentDeviceBridgeSupportStore } from "./happyAgentDeviceBridgeSupportStore.js";
 import type { HappyAgentToolMediaDocumentStore } from "./happyAgentToolMediaDocumentStore.js";
+import {
+    happyAgentChangedFileDiffsStoreCreate,
+    happyAgentChangedFileDiffsStoreNoop,
+    type HappyAgentChangedFileDiffsStore,
+    type HappyAgentChangedFileDiffsStoreOwned,
+    type HappyAgentChangedFiles,
+} from "./happyAgentChangedFileDiffsStore.js";
 import { createStore } from "zustand/vanilla";
 import {
     happyAgentBotSubtasks,
@@ -1448,6 +1455,13 @@ export interface HappyAgentWorkspaceStore {
     deviceBridges(groupId: HappyAgentGroupId): HappyAgentDeviceBridgesStore | undefined;
     /** Whether this Happy Agent serves local bridges; absent exactly where `deviceBridges` is. */
     deviceBridgeSupport(): HappyAgentDeviceBridgeSupportStore | undefined;
+    /**
+     * The changes behind the Happy UI blocks a conversation in one checkout
+     * draws: each named file's two sides, read once per revision. One store
+     * per group, materialized on first access and kept for the workspace's
+     * lifetime, so a transcript revisited does not re-read its change.
+     */
+    changedFileDiffs(groupId: HappyAgentGroupId): HappyAgentChangedFileDiffsStore;
 
     // Navigation-applied conversation lifetime. These are not user selection:
     // the router applies them from the addressed URL.
@@ -2209,6 +2223,11 @@ export function happyAgentWorkspaceStoreCreate(
         draftUpdatedAt = Math.max(Date.now(), draftUpdatedAt + 1);
         return draftUpdatedAt;
     };
+    /** One changed-file diff store per group, kept for the workspace's lifetime. */
+    const changedFileDiffsStores = new Map<
+        HappyAgentGroupId,
+        HappyAgentChangedFileDiffsStoreOwned
+    >();
     const panel: HappyAgentPanelStore = happyAgentPanelStoreCreate({
         terminalOpen: (sessionId) => client.terminalOpen(sessionId),
         memoryRead: (groupId) => client.memory.groupRead(groupId)?.panel,
@@ -3453,6 +3472,39 @@ export function happyAgentWorkspaceStoreCreate(
             if (worktree) return worktree.changes;
         }
         return undefined;
+    };
+
+    /** One checkout's changed-file list, as a Happy UI block's coverage reads it. */
+    const groupChangedFilesRead = (groupId: HappyAgentGroupId): HappyAgentChangedFiles => {
+        const projects = list.get().projects;
+        if (projects.type !== "ready") return { type: "loading" };
+        for (const project of projects.value) {
+            const group =
+                project.id === groupId
+                    ? project
+                    : project.worktrees.find((candidate) => candidate.id === groupId);
+            if (group === undefined) continue;
+            if (group.changesStatus === "unavailable") return { type: "unavailable" };
+            if (group.changes === undefined || group.changesStatus === "loading")
+                return { type: "loading" };
+            const files = group.changes.map((change) => ({
+                path: change.path,
+                status: change.status,
+                ...(change.addedLines === undefined ? {} : { addedLines: change.addedLines }),
+                ...(change.deletedLines === undefined ? {} : { deletedLines: change.deletedLines }),
+            }));
+            // Every change of one scan is measured from the same merge base,
+            // and each carries it; an empty change has none to report.
+            const base = group.changes[0]?.baseRevision;
+            // The scan counts every changed file but may cap the list it sends.
+            return {
+                type: "ready",
+                files,
+                complete: files.length >= (group.changedFiles ?? files.length),
+                ...(base === undefined ? {} : { base }),
+            };
+        }
+        return { type: "unavailable" };
     };
 
     /**
@@ -6231,6 +6283,8 @@ export function happyAgentWorkspaceStoreCreate(
             catalogAuthoritativeApply();
             subtasksRemovedApply();
             recompute();
+            for (const [groupId, store] of changedFileDiffsStores)
+                store.filesUpdate(groupChangedFilesRead(groupId));
         });
         // The tree already listed is where removals are counted from.
         subtasksRemovedApply();
@@ -6618,6 +6672,24 @@ export function happyAgentWorkspaceStoreCreate(
         toolMediaDocument: () => client.toolMediaDocument(),
         deviceBridges: (groupId) => client.deviceBridges(groupId),
         deviceBridgeSupport: () => client.deviceBridgeSupport(),
+        changedFileDiffs(groupId) {
+            if (disposed) return happyAgentChangedFileDiffsStoreNoop;
+            let store = changedFileDiffsStores.get(groupId);
+            if (store === undefined) {
+                store = happyAgentChangedFileDiffsStoreCreate({
+                    changeFind: (path) => fileChangeFind(groupId, path),
+                    read: (path, change, signal) =>
+                        client.changedFileRead(groupId, path, change, signal),
+                    revisionRead: (path, revision, signal) =>
+                        client.fileRevisionRead(groupId, path, revision, signal),
+                    revisionFilesRead: (range, signal) =>
+                        client.revisionFilesRead(groupId, range.base, range.head, signal),
+                });
+                store.filesUpdate(groupChangedFilesRead(groupId));
+                changedFileDiffsStores.set(groupId, store);
+            }
+            return store;
+        },
         subscribe(listener) {
             listeners.add(listener);
             if (listeners.size === 1 && !disposed) start();
@@ -8348,6 +8420,8 @@ export function happyAgentWorkspaceStoreCreate(
             // going away, and a shell nobody can reach again is an orphan.
             unsubscribePanel();
             panel[Symbol.dispose]();
+            for (const store of changedFileDiffsStores.values()) store[Symbol.dispose]();
+            changedFileDiffsStores.clear();
             unsubscribeSnapshot();
             listeners.clear();
         },

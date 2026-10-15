@@ -7,6 +7,27 @@ const MAX_DIMENSION = 100_000;
 
 export const MERMAID_DIAGRAM_BORDER = 2;
 
+/**
+ * How far a diagram may be shrunk to fit the measure it is read at.
+ *
+ * A diagram drawn at its intrinsic size is laid out around 13px labels. A
+ * narrow column — a chat beside two panels — would otherwise scale a wide
+ * flowchart until its words are a few pixels tall, which is a picture of a
+ * diagram rather than one. Below this the diagram keeps its size and the
+ * reader scrolls it sideways instead.
+ */
+export const MERMAID_DIAGRAM_MIN_SCALE = 0.8;
+
+/** The width a diagram is painted at inside a given reading measure. */
+export function mermaidDiagramPaintedWidth(
+    dimensions: MermaidDiagramDimensions,
+    availableWidth: number,
+): number {
+    const inside = Math.max(0, availableWidth - MERMAID_DIAGRAM_BORDER);
+    const floor = dimensions.width * MERMAID_DIAGRAM_MIN_SCALE;
+    return Math.max(Math.min(dimensions.width, inside), Math.min(floor, dimensions.width));
+}
+
 export type MermaidDiagramDimensions = {
     readonly height: number;
     readonly width: number;
@@ -18,9 +39,9 @@ export type MermaidDiagramRender = MermaidDiagramDimensions & {
 
 const renderOptions = {
     font: "happy Figtree",
-    layerSpacing: 40,
-    nodeSpacing: 24,
-    padding: 24,
+    layerSpacing: 32,
+    nodeSpacing: 20,
+    padding: 16,
 } as const;
 
 function byteLength(value: string): number {
@@ -89,12 +110,14 @@ export function mermaidDiagramMeasure(source: string): MermaidDiagramDimensions 
     return { height, width };
 }
 
-/** Natural SVG height: intrinsic size until constrained, then proportional. */
+/**
+ * Natural SVG height: intrinsic size until the measure constrains it, then
+ * proportional, down to the scale floor it stops shrinking at.
+ */
 export function mermaidDiagramNaturalHeight(
     dimensions: MermaidDiagramDimensions,
     availableWidth: number,
 ): number {
-    const contentWidth = Math.max(0, availableWidth - MERMAID_DIAGRAM_BORDER);
-    const paintedWidth = Math.min(dimensions.width, contentWidth);
+    const paintedWidth = mermaidDiagramPaintedWidth(dimensions, availableWidth);
     return MERMAID_DIAGRAM_BORDER + (paintedWidth * dimensions.height) / dimensions.width;
 }

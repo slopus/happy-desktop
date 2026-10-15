@@ -46,9 +46,10 @@ export function compactCount(value: number): string {
  * dropped and the reader would be told "plus four point two k" instead.
  */
 export function changeCountLabel(added: number, deleted: number): string {
+    const lines = (count: number) => `${String(count)} ${count === 1 ? "line" : "lines"}`;
     return [
-        added > 0 ? `${String(added)} lines added` : undefined,
-        deleted > 0 ? `${String(deleted)} lines deleted` : undefined,
+        added > 0 ? `${lines(added)} added` : undefined,
+        deleted > 0 ? `${lines(deleted)} deleted` : undefined,
     ]
         .filter(Boolean)
         .join(", ");

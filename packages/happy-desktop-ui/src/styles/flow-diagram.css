@@ -1,0 +1,206 @@
+/*
+ * FlowDiagram — a system as a review draws it, two ways from one syntax.
+ *
+ * A 16px legend row of the marks in use, 8px, then the drawing at its own
+ * size, centred in the column, or shrunk to a narrower one. As a graph
+ * (`happy-flow`): 36px parts in rows, curves down with their labels, lanes at
+ * the right. As a sequence (`happy-sequence`): 28px heads over dotted
+ * lifelines, one 34px row per call. Parts, arrows, and labels look the same in
+ * both. A mark, on a part or an arrow, is the colour the file list gives the
+ * same status. Every colour is a theme role, so the drawing follows the
+ * appearance without redrawing.
+ */
+
+.happy-flow {
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+    font-family: var(--happy-font-ui);
+    font-synthesis: none;
+}
+
+/* Scoped twice so a message body's paragraph rules do not restyle it. */
+.happy-flow .happy-flow__reason {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 14px;
+    line-height: 20px;
+    overflow-wrap: anywhere;
+}
+
+.happy-flow__legend {
+    display: flex;
+    justify-content: center;
+    gap: 16px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+}
+
+.happy-flow__legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.happy-flow__legend-item::before {
+    content: "";
+    flex: none;
+    width: 6px;
+    height: 6px;
+    border-radius: 999px;
+}
+
+.happy-flow__legend-item[data-mark="new"]::before {
+    background: var(--git-status-new);
+}
+
+.happy-flow__legend-item[data-mark="changed"]::before {
+    background: var(--git-status-modified);
+}
+
+.happy-flow__legend-item[data-mark="gone"]::before {
+    background: var(--git-status-deleted);
+}
+
+.happy-flow__scroll-viewport {
+    overflow-x: auto;
+    overflow-y: hidden;
+}
+
+/* Centred at its own size while it fits; wider than the column, it shrinks
+   to the column (its width clamp is set inline), and below its least scale
+   the margins fall to zero and it scrolls from its left edge. */
+.happy-flow__canvas {
+    display: block;
+    height: auto;
+    margin: 0 auto;
+}
+
+/* A lifeline is the quietest line in the drawing: it only says which column. */
+.happy-flow__lifeline {
+    stroke: var(--divider);
+    stroke-dasharray: 2 4;
+    stroke-width: 1;
+}
+
+:is(.happy-flow__call, .happy-flow__edge) {
+    --happy-flow-call: color-mix(in srgb, var(--text-secondary) 70%, transparent);
+    fill: none;
+    stroke: var(--happy-flow-call);
+    stroke-width: 1.25;
+}
+
+.happy-flow__call[data-reply],
+.happy-flow__edge[data-back] {
+    stroke-dasharray: 4 3;
+}
+
+/* A call this change added or changed is drawn in the file list's colour
+   for the same thing; the rest of the flow stays grey around it. */
+:is(.happy-flow__call, .happy-flow__edge)[data-mark="new"] {
+    --happy-flow-call: var(--git-status-new);
+    stroke-width: 1.5;
+}
+
+:is(.happy-flow__call, .happy-flow__edge)[data-mark="changed"] {
+    --happy-flow-call: var(--git-status-modified);
+    stroke-width: 1.5;
+}
+
+:is(.happy-flow__call, .happy-flow__edge)[data-mark="gone"] {
+    --happy-flow-call: var(--git-status-deleted);
+    stroke-dasharray: 4 3;
+}
+
+.happy-flow__arrowhead {
+    fill: context-stroke;
+}
+
+:is(.happy-flow__call-label, .happy-flow__edge-label) {
+    fill: var(--text-secondary);
+    font-family: var(--happy-font-ui);
+    font-size: 12px;
+    paint-order: stroke;
+    stroke: var(--surface);
+    stroke-width: 4px;
+    stroke-linejoin: round;
+}
+
+:is(.happy-flow__call-label, .happy-flow__edge-label):not([data-mark="none"]) {
+    fill: var(--text);
+    font-weight: 500;
+}
+
+:is(.happy-flow__call-label, .happy-flow__edge-label)[data-mark="gone"] {
+    fill: var(--text-secondary);
+    text-decoration: line-through;
+}
+
+.happy-flow__box {
+    fill: var(--surface);
+    stroke: var(--divider);
+    stroke-width: 1;
+}
+
+.happy-flow__name {
+    fill: var(--text-secondary);
+    font-family: var(--happy-font-mono);
+    font-size: 12px;
+    font-variant-ligatures: none;
+}
+
+/* A part the change is about reads in full ink behind its dot. */
+:is(.happy-flow__head, .happy-flow__node):not([data-mark="none"]) .happy-flow__name {
+    fill: var(--text);
+    font-weight: 600;
+}
+
+:is(.happy-flow__head, .happy-flow__node)[data-mark="gone"] .happy-flow__box {
+    stroke-dasharray: 4 3;
+}
+
+:is(.happy-flow__head, .happy-flow__node)[data-mark="gone"] .happy-flow__name {
+    fill: var(--text-secondary);
+    text-decoration: line-through;
+}
+
+:is(.happy-flow__head, .happy-flow__node)[data-mark="new"] .happy-flow__dot {
+    fill: var(--git-status-new);
+}
+
+:is(.happy-flow__head, .happy-flow__node)[data-mark="changed"] .happy-flow__dot {
+    fill: var(--git-status-modified);
+}
+
+:is(.happy-flow__head, .happy-flow__node)[data-mark="gone"] .happy-flow__dot {
+    fill: var(--git-status-deleted);
+}
+
+.happy-flow__chip circle {
+    fill: var(--surface-pressed);
+}
+
+.happy-flow__chip[data-openable] {
+    cursor: pointer;
+    outline: none;
+}
+
+.happy-flow__chip[data-openable]:hover circle,
+.happy-flow__chip[data-openable]:focus-visible circle {
+    fill: var(--text);
+}
+
+.happy-flow__chip[data-openable]:hover text,
+.happy-flow__chip[data-openable]:focus-visible text {
+    fill: var(--surface);
+}
+
+.happy-flow__chip text {
+    fill: var(--text-secondary);
+    font-family: var(--happy-font-mono);
+    font-size: 11px;
+    font-weight: 600;
+}

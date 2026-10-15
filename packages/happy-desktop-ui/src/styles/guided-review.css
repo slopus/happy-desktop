@@ -1,0 +1,214 @@
+/*
+ * A guided review in the flow of a chat reply: Happy fences drawn as blocks,
+ * and chapters laid out around them.
+ *
+ * Every dimension here is mirrored by `guidedReviewLayout.ts` and the
+ * chapter case in `messageTextLayout.ts`, which size a reply before it
+ * mounts; change one and change the other.
+ */
+
+/* A fence in the body takes the margin a fenced code block takes. Inside a
+   chapter the chapter's gaps space it instead. */
+.happy-review-block {
+    margin: 12px 0;
+}
+
+/* One quiet line: the coverage note, or a file list that cannot list yet. */
+.happy-message__body--markdown .happy-review-note {
+    color: var(--text-secondary);
+    font-family: var(--happy-font-ui);
+    font-size: 13px;
+    line-height: 20px;
+    overflow-wrap: anywhere;
+}
+
+/* The line a fence shows while it is still being written. */
+.happy-review-writing {
+    display: block;
+    font-size: 15px;
+    line-height: 24px;
+}
+
+.happy-review-invalid {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+}
+
+.happy-message__body--markdown .happy-review-invalid__reason {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 14px;
+    line-height: 20px;
+    overflow-wrap: anywhere;
+}
+
+.happy-message__body--markdown .happy-review-invalid > .happy-message__code-block {
+    margin: 0;
+}
+
+/* Before/after: two equal labelled frames 12px apart, the words under them. */
+.happy-review-before-after {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+}
+
+.happy-review-before-after__sides {
+    display: flex;
+    gap: 12px;
+    min-width: 0;
+}
+
+.happy-review-before-after__side {
+    display: flex;
+    flex: 1 1 0;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.happy-review-before-after__label {
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 16px;
+}
+
+.happy-review-before-after__picture {
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    aspect-ratio: 16 / 10;
+    overflow: hidden;
+    margin: 0;
+    padding: 0;
+    border: 1px solid var(--divider);
+    border-radius: 8px;
+    background: var(--surface-pressed);
+    color: var(--text-secondary);
+    font: inherit;
+    cursor: default;
+}
+
+.happy-review-before-after__picture[data-openable] {
+    cursor: zoom-in;
+}
+
+.happy-review-before-after__picture img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.happy-review-before-after__message {
+    padding: 0 12px;
+    font-size: 13px;
+    line-height: 18px;
+    text-align: center;
+}
+
+/*
+ * A chapter: its heading and leading words, the one thing that shows them,
+ * then anything else, 12px apart. From a 720px column the thing takes the
+ * left and the words 280px at the right, 24px between, both from the top;
+ * the words stay first in the reading order. The
+ * chapter is its own container, so the decision follows the column it is
+ * drawn in. Chapters stand 24px apart from what precedes them.
+ */
+.happy-message__body--markdown > .happy-review-section {
+    margin-top: 24px;
+}
+
+.happy-review-section {
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-width: 0;
+    container-type: inline-size;
+}
+
+.happy-message__body--markdown .happy-review-section > *,
+.happy-message__body--markdown .happy-review-section__words > *,
+.happy-message__body--markdown .happy-review-section__aside > *,
+.happy-message__body--markdown .happy-review-section__heading > * {
+    margin: 0;
+}
+
+.happy-review-section__layout {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-width: 0;
+}
+
+.happy-review-section__words {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+}
+
+/* The chapter's number in a 20px chip beside its heading, the chip a flow
+   puts on the parts this chapter is about. */
+.happy-review-section__heading {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    min-width: 0;
+}
+
+.happy-message__body--markdown .happy-review-section__heading > .happy-review-section__number {
+    box-sizing: border-box;
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    margin-top: 2px;
+    border-radius: 999px;
+    background: var(--surface-pressed);
+    color: var(--text-secondary);
+    font-family: var(--happy-font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 16px;
+}
+
+.happy-message__body--markdown .happy-review-section__heading > h2 {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: 16px;
+    font-weight: 600;
+    line-height: 24px;
+}
+
+.happy-review-section__aside {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+@container (min-width: 720px) {
+    .happy-review-section__layout:has(> .happy-review-section__aside) {
+        flex-direction: row-reverse;
+        align-items: flex-start;
+        gap: 24px;
+    }
+
+    .happy-review-section__layout:has(> .happy-review-section__aside)
+        > .happy-review-section__words {
+        flex: 0 0 280px;
+    }
+
+    .happy-review-section__aside {
+        flex: 1 1 0;
+    }
+}

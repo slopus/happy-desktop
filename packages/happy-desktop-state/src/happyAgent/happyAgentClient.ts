@@ -2,7 +2,7 @@ import type {
     TerminalColorScheme,
     TerminalDriverCreate,
 } from "../modules/terminal/terminalState.js";
-import type { HappyAgentClient } from "@slopus/happy-agent-client";
+import { HappyAgentApiError, type HappyAgentClient } from "@slopus/happy-agent-client";
 import { happyAgentProjectAddError } from "./happyAgentProjectRegistration.js";
 import {
     happyAgentFileLinkWorkspaceResolve,
@@ -32,6 +32,7 @@ import {
     type HappyAgentSessionListStore,
 } from "./happyAgentSessionListStore.js";
 import type { HappyAgentHostServices } from "./happyAgentHostServices.js";
+import type { HappyAgentRevisionFileEntry } from "./happyAgentChangedFileDiffsStore.js";
 import {
     happyAgentChangedFileProject,
     happyAgentModelCatalogProject,
@@ -318,6 +319,30 @@ export interface HappyAgentWorkspaceClient {
         change: HappyAgentGitChangedFile,
         signal?: AbortSignal,
     ): Promise<HappyAgentChangedFileDocument>;
+    /**
+     * Reads one file's text as of a commit-ish in a project/worktree checkout,
+     * or nothing when the file does not exist at that revision.
+     */
+    fileRevisionRead(
+        groupId: HappyAgentGroupId,
+        path: string,
+        revision: string,
+        signal?: AbortSignal,
+    ): Promise<string | undefined>;
+    /**
+     * Lists the files that differ between two commits in a project/worktree
+     * checkout, or nothing when this Happy Agent cannot list them: an older
+     * daemon without the route, or a folder that is not a repository.
+     */
+    revisionFilesRead(
+        groupId: HappyAgentGroupId,
+        base: string,
+        head: string,
+        signal?: AbortSignal,
+    ): Promise<
+        | { readonly files: readonly HappyAgentRevisionFileEntry[]; readonly complete: boolean }
+        | undefined
+    >;
     /**
      * Acquires a retained chat store for one session. Concurrent and later
      * acquisitions share its messages and model state. Releasing the last lease
@@ -618,6 +643,44 @@ export function happyAgentWorkspaceClientCreate(
         catalogRead: () => models.load().then((snapshot) => snapshot.catalog),
         changedFileRead: (groupId, path, change, signal) =>
             changedFileRead(deps.client, groupId, path, change, signal),
+        fileRevisionRead: async (groupId, path, revision, signal) => {
+            try {
+                const file = await deps.client.readFileRevision(
+                    groupId,
+                    { path, revision },
+                    { signal },
+                );
+                return happyAgentTextDecodeBase64(file.content);
+            } catch (error) {
+                // A file a commit does not have is an answer, not a failure:
+                // it was added after the base, or removed before the head.
+                if (error instanceof HappyAgentApiError && error.status === 404) return undefined;
+                throw error;
+            }
+        },
+        revisionFilesRead: async (groupId, base, head, signal) => {
+            try {
+                const compared = await deps.client.compareWorkspaceGit(
+                    groupId,
+                    { base, head },
+                    { signal },
+                );
+                return {
+                    files: compared.files.map((file) => ({
+                        path: file.path,
+                        status: file.status,
+                        ...(file.insertions === undefined ? {} : { addedLines: file.insertions }),
+                        ...(file.deletions === undefined ? {} : { deletedLines: file.deletions }),
+                    })),
+                    complete: !compared.filesTruncated,
+                };
+            } catch (error) {
+                // An older daemon has no such route; a plain folder has no
+                // commits. Either way the list cannot be had, which is an answer.
+                if (error instanceof HappyAgentApiError && error.status === 404) return undefined;
+                throw error;
+            }
+        },
         workspaceFileTreeRead: (groupId, path, cursor) =>
             workspaceFileTreeRead(deps.client, groupId, path, cursor),
         filesSearch: async (groupId, query, limit) =>

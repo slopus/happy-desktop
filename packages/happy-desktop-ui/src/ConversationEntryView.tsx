@@ -2,6 +2,7 @@ import { type CSSProperties, type ReactNode } from "react";
 import type { FileLinkOpenHandler, FileOpenHandler } from "./fileReference";
 import type { LinkOpenHandler, LinkOpenPlacement } from "./MessageMarkdown";
 import type { MessageReferences } from "./messageReferences";
+import type { HappyUiGrounding } from "./happyUiGrounding";
 import { thumbhashDataUrl } from "./thumbhashDataUrl";
 import type {
     AgentTurnTraceSummary,
@@ -82,6 +83,8 @@ export type ConversationEntryViewProps = {
     linkOpenDefault?: LinkOpenPlacement;
     /** What the Happy references a message names read as, and where opening one goes. */
     references?: MessageReferences;
+    /** The real change the Happy UI blocks in a message body are checked against. */
+    grounding?: HappyUiGrounding;
     /** Disables request controls while a prior submission is in flight. */
     requestPending?: boolean;
     /** Last failed submission for this request. */
@@ -460,6 +463,7 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
             {...(props.onLinkOpen ? { onLinkOpen: props.onLinkOpen } : {})}
             {...(props.linkOpenDefault ? { linkOpenDefault: props.linkOpenDefault } : {})}
             {...(props.references ? { references: props.references } : {})}
+            {...(props.grounding ? { grounding: props.grounding } : {})}
             own={own}
             style={props.style}
             time={messageTime(message.createdAt)}

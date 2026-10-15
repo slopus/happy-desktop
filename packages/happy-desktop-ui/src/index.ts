@@ -239,6 +239,63 @@ export {
     type FileReference,
 } from "./fileReference";
 export { MermaidDiagram, type MermaidDiagramProps } from "./MermaidDiagram";
+export {
+    ChangedFileList,
+    type ChangedFileListEntry,
+    type ChangedFileListProps,
+} from "./ChangedFileList";
+export { DiffStat } from "./DiffStat";
+export { FlowDiagram, type FlowDiagramLayout, type FlowDiagramProps } from "./FlowDiagram";
+export { ReviewDiff, type ReviewDiffProps, type ReviewDiffStatus } from "./ReviewDiff";
+export {
+    ReviewFinding,
+    ReviewVerdict,
+    type ReviewFindingProps,
+    type ReviewSeverity,
+    type ReviewVerdictProps,
+} from "./ReviewFinding";
+export { GuidedReviewFence, type GuidedReviewFenceProps } from "./GuidedReviewFence";
+export {
+    GUIDED_REVIEW_FENCE_LABELS,
+    guidedReviewDocument,
+    guidedReviewFenceLabel,
+    guidedReviewFenceParse,
+    type GuidedReviewDocument,
+    type GuidedReviewFence as GuidedReviewFenceNode,
+    type GuidedReviewFenceLabel,
+    type GuidedReviewFenceParsed,
+    type HappyUiImage,
+    type HappyUiLineRange,
+    type HappyUiRange,
+} from "./guidedReview";
+export {
+    HAPPY_UI_DIFF_MAX_LINES,
+    happyUiBaseState,
+    happyUiCoverage,
+    happyUiCoverageSummary,
+    happyUiDiffLines,
+    happyUiFilesSelect,
+    happyUiGroundingOf,
+    happyUiImageMessage,
+    happyUiSignature,
+    type HappyUiBaseView,
+    type HappyUiChange,
+    type HappyUiChangedFile,
+    type HappyUiChangedFiles,
+    type HappyUiCoverageView,
+    type HappyUiDiffView,
+    type HappyUiGrounding,
+    type HappyUiImageView,
+    type HappyUiListedFile,
+} from "./happyUiGrounding";
+export {
+    diffSnippetHighlight,
+    diffSnippetHighlightGeneration,
+    diffSnippetHighlightSubscribe,
+    diffSnippetLanguage,
+    diffSnippetTokenColor,
+    type DiffSnippetToken,
+} from "./diffSnippetHighlight";
 export { Icon, type IconName, iconNames, type IconProps } from "./Icon";
 export {
     Ionicon,

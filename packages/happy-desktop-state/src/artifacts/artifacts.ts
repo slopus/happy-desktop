@@ -12,6 +12,10 @@ import {
     type HappyAgentArtifactPeopleStore,
 } from "./artifactPeopleStore.js";
 import {
+    happyAgentArtifactImagesStoreCreate,
+    type HappyAgentArtifactImagesStore,
+} from "./artifactImagesStore.js";
+import {
     happyAgentArtifactTitlesStoreCreate,
     type HappyAgentArtifactTitlesStore,
 } from "./artifactTitlesStore.js";
@@ -46,6 +50,8 @@ export interface HappyAgentArtifacts {
     tabViewer(): HappyAgentArtifactViewerStore;
     /** The live titles of the artifacts conversations name. */
     titles(): HappyAgentArtifactTitlesStore;
+    /** The artifact versions conversations show as pictures. */
+    images(): HappyAgentArtifactImagesStore;
     /** The names of the people artifacts credit. */
     people(): HappyAgentArtifactPeopleStore;
     [Symbol.dispose](): void;
@@ -80,6 +86,7 @@ export function happyAgentArtifactsCreate(deps: HappyAgentArtifactsDeps): HappyA
     let panelViewer: HappyAgentArtifactViewerStore | undefined;
     let tabViewer: HappyAgentArtifactViewerStore | undefined;
     let titles: HappyAgentArtifactTitlesStore | undefined;
+    let images: HappyAgentArtifactImagesStore | undefined;
     let people: HappyAgentArtifactPeople | undefined;
     let disposed = false;
     /*
@@ -140,6 +147,9 @@ export function happyAgentArtifactsCreate(deps: HappyAgentArtifactsDeps): HappyA
                 happyAgentArtifactTitlesStoreCreate({ client: deps.client, sync: deps.sync }),
             ));
         },
+        images() {
+            return (images ??= inert(happyAgentArtifactImagesStoreCreate({ client: deps.client })));
+        },
         people() {
             return peopleOf().store;
         },
@@ -152,6 +162,7 @@ export function happyAgentArtifactsCreate(deps: HappyAgentArtifactsDeps): HappyA
             panelViewer?.[Symbol.dispose]();
             tabViewer?.[Symbol.dispose]();
             titles?.[Symbol.dispose]();
+            images?.[Symbol.dispose]();
             people?.[Symbol.dispose]();
         },
     };
