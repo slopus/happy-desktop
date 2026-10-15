@@ -22,6 +22,7 @@ import {
     HAPPY_AGENT_GROUP_UNLISTED_REFUSAL,
     projectsVisibilityStoreCreate,
 } from "happy-desktop-state";
+import { APP_SHORTCUTS } from "../../sources/appShortcuts";
 import { commandPaletteSuggestionRows } from "../../sources/commandPaletteResults";
 import {
     AppHappyAgentView,
@@ -510,8 +511,11 @@ it("renames a task from its context menu on a Happy Agent that renames them", ()
     expect(actions.taskLeave).not.toHaveBeenCalled();
 });
 
+const commandHeld =
+    APP_SHORTCUTS.taskCreate.modifier === "Meta" ? { metaKey: true } : { ctrlKey: true };
+
 const commandN = (target: Element | Window = window) =>
-    fireEvent.keyDown(target, { key: "n", code: "KeyN", metaKey: true });
+    fireEvent.keyDown(target, { key: "n", code: "KeyN", ...commandHeld });
 
 it("opens New task on the machine on screen with Command-N, and shows the chord on its +", () => {
     const onTaskCreateOpen = vi.fn();
@@ -522,13 +526,13 @@ it("opens New task on the machine on screen with Command-N, and shows the chord 
     const create = container.querySelector<HTMLButtonElement>(
         '[aria-label="New task"][data-happy-desktop-ui="sidebar-section-action"]',
     )!;
-    expect(create.getAttribute("aria-keyshortcuts")).toBe("Meta+N");
+    expect(create.getAttribute("aria-keyshortcuts")).toBe(APP_SHORTCUTS.taskCreate.aria);
     expect(create.querySelector('[data-happy-desktop-ui="key-cap"]')).not.toBeNull();
 
     commandN();
     expect(onTaskCreateOpen).toHaveBeenCalledWith("local");
     // Shift-Command-N is the new workspace's chord now, not this one.
-    fireEvent.keyDown(window, { key: "N", code: "KeyN", metaKey: true, shiftKey: true });
+    fireEvent.keyDown(window, { key: "N", code: "KeyN", ...commandHeld, shiftKey: true });
     expect(onTaskCreateOpen).toHaveBeenCalledTimes(1);
 
     // Typing does not hold it back, as with every window chord: a chord is not text.
@@ -548,7 +552,9 @@ it("leaves Command-N alone on a Happy Agent that cannot make tasks", () => {
     });
     commandN();
     expect(onTaskCreateOpen).not.toHaveBeenCalled();
-    expect(container.querySelector('[aria-keyshortcuts="Meta+N"]')).toBeNull();
+    expect(
+        container.querySelector(`[aria-keyshortcuts="${APP_SHORTCUTS.taskCreate.aria}"]`),
+    ).toBeNull();
 });
 
 it("offers New task in the command palette with its chord, only where a task can be made", () => {
@@ -564,7 +570,7 @@ it("offers New task in the command palette with its chord, only where a task can
     const task = rows.find((candidate) => candidate.id === "action:task-create");
     expect(task).toMatchObject({
         title: "New task",
-        shortcut: { caps: "⌘N" },
+        shortcut: { caps: APP_SHORTCUTS.taskCreate.caps },
         command: { kind: "taskCreate" },
     });
     expect(

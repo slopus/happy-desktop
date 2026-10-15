@@ -11,7 +11,13 @@ import {
 } from "react";
 import { KeyCap } from "./Badge";
 import { Icon } from "./Icon";
-import { commandShortcut, commandShortcutMatches, windowShortcutBlocked } from "./keyboardShortcut";
+import {
+    commandModifier,
+    commandModifierHeld,
+    commandShortcut,
+    commandShortcutMatches,
+    windowShortcutBlocked,
+} from "./keyboardShortcut";
 import { WindowOverlayHostContext } from "./WindowOverlay";
 export type AppShellProps = Omit<HTMLAttributes<HTMLDivElement>, "style"> & {
     children: ReactNode;
@@ -444,18 +450,18 @@ export function AppShell(props: AppShellProps) {
             setShortcutHintsHeld(false);
         };
         const onKeyDown = (event: KeyboardEvent) => {
-            if (event.key === "Meta") {
+            if (event.key === commandModifier) {
                 if (
                     windowShortcutBlocked() ||
                     event.defaultPrevented ||
                     event.isComposing ||
                     event.keyCode === 229 ||
                     event.altKey ||
-                    event.ctrlKey ||
+                    (commandModifier === "Meta" ? event.ctrlKey : event.metaKey) ||
                     event.shiftKey
                 )
                     return;
-                const code = event.code || "Meta";
+                const code = event.code || commandModifier;
                 if (pressedCommandKeys.has(code)) return;
                 pressedCommandKeys.add(code);
                 if (shortcutTimer !== undefined) return;
@@ -466,10 +472,10 @@ export function AppShell(props: AppShellProps) {
                 }, SHORTCUT_HINT_DELAY_MS);
                 return;
             }
-            // Once a Command chord is chosen, discovery has done its job. Hide
+            // Once a command chord is chosen, discovery has done its job. Hide
             // immediately and cancel a nearly-finished timer so hints cannot
             // flash up just after the action runs.
-            if (event.metaKey) hintsHide();
+            if (commandModifierHeld(event)) hintsHide();
             if (
                 !sidebarInteractive ||
                 !commandShortcutMatches(event, SIDEBAR_SHORTCUT) ||
@@ -481,8 +487,8 @@ export function AppShell(props: AppShellProps) {
             onSidebarCollapsedChange?.(!sidebarCollapsed);
         };
         const onKeyUp = (event: KeyboardEvent) => {
-            if (event.key !== "Meta") return;
-            pressedCommandKeys.delete(event.code || "Meta");
+            if (event.key !== commandModifier) return;
+            pressedCommandKeys.delete(event.code || commandModifier);
             if (pressedCommandKeys.size === 0) hintsHide();
         };
         const onVisibilityChange = () => {
