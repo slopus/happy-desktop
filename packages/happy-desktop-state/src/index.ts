@@ -14,6 +14,7 @@ export * from "./conversation/loadable.js";
 export * from "./appearance/appearanceStore.js";
 export * from "./keepAwake/keepAwakeStore.js";
 export * from "./commandPalette/commandPaletteStore.js";
+export * from "./happyAgent/happyAgentChatPanesStore.js";
 export * from "./experiments/experimentsStore.js";
 export * from "./projectsVisibility/projectsVisibilityStore.js";
 export * from "./statusBar/statusBarStore.js";

@@ -856,3 +856,5 @@ export {
     type DataDisclosureGroup,
     type DataDisclosureProps,
 } from "./DataDisclosure";
+export { ChatPanes, type ChatPanesProps } from "./ChatPanes";
+export { ChatProjectPicker, type ChatProjectPickerProps } from "./ChatProjectPicker";

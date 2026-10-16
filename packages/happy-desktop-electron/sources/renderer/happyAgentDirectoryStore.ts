@@ -13,6 +13,7 @@ import type {
     HappyAgentBotCreating,
     HappyAgentConnectionSnapshot,
     HappyAgentHost,
+    HappyAgentWorkspaceStore,
     HappyAgentModelPreferencePersistence,
     HappyAgentCloudHost,
     HappyAgentProjectAddSnapshot,
@@ -79,6 +80,7 @@ export interface HappyAgentDirectoryStore {
 }
 
 export interface HappyAgentDirectoryDeps {
+    readonly workspaceActive?: (happyAgentId: string) => HappyAgentWorkspaceStore | undefined;
     readonly readLegacyCli?: () => Promise<
         import("happy-desktop-state").HappyTerminalCliInspection
     >;
@@ -616,9 +618,12 @@ export function happyAgentDirectoryStoreCreate(
             if (listeners.size === 1) {
                 runtimeUnsubscribe = runtime.subscribe(localReconcile);
                 browserOpenUnsubscribe = bridge.browserOpenSubscribe((url) => {
-                    snapshot.happyAgents
-                        .find((entry) => entry.id === snapshot.activeHappyAgentId)
-                        ?.session?.workspace.panel.browserAdd(url);
+                    const id = snapshot.activeHappyAgentId;
+                    if (!id) return;
+                    const workspace =
+                        deps.workspaceActive?.(id) ??
+                        snapshot.happyAgents.find((entry) => entry.id === id)?.session?.workspace;
+                    workspace?.panel.browserAdd(url);
                 });
                 localReconcile();
             }

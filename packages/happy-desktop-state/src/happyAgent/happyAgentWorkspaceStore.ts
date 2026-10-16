@@ -1,3 +1,4 @@
+import type { HappyAgentArtifacts } from "../artifacts/artifacts.js";
 import type { HappyAgentDeviceBridgesStore } from "./happyAgentDeviceBridgesStore.js";
 import type { HappyAgentDeviceBridgeSupportStore } from "./happyAgentDeviceBridgeSupportStore.js";
 import type { HappyAgentToolMediaDocumentStore } from "./happyAgentToolMediaDocumentStore.js";
@@ -111,7 +112,6 @@ import type {
 import type {
     HappyAgentAvatarImage,
     HappyAgentBackgroundProcess,
-    HappyAgentBot,
     HappyAgentBotSubtask,
     HappyAgentChangedFileDocument,
     HappyAgentFileSearchResult,
@@ -1398,6 +1398,8 @@ export interface HappyAgentWorkspaceDeps {
      * window and no longer, which is what Blueprint and tests want.
      */
     readonly viewPreferences?: HappyAgentViewPreferencesPersistence;
+    /** Shared settings retain one owner across independent workspace surfaces. */
+    readonly changeTiers?: HappyAgentChangeTiersStore;
 }
 
 export interface HappyAgentWorkspaceNewChatInput {
@@ -1420,6 +1422,9 @@ export interface HappyAgentVoiceSession {
 export interface HappyAgentWorkspaceStore {
     get(): HappyAgentWorkspaceSnapshot;
     subscribe(listener: () => void): () => void;
+    /** Independent visible workspace, sharing this connection's authoritative client. */
+    surfaceCreate(output: (event: HappyAgentWorkspaceOutput) => void): HappyAgentWorkspaceStore;
+    artifacts(): HappyAgentArtifacts;
 
     /**
      * The workspace's right-hand tool panel. It is a store of its own, not part of
@@ -2216,6 +2221,9 @@ export function happyAgentWorkspaceStoreCreate(
     });
 
     const listeners = new Set<() => void>();
+    const surfaces = new Set<HappyAgentWorkspaceStore>();
+    let artifacts: HappyAgentArtifacts | undefined;
+    let toolMediaDocument: HappyAgentToolMediaDocumentStore | undefined;
     let active = false;
     let disposed = false;
     let unsubscribeList: (() => void) | undefined;
@@ -2357,7 +2365,7 @@ export function happyAgentWorkspaceStoreCreate(
      * and imposing one checkout's arrangement on the next is a setting rather
      * than a memory of what they did.
      */
-    let viewPreferences: HappyAgentViewPreferencesDocument = (() => {
+    const viewPreferencesRead = (): HappyAgentViewPreferencesDocument => {
         try {
             return (
                 happyAgentViewPreferencesParse(deps.viewPreferences?.read()) ??
@@ -2368,7 +2376,8 @@ export function happyAgentWorkspaceStoreCreate(
             // is the same as one nobody has arranged yet.
             return HAPPY_AGENT_VIEW_PREFERENCES_EMPTY;
         }
-    })();
+    };
+    let viewPreferences = viewPreferencesRead();
     /**
      * What the addressed checkout says about itself, or nothing where it has
      * never been arranged. Changed and flat are the defaults it falls back to:
@@ -2383,7 +2392,9 @@ export function happyAgentWorkspaceStoreCreate(
         groupId: HappyAgentGroupId,
         change: HappyAgentGroupViewPreferences,
     ): void => {
-        viewPreferences = happyAgentViewPreferencesUpdate(viewPreferences, groupId, change);
+        // Another visible pane may have saved preferences for a different project.
+        const current = deps.viewPreferences ? viewPreferencesRead() : viewPreferences;
+        viewPreferences = happyAgentViewPreferencesUpdate(current, groupId, change);
         try {
             deps.viewPreferences?.write(viewPreferences);
         } catch {
@@ -2391,17 +2402,20 @@ export function happyAgentWorkspaceStoreCreate(
             // as long as it stays open.
         }
     };
-    const changeTiers: HappyAgentChangeTiersStore = happyAgentChangeTiersStoreCreate({
-        initial: viewPreferences.changeTiers,
-        output(event) {
-            viewPreferences = happyAgentViewPreferencesTiersUpdate(viewPreferences, event.tiers);
-            try {
-                deps.viewPreferences?.write(viewPreferences);
-            } catch {
-                // Kept on screen for as long as the window stays open.
-            }
-        },
-    });
+    const changeTiers: HappyAgentChangeTiersStore =
+        deps.changeTiers ??
+        happyAgentChangeTiersStoreCreate({
+            initial: viewPreferences.changeTiers,
+            output(event) {
+                const current = deps.viewPreferences ? viewPreferencesRead() : viewPreferences;
+                viewPreferences = happyAgentViewPreferencesTiersUpdate(current, event.tiers);
+                try {
+                    deps.viewPreferences?.write(viewPreferences);
+                } catch {
+                    // Kept on screen for as long as the window stays open.
+                }
+            },
+        });
     let fileTreeExpanded: ReadonlySet<string> = new Set();
     let fileTreeCollapsed: ReadonlySet<string> = new Set();
     /** Counts the asks to show a region, so each one is its own event. */
@@ -6631,9 +6645,28 @@ export function happyAgentWorkspaceStoreCreate(
 
     return {
         get: () => snapshotStore.getState(),
+        surfaceCreate(surfaceOutput) {
+            if (disposed) throw new Error("The workspace is closed.");
+            const surface = happyAgentWorkspaceStoreCreate(client, {
+                ...deps,
+                changeTiers,
+                output: (event) => {
+                    if (event.type === "activityRecorded") output(event);
+                    else surfaceOutput(event);
+                },
+            });
+            const dispose = surface[Symbol.dispose];
+            surface[Symbol.dispose] = () => {
+                surfaces.delete(surface);
+                dispose();
+            };
+            surfaces.add(surface);
+            return surface;
+        },
         panel,
         changeTiers,
-        toolMediaDocument: () => client.toolMediaDocument(),
+        artifacts: () => (artifacts ??= client.artifacts().surfaceCreate()),
+        toolMediaDocument: () => (toolMediaDocument ??= client.toolMediaDocument().surfaceCreate()),
         deviceBridges: (groupId) => client.deviceBridges(groupId),
         deviceBridgeSupport: () => client.deviceBridgeSupport(),
         subscribe(listener) {
@@ -8346,6 +8379,10 @@ export function happyAgentWorkspaceStoreCreate(
         [Symbol.dispose]() {
             if (disposed) return;
             disposed = true;
+            for (const surface of surfaces) surface[Symbol.dispose]();
+            surfaces.clear();
+            artifacts?.[Symbol.dispose]();
+            toolMediaDocument?.[Symbol.dispose]();
             stop();
             botCreateRelease(true);
             const released = new Set<string>();

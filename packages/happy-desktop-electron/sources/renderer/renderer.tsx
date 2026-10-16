@@ -6,6 +6,7 @@ import {
     happyAgentHistoryCreate,
     happyAgentWelcomeSlides,
     happyAgentRouterConversationOpen,
+    happyAgentRouterWorkspaceGet,
     happyAgentRouterGroupOpen,
     happyAgentRouterGroupForget,
     happyAgentRouterSubtasksForget,
@@ -1169,6 +1170,8 @@ if (mediaPreviewBridge) {
         // changes, so a machine that connects after the URL already named it opens
         // the addressed conversation without the reader navigating twice.
         const happyAgents = happyAgentDirectoryStoreCreate(desktopBridge, runtimeStore, {
+            workspaceActive: (id) =>
+                happyAgentRouterWorkspaceGet(connectionUis.get(id)?.router ?? happyAgentRouter, id),
             cloudHostFor: auth.hostFor,
             attentionFollow(id, source) {
                 preferencesFor(id);

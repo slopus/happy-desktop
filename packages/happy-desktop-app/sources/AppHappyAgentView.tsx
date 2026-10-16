@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useRef, useSyncExternalStore, type ReactNode } from "react";
+import { flushSync } from "react-dom";
 import { happyAgentBotSubtasks, happyAgentTodoHeading } from "happy-desktop-state";
 import { AppGptLivePhone } from "./gptLive/AppGptLivePhone";
 import {
@@ -9,9 +10,11 @@ import {
     type MessageReferenceEntities,
 } from "./messageReferences";
 import type {
+    HappyAgentChatPanesStore,
+    HappyAgentChatPane,
+    HappyAgentChatPaneId,
     AppearanceStore,
     CommandPaletteStore,
-    HappyAgentArtifactCatalogStore,
     HappyAgentArtifactChatContext,
     HappyAgentArtifactId,
     HappyAgentArtifactPlaces,
@@ -113,6 +116,7 @@ import type {
     StatusBarStore,
 } from "happy-desktop-state";
 import {
+    happyAgentChatPanesStoreNoop,
     HAPPY_AGENT_FILE_LINK_READ_ONLY_REFUSAL,
     HAPPY_AGENT_PANEL_FILE_VIEW_ID,
     agentAuthor,
@@ -163,6 +167,8 @@ import {
 import {
     type AgentWaitStatus,
     AppShell,
+    ChatPanes,
+    ChatProjectPicker,
     APP_SHELL_PANEL_DEFAULT_WIDTH,
     type AppShellFocusedPane,
     Banner,
@@ -534,6 +540,7 @@ export interface AppBuildIdentity {
 }
 
 export interface AppHappyAgentViewProps {
+    chatPanes?: HappyAgentChatPanesStore;
     /** The host Happy Agent this window is an interface onto, and what it currently holds. */
     happyAgents: AppHappyAgentDirectoryStore;
     /**
@@ -2901,6 +2908,9 @@ const ARTIFACTS_SIDEBAR_ITEM: SidebarItem = {
  * content area instead of taking the window away.
  */
 export function AppHappyAgentView(props: AppHappyAgentViewProps) {
+    const chatPanes = props.chatPanes ?? happyAgentChatPanesStoreNoop;
+    const panes = useSyncExternalStore(chatPanes.subscribe, chatPanes.get, chatPanes.get);
+    const focusedPane = panes.panes.find((pane) => pane.id === panes.activePaneId);
     const directory = useSyncExternalStore(
         props.happyAgents.subscribe,
         props.happyAgents.get,
@@ -3019,6 +3029,10 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
         directory.happyAgents.find((happyAgent) => happyAgent.id === props.happyAgentId) ??
         directory.happyAgents[0] ??
         undefined;
+    const activeWorkspace =
+        focusedPane?.address.happyAgentId === active?.id
+            ? (focusedPane?.workspace ?? active?.session?.workspace)
+            : active?.session?.workspace;
     const viewerId = happyAgentOwnerAuthor.id;
     const activeAvailability = active ? happyAgentEntryAvailability(active) : undefined;
     const addressedProject =
@@ -3056,18 +3070,6 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
     const daemonStore = props.daemon ?? sidebarDaemonStoreNoop;
     const daemon = useSyncExternalStore(daemonStore.subscribe, daemonStore.get, daemonStore.get);
     const inboxPending = inbox.pending.length;
-    // Whether the addressed Happy Agent keeps artifacts at all. The catalog is
-    // read whether or not it is on screen, because the panel beside every chat
-    // exists only once the machine has answered that it does; one too old to
-    // know about them answers 404 and is offered no panel. The sidebar's row
-    // stays either way, and its page says when there is nothing to show.
-    const artifactCatalog: HappyAgentArtifactCatalogStore =
-        active?.session?.artifacts?.catalog() ?? happyAgentArtifactCatalogStoreNoop;
-    const artifactsAvailable = useSyncExternalStore(
-        artifactCatalog.subscribe,
-        () => artifactCatalog.get().availability === "available",
-        () => artifactCatalog.get().availability === "available",
-    );
     // The addressed Happy Agent's Surfaces: the sidebar's own list of them and
     // the dialogs that browse and make them read this one catalog, whatever is
     // on screen. One too old to keep Surfaces answers 404 and is offered none.
@@ -3580,7 +3582,12 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                     // A workspace that has not recorded where this project was
                     // left falls back to its most recent conversation, which is
                     // also what a workspace without the memory at all does.
-                    happyAgent.session?.workspace.get().groupResume?.get(groupId) ??
+                    (focusedPane?.address.happyAgentId === happyAgent.id
+                        ? focusedPane.workspace
+                        : happyAgent.session?.workspace
+                    )
+                        ?.get()
+                        .groupResume?.get(groupId) ??
                         openGroupFind(
                             happyAgent.projects,
                             happyAgent.bots,
@@ -3792,7 +3799,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
             props.update?.status === "downloaded" && props.onUpdateApply
                 ? { action: props.update.action, version: props.update.version }
                 : undefined,
-        workspace: active?.session?.workspace,
+        workspace: activeWorkspace,
         workspaceCreateProjectId: workspaceCreateTarget?.projectId,
         taskCreateAvailable: taskCreateTarget !== undefined,
     };
@@ -3802,7 +3809,10 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
     // exactly as long as the hold. A window with no palette shows no card: its
     // footer promises ⌘K, and a promise nothing answers is worse than silence.
     const paletteHints = !props.commandPalette ? undefined : active?.session?.workspace ? (
-        <HappyAgentQuickActionsSurface {...paletteSubject} workspace={active.session.workspace} />
+        <HappyAgentQuickActionsSurface
+            {...paletteSubject}
+            workspace={activeWorkspace ?? active.session.workspace}
+        />
     ) : (
         <HappyAgentQuickActions {...paletteSubject} facts={PALETTE_WORKSPACE_ABSENT} />
     );
@@ -3811,6 +3821,22 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
         experiments: experimentsStore,
         happyAgentOnline: activeHappyAgentOnline,
         onChatSelect: props.onChatSelect,
+        onChatOpenBeside: props.chatPanes
+            ? (happyAgentId, groupId, chatId) => {
+                  const entry = props.happyAgents
+                      .get()
+                      .happyAgents.find((item) => item.id === happyAgentId);
+                  if (entry?.session)
+                      chatPanes.paneOpen(
+                          {
+                              happyAgentId,
+                              groupId: groupId as HappyAgentGroupId,
+                              chatId: chatId as HappyAgentSessionId,
+                          },
+                          entry.session.workspace,
+                      );
+              }
+            : undefined,
         onFileSelect: props.onFileSelect,
         onSettingsOpen: props.onSettingsOpen,
         onSettingsSectionOpen: props.onSettingsSectionOpen,
@@ -4000,58 +4026,130 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                 </>
             );
 
-        if (active?.session)
-            return (
+        const workspaceSurface = (entry: AppHappyAgentEntry, pane?: HappyAgentChatPane) =>
+            entry.session ? (
                 <HappyAgentWorkspaceSurface
+                    paneId={pane?.id}
+                    onNewChatBeside={props.chatPanes ? chatPanes.projectPickerOpen : undefined}
+                    onChatOpenBeside={
+                        props.chatPanes
+                            ? (groupId, chatId) =>
+                                  chatPanes.paneOpen(
+                                      { happyAgentId: entry.id, groupId, chatId },
+                                      entry.session!.workspace,
+                                  )
+                            : undefined
+                    }
+                    onPaneClose={
+                        pane && panes.panes.length > 1
+                            ? () => chatPanes.paneClose(pane.id)
+                            : undefined
+                    }
                     availability={
-                        activeAvailability ??
-                        happyAgentAvailabilityProject(active.session.connection.get(), true, {
-                            status: active.status,
-                            ...(active.message === undefined ? {} : { message: active.message }),
+                        happyAgentEntryAvailability(entry) ??
+                        happyAgentAvailabilityProject(entry.session.connection.get(), true, {
+                            status: entry.status,
+                            ...(entry.message === undefined ? {} : { message: entry.message }),
                         })
                     }
                     appearance={props.appearance}
                     browserContent={props.browserContent}
-                    browserConnectionId={active.remoteId ?? null}
+                    browserConnectionId={entry.remoteId ?? null}
                     htmlPreview={props.htmlPreview}
                     mediaWindow={props.mediaWindow}
-                    chatId={props.chatId}
-                    clock={active.session.clock}
-                    groupId={props.groupId}
-                    key={active.id}
-                    onChatSelect={(groupId, chatId, replace) =>
-                        props.onChatSelect(active.id, groupId, chatId, replace)
-                    }
+                    chatId={pane ? pane.address.chatId : props.chatId}
+                    clock={entry.session.clock}
+                    groupId={pane ? pane.address.groupId : props.groupId}
+                    key={pane?.id ?? entry.id}
+                    onChatSelect={(groupId, chatId, replace) => {
+                        if (pane) chatPanes.paneFocus(pane.id);
+                        props.onChatSelect(entry.id, groupId, chatId, replace);
+                    }}
                     onChatClose={(groupId, chatId, fallbackChatId) =>
-                        props.onChatClose?.(active.id, groupId, chatId, fallbackChatId) ?? false
+                        props.onChatClose?.(entry.id, groupId, chatId, fallbackChatId) ?? false
                     }
-                    onFileClose={(groupId, path) => props.onFileClose(active.id, groupId, path)}
+                    onFileClose={(groupId, path) => props.onFileClose(entry.id, groupId, path)}
                     onFileSelect={(groupId, chatId, path, kind, replace) =>
-                        props.onFileSelect(active.id, groupId, chatId, path, kind, replace)
+                        props.onFileSelect(entry.id, groupId, chatId, path, kind, replace)
                     }
                     onExternalLinkOpen={props.onExternalLinkOpen ?? openExternalLink}
                     linkOpenDefault={settings.linkOpenPlacement}
                     platform={props.platform}
-                    projects={active.projects}
-                    happyAgentOnline={activeHappyAgentOnline}
-                    providerUsage={active.session.providerUsage}
+                    projects={entry.projects}
+                    happyAgentOnline={() => {
+                        const current = props.happyAgents
+                            .get()
+                            .happyAgents.find((item) => item.id === entry.id);
+                        return current
+                            ? happyAgentEntryAvailability(current)?.online === true
+                            : false;
+                    }}
+                    providerUsage={entry.session.providerUsage}
                     titleShimmerEnabled={titleShimmerEnabled}
                     viewerId={viewerId}
-                    workspace={active.session.workspace}
+                    workspace={pane?.workspace ?? entry.session.workspace}
                     {...(changeTiersStore === undefined ? {} : { changeTiers: changeTiersStore })}
-                    {...(artifactsAvailable && active.session.artifacts
+                    {...(entry.session.artifacts
                         ? {
-                              artifacts: active.session.artifacts,
+                              artifacts: pane?.workspace.artifacts() ?? entry.session.artifacts,
                               ...(props.artifactPage ? { artifactPage: props.artifactPage } : {}),
                               onArtifactOpen: (artifactId: string) =>
-                                  props.onArtifactOpen?.(active.id, artifactId),
+                                  props.onArtifactOpen?.(entry.id, artifactId),
                           }
                         : {})}
                     {...(workspaceCreateTarget
                         ? { workspaceCreateProjectId: workspaceCreateTarget.projectId }
                         : {})}
                 />
-            );
+            ) : null;
+        if (active?.session) {
+            if (props.chatPanes && panes.panes.length > 0)
+                return (
+                    <ChatPanes
+                        activeId={panes.activePaneId}
+                        onFocus={(id) => chatPanes.paneFocus(id as HappyAgentChatPaneId)}
+                        onResize={(id, nextId, weight, nextWeight) =>
+                            chatPanes.paneResize(
+                                id as HappyAgentChatPaneId,
+                                nextId as HappyAgentChatPaneId,
+                                weight,
+                                nextWeight,
+                            )
+                        }
+                        previousShortcut={APP_SHORTCUTS.panePrevious}
+                        nextShortcut={APP_SHORTCUTS.paneNext}
+                        panes={panes.panes.map((pane, index) => {
+                            const entry = directory.happyAgents.find(
+                                (item) => item.id === pane.address.happyAgentId,
+                            );
+                            return {
+                                id: pane.id,
+                                weight: pane.weight,
+                                label: `Chat pane ${index + 1}${entry ? ` · ${entry.label}` : ""}`,
+                                content: entry?.session ? (
+                                    workspaceSurface(entry, pane)
+                                ) : (
+                                    <EmptyState
+                                        action={
+                                            panes.panes.length > 1
+                                                ? {
+                                                      label: "Close pane",
+                                                      onClick: () => chatPanes.paneClose(pane.id),
+                                                  }
+                                                : undefined
+                                        }
+                                        title="Machine unavailable"
+                                        description="This chat will return when its machine connects."
+                                        icon="link"
+                                        size="panel"
+                                    />
+                                ),
+                            };
+                        })}
+                    />
+                );
+            return workspaceSurface(active);
+        }
         // The host Happy Agent has no live stores yet — it is still connecting, or it could
         // not be reached. The sidebar stays so the window keeps its shape while
         // that resolves; anything the reader can do about it is a settings act,
@@ -4125,6 +4223,16 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                     ]}
                 />
             ) : null}
+            {props.chatPanes ? (
+                <WindowShortcuts
+                    actions={[
+                        { run: chatPanes.projectPickerOpen, shortcut: APP_SHORTCUTS.chatBeside },
+                    ]}
+                />
+            ) : null}
+            {panes.picker ? (
+                <HappyAgentChatProjectPicker directory={directory} store={chatPanes} />
+            ) : null}
             {/* Cmd-N belongs to the window too: a task is made from wherever
                 the reader is, as the Tasks heading's + makes one. Bound only
                 while the machine on screen can make one, so an older Happy
@@ -4186,7 +4294,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                 active?.session?.workspace ? (
                     <HappyAgentCommandPaletteSurface
                         {...paletteSubject}
-                        workspace={active.session.workspace}
+                        workspace={activeWorkspace ?? active.session.workspace}
                         {...paletteActions}
                     />
                 ) : (
@@ -4198,6 +4306,58 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                 )
             ) : null}
         </HappyAgentVersionProvider>
+    );
+}
+
+function HappyAgentChatProjectPicker(props: {
+    directory: AppHappyAgentDirectorySnapshot;
+    store: HappyAgentChatPanesStore;
+}) {
+    const snapshot = useSyncExternalStore(props.store.subscribe, props.store.get, props.store.get);
+    const picker = snapshot.picker;
+    if (!picker) return null;
+    const query = picker.query.trim().toLocaleLowerCase();
+    const choices = props.directory.happyAgents.flatMap((entry) => {
+        if (!entry.session || happyAgentEntryAvailability(entry)?.online !== true) return [];
+        return entry.projects
+            .filter((project) => project.lifecycle.phase === "ready" && !project.writeRefusal)
+            .filter((project) =>
+                `${project.name} ${project.displayPath} ${entry.label}`
+                    .toLocaleLowerCase()
+                    .includes(query),
+            )
+            .map((project) => ({
+                id: `${entry.id}:${project.id}`,
+                title: project.name,
+                detail: `${entry.label} · ${project.displayPath}`,
+                entry,
+                project,
+            }));
+    });
+    return (
+        <ChatProjectPicker
+            projects={choices}
+            query={picker.query}
+            activeIndex={picker.activeIndex}
+            busy={picker.busy}
+            error={picker.error}
+            onClose={props.store.projectPickerClose}
+            onQueryChange={props.store.projectQueryUpdate}
+            onActiveIndexChange={props.store.projectIndexUpdate}
+            onSelect={(id) => {
+                const choice = choices.find((entry) => entry.id === id);
+                if (
+                    !choice?.entry.session ||
+                    happyAgentEntryAvailability(choice.entry)?.online !== true
+                )
+                    return;
+                void props.store.projectChoose(
+                    { happyAgentId: choice.entry.id, groupId: choice.project.id },
+                    choice.entry.session.workspace,
+                    { cwd: choice.project.path },
+                );
+            }}
+        />
     );
 }
 
@@ -4233,6 +4393,7 @@ interface HappyAgentPaletteActions {
     store: CommandPaletteStore;
     happyAgentOnline: () => boolean;
     onChatSelect(happyAgentId: string, groupId: string | undefined, chatId?: string): void;
+    onChatOpenBeside?(happyAgentId: string, groupId: string, chatId: string): void;
     onFileSelect(
         happyAgentId: string,
         groupId: string,
@@ -4478,7 +4639,7 @@ function HappyAgentCommandPalette(
     const length = commandPaletteResultsRows(sections).length;
 
     /** Runs one row. A settings row answers in place; anything else is a departure. */
-    const rowCommit = (index: number) => {
+    const rowCommit = (index: number, beside = false) => {
         const row = commandPaletteRowAt(results, index);
         if (!row) return;
         if (row.kind === "setting") {
@@ -4488,9 +4649,13 @@ function HappyAgentCommandPalette(
         // The palette closes before the act rather than after it: navigation
         // moves the window under it, and a surface that goes away as a result
         // of what it did looks like it failed to.
-        props.store.paletteClose();
-        paletteCommandRun(row.command, props);
+        // Finish the palette's focus restoration before navigation can focus another pane.
+        flushSync(() => props.store.paletteClose());
+        paletteCommandRun(row.command, props, beside);
     };
+
+    const selected = commandPaletteRowAt(results, palette.activeIndex);
+    const chatSelected = selected?.kind === "command" && selected.command.kind === "chatOpen";
 
     return (
         <ModalOverlay onDismiss={() => props.store.paletteClose()} placement="top">
@@ -4498,6 +4663,15 @@ function HappyAgentCommandPalette(
                 onClose={() => props.store.paletteClose()}
                 onQueryChange={(value) => props.store.queryUpdate(value)}
                 onSelectionCommit={() => rowCommit(palette.activeIndex)}
+                selectionCommitLabel={chatSelected ? "Open here" : "Select"}
+                alternateAction={
+                    chatSelected && props.onChatOpenBeside
+                        ? {
+                              label: "Open beside",
+                              onSelect: () => rowCommit(palette.activeIndex, true),
+                          }
+                        : undefined
+                }
                 onSelectionMove={(direction) =>
                     props.store.activeIndexUpdate(
                         commandPaletteIndexMove(palette.activeIndex, direction, length),
@@ -4695,11 +4869,14 @@ function paletteSettingCommit(row: CommandPaletteSettingRow, actions: HappyAgent
 function paletteCommandRun(
     command: CommandPaletteCommand,
     props: HappyAgentPaletteSubject & HappyAgentPaletteActions & { facts: HappyAgentPaletteFacts },
+    beside = false,
 ) {
     switch (command.kind) {
         case "chatOpen": {
+            const select = beside ? props.onChatOpenBeside : props.onChatSelect;
+            if (!select) return;
             if (!command.archived) {
-                props.onChatSelect(command.happyAgentId, command.groupId, command.chatId);
+                select(command.happyAgentId, command.groupId, command.chatId);
                 return;
             }
             // A closed session is asked of the host by id: it stopped listing
@@ -4709,9 +4886,7 @@ function paletteCommandRun(
             if (!workspace || !props.happyAgentOnline()) return;
             void workspace
                 .conversationRestore(command.chatId as HappyAgentSessionId)
-                .then(() =>
-                    props.onChatSelect(command.happyAgentId, command.groupId, command.chatId),
-                )
+                .then(() => select(command.happyAgentId, command.groupId, command.chatId))
                 .catch(() => undefined);
             return;
         }
@@ -5505,6 +5680,10 @@ function HappyAgentArtifactsPanelSurface(props: {
 }
 
 interface HappyAgentWorkspaceSurfaceProps {
+    paneId?: string;
+    onNewChatBeside?: () => void;
+    onChatOpenBeside?: (groupId: HappyAgentGroupId, chatId: HappyAgentSessionId) => void;
+    onPaneClose?: () => void;
     /** The machine's artifacts, present only once it has said it keeps them. */
     artifacts?: HappyAgentArtifacts;
     /** Shows an HTML artifact opened beside the conversation as a site of its own. */
@@ -5594,6 +5773,38 @@ function useComposerModelUsageWatch(
 }
 
 function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
+    const artifactCatalog = props.artifacts?.catalog() ?? happyAgentArtifactCatalogStoreNoop;
+    const artifactsAvailable = useSyncExternalStore(
+        artifactCatalog.subscribe,
+        () => artifactCatalog.get().availability === "available",
+        () => artifactCatalog.get().availability === "available",
+    );
+    const paneActions = (
+        <>
+            {props.onNewChatBeside ? (
+                <Button
+                    aria-label="New chat beside"
+                    icon="plus"
+                    iconOnly
+                    onClick={props.onNewChatBeside}
+                    shortcut={APP_SHORTCUTS.chatBeside}
+                    size="small"
+                    variant="ghost"
+                />
+            ) : null}
+            {props.onPaneClose ? (
+                <Button
+                    aria-label="Close chat pane"
+                    icon="close"
+                    iconOnly
+                    onClick={props.onPaneClose}
+                    size="small"
+                    variant="ghost"
+                />
+            ) : null}
+        </>
+    );
+
     const modelUsageWatch = useComposerModelUsageWatch(props.providerUsage);
     const workspaceFocusedPane = useRef<AppShellFocusedPane>("workspace");
     // AppShell's panel callback ref treats this callback's identity as the
@@ -5837,6 +6048,24 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
             detachedConversationId ?? openGroup?.singleConversationId,
         ),
     ];
+    const chatStep = (direction: 1 | -1) => {
+        if (!openGroup || singleChat) return;
+        const chatIds = new Set<string>(
+            openGroup.conversations.map((conversation) => conversation.id),
+        );
+        const chats = groupTabs.filter((tab) => chatIds.has(tab.id));
+        if (chats.length === 0) return;
+        const index = chats.findIndex((tab) => tab.id === props.chatId);
+        const next =
+            chats[
+                index < 0
+                    ? direction === 1
+                        ? 0
+                        : chats.length - 1
+                    : (index + direction + chats.length) % chats.length
+            ];
+        if (next) props.onChatSelect(openGroup.id, next.id);
+    };
     const historyMenuItems = (): readonly MenuItem[] => {
         if (!openGroup) return [];
         // One list in one order: every session this workspace has, open or
@@ -6251,7 +6480,7 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
         ) : (
             <HappyAgentConversationBody
                 modelUsageWatch={modelUsageWatch}
-                {...(props.artifacts ? { artifacts: props.artifacts } : {})}
+                {...(props.artifacts && artifactsAvailable ? { artifacts: props.artifacts } : {})}
                 referenceEntities={messageReferenceEntities(workspace.list)}
                 onReferenceGroupOpen={(groupId, agentId) => {
                     // A workspace or project a reference names opens where the
@@ -6374,8 +6603,9 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                 // own — the reader's choice to have it open is untouched here.
                 panel.open && !checkoutClosed ? (
                     <HappyAgentPanelBody
+                        paneId={props.paneId}
                         {...(panelCloseTarget ? { closeShortcut: APP_SHORTCUTS.tabClose } : {})}
-                        {...(props.artifacts && props.onArtifactOpen
+                        {...(props.artifacts && artifactsAvailable && props.onArtifactOpen
                             ? {
                                   artifacts: {
                                       artifacts: props.artifacts,
@@ -6565,7 +6795,9 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                         // onto it, are the two things this header could offer
                         // that would fail on arrival.
                         actions={
-                            checkoutClosed ? undefined : (
+                            checkoutClosed ? (
+                                paneActions
+                            ) : (
                                 <>
                                     {/* Hands this project's directory to another
                                     application, or puts its path on the
@@ -6630,6 +6862,7 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                                                 void props.workspace.openIn(openGroup.id, target);
                                         }}
                                     />
+                                    {paneActions}
                                     {!panel.open ? (
                                         <Button
                                             aria-label="Show panel"
@@ -6663,6 +6896,15 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                             // do when Files or an offline session is the only
                             // current target.
                             { run: activeTabClose, shortcut: APP_SHORTCUTS.tabClose },
+                            ...(!singleChat && openGroup.conversations.length > 0
+                                ? [
+                                      {
+                                          run: () => chatStep(-1),
+                                          shortcut: APP_SHORTCUTS.chatPrevious,
+                                      },
+                                      { run: () => chatStep(1), shortcut: APP_SHORTCUTS.chatNext },
+                                  ]
+                                : []),
                             ...(checkoutClosed
                                 ? []
                                 : [
@@ -6910,7 +7152,10 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                                         !entry.saving,
                                 )
                             }
-                            transferTargets={MAIN_TRANSFER_TARGETS}
+                            transferTargets={MAIN_TRANSFER_TARGETS.map((target) => ({
+                                ...target,
+                                zone: `${props.paneId ?? "workspace"}:${target.zone}`,
+                            }))}
                             tabMenuItems={(tab) => {
                                 const index = sweepableTabs.findIndex(
                                     (entry) => entry.id === tab.id,
@@ -6926,9 +7171,31 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                                     mainTools.some((entry) => entry.id === tab.id)
                                         ? "Close"
                                         : "Archive";
-                                return tabStripMenu(verb, index, sweepableTabs.length - index - 1);
+                                return [
+                                    ...(verb === "Archive" &&
+                                    tab.id !== props.chatId &&
+                                    props.onChatOpenBeside
+                                        ? [
+                                              {
+                                                  kind: "item" as const,
+                                                  id: "open-beside",
+                                                  label: "Open beside",
+                                                  icon: "panel-expand" as const,
+                                              },
+                                              { kind: "separator" as const },
+                                          ]
+                                        : []),
+                                    ...tabStripMenu(verb, index, sweepableTabs.length - index - 1),
+                                ];
                             }}
                             onTabMenuSelect={(tab, actionId) => {
+                                if (actionId === "open-beside") {
+                                    props.onChatOpenBeside?.(
+                                        openGroup.id,
+                                        tab.id as HappyAgentSessionId,
+                                    );
+                                    return;
+                                }
                                 const ids = sweepableTabs.map((entry) => entry.id);
                                 const index = ids.indexOf(tab.id);
                                 if (index < 0) return;
@@ -6954,7 +7221,7 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                                 thing will be rather than at a stripe. */}
                             <TransferZone
                                 icon="panel-collapse"
-                                id={TRANSFER_ZONE_MAIN}
+                                id={`${props.paneId ?? "workspace"}:${TRANSFER_ZONE_MAIN}`}
                                 label="Open in the main content"
                             >
                                 <DeferredPane
@@ -7043,7 +7310,11 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                 <>
                     {/* With no project open there is no tab strip, so this side of
                         the window would have no lane to drag it by. */}
-                    {desktop ? <WindowDragRegion /> : null}
+                    {props.paneId ? (
+                        <ChannelHeader title="Chat" icon="inbox" actions={paneActions} />
+                    ) : desktop ? (
+                        <WindowDragRegion />
+                    ) : null}
                     {/* No banner for an unreachable Happy Agent here either. The sidebar
                         footer is the window's one account
                         of the machine being out of touch, and this screen has
@@ -7083,6 +7354,20 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                     )}
                 </>
             )}
+            {props.paneId ? (
+                <HappyAgentWindowDialogs
+                    projects={props.projects}
+                    happyAgentOnline={props.happyAgentOnline}
+                    workspace={props.workspace}
+                    onTaskOpen={(task) => {
+                        props.workspace.taskBrowseClose();
+                        props.onChatSelect(task.workspaceId, task.conversation.id);
+                    }}
+                    {...(props.availability.refusal === undefined
+                        ? {}
+                        : { unavailable: props.availability.refusal })}
+                />
+            ) : null}
         </AppShell>
     );
 }
@@ -9119,6 +9404,7 @@ function HappyAgentDevicesSurface(props: { store: HappyAgentDeviceBridgesStore }
 }
 
 function HappyAgentPanelBody(props: {
+    paneId?: string;
     activity?: HappyAgentConversationSnapshot;
     /**
      * What the open chat has published, offered only where the machine keeps
@@ -9399,7 +9685,7 @@ function HappyAgentPanelBody(props: {
                 side of the window, not at a stripe within it. */}
             <TransferZone
                 icon="panel-expand"
-                id={TRANSFER_ZONE_PANEL}
+                id={`${props.paneId ?? "workspace"}:${TRANSFER_ZONE_PANEL}`}
                 label="Open in the side panel"
             >
                 <TabbedPane
@@ -9489,7 +9775,10 @@ function HappyAgentPanelBody(props: {
                         tab.id !== "preview" &&
                         !(tab.id === HAPPY_AGENT_PANEL_FILE_VIEW_ID && panelFile?.linked)
                     }
-                    transferTargets={PANEL_TRANSFER_TARGETS}
+                    transferTargets={PANEL_TRANSFER_TARGETS.map((target) => ({
+                        ...target,
+                        zone: `${props.paneId ?? "workspace"}:${target.zone}`,
+                    }))}
                 >
                     <HappyAgentToolBodies
                         activeId={props.panel.activeViewId}

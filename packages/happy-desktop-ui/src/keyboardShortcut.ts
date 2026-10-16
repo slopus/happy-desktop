@@ -10,20 +10,28 @@ export interface CommandShortcut extends KeyboardShortcut {
     readonly shift: boolean;
 }
 
+const ARROW_KEYS = {
+    arrowleft: { label: "←", code: "ArrowLeft" },
+    arrowright: { label: "→", code: "ArrowRight" },
+    arrowup: { label: "↑", code: "ArrowUp" },
+    arrowdown: { label: "↓", code: "ArrowDown" },
+} as const;
+
 /** Creates one exact macOS Command chord and every representation its UI needs. */
 export function commandShortcut(
     key: string,
     modifiers: { readonly alt?: boolean; readonly shift?: boolean } = {},
 ): CommandShortcut {
     const normalized = key.toLowerCase();
-    const label = normalized.toUpperCase();
+    const arrow = ARROW_KEYS[normalized as keyof typeof ARROW_KEYS];
+    const label = arrow?.label ?? normalized.toUpperCase();
     const alt = modifiers.alt === true;
     const shift = modifiers.shift === true;
     return {
         alt,
-        aria: `Meta+${alt ? "Alt+" : ""}${shift ? "Shift+" : ""}${label}`,
+        aria: `Meta+${alt ? "Alt+" : ""}${shift ? "Shift+" : ""}${arrow?.code ?? label}`,
         caps: `${alt ? "⌥" : ""}${shift ? "⇧" : ""}⌘${label}`,
-        code: /^[0-9]$/.test(normalized) ? `Digit${label}` : `Key${label}`,
+        code: arrow?.code ?? (/^[0-9]$/.test(normalized) ? `Digit${label}` : `Key${label}`),
         key: normalized,
         shift,
     };

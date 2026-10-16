@@ -34,6 +34,7 @@ export interface HappyAgentToolMediaDocumentSnapshot {
  * own. Pictures and recordings never come here: they load by address.
  */
 export interface HappyAgentToolMediaDocumentStore {
+    surfaceCreate(): HappyAgentToolMediaDocumentStore;
     get(): HappyAgentToolMediaDocumentSnapshot;
     subscribe(listener: () => void): () => void;
     /** Shows one document, or none; the previous one's bytes are released. */
@@ -107,6 +108,7 @@ export function happyAgentToolMediaDocumentStoreCreate(
     };
 
     return {
+        surfaceCreate: () => happyAgentToolMediaDocumentStoreCreate(deps),
         get: () => snapshot,
         subscribe(listener) {
             listeners.add(listener);

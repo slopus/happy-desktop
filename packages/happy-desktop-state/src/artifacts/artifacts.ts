@@ -26,6 +26,8 @@ import {
  * never shows artifacts costs this connection nothing.
  */
 export interface HappyAgentArtifacts {
+    /** Independent panel and viewer lifetimes for another visible workspace. */
+    surfaceCreate(): HappyAgentArtifacts;
     /** The whole catalog, as the Artifacts page and its sidebar row read it. */
     catalog(): HappyAgentArtifactCatalogStore;
     /** The list beside the open chat, narrowed to it by the chat's own context. */
@@ -105,6 +107,7 @@ export function happyAgentArtifactsCreate(deps: HappyAgentArtifactsDeps): HappyA
     const peopleOf = (): HappyAgentArtifactPeople =>
         (people ??= inert(happyAgentArtifactPeopleCreate(deps.client)));
     return {
+        surfaceCreate: () => happyAgentArtifactsCreate(deps),
         catalog() {
             return (catalog ??= inert(
                 happyAgentArtifactCatalogStoreCreate({

@@ -12,6 +12,11 @@ export const APP_SHORTCUTS = {
     panelToggle: commandShortcut("j"),
     panelToggleAlternate: commandShortcut("b", { alt: true }),
     sessionCreate: commandShortcut("t"),
+    chatBeside: commandShortcut("t", { shift: true }),
+    panePrevious: commandShortcut("arrowleft", { alt: true }),
+    paneNext: commandShortcut("arrowright", { alt: true }),
+    chatPrevious: commandShortcut("arrowup", { alt: true }),
+    chatNext: commandShortcut("arrowdown", { alt: true }),
     tabClose: commandShortcut("w"),
     /** Opens the new-task surface on the active Happy Agent, as its Tasks heading's + does. */
     taskCreate: commandShortcut("n"),

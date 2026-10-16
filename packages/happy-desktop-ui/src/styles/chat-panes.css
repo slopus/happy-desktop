@@ -1,0 +1,60 @@
+.happy-chat-panes {
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+    height: 100%;
+}
+
+.happy-chat-panes__viewport {
+    display: flex;
+    width: 100%;
+    height: 100%;
+}
+
+.happy-chat-panes__row {
+    display: flex;
+    flex: 1 0 100%;
+    min-width: 100%;
+    height: 100%;
+}
+
+.happy-chat-panes__pane {
+    display: flex;
+    flex-direction: column;
+    flex-basis: 0;
+    min-width: 320px;
+    min-height: 0;
+    outline: none;
+    position: relative;
+}
+
+/* An inset focus marker leaves the header and transcript geometry unchanged. */
+.happy-chat-panes__pane[data-active="true"]::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: var(--text-link);
+    pointer-events: none;
+}
+
+.happy-chat-panes__pane:only-child::after {
+    display: none;
+}
+
+.happy-chat-panes__resize {
+    flex: 0 0 5px;
+    cursor: col-resize;
+    touch-action: none;
+    background: var(--groupped-background);
+    border-inline: 1px solid var(--divider);
+    box-sizing: border-box;
+    outline-offset: -2px;
+}
+
+.happy-chat-panes__resize:hover,
+.happy-chat-panes__resize:focus-visible {
+    background: var(--text-link);
+}

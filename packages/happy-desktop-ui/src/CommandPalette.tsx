@@ -33,6 +33,9 @@ export type CommandPaletteProps = {
     onSelectionMove?: (direction: 1 | -1) => void;
     /** Runs the owner's highlighted row from Enter typed in the input. */
     onSelectionCommit?: () => void;
+    /** Optional Shift-Enter action for the highlighted result, shown beside the Enter hint. */
+    alternateAction?: { readonly label: string; readonly onSelect: () => void };
+    selectionCommitLabel?: string;
     /** Result/command body rendered under the input row. */
     children: ReactNode;
     placeholder?: string;
@@ -67,6 +70,8 @@ export function CommandPalette(props: CommandPaletteProps) {
         "onClose",
         "onSelectionMove",
         "onSelectionCommit",
+        "alternateAction",
+        "selectionCommitLabel",
         "children",
         "placeholder",
         "closeLabel",
@@ -178,7 +183,9 @@ export function CommandPalette(props: CommandPaletteProps) {
                         }
                         if (event.key === "Enter" && local.onSelectionCommit) {
                             event.preventDefault();
-                            local.onSelectionCommit();
+                            if (event.shiftKey && local.alternateAction)
+                                local.alternateAction.onSelect();
+                            else local.onSelectionCommit();
                         }
                     }}
                     placeholder={label()}
@@ -210,6 +217,23 @@ export function CommandPalette(props: CommandPaletteProps) {
                     {local.children}
                 </div>
             </ScrollArea>
+            {local.selectionCommitLabel ? (
+                <div
+                    className="happy-command-palette__actions"
+                    data-happy-desktop-ui="command-palette-actions"
+                >
+                    <span className="happy-command-palette__action">
+                        <KeyCap keys="ENTER" />
+                        {local.selectionCommitLabel}
+                    </span>
+                    {local.alternateAction ? (
+                        <span className="happy-command-palette__action">
+                            <KeyCap keys="⇧ENTER" />
+                            {local.alternateAction.label}
+                        </span>
+                    ) : null}
+                </div>
+            ) : null}
         </div>
     );
 }

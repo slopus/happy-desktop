@@ -1,5 +1,6 @@
 import {
     useCallback,
+    useContext,
     useLayoutEffect,
     useRef,
     useState,
@@ -12,6 +13,7 @@ import {
     type MouseEvent as ReactMouseEvent,
     type ReactNode,
 } from "react";
+import { ChatPaneFocusContext } from "./ChatPaneFocus";
 import { AudienceToggle, type AudienceValue } from "./AudienceToggle";
 import { CommandPicker, type CommandPickerItem } from "./CommandPicker";
 import { Avatar, type ToneName } from "./Avatar";
@@ -404,6 +406,7 @@ export function Composer(props: ComposerProps) {
     const fileInputEl = useRef<HTMLInputElement>(null);
     const inputEl = useRef<HTMLDivElement>(null);
     const textareaEl = useRef<HTMLTextAreaElement>(null);
+    const paneActive = useContext(ChatPaneFocusContext);
     const draftScrollbarController = useScrollbarController("vertical");
     const draftScrollbarHost = useCallback(
         (element: HTMLDivElement | null) => draftScrollbarController.hostSet(element),
@@ -538,12 +541,12 @@ export function Composer(props: ComposerProps) {
     };
     // eslint-disable-next-line happy-react/no-layout-effect -- a completed send returns real keyboard focus to the committed textarea only when this composer initiated the focus handoff
     useLayoutEffect(() => {
-        if (wasBusy.current && !busy && restoreFocusAfterSend.current) {
+        if (wasBusy.current && !busy && restoreFocusAfterSend.current && paneActive) {
             if (textareaEl.current) focusUnlessWritingElsewhere(textareaEl.current);
             restoreFocusAfterSend.current = false;
         }
         wasBusy.current = busy;
-    }, [busy]);
+    }, [busy, paneActive]);
     // A composer nobody can type into neither claims typing nor takes the caret.
     useFocusOnType(
         textareaEl,
@@ -680,6 +683,8 @@ export function Composer(props: ComposerProps) {
         });
     };
     const onKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
+        // Modified arrows belong to window navigation, even while suggestions are open.
+        const suggestionArrow = !event.metaKey && !event.ctrlKey && !event.altKey;
         if (
             event.key === "Tab" &&
             event.shiftKey &&
@@ -693,12 +698,12 @@ export function Composer(props: ComposerProps) {
         }
         if (commandOpen()) {
             const list = commands();
-            if (event.key === "ArrowDown") {
+            if (suggestionArrow && event.key === "ArrowDown") {
                 event.preventDefault();
                 setCommandIndex((index) => (Math.min(index, list.length - 1) + 1) % list.length);
                 return;
             }
-            if (event.key === "ArrowUp") {
+            if (suggestionArrow && event.key === "ArrowUp") {
                 event.preventDefault();
                 setCommandIndex(
                     (index) => (Math.min(index, list.length - 1) - 1 + list.length) % list.length,
@@ -722,12 +727,12 @@ export function Composer(props: ComposerProps) {
         }
         if (mentionOpen()) {
             const list = filtered();
-            if (event.key === "ArrowDown" && list.length > 0) {
+            if (suggestionArrow && event.key === "ArrowDown" && list.length > 0) {
                 event.preventDefault();
                 setActiveIndex((index) => (index + 1) % list.length);
                 return;
             }
-            if (event.key === "ArrowUp" && list.length > 0) {
+            if (suggestionArrow && event.key === "ArrowUp" && list.length > 0) {
                 event.preventDefault();
                 setActiveIndex((index) => (index - 1 + list.length) % list.length);
                 return;
@@ -848,7 +853,7 @@ export function Composer(props: ComposerProps) {
      */
     // eslint-disable-next-line happy-react/no-layout-effect -- claiming a file drop no surface wants requires window-level drag listeners whose lifetime follows the mounted composer, which no handler on a rendered element can express
     useLayoutEffect(() => {
-        if (!props.focusOnType || !dropAccepted()) return;
+        if (!paneActive || !props.focusOnType || !dropAccepted()) return;
         const onDragOver = (event: DragEvent) => {
             if (event.defaultPrevented || !dragCarriesFiles(event.dataTransfer)) return;
             event.preventDefault();

@@ -1,4 +1,5 @@
-import { useEffectEvent, useLayoutEffect } from "react";
+import { useContext, useEffectEvent, useLayoutEffect } from "react";
+import { ChatPaneFocusContext } from "./ChatPaneFocus";
 import {
     commandShortcutMatches,
     windowShortcutBlocked,
@@ -15,11 +16,12 @@ export interface WindowShortcutAction {
  * caller supplies only commands that are currently actionable.
  */
 export function WindowShortcuts(props: { readonly actions: readonly WindowShortcutAction[] }) {
+    const paneActive = useContext(ChatPaneFocusContext);
     const shortcutRun = useEffectEvent((event: KeyboardEvent) => {
         const action = props.actions.find((candidate) =>
             commandShortcutMatches(event, candidate.shortcut),
         );
-        if (!action || windowShortcutBlocked()) return;
+        if (!paneActive || !action || windowShortcutBlocked()) return;
         event.preventDefault();
         action.run();
     });

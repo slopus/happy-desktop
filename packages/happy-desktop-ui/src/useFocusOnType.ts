@@ -1,4 +1,5 @@
-import { useLayoutEffect, type RefObject } from "react";
+import { useContext, useLayoutEffect, type RefObject } from "react";
+import { ChatPaneFocusContext } from "./ChatPaneFocus";
 
 /**
  * Controls that make words out of characters: text entry, and the list and menu
@@ -105,18 +106,19 @@ export function useFocusOnType(
     claimTyping: boolean,
     focusKey: string | undefined,
 ): void {
+    const paneActive = useContext(ChatPaneFocusContext);
     // eslint-disable-next-line happy-react/no-layout-effect -- moving real keyboard focus to a destination the reader has just arrived at is imperative browser work with no declarative or event-driven boundary: the control stays mounted across the move, so no ref callback or handler observes it
     useLayoutEffect(() => {
         // A control nobody can type into is not somewhere to put the caret, and
         // taking focus from whatever does have it would be worse than leaving it
         // where it is.
         const element = control.current;
-        if (focusKey === undefined || !element) return;
+        if (!paneActive || focusKey === undefined || !element) return;
         focusUnlessWritingElsewhere(element);
-    }, [control, focusKey]);
+    }, [control, focusKey, paneActive]);
     // eslint-disable-next-line happy-react/no-layout-effect -- claiming typing that no focused control wants requires one window-level keydown listener, which no handler on a rendered element can express
     useLayoutEffect(() => {
-        if (!claimTyping) return;
+        if (!paneActive || !claimTyping) return;
         const onKeyDown = (event: KeyboardEvent) => {
             const element = control.current;
             if (!element || !typingIsUnclaimed(event, element)) return;
@@ -128,5 +130,5 @@ export function useFocusOnType(
         };
         window.addEventListener("keydown", onKeyDown);
         return () => window.removeEventListener("keydown", onKeyDown);
-    }, [claimTyping, control]);
+    }, [claimTyping, control, paneActive]);
 }

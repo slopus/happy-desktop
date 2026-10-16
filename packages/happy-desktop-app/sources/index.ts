@@ -49,6 +49,7 @@ export {
     happyAgentRouterConversationOpen,
     happyAgentRouterGroupOpen,
     happyAgentRouterWorkspaceVisible,
+    happyAgentRouterWorkspaceGet,
     happyAgentRouterGroupForget,
     happyAgentRouterSubtasksForget,
     happyAgentRouterCreate,

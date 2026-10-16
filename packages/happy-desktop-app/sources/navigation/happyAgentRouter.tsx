@@ -12,6 +12,11 @@ import {
 import { happyAgentHistoryCreate, type HappyAgentRouterHistory } from "./happyAgentHistory";
 import { happyAgentRoutePathParse } from "./happyAgentRoute";
 import { useSyncExternalStore } from "react";
+import {
+    happyAgentChatPanesStoreCreate,
+    type HappyAgentChatPanesStore,
+    type HappyAgentChatPaneAddress,
+} from "happy-desktop-state";
 import { HappyAgentOnboardingBoundary } from "../components/HappyAgentOnboardingBoundary";
 import type {
     AppearanceStore,
@@ -71,6 +76,7 @@ import type { AppHappyAgentUpdateStore } from "../agentUpdate";
  * can be constructed before any Happy Agent connects.
  */
 export interface HappyAgentRouterContext {
+    readonly chatPanes?: HappyAgentChatPanesStore;
     /** A remote daemon uses its own setup inside this connection's router. */
     readonly connectionOnboarding?: boolean;
     /** Native Chromium guest renderer, present only in packaged Electron. */
@@ -238,11 +244,14 @@ function happyAgentListRedirect(happyAgentId: string): never {
 function happyAgentWorkspace(
     context: HappyAgentRouterContext,
     happyAgentId: string,
+    address?: Omit<HappyAgentChatPaneAddress, "happyAgentId">,
 ): HappyAgentWorkspaceStore | undefined {
     context.happyAgents.happyAgentActivate(happyAgentId);
-    return context.happyAgents
-        .get()
-        .happyAgents.find((happyAgent) => happyAgent.id === happyAgentId)?.session?.workspace;
+    const source = context.happyAgents.get().happyAgents.find((entry) => entry.id === happyAgentId)
+        ?.session?.workspace;
+    return source && address && context.chatPanes
+        ? context.chatPanes.routeApply({ happyAgentId, ...address }, source)
+        : source;
 }
 
 /** One machine's Surfaces, once it has stores to answer through. */
@@ -286,7 +295,7 @@ const workspaceRoute = createRoute({
 const chatsIndexRoute = createRoute({
     getParentRoute: () => workspaceRoute,
     loader: ({ context, params }) => {
-        happyAgentWorkspace(context, params.happyAgentId)?.conversationClose();
+        happyAgentWorkspace(context, params.happyAgentId, {})?.conversationClose();
     },
     path: "/chats/$happyAgentId",
 });
@@ -298,9 +307,9 @@ const chatsIndexRoute = createRoute({
 const groupRoute = createRoute({
     getParentRoute: () => workspaceRoute,
     loader: ({ context, params }) => {
-        happyAgentWorkspace(context, params.happyAgentId)?.groupOpen(
-            params.groupId as HappyAgentGroupId,
-        );
+        happyAgentWorkspace(context, params.happyAgentId, {
+            groupId: params.groupId as HappyAgentGroupId,
+        })?.groupOpen(params.groupId as HappyAgentGroupId);
     },
     path: "/chats/$happyAgentId/$groupId",
 });
@@ -310,10 +319,10 @@ const chatRoute = createRoute({
     getParentRoute: () => workspaceRoute,
     loader: ({ context, params }) => {
         const groupId = params.groupId as HappyAgentGroupId;
-        happyAgentWorkspace(context, params.happyAgentId)?.conversationOpen(
-            params.chatId as HappyAgentSessionId,
+        happyAgentWorkspace(context, params.happyAgentId, {
             groupId,
-        );
+            chatId: params.chatId as HappyAgentSessionId,
+        })?.conversationOpen(params.chatId as HappyAgentSessionId, groupId);
     },
     path: "/chats/$happyAgentId/$groupId/$chatId",
 });
@@ -330,7 +339,6 @@ const groupFileRoute = createRoute({
     getParentRoute: () => workspaceRoute,
     loader: ({ context, params }) => {
         const groupId = params.groupId as HappyAgentGroupId;
-        const workspace = happyAgentWorkspace(context, params.happyAgentId);
         const fileKind = happyAgentFileTabKindParse(params.fileKind);
         if (!fileKind)
             throw redirect({
@@ -338,6 +346,10 @@ const groupFileRoute = createRoute({
                 replace: true,
                 to: "/chats/$happyAgentId/$groupId",
             });
+        const workspace = happyAgentWorkspace(context, params.happyAgentId, {
+            groupId,
+            file: { path: params.filePath, kind: fileKind },
+        });
         workspace?.groupOpen(groupId);
         workspace?.filePreview(groupId, params.filePath, fileKind);
     },
@@ -349,7 +361,6 @@ const chatFileRoute = createRoute({
     getParentRoute: () => workspaceRoute,
     loader: ({ context, params }) => {
         const groupId = params.groupId as HappyAgentGroupId;
-        const workspace = happyAgentWorkspace(context, params.happyAgentId);
         const fileKind = happyAgentFileTabKindParse(params.fileKind);
         if (!fileKind)
             throw redirect({
@@ -361,6 +372,11 @@ const chatFileRoute = createRoute({
                 replace: true,
                 to: "/chats/$happyAgentId/$groupId/$chatId",
             });
+        const workspace = happyAgentWorkspace(context, params.happyAgentId, {
+            groupId,
+            chatId: params.chatId as HappyAgentSessionId,
+            file: { path: params.filePath, kind: fileKind },
+        });
         workspace?.conversationOpen(params.chatId as HappyAgentSessionId, groupId);
         workspace?.filePreview(groupId, params.filePath, fileKind);
     },
@@ -618,6 +634,7 @@ function HappyAgentWorkspaceLayout(
     return (
         <AppHappyAgentView
             appearance={context.appearance}
+            chatPanes={context.chatPanes}
             browserContent={context.browserContent}
             buildIdentity={context.buildIdentity}
             performance={context.performance}
@@ -852,12 +869,67 @@ function HappyAgentSettingsRoute() {
  * it, which keeps a filesystem layout out of the URL and survives a rename — and
  * then the session inside it. The machine comes first, because the same project
  * name may exist on several of them: `/chats/$happyAgentId/$groupId/$chatId`. It stays
- * one stable address, so the UI never keeps a second competing selection in a
- * store.
+ * the focused pane’s address; the window store retains the destinations of
+ * other visible panes.
  */
 export function happyAgentRouterCreate(history: HappyAgentRouterHistory = defaultHistory()) {
-    return createRouter({
-        context: undefined as unknown as HappyAgentRouterContext,
+    const chatPanes = happyAgentChatPanesStoreCreate((address) => {
+        if (address.file && address.groupId) {
+            void router.navigate(
+                address.chatId
+                    ? {
+                          to: "/chats/$happyAgentId/$groupId/$chatId/file/$fileKind/$filePath",
+                          params: {
+                              happyAgentId: address.happyAgentId,
+                              groupId: address.groupId,
+                              chatId: address.chatId,
+                              fileKind: address.file.kind,
+                              filePath: address.file.path,
+                          },
+                          replace: true,
+                      }
+                    : {
+                          to: "/chats/$happyAgentId/$groupId/file/$fileKind/$filePath",
+                          params: {
+                              happyAgentId: address.happyAgentId,
+                              groupId: address.groupId,
+                              fileKind: address.file.kind,
+                              filePath: address.file.path,
+                          },
+                          replace: true,
+                      },
+            );
+        } else {
+            void router.navigate(
+                address.chatId && address.groupId
+                    ? {
+                          to: "/chats/$happyAgentId/$groupId/$chatId",
+                          params: {
+                              happyAgentId: address.happyAgentId,
+                              groupId: address.groupId,
+                              chatId: address.chatId,
+                          },
+                          replace: true,
+                      }
+                    : address.groupId
+                      ? {
+                            to: "/chats/$happyAgentId/$groupId",
+                            params: {
+                                happyAgentId: address.happyAgentId,
+                                groupId: address.groupId,
+                            },
+                            replace: true,
+                        }
+                      : {
+                            to: "/chats/$happyAgentId",
+                            params: { happyAgentId: address.happyAgentId },
+                            replace: true,
+                        },
+            );
+        }
+    });
+    const router = createRouter({
+        context: { chatPanes } as HappyAgentRouterContext,
         defaultPreload: false,
         history,
         routeTree,
@@ -866,6 +938,7 @@ export function happyAgentRouterCreate(history: HappyAgentRouterHistory = defaul
         scrollRestoration: () => false,
         scrollToTopSelectors: [],
     });
+    return router;
 }
 
 /**
@@ -881,6 +954,16 @@ export function happyAgentRouterConversationOpen(
         params: { chatId: location.sessionId, groupId: location.groupId, happyAgentId },
         to: "/chats/$happyAgentId/$groupId/$chatId",
     });
+}
+
+/** The focused surface owns window commands, including the live voice context. */
+export function happyAgentRouterWorkspaceGet(
+    router: HappyAgentRouter,
+    happyAgentId: string,
+): HappyAgentWorkspaceStore | undefined {
+    const panes = router.options.context.chatPanes?.get();
+    const pane = panes?.panes.find((entry) => entry.id === panes.activePaneId);
+    return pane?.address.happyAgentId === happyAgentId ? pane.workspace : undefined;
 }
 
 /** Uses the router's explicit route identity, never a pathname convention. */

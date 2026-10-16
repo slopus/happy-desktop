@@ -2,6 +2,7 @@ import {
     gptLiveBrowserTransport,
     gptLiveMediaOpen,
     happyAgentRouterWorkspaceVisible,
+    happyAgentRouterWorkspaceGet,
     type HappyAgentRouter,
 } from "happy-desktop-app";
 import { UserError, type GptLiveDesktopSource, type GptLiveRuntime } from "happy-desktop-state";
@@ -31,7 +32,14 @@ export function desktopGptLiveRuntimeCreate(options: {
                     id: entry.id,
                     name: entry.label,
                     online: entry.status === "connected",
-                    ...(entry.session ? { workspace: entry.session.workspace } : {}),
+                    ...(entry.session
+                        ? {
+                              workspace:
+                                  (router
+                                      ? happyAgentRouterWorkspaceGet(router, entry.id)
+                                      : undefined) ?? entry.session.workspace,
+                          }
+                        : {}),
                 })),
             };
         },
