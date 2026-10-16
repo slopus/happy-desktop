@@ -614,10 +614,14 @@ export function localOnboardingStoreCreate(
                     customCheck(),
                     ...assistants.map(async (assistant) => {
                         if (!current()) return;
-                        const credentials = scan?.providers.find(
+                        const scanned = scan?.providers.find(
                             (provider) => provider.providerId === assistant.id,
-                        )?.credentials;
-                        if (credentials === "missing") {
+                        );
+                        const credentials = scanned?.credentials;
+                        if (
+                            credentials === "missing" ||
+                            (scanned?.enabled === false && scanned.enablement === "explicit")
+                        ) {
                             verificationRetryAt.delete(assistant.id);
                             resultPublish(assistant.id, "invalid");
                             return;
