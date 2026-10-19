@@ -125,8 +125,10 @@ async function sample(demo, label) {
             turnText: q("turn-summary-label")?.innerText,
             elapsed: q("agent-working-status-timer")?.innerText,
             working: q("agent-working-status")?.innerText,
+            wordmarkHidden: getComputedStyle(q("sidebar-brand-logo")).visibility === "hidden",
         };
     });
+    if (!state.wordmarkHidden) throw new Error("Recording wordmark is still visible");
     if (!state.sameShell || !state.sameComposer || state.fullScreen || state.errors.length)
         throw new Error(`App continuity failed at ${label}: ${JSON.stringify(state)}`);
     if (
@@ -175,7 +177,7 @@ export default {
             sourceSha: stdout.trim(),
             feature: { sourceSha: "36f103e1", rendererPreviewVersion: "0.0.94-preview.9" },
             boundary:
-                "Scripted inference and tool fixtures; real production release download, version selection, private daemon upgrade, durable run and tools. Browser bindings replace native IPC only.",
+                "Scripted inference and tool fixtures; real checksum-verified published binaries, version selection, private daemon upgrade, durable run and tools. Browser bindings replace native IPC only. Recording-only CSS hides the sidebar wordmark while preserving its layout and all product controls.",
             agentId,
             samples: [],
             phaseStarts: [],
@@ -214,6 +216,9 @@ export default {
         await demo.page.mouse.move(resizeX + 140, resizeY, { steps: 10 });
         await demo.page.mouse.up();
         await demo.page.evaluate(() => document.fonts.ready);
+        await demo.page.addStyleTag({
+            content: `${hook("sidebar-brand-logo")} { visibility: hidden !important; }`,
+        });
         await demo.page.waitForTimeout(900);
         evidence.framing = await demo.framingPrepare(hook("app-shell"), {
             rawWindow: true,

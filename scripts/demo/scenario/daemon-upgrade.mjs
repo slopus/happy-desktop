@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { chmod, copyFile, mkdir, readFile } from "node:fs/promises";
+import { join, resolve } from "node:path";
 import { DesktopDaemonController } from "../../../packages/happy-desktop-electron/sources/main/desktopDaemonController.ts";
 import { happyDaemonPaths } from "../../../packages/happy-desktop-electron/sources/main/happyAgentBinaryPaths.ts";
 import { happyAgentBinarySelect } from "../../../packages/happy-desktop-electron/sources/main/happyAgentBinaryConfig.ts";
@@ -14,13 +14,41 @@ export async function daemonUpgradePrepare(privatePaths, environment, versions) 
     const paths = happyDaemonPaths(environment);
     if (paths.happyHome !== privatePaths.happyHome || paths.socketPath !== privatePaths.socketPath)
         throw new Error("The upgrade installer must address only this private demo world.");
+    const cacheDirectory = process.env.HAPPY_DEMO_AGENT_CACHE
+        ? resolve(process.env.HAPPY_DEMO_AGENT_CACHE)
+        : undefined;
+    const cacheArtifacts = cacheDirectory
+        ? JSON.parse(await readFile(join(cacheDirectory, "artifacts.json"), "utf8"))
+        : undefined;
     const artifacts = [];
     for (const version of [versions.from, versions.to]) {
         process.stdout.write(`  preparing checksum-verified Happy Agent ${version}…\n`);
         const release = await happyAgentReleaseVersion(version, { channel: "preview" });
+        if (cacheDirectory) {
+            const recorded = cacheArtifacts.find((artifact) => artifact.version === version);
+            if (
+                !recorded ||
+                recorded.archiveSha256 !== release.asset.digest ||
+                recorded.archiveBytes !== release.asset.size ||
+                recorded.archiveUrl !== release.asset.browser_download_url
+            )
+                throw new Error(`The verified cache does not match published release ${version}.`);
+            const cachedExecutable = join(cacheDirectory, version, "happy-agent");
+            const digest = createHash("sha256")
+                .update(await readFile(cachedExecutable))
+                .digest("hex");
+            if (digest !== recorded.executableSha256)
+                throw new Error(`The cached Happy Agent ${version} checksum does not match.`);
+            const destination = join(paths.versionsDirectory, version);
+            await mkdir(destination, { recursive: true, mode: 0o700 });
+            await copyFile(cachedExecutable, join(destination, "happy-agent"));
+            await chmod(join(destination, "happy-agent"), 0o700);
+            process.stdout.write(`  verified existing release cache for ${version}\n`);
+        }
         const binary = await happyAgentReleaseDownload(release, paths);
         artifacts.push({
             version,
+            source: cacheDirectory ? "verified-existing-release-cache" : "release-download",
             archiveUrl: release.asset.browser_download_url,
             archiveSha256: release.asset.digest,
             archiveBytes: release.asset.size,
