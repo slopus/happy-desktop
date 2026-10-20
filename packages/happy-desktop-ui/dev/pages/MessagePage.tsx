@@ -596,6 +596,43 @@ export function MessagePage() {
             </Specimen>
 
             <Specimen
+                detail="Follow-ups still waiting below the working line: steering wears the warning bubble and is read at the run's next step; a queued one is an outline that waits for the run to finish. Each run of one delivery is captioned once"
+                label="Message — pending steering and queued follow-ups"
+                number="19"
+                stage="app"
+            >
+                <div style={column}>
+                    {channelFrame(
+                        <>
+                            <SystemNotice
+                                icon="arrow-right"
+                                text="Steering · read at the agent's next step"
+                            />
+                            <Message
+                                author="Steve"
+                                body="Also check the retry budget."
+                                deliveryState="pending_steering"
+                                own
+                                time="10:55"
+                            />
+                            <SystemNotice
+                                icon="clock"
+                                text="Queued · sent when the agent finishes"
+                            />
+                            <Message
+                                author="Steve"
+                                body="Then write the release notes."
+                                deliveryState="pending_queued"
+                                own
+                                time="10:55"
+                            />
+                        </>,
+                    )}
+                    <DimensionRule label="identical bubble geometry · steering filled warning · queued 1px dashed outline" />
+                </div>
+            </Specimen>
+
+            <Specimen
                 detail="Sparse history bottom-anchors against the 12px padding, so a short conversation sits on the composer instead of floating at the top"
                 label="MessageList — bottom anchor"
                 number="11"

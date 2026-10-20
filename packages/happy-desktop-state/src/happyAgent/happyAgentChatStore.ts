@@ -15,7 +15,7 @@ import {
     type SessionState,
     type SessionUsage,
 } from "../happyAgentConnection/index.js";
-import { UserError } from "../types.js";
+import { UserError, type MessageDelivery } from "../types.js";
 import {
     happyAgentConversationCacheCreate,
     happyAgentConversationProject,
@@ -666,11 +666,13 @@ export interface HappyAgentChatStore {
      * Sends a message the moment it is handed over, resolving once it is on its
      * way. `refused` is called if the host then refuses it outright, so it was
      * never delivered and its row has gone: the caller can put its words back.
+     * `delivery` says how it reaches a running agent; omitted, it steers.
      */
     messageSend(
         text: string,
         images?: readonly HappyAgentImageInput[],
         refused?: (error: UserError) => void,
+        delivery?: MessageDelivery,
     ): Promise<void>;
     /** Exact-text human confirmation from voice. Never routes text into a pending question. */
     voiceMessageSendConfirmed(
@@ -1392,11 +1394,11 @@ export function happyAgentChatStoreCreate(
                 await deps.connectActions.sendMessageConfirmed(sessionId, text);
                 output({ type: "messageSent", sessionId, steered });
             }),
-        messageSend: (text, images, refused) =>
+        messageSend: (text, images, refused, delivery = "steer") =>
             rejecting(async () => {
                 if (!arrived()) await arrivalWait();
                 if ((await pendingQuestionAnswer(text)).textUsed) return;
-                const steered = runStatus === "running";
+                const steered = runStatus === "running" && delivery === "steer";
                 const mutationId = deps.connectActions.sendMessage(
                     sessionId,
                     images && images.length > 0
@@ -1410,8 +1412,9 @@ export function happyAgentChatStoreCreate(
                                       data: image.data,
                                   })),
                               ],
+                              delivery,
                           }
-                        : text,
+                        : { text, delivery },
                 );
                 if (images && images.length > 0) sentImagesRemember(mutationId, images);
                 connectMutationTrack(mutationId);

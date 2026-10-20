@@ -1,4 +1,10 @@
-import { type CSSProperties, type ReactNode, useState, useSyncExternalStore } from "react";
+import {
+    Fragment,
+    type CSSProperties,
+    type ReactNode,
+    useState,
+    useSyncExternalStore,
+} from "react";
 import type { FileLinkOpenHandler, FileOpenHandler } from "./fileReference";
 import {
     MarkdownLayoutCacheContext,
@@ -27,6 +33,7 @@ import {
     type AgentWorkingPhase,
 } from "./AgentWorkingStatus";
 import { ChannelHeader } from "./ChannelHeader";
+import type { ComposerDelivery, ComposerSendDeliveries } from "./Composer";
 import { ConversationDock } from "./ConversationDock";
 import {
     ConversationEntryView,
@@ -55,6 +62,7 @@ import {
     conversationRowHeightPrepare,
     conversationRowHeightCacheCreate,
     conversationRowHeightCachePrune,
+    noticeRowHeight,
     type ConversationFailureRowContext,
     type ConversationRowContext,
     type ConversationRowHeightCache,
@@ -71,6 +79,7 @@ import {
     MessageList,
     type MessageListLegacyScrollPosition,
     type MessageListScrollPosition,
+    SystemNotice,
 } from "./Message";
 import {
     messageTextLayoutFontGenerationGet,
@@ -237,7 +246,10 @@ export type ConversationViewProps = {
     composerFocusKey?: string;
     onComposerValueChange: (value: string) => void;
     onComposerFocusChange?: (focused: boolean) => void;
-    onComposerSend: () => void;
+    /** Receives the delivery the send gesture chose, when `composerSendDeliveries` is given. */
+    onComposerSend: (delivery?: ComposerDelivery) => void;
+    /** What Enter and Command+Enter each do to a running agent; see `Composer.sendDeliveries`. */
+    composerSendDeliveries?: ComposerSendDeliveries;
     /** Receives images picked through the composer's picker or pasted into it. */
     onComposerAttachmentsSelect?: (files: File[]) => void;
     /** Removes one attachment chip from the draft. */
@@ -401,7 +413,8 @@ function conversationRowClassName(
  * seen them. Below that line it reads as what it is, next in the queue.
  *
  * Only a run of them at the very tail moves. Steering that was already applied
- * is ordinary history and stays where it happened.
+ * is ordinary history and stays where it happened. A follow-up queued behind the
+ * run is the same kind of thing, waiting a little longer, so it moves with them.
  */
 function conversationPendingSteering(entries: readonly ConversationEntry[]): {
     readonly transcript: readonly ConversationEntry[];
@@ -410,12 +423,43 @@ function conversationPendingSteering(entries: readonly ConversationEntry[]): {
     let start = entries.length;
     while (start > 0) {
         const entry = entries[start - 1];
-        if (entry?.kind !== "message" || entry.delivery !== "pending_steering") break;
+        if (
+            entry?.kind !== "message" ||
+            (entry.delivery !== "pending_steering" && entry.delivery !== "pending_queued")
+        )
+            break;
         start -= 1;
     }
     return start === entries.length
         ? { transcript: entries, queued: [] }
         : { transcript: entries.slice(0, start), queued: entries.slice(start) };
+}
+
+/**
+ * The caption over each run of waiting follow-ups that share a delivery, so a
+ * message that will reach this run reads differently from one that waits for
+ * the next. Only where the delivery changes does a new caption begin.
+ */
+function conversationPendingCaption(
+    queued: readonly ConversationEntry[],
+    index: number,
+): { readonly icon: "arrow-right" | "clock"; readonly text: string } | undefined {
+    const entry = queued[index];
+    if (entry?.kind !== "message") return undefined;
+    const previous = queued[index - 1];
+    if (previous?.kind === "message" && previous.delivery === entry.delivery) return undefined;
+    return entry.delivery === "pending_queued"
+        ? { icon: "clock", text: "Queued · sent when the agent finishes" }
+        : { icon: "arrow-right", text: "Steering · read at the agent's next step" };
+}
+
+function conversationPendingCaptionHeight(
+    queued: readonly ConversationEntry[],
+    index: number,
+    width: number,
+): number {
+    const caption = conversationPendingCaption(queued, index);
+    return caption ? noticeRowHeight(caption.text, contentWidth(width), "center") : 0;
 }
 
 /**
@@ -916,20 +960,35 @@ export function ConversationView(props: ConversationViewProps) {
                                         className="happy-conversation__queued"
                                         data-happy-desktop-ui="conversation-queued"
                                     >
-                                        {queued.map((entry) => (
-                                            <ConversationEntryView
-                                                entry={entry}
-                                                key={
-                                                    entry.kind === "message"
-                                                        ? entry.message.id
-                                                        : entry.id
-                                                }
-                                                {...(props.references
-                                                    ? { references: props.references }
-                                                    : {})}
-                                                viewerId={props.viewerId}
-                                            />
-                                        ))}
+                                        {queued.map((entry, index) => {
+                                            const caption = conversationPendingCaption(
+                                                queued,
+                                                index,
+                                            );
+                                            return (
+                                                <Fragment
+                                                    key={
+                                                        entry.kind === "message"
+                                                            ? entry.message.id
+                                                            : entry.id
+                                                    }
+                                                >
+                                                    {caption ? (
+                                                        <SystemNotice
+                                                            icon={caption.icon}
+                                                            text={caption.text}
+                                                        />
+                                                    ) : null}
+                                                    <ConversationEntryView
+                                                        entry={entry}
+                                                        {...(props.references
+                                                            ? { references: props.references }
+                                                            : {})}
+                                                        viewerId={props.viewerId}
+                                                    />
+                                                </Fragment>
+                                            );
+                                        })}
                                     </div>
                                 ) : null}
                             </>
@@ -944,6 +1003,7 @@ export function ConversationView(props: ConversationViewProps) {
                             queued.reduce(
                                 (total, entry, index) =>
                                     total +
+                                    conversationPendingCaptionHeight(queued, index, width) +
                                     (conversationRowHeight(
                                         queued,
                                         index,
@@ -1092,6 +1152,9 @@ export function ConversationView(props: ConversationViewProps) {
                 onComposerSend={props.onComposerSend}
                 onComposerValueChange={props.onComposerValueChange}
                 running={props.running}
+                {...(props.composerSendDeliveries
+                    ? { sendDeliveries: props.composerSendDeliveries }
+                    : {})}
             />
 
             {props.overlay ? <WindowOverlay>{props.overlay}</WindowOverlay> : null}

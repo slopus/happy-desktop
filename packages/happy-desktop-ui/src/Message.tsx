@@ -140,7 +140,12 @@ function MessageMediaItem(props: {
         <div {...shared}>{content}</div>
     );
 }
-export type MessageDeliveryState = "failed" | "pending_steering" | "sending" | "sent";
+export type MessageDeliveryState =
+    | "failed"
+    | "pending_queued"
+    | "pending_steering"
+    | "sending"
+    | "sent";
 export type MessageProps = Omit<HTMLAttributes<HTMLDivElement>, "style"> & {
     /** Author is an agent → accent AGENT badge next to the name. */
     agent?: boolean;
@@ -642,6 +647,7 @@ export function Message(props: MessageProps) {
             aria-busy={
                 deliveryState() === "sending" ||
                 deliveryState() === "pending_steering" ||
+                deliveryState() === "pending_queued" ||
                 local.generationStatus === "streaming"
                     ? "true"
                     : undefined

@@ -1,5 +1,13 @@
 export type MessageAudience = "people" | "agents";
 
+/**
+ * How a message sent while the agent is working reaches it. `steer` is taken at
+ * the run's next inference boundary, after the current response and its tool
+ * calls; `queue` waits for the run to finish and starts the next one. To an
+ * idle agent the two are the same: a run starts.
+ */
+export type MessageDelivery = "steer" | "queue";
+
 export type AgentTurnTraceKind =
     | "reasoning"
     | "response"

@@ -92,3 +92,18 @@ it("removes a send a draining daemon refused, hands it back, and keeps a resend 
     await new Promise((resolve) => setTimeout(resolve, 10));
     expect(rows(store, "Racing the drain")).toHaveLength(1);
 });
+
+it("hands the daemon the delivery a send asked for, steering when it names none", async () => {
+    const { daemon, store } = await chatOpen();
+    await store.messageSend("Steer by default");
+    await store.messageSend("Wait for the run", [], undefined, "queue");
+    await store.messageSend("Steer on purpose", [], undefined, "steer");
+    await vi.waitFor(() => expect(daemon.callCount("sendMessage")).toBe(3));
+    expect(
+        daemon.calls.filter((call) => call.method === "sendMessage").map((call) => call.args[1]),
+    ).toMatchObject([
+        { text: "Steer by default", delivery: "steer" },
+        { text: "Wait for the run", delivery: "queue" },
+        { text: "Steer on purpose", delivery: "steer" },
+    ]);
+});

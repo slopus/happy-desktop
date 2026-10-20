@@ -28,7 +28,7 @@ import {
 } from "./happyAgentFileLink.js";
 import type { ConversationSummary } from "../conversation/conversationSummary.js";
 import type { Loadable } from "../conversation/loadable.js";
-import { UserError } from "../types.js";
+import { UserError, type MessageDelivery } from "../types.js";
 import {
     composerStoreCreate,
     type ComposerAttachment,
@@ -1855,7 +1855,8 @@ export interface HappyAgentWorkspaceStore {
     // Composer actions for the open conversation (no draft lives in React).
     composerTextUpdate(text: string): void;
     composerFocusUpdate(focused: boolean): void;
-    composerTextSubmit(): void;
+    /** Submits the open draft; `delivery` says how it reaches a working agent, steering when omitted. */
+    composerTextSubmit(delivery?: MessageDelivery): void;
     composerCommandInvoke(commandId: string): void;
     /**
      * Attaches picked, pasted, or dropped files to the addressed draft. Small
@@ -5073,29 +5074,38 @@ export function happyAgentWorkspaceStoreCreate(
                                     event.attachments,
                                 );
                                 const session = await withChatStore(async (store) => {
-                                    await store.messageSend(text, images, () => {
-                                        // Refused after it left the composer,
-                                        // as a send racing the start of a drain
-                                        // is: the words come back, unless
-                                        // something newer has been written.
-                                        if (created.getState().text.length > 0) return;
-                                        created.getState().composerInput({
-                                            type: "submissionReturned",
-                                            text: event.text,
-                                            attachments: event.attachments.map(
-                                                happyAgentComposerAttachmentPreviewRenew,
-                                            ),
-                                        });
-                                        if (created.getState().text !== event.text) return;
-                                        attachmentsRemember(
-                                            conversationAttachments,
-                                            conversationId,
-                                            created,
-                                        );
-                                        void store
-                                            .draftSet(event.text, nextDraftUpdatedAt(), draftOrigin)
-                                            .catch(() => undefined);
-                                    });
+                                    await store.messageSend(
+                                        text,
+                                        images,
+                                        () => {
+                                            // Refused after it left the composer,
+                                            // as a send racing the start of a drain
+                                            // is: the words come back, unless
+                                            // something newer has been written.
+                                            if (created.getState().text.length > 0) return;
+                                            created.getState().composerInput({
+                                                type: "submissionReturned",
+                                                text: event.text,
+                                                attachments: event.attachments.map(
+                                                    happyAgentComposerAttachmentPreviewRenew,
+                                                ),
+                                            });
+                                            if (created.getState().text !== event.text) return;
+                                            attachmentsRemember(
+                                                conversationAttachments,
+                                                conversationId,
+                                                created,
+                                            );
+                                            void store
+                                                .draftSet(
+                                                    event.text,
+                                                    nextDraftUpdatedAt(),
+                                                    draftOrigin,
+                                                )
+                                                .catch(() => undefined);
+                                        },
+                                        event.delivery,
+                                    );
                                     return store.get().session;
                                 });
                                 activityRecord({
@@ -7935,7 +7945,8 @@ export function happyAgentWorkspaceStoreCreate(
         composerTextUpdate: (text) => (groupComposer ?? composer)?.getState().textUpdate(text),
         composerFocusUpdate: (focused) =>
             (groupComposer ?? composer)?.getState().focusUpdate(focused),
-        composerTextSubmit: () => (groupComposer ?? composer)?.getState().textSubmit(),
+        composerTextSubmit: (delivery) =>
+            (groupComposer ?? composer)?.getState().textSubmit(delivery),
         composerCommandInvoke: (commandId) => composer?.getState().commandInvoke(commandId),
         composerAttachmentsAdd(files) {
             const target = groupComposer ?? composer;

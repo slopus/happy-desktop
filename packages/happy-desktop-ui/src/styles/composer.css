@@ -354,6 +354,16 @@
         opacity 120ms ease;
 }
 
+/* The send control is the composer's last item, so its delivery hint ends at
+ * the control's trailing edge instead of centering past the window's. The
+ * `translate` cancels the shared bubble's centering `transform`, which keeps
+ * its fade and rise untouched. */
+.happy-composer__send-tooltip > .happy-tooltip__bubble {
+    left: auto;
+    right: 0;
+    translate: 50% 0;
+}
+
 /* The toolbar uses a 16px upward arrow in its 32px circular send control. The
  * slightly larger ink matches adjacent 14px line icons while retaining equal
  * transparent space on every edge of the directional glyph's bounds. */

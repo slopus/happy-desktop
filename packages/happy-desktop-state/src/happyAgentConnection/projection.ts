@@ -1075,9 +1075,11 @@ function messageElementsProject(
                       }),
                 ...(senderAgent === undefined ? {} : { senderAgent }),
                 delivery:
-                    message.status === "pending" && message.delivery === "steer"
-                        ? "pending_steering"
-                        : "sent",
+                    message.status !== "pending"
+                        ? "sent"
+                        : message.delivery === "steer"
+                          ? "pending_steering"
+                          : "pending_queued",
                 text: messageText(message),
                 attachments: message.content
                     .filter(

@@ -24,7 +24,9 @@ import {
 } from "./ComposerAttachmentPreviews";
 import { EmojiPicker, type EmojiItem } from "./EmojiPicker";
 import { Icon, type IconName } from "./Icon";
+import { commandModifier, commandModifierHeld } from "./keyboardShortcut";
 import { ScrollbarTracks, useScrollbarController } from "./Scrollbar";
+import { Tooltip } from "./Tooltip";
 import { focusUnlessWritingElsewhere, useFocusOnType } from "./useFocusOnType";
 /* ---- ContextChips ----------------------------------------------------- */
 export type ContextKind = "file" | "run";
@@ -216,6 +218,15 @@ export function MentionPicker(props: MentionPickerProps) {
     );
 }
 /* ---- Composer ----------------------------------------------------------- */
+/** How a message sent while the agent is running reaches it. */
+export type ComposerDelivery = "steer" | "queue";
+/** The delivery each send gesture uses while the agent is running. */
+export type ComposerSendDeliveries = {
+    /** Plain Enter and the send button. */
+    readonly plain: ComposerDelivery;
+    /** Command+Enter (Ctrl+Enter off macOS). */
+    readonly command: ComposerDelivery;
+};
 export type ComposerProps = {
     /** Native file-picker accept filter, used with `onAttachmentsSelect`. */
     attachmentAccept?: string;
@@ -307,7 +318,17 @@ export type ComposerProps = {
     modelControl?: ReactNode;
     /** Optional controlled accessory rendered below the composer card. */
     footerControl?: ReactNode;
-    onSend: () => unknown;
+    /**
+     * Receives the delivery the send gesture chose from `sendDeliveries`, or
+     * nothing when the composer was given none.
+     */
+    onSend: (delivery?: ComposerDelivery) => unknown;
+    /**
+     * What plain Enter and Command+Enter each do to a running agent. Supplying
+     * it makes Command+Enter a send of its own and, while `running`, names the
+     * choice on the send control.
+     */
+    sendDeliveries?: ComposerSendDeliveries;
     /**
      * Ends the agent's current inference. With `running`, it takes over the send
      * control while the draft is empty; typing gives the control back to sending,
@@ -480,6 +501,19 @@ export function Composer(props: ComposerProps) {
      */
     const stopShown = () =>
         Boolean(props.running && props.onStop) && (busy || props.value.trim().length === 0);
+    /*
+     * Whether a send joins the run under way or waits for it is only a question
+     * while there is a run, so only then does the send control say which, and
+     * what the other key would do instead when it does something else.
+     */
+    const sendLabel = () => {
+        const deliveries = props.sendDeliveries;
+        if (!props.running || deliveries === undefined) return undefined;
+        const name = (delivery: ComposerDelivery) => (delivery === "steer" ? "Steer" : "Queue");
+        if (deliveries.plain === deliveries.command) return name(deliveries.plain);
+        const chord = commandModifier === "Meta" ? "⌘↵" : "Ctrl+Enter";
+        return `${name(deliveries.plain)} · ${chord} to ${deliveries.command}`;
+    };
     const emoji = () => props.emoji ?? [];
     const filteredEmoji = () => {
         const needle = emojiQuery.trim().toLowerCase();
@@ -668,11 +702,11 @@ export function Composer(props: ComposerProps) {
         event.currentTarget.value = "";
         textareaEl.current?.focus();
     };
-    const send = () => {
+    const send = (delivery: ComposerDelivery | undefined) => {
         if (!canSend()) return;
         closePopovers();
         restoreFocusAfterSend.current = true;
-        void props.onSend();
+        void props.onSend(delivery);
         queueMicrotask(() => {
             const textarea = textareaEl.current;
             if (!textarea || textarea.disabled || textarea.readOnly) return;
@@ -774,7 +808,11 @@ export function Composer(props: ComposerProps) {
         }
         if (event.key === "Enter" && !event.shiftKey) {
             event.preventDefault();
-            send();
+            send(
+                commandModifierHeld(event.nativeEvent)
+                    ? props.sendDeliveries?.command
+                    : props.sendDeliveries?.plain,
+            );
         }
     };
     const onInput = (event: FormEvent<HTMLTextAreaElement>) => {
@@ -1080,16 +1118,21 @@ export function Composer(props: ComposerProps) {
                                 variant="primary"
                             />
                         ) : (
-                            <Button
-                                aria-label="Send message"
-                                className="happy-composer__send"
-                                disabled={!canSend()}
-                                icon="arrow-up"
-                                iconOnly
-                                onClick={send}
-                                size="small"
-                                variant="primary"
-                            />
+                            <Tooltip className="happy-composer__send-tooltip" label={sendLabel()}>
+                                <Button
+                                    aria-label="Send message"
+                                    className="happy-composer__send"
+                                    data-delivery={
+                                        props.running ? props.sendDeliveries?.plain : undefined
+                                    }
+                                    disabled={!canSend()}
+                                    icon="arrow-up"
+                                    iconOnly
+                                    onClick={() => send(props.sendDeliveries?.plain)}
+                                    size="small"
+                                    variant="primary"
+                                />
+                            </Tooltip>
                         )}
                     </div>
                 </div>

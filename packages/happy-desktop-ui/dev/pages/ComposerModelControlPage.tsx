@@ -804,6 +804,34 @@ export function ComposerModelControlPage() {
                     width={1140}
                 />
             </Specimen>
+            <Specimen
+                number="27"
+                label="Follow-up while running"
+                detail="While the agent works, the send control says what Enter does and what Command+Enter does instead; a locked choice names only the one delivery. Idle, it says nothing."
+                stage="surface"
+            >
+                <div style={{ display: "flex", flexDirection: "column", gap: 16, width: 800 }}>
+                    {(
+                        [
+                            { plain: "steer", command: "queue" },
+                            { plain: "queue", command: "steer" },
+                            { plain: "queue", command: "queue" },
+                        ] as const
+                    ).map((deliveries) => (
+                        <Composer
+                            key={`${deliveries.plain}-${deliveries.command}`}
+                            mentions={[]}
+                            modelControl={<Picker />}
+                            onSend={() => undefined}
+                            onStop={() => undefined}
+                            onValueChange={() => undefined}
+                            running
+                            sendDeliveries={deliveries}
+                            value="Then write the release notes."
+                        />
+                    ))}
+                </div>
+            </Specimen>
         </ComponentPage>
     );
 }

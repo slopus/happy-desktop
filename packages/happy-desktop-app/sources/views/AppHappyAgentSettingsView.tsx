@@ -7,6 +7,7 @@ import type {
     HappyAgentChangeTiersStore,
     ExperimentsStore,
     ProjectsVisibilityStore,
+    FollowUpBehaviorStore,
     GptLiveStore,
     HappyAgentInstructionsSnapshot,
     HappyAgentDebugLogSnapshot,
@@ -36,6 +37,7 @@ import {
     happyAgentThinkingLabel,
     experimentsStoreNoop,
     projectsVisibilityStoreNoop,
+    followUpBehaviorStoreNoop,
     gptLiveStoreNoop,
     happyAgentCloudStoreNoop,
     happyAgentAvailabilityProject,
@@ -343,6 +345,12 @@ export interface AppHappyAgentSettingsViewProps {
      * host that remembers no such choice, which offers no control for it.
      */
     projectsVisibility?: ProjectsVisibilityStore;
+    /**
+     * What Enter and Command+Enter do to a message sent while the agent
+     * works. Absent in a host that remembers no such choice, which offers
+     * no control for it.
+     */
+    followUpBehavior?: FollowUpBehaviorStore;
     /** Whether this window sends product analytics events. Absent where it sends none. */
     usageAnalytics?: UsageAnalyticsStore;
     gptLive?: GptLiveStore;
@@ -400,6 +408,12 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
         projectsVisibilityStore.get,
         projectsVisibilityStore.get,
     );
+    const followUpBehaviorStore = props.followUpBehavior ?? followUpBehaviorStoreNoop;
+    const followUpBehavior = useSyncExternalStore(
+        followUpBehaviorStore.subscribe,
+        followUpBehaviorStore.get,
+        followUpBehaviorStore.get,
+    ).followUp;
     const usageAnalyticsStore = props.usageAnalytics ?? usageAnalyticsAbsent;
     const usageAnalytics = useSyncExternalStore(
         usageAnalyticsStore.subscribe,
@@ -1165,6 +1179,12 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                               projectsHidden: projectsVisibility.projectsHidden,
                               onProjectsHiddenChange: (hidden: boolean) =>
                                   projectsVisibilityStore.projectsHiddenUpdate(hidden),
+                          }
+                        : {})}
+                    {...(props.followUpBehavior
+                        ? {
+                              followUpBehavior,
+                              onFollowUpBehaviorChange: followUpBehaviorStore.followUpUpdate,
                           }
                         : {})}
                     onDefaultModelChange={(key) => {
