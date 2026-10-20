@@ -40,6 +40,12 @@ import {
     conversationRowHeightCacheCreate,
     type ConversationRowHeightCache,
 } from "./conversationRowHeight";
+import {
+    conversationInlineArtifactLeads,
+    conversationInlinePage,
+    type ConversationInlinePageLocal,
+    type ConversationInlinePages,
+} from "./conversationInlinePages";
 import { EmptyState } from "./EmptyState";
 import { Message, MessageList, type MessageListScrollPosition } from "./Message";
 import {
@@ -230,6 +236,11 @@ export type ConversationViewProps = {
      * a new value re-renders the references and re-sizes the rows naming them.
      */
     references?: MessageReferences;
+    /**
+     * The artifacts and web pages tool calls show inline, and the engines that
+     * draw them. Absent, every such call keeps its card.
+     */
+    inlinePages?: ConversationInlinePages;
     /** Runs a command chosen from the `/` palette. */
     onCommandInvoke?: (commandId: string) => void;
     /** Stops the current run; the composer's send control becomes this while running. */
@@ -272,6 +283,28 @@ function conversationRowHeightCacheGet(key: string): ConversationRowHeightCache 
         rowHeightCaches.delete(oldest);
     }
     return cache;
+}
+
+/** How many inline pages keep their reader's collapse and last height. */
+const INLINE_PAGE_MEMORY_LIMIT = 2_000;
+/*
+ * What the reader did to each inline page, and the height its page last
+ * reported, by conversation and row. Like the row-layout caches they belong to
+ * the module: a row scrolled out of the virtualized list, or a conversation
+ * opened again, keeps its page's height and its collapse instead of jumping.
+ * Collapse is local to this reader, as the product asks. Map insertion order
+ * is the bounded LRU.
+ */
+const inlinePageCollapse = new Map<string, boolean>();
+const inlinePageHeights = new Map<string, number>();
+function inlinePageRemember<Value>(memory: Map<string, Value>, key: string, value: Value): void {
+    memory.delete(key);
+    memory.set(key, value);
+    while (memory.size > INLINE_PAGE_MEMORY_LIMIT) {
+        const oldest = memory.keys().next().value as string | undefined;
+        if (oldest === undefined) break;
+        memory.delete(oldest);
+    }
 }
 
 /** Whether the turn this row carries the trace control for is currently open. */
@@ -448,6 +481,35 @@ export function ConversationView(props: ConversationViewProps) {
     };
     const rowHeightCache = conversationRowHeightCacheGet(conversationCacheKey);
     const { transcript, queued } = conversationPendingSteering(props.entries);
+    /* Every change to an inline page's collapse or height is one generation,
+       which re-sizes the rows; the values themselves live in module memory. */
+    const [inlinePageGeneration, setInlinePageGeneration] = useState(0);
+    const inlinePageLocal: ConversationInlinePageLocal = {
+        collapsed: (key) => inlinePageCollapse.get(key),
+        collapsedSet: (key, collapsed) => {
+            if (inlinePageCollapse.get(key) === collapsed) return;
+            inlinePageRemember(inlinePageCollapse, key, collapsed);
+            setInlinePageGeneration((generation) => generation + 1);
+        },
+        height: (key) => inlinePageHeights.get(key),
+        heightSet: (key, height) => {
+            if (inlinePageHeights.get(key) === height) return;
+            inlinePageRemember(inlinePageHeights, key, height);
+            setInlinePageGeneration((generation) => generation + 1);
+        },
+    };
+    const inlinePages = props.inlinePages;
+    const inlineLeads = inlinePages ? conversationInlineArtifactLeads(transcript) : undefined;
+    const inlinePageOf = (entry: ConversationEntry | undefined) =>
+        entry === undefined || inlinePages === undefined || inlineLeads === undefined
+            ? undefined
+            : conversationInlinePage(
+                  entry,
+                  rowExpansionKey(entry),
+                  inlinePages,
+                  inlineLeads,
+                  inlinePageLocal,
+              );
     const awaitingInput = transcript.some(
         (entry) =>
             entry.kind === "request" &&
@@ -649,9 +711,14 @@ export function ConversationView(props: ConversationViewProps) {
                         props.activityTreatment,
                         rowExpansion,
                         conversationReferencesSignature(transcript, props.references),
+                        inlinePageGeneration,
+                        inlinePages?.artifacts,
+                        inlinePages?.artifactRender === undefined,
+                        inlinePages?.pageRender === undefined,
                     ]}
-                    estimateRowSize={(index, width) =>
-                        conversationRowHeight(
+                    estimateRowSize={(index, width) => {
+                        const inlinePage = inlinePageOf(transcript[index]);
+                        return conversationRowHeight(
                             transcript,
                             index,
                             {
@@ -664,12 +731,13 @@ export function ConversationView(props: ConversationViewProps) {
                                 surface: "conversation",
                                 liveStatus: statusVisible,
                                 ...(props.references ? { references: props.references } : {}),
+                                ...(inlinePage ? { inlinePage: inlinePage.geometry } : {}),
                                 viewerId: props.viewerId,
                                 width,
                             },
                             rowHeightCache,
-                        )
-                    }
+                        );
+                    }}
                     estimateRows={transcript}
                     estimateRowWidth={contentWidth}
                     estimateVersion={textLayoutGeneration}
@@ -748,12 +816,14 @@ export function ConversationView(props: ConversationViewProps) {
                                           candidate.requestId === entry.request.requestId,
                                   )
                                 : undefined;
+                        const inlinePage = inlinePageOf(entry);
                         return (
                             <ConversationEntryView
                                 /* The key leads the spread props below so React
                                    takes its direct element path for each of the
                                    transcript's rows instead of copying props. */
                                 key={entry.kind === "message" ? entry.message.id : entry.id}
+                                {...(inlinePage ? { inlinePage: inlinePage.props } : {})}
                                 errorAssistance={errorAssistanceFor(entry)}
                                 onErrorAssistanceRequest={props.onErrorAssistanceRequest}
                                 activityMotion={props.motion}

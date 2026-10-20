@@ -1345,8 +1345,25 @@ function projectToolPresentation(
                 version: presentation.version,
                 artifactType: presentation.artifactType,
                 title: presentation.title,
+                shows: presentation.shows === "latest" ? "latest" : "version",
+            };
+        case "page":
+            return {
+                kind: "page",
+                url: presentation.url,
+                title: presentation.title,
+                display: artifactDisplayProject(presentation.display),
             };
     }
+}
+
+/** A display preference this build knows, or no preference. */
+function artifactDisplayProject(
+    display: string | null | undefined,
+): "inline_compact" | "inline_expanded" | "side" | null {
+    return display === "inline_compact" || display === "inline_expanded" || display === "side"
+        ? display
+        : null;
 }
 
 /**

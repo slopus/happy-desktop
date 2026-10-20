@@ -1037,7 +1037,8 @@ function happyAgentConnectGroupProject(
                 entry.activity.kind === "tool" &&
                 (entry.activity.tool.presentation?.type === "fileDiff" ||
                     entry.activity.tool.presentation?.type === "media" ||
-                    entry.activity.tool.presentation?.type === "artifact")) ||
+                    entry.activity.tool.presentation?.type === "artifact" ||
+                    entry.activity.tool.presentation?.type === "page")) ||
             (entry.kind === "notice" && !noticeInformational(entry)),
     );
     const hiddenCount = entries.length - visibleCollapsed.length;
@@ -1242,6 +1243,14 @@ function presentationProject(
                 version: presentation.version,
                 artifactType: happyAgentArtifactTypeProject(presentation.artifactType),
                 title: presentation.title,
+                shows: presentation.shows,
+            };
+        case "page":
+            return {
+                type: "page",
+                url: presentation.url,
+                title: presentation.title,
+                display: presentation.display,
             };
     }
 }

@@ -569,7 +569,12 @@ function presentationEqual(
             left.artifactId === right.artifactId &&
             left.version === right.version &&
             left.artifactType === right.artifactType &&
-            left.title === right.title
+            left.title === right.title &&
+            left.shows === right.shows
+        );
+    if (left.type === "page" && right.type === "page")
+        return (
+            left.url === right.url && left.title === right.title && left.display === right.display
         );
     return false;
 }

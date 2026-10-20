@@ -87,6 +87,10 @@ const bridge: HappyDesktopBridge = {
     browserNetworkResolve: (target) => ipcRenderer.invoke(desktopIpc.browserNetworkResolve, target),
     browserNetworkProfileOpen: (network) =>
         ipcRenderer.invoke(desktopIpc.browserNetworkProfileOpen, network),
+    browserNetworkProfileClose: (partition) =>
+        ipcRenderer.invoke(desktopIpc.browserNetworkProfileClose, partition),
+    guestFitMeasure: (guestId, previous) =>
+        ipcRenderer.invoke(desktopIpc.guestFitMeasure, guestId, previous),
     browserNetworkCommand: (partition, guestId, command) =>
         ipcRenderer.invoke(desktopIpc.browserNetworkCommand, partition, guestId, command),
     browserNetworkPopupSubscribe(listener: (popup: DesktopBrowserPopup) => void) {

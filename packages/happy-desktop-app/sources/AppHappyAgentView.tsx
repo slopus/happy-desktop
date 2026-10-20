@@ -12,6 +12,7 @@ import {
     type HappyAgentSidebarProject,
 } from "happy-desktop-state";
 import { AppGptLivePhone } from "./gptLive/AppGptLivePhone";
+import { conversationInlinePagesCreate, inlineArtifactsStoreNoop } from "./conversationInlinePages";
 import {
     ARTIFACT_READING,
     artifactTitlesStoreNoop,
@@ -6685,6 +6686,11 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
             <HappyAgentConversationBody
                 modelUsageWatch={modelUsageWatch}
                 {...(props.artifacts ? { artifacts: props.artifacts } : {})}
+                inlineEngines={{
+                    ...(props.artifactPage ? { artifactPage: props.artifactPage } : {}),
+                    ...(props.browserContent ? { browserContent: props.browserContent } : {}),
+                    browserConnectionId: props.browserConnectionId,
+                }}
                 referenceEntities={messageReferenceEntities(workspace.list)}
                 onReferenceGroupOpen={(groupId, agentId) => {
                     // A workspace or project a reference names opens where the
@@ -8224,6 +8230,15 @@ function HappyAgentConversationBody(props: {
     activitySelected: boolean;
     /** The machine's artifacts, which the transcript's references name. */
     artifacts?: HappyAgentArtifacts;
+    /**
+     * The host's engines for pages tool calls show inline, and the connection
+     * a web page's network belongs to. Absent, every such call keeps its card.
+     */
+    inlineEngines?: {
+        readonly artifactPage?: HtmlPreviewRenderer;
+        readonly browserContent?: BrowserContentRenderer;
+        readonly browserConnectionId: string | null;
+    };
     /** The agents, workspaces, and projects the transcript's references can name. */
     referenceEntities: MessageReferenceEntities;
     /** Opens a group a reference names, on one of its conversations or where it was left. */
@@ -8284,6 +8299,7 @@ function HappyAgentConversationBody(props: {
             <HappyAgentConversationSurface
                 activitySelected={props.activitySelected}
                 {...(props.artifacts ? { artifacts: props.artifacts } : {})}
+                {...(props.inlineEngines ? { inlineEngines: props.inlineEngines } : {})}
                 referenceEntities={props.referenceEntities}
                 onReferenceGroupOpen={props.onReferenceGroupOpen}
                 modelUsageWatch={props.modelUsageWatch}
@@ -8434,6 +8450,15 @@ function HappyAgentConversationSurface(props: {
     activitySelected: boolean;
     /** The machine's artifacts, which the transcript's references name. */
     artifacts?: HappyAgentArtifacts;
+    /**
+     * The host's engines for pages tool calls show inline, and the connection
+     * a web page's network belongs to. Absent, every such call keeps its card.
+     */
+    inlineEngines?: {
+        readonly artifactPage?: HtmlPreviewRenderer;
+        readonly browserContent?: BrowserContentRenderer;
+        readonly browserConnectionId: string | null;
+    };
     /** The agents, workspaces, and projects the transcript's references can name. */
     referenceEntities: MessageReferenceEntities;
     /** Opens a group a reference names, on one of its conversations or where it was left. */
@@ -8486,6 +8511,14 @@ function HappyAgentConversationSurface(props: {
     // reference row fans out from this snapshot rather than subscribing itself.
     const titlesStore = props.artifacts?.titles() ?? artifactTitlesStoreNoop;
     const titles = useSyncExternalStore(titlesStore.subscribe, titlesStore.get, titlesStore.get);
+    // The artifacts the transcript shows inline, read through one subscription
+    // the way its titles are.
+    const inlineStore = props.artifacts?.inline() ?? inlineArtifactsStoreNoop;
+    const inlineArtifacts = useSyncExternalStore(
+        inlineStore.subscribe,
+        inlineStore.get,
+        inlineStore.get,
+    );
     // A session that is still being read is not a reason to unmount this
     // surface: the composer is already live, the header already carries the
     // title the list knew, and the transcript fills in underneath. Only a
@@ -8553,9 +8586,28 @@ function HappyAgentConversationSurface(props: {
               }
             : {}),
     });
+    const inlineEngines = props.inlineEngines;
+    const inlinePages = inlineEngines
+        ? conversationInlinePagesCreate({
+              artifacts: inlineArtifacts,
+              store: inlineStore,
+              ...(props.artifacts && inlineEngines.artifactPage
+                  ? { artifactPage: inlineEngines.artifactPage }
+                  : {}),
+              ...(inlineEngines.browserContent
+                  ? { browserContent: inlineEngines.browserContent }
+                  : {}),
+              browserConnectionId: inlineEngines.browserConnectionId,
+              workspaceId: props.groupId,
+              agentId: conversation.conversationId,
+              artifactOpen: (artifactId) => workspace.panel.artifactViewOpen(artifactId),
+              pageOpen: (url) => workspace.panel.browserAdd(url),
+          })
+        : undefined;
     return (
         <ConversationView
             references={references}
+            {...(inlinePages ? { inlinePages } : {})}
             emptyContent={props.emptyContent}
             agentAuthor={agentAuthor}
             activityControl={

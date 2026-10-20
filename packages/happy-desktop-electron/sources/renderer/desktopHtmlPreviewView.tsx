@@ -1,10 +1,10 @@
 import { Component, createElement } from "react";
 import type { HtmlPreviewProps } from "happy-desktop-ui";
 import type { DesktopPreviewNavigation } from "../shared/desktopContract";
+import { GuestPageFit, type FitGuestElement } from "./guestPageFit";
 
-interface HtmlPreviewWebViewElement extends HTMLElement {
+interface HtmlPreviewWebViewElement extends FitGuestElement {
     getWebContentsId(): number;
-    insertCSS(css: string): Promise<string>;
     reload(): void;
 }
 
@@ -98,6 +98,8 @@ export class DesktopHtmlPreviewView extends Component<DesktopHtmlPreviewViewProp
      * finish that is a page from a finish that is the server's refusal.
      */
     private refused = false;
+    /** Lays the page inline while the owner asks for that; see `HtmlPreviewProps.fit`. */
+    private readonly fitter = new GuestPageFit(() => this.props.fit);
 
     componentDidMount(): void {
         this.unsubscribe = window.happyDesktop?.previewNavigationSubscribe(this.receive);
@@ -115,6 +117,7 @@ export class DesktopHtmlPreviewView extends Component<DesktopHtmlPreviewViewProp
         this.unsubscribe = undefined;
         this.elementApply(null);
         this.pending = [];
+        this.fitter.dispose();
     }
 
     private readonly receive = (step: DesktopPreviewNavigation): void => {
@@ -219,6 +222,12 @@ export class DesktopHtmlPreviewView extends Component<DesktopHtmlPreviewViewProp
      * each new one is given its canvas again.
      */
     private readonly documentReady = (): void => {
+        // A page laid inline is given the conversation's own colour scheme,
+        // which is the canvas it needs.
+        if (this.props.fit && this.element) {
+            this.fitter.documentReady(this.element);
+            return;
+        }
         if (this.props.canvas !== "none") return;
         // A guest that is already gone has no document left to style.
         this.element?.insertCSS(PREVIEW_CANVAS_DARK).catch(() => undefined);
@@ -229,6 +238,7 @@ export class DesktopHtmlPreviewView extends Component<DesktopHtmlPreviewViewProp
         this.element?.removeEventListener("did-attach", this.attached);
         this.element?.removeEventListener("dom-ready", this.documentReady);
         this.element = view ?? undefined;
+        this.fitter.stop();
         this.element?.addEventListener("did-attach", this.attached);
         this.element?.addEventListener("dom-ready", this.documentReady);
         // A different element is a different guest, and everything this view

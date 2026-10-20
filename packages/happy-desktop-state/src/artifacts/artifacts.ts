@@ -16,6 +16,10 @@ import {
     type HappyAgentArtifactTitlesStore,
 } from "./artifactTitlesStore.js";
 import {
+    happyAgentInlineArtifactsStoreCreate,
+    type HappyAgentInlineArtifactsStore,
+} from "./artifactInlineStore.js";
+import {
     happyAgentArtifactViewerStoreCreate,
     type HappyAgentArtifactViewerStore,
 } from "./artifactViewerStore.js";
@@ -46,6 +50,8 @@ export interface HappyAgentArtifacts {
     tabViewer(): HappyAgentArtifactViewerStore;
     /** The live titles of the artifacts conversations name. */
     titles(): HappyAgentArtifactTitlesStore;
+    /** The artifacts conversations show inline, each at its latest version. */
+    inline(): HappyAgentInlineArtifactsStore;
     /** The names of the people artifacts credit. */
     people(): HappyAgentArtifactPeopleStore;
     [Symbol.dispose](): void;
@@ -80,6 +86,7 @@ export function happyAgentArtifactsCreate(deps: HappyAgentArtifactsDeps): HappyA
     let panelViewer: HappyAgentArtifactViewerStore | undefined;
     let tabViewer: HappyAgentArtifactViewerStore | undefined;
     let titles: HappyAgentArtifactTitlesStore | undefined;
+    let inline: HappyAgentInlineArtifactsStore | undefined;
     let people: HappyAgentArtifactPeople | undefined;
     let disposed = false;
     /*
@@ -140,6 +147,15 @@ export function happyAgentArtifactsCreate(deps: HappyAgentArtifactsDeps): HappyA
                 happyAgentArtifactTitlesStoreCreate({ client: deps.client, sync: deps.sync }),
             ));
         },
+        inline() {
+            return (inline ??= inert(
+                happyAgentInlineArtifactsStoreCreate({
+                    client: deps.client,
+                    sync: deps.sync,
+                    ...(deps.siteOpen ? { siteOpen: deps.siteOpen } : {}),
+                }),
+            ));
+        },
         people() {
             return peopleOf().store;
         },
@@ -152,6 +168,7 @@ export function happyAgentArtifactsCreate(deps: HappyAgentArtifactsDeps): HappyA
             panelViewer?.[Symbol.dispose]();
             tabViewer?.[Symbol.dispose]();
             titles?.[Symbol.dispose]();
+            inline?.[Symbol.dispose]();
             people?.[Symbol.dispose]();
         },
     };

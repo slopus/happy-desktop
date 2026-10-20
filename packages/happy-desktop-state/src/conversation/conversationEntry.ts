@@ -1,4 +1,8 @@
-import type { HappyAgentArtifactId, HappyAgentArtifactType } from "../artifacts/artifactTypes.js";
+import type {
+    HappyAgentArtifactDisplay,
+    HappyAgentArtifactId,
+    HappyAgentArtifactType,
+} from "../artifacts/artifactTypes.js";
 import type { AgentTurnTraceSummary, UserError } from "../types.js";
 import type { ConversationAuthor } from "./conversationAuthor.js";
 
@@ -225,7 +229,12 @@ export type ConversationActivityPresentation =
           readonly type: "media";
           readonly items: readonly ConversationMediaItem[];
       }
-    /** The artifact version the call published, shown as a card that opens it. */
+    /**
+     * The artifact a call made, changed, or took up. `shows` is `"latest"`
+     * where the chat follows the artifact as it changes — where an HTML
+     * artifact is shown inline — and `"version"` where the call records one
+     * version, shown as a card that opens it.
+     */
     | {
           readonly type: "artifact";
           readonly artifactId: HappyAgentArtifactId;
@@ -233,6 +242,14 @@ export type ConversationActivityPresentation =
           readonly artifactType: HappyAgentArtifactType;
           /** The title at publication; a surface with live titles prefers those. */
           readonly title: string;
+          readonly shows: "latest" | "version";
+      }
+    /** A web page the call asked the chat to show inline, through the agent's network. */
+    | {
+          readonly type: "page";
+          readonly url: string;
+          readonly title: string;
+          readonly display: HappyAgentArtifactDisplay | null;
       };
 
 export interface ConversationActivityFailure {

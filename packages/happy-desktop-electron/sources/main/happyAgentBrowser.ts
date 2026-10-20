@@ -16,11 +16,28 @@ export class HappyAgentBrowser {
     readonly #guests = new Map<number, WebContents>();
     #closed = false;
 
+    /**
+     * A tab's profile is kept on disk and shared by every tab on its network. An
+     * inline page's is kept only in memory and is its own: no `persist:` prefix,
+     * and the page's name is part of its identity.
+     */
     static partition(network: DesktopBrowserNetwork): string {
+        if (network.page !== undefined) {
+            const identity = createHash("sha256")
+                .update(JSON.stringify([network.connectionId, network.networkId, network.page]))
+                .digest("hex");
+            return `${HappyAgentBrowser.inlinePagePrefix}${identity}`;
+        }
         const identity = createHash("sha256")
             .update(JSON.stringify([network.connectionId, network.networkId]))
             .digest("hex");
         return `persist:happy-browser-${identity}`;
+    }
+
+    static readonly inlinePagePrefix = "happy-inline-page-";
+
+    static inlinePage(partition: string): boolean {
+        return partition.startsWith(HappyAgentBrowser.inlinePagePrefix);
     }
 
     static async create(

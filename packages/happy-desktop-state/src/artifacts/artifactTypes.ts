@@ -24,6 +24,13 @@ export type HappyAgentArtifactType =
     | "document"
     | "unknown";
 
+/**
+ * How an artifact's author wants it shown in a chat: inline collapsed to its
+ * title, inline at its full height, or as its title that opens it beside the
+ * chat. A value this build does not know reads as no preference.
+ */
+export type HappyAgentArtifactDisplay = "inline_compact" | "inline_expanded" | "side";
+
 /** The types this build knows, in the order a type filter offers them. */
 export const HAPPY_AGENT_ARTIFACT_TYPES: readonly Exclude<HappyAgentArtifactType, "unknown">[] = [
     "markdown",

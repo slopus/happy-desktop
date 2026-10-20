@@ -71,7 +71,13 @@ export function desktopBrowserNetworkValidate(value: unknown): DesktopBrowserNet
               );
     if (!Value.Check(networkIdSchema, network.networkId))
         throw new Error("The Happy Agent browser network is invalid.");
-    return { connectionId, networkId: network.networkId };
+    const page = (value as { readonly page?: unknown }).page;
+    if (page === undefined) return { connectionId, networkId: network.networkId };
+    return {
+        connectionId,
+        networkId: network.networkId,
+        page: boundedString(page, "The inline page", 128),
+    };
 }
 
 export function happyAgentTerminalInputValidate(value: unknown): string {

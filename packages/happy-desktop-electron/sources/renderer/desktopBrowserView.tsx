@@ -5,6 +5,7 @@ import type {
     DesktopBrowserStatus,
     DesktopBrowserTunnelFailure,
 } from "../shared/desktopContract";
+import { GuestPageFit, type FitGuestElement } from "./guestPageFit";
 
 interface BrowserWebViewEvent extends Event {
     readonly canGoBack?: boolean;
@@ -18,10 +19,9 @@ interface BrowserWebViewEvent extends Event {
     readonly validatedURL?: string;
 }
 
-interface BrowserWebViewElement extends HTMLElement {
+interface BrowserWebViewElement extends FitGuestElement {
     canGoBack(): boolean;
     canGoForward(): boolean;
-    executeJavaScript(code: string): Promise<unknown>;
     getTitle(): string;
     getURL(): string;
     getWebContentsId(): number;
@@ -93,6 +93,10 @@ export class DesktopBrowserView extends Component<BrowserContentProps> {
     private status?: DesktopBrowserStatus;
     /** Address of the newest requested navigation, for failures with no commit. */
     private requested?: string;
+    /** Lays the page inline while the owner asks for that; see `BrowserContentProps.fit`. */
+    private readonly fitter = new GuestPageFit(() => this.props.fit);
+    /** This view's own name for its inline page's profile; see `profileOpen`. */
+    private readonly inlinePage = crypto.randomUUID();
 
     private readonly controller: BrowserController = {
         browserBack: () => {
@@ -160,6 +164,10 @@ export class DesktopBrowserView extends Component<BrowserContentProps> {
         const event = raw as BrowserWebViewEvent;
         const view = this.element;
         if (!view) return;
+        // The blank document a guest boots on is not the page; each document
+        // after it is laid inline when the owner asks.
+        if (event.type === "dom-ready" && this.props.fit && view.getURL() !== "about:blank")
+            this.fitter.documentReady(view);
         if (!this.initialized) {
             if (event.type === "dom-ready") {
                 this.initialized = true;
@@ -290,6 +298,8 @@ export class DesktopBrowserView extends Component<BrowserContentProps> {
         this.networkMissingUnsubscribe?.();
         this.networkMissingUnsubscribe = undefined;
         this.elementApply(undefined);
+        this.fitter.dispose();
+        this.inlineProfileClose(this.state.partition);
     }
 
     /**
@@ -319,6 +329,7 @@ export class DesktopBrowserView extends Component<BrowserContentProps> {
                 this.element.removeEventListener(event, this.receive);
         this.element = view ?? undefined;
         this.initialized = false;
+        this.fitter.stop();
         if (this.element) {
             for (const event of browserEvents) this.element.addEventListener(event, this.receive);
         } else {
@@ -331,6 +342,7 @@ export class DesktopBrowserView extends Component<BrowserContentProps> {
         const desktop = window.happyDesktop;
         const generation = (this.proxyGeneration += 1);
         this.elementApply(undefined);
+        this.inlineProfileClose(this.state.partition);
         if (this.state.partition) this.setState({ partition: undefined });
         if (!target || !desktop) {
             this.props.browserFailed({ message: "The browser has no Happy Agent workspace." });
@@ -363,7 +375,8 @@ export class DesktopBrowserView extends Component<BrowserContentProps> {
         // and the tab is not moved to whatever the agent names now.
         if (target.networkId === undefined) {
             // Bind the tab this view was asked for, even if the view has moved
-            // on by the time the agent answers.
+            // on by the time the agent answers. A page with no tab to bind —
+            // one laid inline into a conversation — opens the network itself.
             const bind = this.props.browserNetworkResolved;
             void desktop
                 .browserNetworkResolve({
@@ -371,17 +384,37 @@ export class DesktopBrowserView extends Component<BrowserContentProps> {
                     workspaceId: target.workspaceId,
                     agentId: target.agentId,
                 })
-                .then((networkId) => bind?.(networkId), failed);
+                .then((networkId) => {
+                    if (bind) bind(networkId);
+                    else if (generation === this.proxyGeneration)
+                        this.profileOpen(target.connectionId, networkId, generation, failed);
+                }, failed);
             return;
         }
-        void desktop
-            .browserNetworkProfileOpen({
-                connectionId: target.connectionId,
-                networkId: target.networkId,
-            })
+        this.profileOpen(target.connectionId, target.networkId, generation, failed);
+    }
+
+    private profileOpen(
+        connectionId: string | null,
+        networkId: string,
+        generation: number,
+        failed: (error: unknown) => void,
+    ): void {
+        // A page laid inline gets a profile of its own for as long as it is
+        // mounted, never the workspace browser's, whose logins it must not see.
+        // Each attempt names its own, so one abandoned midway is closed alone.
+        const page = this.props.fit ? `${this.inlinePage}-${String(generation)}` : undefined;
+        void window.happyDesktop
+            ?.browserNetworkProfileOpen?.({ connectionId, networkId, page })
             .then((partition) => {
                 if (generation === this.proxyGeneration) this.setState({ partition });
+                else if (page !== undefined) this.inlineProfileClose(partition);
             }, failed);
+    }
+
+    private inlineProfileClose(partition: string | undefined): void {
+        if (partition === undefined || !this.props.fit) return;
+        void window.happyDesktop?.browserNetworkProfileClose?.(partition).catch(() => undefined);
     }
 
     /**

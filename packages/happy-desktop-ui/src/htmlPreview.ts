@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import type { InlinePageFit } from "./inlinePageFit";
 
 /**
  * Why a page is not on screen, in the terms the host actually observed.
@@ -66,6 +67,12 @@ export interface HtmlPreviewProps {
      * reader.
      */
     previewLoaded(): void;
+    /**
+     * The page is laid inline into a conversation rather than given a region of
+     * its own: the engine lays it out at its content height in the chat's
+     * colour scheme, never scrolls inside it, and reports each height.
+     */
+    readonly fit?: InlinePageFit;
 }
 
 /**

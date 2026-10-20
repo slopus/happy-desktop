@@ -14,6 +14,7 @@ import type {
 } from "happy-desktop-state";
 import { messageBodyFormat } from "./messagePlainText";
 import { AgentActivityRow, type ActivityMotion, type ActivityTreatment } from "./AgentActivityRow";
+import type { InlinePageProps } from "./InlinePage";
 import { ConversationComputeEvent } from "./ConversationComputeEvent";
 import { ConversationErrorCard } from "./ConversationErrorCard";
 import { conversationErrorTitle } from "./conversationErrorTitle";
@@ -83,6 +84,8 @@ export type ConversationEntryViewProps = {
     linkOpenDefault?: LinkOpenPlacement;
     /** What the Happy references a message names read as, and where opening one goes. */
     references?: MessageReferences;
+    /** The page this row's tool call shows inline, when its owner shows one. */
+    inlinePage?: InlinePageProps;
     /** Disables request controls while a prior submission is in flight. */
     requestPending?: boolean;
     /** Last failed submission for this request. */
@@ -239,6 +242,7 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
                       }
                     : {})}
                 {...(props.references ? { references: props.references } : {})}
+                {...(props.inlinePage ? { inlinePage: props.inlinePage } : {})}
                 singleLine={entry.activity.kind === "tool"}
                 time={
                     (entry.activity.kind === "tool" || entry.activity.kind === "agentMessage") &&

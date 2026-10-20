@@ -258,6 +258,7 @@ export const createdArtifactTool: ConversationToolCall = {
         version: 1,
         artifactType: "html",
         title: "Relay flagship landing page",
+        shows: "latest",
     },
 };
 
@@ -273,6 +274,7 @@ export const updatedArtifactTool: ConversationToolCall = {
         version: 4,
         artifactType: "document",
         title: "Q3 launch readiness review",
+        shows: "version",
     },
 };
 

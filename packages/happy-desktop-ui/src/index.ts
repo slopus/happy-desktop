@@ -236,6 +236,18 @@ export {
 } from "./keyboardShortcut";
 export { WindowShortcuts, type WindowShortcutAction } from "./WindowShortcuts";
 export type { HtmlPreviewFailure, HtmlPreviewProps, HtmlPreviewRenderer } from "./htmlPreview";
+export {
+    INLINE_PAGE_CONTENT_GAP,
+    INLINE_PAGE_MAX_HEIGHT,
+    INLINE_PAGE_TITLE_HEIGHT,
+    inlinePageHeight,
+    type InlinePageFit,
+    type InlinePageGeometry,
+    type InlinePagePlacement,
+    type InlinePageRender,
+} from "./inlinePageFit";
+export { InlinePage, type InlinePageProps } from "./InlinePage";
+export type { ConversationInlinePages } from "./conversationInlinePages";
 export type { MediaWindowOpener, MediaWindowRequest } from "./mediaWindow";
 export { HtmlPreviewFrame, type HtmlPreviewFrameProps } from "./HtmlPreviewFrame";
 export { HtmlPreviewError, type HtmlPreviewErrorProps } from "./HtmlPreviewError";

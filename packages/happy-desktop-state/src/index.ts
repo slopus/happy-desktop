@@ -84,6 +84,12 @@ export type {
     HappyAgentToolMediaDocumentStore,
 } from "./happyAgent/happyAgentToolMediaDocumentStore.js";
 export type { HappyAgentArtifacts } from "./artifacts/artifacts.js";
+export type {
+    HappyAgentInlineArtifact,
+    HappyAgentInlineArtifactSite,
+    HappyAgentInlineArtifactsSnapshot,
+    HappyAgentInlineArtifactsStore,
+} from "./artifacts/artifactInlineStore.js";
 export * from "./surfaces/surfaceTypes.js";
 export {
     happyAgentSurfaceCatalogStoreNoop,

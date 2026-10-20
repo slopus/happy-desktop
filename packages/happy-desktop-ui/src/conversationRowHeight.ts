@@ -37,6 +37,7 @@ import {
     type MessageReferences,
 } from "./messageReferences";
 import { messageBodyFormat, type MessageBodyFormat } from "./messagePlainText";
+import { inlinePageHeight, type InlinePageGeometry } from "./inlinePageFit";
 import { SYSTEM_NOTIFICATION_HEIGHT } from "./systemNotification";
 import { agentTraceMetaStats, agentTraceMetaTitle } from "./agentTraceMeta";
 import { conversationErrorTitle } from "./conversationErrorTitle";
@@ -91,6 +92,11 @@ export type ConversationRowContext = {
      * sized from the same resolution the body renders.
      */
     readonly references?: MessageReferences;
+    /**
+     * The page this row's tool call shows inline, as its owner holds it: where
+     * it sits, whether it is collapsed, and the height its page last reported.
+     */
+    readonly inlinePage?: InlinePageGeometry;
 };
 type CachedRowHeight = { readonly value: number | undefined };
 type Dictionary<T> = Record<string, T | undefined>;
@@ -345,14 +351,26 @@ export function conversationMediaHeight(
  * alone: presented files, or the card for the artifact it published. Zero for
  * every other call, which stays one line.
  */
-function toolResultHeight(entry: ConversationEntry, measure: number): number {
+function toolResultHeight(
+    entry: ConversationEntry,
+    measure: number,
+    inlinePage: InlinePageGeometry | undefined,
+): number {
     if (entry.kind !== "agentActivity" || entry.activity.kind !== "tool") return 0;
+    if (inlinePage !== undefined) return TOOL_MEDIA_GAP + inlinePageHeight(inlinePage);
     const tool = entry.activity.tool;
     const presentation = tool.presentation;
     if (presentation?.type === "media" && presentation.items.length > 0)
         return TOOL_MEDIA_GAP + conversationMediaHeight(presentation.items, measure);
-    if (presentation?.type === "artifact") return TOOL_MEDIA_GAP + RESULT_CARD_HEIGHT;
+    if (presentation?.type === "artifact" || presentation?.type === "page")
+        return TOOL_MEDIA_GAP + RESULT_CARD_HEIGHT;
     return 0;
+}
+
+/** What of an inline page a row's height reads, as part of its cache key. */
+function inlinePageSignature(inlinePage: InlinePageGeometry | undefined): string {
+    if (inlinePage === undefined) return "";
+    return `${inlinePage.placement}/${inlinePage.collapsed ? "c" : "o"}/${String(inlinePage.height ?? 0)}`;
 }
 
 /** Which of the three author treatments a message row takes. */
@@ -624,7 +642,7 @@ export function conversationRowHeight(
         return rowHeightCached(
             cache,
             entry,
-            `activity:${context.surface}:${context.activityTreatment ?? "detailed"}:${String(width)}:${expanded ? "expanded" : "collapsed"}:${startsGroup ? "lead" : "plain"}:${messageReferencesSignature(
+            `activity:${context.surface}:${context.activityTreatment ?? "detailed"}:${String(width)}:${expanded ? "expanded" : "collapsed"}:${startsGroup ? "lead" : "plain"}:${inlinePageSignature(context.inlinePage)}:${messageReferencesSignature(
                 conversationEntryReferences(entry),
                 context.references,
             )}`,
@@ -667,7 +685,7 @@ export function conversationRowHeight(
                               )
                             : entry.activity.kind === "tool"
                               ? ACTIVITY_HEIGHT.tool +
-                                toolResultHeight(entry, width - activityInset)
+                                toolResultHeight(entry, width - activityInset, context.inlinePage)
                               : conversationActivityHeight(entry.activity.kind);
                 if (activityHeight === undefined) return undefined;
                 return startsGroup

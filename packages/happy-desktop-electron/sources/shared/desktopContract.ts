@@ -679,6 +679,12 @@ export interface DesktopBrowserNetwork {
     readonly connectionId: string | null;
     /** Opaque, minted by Happy Agent. */
     readonly networkId: string;
+    /**
+     * Names a page laid inline into a conversation. Such a page gets a profile
+     * of its own, kept only in memory and shared with no tab or other page, so
+     * it never sees the cookies, storage, or logins of the workspace browser.
+     */
+    readonly page?: string;
 }
 
 /**
@@ -820,6 +826,14 @@ export interface HappyDesktopBridge {
     browserNetworkResolve?(target: DesktopBrowserProxyTarget): Promise<string>;
     /** Returns the partition of a network's profile, opening it the first time. */
     browserNetworkProfileOpen?(network: DesktopBrowserNetwork): Promise<string>;
+    /** Closes an inline page's own profile, opened with `page`; tab profiles stay open. */
+    browserNetworkProfileClose?(partition: string): Promise<void>;
+    /**
+     * Resolves with an inline guest's content height once it differs from
+     * `previous`, measured in a world of its own that the page's scripts cannot
+     * reach or replace.
+     */
+    guestFitMeasure?(guestId: number, previous: number): Promise<number>;
     /** Navigates one guest of an open network profile. */
     browserNetworkCommand?(
         partition: string,
@@ -1002,6 +1016,8 @@ export const desktopIpc = {
     appearanceSet: "happy:appearance:set",
     browserNetworkResolve: "happy:browser:network-resolve",
     browserNetworkProfileOpen: "happy:browser:network-profile-open",
+    browserNetworkProfileClose: "happy:browser:network-profile-close",
+    guestFitMeasure: "happy:guest:fit-measure",
     browserNetworkPopupRequested: "happy:browser:network-popup-requested",
     browserNetworkCommand: "happy:browser:network-command",
     browserNetworkMissing: "happy:browser:network-missing",

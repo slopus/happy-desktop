@@ -102,6 +102,14 @@ export type ToolPresentation =
           /** The daemon's artifact type, which grows with the product. */
           artifactType: string;
           title: string;
+          /** Absent from older daemons, and any value this build does not know, is a version. */
+          shows: "latest" | "version";
+      }
+    | {
+          kind: "page";
+          url: string;
+          title: string;
+          display: "inline_compact" | "inline_expanded" | "side" | null;
       };
 
 interface BaseChatElement {

@@ -18,6 +18,7 @@ import { CopyButton } from "./CopyButton";
 import { DiffSnippet, type DiffLine } from "./DiffSnippet";
 import { filePreviewKind } from "./FilePreview";
 import { Icon, type IconName } from "./Icon";
+import { InlinePage, type InlinePageProps } from "./InlinePage";
 import { useMessageListDisclosureAnchor } from "./messageListDisclosureAnchor";
 import { renderMessageMarkdown } from "./MessageMarkdown";
 import { messageReferencesPlainText, type MessageReferences } from "./messageReferences";
@@ -80,6 +81,12 @@ export type AgentActivityRowProps = {
      * and what a published artifact is called now and how it opens.
      */
     references?: MessageReferences;
+    /**
+     * The page a tool call shows inline — an artifact it follows, or a web
+     * page — drawn under the call's line in place of a card. The owner decides
+     * whether a call shows one and keeps its height and collapse.
+     */
+    inlinePage?: InlinePageProps;
     className?: string;
     "data-testid"?: string;
     style?: CSSProperties;
@@ -142,6 +149,10 @@ function humanizeToolName(name: string): string {
     const explicit: Record<string, string> = {
         Agent: "Subagent",
         compact: "Context compaction",
+        create_artifact: "artifact",
+        edit_artifact_files: "artifact files",
+        update_artifact: "artifact",
+        show_page: "page",
         TaskInput: "Terminal input",
         TaskList: "Task list",
         TaskOutput: "Background output",
@@ -169,6 +180,8 @@ function humanizeToolName(name: string): string {
  * has no presentation to classify it by.
  */
 const TERMINAL_INPUT_TOOL = /stdin|terminal_?input|taskinput/;
+/** Happy Agent's own artifact and page tools, which name what they did themselves. */
+const ARTIFACT_TOOL = /^(create_artifact|edit_artifact_files|update_artifact|show_page)$/;
 
 /** Active/done verb for a tool by name + status (A2/A3). */
 function toolVerb(
@@ -191,8 +204,21 @@ function toolVerb(
     }
     if (presentation?.type === "search") return active ? "Searching" : "Searched";
     if (presentation?.type === "media") return mediaNoun(presentation.items);
-    if (presentation?.type === "artifact")
-        return presentation.version === 1 ? "Created" : "Updated";
+    // An artifact's tools say what they did to it in their own words: the
+    // generic family below would read `edit_artifact_files` as an edit of a
+    // file called "Edit artifact files".
+    if (
+        presentation?.type === "artifact" ||
+        presentation?.type === "page" ||
+        ARTIFACT_TOOL.test(lower)
+    ) {
+        if (status === "failed") return "Failed";
+        if (presentation?.type === "page" || lower === "show_page")
+            return active ? "Showing" : "Showed";
+        if (lower === "edit_artifact_files") return active ? "Opening" : "Opened";
+        if (lower === "create_artifact") return active ? "Creating" : "Created";
+        return active ? "Updating" : "Updated";
+    }
     if (presentation?.type === "exploration") return active ? "Exploring" : "Explored";
     // Typing into a terminal that is already running is not the same act as
     // starting one, and it is certainly not editing a file: `write_stdin` would
@@ -268,6 +294,7 @@ function toolGlyph(
     if (presentation?.type === "exploration") return { set: "house", name: "search" };
     if (presentation?.type === "fileDiff") return { set: "ionicons", name: "document-outline" };
     if (presentation?.type === "artifact") return { set: "house", name: "package" };
+    if (presentation?.type === "page") return { set: "house", name: "globe" };
     if (presentation?.type === "media")
         return presentation.items.some((item) => item.kind === "image")
             ? { set: "house", name: "image" }
@@ -628,6 +655,7 @@ function AgentToolActivity(props: {
     onFileOpen?: (path: string) => void;
     onMediaOpen?: (tool: ConversationToolCall, index: number) => void;
     references?: MessageReferences;
+    inlinePage?: InlinePageProps;
     singleLine?: boolean;
     time?: string;
 }) {
@@ -677,7 +705,10 @@ function AgentToolActivity(props: {
         primaryText = presentation.items.map((item) => item.name).join(", ");
     } else if (presentation?.type === "artifact") {
         verb = toolVerb(tool.toolName, tool.status, presentation);
-        primaryText = "artifact";
+        primaryText = presentation.shows === "latest" ? presentation.title : "artifact";
+    } else if (presentation?.type === "page") {
+        verb = toolVerb(tool.toolName, tool.status, presentation);
+        primaryText = presentation.url;
     } else if (presentation?.type === "exploration") {
         verb = toolVerb(tool.toolName, tool.status, presentation);
         primaryText = explorationSummary(presentation);
@@ -980,8 +1011,16 @@ function AgentToolActivity(props: {
                 />
             ) : null}
 
-            {presentation?.type === "artifact" ? (
+            {props.inlinePage ? (
+                <InlinePage {...props.inlinePage} />
+            ) : presentation?.type === "artifact" ? (
                 <ArtifactResultCard presentation={presentation} references={props.references} />
+            ) : presentation?.type === "page" ? (
+                <ResultCard
+                    detail={presentation.url}
+                    glyph={<Icon name="globe" size={20} />}
+                    title={presentation.title}
+                />
             ) : null}
 
             {!singleLine && tool.review ? <PermissionReviewRow review={tool.review} /> : null}
@@ -1121,19 +1160,22 @@ function ArtifactResultCard(props: {
     references?: MessageReferences;
 }) {
     const { presentation, references } = props;
-    const reference = {
-        kind: "artifact",
-        id: presentation.artifactId,
-        version: presentation.version,
-    };
+    // Only a creation makes version 1, and an agent writes a new artifact's
+    // files after the call that created it, so that card follows the artifact
+    // instead of opening the entry it started from.
+    const created = presentation.version === 1;
+    const reference = created
+        ? { kind: "artifact", id: presentation.artifactId }
+        : { kind: "artifact", id: presentation.artifactId, version: presentation.version };
     const view = references?.view(reference);
     const title =
         view === undefined || (view.type === "link" && view.reading === true)
             ? presentation.title || "Untitled artifact"
             : view.label;
+    const typeLabel = happyAgentArtifactTypeLabel(presentation.artifactType);
     return (
         <ResultCard
-            detail={`${happyAgentArtifactTypeLabel(presentation.artifactType)} · Version ${String(presentation.version)}`}
+            detail={created ? typeLabel : `${typeLabel} · Version ${String(presentation.version)}`}
             glyph={<ArtifactTypeGlyph size={20} type={presentation.artifactType} />}
             {...(references !== undefined && view?.type === "link"
                 ? { onOpen: () => references.open(reference) }
@@ -1528,6 +1570,7 @@ export function AgentActivityRow(props: AgentActivityRowProps) {
                     {...(props.onFileOpen ? { onFileOpen: props.onFileOpen } : {})}
                     {...(props.onMediaOpen ? { onMediaOpen: props.onMediaOpen } : {})}
                     {...(props.references ? { references: props.references } : {})}
+                    {...(props.inlinePage ? { inlinePage: props.inlinePage } : {})}
                     singleLine={props.singleLine}
                     time={props.time}
                     tool={activity.tool}

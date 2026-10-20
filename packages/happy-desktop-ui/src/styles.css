@@ -108,6 +108,7 @@
 @import "./styles/media-gallery.css";
 @import "./styles/file-attachment.css";
 @import "./styles/result-card.css";
+@import "./styles/inline-page.css";
 @import "./styles/conversation-media.css";
 @import "./styles/emoji-picker.css";
 @import "./styles/splash-screen.css";

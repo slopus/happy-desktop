@@ -958,7 +958,13 @@ export function MessageList(props: MessageListProps) {
         escapedFromFollow.current = true;
         following.current = false;
         pendingAnchor.current = undefined;
-        readerAnchor.current = { scrollTop: element.scrollTop, type: "scrollTop" };
+        /* Held by its row where the model has one, so the control also stays
+           put when what is above it reflows, as when a panel opening beside
+           the transcript narrows it; otherwise by the scroll offset. */
+        readerAnchor.current = disclosureRowAnchorCurrent.current(element, disclosure) ?? {
+            scrollTop: element.scrollTop,
+            type: "scrollTop",
+        };
         readerScrollTop.current = element.scrollTop;
     }).current;
     const startReachedReport = (element: HTMLElement) => {
@@ -1270,6 +1276,34 @@ export function MessageList(props: MessageListProps) {
     }
     const modelAnchorCaptureCurrent = useRef(modelAnchorCapture);
     modelAnchorCaptureCurrent.current = modelAnchorCapture;
+    /**
+     * The anchor that keeps `disclosure` at its place in the viewport: the
+     * modeled row it sits in, at the control's offset within that row. Absent
+     * outside a virtual list, or for a control that is not on screen.
+     */
+    function disclosureRowAnchor(
+        element: HTMLElement,
+        disclosure: HTMLElement,
+    ): MessageListVirtualAnchor | undefined {
+        if (!virtualized) return undefined;
+        const row = disclosure.closest<HTMLElement>(".happy-message-list__virtual-row");
+        const index = row ? Number(row.dataset.index) : Number.NaN;
+        if (!row || !Number.isInteger(index) || index < 0 || index >= items.length)
+            return undefined;
+        const viewportHeight = element.clientHeight;
+        const top = disclosure.getBoundingClientRect().top;
+        const offset = top - element.getBoundingClientRect().top;
+        if (offset < 0 || offset > viewportHeight) return undefined;
+        return {
+            index,
+            itemOffset: Math.max(0, top - row.getBoundingClientRect().top),
+            key: itemKeyAt(index),
+            type: "item",
+            viewportInset: viewportHeight - offset,
+        };
+    }
+    const disclosureRowAnchorCurrent = useRef(disclosureRowAnchor);
+    disclosureRowAnchorCurrent.current = disclosureRowAnchor;
     /** Where an item anchor puts the reader in the current model. */
     function modelAnchorPlace(
         anchor: Extract<MessageListVirtualAnchor, { type: "item" }>,

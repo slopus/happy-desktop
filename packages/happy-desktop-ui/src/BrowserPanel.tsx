@@ -3,6 +3,7 @@ import { Button } from "./Button";
 import { EmptyState } from "./EmptyState";
 import type { IconName } from "./Icon";
 import { Ionicon } from "./vectorIcons/VectorIcon";
+import type { InlinePageFit } from "./inlinePageFit";
 import { TextField } from "./TextField";
 
 export interface BrowserController {
@@ -52,6 +53,12 @@ export interface BrowserContentProps {
     browserNetworkResolved?(networkId: string): void;
     /** The page asked to open another page, which belongs on the same network. */
     browserPopupRequested?(url: string): void;
+    /**
+     * The page is laid inline into a conversation: the engine lays it out at its
+     * content height in the chat's colour scheme, never scrolls inside it, and
+     * reports each height. Absent, the page fills the region it is given.
+     */
+    readonly fit?: InlinePageFit;
 }
 
 /** Native browser-content adapter supplied by the host (Electron in production). */

@@ -378,11 +378,12 @@
     gap: 0;
 }
 
-/* A call whose result is something to look at — files it presented, or the
-   artifact it published — shows it 8px beneath its line, in the row's own
-   flow. `conversationRowHeight` reserves the same gap. */
+/* A call whose result is something to look at — files it presented, the
+   artifact it published, or the page it showed — shows it 8px beneath its
+   line, in the row's own flow. `conversationRowHeight` reserves the same gap. */
 .happy-agent-activity-row[data-kind="tool"] .happy-agent-activity[data-presentation="media"],
-.happy-agent-activity-row[data-kind="tool"] .happy-agent-activity[data-presentation="artifact"] {
+.happy-agent-activity-row[data-kind="tool"] .happy-agent-activity[data-presentation="artifact"],
+.happy-agent-activity-row[data-kind="tool"] .happy-agent-activity[data-presentation="page"] {
     gap: 8px;
 }
 

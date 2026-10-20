@@ -1,0 +1,92 @@
+/*
+ * A page laid into a reply. Every box here is the one `inlinePageHeight`
+ * reserves: a 28px title line, then an 8px gap and the page's measured height.
+ */
+
+.happy-inline-page {
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    min-width: 0;
+}
+
+/* The title reads as part of the reply: no background, border, or colour of
+   its own. The controls follow it and never move when the page under them
+   collapses or expands. */
+.happy-inline-page__title-line {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    height: 28px;
+    min-width: 0;
+    color: var(--text);
+    font-size: 15px;
+    line-height: 22px;
+}
+
+.happy-inline-page__glyph {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    margin-right: 4px;
+    color: var(--text-secondary);
+}
+
+.happy-inline-page__title {
+    min-width: 0;
+    overflow: hidden;
+    font-weight: 500;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-inline-page__title-line > .happy-button {
+    flex: none;
+    color: var(--text-secondary);
+}
+
+/* The page sits on the chat's own surface: no frame, no background unless its
+   author named one, and never a scrollport. */
+.happy-inline-page__content {
+    position: relative;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    flex: none;
+    width: 100%;
+    overflow: visible;
+}
+
+.happy-inline-page__frame {
+    display: flex;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+/* A page still being measured: at the exact width it will be shown at, laid
+   out and running, but invisible and out of the way of the pointer. */
+.happy-inline-page__frame[data-measuring] {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.happy-inline-page__frame > * {
+    flex: 1 1 auto;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    border: 0;
+}
+
+.happy-inline-page__failure {
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 24px;
+}

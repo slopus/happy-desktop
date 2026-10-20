@@ -45,7 +45,7 @@
     },
     "dependencies": {
         "@sinclair/typebox": "^0.34.49",
-        "@slopus/happy-agent-client": "0.0.103",
+        "@slopus/happy-agent-client": "0.0.104",
         "electron-updater": "^6.8.9",
         "usb": "^2.19.1",
         "ws": "^8.21.1",
