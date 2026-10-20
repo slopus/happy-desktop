@@ -28,6 +28,7 @@ import {
     commandPaletteStoreCreate,
     experimentsStoreCreate,
     projectsVisibilityStoreCreate,
+    followUpBehaviorStoreCreate,
     statusBarStoreCreate,
     gptLiveStoreCreate,
     gptLiveExperimentsConnect,
@@ -49,6 +50,7 @@ import {
     type CommandPaletteStore,
     type ExperimentsStore,
     type ProjectsVisibilityStore,
+    type FollowUpBehaviorStore,
     type StatusBarStore,
     type UsageAnalyticsStore,
     type GptLiveStore,
@@ -136,6 +138,7 @@ import { desktopMetricsStoreCreate } from "./desktopMetricsStore";
 import { desktopDaemonStoreCreate } from "./desktopDaemonStore";
 import { desktopExperimentsPersistence } from "./desktopExperiments";
 import { desktopProjectsVisibilityPersistence } from "./desktopProjectsVisibility";
+import { desktopFollowUpBehaviorPersistence } from "./desktopFollowUpBehavior";
 import { desktopStatusBarPersistence } from "./desktopStatusBar";
 import { desktopGptLivePersistence } from "./desktopGptLive";
 import { desktopGptLiveRuntimeCreate } from "./desktopGptLiveRuntime";
@@ -363,6 +366,7 @@ function HappyAgentBoundary(props: {
     mediaWindow?: MediaWindowOpener;
     experiments: ExperimentsStore;
     projectsVisibility: ProjectsVisibilityStore;
+    followUpBehavior: FollowUpBehaviorStore;
     statusBar: StatusBarStore;
     keepAwake: KeepAwakeStore;
     platform: "desktop" | "web";
@@ -416,6 +420,7 @@ function HappyAgentBoundary(props: {
                     : {}),
                 experiments: props.experiments,
                 projectsVisibility: props.projectsVisibility,
+                followUpBehavior: props.followUpBehavior,
                 statusBar: props.statusBar,
                 gptLive: props.gptLive,
                 usageAnalytics: props.usageAnalytics,
@@ -563,6 +568,7 @@ interface DesktopRendererProps {
     bridge: HappyDesktopBridge;
     experiments: ExperimentsStore;
     projectsVisibility: ProjectsVisibilityStore;
+    followUpBehavior: FollowUpBehaviorStore;
     statusBar: StatusBarStore;
     gptLive: GptLiveStore;
     usageAnalytics: UsageAnalyticsStore;
@@ -750,6 +756,7 @@ function DesktopScreens(props: DesktopRendererProps) {
                                 connectionOnboarding
                                 experiments={props.experiments}
                                 projectsVisibility={props.projectsVisibility}
+                                followUpBehavior={props.followUpBehavior}
                                 statusBar={props.statusBar}
                                 gptLive={props.gptLive}
                                 usageAnalytics={props.usageAnalytics}
@@ -975,6 +982,7 @@ function DesktopRuntimeContent(
             mediaWindow={props.mediaWindow}
             experiments={props.experiments}
             projectsVisibility={props.projectsVisibility}
+            followUpBehavior={props.followUpBehavior}
             statusBar={props.statusBar}
             keepAwake={props.keepAwake}
             gptLive={props.gptLive}
@@ -1195,6 +1203,9 @@ if (mediaPreviewBridge) {
         const projectsVisibility = projectsVisibilityStoreCreate(
             desktopProjectsVisibilityPersistence(),
         );
+        // What Enter and Command+Enter do while an agent works: also the
+        // window's own choice, for every connection.
+        const followUpBehavior = followUpBehaviorStoreCreate(desktopFollowUpBehaviorPersistence());
         // Which optional controls the status bar shows: the window's own choice.
         const statusBar = statusBarStoreCreate(desktopStatusBarPersistence());
         // Active-title motion is also this window's own choice. The store keeps
@@ -1514,6 +1525,7 @@ if (mediaPreviewBridge) {
                         }
                         experiments={experiments}
                         projectsVisibility={projectsVisibility}
+                        followUpBehavior={followUpBehavior}
                         statusBar={statusBar}
                         gptLive={gptLive}
                         usageAnalytics={analytics.preference}

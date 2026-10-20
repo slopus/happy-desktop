@@ -3,7 +3,12 @@ import type { ComposerSnapshot } from "happy-desktop-state";
 import { Banner } from "./Banner";
 import { Button } from "./Button";
 import { commandPickerItems } from "./CommandPicker";
-import { Composer, type Mentionable } from "./Composer";
+import {
+    Composer,
+    type ComposerDelivery,
+    type ComposerSendDeliveries,
+    type Mentionable,
+} from "./Composer";
 import type { ComposerAttachmentPreview } from "./ComposerAttachmentPreviews";
 import { Lightbox } from "./Lightbox";
 import type { ImageViewerLoadedImage } from "./ImageViewer";
@@ -50,9 +55,12 @@ export type ConversationDockProps = {
     onComposerAttachmentRemove?: (attachmentId: string) => void;
     onComposerAttachmentsSelect?: (files: File[]) => void;
     onComposerFocusChange?: (focused: boolean) => void;
-    onComposerSend: () => void;
+    /** Receives the delivery the send gesture chose, when `sendDeliveries` is given. */
+    onComposerSend: (delivery?: ComposerDelivery) => void;
     onComposerValueChange: (value: string) => void;
     running?: boolean;
+    /** What Enter and Command+Enter each do to a running agent; see `Composer.sendDeliveries`. */
+    sendDeliveries?: ComposerSendDeliveries;
     style?: CSSProperties;
 };
 
@@ -168,9 +176,9 @@ export function ConversationDock(props: ConversationDockProps) {
         }
         props.onComposerAttachmentRemove?.(attachmentId);
     };
-    const composerSend = () => {
+    const composerSend = (delivery?: ComposerDelivery) => {
         setPreview(null);
-        props.onComposerSend();
+        props.onComposerSend(delivery);
     };
     const commandSelect = (commandId: string) => {
         const command = composer.capabilities.commands.find(
@@ -242,7 +250,10 @@ export function ConversationDock(props: ConversationDockProps) {
                     action={
                         props.disabled || props.submitDisabled
                             ? undefined
-                            : { label: "Retry", onClick: composerSend }
+                            : {
+                                  label: "Retry",
+                                  onClick: () => composerSend(props.sendDeliveries?.plain),
+                              }
                     }
                     data-testid="conversation-submission-error"
                     tone="danger"
@@ -297,6 +308,7 @@ export function ConversationDock(props: ConversationDockProps) {
                     pending={composer.submission.status === "pending"}
                     placeholder={props.composerPlaceholder ?? "Message the agent…"}
                     running={props.running}
+                    {...(props.sendDeliveries ? { sendDeliveries: props.sendDeliveries } : {})}
                     sendEnabled={sendEnabled}
                     submitDisabled={props.submitDisabled === true}
                     value={composer.text}

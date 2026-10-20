@@ -21,6 +21,7 @@ import type {
     HappyAgentSubtaskActivity,
 } from "../happyAgent/happyAgentTypes.js";
 import type { HappyAgentServiceTier } from "../happyAgentServiceTier.js";
+import type { MessageDelivery } from "../types.js";
 import type { HappyAgentSync } from "./happyAgentSync.js";
 import type { UserProfile } from "./userProfiles.js";
 
@@ -131,7 +132,11 @@ export interface UserMessageElement extends BaseChatElement {
     identity: string | null;
     userId?: string;
     profile?: UserProfile;
-    delivery: "pending_steering" | "sent";
+    /**
+     * Where a sent message stands. A pending one is still waiting for the agent:
+     * steering for the run's next inference boundary, queued for the run to end.
+     */
+    delivery: "pending_steering" | "pending_queued" | "sent";
     text: string;
     attachments?: readonly { data: string; mediaType: string }[];
     source?: "notification";
@@ -847,6 +852,8 @@ export interface SendMessageInput {
         | SendMessageToolCallRequest
     )[];
     text: string;
+    /** How the message reaches a running agent; a send that names none steers. */
+    delivery?: MessageDelivery;
 }
 
 /**

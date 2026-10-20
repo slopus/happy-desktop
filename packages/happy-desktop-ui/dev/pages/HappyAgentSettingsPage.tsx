@@ -691,6 +691,8 @@ export function HappyAgentSettingsBlueprintPage() {
                         onScrollbarVisibilityChange={noop}
                         onLinkOpenPlacementChange={noop}
                         linkOpenPlacement="panel"
+                        followUpBehavior="steer"
+                        onFollowUpBehaviorChange={noop}
                         onTitleShimmerChange={noop}
                         onProjectsHiddenChange={noop}
                         permissionMode="auto"

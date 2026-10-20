@@ -30,6 +30,32 @@ describe("composerState slash commands", () => {
     });
 });
 
+describe("composerState follow-up delivery", () => {
+    it("steers a submission that names no delivery and carries a queued one through", () => {
+        const output: ComposerOutput[] = [];
+        const store = composerStoreCreate("session-a", {
+            output: (event) => output.push(event),
+        });
+        store.getState().textUpdate("Steer this");
+        store.getState().textSubmit();
+        store.getState().composerInput({
+            type: "submissionConfirmed",
+            revision: store.getState().revision,
+        });
+        store.getState().textUpdate("Queue this");
+        store.getState().textSubmit("queue");
+
+        expect(
+            output
+                .filter((event) => event.type === "textSubmitted")
+                .map((event) => [event.text, event.delivery]),
+        ).toEqual([
+            ["Steer this", "steer"],
+            ["Queue this", "queue"],
+        ]);
+    });
+});
+
 describe("composerState refused submissions", () => {
     it("returns a refused send's words to an empty composer without re-saving them itself", () => {
         const output: ComposerOutput[] = [];

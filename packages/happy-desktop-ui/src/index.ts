@@ -149,7 +149,9 @@ export { PanelHeader, type PanelHeaderProps } from "./PanelHeader";
 export { AudienceToggle, type AudienceToggleProps, type AudienceValue } from "./AudienceToggle";
 export {
     Composer,
+    type ComposerDelivery,
     type ComposerProps,
+    type ComposerSendDeliveries,
     ContextChips,
     type ContextChipsProps,
     type ContextItem,
@@ -833,6 +835,7 @@ export {
     HappyAgentGeneralSettings,
     type HappyAgentAppearanceChoice,
     type HappyAgentGeneralSettingsProps,
+    type HappyAgentFollowUpBehaviorChoice,
     type HappyAgentLinkOpenPlacementChoice,
     type HappyAgentScrollbarVisibilityChoice,
 } from "./pages/settings/HappyAgentGeneralSettings";

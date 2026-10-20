@@ -16,6 +16,15 @@ export type HappyAgentAppearanceChoice = "system" | "light" | "dark";
 export type HappyAgentScrollbarVisibilityChoice = "always" | "automatic";
 /** Where a clicked web link opens: the side panel's browser tab, or the machine's browser. */
 export type HappyAgentLinkOpenPlacementChoice = "panel" | "browser";
+/** What Enter and Command+Enter each do to a message sent while the agent works. */
+export type HappyAgentFollowUpBehaviorChoice = "steer" | "queue" | "alwaysSteer" | "alwaysQueue";
+
+const followUpBehaviorOptions: readonly SelectOption[] = [
+    { value: "steer", label: "Enter steers, ⌘↵ queues" },
+    { value: "queue", label: "Enter queues, ⌘↵ steers" },
+    { value: "alwaysSteer", label: "Always steer" },
+    { value: "alwaysQueue", label: "Always queue" },
+];
 
 export type HappyAgentGeneralSettingsProps = {
     appearance: HappyAgentAppearanceChoice;
@@ -94,6 +103,12 @@ export type HappyAgentGeneralSettingsProps = {
     onAppearanceChange: (appearance: HappyAgentAppearanceChoice) => void;
     onScrollbarVisibilityChange: (visibility: HappyAgentScrollbarVisibilityChoice) => void;
     onLinkOpenPlacementChange: (placement: HappyAgentLinkOpenPlacementChoice) => void;
+    /**
+     * What a message sent while the agent works does. Absent where the host
+     * keeps no such choice, which offers no control.
+     */
+    followUpBehavior?: HappyAgentFollowUpBehaviorChoice;
+    onFollowUpBehaviorChange?: (behavior: HappyAgentFollowUpBehaviorChoice) => void;
     onExperimentalFeaturesChange: (enabled: boolean) => void;
     onTitleShimmerChange: (enabled: boolean) => void;
     onDefaultModelChange: (key: string) => void;
@@ -319,6 +334,35 @@ export function HappyAgentGeneralSettings(props: HappyAgentGeneralSettingsProps)
                     label="Open links in"
                 />
             </HappyAgentSettingsSection>
+            {props.onFollowUpBehaviorChange ? (
+                <HappyAgentSettingsSection
+                    description="What a message sent while the agent is working does. To an idle agent every choice just sends."
+                    title="Conversations"
+                >
+                    <FormRow
+                        control={
+                            <Box width={280}>
+                                <Select
+                                    aria-label="Follow-up behavior"
+                                    fullWidth
+                                    id="happy-agent-settings-follow-up-behavior"
+                                    onValueChange={(value) =>
+                                        props.onFollowUpBehaviorChange?.(
+                                            value as HappyAgentFollowUpBehaviorChoice,
+                                        )
+                                    }
+                                    options={[...followUpBehaviorOptions]}
+                                    size="small"
+                                    value={props.followUpBehavior ?? "steer"}
+                                />
+                            </Box>
+                        }
+                        description="Steer reaches the agent at its next step; Queue waits until it finishes"
+                        htmlFor="happy-agent-settings-follow-up-behavior"
+                        label="Follow-up behavior"
+                    />
+                </HappyAgentSettingsSection>
+            ) : null}
             <HappyAgentSettingsSection
                 description="What a new session on this connection begins with. Your defaults follow you across devices."
                 title="New sessions"

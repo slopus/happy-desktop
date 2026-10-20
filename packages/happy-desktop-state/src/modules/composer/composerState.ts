@@ -1,5 +1,5 @@
 import { createStore, type StoreApi } from "zustand/vanilla";
-import { type MessageAudience, type UserError } from "../../types.js";
+import { type MessageAudience, type MessageDelivery, type UserError } from "../../types.js";
 
 /** One slash command a composer may offer while the draft begins with `/`. */
 export interface ComposerCommand {
@@ -200,6 +200,8 @@ export type ComposerOutput =
           readonly revision: number;
           readonly audience?: MessageAudience;
           readonly agentUserIds: readonly string[];
+          /** How the message reaches an agent that is already working. */
+          readonly delivery: MessageDelivery;
       };
 
 export type ComposerInput =
@@ -236,7 +238,8 @@ export interface ComposerState extends ComposerSnapshot {
     agentUserRemove(agentUserId: string): void;
     /** Runs one offered slash command and clears the draft that opened it. */
     commandInvoke(commandId: string): void;
-    textSubmit(): void;
+    /** Submits the draft; `delivery` says how it reaches a working agent, steering when omitted. */
+    textSubmit(delivery?: MessageDelivery): void;
     composerInput(event: ComposerInput): void;
 }
 
@@ -483,7 +486,7 @@ export function composerStoreCreate(
             output({ type: "commandInvoked", scopeId, commandId });
         },
 
-        textSubmit(): void {
+        textSubmit(delivery = "steer"): void {
             const previous = get();
             if (
                 previous.submission.status === "pending" ||
@@ -530,6 +533,7 @@ export function composerStoreCreate(
                 revision: previous.revision,
                 audience: previous.audience,
                 agentUserIds: previous.audience === "agents" ? previous.agentUserIds : [],
+                delivery,
             });
         },
 

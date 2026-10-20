@@ -399,7 +399,7 @@ export interface ConversationMessageEntry {
     readonly source: "server" | "local";
     /** Explicit send acceptance for daemon-projected user rows; voice never shares optimistic text. */
     readonly pendingSend?: boolean;
-    readonly delivery: "sending" | "pending_steering" | "sent" | "failed";
+    readonly delivery: "sending" | "pending_steering" | "pending_queued" | "sent" | "failed";
     readonly clientMutationId?: string;
     readonly error?: UserError;
     /**

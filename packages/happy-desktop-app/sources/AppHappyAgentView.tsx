@@ -98,6 +98,8 @@ import type {
     HappyAgentTask,
     HappyAgentTaskId,
     ProjectsVisibilityStore,
+    FollowUpBehaviorStore,
+    FollowUpDeliveries,
     HappyAgentGroupLifecycle,
     ConversationFailureFallback,
     HappyAgentChangeTier,
@@ -147,6 +149,8 @@ import {
     commandPaletteStoreNoop,
     experimentsStoreNoop,
     projectsVisibilityStoreNoop,
+    followUpBehaviorStoreNoop,
+    followUpDeliveries,
     happyAgentVersionAtLeast,
     HAPPY_AGENT_TASKS_VERSION,
     HAPPY_AGENT_TASK_CREATE_VERSION,
@@ -709,6 +713,12 @@ export interface AppHappyAgentViewProps {
      * remembers no such choice supplies none, and the projects stay listed.
      */
     projectsVisibility?: ProjectsVisibilityStore;
+    /**
+     * What Enter and Command+Enter do to a message sent while the agent works.
+     * A host that remembers no such choice supplies none: Enter steers and
+     * Command+Enter queues.
+     */
+    followUpBehavior?: FollowUpBehaviorStore;
     gptLive?: GptLiveStore;
     /**
      * Whether running session, project, and workspace titles shimmer. A host
@@ -3189,6 +3199,16 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
         projectsVisibilityStore.get,
         projectsVisibilityStore.get,
     ).projectsHidden;
+    // What each send key does while an agent works. The window's own choice,
+    // read once here and handed to every conversation composer below.
+    const followUpBehaviorStore = props.followUpBehavior ?? followUpBehaviorStoreNoop;
+    const sendDeliveries = followUpDeliveries(
+        useSyncExternalStore(
+            followUpBehaviorStore.subscribe,
+            followUpBehaviorStore.get,
+            followUpBehaviorStore.get,
+        ).followUp,
+    );
     const navigationOrderStore = props.navigationOrder ?? happyAgentNavigationOrderStoreNoop;
     const navigationOrder = useSyncExternalStore(
         navigationOrderStore.subscribe,
@@ -4173,6 +4193,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                             {...(session.providerUsage
                                 ? { providerUsage: session.providerUsage }
                                 : {})}
+                            sendDeliveries={sendDeliveries}
                             surfaceName={surfaceName}
                             {...(activeAvailability?.refusal === undefined
                                 ? {}
@@ -4273,6 +4294,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                     }
                     onExternalLinkOpen={props.onExternalLinkOpen ?? openExternalLink}
                     linkOpenDefault={settings.linkOpenPlacement}
+                    sendDeliveries={sendDeliveries}
                     platform={props.platform}
                     projects={active.projects}
                     happyAgentOnline={activeHappyAgentOnline}
@@ -5529,6 +5551,8 @@ function HappyAgentSurfaceChat(props: {
     unavailable?: string;
     onChatSelect: (groupId: string | undefined, chatId?: string) => void;
     onExternalLinkOpen: (url: string) => void;
+    /** What Enter and Command+Enter each do to a running agent. */
+    sendDeliveries: FollowUpDeliveries;
 }) {
     const workspace = useSyncExternalStore(
         reactFrameSubscribe(props.workspace),
@@ -5570,6 +5594,7 @@ function HappyAgentSurfaceChat(props: {
             onFileLinkOpen={() => undefined}
             onLinkOpen={(url) => props.onExternalLinkOpen(url)}
             linkOpenDefault="browser"
+            sendDeliveries={props.sendDeliveries}
             canAbort
             readOnly={false}
             happyAgentOnline={props.happyAgentOnline}
@@ -6027,6 +6052,8 @@ interface HappyAgentWorkspaceSurfaceProps {
     onExternalLinkOpen(url: string): void;
     /** Which of the two places a plain click on a link goes, marked in its menu. */
     linkOpenDefault: LinkOpenPlacement;
+    /** What Enter and Command+Enter each do to a running agent. */
+    sendDeliveries: FollowUpDeliveries;
 }
 
 /**
@@ -6819,6 +6846,7 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                     else props.workspace.panel.browserAdd(url);
                 }}
                 linkOpenDefault={props.linkOpenDefault}
+                sendDeliveries={props.sendDeliveries}
                 canAbort={conversationCanAbort}
                 readOnly={conversationReadOnly}
                 happyAgentOnline={happyAgentOnline}
@@ -8354,6 +8382,8 @@ function HappyAgentConversationBody(props: {
     onLinkOpen: LinkOpenHandler;
     /** Which of the two places a plain click on a link goes, marked in its menu. */
     linkOpenDefault: LinkOpenPlacement;
+    /** What Enter and Command+Enter each do to a running agent. */
+    sendDeliveries: FollowUpDeliveries;
     readOnly: boolean;
     /** Reads current transport health when a Happy Agent-backed action is invoked. */
     happyAgentOnline: () => boolean;
@@ -8402,6 +8432,7 @@ function HappyAgentConversationBody(props: {
                 onFileLinkOpen={props.onFileLinkOpen}
                 onLinkOpen={props.onLinkOpen}
                 linkOpenDefault={props.linkOpenDefault}
+                sendDeliveries={props.sendDeliveries}
                 canAbort={props.canAbort}
                 readOnly={props.readOnly}
                 happyAgentOnline={props.happyAgentOnline}
@@ -8616,6 +8647,8 @@ function HappyAgentConversationSurface(props: {
     onLinkOpen: LinkOpenHandler;
     /** Which of the two places a plain click on a link goes, marked in its menu. */
     linkOpenDefault: LinkOpenPlacement;
+    /** What Enter and Command+Enter each do to a running agent. */
+    sendDeliveries: FollowUpDeliveries;
     readOnly: boolean;
     /** Reads current transport health when a Happy Agent-backed action is invoked. */
     happyAgentOnline: () => boolean;
@@ -8915,9 +8948,10 @@ function HappyAgentConversationSurface(props: {
             }
             onComposerAttachmentsSelect={(files) => workspace.composerAttachmentsAdd(files)}
             onComposerFocusChange={(focused) => workspace.composerFocusUpdate(focused)}
-            onComposerSend={() => {
+            composerSendDeliveries={props.sendDeliveries}
+            onComposerSend={(delivery) => {
                 if (!modelsNotConfigured && props.happyAgentOnline())
-                    workspace.composerTextSubmit();
+                    workspace.composerTextSubmit(delivery);
             }}
             onComposerValueChange={(value) =>
                 reactFrameInputUpdate(workspace, () => workspace.composerTextUpdate(value))

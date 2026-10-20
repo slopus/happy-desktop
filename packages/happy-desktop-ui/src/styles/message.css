@@ -96,6 +96,16 @@
     color: var(--text);
 }
 
+/* A queued follow-up waits for the run to end rather than joining it, so its
+   bubble is an outline still to be filled in. The outline is drawn inside the
+   bubble's own box, so the row measures exactly as a steering one does. */
+.happy-message[data-own][data-delivery-state="pending_queued"] .happy-message__body {
+    outline: 1px dashed var(--text-secondary);
+    outline-offset: -1px;
+    background: transparent;
+    color: var(--text);
+}
+
 .happy-message[data-delivery-state="failed"] .happy-message__content {
     color: var(--text-secondary);
     opacity: 0.78;

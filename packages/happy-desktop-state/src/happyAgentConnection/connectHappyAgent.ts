@@ -3902,10 +3902,10 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                                   : `[tool:${block.name}]`,
                           )
                           .join("");
-            // Always steer: a message sent mid-run interrupts the run rather
-            // than waiting behind it, and on an idle agent the daemon treats
-            // steer and queue identically.
-            const delivery = "steer" as const;
+            // Steer unless the sender asked to queue: a message sent mid-run
+            // reaches the run at its next boundary rather than waiting behind
+            // it. On an idle agent the daemon treats the two identically.
+            const delivery = typeof message === "string" ? "steer" : (message.delivery ?? "steer");
             let confirmSend!: () => void;
             const confirmed = new Promise<void>((resolve) => {
                 confirmSend = resolve;

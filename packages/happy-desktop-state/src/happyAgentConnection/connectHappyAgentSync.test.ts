@@ -300,6 +300,34 @@ it("sends the selected Ultrafast wire tier with the user message, then clears it
     });
 });
 
+it("steers a send that names no delivery, queues one that asks to, and shows each as still waiting", async () => {
+    const { connection, daemon, chat, sessionId } = await liveHarness();
+    connection.sendMessage(sessionId, "steer by default");
+    connection.sendMessage(sessionId, { text: "wait for the run", delivery: "queue" });
+    await vi.waitFor(() => expect(daemon.callCount("sendMessage")).toBe(2));
+    // The two sends are not awaited, so they may reach the daemon in either order.
+    const sent = daemon.calls
+        .filter((call) => call.method === "sendMessage")
+        .map((call) => call.args[1]);
+    expect(sent).toContainEqual(
+        expect.objectContaining({ text: "steer by default", delivery: "steer" }),
+    );
+    expect(sent).toContainEqual(
+        expect.objectContaining({ text: "wait for the run", delivery: "queue" }),
+    );
+    // The fake daemon holds both pending, as a running agent would.
+    await vi.waitFor(() =>
+        expect(
+            new Map(userMessages(chat.elements).map((message) => [message.text, message.delivery])),
+        ).toEqual(
+            new Map([
+                ["steer by default", "pending_steering"],
+                ["wait for the run", "pending_queued"],
+            ]),
+        ),
+    );
+});
+
 it("keeps 523 untouched catalog sessions identical when one session changes", async () => {
     const { connection, daemon } = harnessOpen();
     const project = daemon.projectSeed({ id: "project-large" });
