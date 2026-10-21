@@ -13,6 +13,12 @@ export interface TurnSummaryProps {
     readonly usedTokens?: number;
     /** Conversation context size measured when this run settled. */
     readonly finalContextTokens?: number;
+    /**
+     * Puts the request a stopped turn was given back in the composer, to be
+     * revised and sent again. Offered only on a stopped turn; absent, the
+     * footer reads as the outcome alone.
+     */
+    readonly onEdit?: () => void;
     readonly reason?: "completed" | "steering" | "compaction" | "abort" | "error";
     readonly status: "complete" | "failed" | "steered";
     readonly style?: CSSProperties;
@@ -41,7 +47,10 @@ function tokenDetail(usedTokens?: number, finalContextTokens?: number): string |
     return parts.length === 0 ? undefined : parts.join(" · ");
 }
 
-/** Neutral settled footer for one turn, including duration and final-message copy action. */
+/**
+ * Neutral settled footer for one turn: its duration, led by the final-message
+ * copy action on a completed turn or the edit action on a stopped one.
+ */
 export function TurnSummary(props: TurnSummaryProps) {
     const [local] = partitionComponentProps(props, [
         "className",
@@ -50,6 +59,7 @@ export function TurnSummary(props: TurnSummaryProps) {
         "durationMs",
         "usedTokens",
         "finalContextTokens",
+        "onEdit",
         "reason",
         "status",
         "style",
@@ -105,6 +115,19 @@ export function TurnSummary(props: TurnSummaryProps) {
                 >
                     <Icon name={copied ? "check" : "copy"} size={16} />
                 </button>
+            ) : null}
+            {reason === "abort" && local.onEdit !== undefined ? (
+                <Tooltip label="Edit message" placement="top">
+                    <button
+                        aria-label="Edit message"
+                        className="happy-turn-summary__edit"
+                        data-happy-desktop-ui="turn-summary-edit"
+                        onClick={() => local.onEdit?.()}
+                        type="button"
+                    >
+                        <Icon name="edit" size={16} />
+                    </button>
+                </Tooltip>
             ) : null}
             <Tooltip className="happy-turn-summary__detail" label={detail} placement="top">
                 <span

@@ -8890,6 +8890,14 @@ function HappyAgentConversationSurface(props: {
                 : {})}
             expandedTurnIds={conversation.expandedTurnIds}
             onTraceToggle={(turnId) => workspace.turnTraceToggle(turnId)}
+            // A stopped request goes back into this conversation's own draft,
+            // so only a chat whose draft the reader can write offers it.
+            {...(composerDisabled
+                ? {}
+                : {
+                      onStoppedMessageEdit: (entryId: string) =>
+                          workspace.stoppedMessageEdit(entryId),
+                  })}
             overlay={
                 openImage ? (
                     <ModalOverlay onDismiss={() => workspace.imageClose()} placement="fill">

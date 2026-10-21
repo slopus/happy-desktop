@@ -221,6 +221,12 @@ export type ConversationViewProps = {
     onTraceToggle?: (turnId: string) => void;
     /** Finished turns currently listing their intermediate entries. */
     expandedTurnIds?: ReadonlySet<string>;
+    /**
+     * Puts the reader's messages from a stopped turn back in the composer, told
+     * the entry of that turn's footer. The caret follows them into the draft.
+     * Absent, a stopped turn offers no edit.
+     */
+    onStoppedMessageEdit?: (entryId: string) => void;
     /** @deprecated Pending steering now renders as an ordered transcript message. */
     queued?: readonly { readonly id: string; readonly text: string }[];
     /** The composer surface snapshot; the draft never lives in this component. */
@@ -640,6 +646,22 @@ export function ConversationView(props: ConversationViewProps) {
                 }),
         };
     };
+    /* Editing a stopped message makes the draft a revision of it, which is
+       somewhere new to write: the caret goes there the way it does on arriving
+       at a conversation, through the same key, so it still never leaves a
+       control the reader is writing in and never enters a composer whose owner
+       withheld the key. */
+    const [stoppedMessageEdits, setStoppedMessageEdits] = useState(0);
+    const stoppedMessageEdit = props.onStoppedMessageEdit
+        ? (entryId: string) => {
+              props.onStoppedMessageEdit!(entryId);
+              setStoppedMessageEdits((edits) => edits + 1);
+          }
+        : undefined;
+    const composerFocusKey =
+        props.composerFocusKey === undefined || stoppedMessageEdits === 0
+            ? props.composerFocusKey
+            : `${props.composerFocusKey}:edit:${String(stoppedMessageEdits)}`;
     const awaitingInput = transcript.some(
         (entry) =>
             entry.kind === "request" &&
@@ -1058,6 +1080,7 @@ export function ConversationView(props: ConversationViewProps) {
                                         ? { linkOpenDefault: props.linkOpenDefault }
                                         : {})}
                                     onTraceToggle={props.onTraceToggle}
+                                    onStoppedMessageEdit={stoppedMessageEdit}
                                     /* Either kind of row can be the one a turn hung
                                    its control on: the answer when the turn is
                                    folded up, the row its work starts on when it
@@ -1090,9 +1113,7 @@ export function ConversationView(props: ConversationViewProps) {
                 {...(props.composerNotice === undefined ? {} : { notice: props.composerNotice })}
                 composerFooterControl={props.composerFooterControl}
                 composerFocusOnType={props.composerFocusOnType}
-                {...(props.composerFocusKey === undefined
-                    ? {}
-                    : { composerFocusKey: props.composerFocusKey })}
+                {...(composerFocusKey === undefined ? {} : { composerFocusKey })}
                 composerPlaceholder={props.composerPlaceholder}
                 onAbort={props.onAbort}
                 onCommandInvoke={props.onCommandInvoke}

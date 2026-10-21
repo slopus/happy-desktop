@@ -48,10 +48,13 @@
     flex: none;
 }
 
-/* The copy action leads the settled line. Its 20px hit box carries 2px around a
-   16px glyph, so the negative margin is what puts the glyph's own left edge on
-   the transcript's text column instead of the button's padding box. */
-.happy-turn-summary__copy {
+/* The copy action leads a completed line and the edit action a stopped one.
+   Their 20px hit box carries 2px around a 16px glyph, so the negative margin is
+   what puts the glyph's own left edge on the transcript's text column instead
+   of the button's padding box. The edit action's tooltip wrapper adds no box of
+   its own, so both land in exactly the same place. */
+.happy-turn-summary__copy,
+.happy-turn-summary__edit {
     display: flex;
     flex: none;
     align-items: center;
@@ -69,11 +72,13 @@
     transition: background-color 100ms ease;
 }
 
-.happy-turn-summary__copy:hover {
+.happy-turn-summary__copy:hover,
+.happy-turn-summary__edit:hover {
     background: var(--surface-pressed);
 }
 
-.happy-turn-summary__copy:focus-visible {
+.happy-turn-summary__copy:focus-visible,
+.happy-turn-summary__edit:focus-visible {
     outline: 2px solid var(--radio-active);
     outline-offset: 1px;
 }

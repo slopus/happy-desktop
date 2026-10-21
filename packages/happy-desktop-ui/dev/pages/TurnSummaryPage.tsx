@@ -16,7 +16,7 @@ export function TurnSummaryPage() {
     return (
         <ComponentPage
             number={componentNumber}
-            summary="The neutral settled footer for a turn: total duration, token detail on hover, steering boundary, and final-message copy confirmation. Failure detail belongs to ConversationErrorCard above it."
+            summary="The neutral settled footer for a turn: total duration, token detail on hover, steering boundary, final-message copy confirmation, and the edit action that gives a stopped request back to the composer. Failure detail belongs to ConversationErrorCard above it."
             title="Turn summary"
         >
             <Specimen
@@ -53,6 +53,22 @@ export function TurnSummaryPage() {
                     />
                     <TurnSummary copyText="The run stopped." status="complete" />
                     <TurnSummary durationMs={18_000} status="steered" />
+                </div>
+            </Specimen>
+            <Specimen
+                detail="A stopped turn leads with an edit action that puts the reader's message back in the composer · with no message of theirs to give back, it reads as the outcome alone"
+                label="Stopped"
+                number="03"
+                stage="surface"
+            >
+                <div style={column}>
+                    <TurnSummary
+                        durationMs={4_000}
+                        onEdit={() => undefined}
+                        reason="abort"
+                        status="failed"
+                    />
+                    <TurnSummary durationMs={96_000} reason="abort" status="failed" />
                 </div>
             </Specimen>
         </ComponentPage>

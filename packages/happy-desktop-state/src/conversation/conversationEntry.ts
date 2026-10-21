@@ -882,6 +882,13 @@ export interface ConversationTurnStatusEntry {
     readonly reason?: "completed" | "steering" | "compaction" | "abort" | "error";
     /** Final assistant text copied by the settled footer action. */
     readonly copyText?: string;
+    /**
+     * The reader's own messages that opened a turn that was stopped, in the
+     * order they were sent. The settled footer offers to put them back in the
+     * composer, so the request can be revised and sent again. Absent on a turn
+     * that was not stopped, and on one no message of the reader's began.
+     */
+    readonly stoppedMessageIds?: readonly string[];
     /** Final duration from request sent through completion, when known. */
     readonly durationMs?: number;
     /** Tokens consumed by this run across provider/model segments. */

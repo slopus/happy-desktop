@@ -77,6 +77,33 @@ export function happyAgentComposerAttachmentCreate(
     };
 }
 
+/**
+ * An inline picture carries only its media type, so the name it goes by is a
+ * plain one with the extension that type implies.
+ */
+export function happyAgentInlineImageName(mediaType: string): string {
+    const subtype = mediaType.slice(mediaType.indexOf("/") + 1).split("+")[0];
+    return `image.${subtype === "jpeg" ? "jpg" : subtype || "png"}`;
+}
+
+/**
+ * Makes a draft attachment again from a picture a sent message carried inline,
+ * so it can go with a revision of that message. The transcript keeps its bytes
+ * and media type, which is all a draft attachment needs.
+ */
+export function happyAgentComposerAttachmentFromInline(
+    id: string,
+    image: { readonly mediaType: string; readonly data: string },
+): ComposerAttachment {
+    const binary = atob(image.data);
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+    return happyAgentComposerAttachmentCreate(
+        id,
+        new File([bytes], happyAgentInlineImageName(image.mediaType), { type: image.mediaType }),
+    );
+}
+
 function attachmentSizeAssert(name: string, size: number): void {
     if (size > HAPPY_AGENT_COMPOSER_FILE_MAX_BYTES)
         throw new Error(

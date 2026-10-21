@@ -139,6 +139,11 @@ export type ConversationEntryViewProps = {
     onTraceToggle?: (turnId: string) => void;
     /** That turn's intermediate entries are currently listed. */
     traceOpen?: boolean;
+    /**
+     * Puts the reader's messages from a stopped turn back in the composer, told
+     * the entry of that turn's footer. Absent, a stopped turn offers no edit.
+     */
+    onStoppedMessageEdit?: (entryId: string) => void;
     className?: string;
     "data-testid"?: string;
     style?: CSSProperties;
@@ -326,6 +331,11 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
                 durationMs={entry.durationMs}
                 usedTokens={entry.usedTokens}
                 finalContextTokens={entry.finalContextTokens}
+                onEdit={
+                    entry.stoppedMessageIds !== undefined && props.onStoppedMessageEdit
+                        ? () => props.onStoppedMessageEdit!(entry.id)
+                        : undefined
+                }
                 reason={entry.reason}
                 status={entry.status}
                 {...(props.activityAuthor ? {} : { style: props.style })}

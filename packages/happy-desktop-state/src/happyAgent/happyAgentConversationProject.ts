@@ -551,6 +551,10 @@ function happyAgentConnectGroupProject(
      * no `parentToolCallId` cannot be placed and is left to the Activity surface.
      */
     let groupEnd: Extract<ChatElement, { kind: "group_end" }> | undefined;
+    /* The reader's own messages this turn received: words they typed here, not
+       ones an agent or another person put in the user slot. A stopped turn
+       offers them back to the composer. */
+    const readerMessageIds: string[] = [];
     const groupSteered = elements.some(
         (element) => element.kind === "group_end" && element.reason === "steering",
     );
@@ -585,6 +589,8 @@ function happyAgentConnectGroupProject(
                     });
                     break;
                 }
+                if (element.identity === null && element.senderAgent === undefined)
+                    readerMessageIds.push(element.messageId);
                 entries.push({
                     kind: "message",
                     source: "server",
@@ -970,6 +976,9 @@ function happyAgentConnectGroupProject(
                               ? "failed"
                               : "complete",
                     reason: element.reason,
+                    ...(element.reason === "abort" && readerMessageIds.length > 0
+                        ? { stoppedMessageIds: readerMessageIds }
+                        : {}),
                     durationMs: element.elapsedMs,
                     ...(element.usedTokens === undefined ? {} : { usedTokens: element.usedTokens }),
                     ...(element.finalContextTokens === undefined

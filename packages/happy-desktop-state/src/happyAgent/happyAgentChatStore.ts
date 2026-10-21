@@ -17,6 +17,7 @@ import {
     type SessionUsage,
 } from "../happyAgentConnection/index.js";
 import { UserError } from "../types.js";
+import { happyAgentInlineImageName } from "./happyAgentComposerAttachment.js";
 import {
     happyAgentConversationCacheCreate,
     happyAgentConversationProject,
@@ -412,7 +413,7 @@ function imageSourceOf(
         return {
             url: `data:${attachment.mediaType};base64,${attachment.data}`,
             alt: "Attached image",
-            name: inlineImageNameOf(attachment.mediaType),
+            name: happyAgentInlineImageName(attachment.mediaType),
             thumbnail: {
                 url: `data:${attachment.mediaType};base64,${attachment.data}`,
                 width: attachment.width,
@@ -432,15 +433,6 @@ function imageSourceOf(
             },
         };
     return undefined;
-}
-
-/**
- * An inline picture carries only its media type, so the name it is saved under
- * is a plain one with the extension that type implies.
- */
-function inlineImageNameOf(mediaType: string): string {
-    const subtype = mediaType.slice(mediaType.indexOf("/") + 1).split("+")[0];
-    return `image.${subtype === "jpeg" ? "jpg" : subtype || "png"}`;
 }
 
 /**

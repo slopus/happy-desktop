@@ -238,12 +238,22 @@ function payloadEqual(left: ConversationEntry, right: ConversationEntry): boolea
             left.status === right.status &&
             left.reason === right.reason &&
             left.copyText === right.copyText &&
+            stringListEqual(left.stoppedMessageIds, right.stoppedMessageIds) &&
             left.durationMs === right.durationMs &&
             left.usedTokens === right.usedTokens &&
             left.finalContextTokens === right.finalContextTokens &&
             left.tools === right.tools
         );
     return false;
+}
+
+function stringListEqual(
+    left: readonly string[] | undefined,
+    right: readonly string[] | undefined,
+): boolean {
+    if (left === right) return true;
+    if (left === undefined || right === undefined) return false;
+    return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
 function failureFallbackEqual(

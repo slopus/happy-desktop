@@ -14,7 +14,7 @@ import type {
     ConversationFailureFallback,
     ConversationRetrying,
 } from "../conversation/conversationEntry.js";
-import { happyAgentChatDraftAppend } from "./happyAgentChatDraftAppend.js";
+import { happyAgentChatDraftAppend, happyAgentDraftAppended } from "./happyAgentChatDraftAppend.js";
 import {
     happyAgentChiefOfStaffRequestText,
     type HappyAgentChiefOfStaffRequest,
@@ -69,12 +69,14 @@ import {
     happyAgentAttachmentTextAppend,
     happyAgentCommentsTextAppend,
     happyAgentComposerAttachmentCreate,
+    happyAgentComposerAttachmentFromInline,
     happyAgentComposerAttachmentPreviewRelease,
     happyAgentComposerAttachmentPreviewRenew,
     happyAgentComposerAttachmentsValidate,
     happyAgentImageInputsOf,
     happyAgentWorkspaceAttachmentData,
 } from "./happyAgentComposerAttachment.js";
+import { happyAgentStoppedMessageDraft } from "./happyAgentStoppedMessageDraft.js";
 import {
     happyAgentChangeTiersStoreCreate,
     type HappyAgentChangeTiersStore,
@@ -1865,6 +1867,14 @@ export interface HappyAgentWorkspaceStore {
     composerAttachmentsAdd(files: readonly File[]): void;
     /** Removes one attachment from the addressed draft. */
     composerAttachmentRemove(attachmentId: string): void;
+    /**
+     * Puts the reader's messages from a turn that was stopped back into the
+     * open conversation's draft, so the request can be revised and sent again:
+     * their words below anything already typed there, and the pictures that
+     * went with them. The turn is named by its footer entry. Words the draft
+     * already holds are not added twice, and nothing is sent.
+     */
+    stoppedMessageEdit(entryId: string): void;
 
     /*
      * How the next turn will be configured. Picking states an intent and sending
@@ -7944,6 +7954,35 @@ export function happyAgentWorkspaceStoreCreate(
         composerAttachmentRemove(attachmentId) {
             const target = groupComposer ?? composer;
             if (target) attachmentRemoveFrom(target, attachmentId);
+        },
+        stoppedMessageEdit(entryId) {
+            // The stopped turn is in the open conversation's transcript, so its
+            // words go back into that conversation's own draft.
+            const target = composer;
+            if (disposed || !target || conversation.type !== "ready") return;
+            const stopped = happyAgentStoppedMessageDraft(conversation.value.entries, entryId);
+            // A send still on its way holds the draft, as it holds typing.
+            if (!stopped || target.getState().submission.status === "pending") return;
+            if (stopped.text.length > 0) {
+                const draft = target.getState().text;
+                const text = happyAgentDraftAppended(
+                    draft.trim().length === 0 ? "" : draft,
+                    stopped.text,
+                );
+                // Already in the draft: asking again leaves it as it is,
+                // pictures included, rather than doubling the request.
+                if (text === undefined) return;
+                target.getState().textUpdate(text);
+            }
+            for (const image of stopped.images)
+                target
+                    .getState()
+                    .attachmentAdd(
+                        happyAgentComposerAttachmentFromInline(
+                            `attachment:${++attachmentSequence}`,
+                            image,
+                        ),
+                    );
         },
 
         sessionModelUpdate(input) {
