@@ -21,6 +21,8 @@ import type {
 const LOCAL_ROUTES = new Set([
     "/open-in-targets",
     "/open-in",
+    "/file-open-targets",
+    "/file-open",
     "/attachment",
     "/attachment-source-reachable",
     "/workspace-file-bytes",

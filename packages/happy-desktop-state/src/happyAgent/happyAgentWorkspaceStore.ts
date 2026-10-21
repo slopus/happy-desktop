@@ -99,6 +99,7 @@ import {
 import {
     HAPPY_AGENT_ACTION_OK,
     happyAgentActionFailed,
+    deepEqual,
     happyAgentUserError,
 } from "./happyAgentSupport.js";
 import type {
@@ -137,6 +138,8 @@ import type {
     HappyAgentProjectId,
     HappyAgentQueuedMessage,
     HappyAgentContextGauge,
+    HappyAgentFileOpenInAction,
+    HappyAgentFileOpenInTargets,
     HappyAgentOpenInTarget,
     HappyAgentWorkspaceFiles,
     HappyAgentWorkspaceFileTreeDirectory,
@@ -509,6 +512,8 @@ const HAPPY_AGENT_FILE_PREPROCESS_MAX_CONCURRENT_LOADS = 2;
  * that an editor installed this morning is in the menu this afternoon.
  */
 const OPEN_IN_TARGETS_REFRESH_MS = 60 * 60 * 1_000;
+/** How long a group whose file targets could not be read waits before it is asked again. */
+const FILE_OPEN_IN_TARGETS_RETRY_MS = 30_000;
 /**
  * The renderer/UI uses the same ceiling when deciding whether to retain a
  * Pierre AST. A changed document at or above it must already carry the
@@ -738,6 +743,17 @@ export interface HappyAgentWorkspaceSnapshot {
      * moments of one.
      */
     readonly openInRecent?: HappyAgentOpenInTarget;
+    /**
+     * Where the files of each group with a file open can be opened outside
+     * Happy, by group. Absent altogether where no file can be (a browser tab, a
+     * Happy Agent on another computer); a group missing from the map has not
+     * been answered for yet. It is a separate answer from `openInTargets`, and
+     * opening a file never changes `openInRecent`: that is the project's
+     * control, and a file opened in an editor is not a project opened in it.
+     */
+    readonly fileOpenInTargets?: ReadonlyMap<HappyAgentGroupId, HappyAgentFileOpenInTargets>;
+    /** The last file that could not be opened in another application, until put away. */
+    readonly fileOpenInFailure?: HappyAgentFileOpenInFailure;
     /** The rename in progress, if any: what is being renamed and the draft name. */
     readonly rename?: HappyAgentRenameSnapshot;
     /** The project archive that has been asked for and not yet carried out, if any. */
@@ -1042,6 +1058,14 @@ const FILE_COMMENTS_IDLE: HappyAgentFileComments = { comments: [] };
  */
 export interface HappyAgentFileOpenFailure {
     readonly path: string;
+    readonly message: string;
+}
+
+/** A file the host did not open in another application, and its own reason why. */
+export interface HappyAgentFileOpenInFailure {
+    readonly groupId: HappyAgentGroupId;
+    readonly path: string;
+    readonly action: HappyAgentFileOpenInAction;
     readonly message: string;
 }
 
@@ -1930,6 +1954,15 @@ export interface HappyAgentWorkspaceStore {
      */
     openIn(groupId: HappyAgentGroupId, target: HappyAgentOpenInTarget): Promise<void>;
     /**
+     * Opens one file of a group outside Happy: shows it in Finder, hands it to
+     * its default application, or to one of the group's `fileOpenInTargets`
+     * editors. Returns at once; a refusal lands in `fileOpenInFailure` with the
+     * host's own reason. It never touches `openInRecent`.
+     */
+    fileOpenIn(groupId: HappyAgentGroupId, path: string, action: HappyAgentFileOpenInAction): void;
+    /** Puts away `fileOpenInFailure`. */
+    fileOpenInFailureDismiss(): void;
+    /**
      * Materializes the surface for a new bot, with four faces rolled and the
      * first of them picked. A draft from a previous visit is offered back:
      * leaving the surface is how a draft is put down, not how it is thrown
@@ -2326,6 +2359,21 @@ export function happyAgentWorkspaceStoreCreate(
     let openInRecent: HappyAgentOpenInTarget | undefined;
     let openInTargetsReading = false;
     let openInTargetsTimer: ReturnType<typeof setInterval> | undefined;
+    /* Where each group's files can be opened, asked of the host per group because
+       the host is what knows whether a group's checkout is on this machine or in
+       a container. Asked for a group once one of its files is open, and again
+       whenever the project's targets are. */
+    const fileOpener = client.fileOpener;
+    let fileOpenInTargets: ReadonlyMap<HappyAgentGroupId, HappyAgentFileOpenInTargets> | undefined =
+        fileOpener ? new Map() : undefined;
+    const fileOpenInTargetsReading = new Set<HappyAgentGroupId>();
+    /** When a group's read last failed, so a host that is down is not asked on every tick. */
+    const fileOpenInTargetsFailedAt = new Map<HappyAgentGroupId, number>();
+    /** The one wake-up for unanswered visible groups whose backoff has not elapsed yet. */
+    let fileOpenInTargetsRetryTimer: ReturnType<typeof setTimeout> | undefined;
+    let fileOpenInFailure: HappyAgentFileOpenInFailure | undefined;
+    /** Which open request is the latest; an earlier one's refusal is no longer news. */
+    let fileOpenInGeneration = 0;
     let rename: HappyAgentRenameSnapshot | undefined;
     let taskBrowseOpen = false;
     let projectArchive: HappyAgentProjectArchiveSnapshot | undefined;
@@ -2765,6 +2813,8 @@ export function happyAgentWorkspaceStoreCreate(
         tabOrder,
         groupResume,
         openInTargets,
+        ...(fileOpenInTargets ? { fileOpenInTargets } : {}),
+        ...(fileOpenInFailure ? { fileOpenInFailure } : {}),
         fileViewMode,
         fileViewWrap,
         fileScope: "changed",
@@ -3098,6 +3148,10 @@ export function happyAgentWorkspaceStoreCreate(
         // The panel's file is not a second thing to keep in step: it is the one
         // member of the strip placed there, found rather than mirrored.
         const panelFile = fileTabs.find((tab) => tab.placement === "panel");
+        // A group whose file is open needs to know where that file can be opened
+        // before its header is drawn; this only starts reads, and they land
+        // through a later recompute.
+        if (active) fileOpenInTargetsEnsure();
         // Returning the previous snapshot keeps its identity and announces
         // nothing; a changed one replaces it wholesale and the store's own
         // subscription is what notifies.
@@ -3120,6 +3174,8 @@ export function happyAgentWorkspaceStoreCreate(
                 snapshot.groupResume === groupResume &&
                 snapshot.openInTargets === openInTargets &&
                 snapshot.openInRecent === openInRecent &&
+                snapshot.fileOpenInTargets === fileOpenInTargets &&
+                snapshot.fileOpenInFailure === fileOpenInFailure &&
                 snapshot.rename === rename &&
                 snapshot.projectArchive === projectArchive &&
                 snapshot.groupArchive === groupArchive &&
@@ -3154,6 +3210,8 @@ export function happyAgentWorkspaceStoreCreate(
                           tabOrder,
                           groupResume,
                           openInTargets,
+                          ...(fileOpenInTargets ? { fileOpenInTargets } : {}),
+                          ...(fileOpenInFailure ? { fileOpenInFailure } : {}),
                           fileViewMode,
                           fileViewWrap,
                           fileScope: nextFileScope,
@@ -5980,6 +6038,83 @@ export function happyAgentWorkspaceStoreCreate(
         );
     };
 
+    /**
+     * Asks the host where one group's files can be opened. Only one read per
+     * group is in flight; a failure leaves the group unanswered, and it is asked
+     * again once `FILE_OPEN_IN_TARGETS_RETRY_MS` has passed.
+     */
+    const fileOpenInTargetsRead = (groupId: HappyAgentGroupId): void => {
+        if (!fileOpener || fileOpenInTargetsReading.has(groupId)) return;
+        // This attempt owns the group's next outcome. Removing the old failure
+        // before starting prevents the retry scheduler from spinning on an
+        // already elapsed timestamp while this request is in flight.
+        fileOpenInTargetsFailedAt.delete(groupId);
+        fileOpenInTargetsReading.add(groupId);
+        void fileOpener.targetsRead(groupId).then(
+            (result) => {
+                fileOpenInTargetsReading.delete(groupId);
+                fileOpenInTargetsFailedAt.delete(groupId);
+                if (disposed || !fileOpenInTargets) return;
+                if (deepEqual(fileOpenInTargets.get(groupId), result)) return;
+                fileOpenInTargets = new Map(fileOpenInTargets).set(groupId, result);
+                recompute();
+            },
+            () => {
+                fileOpenInTargetsReading.delete(groupId);
+                fileOpenInTargetsFailedAt.set(groupId, Date.now());
+                fileOpenInTargetsRetrySchedule();
+            },
+        );
+    };
+
+    /** Reads every group with a file open that has no answer yet. Starts reads only. */
+    function fileOpenInTargetsEnsure(): void {
+        if (!fileOpenInTargets) return;
+        const now = Date.now();
+        for (const tab of fileTabs) {
+            if (fileOpenInTargets.has(tab.groupId)) continue;
+            const failedAt = fileOpenInTargetsFailedAt.get(tab.groupId);
+            if (failedAt !== undefined && now - failedAt < FILE_OPEN_IN_TARGETS_RETRY_MS) continue;
+            fileOpenInTargetsRead(tab.groupId);
+        }
+    }
+
+    /**
+     * Wakes the earliest failed visible group when its backoff expires. An idle
+     * surface therefore recovers without waiting for an unrelated store event
+     * or the hourly installed-application refresh.
+     */
+    function fileOpenInTargetsRetrySchedule(): void {
+        if (!active || disposed || fileOpenInTargetsRetryTimer !== undefined) return;
+        const visibleGroups = new Set(fileTabs.map((tab) => tab.groupId));
+        const now = Date.now();
+        let delay: number | undefined;
+        for (const [groupId, failedAt] of fileOpenInTargetsFailedAt) {
+            if (!visibleGroups.has(groupId) || fileOpenInTargets?.has(groupId)) continue;
+            const remaining = Math.max(0, FILE_OPEN_IN_TARGETS_RETRY_MS - (now - failedAt));
+            delay = delay === undefined ? remaining : Math.min(delay, remaining);
+        }
+        if (delay === undefined) return;
+        fileOpenInTargetsRetryTimer = setTimeout(() => {
+            fileOpenInTargetsRetryTimer = undefined;
+            if (!active || disposed) return;
+            fileOpenInTargetsEnsure();
+            // Groups whose later deadline has not elapsed still need their own
+            // wake-up; groups just retried no longer carry a failure timestamp.
+            fileOpenInTargetsRetrySchedule();
+        }, delay);
+    }
+
+    /** Reads every answered group again, alongside the project's own targets. */
+    const fileOpenInTargetsRefresh = (): void => {
+        for (const groupId of fileOpenInTargets?.keys() ?? []) fileOpenInTargetsRead(groupId);
+        fileOpenInTargetsEnsure();
+        // `stop` cancels the wake-up but keeps backoff timestamps. Starting the
+        // surface again before one expires must restore that wake-up rather than
+        // wait for an unrelated notification or the hourly refresh.
+        fileOpenInTargetsRetrySchedule();
+    };
+
     const workspaceFilesDirectorySet = (
         path: string,
         directory: HappyAgentWorkspaceFileTreeDirectory,
@@ -6482,7 +6617,11 @@ export function happyAgentWorkspaceStoreCreate(
         // left open all day polls for it; the cadence is hours rather than
         // seconds because that is how often the answer can change.
         openInTargetsRefresh();
-        openInTargetsTimer ??= setInterval(openInTargetsRefresh, OPEN_IN_TARGETS_REFRESH_MS);
+        fileOpenInTargetsRefresh();
+        openInTargetsTimer ??= setInterval(() => {
+            openInTargetsRefresh();
+            fileOpenInTargetsRefresh();
+        }, OPEN_IN_TARGETS_REFRESH_MS);
         // The daemon can change what it offers at any time — a provider
         // switched on, or a restart onto another configuration — and the open
         // drafts and a conversation still showing the machine's defaults list
@@ -6511,6 +6650,10 @@ export function happyAgentWorkspaceStoreCreate(
         if (openInTargetsTimer !== undefined) {
             clearInterval(openInTargetsTimer);
             openInTargetsTimer = undefined;
+        }
+        if (fileOpenInTargetsRetryTimer !== undefined) {
+            clearTimeout(fileOpenInTargetsRetryTimer);
+            fileOpenInTargetsRetryTimer = undefined;
         }
         // The catalog is no longer being watched, so what was last known about
         // it is no longer a basis for reporting anything. Confirmation is
@@ -6560,6 +6703,8 @@ export function happyAgentWorkspaceStoreCreate(
                     tabOrder,
                     groupResume,
                     openInTargets,
+                    ...(fileOpenInTargets ? { fileOpenInTargets } : {}),
+                    ...(fileOpenInFailure ? { fileOpenInFailure } : {}),
                     fileViewMode,
                     fileViewWrap,
                     // Nothing is addressed here, so there is no checkout whose
@@ -8022,6 +8167,30 @@ export function happyAgentWorkspaceStoreCreate(
                 recompute();
             }
             return client.openIn(groupId, target);
+        },
+        fileOpenIn(groupId, path, action) {
+            if (disposed || !fileOpener) return;
+            const generation = ++fileOpenInGeneration;
+            // A new attempt is the reader moving on from the last refusal.
+            if (fileOpenInFailure !== undefined) {
+                fileOpenInFailure = undefined;
+                recompute();
+            }
+            void fileOpener.open(groupId, path, action).catch((error: unknown) => {
+                if (disposed || generation !== fileOpenInGeneration) return;
+                fileOpenInFailure = {
+                    groupId,
+                    path,
+                    action,
+                    message: happyAgentUserError(error).message,
+                };
+                recompute();
+            });
+        },
+        fileOpenInFailureDismiss() {
+            if (disposed || fileOpenInFailure === undefined) return;
+            fileOpenInFailure = undefined;
+            recompute();
         },
         botCreateOpen(paint) {
             botCreatePaint = paint;

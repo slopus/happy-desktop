@@ -25,6 +25,8 @@ export type FileEditorProps = {
     onSave?: () => void;
     onRevert?: () => void;
     onClose?: () => void;
+    /** Trailing header controls before Download, e.g. Open in. */
+    actions?: ReactNode;
     /** Saves the file to the reader's machine. Absent hides the control. */
     onDownload?: () => void;
     /** Unsaved local edits exist. Drives Command-S and Revert. */
@@ -90,6 +92,7 @@ export function FileEditor(props: FileEditorProps) {
         "onSave",
         "onRevert",
         "onClose",
+        "actions",
         "onDownload",
         "dirty",
         "saving",
@@ -200,6 +203,7 @@ export function FileEditor(props: FileEditorProps) {
                             {local.revertLabel ?? "Revert"}
                         </Button>
                     ) : null}
+                    {local.actions}
                     {local.onDownload ? (
                         <Button
                             aria-label="Download"

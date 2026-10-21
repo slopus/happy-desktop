@@ -53,6 +53,7 @@ import type {
     HappyAgentCommentDraft,
     HappyAgentCommentId,
     HappyAgentFileComment,
+    HappyAgentFileOpenInAction,
     HappyAgentFileScope,
     HappyAgentFileSearch,
     HappyAgentFileViewMode,
@@ -210,6 +211,7 @@ import {
     EmptyState,
     FileBrowser,
     FileEditor,
+    FileOpenInMenu,
     FilePreview,
     FormRow,
     type FilePreviewKind,
@@ -6516,39 +6518,66 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
         openGroup !== undefined &&
         activeMainTool === undefined &&
         activeFile === undefined;
-    const mainFileBody = (file: HappyAgentFileTabSnapshot): ReactNode => (
-        <HappyAgentFileBody
-            appearance={appearance.appearance}
-            file={file}
-            {...(props.htmlPreview ? { htmlPreview: props.htmlPreview } : {})}
-            key={`${file.id}:${file.kind}`}
-            {...(props.mediaWindow ? { mediaWindow: props.mediaWindow } : {})}
-            mode={workspace.fileViewMode}
-            comments={workspace.fileComments.comments.filter(
-                (comment) => comment.anchor.path === file.path,
-            )}
-            {...(workspace.fileComments.draft?.anchor.path === file.path
-                ? { commentDraft: workspace.fileComments.draft }
-                : {})}
-            happyAgentOnline={happyAgentOnline}
-            onMainFileOpen={(path, kind, selection) => {
-                // The address names the file; the region is the ask that came
-                // with it, and the tab keeps it because a file's own address is
-                // re-applied as a preview and leaves a region alone.
-                if (selection !== undefined)
-                    props.workspace.fileOpen(file.groupId, path, kind, selection);
-                props.onFileSelect(file.groupId, props.chatId, path, kind);
-            }}
-            wrap={workspace.fileViewWrap}
-            {...(file.linked
-                ? { writeRefusal: HAPPY_AGENT_FILE_LINK_READ_ONLY_REFUSAL }
-                : access.writeRefusal === undefined
-                  ? {}
-                  : { writeRefusal: access.writeRefusal })}
-            {...(connectionRefusal === undefined ? {} : { saveRefusal: connectionRefusal })}
-            workspace={props.workspace}
-        />
-    );
+    const mainFileBody = (file: HappyAgentFileTabSnapshot): ReactNode => {
+        const fileGroupPhase = workspaceLifecyclePhase(
+            openGroupFind(rows, workspace.list.bots, workspace.list.tasks, file.groupId)?.lifecycle,
+        );
+        return (
+            <HappyAgentFileBody
+                appearance={appearance.appearance}
+                file={file}
+                {...(props.htmlPreview ? { htmlPreview: props.htmlPreview } : {})}
+                key={`${file.id}:${file.kind}`}
+                {...(props.mediaWindow ? { mediaWindow: props.mediaWindow } : {})}
+                mode={workspace.fileViewMode}
+                comments={workspace.fileComments.comments.filter(
+                    (comment) => comment.anchor.path === file.path,
+                )}
+                {...(workspace.fileComments.draft?.anchor.path === file.path
+                    ? { commentDraft: workspace.fileComments.draft }
+                    : {})}
+                happyAgentOnline={happyAgentOnline}
+                onMainFileOpen={(path, kind, selection) => {
+                    // The address names the file; the region is the ask that came
+                    // with it, and the tab keeps it because a file's own address is
+                    // re-applied as a preview and leaves a region alone.
+                    if (selection !== undefined)
+                        props.workspace.fileOpen(file.groupId, path, kind, selection);
+                    props.onFileSelect(file.groupId, props.chatId, path, kind);
+                }}
+                openIn={(unavailable) =>
+                    happyAgentFileOpenIn({
+                        targets: workspace.fileOpenInTargets,
+                        groupId: file.groupId,
+                        path: file.path,
+                        // The reasons in order of how much they explain: no
+                        // connection says nothing about the file, a checkout that
+                        // is not there yet or any more says it about every file,
+                        // and the file's own reason is about this one alone.
+                        unavailable:
+                            connectionRefusal ??
+                            happyAgentCheckoutUnavailable(fileGroupPhase) ??
+                            unavailable,
+                        happyAgentOnline,
+                        workspace: props.workspace,
+                    })
+                }
+                openInNotice={happyAgentFileOpenInNotice(
+                    workspace.fileOpenInFailure,
+                    file,
+                    props.workspace,
+                )}
+                wrap={workspace.fileViewWrap}
+                {...(file.linked
+                    ? { writeRefusal: HAPPY_AGENT_FILE_LINK_READ_ONLY_REFUSAL }
+                    : access.writeRefusal === undefined
+                      ? {}
+                      : { writeRefusal: access.writeRefusal })}
+                {...(connectionRefusal === undefined ? {} : { saveRefusal: connectionRefusal })}
+                workspace={props.workspace}
+            />
+        );
+    };
     /**
      * The checkout's whole change, in one scroll — or one file of it, when the
      * change is too large for that and is read a file at a time instead.
@@ -7642,6 +7671,119 @@ function happyAgentFileNotices(file: HappyAgentFileTabSnapshot): ReactNode {
     );
 }
 
+/**
+ * Two notices for one banner slot, as nothing at all when both are absent: the
+ * editor draws its banner lane whenever it is handed anything, so an empty
+ * fragment would leave an empty lane above the text.
+ */
+function happyAgentNoticesJoin(first: ReactNode, second: ReactNode): ReactNode {
+    if (first === null || first === undefined) return second;
+    if (second === null || second === undefined) return first;
+    return (
+        <>
+            {first}
+            {second}
+        </>
+    );
+}
+
+/** Why no file of a checkout in this phase can be opened elsewhere, or nothing when one can. */
+function happyAgentCheckoutUnavailable(
+    phase: WorkspaceLifecyclePhase | undefined,
+): string | undefined {
+    if (phase === "creating") return "This workspace is still being created.";
+    if (phase === "missing") return "This workspace's folder is missing.";
+    if (phase === "failed" || phase === "refused") return "This workspace was never created.";
+    return undefined;
+}
+
+/** What the reader is told when the app around this renderer predates opening files. */
+const FILE_OPEN_IN_APP_OUTDATED = "Update Happy to open files in other apps.";
+
+/**
+ * The lower-case extension the host's default-application list is keyed by: the
+ * part of the file name after its last dot, where a name that only starts with
+ * a dot (`.env`) has none, as the host reads it.
+ */
+function fileExtension(path: string): string {
+    const name = path.slice(path.lastIndexOf("/") + 1);
+    const dot = name.lastIndexOf(".");
+    return dot <= 0 ? "" : name.slice(dot + 1).toLowerCase();
+}
+
+/**
+ * The Open in control for one project file's header, or nothing where that
+ * file cannot be opened on this machine at all: a browser tab, a Happy Agent on
+ * another computer, another operating system, a container, or a group the host
+ * has not answered for yet. A file whose answer is in hand but cannot be opened
+ * right now still shows the control, disabled with `unavailable` as its reason.
+ */
+function happyAgentFileOpenIn(props: {
+    targets: HappyAgentWorkspaceSnapshot["fileOpenInTargets"];
+    groupId: HappyAgentGroupId;
+    path: string;
+    unavailable?: string;
+    happyAgentOnline: () => boolean;
+    workspace: HappyAgentWorkspaceStore;
+}): ReactNode {
+    const answer = props.targets?.get(props.groupId);
+    if (answer === undefined || answer.type === "unsupported") return undefined;
+    if (answer.type === "app-outdated")
+        return (
+            <FileOpenInMenu
+                onReveal={() => undefined}
+                onTargetOpen={() => undefined}
+                targets={[]}
+                unavailableReason={FILE_OPEN_IN_APP_OUTDATED}
+            />
+        );
+    const open = (action: HappyAgentFileOpenInAction): void => {
+        if (props.happyAgentOnline()) props.workspace.fileOpenIn(props.groupId, props.path, action);
+    };
+    return (
+        <FileOpenInMenu
+            {...(answer.defaultAppExtensions.includes(fileExtension(props.path))
+                ? { onDefaultAppOpen: () => open({ type: "default-app" }) }
+                : {})}
+            onReveal={() => open({ type: "reveal" })}
+            onTargetOpen={(id) => {
+                const target = answer.editors.find((editor) => editor.id === id);
+                if (target) open({ type: "app", target });
+            }}
+            {...(answer.revealIconUrl === undefined ? {} : { revealIconUrl: answer.revealIconUrl })}
+            targets={answer.editors}
+            {...(props.unavailable === undefined ? {} : { unavailableReason: props.unavailable })}
+        />
+    );
+}
+
+/** The refusal of the last attempt to open this file elsewhere, until put away. */
+function happyAgentFileOpenInNotice(
+    failure: HappyAgentWorkspaceSnapshot["fileOpenInFailure"],
+    file: { readonly groupId: HappyAgentGroupId; readonly path: string },
+    workspace: HappyAgentWorkspaceStore,
+): ReactNode {
+    if (failure === undefined || failure.groupId !== file.groupId || failure.path !== file.path)
+        return null;
+    const name = file.path.slice(file.path.lastIndexOf("/") + 1);
+    const where =
+        failure.action.type === "reveal"
+            ? "show it in Finder"
+            : failure.action.type === "default-app"
+              ? "open it in its default app"
+              : `open it in ${failure.action.target.label}`;
+    return (
+        <Banner
+            data-testid="file-open-in-failure"
+            onDismiss={() => workspace.fileOpenInFailureDismiss()}
+            title={`Could not ${where}`}
+            tone="warning"
+        >
+            {name}: {failure.message}
+        </Banner>
+    );
+}
+
 function HappyAgentFileBody(props: {
     appearance: "dark" | "light";
     file: HappyAgentFileTabSnapshot;
@@ -7665,6 +7807,13 @@ function HappyAgentFileBody(props: {
     /** Review notes on this file, and the one being written if it is on this file. */
     comments: readonly HappyAgentFileComment[];
     commentDraft?: HappyAgentCommentDraft;
+    /**
+     * This file's Open in control, disabled with a reason the file itself
+     * supplies (it was deleted, it could not be read), or nothing at all.
+     */
+    openIn: (unavailable?: string) => ReactNode;
+    /** Why the last attempt to open this file elsewhere failed, if it did. */
+    openInNotice: ReactNode;
     workspace: HappyAgentWorkspaceStore;
 }) {
     const { file, workspace } = props;
@@ -7704,7 +7853,13 @@ function HappyAgentFileBody(props: {
         return (
             <>
                 {happyAgentFileRevalidationBanner(file.revalidationError)}
+                {props.openInNotice}
                 <HappyAgentFilePreview
+                    actions={props.openIn(
+                        file.document.type === "error"
+                            ? file.document.error.message
+                            : file.revalidationError?.message,
+                    )}
                     document={file.document}
                     {...(props.mediaWindow ? { mediaWindow: props.mediaWindow } : {})}
                     key={file.id}
@@ -7729,7 +7884,8 @@ function HappyAgentFileBody(props: {
                 : undefined;
         return (
             <FileEditor
-                banner={happyAgentFileNotices(file)}
+                actions={props.openIn(file.revalidationError?.message)}
+                banner={happyAgentNoticesJoin(happyAgentFileNotices(file), props.openInNotice)}
                 documentKey={fileDocumentKey(file.id, file.document.value)}
                 dirty={dirty}
                 {...(file.kind === "document" && props.htmlPreview
@@ -7822,7 +7978,16 @@ function HappyAgentFileBody(props: {
         return (
             <>
                 {happyAgentFileNotices(file)}
+                {props.openInNotice}
                 <ChangedFileDiff
+                    actions={props.openIn(
+                        file.revalidationError?.message ??
+                            // A change that deleted the file left nothing on disk to
+                            // hand to another application.
+                            (change.hash === undefined
+                                ? "This file was deleted in these changes."
+                                : undefined),
+                    )}
                     appearance={props.appearance}
                     documentKey={fileDocumentKey(file.id, file.document.value)}
                     key={`${file.id}:${file.kind}`}
@@ -7946,45 +8111,47 @@ function HappyAgentFileBody(props: {
     }
     if (file.document.type === "error")
         return (
-            <EmptyState
-                {...(props.saveRefusal === undefined
-                    ? {
-                          action: {
-                              label: "Retry",
-                              icon: "arrow-right" as const,
-                              onClick: () => {
-                                  if (props.happyAgentOnline()) workspace.fileRetry(file.id);
-                              },
-                          },
-                      }
-                    : {})}
-                description={file.document.error.message}
-                icon="doc"
-                size="panel"
-                title="File unavailable"
-            />
+            <>
+                {props.openInNotice}
+                <FilePreview
+                    actions={
+                        <>
+                            {props.saveRefusal === undefined ? (
+                                <Button
+                                    icon="arrow-right"
+                                    onClick={() => {
+                                        if (props.happyAgentOnline()) workspace.fileRetry(file.id);
+                                    }}
+                                    size="small"
+                                    variant="ghost"
+                                >
+                                    Retry
+                                </Button>
+                            ) : null}
+                            {props.openIn(file.document.error.message)}
+                        </>
+                    }
+                    content={{ type: "error", message: file.document.error.message }}
+                    path={file.path}
+                />
+            </>
         );
     if (props.saveRefusal)
         return (
-            <EmptyState
-                description={props.saveRefusal}
-                icon="link"
-                size="panel"
-                title="File unavailable while Happy Agent is offline"
-            />
+            <>
+                {props.openInNotice}
+                <FilePreview
+                    actions={props.openIn(props.saveRefusal)}
+                    content={{ type: "error", message: props.saveRefusal }}
+                    path={file.path}
+                />
+            </>
         );
     return (
-        <EmptyState
-            animation="snail"
-            description={
-                file.kind === "file"
-                    ? "Reading the file from its workspace."
-                    : "Reading the changed file from its workspace."
-            }
-            icon="doc"
-            size="panel"
-            title="Loading file…"
-        />
+        <>
+            {props.openInNotice}
+            <FilePreview actions={props.openIn()} content={{ type: "loading" }} path={file.path} />
+        </>
     );
 }
 
@@ -8061,6 +8228,8 @@ function HappyAgentChangedFilePreview(props: {
  * range requests against the proxy instead of a whole file already in the DOM.
  */
 function HappyAgentFilePreview(props: {
+    /** Header controls about the file itself, such as Open in. */
+    actions?: ReactNode;
     document: HappyAgentFileTabSnapshot["document"];
     mediaWindow?: MediaWindowOpener;
     path: string;
@@ -8070,6 +8239,7 @@ function HappyAgentFilePreview(props: {
     if (document.type === "error")
         return (
             <FilePreview
+                actions={props.actions}
                 content={{ type: "error", message: document.error.message }}
                 path={props.path}
             />
@@ -8078,10 +8248,18 @@ function HappyAgentFilePreview(props: {
     // face. The request may still fail into the warning banner owned by the
     // surrounding file surface; only a true first load has no content to show.
     if (document.type !== "ready")
-        return <FilePreview content={{ type: "loading" }} path={props.path} />;
+        return (
+            <FilePreview actions={props.actions} content={{ type: "loading" }} path={props.path} />
+        );
     const value = document.value;
     if (!("contentType" in value))
-        return <FilePreview content={{ type: "unavailable" }} path={props.path} />;
+        return (
+            <FilePreview
+                actions={props.actions}
+                content={{ type: "unavailable" }}
+                path={props.path}
+            />
+        );
     // A format with no viewer is stated as such rather than rendered as an
     // <img> that will only ever show a broken-image glyph.
     const kind = filePreviewKind(props.path);
@@ -8089,6 +8267,7 @@ function HappyAgentFilePreview(props: {
     const mediaWindow = props.mediaWindow;
     return (
         <FilePreview
+            actions={props.actions}
             content={showable ? { type: "url", url: value.url } : { type: "unavailable" }}
             {...(mediaWindow && showable && mediaWindowShowable(kind)
                 ? {

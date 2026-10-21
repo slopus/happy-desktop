@@ -1,6 +1,8 @@
 import type { TerminalConnection } from "../transport.js";
 import type { HappyAgentDeviceBridgeHost } from "./happyAgentDeviceBridgeHost.js";
 import type {
+    HappyAgentFileOpenInAction,
+    HappyAgentFileOpenInTargets,
     HappyAgentGroupId,
     HappyAgentOpenInTarget,
     HappyAgentOpenInTargets,
@@ -17,6 +19,22 @@ export type HappyAgentArtifactSiteOpening =
      * it; updating the app is what lets the page run.
      */
     | { readonly type: "app-outdated" };
+
+/**
+ * Opens one project file in another application on this machine. The group and
+ * a path relative to its checkout are all that is named; the host resolves the
+ * file from its own record of the group and refuses anything outside it.
+ */
+export interface HappyAgentFileOpener {
+    /** What this group's files can be opened in here. */
+    targetsRead(groupId: HappyAgentGroupId): Promise<HappyAgentFileOpenInTargets>;
+    /** Rejects with the host's own explanation when the file was not opened. */
+    open(
+        groupId: HappyAgentGroupId,
+        path: string,
+        action: HappyAgentFileOpenInAction,
+    ): Promise<void>;
+}
 
 /**
  * Desktop-local services that are not Happy Agent product resources.
@@ -36,6 +54,12 @@ export interface HappyAgentHostServices {
      * control that wears it needs the label and the icon, not only the id.
      */
     openIn(groupId: HappyAgentGroupId, target: HappyAgentOpenInTarget): Promise<void>;
+    /**
+     * Opening one project file in another application. Absent where the files
+     * cannot be on this machine at all: a browser tab, or a Happy Agent on
+     * another computer.
+     */
+    readonly fileOpener?: HappyAgentFileOpener;
     workspaceFileBytesRead(
         groupId: HappyAgentGroupId,
         path: string,

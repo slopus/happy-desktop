@@ -1,9 +1,9 @@
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
-import { readdir, readFile, rm, stat } from "node:fs/promises";
+import { lstat, readdir, readFile, realpath, rm, stat } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
-import { join } from "node:path";
+import { extname, join, sep } from "node:path";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
@@ -34,50 +34,94 @@ interface OpenInApp {
      * is also what `open -b` is given.
      */
     readonly bundleIds: readonly string[];
+    /**
+     * Whether one file of a project may be handed to this application, and not
+     * only the project's directory. Editors and IDEs open a file as text to read
+     * and change. Finder does not, because showing a file in its folder is an
+     * action of its own; a terminal never does, because Terminal runs a file it
+     * is handed as a program; and a Git client opens repositories, not files.
+     */
+    readonly opensFiles: boolean;
 }
 
 const OPEN_IN_APPS: readonly OpenInApp[] = [
-    { id: "finder", label: "Finder", appNames: ["Finder.app"], bundleIds: ["com.apple.finder"] },
+    {
+        id: "finder",
+        label: "Finder",
+        appNames: ["Finder.app"],
+        bundleIds: ["com.apple.finder"],
+        opensFiles: false,
+    },
     {
         id: "terminal",
         label: "Terminal",
         appNames: ["Terminal.app"],
         bundleIds: ["com.apple.Terminal"],
+        opensFiles: false,
     },
-    { id: "iterm", label: "iTerm", appNames: ["iTerm.app"], bundleIds: ["com.googlecode.iterm2"] },
+    {
+        id: "iterm",
+        label: "iTerm",
+        appNames: ["iTerm.app"],
+        bundleIds: ["com.googlecode.iterm2"],
+        opensFiles: false,
+    },
     {
         id: "ghostty",
         label: "Ghostty",
         appNames: ["Ghostty.app"],
         bundleIds: ["com.mitchellh.ghostty"],
+        opensFiles: false,
     },
-    { id: "kitty", label: "kitty", appNames: ["kitty.app"], bundleIds: ["net.kovidgoyal.kitty"] },
+    {
+        id: "kitty",
+        label: "kitty",
+        appNames: ["kitty.app"],
+        bundleIds: ["net.kovidgoyal.kitty"],
+        opensFiles: false,
+    },
     {
         id: "warp",
         label: "Warp",
         appNames: ["Warp.app"],
         bundleIds: ["dev.warp.Warp-Stable", "dev.warp.Warp"],
+        opensFiles: false,
     },
     {
         id: "vscode",
         label: "VS Code",
         appNames: ["Visual Studio Code.app"],
         bundleIds: ["com.microsoft.VSCode"],
+        opensFiles: true,
     },
     {
         id: "cursor",
         label: "Cursor",
         appNames: ["Cursor.app"],
         bundleIds: ["com.todesktop.230313mzl4w4u92"],
+        opensFiles: true,
     },
-    { id: "zed", label: "Zed", appNames: ["Zed.app"], bundleIds: ["dev.zed.Zed"] },
+    {
+        id: "zed",
+        label: "Zed",
+        appNames: ["Zed.app"],
+        bundleIds: ["dev.zed.Zed"],
+        opensFiles: true,
+    },
     {
         id: "sublime-text",
         label: "Sublime Text",
         appNames: ["Sublime Text.app"],
         bundleIds: ["com.sublimetext.4", "com.sublimetext.3"],
+        opensFiles: true,
     },
-    { id: "xcode", label: "Xcode", appNames: ["Xcode.app"], bundleIds: ["com.apple.dt.Xcode"] },
+    {
+        id: "xcode",
+        label: "Xcode",
+        appNames: ["Xcode.app"],
+        bundleIds: ["com.apple.dt.Xcode"],
+        opensFiles: true,
+    },
     {
         id: "intellij",
         label: "IntelliJ IDEA",
@@ -88,6 +132,7 @@ const OPEN_IN_APPS: readonly OpenInApp[] = [
             "IntelliJ IDEA Community Edition.app",
         ],
         bundleIds: ["com.jetbrains.intellij", "com.jetbrains.intellij.ce"],
+        opensFiles: true,
     },
     {
         id: "pycharm",
@@ -99,36 +144,42 @@ const OPEN_IN_APPS: readonly OpenInApp[] = [
             "PyCharm Community Edition.app",
         ],
         bundleIds: ["com.jetbrains.pycharm", "com.jetbrains.pycharm.ce"],
+        opensFiles: true,
     },
     {
         id: "webstorm",
         label: "WebStorm",
         appNames: ["WebStorm.app"],
         bundleIds: ["com.jetbrains.WebStorm"],
+        opensFiles: true,
     },
     {
         id: "rustrover",
         label: "RustRover",
         appNames: ["RustRover.app"],
         bundleIds: ["com.jetbrains.rustrover"],
+        opensFiles: true,
     },
     {
         id: "goland",
         label: "GoLand",
         appNames: ["GoLand.app"],
         bundleIds: ["com.jetbrains.goland"],
+        opensFiles: true,
     },
     {
         id: "datagrip",
         label: "DataGrip",
         appNames: ["DataGrip.app"],
         bundleIds: ["com.jetbrains.datagrip"],
+        opensFiles: true,
     },
     {
         id: "android-studio",
         label: "Android Studio",
         appNames: ["Android Studio.app"],
         bundleIds: ["com.google.android.studio"],
+        opensFiles: true,
     },
     {
         id: "sourcetree",
@@ -136,20 +187,35 @@ const OPEN_IN_APPS: readonly OpenInApp[] = [
         appNames: ["Sourcetree.app", "SourceTree.app"],
         // The direct download and the App Store build ship different ids.
         bundleIds: ["com.torusknot.SourceTreeNotMAS", "com.torusknot.SourceTree"],
+        opensFiles: false,
     },
-    { id: "fork", label: "Fork", appNames: ["Fork.app"], bundleIds: ["com.DanPristupov.Fork"] },
-    { id: "tower", label: "Tower", appNames: ["Tower.app"], bundleIds: ["com.fournova.Tower3"] },
+    {
+        id: "fork",
+        label: "Fork",
+        appNames: ["Fork.app"],
+        bundleIds: ["com.DanPristupov.Fork"],
+        opensFiles: false,
+    },
+    {
+        id: "tower",
+        label: "Tower",
+        appNames: ["Tower.app"],
+        bundleIds: ["com.fournova.Tower3"],
+        opensFiles: false,
+    },
     {
         id: "github-desktop",
         label: "GitHub Desktop",
         appNames: ["GitHub Desktop.app"],
         bundleIds: ["com.github.GitHubClient"],
+        opensFiles: false,
     },
     {
         id: "antigravity",
         label: "Antigravity",
         appNames: ["Antigravity.app"],
         bundleIds: ["com.google.antigravity"],
+        opensFiles: true,
     },
 ];
 
@@ -420,5 +486,304 @@ export async function openInRun(targetId: string, directory: string): Promise<vo
         await execFileAsync("/usr/bin/open", ["-a", path, directory], { timeout: 10_000 });
     } catch {
         throw new Error(`${target.label} could not open this project.`);
+    }
+}
+
+/**
+ * The file types the default-app action hands to macOS: documents whose
+ * ordinary application shows them rather than runs them: raster pictures,
+ * recordings, plain text, and Markdown.
+ *
+ * It is an allowlist because the alternative cannot be complete. What macOS does
+ * with a file is decided by whichever application claims its type. Active
+ * documents stay out too: HTML and SVG execute scripts, PDF supports actions,
+ * ODF supports auto-start macros, and office formats can carry embedded or
+ * external active content even when their extension excludes VBA. A type
+ * missing here is still one click away in an editor or in Finder, which is the
+ * right price for one nobody thought of.
+ */
+const DEFAULT_APP_EXTENSIONS: readonly string[] = [
+    // Pictures
+    "avif",
+    "bmp",
+    "gif",
+    "heic",
+    "heif",
+    "ico",
+    "jpeg",
+    "jpg",
+    "png",
+    "tif",
+    "tiff",
+    "webp",
+    // Recordings
+    "aac",
+    "aif",
+    "aiff",
+    "flac",
+    "m4a",
+    "m4v",
+    "mkv",
+    "mov",
+    "mp3",
+    "mp4",
+    "oga",
+    "ogg",
+    "opus",
+    "wav",
+    "webm",
+    // Plain documents
+    "txt",
+    "md",
+    "markdown",
+];
+
+/**
+ * The extended attribute a file can carry to name its own application, which
+ * LaunchServices honours over the one its type would choose. A file that wears
+ * one is not handed to "its default application", because that is then no
+ * longer the reader's default at all.
+ */
+const OPEN_WITH_ATTRIBUTE = "com.apple.LaunchServices.OpenWith";
+
+/** What the reader can do with one project file outside Happy, on this Mac. */
+export type FileOpenTargets =
+    | {
+          readonly type: "available";
+          /** Finder's own artwork, for the Show in Finder row. */
+          readonly revealIconUrl?: string;
+          /** The installed editors and IDEs, in the fixed order above. */
+          readonly editors: readonly OpenInTarget[];
+          /** Lower-case extensions without a dot; see `DEFAULT_APP_EXTENSIONS`. */
+          readonly defaultAppExtensions: readonly string[];
+      }
+    /** Nothing can be opened from here: another OS, machine, or a container. */
+    | { readonly type: "unsupported"; readonly reason: string };
+
+/**
+ * The applications one project file can be handed to. Only the editors are
+ * listed by name; Finder appears as Show in Finder and the file's own default
+ * application needs no name at all.
+ */
+export async function fileOpenTargetsRead(): Promise<FileOpenTargets> {
+    if (process.platform !== "darwin")
+        return {
+            type: "unsupported",
+            reason: "Opening a file in another application is only supported on macOS.",
+        };
+    const installed = await detectedRead();
+    const revealIconUrl = installed.get("finder")?.iconUrl;
+    return {
+        type: "available",
+        ...(revealIconUrl === undefined ? {} : { revealIconUrl }),
+        editors: OPEN_IN_APPS.filter(
+            (candidate) => candidate.opensFiles && installed.has(candidate.id),
+        ).map((candidate) => ({
+            id: candidate.id,
+            label: candidate.label,
+            iconUrl: installed.get(candidate.id)?.iconUrl,
+        })),
+        defaultAppExtensions: DEFAULT_APP_EXTENSIONS,
+    };
+}
+
+/** What to do with one project file. The renderer names this and nothing else. */
+export type FileOpenAction =
+    | { readonly type: "reveal" }
+    | { readonly type: "default-app" }
+    | { readonly type: "app"; readonly targetId: string };
+
+/** The renderer's action, read from its request without taking anything else from it. */
+export function fileOpenActionParse(action: unknown, target: unknown): FileOpenAction {
+    if (action === "reveal") return { type: "reveal" };
+    if (action === "default-app") return { type: "default-app" };
+    if (action === "app" && typeof target === "string" && target.length > 0)
+        return { type: "app", targetId: target };
+    throw new Error("That is not a way this app can open a file.");
+}
+
+/** Longer than any path a checkout can hold, and short enough to refuse noise outright. */
+const FILE_PATH_MAX_LENGTH = 4_096;
+
+/**
+ * The renderer's path as the segments it names below the workspace root.
+ *
+ * Only a plain relative path is accepted: no absolute path, no NUL, and no
+ * empty, `.`, or `..` segment. That is a refusal of the spelling, not the
+ * containment check — a symlink can still point anywhere, which is what
+ * `fileOpenResolve` is for.
+ */
+export function fileRelativePathParse(value: unknown): readonly string[] {
+    if (typeof value !== "string" || value.length === 0) throw new Error("Name the file to open.");
+    if (value.length > FILE_PATH_MAX_LENGTH || value.includes("\0"))
+        throw new Error("That is not a file path this app can open.");
+    if (value.startsWith("/") || value.startsWith("\\"))
+        throw new Error("Only a file inside its workspace can be opened.");
+    const segments = value.split("/");
+    if (segments.some((segment) => segment === "" || segment === "." || segment === ".."))
+        throw new Error("Only a file inside its workspace can be opened.");
+    return segments;
+}
+
+/** One project file as it really lies on disk, after every link in its path is followed. */
+export interface ResolvedFile {
+    /** The daemon-authoritative root, retained so the launch can resolve it again. */
+    readonly root: string;
+    /** The already-validated relative spelling beneath `root`. */
+    readonly segments: readonly string[];
+    readonly path: string;
+    readonly device: number;
+    readonly inode: number;
+    readonly mode: number;
+    readonly size: number;
+    readonly changedAtMs: number;
+}
+
+function errorCode(error: unknown): string | undefined {
+    return typeof error === "object" && error !== null && "code" in error
+        ? String((error as { readonly code: unknown }).code)
+        : undefined;
+}
+
+/**
+ * Resolves `segments` below `root` to the regular file they name.
+ *
+ * Both sides are resolved through every symbolic link before they are compared,
+ * so a link inside the checkout that points out of it is refused rather than
+ * followed, and what is opened is the resolved path rather than the link. A
+ * directory is refused as well, which is also what refuses an application or
+ * package bundle: on disk, a bundle is a directory.
+ */
+export async function fileOpenResolve(
+    root: string,
+    segments: readonly string[],
+): Promise<ResolvedFile> {
+    let realRoot: string;
+    try {
+        realRoot = await realpath(root);
+    } catch {
+        throw new Error("This workspace's folder is not on this Mac any more.");
+    }
+    let real: string;
+    try {
+        real = await realpath(join(realRoot, ...segments));
+    } catch (error) {
+        throw new Error(
+            errorCode(error) === "ENOENT"
+                ? "This file is not in its workspace any more."
+                : "This file could not be read.",
+        );
+    }
+    if (!real.startsWith(realRoot.endsWith(sep) ? realRoot : `${realRoot}${sep}`))
+        throw new Error("This file lies outside its workspace, so it was not opened.");
+    const info = await lstat(real).catch(() => undefined);
+    if (!info?.isFile()) throw new Error("Only a file can be opened this way.");
+    return {
+        root,
+        segments,
+        path: real,
+        device: info.dev,
+        inode: info.ino,
+        mode: info.mode,
+        size: info.size,
+        changedAtMs: info.ctimeMs,
+    };
+}
+
+/**
+ * Resolves a file again after every slower lookup and requires the same object.
+ *
+ * LaunchServices accepts only a pathname, not an already-open descriptor, so a
+ * workspace process can still change a component in the tiny interval between
+ * this final check and `/usr/bin/open` resolving it. Eliminating that residual
+ * race would require handing LaunchServices a host-private snapshot with a
+ * different lifetime contract. Rechecking path, device, inode, metadata, type,
+ * and containment here removes the practical windows created by app detection
+ * and `xattr`, and fails closed if the workspace changed during either one.
+ */
+async function fileOpenRevalidate(file: ResolvedFile): Promise<ResolvedFile> {
+    const current = await fileOpenResolve(file.root, file.segments);
+    if (
+        current.path !== file.path ||
+        current.device !== file.device ||
+        current.inode !== file.inode ||
+        current.mode !== file.mode ||
+        current.size !== file.size ||
+        current.changedAtMs !== file.changedAtMs
+    )
+        throw new Error("This file changed while Happy was preparing to open it. Try again.");
+    return current;
+}
+
+/** Whether the file names its own application, or nothing could be read to say it does not. */
+async function openWithClaimed(path: string): Promise<boolean> {
+    try {
+        const { stdout } = await execFileAsync("/usr/bin/xattr", [path], { timeout: 4_000 });
+        return stdout.split("\n").some((name) => name.trim() === OPEN_WITH_ATTRIBUTE);
+    } catch {
+        return true;
+    }
+}
+
+/**
+ * Opens one resolved project file as `action` says.
+ *
+ * Every launch is `/usr/bin/open` with a fixed flag, a confirmed bundle path,
+ * and the resolved absolute path — which begins with `/`, so it cannot be read
+ * as a flag. There is no shell. Show in Finder and the editors take any regular
+ * file, because neither runs it. The default application is offered a file only
+ * when its type is a document (`DEFAULT_APP_EXTENSIONS`), it is not marked as a
+ * program, and it does not name an application of its own.
+ */
+export async function fileOpenRun(action: FileOpenAction, file: ResolvedFile): Promise<void> {
+    if (process.platform !== "darwin")
+        throw new Error("Opening a file in another application is only supported on macOS.");
+    if (action.type === "reveal") {
+        const current = await fileOpenRevalidate(file);
+        try {
+            await execFileAsync("/usr/bin/open", ["-R", current.path], { timeout: 10_000 });
+        } catch {
+            throw new Error("Finder could not show this file.");
+        }
+        return;
+    }
+    if (action.type === "default-app") {
+        if (await openWithClaimed(file.path))
+            throw new Error(
+                "This file names its own application, so Happy will not open it in its default application.",
+            );
+        // `xattr` is the slow, externally scheduled part of this action. Resolve
+        // and stat once more after it, then perform only synchronous checks
+        // before spawning `open`, so a path swap during that subprocess cannot
+        // inherit the earlier containment or mode decision.
+        const current = await fileOpenRevalidate(file);
+        const extension = extname(current.path).slice(1).toLowerCase();
+        if (!DEFAULT_APP_EXTENSIONS.includes(extension))
+            throw new Error(
+                "Happy opens only raster pictures, recordings, plain text, and Markdown in their default application. Open this file in an editor or show it in Finder instead.",
+            );
+        if ((current.mode & 0o111) !== 0)
+            throw new Error(
+                "This file is marked as a program, so Happy will not open it in its default application.",
+            );
+        try {
+            await execFileAsync("/usr/bin/open", [current.path], { timeout: 10_000 });
+        } catch {
+            throw new Error("macOS could not open this file in its default application.");
+        }
+        return;
+    }
+    const target = OPEN_IN_APPS.find((candidate) => candidate.id === action.targetId);
+    if (!target?.opensFiles)
+        throw new Error("That application is not one this app opens files in.");
+    const path = (await detectedRead()).get(target.id)?.path;
+    if (path === undefined) throw new Error(`${target.label} does not appear to be installed.`);
+    // App discovery can launch several subprocesses. None of the file decision
+    // made before that work is reused without this final identity check.
+    const current = await fileOpenRevalidate(file);
+    try {
+        await execFileAsync("/usr/bin/open", ["-a", path, current.path], { timeout: 10_000 });
+    } catch {
+        throw new Error(`${target.label} could not open this file.`);
     }
 }

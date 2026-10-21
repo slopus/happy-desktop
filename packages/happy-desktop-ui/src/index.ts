@@ -227,6 +227,7 @@ export {
 } from "./ImageViewer";
 export { VideoViewer, type VideoViewerContent, type VideoViewerProps } from "./VideoViewer";
 export { FileEditor, type FileEditorProps } from "./FileEditor";
+export { FileOpenInMenu, type FileOpenInMenuProps, type FileOpenInTarget } from "./FileOpenInMenu";
 export {
     commandShortcut,
     commandShortcutMatches,

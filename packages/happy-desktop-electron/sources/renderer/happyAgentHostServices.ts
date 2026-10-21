@@ -3,6 +3,8 @@ import type {
     HappyAgentArtifactSiteOpening,
     HappyAgentDeviceBridgeHost,
     HappyAgentDeviceBridgeHostState,
+    HappyAgentFileOpener,
+    HappyAgentFileOpenInTargets,
     HappyAgentHostServices,
     HappyAgentOpenInTarget,
     HappyAgentOpenInTargets,
@@ -211,6 +213,50 @@ function deviceBridgeHostCreate(baseUrl: string): HappyAgentDeviceBridgeHost {
     };
 }
 
+/** The host's answer to `/file-open-targets`, as its proxy writes it. */
+type FileOpenTargetsResponse =
+    | {
+          readonly type: "available";
+          readonly revealIconUrl?: string;
+          readonly editors: readonly HappyAgentOpenInTarget[];
+          readonly defaultAppExtensions: readonly string[];
+      }
+    | { readonly type: "unsupported"; readonly reason: string };
+
+/**
+ * Opens one project file in another application through the app. Like
+ * artifact sites, an app from before this answers the route with a bare 404,
+ * which says the app is out of date rather than that the file cannot be opened.
+ */
+function fileOpenerCreate(baseUrl: string): HappyAgentFileOpener {
+    return {
+        targetsRead: async (workspaceId): Promise<HappyAgentFileOpenInTargets> => {
+            const response = await fetch(
+                serviceUrl(baseUrl, "/file-open-targets", { workspaceId }),
+            );
+            if (responseOutdated(response)) return { type: "app-outdated" };
+            const answer = await jsonRead<FileOpenTargetsResponse>(response);
+            if (answer.type !== "available") return { type: "unsupported" };
+            return {
+                type: "available",
+                editors: answer.editors,
+                ...(answer.revealIconUrl === undefined
+                    ? {}
+                    : { revealIconUrl: answer.revealIconUrl }),
+                defaultAppExtensions: answer.defaultAppExtensions,
+            };
+        },
+        open: async (workspaceId, path, action) => {
+            await postJson<Record<string, never>>(baseUrl, "/file-open", {
+                workspaceId,
+                path,
+                action: action.type,
+                ...(action.type === "app" ? { target: action.target.id } : {}),
+            });
+        },
+    };
+}
+
 export interface HappyAgentHostServicesOptions {
     /**
      * Whether this computer offers its USB devices and ports to this Happy
@@ -218,6 +264,12 @@ export interface HappyAgentHostServicesOptions {
      * would change nothing.
      */
     readonly deviceBridges?: boolean;
+    /**
+     * Whether this Happy Agent's files can be on this computer at all, so that
+     * one can be opened in another application here. Only the machine's own:
+     * a Happy Agent on another computer keeps its files there.
+     */
+    readonly localFiles?: boolean;
 }
 
 /**
@@ -251,6 +303,11 @@ export function happyAgentHostServicesCreate(
                 target: target.id,
             });
         },
+        // Only the desktop window has applications to hand a file to; a browser
+        // tab, or a Happy Agent on another computer, has no control at all.
+        ...(options.localFiles && globalThis.window?.happyDesktop
+            ? { fileOpener: fileOpenerCreate(baseUrl) }
+            : {}),
         workspaceFileBytesRead: async (
             workspaceId,
             path,

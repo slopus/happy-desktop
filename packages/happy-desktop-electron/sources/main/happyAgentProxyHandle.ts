@@ -8,7 +8,16 @@ import {
     HappyAgentDaemonHttpError,
     type HappyAgentDaemonClient,
 } from "./happyAgentDaemonClient";
-import { openInRun, openInTargetsRead } from "./openIn";
+import {
+    fileOpenActionParse,
+    fileOpenResolve,
+    fileOpenRun,
+    fileOpenTargetsRead,
+    fileRelativePathParse,
+    openInRun,
+    openInTargetsRead,
+    type FileOpenTargets,
+} from "./openIn";
 import { happyAgentDaemonHealthProject } from "./happyAgentHttpProxy";
 import type { HappyAgentRequestMilestone } from "./happyAgentRequestTiming";
 import type { HappyAgentDaemonClientOptions } from "./happyAgentDaemonClient";
@@ -128,6 +137,26 @@ export async function happyAgentProxyHandle(
             if (workspace.compute.type !== "host")
                 throw new Error("A container workspace cannot be opened as a local folder.");
             await openInRun(target, workspace.compute.path);
+            writeJson(response, 200, {});
+            return true;
+        }
+        if (method === "GET" && path === "/file-open-targets") {
+            const workspaceId = requiredQuery(query, "workspaceId");
+            writeJson(
+                response,
+                200,
+                await fileOpenTargetsAnswer(client, connectionId, workspaceId),
+            );
+            return true;
+        }
+        if (method === "POST" && path === "/file-open") {
+            const body = await bodyReadJson(request);
+            const workspaceId = requiredString(body.workspaceId, "workspaceId");
+            const segments = fileRelativePathParse(body.path);
+            const action = fileOpenActionParse(body.action, body.target);
+            const root = await fileOpenRoot(client, connectionId, workspaceId);
+            if ("refusal" in root) throw new Error(root.refusal);
+            await fileOpenRun(action, await fileOpenResolve(root.path, segments));
             writeJson(response, 200, {});
             return true;
         }
@@ -430,6 +459,41 @@ async function attachmentSourceReachable(
     } catch {
         return false;
     }
+}
+
+const FILE_OPEN_REMOTE_REFUSAL = "A workspace on another machine has no files on this Mac to open.";
+const FILE_OPEN_CONTAINER_REFUSAL = "A container workspace's files cannot be opened on this Mac.";
+
+/**
+ * The directory one workspace's files live in on this Mac, from the daemon's
+ * own record of the workspace, or why there is none. The renderer names the
+ * workspace and never the directory, exactly as for Open in.
+ */
+async function fileOpenRoot(
+    client: HappyAgentProxyClient,
+    connectionId: string | undefined,
+    workspaceId: string,
+): Promise<{ readonly path: string } | { readonly refusal: string }> {
+    if (connectionId) return { refusal: FILE_OPEN_REMOTE_REFUSAL };
+    const { workspace } = await client.getWorkspace(workspaceId);
+    if (workspace.compute.type !== "host") return { refusal: FILE_OPEN_CONTAINER_REFUSAL };
+    return { path: workspace.compute.path };
+}
+
+/**
+ * What one workspace's files can be opened in here. The daemon decides where
+ * the workspace's files are, so the same question asked of a container or of
+ * another machine's workspace is answered "unsupported" rather than with a list
+ * of applications that would fail on arrival.
+ */
+async function fileOpenTargetsAnswer(
+    client: HappyAgentProxyClient,
+    connectionId: string | undefined,
+    workspaceId: string,
+): Promise<FileOpenTargets> {
+    const root = await fileOpenRoot(client, connectionId, workspaceId);
+    if ("refusal" in root) return { type: "unsupported", reason: root.refusal };
+    return await fileOpenTargetsRead();
 }
 
 async function workspaceFileExists(

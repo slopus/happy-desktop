@@ -31,7 +31,7 @@ import {
     type HappyAgentSessionListOutput,
     type HappyAgentSessionListStore,
 } from "./happyAgentSessionListStore.js";
-import type { HappyAgentHostServices } from "./happyAgentHostServices.js";
+import type { HappyAgentFileOpener, HappyAgentHostServices } from "./happyAgentHostServices.js";
 import {
     happyAgentChangedFileProject,
     happyAgentModelCatalogProject,
@@ -328,6 +328,11 @@ export interface HappyAgentWorkspaceClient {
      * it the one this machine opened most recently.
      */
     openIn(groupId: HappyAgentGroupId, target: HappyAgentOpenInTarget): Promise<void>;
+    /**
+     * Opens one file of a project or worktree in another application. Absent
+     * where this machine cannot hold that file at all.
+     */
+    readonly fileOpener?: HappyAgentFileOpener;
     /** Reads one changed text file from a project/worktree checkout. */
     changedFileRead(
         groupId: HappyAgentGroupId,
@@ -718,6 +723,7 @@ export function happyAgentWorkspaceClientCreate(
         },
         openInTargetsRead: () => deps.hostServices.openInTargetsRead(),
         openIn: (groupId, target) => deps.hostServices.openIn(groupId, target),
+        ...(deps.hostServices.fileOpener ? { fileOpener: deps.hostServices.fileOpener } : {}),
         sessionList() {
             if (disposed) throw new Error("The Happy Agent client is disposed.");
             if (!sessionListStore) {

@@ -65,6 +65,11 @@ export type ChangedFileDiffProps = {
      */
     onWrapChange?: (wrap: boolean) => void;
     /**
+     * Trailing bar controls about the file itself, e.g. Open in. They end the
+     * bar in every view, so switching views never moves them.
+     */
+    actions?: ReactNode;
+    /**
      * Receives edits to the working-tree text. Without it there is nobody to
      * hand an edit to, so the mode is not offered at all rather than offered
      * and silently inert.
@@ -398,6 +403,7 @@ export function ChangedFileDiff(props: ChangedFileDiffProps) {
                             value={props.wrap === true ? "wrap" : "scroll"}
                         />
                     ) : null}
+                    {props.actions}
                 </span>
             </div>
 

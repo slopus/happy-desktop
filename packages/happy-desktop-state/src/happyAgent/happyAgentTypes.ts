@@ -985,6 +985,39 @@ export interface HappyAgentOpenInTargets {
     readonly recent?: HappyAgentOpenInTarget;
 }
 
+/**
+ * Where one file of a project or worktree can be opened outside Happy, as the
+ * host answers for that group.
+ *
+ * - `available` — the group's files are on this machine. `editors` are the
+ *   installed editors and IDEs, a subset of the project's own targets: Finder
+ *   is offered as Show in Finder instead, and terminals and Git clients are not
+ *   handed files at all. The file's default application is offered only for a
+ *   file whose extension is in `defaultAppExtensions`, the host's own list of
+ *   document types that are shown rather than run.
+ * - `unsupported` — the files are not on this machine: another operating
+ *   system, or a container.
+ * - `app-outdated` — the desktop app this renderer runs in predates opening
+ *   files; updating the app is what makes it possible.
+ */
+export type HappyAgentFileOpenInTargets =
+    | {
+          readonly type: "available";
+          readonly editors: readonly HappyAgentOpenInTarget[];
+          /** Finder's own artwork, for Show in Finder. */
+          readonly revealIconUrl?: string;
+          /** Lower-case extensions, without a dot. */
+          readonly defaultAppExtensions: readonly string[];
+      }
+    | { readonly type: "unsupported" }
+    | { readonly type: "app-outdated" };
+
+/** One way of opening a project file outside Happy. */
+export type HappyAgentFileOpenInAction =
+    | { readonly type: "reveal" }
+    | { readonly type: "default-app" }
+    | { readonly type: "app"; readonly target: HappyAgentOpenInTarget };
+
 /** Current model/effort/permission/tier selection used to derive menu options. */
 export interface HappyAgentSelection {
     readonly providerId: string;

@@ -406,6 +406,8 @@ export function happyAgentDirectoryStoreCreate(
             // A Happy Agent on another machine is what this computer's devices
             // and ports can reach; the local one already has them.
             deviceBridges: happyAgent.entry.remoteId !== undefined,
+            // The machine's own Happy Agent is the only one whose files are here.
+            localFiles: happyAgent.entry.remoteId === undefined,
             happyAgentHttpUrl,
             modelPreferencePersistence: deps.modelPreferencePersistence(happyAgent.entry.id),
             terminalColorScheme: deps.terminalColorScheme,
