@@ -525,6 +525,15 @@ export interface HappyAgentSessionListStore {
         worktreeId: HappyAgentWorktreeId,
         name: string,
     ): Promise<void>;
+    /**
+     * Sets the branch a worktree's changes are compared with, or `null` to let
+     * the host choose. The choice shows before the host confirms it; what the
+     * changes are then measured against arrives with the next git scan.
+     */
+    worktreeComparisonBaseUpdate(
+        worktreeId: HappyAgentWorktreeId,
+        comparisonBase: string | null,
+    ): Promise<void>;
 
     /** Moves one worktree after `afterId` within its project, or to the front when null. */
     worktreeReorder(
@@ -574,6 +583,7 @@ export interface HappyAgentSessionListDeps {
         | "switchModel"
         | "sessionModeSaveWait"
         | "unarchiveTask"
+        | "updateWorkspaceComparisonBase"
     > & {
         readonly projects: Pick<HappyAgentConnection["projects"], "archive" | "clone">;
     };
@@ -2749,6 +2759,31 @@ export function happyAgentSessionListStoreCreate(
                         { kind: "workspace", projectId, workspaceId: worktreeId },
                         name,
                     ),
+                );
+            }),
+        worktreeComparisonBaseUpdate: (worktreeId, comparisonBase) =>
+            mutate(async () => {
+                // Only a worktree whose host stores a choice can be given one.
+                const worktree = internal
+                    .getState()
+                    .catalog.worktrees.find((candidate) => candidate.id === worktreeId);
+                if (worktree?.comparisonBase === undefined) return;
+                // The choice is the person's own, so it shows at once, like a
+                // rename; the branch actually compared with is the host's answer
+                // and is never written here.
+                internal.setState((state) => ({
+                    catalog: {
+                        ...state.catalog,
+                        worktrees: state.catalog.worktrees.map((candidate) =>
+                            candidate.id === worktreeId
+                                ? { ...candidate, comparisonBase }
+                                : candidate,
+                        ),
+                    },
+                }));
+                publish();
+                connectMutationTrack(
+                    deps.connectActions.updateWorkspaceComparisonBase(worktreeId, comparisonBase),
                 );
             }),
         async projectArchive(projectId) {

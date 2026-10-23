@@ -566,7 +566,30 @@ export interface GitChangeSnapshot {
     revision?: string;
     /** Comparison revision already held by the live Git watcher. */
     baseRevision?: string;
+    /** What the changes are measured against; absent from a daemon that does not say. */
+    comparedWith?: GitComparedWith;
 }
+
+/** Where a workspace's comparison branch came from, as the daemon decided it. */
+export type GitComparisonBaseSource = "explicit" | "workspace" | "inferred" | "default";
+
+/** The branch a workspace's changes are measured against, as the daemon reports it. */
+export interface GitComparedWith {
+    /** The ref, e.g. `origin/release-v8.8`; `null` when measured against HEAD or the empty tree. */
+    ref: string | null;
+    source: GitComparisonBaseSource | null;
+    /** The daemon's own sentence about a fallback, when it had to fall back. */
+    notice: string | null;
+}
+
+/**
+ * The daemon's answer to a branch listing: the branches, best first, or why it
+ * cannot list them at all — `HTTP 404` from a daemon older than the route, or
+ * an answer of a shape this client does not read.
+ */
+export type WorkspaceBranchesAnswer =
+    | { readonly type: "listed"; readonly branches: readonly string[] }
+    | { readonly type: "unsupported"; readonly reason: string };
 
 export interface GroupSession {
     /**
@@ -623,6 +646,15 @@ export interface WorkspaceGroup {
     status: "initializing" | "ready" | "failed";
     error?: string;
     git?: GitChangeSnapshot;
+    /**
+     * The comparison branch someone chose, as they typed it, or `null` to let the
+     * daemon choose. Absent from a daemon that cannot store one.
+     */
+    comparisonBase?: string | null;
+    /** The ref the workspace was created from. */
+    createdFrom?: string;
+    /** The upstream its branch tracks. */
+    upstream?: string;
     sessions: readonly GroupSession[];
     usage: { totalTokens: number };
     unread: { count: number; attentionCount: number; reason?: string; since?: number };
@@ -785,6 +817,7 @@ export type MutationAction =
     | "set_session_archived"
     | "mark_session_read"
     | "rename_group"
+    | "update_workspace_comparison_base"
     | "reorder_group"
     | "reorder_bot"
     | "reorder_session"
@@ -1055,6 +1088,24 @@ export interface HappyAgentConnection {
     answerUserInput(sessionId: string, requestId: string, response: UserInputAnswers): MutationId;
     setSessionArchived(sessionId: string, archived: boolean): MutationId;
     renameGroup(target: GroupTarget, name: string): MutationId;
+    /**
+     * Sets the branch a workspace's changes are compared with, or `null` to let
+     * the daemon choose. A branch that does not exist is accepted; the daemon
+     * falls back and says so in the workspace's git state.
+     */
+    updateWorkspaceComparisonBase(workspaceId: string, comparisonBase: string | null): MutationId;
+    /**
+     * The branches a workspace could be compared with that contain `query`, in
+     * the daemon's ranking, or why this daemon cannot list them. A pure query:
+     * the answer is transient typeahead, never durable state. Rejects, with
+     * the reason as its message, when the listing failed for another reason.
+     */
+    workspaceBranchesList(
+        workspaceId: string,
+        query: string,
+        limit: number,
+        signal?: AbortSignal,
+    ): Promise<WorkspaceBranchesAnswer>;
     /**
      * Creates a bot, its dedicated workspace, and its one agent.
      *

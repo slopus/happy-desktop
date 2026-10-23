@@ -14,6 +14,7 @@ import {
 } from "./happyAgentAgentIdentities.js";
 import type { MutationRejectedDelta } from "../happyAgentConnection/index.js";
 import type { HappyAgentConnection } from "../happyAgentConnection/index.js";
+import type { WorkspaceBranchesAnswer } from "../happyAgentConnection/types.js";
 import {
     happyAgentTerminalOpen,
     type HappyAgentTerminalHandle,
@@ -267,6 +268,16 @@ export interface HappyAgentWorkspaceClient {
         query: string,
         limit?: number,
     ): Promise<readonly HappyAgentFileSearchResult[]>;
+    /**
+     * Lists the branches a checkout could be compared with that contain
+     * `query`, in the host's ranking, or why the host cannot list them. A pure
+     * query, like `filesSearch`; it rejects with a short reason on failure.
+     */
+    branchesSearch(
+        groupId: HappyAgentGroupId,
+        query: string,
+        limit: number,
+    ): Promise<WorkspaceBranchesAnswer>;
     /**
      * Reads one existing text file from a project/worktree checkout. A file
      * belongs to the checkout rather than to any conversation open over it, so
@@ -689,6 +700,8 @@ export function happyAgentWorkspaceClientCreate(
                     ...(limit === undefined ? {} : { limit }),
                 })
             ).files.map((file) => ({ fileName: file.fileName, path: file.path })),
+        branchesSearch: (groupId, query, limit) =>
+            deps.connection.workspaceBranchesList(groupId, query, limit),
         workspaceFileRead: async (groupId, path, signal) => {
             const file = await deps.client.readFile(groupId, path, { signal });
             return { path, content: happyAgentTextDecodeBase64(file.content), hash: file.hash };
