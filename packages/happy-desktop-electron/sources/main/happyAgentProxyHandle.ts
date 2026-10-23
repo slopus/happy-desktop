@@ -19,7 +19,12 @@ import type { DeviceBridgeHost } from "./deviceBridgeHost";
 /** The minimal Happy Agent surface used by the loopback bridge. */
 export type HappyAgentProxyClient = Pick<
     HappyAgentDaemonClient,
-    "getWorkspace" | "health" | "rawRequest" | "readWorkspaceFile" | "writeWorkspaceFile"
+    | "getWorkspace"
+    | "health"
+    | "rawRequest"
+    | "readToolCallMedia"
+    | "readWorkspaceFile"
+    | "writeWorkspaceFile"
 > & {
     readonly connection?: (id: string) => HappyAgentProxyClient;
     readonly rendererTransport?: () => HappyAgentDaemonClientOptions;
@@ -38,6 +43,14 @@ export interface HappyAgentProxyHandleOptions {
     readonly htmlPreviewUrl?: (
         workspaceId: string,
         filePath: string,
+        connectionId?: string,
+    ) => string;
+    /** Publishes one file a tool call presented as an isolated local preview site. */
+    readonly toolMediaPreviewUrl?: (
+        agentId: string,
+        toolCallId: string,
+        index: number,
+        name: string,
         connectionId?: string,
     ) => string;
     /** Serves one numbered artifact version as an isolated site and names its entry. */
@@ -183,6 +196,23 @@ export async function happyAgentProxyHandle(
             const filePath = requiredQuery(query, "path");
             writeJson(response, 200, {
                 url: options.htmlPreviewUrl(workspaceId, filePath, connectionId),
+            });
+            return true;
+        }
+        if (method === "GET" && path === "/tool-media-preview") {
+            if (!options.toolMediaPreviewUrl) {
+                writeJson(response, 501, {
+                    error: "This desktop cannot show a presented file as a page.",
+                });
+                return true;
+            }
+            const agentId = requiredQuery(query, "agentId");
+            const toolCallId = requiredQuery(query, "toolCallId");
+            const index = Number(requiredQuery(query, "index"));
+            if (!Number.isSafeInteger(index) || index < 0) throw new Error("index is invalid.");
+            const name = requiredQuery(query, "name");
+            writeJson(response, 200, {
+                url: options.toolMediaPreviewUrl(agentId, toolCallId, index, name, connectionId),
             });
             return true;
         }

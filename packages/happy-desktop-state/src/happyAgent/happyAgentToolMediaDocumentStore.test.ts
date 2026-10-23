@@ -40,6 +40,7 @@ function textRef(name: string, size: number): HappyAgentToolMediaDocumentRef {
         agentId: "agt_one",
         toolCallId: `call_${name}`,
         index: 0,
+        name,
         mimeType: "application/octet-stream",
         view: "text",
         size,

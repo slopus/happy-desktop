@@ -160,9 +160,18 @@ export function HtmlPreviewErrorPage() {
             </Specimen>
 
             <Specimen
+                detail="A renderer newer than the app around it — the app cannot yet serve this file as a page, and its source stays a toggle away"
+                label="App outdated"
+                number="11"
+                stage="surface"
+            >
+                {specimen({ kind: "app-outdated" })}
+            </Specimen>
+
+            <Specimen
                 detail="Inside the frame: the failure covers the region the page would occupy"
                 label="In the preview frame"
-                number="11"
+                number="12"
                 stage="surface"
             >
                 {region(

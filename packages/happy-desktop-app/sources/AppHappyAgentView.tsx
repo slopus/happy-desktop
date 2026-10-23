@@ -10889,6 +10889,7 @@ function HappyAgentPanelBody(props: {
                         props.previewMedia && props.toolMediaDocument ? (
                             <HappyAgentToolMediaPreview
                                 documents={props.toolMediaDocument}
+                                {...(props.htmlPreview ? { htmlPreview: props.htmlPreview } : {})}
                                 media={props.previewMedia}
                                 onClose={() => props.store.previewClose()}
                             />

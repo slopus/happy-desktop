@@ -219,7 +219,12 @@ export function happyAgentHttpProxyCreate(
                             // the new connection or start another reconnect.
                             if (backing === requestBacking) options.onConnectionError?.(error);
                         },
-                        ...(preview ? { htmlPreviewUrl: preview.workspace } : {}),
+                        ...(preview
+                            ? {
+                                  htmlPreviewUrl: preview.workspace,
+                                  toolMediaPreviewUrl: preview.toolMedia,
+                              }
+                            : {}),
                         ...(artifactSite ? { artifactSiteUrl: artifactSite.open } : {}),
                         ...(options.deviceBridges ? { deviceBridges: options.deviceBridges } : {}),
                     }),

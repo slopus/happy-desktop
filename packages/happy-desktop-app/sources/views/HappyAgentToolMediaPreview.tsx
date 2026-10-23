@@ -1,6 +1,13 @@
 import { useSyncExternalStore } from "react";
 import type { ConversationMediaItem, HappyAgentToolMediaDocumentStore } from "happy-desktop-state";
-import { FilePreview, filePreviewKind, type FilePreviewContent } from "happy-desktop-ui";
+import {
+    FilePreview,
+    filePreviewKind,
+    HtmlPreviewFrame,
+    type FilePreviewContent,
+    type HtmlPreviewFailure,
+    type HtmlPreviewRenderer,
+} from "happy-desktop-ui";
 import { fileDownload } from "../fileDownload";
 import { useDisposableLease } from "../useDisposableLease";
 
@@ -17,11 +24,14 @@ export interface HappyAgentPreviewMedia {
  * in. Pictures and recordings load from their address; a document is read
  * whole for the host's viewer, and a text file whole for the Markdown and
  * source views, each held by this preview for as long as it shows that file;
- * any other file states its facts and can be saved.
+ * an HTML file is also shown as the page the host serves it as; any other
+ * file states its facts and can be saved.
  */
 export function HappyAgentToolMediaPreview(props: {
     media: HappyAgentPreviewMedia;
     documents: HappyAgentToolMediaDocumentStore;
+    /** The host's page engine. Absent leaves an HTML file readable as source only. */
+    htmlPreview?: HtmlPreviewRenderer;
     onClose(): void;
 }) {
     const { agentId, toolCallId, index, item } = props.media;
@@ -34,7 +44,13 @@ export function HappyAgentToolMediaPreview(props: {
             ? nameKind
             : undefined;
     const view =
-        item.kind === "document" ? "document" : textKind === undefined ? undefined : "text";
+        item.kind === "document"
+            ? "document"
+            : textKind === "html"
+              ? "page"
+              : textKind === undefined
+                ? undefined
+                : "text";
     const documentKey =
         view === undefined ? undefined : `${agentId}/${toolCallId}/${String(index)}`;
     useDisposableLease(documentKey, () => {
@@ -43,6 +59,7 @@ export function HappyAgentToolMediaPreview(props: {
                 agentId,
                 toolCallId,
                 index,
+                name: item.name,
                 mimeType: item.mimeType,
                 view,
                 size: item.size,
@@ -54,12 +71,12 @@ export function HappyAgentToolMediaPreview(props: {
         props.documents.get,
         props.documents.get,
     );
-    const document =
+    const shown =
         documentKey !== undefined &&
         documents.document?.toolCallId === toolCallId &&
-        documents.document.index === index
-            ? documents.content
-            : undefined;
+        documents.document.index === index;
+    const document = shown ? documents.content : undefined;
+    const page = shown ? documents.page : undefined;
     const kind =
         item.kind === "image"
             ? "image"
@@ -84,6 +101,22 @@ export function HappyAgentToolMediaPreview(props: {
                     : document.type === "failed"
                       ? { type: "error", message: document.error.message }
                       : { type: "unavailable" };
+    // The page is the snapshot's own bytes served by the host, so it is offered
+    // only once those bytes turned out to be text that the source face shows.
+    const pageFailure: HtmlPreviewFailure | undefined =
+        page?.type === "app-outdated"
+            ? { kind: "app-outdated" }
+            : page?.type === "failed"
+              ? { kind: "address-unavailable", path: item.name, detail: page.error.message }
+              : undefined;
+    const rendered =
+        props.htmlPreview !== undefined && page !== undefined && content.type === "text" ? (
+            <HtmlPreviewFrame
+                {...(pageFailure ? { failure: pageFailure } : {})}
+                renderContent={props.htmlPreview}
+                {...(page.type === "opened" ? { source: page.url } : {})}
+            />
+        ) : undefined;
     return (
         <FilePreview
             closeLabel="Close preview"
@@ -97,6 +130,7 @@ export function HappyAgentToolMediaPreview(props: {
                 void fileDownload(item.name, { type: "url", url: item.url }).catch(() => undefined)
             }
             path={item.name}
+            {...(rendered ? { rendered } : {})}
             size={fileSizeFormat(item.size)}
         />
     );

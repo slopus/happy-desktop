@@ -19,6 +19,18 @@ export interface HtmlPreviewProxyHandle {
             filePath: string,
             connectionId?: string,
         ) => string;
+        /**
+         * Names the site one file a tool call presented is served as. Its page
+         * is the daemon's private copy of those bytes, and nothing stands
+         * beside it.
+         */
+        readonly toolMedia: (
+            agentId: string,
+            toolCallId: string,
+            index: number,
+            name: string,
+            connectionId?: string,
+        ) => string;
     };
     close(): void;
 }
@@ -86,13 +98,28 @@ const PREVIEW_MAX_BYTES = 64 * 1024 * 1024;
  */
 const PREVIEW_SITE_LIMIT = 32;
 
-/** One isolated preview origin backed by a Happy Agent workspace folder. */
-interface PreviewSite {
-    readonly client: HappyAgentProxyClient;
-    readonly connectionId?: string;
-    readonly workspaceId: string;
-    readonly directory: string;
-}
+/**
+ * One isolated preview origin: a Happy Agent workspace folder, or one file a
+ * tool call presented.
+ */
+type PreviewSite =
+    | {
+          readonly type: "workspace";
+          readonly client: HappyAgentProxyClient;
+          readonly connectionId?: string;
+          readonly workspaceId: string;
+          readonly directory: string;
+      }
+    | {
+          readonly type: "toolMedia";
+          readonly client: HappyAgentProxyClient;
+          readonly connectionId?: string;
+          readonly agentId: string;
+          readonly toolCallId: string;
+          readonly index: number;
+          /** The presented file's base name, which is the site's one page. */
+          readonly name: string;
+      };
 
 /**
  * Serves a workspace document as a site of its own.
@@ -198,6 +225,7 @@ export function htmlPreviewProxyCreate(): Promise<HtmlPreviewProxyHandle> {
                                 site.directory,
                             );
                             remember(name, {
+                                type: "workspace",
                                 client,
                                 ...(connectionId ? { connectionId } : {}),
                                 workspaceId,
@@ -208,6 +236,26 @@ export function htmlPreviewProxyCreate(): Promise<HtmlPreviewProxyHandle> {
                                 .map((segment) => encodeURIComponent(segment))
                                 .join("/");
                             return `http://${name}.localhost/${page}`;
+                        },
+                        toolMedia: (agentId, toolCallId, index, fileName, connectionId) => {
+                            const name = siteName(
+                                registration,
+                                connectionId ?? "",
+                                "toolMedia",
+                                agentId,
+                                toolCallId,
+                                String(index),
+                            );
+                            remember(name, {
+                                type: "toolMedia",
+                                client,
+                                ...(connectionId ? { connectionId } : {}),
+                                agentId,
+                                toolCallId,
+                                index,
+                                name: fileName,
+                            });
+                            return `http://${name}.localhost/${encodeURIComponent(fileName)}`;
                         },
                     };
                 },
@@ -277,13 +325,7 @@ async function serve(
     }
     let bytes: Buffer;
     try {
-        const filePath = site.directory === "" ? within : `${site.directory}/${within}`;
-        const client = site.connectionId
-            ? site.client.connection?.(site.connectionId)
-            : site.client;
-        if (!client) throw new Error("Remote previews are unavailable.");
-        const file = await workspaceFileLoad(client, site.workspaceId, filePath);
-        bytes = Buffer.from(file.content, "base64");
+        bytes = await siteFileRead(site, within);
     } catch {
         // A file the checkout no longer holds and a file this page may not
         // read are the same answer: it is not there.
@@ -295,6 +337,23 @@ async function serve(
         return;
     }
     writeAsset(request, response, contentType, bytes);
+}
+
+/**
+ * The bytes one path of a site names. A presented file is a single snapshot,
+ * so its site holds that page and nothing beside it: whatever else its markup
+ * names was never presented, and is answered as missing.
+ */
+async function siteFileRead(site: PreviewSite, within: string): Promise<Buffer> {
+    const client = site.connectionId ? site.client.connection?.(site.connectionId) : site.client;
+    if (!client) throw new Error("Remote previews are unavailable.");
+    if (site.type === "toolMedia") {
+        if (within !== site.name) throw new Error("Only the presented file is served.");
+        return await client.readToolCallMedia(site.agentId, site.toolCallId, site.index);
+    }
+    const filePath = site.directory === "" ? within : `${site.directory}/${within}`;
+    const file = await workspaceFileLoad(client, site.workspaceId, filePath);
+    return Buffer.from(file.content, "base64");
 }
 
 /** The absolute address of a proxied request, as the proxy protocol states it. */

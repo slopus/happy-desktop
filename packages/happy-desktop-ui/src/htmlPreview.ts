@@ -42,6 +42,14 @@ export type HtmlPreviewFailure =
     | {
           /** This host has no engine that can render a page at all. */
           readonly kind: "unsupported";
+      }
+    | {
+          /**
+           * The desktop app around this renderer predates serving this kind of
+           * file as a page. The renderer updates on its own; updating the app is
+           * what renders the page.
+           */
+          readonly kind: "app-outdated";
       };
 
 export interface HtmlPreviewProps {
