@@ -38,6 +38,12 @@ export interface BrowserLoginSource {
 
 export interface BrowserLoginSourceList {
     readonly candidates: readonly BrowserLoginCandidate[];
+    /**
+     * Browsers, by their own name such as "Chrome", whose saved logins the OS
+     * would not let Happy read. Each is named once, beside any logins the
+     * other browsers offered.
+     */
+    readonly accessDenied: readonly string[];
 }
 
 /** A failure to use a picked login, in a short sentence fit to show the person. */
@@ -89,7 +95,7 @@ export async function browserLoginsList(
             } catch {
                 // A source that cannot be read offers nothing; the picker
                 // shows only the logins it has.
-                return { candidates: [] };
+                return { candidates: [], accessDenied: [] };
             } finally {
                 clearTimeout(timer);
             }
@@ -104,5 +110,8 @@ export async function browserLoginsList(
                 left.name.localeCompare(right.name) ||
                 left.source.localeCompare(right.source),
         );
-    return { candidates };
+    const accessDenied = [...new Set(results.flatMap((result) => result.accessDenied))].sort(
+        (left, right) => left.localeCompare(right),
+    );
+    return { candidates, accessDenied };
 }

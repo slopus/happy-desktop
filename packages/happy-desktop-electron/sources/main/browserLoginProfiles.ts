@@ -101,16 +101,27 @@ const chromiumBrowsers: readonly {
     { label: "Aside", mac: "Aside", keychainService: "Aside Safe Storage" },
 ];
 
+/** What discovery found: readable profiles, and browsers the OS would not let Happy read. */
+export interface BrowserLoginDiscovery {
+    readonly profiles: readonly BrowserLoginProfile[];
+    /** Browsers whose folder the OS refused to Happy, with the Keychain service of their key. */
+    readonly accessDenied: readonly {
+        readonly label: string;
+        readonly keychainService: string;
+    }[];
+}
+
 /**
  * Every profile of every supported browser that has saved logins. No database,
  * credential value, or Keychain secret is opened here.
  */
-export async function browserLoginProfilesDiscover(): Promise<readonly BrowserLoginProfile[]> {
+export async function browserLoginProfilesDiscover(): Promise<BrowserLoginDiscovery> {
     const platform = process.platform;
-    if (platform !== "darwin" && platform !== "win32") return [];
+    if (platform !== "darwin" && platform !== "win32") return { profiles: [], accessDenied: [] };
     const userHome = homedir();
     const localAppData = process.env.LOCALAPPDATA ?? join(userHome, "AppData/Local");
     const profiles: BrowserLoginProfile[] = [];
+    const accessDenied: { label: string; keychainService: string }[] = [];
     const roots: {
         readonly label: string;
         readonly root: string;
@@ -135,9 +146,11 @@ export async function browserLoginProfilesDiscover(): Promise<readonly BrowserLo
         let entries;
         try {
             entries = await readdir(root, { withFileTypes: true });
-        } catch {
-            // Absent, or refused by the operating system: either way there is
-            // nothing to offer from this browser.
+        } catch (error) {
+            // macOS 27 keeps some browsers' folders private to the browser
+            // itself. That is not the same as having no logins, so it is
+            // reported; an absent folder is simply skipped.
+            if (browserLoginAccessDenied(error)) accessDenied.push({ label, keychainService });
             continue;
         }
         const localStatePath = join(root, "Local State");
@@ -176,7 +189,13 @@ export async function browserLoginProfilesDiscover(): Promise<readonly BrowserLo
             });
         }
     }
-    return profiles;
+    return { profiles, accessDenied };
+}
+
+/** Whether a filesystem error is the OS refusing access, rather than a missing or broken file. */
+export function browserLoginAccessDenied(error: unknown): boolean {
+    const code = (error as NodeJS.ErrnoException | null)?.code;
+    return code === "EPERM" || code === "EACCES";
 }
 
 function isInside(root: string, path: string): boolean {

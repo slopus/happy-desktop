@@ -5,6 +5,7 @@ import {
 } from "./browserLoginCrypto";
 import { browserLoginKeychainItemExists } from "./browserLoginKeychain";
 import {
+    BrowserLoginAccessDeniedError,
     browserLoginFingerprint,
     browserLoginMetadataRead,
     browserLoginRecordRead,
@@ -36,10 +37,16 @@ export class BrowserLoginBrowserSource implements BrowserLoginSource {
     private readonly keys = new Map<string, { present: boolean; checkedAt: number }>();
 
     async list(pageOrigin: string): Promise<BrowserLoginSourceList> {
+        const discovery = await browserLoginProfilesDiscover();
         const profiles: BrowserLoginProfile[] = [];
-        for (const profile of await browserLoginProfilesDiscover())
+        for (const profile of discovery.profiles)
             if (!profile.keychainService || (await this.keyPresent(profile.keychainService)))
                 profiles.push(profile);
+        // macOS refuses a protected browser's folder whether or not the browser
+        // is installed, so only a browser whose key exists was ever used here.
+        const accessDenied = new Set<string>();
+        for (const browser of discovery.accessDenied)
+            if (await this.keyPresent(browser.keychainService)) accessDenied.add(browser.label);
         const perBrowser = new Map<string, number>();
         for (const profile of profiles)
             perBrowser.set(profile.label, (perBrowser.get(profile.label) ?? 0) + 1);
@@ -55,9 +62,11 @@ export class BrowserLoginBrowserSource implements BrowserLoginSource {
             let logins: readonly BrowserLoginMetadata[];
             try {
                 logins = await this.profileLogins(profile);
-            } catch {
+            } catch (error) {
                 // An unreadable profile simply offers nothing; a picker of
-                // logins is no place for one browser's diagnostics.
+                // logins is no place for one browser's diagnostics. Only the
+                // OS refusing access is named, as it is for a folder.
+                if (error instanceof BrowserLoginAccessDeniedError) accessDenied.add(profile.label);
                 continue;
             }
             const matching = newest(
@@ -78,7 +87,7 @@ export class BrowserLoginBrowserSource implements BrowserLoginSource {
         }
         for (const directory of this.cache.keys())
             if (!live.has(directory)) this.cache.delete(directory);
-        return { candidates };
+        return { candidates, accessDenied: [...accessDenied] };
     }
 
     /** Whether a browser's key exists, rechecked at most once a minute. */

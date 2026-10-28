@@ -1,8 +1,12 @@
-import { chmod, copyFile, mkdtemp, rm, stat } from "node:fs/promises";
+import { chmod, copyFile, mkdtemp, open, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync, type SQLOutputValue } from "node:sqlite";
-import { browserLoginOriginNormalize, type BrowserLoginProfile } from "./browserLoginProfiles";
+import {
+    browserLoginAccessDenied,
+    browserLoginOriginNormalize,
+    type BrowserLoginProfile,
+} from "./browserLoginProfiles";
 
 /** One saved login as its browser lists it. Never a password. */
 export interface BrowserLoginMetadata {
@@ -94,6 +98,15 @@ export async function browserLoginRecordRead(
 }
 
 async function databaseRead<T>(path: string, read: (database: DatabaseSync) => T): Promise<T> {
+    // SQLite reports a refused file only as "unable to open", so ask the
+    // filesystem first: the OS keeping a browser's logins private is not the
+    // same failure as an unreadable database.
+    try {
+        await (await open(path, "r")).close();
+    } catch (error) {
+        if (browserLoginAccessDenied(error)) throw new BrowserLoginAccessDeniedError();
+        throw new BrowserLoginDatabaseError("Happy could not read this browser's saved logins.");
+    }
     try {
         const info = await stat(path);
         if (!info.isFile() || info.size > maximumDatabaseBytes) throw limitError();
@@ -213,6 +226,12 @@ async function fileSize(path: string): Promise<number> {
 }
 
 class BrowserLoginDatabaseError extends Error {}
+/** The OS refused Happy this browser's logins file. */
+export class BrowserLoginAccessDeniedError extends Error {
+    constructor() {
+        super("The operating system did not let Happy read this browser's saved logins.");
+    }
+}
 class BrowserLoginDatabaseLockedError extends Error {}
 function formatError(): Error {
     return new BrowserLoginDatabaseError(
