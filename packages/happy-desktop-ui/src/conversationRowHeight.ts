@@ -75,7 +75,7 @@ import {
     type MediaFlowImage,
 } from "./mediaLayout";
 import { mediaItemsFramed, mediaVideoFramesSignature } from "./mediaVideoFrames";
-import { mediaTreeHeight } from "./MediaTree";
+import { mediaTreeHeight, mediaTreeWidgetsSignature } from "./MediaTree";
 import { userInputRuleText } from "./userInputRule";
 import { conversationMediaRunSignature, type ConversationMediaRun } from "./conversationMediaRuns";
 import {
@@ -583,15 +583,20 @@ function toolResultHeight(
 function activityFramesSignature(entry: ConversationEntry): string {
     if (entry.kind !== "agentActivity" || entry.activity.kind !== "tool") return "";
     const presentation = entry.activity.tool.presentation;
-    return presentation?.type === "media" ? mediaVideoFramesSignature(presentation.items) : "";
+    if (presentation?.type !== "media") return "";
+    const widgets =
+        presentation.layout?.type === "tree"
+            ? mediaTreeWidgetsSignature(presentation.layout.root)
+            : "";
+    return `${mediaVideoFramesSignature(presentation.items)}${widgets}`;
 }
 
-/** The same for the recordings a reply's layouts place. */
+/** The same for the recordings and widgets a reply's layouts place. */
 function messageLayoutsFramesSignature(layouts: MessageInlineLayouts | undefined): string {
     if (layouts === undefined) return "";
     let signature = "";
     for (const layout of layouts.layouts.values())
-        signature += mediaVideoFramesSignature(layout.members.map((member) => member.item));
+        signature += `${mediaVideoFramesSignature(layout.members.map((member) => member.item))}${mediaTreeWidgetsSignature(layout.root)}`;
     return signature;
 }
 

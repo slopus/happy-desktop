@@ -19,7 +19,9 @@ import { mediaVideoFramesSignature } from "./mediaVideoFrames";
  * earlier in the conversation — read, presented, or generated — by the path a
  * tool showed it from, the same way a `present_files` layout names its files. Nothing is loaded from disk or the network: the source resolves to that
  * call's existing item, the latest call that showed the path winning, and an
- * image that names nothing is left out. A block in which no image resolves is
+ * image that names nothing is left out. A widget — a chart, a diagram, a code
+ * quote, or a changed-files list — resolves a block on its own. A block in
+ * which no image resolves and no widget is kept is
  * not a layout and stays the inert HTML it always was. So does one the client
  * cannot parse, and one that lays out absurdly tall: a broken layout is text,
  * and its pictures stay under the calls that showed them.
@@ -98,7 +100,8 @@ export function conversationInlineLayouts(
             continue;
         }
         if (entry.kind !== "message" || entry.message.sender?.kind !== "agent") continue;
-        if (shown.size === 0) continue;
+        /* No pictures shown yet is not an exit: a widget block — a chart, a
+           diagram, a code quote, a changed-files list — resolves on its own. */
         const layouts = messageInlineLayouts(entry, shown, framesAt);
         if (layouts === undefined) continue;
         messages ??= new Map();

@@ -1,6 +1,9 @@
 import { mediaLayoutStyleValue, type MediaLayoutStyleKey } from "@slopus/happy-agent-client";
 import {
     CONVERSATION_MEDIA_LAYOUT_CSS_PROPERTIES,
+    type ConversationMediaChartSeries,
+    type ConversationMediaChartVariant,
+    type ConversationMediaFileRow,
     type ConversationMediaLayout,
     type ConversationMediaLayoutCssProperty,
     type ConversationMediaLayoutNode,
@@ -78,6 +81,61 @@ const TAGS: ReadonlySet<string> = new Set<ConversationMediaLayoutTag>([
     "code",
 ]);
 
+const CHART_VARIANTS: ReadonlySet<string> = new Set<ConversationMediaChartVariant>([
+    "bar",
+    "hbar",
+    "line",
+    "area",
+]);
+
+const FILE_STATUSES = ["added", "deleted", "renamed", "modified"] as const;
+
+/** A non-empty string within `limit`, or nothing; widgets are closed and bounded. */
+function boundedString(value: unknown, limit: number): string | undefined {
+    return typeof value === "string" && value.length > 0 && value.length <= limit
+        ? value
+        : undefined;
+}
+
+function chartSeriesProject(value: unknown): ConversationMediaChartSeries | undefined {
+    if (!isRecord(value) || !Array.isArray(value.values)) return undefined;
+    if (value.values.length === 0 || value.values.length > 100) return undefined;
+    const values: (number | null)[] = [];
+    for (const entry of value.values) {
+        if (entry === null) values.push(null);
+        else if (typeof entry === "number" && Number.isFinite(entry)) values.push(entry);
+        else return undefined;
+    }
+    const name = boundedString(value.name, 120);
+    return { ...(name === undefined ? {} : { name }), values };
+}
+
+function fileRowProject(value: unknown): ConversationMediaFileRow | undefined {
+    if (!isRecord(value)) return undefined;
+    const path = boundedString(value.path, 512);
+    if (path === undefined) return undefined;
+    const status = oneOf(value.status, FILE_STATUSES);
+    const added = lineCount(value.added);
+    const removed = lineCount(value.removed);
+    if (
+        (value.added !== undefined && added === undefined) ||
+        (value.removed !== undefined && removed === undefined)
+    )
+        return undefined;
+    return {
+        path,
+        ...(status === undefined ? {} : { status }),
+        ...(added === undefined ? {} : { added }),
+        ...(removed === undefined ? {} : { removed }),
+    };
+}
+
+function lineCount(value: unknown): number | undefined {
+    return typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= 1_000_000
+        ? value
+        : undefined;
+}
+
 type ItemsProject = {
     readonly itemCount: number;
     readonly renumber: (index: number) => number | undefined;
@@ -125,6 +183,68 @@ function nodeProject(
                     : {}),
                 ...(style ? { style } : {}),
             };
+        }
+        case "chart": {
+            if (
+                typeof value.variant !== "string" ||
+                !CHART_VARIANTS.has(value.variant) ||
+                !Array.isArray(value.labels) ||
+                value.labels.length === 0 ||
+                value.labels.length > 100 ||
+                !value.labels.every((label) => typeof label === "string" && label.length <= 200) ||
+                !Array.isArray(value.series) ||
+                value.series.length === 0 ||
+                value.series.length > 10
+            )
+                return undefined;
+            const series: ConversationMediaChartSeries[] = [];
+            for (const row of value.series) {
+                const projected = chartSeriesProject(row);
+                if (projected === undefined) return undefined;
+                series.push(projected);
+            }
+            const unit = boundedString(value.unit, 24);
+            const style = styleProject(value.style);
+            return {
+                type: "chart",
+                variant: value.variant as ConversationMediaChartVariant,
+                labels: value.labels as string[],
+                series,
+                ...(unit === undefined ? {} : { unit }),
+                ...(style ? { style } : {}),
+            };
+        }
+        case "diagram": {
+            const source = boundedString(value.source, 8000);
+            if (source === undefined) return undefined;
+            const style = styleProject(value.style);
+            return { type: "diagram", source, ...(style ? { style } : {}) };
+        }
+        case "codeQuote": {
+            const code = boundedString(value.code, 8000);
+            if (code === undefined) return undefined;
+            const language = boundedString(value.language, 40);
+            const path = boundedString(value.path, 512);
+            const style = styleProject(value.style);
+            return {
+                type: "codeQuote",
+                code,
+                ...(language === undefined ? {} : { language }),
+                ...(path === undefined ? {} : { path }),
+                ...(style ? { style } : {}),
+            };
+        }
+        case "files": {
+            if (!Array.isArray(value.files) || value.files.length === 0 || value.files.length > 200)
+                return undefined;
+            const files: ConversationMediaFileRow[] = [];
+            for (const row of value.files) {
+                const projected = fileRowProject(row);
+                if (projected === undefined) return undefined;
+                files.push(projected);
+            }
+            const style = styleProject(value.style);
+            return { type: "files", files, ...(style ? { style } : {}) };
         }
         case "element": {
             if (depth >= MAX_DEPTH || typeof value.tag !== "string") return undefined;

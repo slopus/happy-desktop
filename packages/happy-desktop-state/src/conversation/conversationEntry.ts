@@ -205,6 +205,23 @@ export type ConversationMediaLayoutTag =
     | "em"
     | "code";
 
+/** The chart a `chart` widget node draws: vertical or horizontal bars, a line, or an area. */
+export type ConversationMediaChartVariant = "bar" | "hbar" | "line" | "area";
+
+/** One series of a `chart` widget node; `null` is a missing point. */
+export type ConversationMediaChartSeries = {
+    readonly name?: string;
+    readonly values: readonly (number | null)[];
+};
+
+/** One row of a `files` widget node: a changed file, inline data only. */
+export type ConversationMediaFileRow = {
+    readonly path: string;
+    readonly status?: "added" | "deleted" | "renamed" | "modified";
+    readonly added?: number;
+    readonly removed?: number;
+};
+
 export type ConversationMediaLayoutNode =
     | {
           readonly type: "element";
@@ -220,7 +237,39 @@ export type ConversationMediaLayoutNode =
           readonly style?: ConversationMediaLayoutStyle;
       }
     | { readonly type: "text"; readonly text: string }
-    | { readonly type: "break" };
+    | { readonly type: "break" }
+    /* The widget nodes: standard components the agent wrote as data, each
+       drawn by Happy Agent's own components on a page of its own. Their
+       payloads are closed and bounded by the protocol; the projection checks
+       them again on this side of the wire. */
+    | {
+          readonly type: "chart";
+          readonly variant: ConversationMediaChartVariant;
+          readonly labels: readonly string[];
+          readonly series: readonly ConversationMediaChartSeries[];
+          /** Written after each value, such as `ms` or `%`. */
+          readonly unit?: string;
+          readonly style?: ConversationMediaLayoutStyle;
+      }
+    /** Mermaid source, verbatim; a source that does not draw shows as code. */
+    | {
+          readonly type: "diagram";
+          readonly source: string;
+          readonly style?: ConversationMediaLayoutStyle;
+      }
+    | {
+          readonly type: "codeQuote";
+          readonly code: string;
+          readonly language?: string;
+          /** A display label, not a file that is read. */
+          readonly path?: string;
+          readonly style?: ConversationMediaLayoutStyle;
+      }
+    | {
+          readonly type: "files";
+          readonly files: readonly ConversationMediaFileRow[];
+          readonly style?: ConversationMediaLayoutStyle;
+      };
 
 /**
  * Every CSS property a layout may set, by its React name. The set is closed

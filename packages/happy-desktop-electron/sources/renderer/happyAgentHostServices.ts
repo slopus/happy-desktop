@@ -1,6 +1,7 @@
 import { BrowserTerminalConnection, TERMINAL_PROTOCOL, terminalSocketUrl } from "happy-desktop-app";
 import type {
     HappyAgentArtifactSiteOpening,
+    HappyAgentComponent,
     HappyAgentDeviceBridgeHost,
     HappyAgentDeviceBridgeHostState,
     HappyAgentHostServices,
@@ -120,6 +121,23 @@ async function artifactSiteOpen(
         !response.headers.get("content-type")?.startsWith("application/json")
     )
         return { type: "app-outdated" };
+    return { type: "opened", url: (await jsonRead<{ readonly url: string }>(response)).url };
+}
+
+/**
+ * Asks the app to serve one standard component as a page of its own. Like an
+ * artifact site, an app from before component pages answers with a bare 404.
+ */
+async function componentSiteOpen(
+    baseUrl: string,
+    component: HappyAgentComponent,
+): Promise<HappyAgentArtifactSiteOpening> {
+    const response = await fetch(serviceUrl(baseUrl, "/component-site"), {
+        body: JSON.stringify(component),
+        headers: { "content-type": "application/json" },
+        method: "POST",
+    });
+    if (responseOutdated(response)) return { type: "app-outdated" };
     return { type: "opened", url: (await jsonRead<{ readonly url: string }>(response)).url };
 }
 
@@ -284,6 +302,8 @@ export function happyAgentHostServicesCreate(
             ? {
                   artifactSiteOpen: (artifactId: string, version: number) =>
                       artifactSiteOpen(baseUrl, artifactId, version),
+                  componentSiteOpen: (component: HappyAgentComponent) =>
+                      componentSiteOpen(baseUrl, component),
               }
             : {}),
         ...(options.deviceBridges ? { deviceBridges: deviceBridgeHostCreate(baseUrl) } : {}),

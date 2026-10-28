@@ -103,6 +103,17 @@ export type {
     HappyAgentInlineArtifactsSnapshot,
     HappyAgentInlineArtifactsStore,
 } from "./artifacts/artifactInlineStore.js";
+export {
+    conversationMediaWidgetComponent,
+    conversationMediaWidgetIs,
+    happyAgentComponentKey,
+    happyAgentComponentSitesStoreCreate,
+    type ConversationMediaWidgetNode,
+    type HappyAgentComponent,
+    type HappyAgentComponentSite,
+    type HappyAgentComponentSitesSnapshot,
+    type HappyAgentComponentSitesStore,
+} from "./artifacts/artifactComponentStore.js";
 export * from "./surfaces/surfaceTypes.js";
 export {
     happyAgentSurfaceCatalogStoreNoop,

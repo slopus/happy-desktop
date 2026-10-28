@@ -5,6 +5,8 @@ import {
     type HappyAgentArtifactDisplay,
     type HappyAgentArtifactId,
     type HappyAgentArtifactType,
+    type HappyAgentComponent,
+    type HappyAgentComponentSitesSnapshot,
     type HappyAgentInlineArtifactLive,
     type HappyAgentInlineArtifactsSnapshot,
 } from "happy-desktop-state";
@@ -31,6 +33,14 @@ export interface ConversationInlinePages {
     artifactsContentRequest(artifactIds: readonly HappyAgentArtifactId[]): void;
     /** Draws an artifact's page served at `url`; absent where the host has no engine. */
     readonly artifactRender?: (url: string, fit: InlinePageFit) => ReactNode;
+    /**
+     * The pages the standard components a reply holds — its charts, diagrams,
+     * code quotes, and file lists — are served on, as the owner's store holds
+     * them. Each is drawn by `artifactRender`.
+     */
+    readonly componentSites?: HappyAgentComponentSitesSnapshot;
+    /** Asks the owner's store for these components' pages; it never publishes in this call. */
+    componentSitesRequest?(components: readonly HappyAgentComponent[]): void;
     /**
      * Draws a live artifact's page through the network it was made on, in a
      * browser profile of that artifact's own: its cookies and storage are

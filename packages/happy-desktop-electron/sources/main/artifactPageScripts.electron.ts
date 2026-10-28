@@ -86,6 +86,9 @@ const client: ArtifactSiteClient = {
     openArtifactApi: (async () => {
         throw new Error("This page has no API.");
     }) as never,
+    openArtifactComponent: (async () => {
+        throw new Error("Standard components are not part of this fixture.");
+    }) as never,
 };
 
 void app.whenReady().then(async () => {

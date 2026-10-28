@@ -220,7 +220,12 @@ export function happyAgentHttpProxyCreate(
                             if (backing === requestBacking) options.onConnectionError?.(error);
                         },
                         ...(preview ? { htmlPreviewUrl: preview.workspace } : {}),
-                        ...(artifactSite ? { artifactSiteUrl: artifactSite.open } : {}),
+                        ...(artifactSite
+                            ? {
+                                  artifactSiteUrl: artifactSite.open,
+                                  artifactComponentUrl: artifactSite.component,
+                              }
+                            : {}),
                         ...(options.deviceBridges ? { deviceBridges: options.deviceBridges } : {}),
                     }),
             )

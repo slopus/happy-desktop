@@ -97,6 +97,11 @@ import {
     mediaVideoFramesSubscribe,
     mediaVideoFramesVersion,
 } from "./mediaVideoFrames";
+import {
+    mediaComponentHeightsSubscribe,
+    mediaComponentHeightsVersion,
+} from "./mediaComponentHeights";
+import { MediaTreeComponentsContext, mediaTreeWidgetsSignature } from "./MediaTree";
 
 /** The transcript's first row: what it shows, and how tall it is at a row width. */
 export type ConversationLeadingHeader = {
@@ -645,6 +650,13 @@ export function ConversationView(props: ConversationViewProps) {
         mediaVideoFramesVersion,
         mediaVideoFramesVersion,
     );
+    /* The same for a widget once its page reports its height: the rows that
+       hold a widget are asked again. */
+    useSyncExternalStore(
+        mediaComponentHeightsSubscribe,
+        mediaComponentHeightsVersion,
+        mediaComponentHeightsVersion,
+    );
     const conversationCacheKey =
         props.conversationId === undefined ? "anonymous" : `conversation:${props.conversationId}`;
     const [rowExpansion, setRowExpansion] = useState(() => new Map<string, boolean>());
@@ -720,6 +732,18 @@ export function ConversationView(props: ConversationViewProps) {
         return placed ? { mediaPlaced: placed } : {};
     };
     const inlinePages = props.inlinePages;
+    /* A widget in a reply is a standard component on a page of its own, drawn
+       by the engine that draws an artifact's page. */
+    const componentRender = inlinePages?.artifactRender;
+    const componentSitesRequest = inlinePages?.componentSitesRequest;
+    const mediaComponents =
+        inlinePages?.componentSites !== undefined && componentSitesRequest && componentRender
+            ? {
+                  sites: inlinePages.componentSites,
+                  request: componentSitesRequest,
+                  render: componentRender,
+              }
+            : undefined;
     const inlineLeads = inlinePages ? conversationInlineArtifactLeads(transcript) : undefined;
     const inlinePageOf = (entry: ConversationEntry | undefined) =>
         entry === undefined || inlinePages === undefined || inlineLeads === undefined
@@ -1092,248 +1116,272 @@ export function ConversationView(props: ConversationViewProps) {
                 </ScrollArea>
             ) : (
                 <MarkdownLayoutCacheContext.Provider value={rowHeightCache.text}>
-                    <MessageList
-                        /* Inputs every row's estimate may read. The live status is
+                    <MediaTreeComponentsContext.Provider value={mediaComponents}>
+                        <MessageList
+                            /* Inputs every row's estimate may read. The live status is
                        not one: only the final row reads it, as its successor,
                        and the list asks that row again with the footer. */
-                        estimateDependencies={[
-                            props.errorAssistance,
-                            props.errorAssistanceUnavailable,
-                            // Which actions a card offers sizes it; their identity does not.
-                            props.failureActions?.onRetry === undefined,
-                            props.failureActions?.onNewChat === undefined,
-                            props.failureActions?.onSwitch === undefined,
-                            props.failureClock,
-                            failureTargets,
-                            currentFailureId,
-                            // The labels the switch can show and which one it shows now.
-                            switchTargets?.map(conversationFailureTargetLabel).join("\n"),
-                            switchPreferred && conversationFailureTargetKey(switchPreferred),
-                            props.viewerId,
-                            props.activityTreatment,
-                            rowExpansion,
-                            conversationReferencesSignature(transcript, props.references),
-                            inlinePageGeneration,
-                            inlinePages?.artifacts,
-                            inlinePages?.artifactRender === undefined,
-                            inlinePages?.liveRender === undefined,
-                        ]}
-                        estimateRowSize={(index, width) =>
-                            conversationRowHeight(...rowGeometry(index, width))
-                        }
-                        cachedRowSize={(index, width) =>
-                            conversationRowHeightCached(...rowGeometry(index, width))
-                        }
-                        prepareRowSize={(index, width) =>
-                            conversationRowHeightPrepare(...rowGeometry(index, width))
-                        }
-                        estimateRows={conversationMediaRunRows(listEntries, mediaRuns, (entry) => {
-                            if (entry.kind === "message") {
-                                const fold =
-                                    entry.message.sender?.kind === "human"
-                                        ? messageExpanded(entry)
-                                            ? "message-open"
-                                            : "message-closed"
-                                        : "";
-                                const layouts = inlineLayouts.messages.get(entry.message.id);
-                                if (layouts === undefined) return fold;
-                                let frames = "";
-                                for (const layout of layouts.layouts.values())
-                                    frames += mediaVideoFramesSignature(
-                                        layout.members.map((member) => member.item),
-                                        framesAt,
-                                    );
-                                return `${fold}|${layouts.signature}|${frames}`;
+                            estimateDependencies={[
+                                props.errorAssistance,
+                                props.errorAssistanceUnavailable,
+                                // Which actions a card offers sizes it; their identity does not.
+                                props.failureActions?.onRetry === undefined,
+                                props.failureActions?.onNewChat === undefined,
+                                props.failureActions?.onSwitch === undefined,
+                                props.failureClock,
+                                failureTargets,
+                                currentFailureId,
+                                // The labels the switch can show and which one it shows now.
+                                switchTargets?.map(conversationFailureTargetLabel).join("\n"),
+                                switchPreferred && conversationFailureTargetKey(switchPreferred),
+                                props.viewerId,
+                                props.activityTreatment,
+                                rowExpansion,
+                                conversationReferencesSignature(transcript, props.references),
+                                inlinePageGeneration,
+                                inlinePages?.artifacts,
+                                inlinePages?.artifactRender === undefined,
+                                inlinePages?.liveRender === undefined,
+                            ]}
+                            estimateRowSize={(index, width) =>
+                                conversationRowHeight(...rowGeometry(index, width))
                             }
-                            const placed = [
-                                ...(inlineLayouts.hidden.get(entryKey(entry)) ?? []),
-                            ].join(",");
-                            const presentation =
-                                entry.kind === "agentActivity" && entry.activity.kind === "tool"
-                                    ? entry.activity.tool.presentation
-                                    : undefined;
-                            const frames =
-                                presentation?.type === "media"
-                                    ? mediaVideoFramesSignature(presentation.items, framesAt)
-                                    : "";
-                            return frames === "" ? placed : `${placed}|${frames}`;
-                        })}
-                        estimateRowWidth={contentWidth}
-                        estimateVersion={textLayoutGeneration}
-                        footer={workingStatusRow}
-                        footerBefore={transcript.length}
-                        /* The status and any queued message arrive with a
+                            cachedRowSize={(index, width) =>
+                                conversationRowHeightCached(...rowGeometry(index, width))
+                            }
+                            prepareRowSize={(index, width) =>
+                                conversationRowHeightPrepare(...rowGeometry(index, width))
+                            }
+                            estimateRows={conversationMediaRunRows(
+                                listEntries,
+                                mediaRuns,
+                                (entry) => {
+                                    if (entry.kind === "message") {
+                                        const fold =
+                                            entry.message.sender?.kind === "human"
+                                                ? messageExpanded(entry)
+                                                    ? "message-open"
+                                                    : "message-closed"
+                                                : "";
+                                        const layouts = inlineLayouts.messages.get(
+                                            entry.message.id,
+                                        );
+                                        if (layouts === undefined) return fold;
+                                        let frames = "";
+                                        for (const layout of layouts.layouts.values())
+                                            frames += `${mediaVideoFramesSignature(
+                                                layout.members.map((member) => member.item),
+                                                framesAt,
+                                            )}${mediaTreeWidgetsSignature(layout.root)}`;
+                                        return `${fold}|${layouts.signature}|${frames}`;
+                                    }
+                                    const placed = [
+                                        ...(inlineLayouts.hidden.get(entryKey(entry)) ?? []),
+                                    ].join(",");
+                                    const presentation =
+                                        entry.kind === "agentActivity" &&
+                                        entry.activity.kind === "tool"
+                                            ? entry.activity.tool.presentation
+                                            : undefined;
+                                    const frames =
+                                        presentation?.type === "media"
+                                            ? `${mediaVideoFramesSignature(presentation.items, framesAt)}${
+                                                  presentation.layout?.type === "tree"
+                                                      ? mediaTreeWidgetsSignature(
+                                                            presentation.layout.root,
+                                                        )
+                                                      : ""
+                                              }`
+                                            : "";
+                                    return frames === "" ? placed : `${placed}|${frames}`;
+                                },
+                            )}
+                            estimateRowWidth={contentWidth}
+                            estimateVersion={textLayoutGeneration}
+                            footer={workingStatusRow}
+                            footerBefore={transcript.length}
+                            /* The status and any queued message arrive with a
                            send; a reader at the bottom sees where the reply
                            will start rather than having it held below. */
-                        footerFollowed={sendPending}
-                        footerReserveHeight={queuedStatusHeight}
-                        liftKey={sendLift.liftKey}
-                        followKey={sendLift.followKey}
-                        {...(props.leadingHeader
-                            ? {
-                                  header: props.leadingHeader.content,
-                                  headerHeight: props.leadingHeader.height,
-                                  headerLift: props.leadingHeader.lift,
-                              }
-                            : {})}
-                        footerHeight={workingStatusHeight}
-                        initialScrollPosition={props.scrollPosition}
-                        rowFallbackKey={(index) => listEntries[index]?.traceFoldTargetId}
-                        rowAnchorKey={(index) => listEntries[index]?.traceFoldAnchorId}
-                        // The conversation is this list's lifetime: switching to
-                        // another one mounts its own list, which is what lets each
-                        // restore its own position instead of inheriting one.
-                        key={props.conversationId}
-                        onScrollPositionChange={props.onScrollPositionChange}
-                        onStartReached={props.onStartReached}
-                        {...(props.onTracesSeen
-                            ? {
-                                  onVisibleRowsChange: (
-                                      first: number,
-                                      last: number,
-                                      element: HTMLElement,
-                                  ) => {
-                                      traceList.current = element;
-                                      props.onTracesSeen!(
-                                          traceViewer,
-                                          conversationTracesOnScreen(traceSpans, first, last),
-                                      );
-                                  },
-                              }
-                            : {})}
-                        jumpToEnd
-                        /* Shimmers exactly while the status line spins: not on
+                            footerFollowed={sendPending}
+                            footerReserveHeight={queuedStatusHeight}
+                            liftKey={sendLift.liftKey}
+                            followKey={sendLift.followKey}
+                            {...(props.leadingHeader
+                                ? {
+                                      header: props.leadingHeader.content,
+                                      headerHeight: props.leadingHeader.height,
+                                      headerLift: props.leadingHeader.lift,
+                                  }
+                                : {})}
+                            footerHeight={workingStatusHeight}
+                            initialScrollPosition={props.scrollPosition}
+                            rowFallbackKey={(index) => listEntries[index]?.traceFoldTargetId}
+                            rowAnchorKey={(index) => listEntries[index]?.traceFoldAnchorId}
+                            // The conversation is this list's lifetime: switching to
+                            // another one mounts its own list, which is what lets each
+                            // restore its own position instead of inheriting one.
+                            key={props.conversationId}
+                            onScrollPositionChange={props.onScrollPositionChange}
+                            onStartReached={props.onStartReached}
+                            {...(props.onTracesSeen
+                                ? {
+                                      onVisibleRowsChange: (
+                                          first: number,
+                                          last: number,
+                                          element: HTMLElement,
+                                      ) => {
+                                          traceList.current = element;
+                                          props.onTracesSeen!(
+                                              traceViewer,
+                                              conversationTracesOnScreen(traceSpans, first, last),
+                                          );
+                                      },
+                                  }
+                                : {})}
+                            jumpToEnd
+                            /* Shimmers exactly while the status line spins: not on
                            a question or a wait, and on through delegation. */
-                        jumpToEndWorking={
-                            statusVisible &&
-                            !awaitingInput &&
-                            !scheduledWait &&
-                            (delegating || props.workingWait === undefined)
-                        }
-                        paddingEnd={24}
-                        virtualize
-                    >
-                        {listEntries.map((entry, index) => {
-                            const source = conversationRowSource(index);
-                            const submission =
-                                entry.kind === "request"
-                                    ? props.requestSubmissions?.find(
-                                          (candidate) =>
-                                              candidate.requestId === entry.request.requestId,
-                                      )
-                                    : undefined;
-                            const inlinePage = inlinePageOf(entry);
-                            return (
-                                <ConversationEntryView
-                                    /* The key leads the spread props below so React
+                            jumpToEndWorking={
+                                statusVisible &&
+                                !awaitingInput &&
+                                !scheduledWait &&
+                                (delegating || props.workingWait === undefined)
+                            }
+                            paddingEnd={24}
+                            virtualize
+                        >
+                            {listEntries.map((entry, index) => {
+                                const source = conversationRowSource(index);
+                                const submission =
+                                    entry.kind === "request"
+                                        ? props.requestSubmissions?.find(
+                                              (candidate) =>
+                                                  candidate.requestId === entry.request.requestId,
+                                          )
+                                        : undefined;
+                                const inlinePage = inlinePageOf(entry);
+                                return (
+                                    <ConversationEntryView
+                                        /* The key leads the spread props below so React
                                    takes its direct element path for each of the
                                    transcript's rows instead of copying props. */
-                                    key={entry.kind === "message" ? entry.message.id : entry.id}
-                                    {...(inlinePage ? { inlinePage: inlinePage.props } : {})}
-                                    errorAssistance={errorAssistanceFor(entry)}
-                                    failure={failureFor(entry)}
-                                    onErrorAssistanceRequest={props.onErrorAssistanceRequest}
-                                    activityMotion={props.motion}
-                                    activityTreatment={props.activityTreatment}
-                                    {...(props.streamingCaret === undefined
-                                        ? {}
-                                        : { streamingCaret: props.streamingCaret })}
-                                    {...(entry.kind === "message" && entry.contextNote !== undefined
-                                        ? { contextNote: entry.contextNote }
-                                        : {})}
-                                    activityAuthor={
-                                        props.agentAuthor &&
-                                        (conversationAgentRowStartsGroup(source, index) ||
-                                            conversationTurnStatusStartsGroup(source, index))
-                                            ? props.agentAuthor
-                                            : undefined
-                                    }
-                                    className={
-                                        [
-                                            conversationRowClassName(
-                                                source,
-                                                index,
-                                                index < transcript.length && statusVisible,
-                                                props.viewerId,
-                                            ),
-                                            index >= transcript.length
-                                                ? "happy-conversation__queued"
-                                                : undefined,
-                                        ]
-                                            .filter(Boolean)
-                                            .join(" ") || undefined
-                                    }
-                                    entry={entry}
-                                    grouped={
-                                        entry.kind === "message"
-                                            ? conversationMessageGrouped(source, index)
-                                            : undefined
-                                    }
-                                    onImageOpen={props.onImageOpen}
-                                    onAttachmentOpen={props.onAttachmentOpen}
-                                    onRequestAnswer={props.onRequestAnswer}
-                                    onRequestSelectionChange={props.onRequestSelectionChange}
-                                    onRowExpandedChange={(expanded) =>
-                                        entry.kind === "message"
-                                            ? messageExpandedChange(entry, expanded)
-                                            : rowExpandedChange(entry, expanded)
-                                    }
-                                    messageExpanded={
-                                        entry.kind === "message" &&
-                                        entry.message.sender?.kind === "human"
-                                            ? messageExpanded(entry)
-                                            : undefined
-                                    }
-                                    requestSelection={
-                                        entry.kind === "request"
-                                            ? props.requestSelections?.get(entry.request.requestId)
-                                            : undefined
-                                    }
-                                    onToolSelect={props.onToolSelect}
-                                    {...(props.onToolMediaOpen
-                                        ? { onToolMediaOpen: props.onToolMediaOpen }
-                                        : {})}
-                                    {...((run) => (run ? { mediaRun: run } : {}))(
-                                        mediaRuns.get(entryKey(entry)),
-                                    )}
-                                    {...placedOf(entry)}
-                                    onDelegationSelect={props.onDelegationSelect}
-                                    now={props.now}
-                                    {...(props.onFileOpen ? { onFileOpen: props.onFileOpen } : {})}
-                                    {...(props.onFileLinkOpen
-                                        ? { onFileLinkOpen: props.onFileLinkOpen }
-                                        : {})}
-                                    {...(props.onLinkOpen ? { onLinkOpen: props.onLinkOpen } : {})}
-                                    {...(props.references ? { references: props.references } : {})}
-                                    {...(props.linkOpenDefault
-                                        ? { linkOpenDefault: props.linkOpenDefault }
-                                        : {})}
-                                    onTraceToggle={props.onTraceToggle}
-                                    /* Either kind of row can be the one a turn hung
+                                        key={entry.kind === "message" ? entry.message.id : entry.id}
+                                        {...(inlinePage ? { inlinePage: inlinePage.props } : {})}
+                                        errorAssistance={errorAssistanceFor(entry)}
+                                        failure={failureFor(entry)}
+                                        onErrorAssistanceRequest={props.onErrorAssistanceRequest}
+                                        activityMotion={props.motion}
+                                        activityTreatment={props.activityTreatment}
+                                        {...(props.streamingCaret === undefined
+                                            ? {}
+                                            : { streamingCaret: props.streamingCaret })}
+                                        {...(entry.kind === "message" &&
+                                        entry.contextNote !== undefined
+                                            ? { contextNote: entry.contextNote }
+                                            : {})}
+                                        activityAuthor={
+                                            props.agentAuthor &&
+                                            (conversationAgentRowStartsGroup(source, index) ||
+                                                conversationTurnStatusStartsGroup(source, index))
+                                                ? props.agentAuthor
+                                                : undefined
+                                        }
+                                        className={
+                                            [
+                                                conversationRowClassName(
+                                                    source,
+                                                    index,
+                                                    index < transcript.length && statusVisible,
+                                                    props.viewerId,
+                                                ),
+                                                index >= transcript.length
+                                                    ? "happy-conversation__queued"
+                                                    : undefined,
+                                            ]
+                                                .filter(Boolean)
+                                                .join(" ") || undefined
+                                        }
+                                        entry={entry}
+                                        grouped={
+                                            entry.kind === "message"
+                                                ? conversationMessageGrouped(source, index)
+                                                : undefined
+                                        }
+                                        onImageOpen={props.onImageOpen}
+                                        onAttachmentOpen={props.onAttachmentOpen}
+                                        onRequestAnswer={props.onRequestAnswer}
+                                        onRequestSelectionChange={props.onRequestSelectionChange}
+                                        onRowExpandedChange={(expanded) =>
+                                            entry.kind === "message"
+                                                ? messageExpandedChange(entry, expanded)
+                                                : rowExpandedChange(entry, expanded)
+                                        }
+                                        messageExpanded={
+                                            entry.kind === "message" &&
+                                            entry.message.sender?.kind === "human"
+                                                ? messageExpanded(entry)
+                                                : undefined
+                                        }
+                                        requestSelection={
+                                            entry.kind === "request"
+                                                ? props.requestSelections?.get(
+                                                      entry.request.requestId,
+                                                  )
+                                                : undefined
+                                        }
+                                        onToolSelect={props.onToolSelect}
+                                        {...(props.onToolMediaOpen
+                                            ? { onToolMediaOpen: props.onToolMediaOpen }
+                                            : {})}
+                                        {...((run) => (run ? { mediaRun: run } : {}))(
+                                            mediaRuns.get(entryKey(entry)),
+                                        )}
+                                        {...placedOf(entry)}
+                                        onDelegationSelect={props.onDelegationSelect}
+                                        now={props.now}
+                                        {...(props.onFileOpen
+                                            ? { onFileOpen: props.onFileOpen }
+                                            : {})}
+                                        {...(props.onFileLinkOpen
+                                            ? { onFileLinkOpen: props.onFileLinkOpen }
+                                            : {})}
+                                        {...(props.onLinkOpen
+                                            ? { onLinkOpen: props.onLinkOpen }
+                                            : {})}
+                                        {...(props.references
+                                            ? { references: props.references }
+                                            : {})}
+                                        {...(props.linkOpenDefault
+                                            ? { linkOpenDefault: props.linkOpenDefault }
+                                            : {})}
+                                        onTraceToggle={props.onTraceToggle}
+                                        /* Either kind of row can be the one a turn hung
                                    its control on: the answer when the turn is
                                    folded up, the row its work starts on when it
                                    is open. */
-                                    traceOpen={conversationEntryTraceOpen(
-                                        entry,
-                                        props.expandedTurnIds,
-                                    )}
-                                    requestError={
-                                        submission?.status === "failed"
-                                            ? submission.error
-                                            : undefined
-                                    }
-                                    requestRetryAnswers={
-                                        submission?.status === "failed"
-                                            ? submission.answers
-                                            : undefined
-                                    }
-                                    requestPending={submission?.status === "pending"}
-                                    rowExpanded={rowExpanded(entry)}
-                                    viewerId={props.viewerId}
-                                />
-                            );
-                        })}
-                    </MessageList>
+                                        traceOpen={conversationEntryTraceOpen(
+                                            entry,
+                                            props.expandedTurnIds,
+                                        )}
+                                        requestError={
+                                            submission?.status === "failed"
+                                                ? submission.error
+                                                : undefined
+                                        }
+                                        requestRetryAnswers={
+                                            submission?.status === "failed"
+                                                ? submission.answers
+                                                : undefined
+                                        }
+                                        requestPending={submission?.status === "pending"}
+                                        rowExpanded={rowExpanded(entry)}
+                                        viewerId={props.viewerId}
+                                    />
+                                );
+                            })}
+                        </MessageList>
+                    </MediaTreeComponentsContext.Provider>
                 </MarkdownLayoutCacheContext.Provider>
             )}
 

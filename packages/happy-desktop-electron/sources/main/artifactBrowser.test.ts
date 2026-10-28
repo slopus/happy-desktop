@@ -20,7 +20,7 @@ const OTHER = "happy-artifact://k3v8w2m9q4x7z1c5b6n0p2r8-v1/index.html";
 
 /** Sites that own exactly the entry and one other file of `SITE`, and the entry of version 1. */
 const sites: ArtifactSiteHandle = {
-    register: () => ({ open: async () => ENTRY }),
+    register: () => ({ open: async () => ENTRY, component: () => ENTRY }),
     owns: (url) => url === ENTRY || url === `happy-artifact://${SITE}/page.html` || url === OTHER,
     handle: async () => new Response("served"),
     close: () => undefined,

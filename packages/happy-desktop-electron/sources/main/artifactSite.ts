@@ -1,5 +1,11 @@
 import { createHash } from "node:crypto";
 import { Readable } from "node:stream";
+import {
+    ARTIFACT_COMPONENT_FILES,
+    ARTIFACT_COMPONENT_SCRIPT,
+    artifactComponentPage,
+    type ArtifactComponent,
+} from "./artifactComponentSite";
 import type { HappyAgentDaemonClient } from "./happyAgentDaemonClient";
 
 /** The scheme every artifact site is served under, and only inside its own partition. */
@@ -8,7 +14,7 @@ export const artifactSiteScheme = "happy-artifact";
 /** The minimal Happy Agent surface an artifact site reads through. */
 export type ArtifactSiteClient = Pick<
     HappyAgentDaemonClient,
-    "getArtifactVersion" | "openArtifactFile" | "openArtifactApi"
+    "getArtifactVersion" | "openArtifactFile" | "openArtifactApi" | "openArtifactComponent"
 > & {
     readonly connection?: (id: string) => ArtifactSiteClient;
 };
@@ -36,6 +42,12 @@ export interface ArtifactSiteHandle {
             version: number,
             connectionId?: string,
         ) => Promise<string>;
+        /**
+         * Serves one standard component as a page of its own, drawn by the
+         * daemon's standard files, and names its address. The same component
+         * is the same site.
+         */
+        readonly component: (component: ArtifactComponent, connectionId?: string) => string;
     };
     /** Whether an address is the entry or a file of a site opened by `open`. */
     owns(url: string): boolean;
@@ -53,6 +65,23 @@ interface ArtifactSite {
     /** Exactly the manifest's paths, each with the media type the daemon decided for it. */
     readonly files: ReadonlyMap<string, string>;
 }
+
+/** One standard component published as an origin of its own. */
+interface ComponentSite {
+    readonly client: ArtifactSiteClient;
+    readonly connectionId?: string;
+    readonly html: Buffer;
+}
+
+/**
+ * How many components keep a site at once. A long conversation shows a few
+ * hundred charts and code quotes, each a page of a few kilobytes, and one
+ * scrolled back to must still be there.
+ */
+const COMPONENT_SITE_LIMIT = 1024;
+/** The page's own name on a component site. */
+const COMPONENT_ENTRY = "index.html";
+const COMPONENT_SCRIPT = "component.js";
 
 /**
  * How many versions keep a site at once. A reader looks at a handful of
@@ -83,6 +112,11 @@ export function artifactSiteHost(
         return undefined;
     const site = `${artifactId}-v${String(version)}`;
     if (site.length > 63) return undefined;
+    return siteConnectionHost(site, connectionId);
+}
+
+/** `site`, labelled with the remote connection it was reached through, if any. */
+function siteConnectionHost(site: string, connectionId: string | undefined): string {
     if (connectionId === undefined) return site;
     const connection = createHash("sha256").update(connectionId).digest("hex").slice(0, 16);
     return `${site}.c${connection}`;
@@ -187,6 +221,7 @@ function artifactSiteUrl(host: string, path: string): string {
  */
 export function artifactSitesCreate(): ArtifactSiteHandle {
     const sites = new Map<string, ArtifactSite>();
+    const components = new Map<string, ComponentSite>();
     const remember = (host: string, site: ArtifactSite): void => {
         // Re-inserted so insertion order is use order and the oldest site
         // nobody is looking at is the one that goes.
@@ -247,14 +282,36 @@ export function artifactSitesCreate(): ArtifactSiteHandle {
                 });
                 return artifactSiteUrl(host, read.entry.path);
             },
+            component: (component, connectionId) => {
+                const page = artifactComponentPage(component);
+                if (page === undefined)
+                    throw new ArtifactSiteError(413, "This component is too large to serve.");
+                if (connectionId !== undefined && !client.connection)
+                    throw new ArtifactSiteError(501, "Remote components are unavailable here.");
+                const host = siteConnectionHost(page.site, connectionId);
+                components.delete(host);
+                components.set(host, {
+                    client,
+                    ...(connectionId === undefined ? {} : { connectionId }),
+                    html: page.html,
+                });
+                for (const stale of components.keys()) {
+                    if (components.size <= COMPONENT_SITE_LIMIT) break;
+                    components.delete(stale);
+                }
+                return artifactSiteUrl(host, COMPONENT_ENTRY);
+            },
         }),
         owns: (url) => {
             const address = artifactSiteAddress(url);
-            return (
-                address !== undefined && sites.get(address.host)?.files.has(address.path) === true
-            );
+            if (address === undefined) return false;
+            if (components.has(address.host)) return address.path === COMPONENT_ENTRY;
+            return sites.get(address.host)?.files.has(address.path) === true;
         },
         handle: async (request) => {
+            const named = artifactSiteAddress(request.url);
+            const component = named ? components.get(named.host) : undefined;
+            if (named && component) return componentServe(component, named.path, request);
             const api = artifactSiteApi(request.url);
             if (api) {
                 const site = sites.get(api.host);
@@ -305,8 +362,72 @@ export function artifactSitesCreate(): ArtifactSiteHandle {
                 { status: upstream.statusCode, headers },
             );
         },
-        close: () => sites.clear(),
+        close: () => {
+            sites.clear();
+            components.clear();
+        },
     };
+}
+
+/**
+ * Answers one request of a component's page: the page, the script that builds
+ * its element, or one of the daemon's standard files at `/api/v1/`, read
+ * through the connection the component was opened on. Nothing else is there.
+ */
+async function componentServe(
+    site: ComponentSite,
+    path: string,
+    request: Request,
+): Promise<Response> {
+    if (request.method !== "GET") return refuse(405, { allow: "GET" });
+    if (path === COMPONENT_ENTRY || path === COMPONENT_SCRIPT) {
+        const headers = new Headers(siteHeaders);
+        headers.set(
+            "content-type",
+            path === COMPONENT_ENTRY
+                ? "text/html; charset=utf-8"
+                : "text/javascript; charset=utf-8",
+        );
+        return new Response(
+            new Uint8Array(path === COMPONENT_ENTRY ? site.html : ARTIFACT_COMPONENT_SCRIPT),
+            { status: 200, headers },
+        );
+    }
+    const file = path.startsWith("api/v1/") ? path.slice("api/v1/".length) : undefined;
+    const mimeType = file === undefined ? undefined : ARTIFACT_COMPONENT_FILES.get(file);
+    if (file === undefined || mimeType === undefined) return refuse(404);
+    const reader =
+        site.connectionId === undefined ? site.client : site.client.connection?.(site.connectionId);
+    if (!reader) return refuse(502);
+    const ifNoneMatch = request.headers.get("if-none-match");
+    let upstream: Awaited<ReturnType<ArtifactSiteClient["openArtifactComponent"]>>;
+    try {
+        upstream = await reader.openArtifactComponent(
+            file,
+            { accept: "*/*", ...(ifNoneMatch === null ? {} : { "if-none-match": ifNoneMatch }) },
+            request.signal,
+        );
+    } catch {
+        return refuse(502);
+    }
+    if (upstream.statusCode !== 200 && upstream.statusCode !== 304) {
+        upstream.body.resume();
+        return refuse(upstream.statusCode === 404 ? 404 : 502);
+    }
+    const headers = new Headers(siteHeaders);
+    headers.set("content-type", mimeType);
+    for (const name of ["content-length", "etag"]) {
+        const value = upstream.headers[name];
+        if (typeof value === "string") headers.set(name, value);
+    }
+    if (upstream.statusCode === 304) {
+        upstream.body.resume();
+        return new Response(null, { status: 304, headers });
+    }
+    return new Response(Readable.toWeb(upstream.body) as ReadableStream<Uint8Array>, {
+        status: 200,
+        headers,
+    });
 }
 
 /** Where a site URL names its artifact's API. */

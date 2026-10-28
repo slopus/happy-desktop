@@ -13,6 +13,7 @@ import { happyAgentDaemonHealthProject } from "./happyAgentHttpProxy";
 import type { HappyAgentRequestMilestone } from "./happyAgentRequestTiming";
 import type { HappyAgentDaemonClientOptions } from "./happyAgentDaemonClient";
 import { HAPPY_AGENT_LIVE_WINDOW_HEADER, happyAgentLivePath } from "./happyAgentLiveRoute";
+import { artifactComponentRead, type ArtifactComponent } from "./artifactComponentSite";
 import { ArtifactSiteError } from "./artifactSite";
 import type { DeviceBridgeHost } from "./deviceBridgeHost";
 
@@ -46,6 +47,8 @@ export interface HappyAgentProxyHandleOptions {
         version: number,
         connectionId?: string,
     ) => Promise<string>;
+    /** Serves one standard component as an isolated page and names its address. */
+    readonly artifactComponentUrl?: (component: ArtifactComponent, connectionId?: string) => string;
     /** The app's USB devices, port bridges, and forwards, held apart from any window. */
     readonly deviceBridges?: DeviceBridgeHost;
 }
@@ -197,6 +200,23 @@ export async function happyAgentProxyHandle(
             const version = Number(requiredQuery(query, "version"));
             writeJson(response, 200, {
                 url: await options.artifactSiteUrl(artifactId, version, connectionId),
+            });
+            return true;
+        }
+        if (method === "POST" && path === "/component-site") {
+            if (!options.artifactComponentUrl) {
+                writeJson(response, 501, {
+                    error: "This desktop cannot serve a component as a page.",
+                });
+                return true;
+            }
+            const component = artifactComponentRead(await bodyReadJson(request));
+            if (!component) {
+                writeJson(response, 400, { error: "This is not a component a page can show." });
+                return true;
+            }
+            writeJson(response, 200, {
+                url: options.artifactComponentUrl(component, connectionId),
             });
             return true;
         }

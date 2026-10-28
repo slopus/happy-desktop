@@ -39,9 +39,11 @@ export type ConversationTextLayout = {
 /**
  * The layout one HTML block draws, with each `<img src>` resolved by `resolve`
  * to a position in the caller's own list of pictures; a source it does not
- * resolve is left out. Nothing, when no picture resolves or the block is past
- * the parser's limits: the block is then the inert HTML it was written as, so
- * nothing the agent wrote is cut short.
+ * resolve is left out. A widget node — a chart, a diagram, a code quote, or a
+ * changed-files list — resolves a block like a picture does. Nothing, when no
+ * picture resolves and no widget is kept, or the block is past the parser's
+ * limits (an invalid widget counts as lost content): the block is then the
+ * inert HTML it was written as, so nothing the agent wrote is cut short.
  *
  * The tree is checked again exactly as a presented layout is, so it carries
  * only the closed node set and grammar-checked styles `MediaTree` draws. A
@@ -55,7 +57,8 @@ export function conversationTextLayoutParse(
        trips — the block is only text, and its pictures stay where they were. */
     try {
         const parsed = parseMediaLayoutHtml(html, resolve);
-        if (parsed.truncated || parsed.placed.length === 0) return undefined;
+        if (parsed.truncated || (parsed.placed.length === 0 && parsed.widgets === 0))
+            return undefined;
         const positions = new Map(parsed.placed.map((index, position) => [index, position]));
         const layout = mediaLayoutProject(
             { type: "tree", root: parsed.root },

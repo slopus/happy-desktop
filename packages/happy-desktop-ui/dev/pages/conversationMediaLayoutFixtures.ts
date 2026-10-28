@@ -894,6 +894,84 @@ export const inlineEntries: readonly ConversationEntry[] = [
 ];
 
 /*
+ * Rich-reply widgets written straight into the reply's HTML: a chart, a
+ * Mermaid diagram, a code quote, and a changed-files list, resolving a block
+ * with no picture at all, plus one beside a picture, and one invalid widget
+ * whose block stays the inert text it was written as.
+ */
+
+const WIDGET_REPLY = `Profiling done. Parse dominated before; after the change the three phases are even.
+
+<happy-chart type="hbar"><script type="application/json">
+{ "labels": ["Parse", "Layout", "Paint"],
+  "series": [{ "name": "Before", "values": [412, 96, 31] },
+             { "name": "After", "values": [118, 94, 30] }],
+  "unit": "ms" }
+</script></happy-chart>
+
+Month over month, p50 holds flat while p99 falls:
+
+<happy-chart type="line"><script type="application/json">
+{ "labels": ["May", "Jun", "Jul", "Aug", "Sep", "Oct"],
+  "series": [{ "name": "p50", "values": [41, 39, 40, 38, null, 37] },
+             { "name": "p99", "values": [310, 290, 240, 205, 170, 140] }],
+  "unit": "ms" }
+</script></happy-chart>
+
+The retry path now flows through one scheduler:
+
+<happy-diagram><script type="text/x-mermaid">
+flowchart LR
+    call[Tool call] --> queue[Retry queue]
+    queue --> scheduler{Scheduler}
+    scheduler -->|idempotency key| provider[Provider]
+    provider -->|429| queue
+</script></happy-diagram>
+
+The whole fix is two lines of backoff:
+
+<happy-code language="ts" path="src/retry.ts"><script type="text/plain">
+    const delay = Math.min(cap, base * 2 ** attempt);
+    await sleep(delay + jitter());
+</script></happy-code>
+
+<happy-files><script type="application/json">
+[ { "path": "src/retry.ts", "status": "modified", "added": 14, "removed": 3 },
+  { "path": "src/retry.test.ts", "status": "added", "added": 52 },
+  { "path": "src/legacy/backoff.ts", "status": "deleted", "removed": 88 } ]
+</script></happy-files>
+
+A chart sits beside the screenshot that motivated it:
+
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start">
+  <figure><img src="screens/weekly-chart.png" style="width: 100%"><figcaption style="tone: muted; font-size: small">The dashboard's own chart</figcaption></figure>
+  <figure><happy-chart><script type="application/json">{ "labels": ["Mon", "Tue", "Wed", "Thu", "Fri"], "series": [{ "values": [12, 19, 7, 23, 16] }], "unit": "runs" }</script></happy-chart><figcaption style="tone: muted; font-size: small">The same week, as a chart</figcaption></figure>
+</div>
+
+An invalid widget hides nothing — this block stays text:
+
+<happy-chart>not json at all</happy-chart>`;
+
+const widgetChartRead = mediaTool(
+    "tool-widget-read-chart",
+    "Read",
+    [sourced(smallChart, "screens/weekly-chart.png")],
+    COLUMNS_TWO,
+);
+
+/** A reply that carries charts, a diagram, a code quote, and a files list, with zero tool calls. */
+export const widgetEntries: readonly ConversationEntry[] = [
+    message(
+        "m-70",
+        happyAgentOwnerAuthor,
+        "Profile the renderer and show me what changed.",
+        "2026-10-20T10:08:00.000Z",
+    ),
+    activity(widgetChartRead, "m-71", "2026-10-20T10:08:01.000Z"),
+    message("m-72", agentAuthor, WIDGET_REPLY, "2026-10-20T10:08:20.000Z"),
+];
+
+/*
  * Recordings an agent made on a phone and presented, then laid out again —
  * with no stated size, as today's daemon presents every recording, so the
  * transcript learns each shape from the recording itself.

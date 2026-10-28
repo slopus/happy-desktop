@@ -289,6 +289,26 @@ export class HappyAgentDaemonClient {
     }
 
     /**
+     * Opens one of Happy Agent's standard component files — `style.css`,
+     * `components.js`, `diagrams.js` — as it serves them outside any artifact,
+     * at `/v0/artifact-components/`, under this client's connection prefix.
+     * The caller names only files it allows; the request is never interpreted.
+     */
+    openArtifactComponent(
+        file: string,
+        headers: Readonly<Record<string, string>>,
+        signal?: AbortSignal,
+    ): Promise<HappyAgentDaemonRawResponse> {
+        const connection = new URL(this.#client.endpoint).pathname.replace(/\/$/u, "");
+        return this.rawRequest({
+            method: "GET",
+            path: `${connection}/v0/artifact-components/${encodeURIComponent(file)}`,
+            headers,
+            ...(signal ? { signal } : {}),
+        });
+    }
+
+    /**
      * Opens one daemon request without interpreting its response.
      *
      * Only `/v0` is accepted. The renderer supplies ordinary HTTP headers, but

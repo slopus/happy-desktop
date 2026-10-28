@@ -183,6 +183,49 @@
     max-height: none;
 }
 
+/* ---- MediaTree widgets -------------------------------------------------
+
+   The chart, diagram, code quote, and changed-files list an agent wrote into
+   a layout: each a standard component on a page of its own, drawn by Happy
+   Agent's own script on the chat's surface. The box is sized from the height
+   its page reported (`mediaComponentHeights`) and the page stays invisible
+   until it has reported one, so it is never seen at a guessed size. */
+
+.happy-media-tree .happy-media-tree__widget {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+}
+
+.happy-media-tree__widget-page {
+    display: flex;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+.happy-media-tree__widget-page > * {
+    flex: 1 1 auto;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    border: 0;
+}
+
+.happy-media-tree__widget:not([data-drawn]) > .happy-media-tree__widget-page {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.happy-media-tree__widget-note {
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 24px;
+}
+
 /* ---- MediaImageTile --------------------------------------------------- */
 
 .happy-media-image-tile {

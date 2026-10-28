@@ -59,6 +59,9 @@ function fixture(paths: readonly string[] = ["index.html", "app.js", "img/a b.pn
         openArtifactApi: (async () => {
             throw new Error("unreachable");
         }) as never,
+        openArtifactComponent: (async () => {
+            throw new Error("Standard components are not part of this fixture.");
+        }) as never,
     };
     const sites = artifactSitesCreate();
     const site = sites.register(client);
@@ -305,6 +308,9 @@ describe("artifact site handler", () => {
             openArtifactApi: (async () => {
                 throw new Error("unreachable");
             }) as never,
+            openArtifactComponent: (async () => {
+                throw new Error("Standard components are not part of this fixture.");
+            }) as never,
         };
         await expect(artifactSitesCreate().register(wrong).open(ARTIFACT, 2)).rejects.toMatchObject(
             {
@@ -320,6 +326,9 @@ describe("artifact site handler", () => {
             }) as never,
             openArtifactApi: (async () => {
                 throw new Error("unreachable");
+            }) as never,
+            openArtifactComponent: (async () => {
+                throw new Error("Standard components are not part of this fixture.");
             }) as never,
         };
         await expect(
@@ -342,6 +351,9 @@ describe("artifact site handler", () => {
             openArtifactApi: (async () => {
                 throw new Error("unreachable");
             }) as never,
+            openArtifactComponent: (async () => {
+                throw new Error("Standard components are not part of this fixture.");
+            }) as never,
         };
         await expect(
             artifactSitesCreate().register(entryless).open(ARTIFACT, 2),
@@ -359,6 +371,9 @@ describe("artifact site handler", () => {
             }) as never,
             openArtifactApi: (async () => {
                 throw new Error("read locally");
+            }) as never,
+            openArtifactComponent: (async () => {
+                throw new Error("Standard components are not part of this fixture.");
             }) as never,
             connection: (id) => {
                 expect(id).toBe("team");

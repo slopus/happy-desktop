@@ -1,3 +1,4 @@
+import type { HappyAgentComponent } from "../artifacts/artifactComponentStore.js";
 import type { TerminalConnection } from "../transport.js";
 import type { HappyAgentDeviceBridgeHost } from "./happyAgentDeviceBridgeHost.js";
 import type {
@@ -49,6 +50,13 @@ export interface HappyAgentHostServices {
      * could not serve this one.
      */
     artifactSiteOpen?(artifactId: string, version: number): Promise<HappyAgentArtifactSiteOpening>;
+    /**
+     * Serves one standard component — a chart, diagram, code quote, or file
+     * list a reply holds — as a page of its own, drawn by Happy Agent's
+     * standard components, and names its address. Absent where the host has
+     * no isolated guest to show such a page in.
+     */
+    componentSiteOpen?(component: HappyAgentComponent): Promise<HappyAgentArtifactSiteOpening>;
     /**
      * Where a file the reader chose lives on this machine, when it lives
      * anywhere. A pasted screenshot exists only in the browser and answers

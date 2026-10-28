@@ -17,7 +17,11 @@ import {
     type HappyAgentSidebarProject,
 } from "happy-desktop-state";
 import { AppGptLivePhone } from "./gptLive/AppGptLivePhone";
-import { conversationInlinePagesCreate, inlineArtifactsStoreNoop } from "./conversationInlinePages";
+import {
+    componentSitesStoreNoop,
+    conversationInlinePagesCreate,
+    inlineArtifactsStoreNoop,
+} from "./conversationInlinePages";
 import {
     ARTIFACT_READING,
     artifactTitlesStoreNoop,
@@ -9621,6 +9625,14 @@ function HappyAgentConversationSurface(props: {
         inlineStore.get,
         inlineStore.get,
     );
+    // The pages a reply's charts, diagrams, code quotes, and file lists are
+    // drawn on, through one subscription as well.
+    const componentStore = props.artifacts?.components() ?? componentSitesStoreNoop;
+    const componentSites = useSyncExternalStore(
+        componentStore.subscribe,
+        componentStore.get,
+        componentStore.get,
+    );
     // A session that is still being read is not a reason to unmount this
     // surface: the composer is already live, the header already carries the
     // title the list knew, and the transcript fills in underneath. Only a
@@ -9727,7 +9739,10 @@ function HappyAgentConversationSurface(props: {
               artifacts: inlineArtifacts,
               store: inlineStore,
               ...(props.artifacts && inlineEngines.artifactPage
-                  ? { artifactPage: inlineEngines.artifactPage }
+                  ? {
+                        artifactPage: inlineEngines.artifactPage,
+                        components: { sites: componentSites, store: componentStore },
+                    }
                   : {}),
               ...(inlineEngines.browserContent
                   ? { browserContent: inlineEngines.browserContent }

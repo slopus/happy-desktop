@@ -1,5 +1,8 @@
 import type {
     HappyAgentArtifactId,
+    HappyAgentComponent,
+    HappyAgentComponentSitesSnapshot,
+    HappyAgentComponentSitesStore,
     HappyAgentInlineArtifactsSnapshot,
     HappyAgentInlineArtifactsStore,
 } from "happy-desktop-state";
@@ -19,6 +22,16 @@ export const inlineArtifactsStoreNoop: HappyAgentInlineArtifactsStore = {
     subscribe: () => () => undefined,
     request: () => undefined,
     contentRequest: () => undefined,
+    [Symbol.dispose]: () => undefined,
+};
+
+const COMPONENTS_EMPTY: HappyAgentComponentSitesSnapshot = new Map();
+
+/** A component-sites store with nothing behind it, for a Happy Agent that keeps no artifacts. */
+export const componentSitesStoreNoop: HappyAgentComponentSitesStore = {
+    get: () => COMPONENTS_EMPTY,
+    subscribe: () => () => undefined,
+    request: () => undefined,
     [Symbol.dispose]: () => undefined,
 };
 
@@ -59,6 +72,11 @@ const ignore = (): void => undefined;
 export function conversationInlinePagesCreate(input: {
     readonly artifacts: HappyAgentInlineArtifactsSnapshot;
     readonly store: HappyAgentInlineArtifactsStore;
+    /** The pages the conversation's standard components are drawn on, and their store. */
+    readonly components?: {
+        readonly sites: HappyAgentComponentSitesSnapshot;
+        readonly store: HappyAgentComponentSitesStore;
+    };
     readonly artifactPage?: HtmlPreviewRenderer;
     readonly browserContent?: BrowserContentRenderer;
     readonly proposalRender?: ConversationInlinePages["proposalRender"];
@@ -71,10 +89,18 @@ export function conversationInlinePagesCreate(input: {
 }): ConversationInlinePages {
     const artifactPage = input.artifactPage;
     const browserContent = input.browserContent;
+    const components = input.components;
     return {
         artifacts: input.artifacts,
         artifactsRequest: (artifactIds) => input.store.request(artifactIds),
         artifactsContentRequest: (artifactIds) => input.store.contentRequest(artifactIds),
+        ...(components
+            ? {
+                  componentSites: components.sites,
+                  componentSitesRequest: (requested: readonly HappyAgentComponent[]) =>
+                      components.store.request(requested),
+              }
+            : {}),
         ...(artifactPage
             ? {
                   artifactRender: (url, fit) =>

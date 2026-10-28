@@ -26,6 +26,11 @@ import {
     happyAgentArtifactViewerStoreCreate,
     type HappyAgentArtifactViewerStore,
 } from "./artifactViewerStore.js";
+import {
+    happyAgentComponentSitesStoreCreate,
+    type HappyAgentComponent,
+    type HappyAgentComponentSitesStore,
+} from "./artifactComponentStore.js";
 
 /**
  * One Happy Agent's artifact surfaces. Each store is materialized on first
@@ -55,6 +60,8 @@ export interface HappyAgentArtifacts {
     titles(): HappyAgentArtifactTitlesStore;
     /** The artifacts conversations show inline, each at its latest version. */
     inline(): HappyAgentInlineArtifactsStore;
+    /** The pages the standard components conversations draw are shown on. */
+    components(): HappyAgentComponentSitesStore;
     /** The names of the people artifacts credit. */
     people(): HappyAgentArtifactPeopleStore;
     /**
@@ -86,10 +93,15 @@ export interface HappyAgentArtifactsDeps {
         artifactId: HappyAgentArtifactId,
         version: number,
     ) => Promise<HappyAgentArtifactSiteOpening>;
+    /** Serves a standard component as a page, where the host has a guest to show it in. */
+    readonly componentOpen?: (
+        component: HappyAgentComponent,
+    ) => Promise<HappyAgentArtifactSiteOpening>;
 }
 
 export function happyAgentArtifactsCreate(deps: HappyAgentArtifactsDeps): HappyAgentArtifacts {
     let catalog: HappyAgentArtifactCatalogStore | undefined;
+    let components: HappyAgentComponentSitesStore | undefined;
     let panel: HappyAgentArtifactCatalogStore | undefined;
     let viewer: HappyAgentArtifactViewerStore | undefined;
     let panelViewer: HappyAgentArtifactViewerStore | undefined;
@@ -165,6 +177,13 @@ export function happyAgentArtifactsCreate(deps: HappyAgentArtifactsDeps): HappyA
                 }),
             ));
         },
+        components() {
+            return (components ??= inert(
+                happyAgentComponentSitesStoreCreate(
+                    deps.componentOpen ? { componentOpen: deps.componentOpen } : {},
+                ),
+            ));
+        },
         people() {
             return peopleOf().store;
         },
@@ -193,6 +212,7 @@ export function happyAgentArtifactsCreate(deps: HappyAgentArtifactsDeps): HappyA
             tabViewer?.[Symbol.dispose]();
             titles?.[Symbol.dispose]();
             inline?.[Symbol.dispose]();
+            components?.[Symbol.dispose]();
             people?.[Symbol.dispose]();
         },
     };

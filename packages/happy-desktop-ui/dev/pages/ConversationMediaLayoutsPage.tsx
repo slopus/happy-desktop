@@ -13,6 +13,7 @@ import {
     lenientEntries,
     presentedEntries,
     readRunEntries,
+    widgetEntries,
 } from "./conversationMediaLayoutFixtures";
 
 /** The component plan this page documents. The selector and the page header read the same value. */
@@ -82,6 +83,8 @@ const SCREENS = [
     { name: "lenient", entries: lenientEntries, mode: "dark", width: 1100, height: 3800 },
     { name: "inline", entries: inlineEntries, mode: "light", width: 1100, height: 2400 },
     { name: "inline", entries: inlineEntries, mode: "dark", width: 1100, height: 2400 },
+    { name: "widgets", entries: widgetEntries, mode: "light", width: 1100, height: 5600 },
+    { name: "widgets", entries: widgetEntries, mode: "dark", width: 1100, height: 5600 },
 ] as const;
 
 export function ConversationMediaLayoutsPage() {

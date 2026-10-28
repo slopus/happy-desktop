@@ -201,7 +201,9 @@ export async function gymElectronVideoRecord(
             "pipe:0",
             "-an",
             "-c:v",
-            "vp8",
+            // Playwright's ffmpeg build 1013 ships libvpx-vp9 without the VP8
+            // encoder, and some builds reject the bare "vp8" alias entirely.
+            "libvpx-vp9",
             "-b:v",
             "4M",
             "-crf",

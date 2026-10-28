@@ -799,6 +799,13 @@ export function happyAgentWorkspaceClientCreate(
                           siteOpen: deps.hostServices.artifactSiteOpen.bind(deps.hostServices),
                       }
                     : {}),
+                ...(deps.hostServices.componentSiteOpen
+                    ? {
+                          componentOpen: deps.hostServices.componentSiteOpen.bind(
+                              deps.hostServices,
+                          ),
+                      }
+                    : {}),
             });
             return artifacts;
         },
