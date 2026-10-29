@@ -208,7 +208,17 @@ jobs:
                   RELEASE_ARCH: ${{ matrix.arch }}
                   RELEASE_FLAVOR: ${{ matrix.flavor }}
               run: |
-                  pnpm desktop:mac:release -- --arch "$RELEASE_ARCH" --flavor "$RELEASE_FLAVOR"
+                  # GitHub's Intel runners drop Apple's CloudKit ticket lookup during
+                  # electron-builder's `stapler staple`, which has no retry of its own.
+                  set -o pipefail
+                  for attempt in 1 2 3; do
+                    log="$RUNNER_TEMP/desktop-mac-release-$attempt.log"
+                    if pnpm desktop:mac:release -- --arch "$RELEASE_ARCH" --flavor "$RELEASE_FLAVOR" 2>&1 | tee "$log"; then exit 0; fi
+                    grep -q 'Failed to staple your application with code: 68' "$log" || exit 1
+                    echo "Apple's ticket lookup dropped while stapling (attempt $attempt/3)." >&2
+                    [[ $attempt == 3 ]] || sleep $((120 * attempt))
+                  done
+                  exit 1
 
             - name: Remove App Store Connect API key
               if: always()
