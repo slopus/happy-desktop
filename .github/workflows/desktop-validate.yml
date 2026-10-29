@@ -60,7 +60,7 @@ jobs:
                   GH_TOKEN: ${{ github.token }}
                   # Advance only after this exact preview is published and verified
                   # against Desktop's pinned SDK. Never fall back to another release.
-                  HAPPY_DESKTOP_CI_AGENT_RELEASE_TAG: v0.4.110-preview.11
+                  HAPPY_DESKTOP_CI_AGENT_RELEASE_TAG: v0.4.110-preview.12
               run: |
                   set -euo pipefail
                   TAG="$HAPPY_DESKTOP_CI_AGENT_RELEASE_TAG"
