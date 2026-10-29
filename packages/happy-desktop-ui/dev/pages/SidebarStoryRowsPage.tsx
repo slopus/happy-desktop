@@ -193,7 +193,7 @@ export function SidebarStoryRowsPage() {
         <ComponentPage
             number={componentNumber}
             title="Sidebar story rows"
-            summary="Telegram-measured 64px chat cards: title and time, then the lines the work changed and up to two status lines, a draft on the last line, a resting dinosaur when there is nothing to say, and one corner signal; compact nested rows with deltas; section headings."
+            summary="Telegram-measured 64px chat cards: title and time, then the lines the work changed and up to two status lines, a draft on the last line, blank lines when there is nothing to say, and one corner signal; compact nested rows with deltas; section headings."
         >
             {[
                 { width: 1100, height: 760 },

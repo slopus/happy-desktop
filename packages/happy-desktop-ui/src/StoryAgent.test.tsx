@@ -220,9 +220,7 @@ it("keeps every story row one height with its name on one line, whatever the sta
         return {
             height: px(box.height),
             label: of("sidebar-item-label"),
-            // Where the status starts; how many lines it holds depends on
-            // whether the last line is the empty mark's.
-            subtitle: (({ x, y }) => ({ x, y }))(of("sidebar-item-subtitle")),
+            subtitle: of("sidebar-item-subtitle"),
             leading: of("sidebar-item-leading"),
         };
     };

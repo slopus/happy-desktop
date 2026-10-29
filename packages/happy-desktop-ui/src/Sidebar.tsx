@@ -35,7 +35,6 @@ import { ShimmerText } from "./ShimmerText";
 import { Spinner } from "./Spinner";
 import { type StemCellMark } from "./StemCell";
 import { StemCellGrowth, type ImageMark } from "./StemCellGrowth";
-import { StoryEmptyMark } from "./StoryEmptyMark";
 import { StoryRing, type StoryRingSegments } from "./StoryRing";
 import { ScrollArea } from "./Scrollbar";
 import { SidebarSectionContext, SidebarSectionTail } from "./SidebarSectionDetails";
@@ -2681,18 +2680,15 @@ function SidebarRow({
                             ? null
                             : ((stats: boolean, draft: string | undefined) => {
                                   /* The last line is the draft's when there is
-                                     one, and the empty mark's when the row has
-                                     nothing at all to say; the status keeps the
-                                     line above either. */
-                                  const empty = !stats && !story()?.subtitle && draft === undefined;
+                                     one, and the status keeps the line above it.
+                                     A row with nothing to say leaves both lines
+                                     blank. */
                                   return (
                                       <>
                                           <span
                                               className="happy-sidebar__item-subtitle"
                                               data-happy-desktop-ui="sidebar-item-subtitle"
-                                              data-lines={
-                                                  draft !== undefined || empty ? "1" : undefined
-                                              }
+                                              data-lines={draft !== undefined ? "1" : undefined}
                                           >
                                               {stats ? (
                                                   <ChangeStats
@@ -2713,13 +2709,6 @@ function SidebarRow({
                                                       Draft:{" "}
                                                   </span>
                                                   {draft}
-                                              </span>
-                                          ) : empty ? (
-                                              <span
-                                                  className="happy-sidebar__item-empty"
-                                                  data-happy-desktop-ui="sidebar-item-empty"
-                                              >
-                                                  <StoryEmptyMark />
                                               </span>
                                           ) : null}
                                       </>

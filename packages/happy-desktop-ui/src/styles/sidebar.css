@@ -2528,9 +2528,8 @@
     );
 }
 
-/* With a draft, or nothing at all to say, the status keeps one line and the
-   last line is the draft's or the empty mark's. Both hold 16px, so the row's
-   two status lines stand where they always do. */
+/* With a draft, the status keeps one line and the last line is the draft's.
+   Both hold 16px, so the row's two status lines stand where they always do. */
 .happy-sidebar__item-subtitle[data-lines="1"] {
     height: 16px;
     -webkit-line-clamp: 1;
@@ -2554,22 +2553,6 @@
 
 .happy-sidebar__item-draft-label {
     font-weight: 500;
-}
-
-/* The empty mark's dinosaur spans the last line's cap top to its descender,
-   the height of "Ag" in the status text, at the text column. */
-.happy-sidebar__item-empty {
-    display: flex;
-    flex: none;
-    align-items: flex-start;
-    height: 16px;
-    padding-top: 3px;
-    color: color-mix(in srgb, var(--text-secondary) 55%, transparent);
-}
-
-.happy-story-empty-mark {
-    display: block;
-    flex: none;
 }
 
 /* The lines the work changed lead the status, in the same run: the status
