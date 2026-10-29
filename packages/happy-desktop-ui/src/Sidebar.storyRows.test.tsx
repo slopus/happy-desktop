@@ -78,11 +78,12 @@ it("holds the same title, row and sibling boxes as statuses, rings, times and co
         );
         const subtitle = part(parent, "sidebar-item-subtitle");
         // Two 16px lines are reserved, and a longer status ends in an ellipsis;
-        // with nothing to say, both stay blank.
-        expect(subtitle.getBoundingClientRect().height).toBe(32);
-        expect(subtitle.textContent).toBe(story.subtitle ?? "");
-        expect(subtitle.nextElementSibling).toBeNull();
-        expect(getComputedStyle(subtitle).getPropertyValue("-webkit-line-clamp")).toBe("2");
+        // with nothing to say, the last line is the empty mark's.
+        expect(subtitle.getBoundingClientRect().height).toBe("subtitle" in story ? 32 : 16);
+        expect(part(parent, "sidebar-item-empty") !== null).toBe(!("subtitle" in story));
+        expect(getComputedStyle(subtitle).getPropertyValue("-webkit-line-clamp")).toBe(
+            "subtitle" in story ? "2" : "1",
+        );
         // A nested row is one compact line: no status, no time.
         expect(part(child, "sidebar-item-subtitle")).toBeNull();
         expect(part(child, "sidebar-item-time")).toBeNull();

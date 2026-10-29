@@ -209,7 +209,7 @@ body,
     -webkit-line-clamp: var(--sv-status-lines);
 }
 
-/* With a draft, the status keeps one line; line 2 is the draft. */
+/* With a draft or nothing to say, the status keeps one line; line 2 is the draft or the empty mark. */
 .sv-sidebar .happy-sidebar__item[data-story] .happy-sidebar__item-subtitle[data-lines="1"] {
     height: var(--sv-status-line);
     -webkit-line-clamp: 1;
