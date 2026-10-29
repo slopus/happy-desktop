@@ -88,6 +88,10 @@ export interface HappyAgentWorktreeGroup {
     readonly addedLines?: number;
     readonly deletedLines?: number;
     readonly changes?: HappyAgentWorktree["changes"];
+    readonly comparedWith?: HappyAgentWorktree["comparedWith"];
+    readonly comparisonBase?: HappyAgentWorktree["comparisonBase"];
+    readonly createdFrom?: string;
+    readonly upstream?: string;
 }
 
 /**
@@ -125,6 +129,7 @@ export interface HappyAgentProjectGroup {
     readonly addedLines?: number;
     readonly deletedLines?: number;
     readonly changes?: HappyAgentProject["changes"];
+    readonly comparedWith?: HappyAgentProject["comparedWith"];
 }
 
 /**
@@ -191,6 +196,12 @@ export function happyAgentProjectGroupsProject(
             ...(worktree.addedLines === undefined ? {} : { addedLines: worktree.addedLines }),
             ...(worktree.deletedLines === undefined ? {} : { deletedLines: worktree.deletedLines }),
             ...(worktree.changes === undefined ? {} : { changes: worktree.changes }),
+            ...(worktree.comparedWith === undefined ? {} : { comparedWith: worktree.comparedWith }),
+            ...(worktree.comparisonBase === undefined
+                ? {}
+                : { comparisonBase: worktree.comparisonBase }),
+            ...(worktree.createdFrom === undefined ? {} : { createdFrom: worktree.createdFrom }),
+            ...(worktree.upstream === undefined ? {} : { upstream: worktree.upstream }),
         });
     }
 
@@ -298,6 +309,7 @@ function projectGroup(
         ...(project.addedLines === undefined ? {} : { addedLines: project.addedLines }),
         ...(project.deletedLines === undefined ? {} : { deletedLines: project.deletedLines }),
         ...(project.changes === undefined ? {} : { changes: project.changes }),
+        ...(project.comparedWith === undefined ? {} : { comparedWith: project.comparedWith }),
     };
 }
 

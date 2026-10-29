@@ -171,6 +171,7 @@ import {
     happyAgentInboxStoreNoop,
     happyAgentNavigationOrderApply,
     happyAgentAvailabilityProject,
+    happyAgentComparisonBaseRefusal,
     happyAgentNavigationOrderStoreNoop,
     happyAgentSidebarCollapseStoreNoop,
     happyAgentSidebarSearchStoreNoop,
@@ -185,6 +186,7 @@ import {
     keepAwakeStoreCreate,
     statusBarStoreNoop,
     titleShimmerStoreNoop,
+    type HappyAgentComparisonBranchSearch,
     type HappyAgentConversationSource,
     type HappyAgentSurface,
     type HappyAgentSurfaceCatalogSnapshot,
@@ -242,6 +244,7 @@ import {
     FormRow,
     type FilePreviewKind,
     filePreviewKind,
+    type GitComparisonBaseProps,
     Lightbox,
     MarkdownDocument,
     ConfirmPopover,
@@ -965,6 +968,21 @@ interface OpenGroup {
     readonly conversations: HappyAgentProjectGroup["conversations"];
     readonly changes: NonNullable<HappyAgentProjectGroup["changes"]>;
     readonly changesStatus?: HappyAgentProjectGroup["changesStatus"];
+    /** What Changes is measured against, when the host says. */
+    readonly comparedWith?: HappyAgentProjectGroup["comparedWith"];
+    /**
+     * The worktree's own comparison choice, present only where the host stores
+     * one: that presence is what makes the comparison changeable.
+     */
+    readonly comparisonChoice?: {
+        readonly worktreeId: HappyAgentWorktreeId;
+        readonly value: string | null;
+        /**
+         * The branches known without asking the host, most relevant first:
+         * offered when the host cannot list the repository's branches.
+         */
+        readonly known: readonly string[];
+    };
     readonly create?: HappyAgentSessionCreateInput;
     /**
      * Where the open group's checkout is in its own life, for a worktree. A
@@ -1977,6 +1995,7 @@ function openGroupFind(
             ...(worktree?.changesStatus === undefined
                 ? {}
                 : { changesStatus: worktree.changesStatus }),
+            ...(worktree === undefined ? {} : worktreeComparison(worktree)),
             ...(worktree === undefined ? {} : { lifecycle: worktree.lifecycle }),
             create: { cwd: task.path, worktreeId: task.workspaceId },
             path: task.path,
@@ -2020,6 +2039,11 @@ function openGroupFind(
                 ...(project.changesStatus === undefined
                     ? {}
                     : { changesStatus: project.changesStatus }),
+                // The project's own checkout is compared, but the host keeps no
+                // choice for it, so it is stated and never offered for change.
+                ...(project.comparedWith === undefined
+                    ? {}
+                    : { comparedWith: project.comparedWith }),
                 create: { cwd: project.path },
                 lifecycle: project.lifecycle,
                 path: project.displayPath,
@@ -2035,12 +2059,99 @@ function openGroupFind(
                     ...(worktree.changesStatus === undefined
                         ? {}
                         : { changesStatus: worktree.changesStatus }),
+                    ...worktreeComparison(worktree),
                     create: { cwd: worktree.path, worktreeId: worktree.id },
                     lifecycle: worktree.lifecycle,
                     path: worktree.displayPath,
                 };
     }
     return undefined;
+}
+
+/**
+ * What a worktree's Changes is measured against and, where its host stores a
+ * choice, the choice itself with the branches worth offering in its place:
+ * what it compares with now, what it was created from, and its own upstream.
+ */
+function worktreeComparison(
+    worktree: HappyAgentProjectGroup["worktrees"][number],
+): Pick<OpenGroup, "comparedWith" | "comparisonChoice"> {
+    const known = [
+        ...new Set(
+            [worktree.comparedWith?.ref, worktree.createdFrom, worktree.upstream].filter(
+                (ref): ref is string => ref !== undefined && ref !== null && ref !== "",
+            ),
+        ),
+    ];
+    return {
+        ...(worktree.comparedWith === undefined ? {} : { comparedWith: worktree.comparedWith }),
+        ...(worktree.comparisonBase === undefined
+            ? {}
+            : {
+                  comparisonChoice: {
+                      worktreeId: worktree.id,
+                      value: worktree.comparisonBase,
+                      known,
+                  },
+              }),
+    };
+}
+
+/**
+ * The branches the comparison picker offers a worktree: the host's ranked
+ * listing for what is typed where it gave one, else the branches already
+ * known. The one place the picker's candidates come from.
+ */
+function comparisonCandidates(
+    worktreeId: HappyAgentWorktreeId,
+    known: readonly string[],
+    search: HappyAgentComparisonBranchSearch,
+): readonly string[] {
+    return search.worktreeId === worktreeId && search.branches !== undefined
+        ? search.branches
+        : known;
+}
+
+/** What the Changes header does with a person's hand on it. */
+interface ComparisonActions {
+    readonly change: (worktreeId: HappyAgentWorktreeId, choice: string | null) => void;
+    readonly search: (worktreeId: HappyAgentWorktreeId, query: string) => void;
+    readonly searchClose: () => void;
+}
+
+/**
+ * The Changes header for an open group, or nothing from a host that does not
+ * say what it compares with. It is changeable only for a worktree whose host
+ * stores a choice, and only when `actions` are given.
+ */
+function comparisonProps(
+    group: OpenGroup,
+    actions: ComparisonActions | undefined,
+    search: HappyAgentComparisonBranchSearch,
+): GitComparisonBaseProps | undefined {
+    const comparedWith = group.comparedWith;
+    if (comparedWith === undefined) return undefined;
+    const choice = group.comparisonChoice;
+    return {
+        baseRef: comparedWith.ref,
+        ...(comparedWith.source === null ? {} : { source: comparedWith.source }),
+        ...(comparedWith.notice === null ? {} : { notice: comparedWith.notice }),
+        ...(choice === undefined || actions === undefined
+            ? {}
+            : {
+                  choice: choice.value,
+                  branches: comparisonCandidates(choice.worktreeId, choice.known, search),
+                  searching: search.worktreeId === choice.worktreeId && search.searching,
+                  ...(search.worktreeId === choice.worktreeId && search.unavailable !== undefined
+                      ? { unavailable: search.unavailable }
+                      : {}),
+                  onChoiceChange: (value: string | null) =>
+                      actions.change(choice.worktreeId, value),
+                  onQueryChange: (query: string) => actions.search(choice.worktreeId, query),
+                  onClose: actions.searchClose,
+                  validate: happyAgentComparisonBaseRefusal,
+              }),
+    };
 }
 
 /**
@@ -7798,6 +7909,23 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                 workspace={props.workspace}
             />
         );
+    const panelComparison =
+        openGroup &&
+        comparisonProps(
+            openGroup,
+            // A change is a write to the host, so it is offered only while the
+            // host can take it.
+            availability.online
+                ? {
+                      change: (worktreeId, choice) =>
+                          props.workspace.worktreeComparisonBaseUpdate(worktreeId, choice),
+                      search: (worktreeId, query) =>
+                          props.workspace.comparisonBranchSearchUpdate(worktreeId, query),
+                      searchClose: () => props.workspace.comparisonBranchSearchClose(),
+                  }
+                : undefined,
+            workspace.comparisonBranchSearch,
+        );
 
     // Devices reach a workspace on another machine, so only a connection the
     // host can bridge offers them, and only for the workspace that is open.
@@ -7897,6 +8025,7 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                         {...(props.changeTiers === undefined
                             ? {}
                             : { changeTiers: props.changeTiers })}
+                        {...(panelComparison === undefined ? {} : { comparison: panelComparison })}
                         expanded={workspace.fileTreeExpanded}
                         collapsed={workspace.fileTreeCollapsed}
                         layout={workspace.fileLayout}
@@ -11013,6 +11142,8 @@ function HappyAgentPanelBody(props: {
      * workspace to remember them in, when every change is listed together.
      */
     changeTiers?: HappyAgentChangeTiersStore;
+    /** What Changes is measured against, and how to change it where it can be. */
+    comparison?: GitComparisonBaseProps;
     closeShortcut?: KeyboardShortcut;
     expanded: ReadonlySet<string>;
     collapsed: ReadonlySet<string>;
@@ -11397,6 +11528,9 @@ function HappyAgentPanelBody(props: {
                             layout={props.layout}
                             loading={loading}
                             nodes={nodes}
+                            {...(props.comparison === undefined
+                                ? {}
+                                : { comparison: props.comparison })}
                             {...(changesStale
                                 ? {
                                       note: "Showing the last successful Git scan. Retrying automatically…",

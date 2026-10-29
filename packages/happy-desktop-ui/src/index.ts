@@ -224,6 +224,15 @@ export {
     type FileBrowserProps,
     type FileBrowserScope,
 } from "./FileBrowser";
+export {
+    GitComparisonBase,
+    GitComparisonBaseCard,
+    gitComparisonBaseOptions,
+    type GitComparisonBaseCardProps,
+    type GitComparisonBaseOption,
+    type GitComparisonBaseProps,
+    type GitComparisonBaseSource,
+} from "./GitComparisonBase";
 export { FilePathLabel, type FilePathLabelProps } from "./FilePathLabel";
 export {
     FilePreview,

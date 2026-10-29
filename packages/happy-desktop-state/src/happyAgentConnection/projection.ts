@@ -1,3 +1,4 @@
+import { workspaceComparisonBaseRead } from "./gitComparisonBase.js";
 import { gitSnapshotProject, type GitSnapshotState } from "./gitSnapshotState.js";
 import { mediaLayoutProject, mediaScaleProject } from "./mediaLayoutProject.js";
 import type {
@@ -745,6 +746,7 @@ function projectWorkspace(
     const agents = workspace.agents;
     const activeAgents = agents.filter((agent) => agent.archivedAt === null);
     const git = gitSnapshotProject(gitState);
+    const comparisonBase = workspaceComparisonBaseRead(workspace);
     return {
         id: workspace.id,
         name: workspace.name,
@@ -758,6 +760,9 @@ function projectWorkspace(
             ? {}
             : { error: workspace.initialization.error }),
         ...(git === undefined ? {} : { git }),
+        ...(comparisonBase === undefined ? {} : { comparisonBase }),
+        ...(workspace.base === null ? {} : { createdFrom: workspace.base.ref }),
+        ...(workspace.git?.upstream ? { upstream: workspace.git.upstream } : {}),
         sessions: [...agents]
             .sort(orderCompare)
             .map((agent) =>

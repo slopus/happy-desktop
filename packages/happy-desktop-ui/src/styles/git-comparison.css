@@ -1,0 +1,385 @@
+/*
+ * C-289 GitComparisonBase — which branch a checkout's changes are measured
+ * against.
+ *
+ * A 32px box with the search field's own geometry — input well, divider
+ * hairline, small radius, 8px lead to a 14px glyph, 8px gaps — so it reads as
+ * a pair with "Search changes" under it and starts on the same edge. Inside: a
+ * secondary "Compared with", the ref in the code face, and a source badge;
+ * an editable box ends in a chevron and takes the ripple fill on hover and
+ * the focus ring while its card is open. A fallback notice sits under the box
+ * in 11px secondary text, its glyph on the box glyph's lane. The card it opens
+ * is the Menu's surface: plain surface, modal hairline, 10px radius, a short
+ * drop.
+ */
+
+.happy-git-comparison,
+.happy-git-comparison * {
+    box-sizing: border-box;
+}
+
+.happy-git-comparison {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+    font-family: var(--happy-font-ui);
+    font-synthesis: none;
+    color: var(--text);
+}
+
+.happy-git-comparison__box {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    min-width: 0;
+    height: 32px;
+    margin: 0;
+    padding: 0 8px;
+    background: var(--input-background);
+    border: 1px solid var(--divider);
+    border-radius: var(--happy-radius-sm);
+    color: var(--text);
+    font-family: var(--happy-font-ui);
+    font-synthesis: none;
+    text-align: left;
+    appearance: none;
+    transition: background-color 120ms ease;
+}
+
+button.happy-git-comparison__box {
+    cursor: pointer;
+}
+
+button.happy-git-comparison__box:hover {
+    background: var(--surface-ripple);
+}
+
+button.happy-git-comparison__box:focus-visible,
+button.happy-git-comparison__box[aria-expanded="true"] {
+    outline: 2px solid var(--radio-active);
+    outline-offset: 1px;
+}
+
+.happy-git-comparison__icon,
+.happy-git-comparison__chevron {
+    display: flex;
+    flex: none;
+    align-items: center;
+    color: var(--text-secondary);
+}
+
+/* The chevron closes the box's far end, wherever the ref and badge stop. */
+.happy-git-comparison__chevron {
+    margin-left: auto;
+}
+
+.happy-git-comparison__label {
+    display: block;
+    flex: none;
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 16px;
+    white-space: nowrap;
+}
+
+/* The ref is what the reader came to read, so it is the one bright part and
+   the only part that gives way: it elides before the label or the badge do. */
+.happy-git-comparison__ref {
+    display: block;
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--text);
+    font-family: var(--happy-font-mono);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 16px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-git-comparison__source {
+    flex: none;
+}
+
+/* 1px hairline + 8px lead: the notice glyph sits on the box glyph's lane. */
+.happy-git-comparison__notice {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    min-width: 0;
+    padding: 0 9px;
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 16px;
+}
+
+.happy-git-comparison__notice-icon {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 16px;
+    color: var(--box-warning-text);
+}
+
+.happy-git-comparison__notice-text {
+    display: block;
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+/* ---- Card ------------------------------------------------------------- */
+
+.happy-git-comparison__backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: calc(var(--happy-z-overlay) - 1);
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    cursor: default;
+}
+
+/* Drawn in the window's overlay lane and placed and sized under the box by
+   the component once it has a size, so nothing here anchors it to a parent. */
+.happy-git-comparison__popover {
+    position: fixed;
+    z-index: var(--happy-z-overlay);
+    display: flex;
+}
+
+.happy-git-comparison-card,
+.happy-git-comparison-card * {
+    box-sizing: border-box;
+}
+
+.happy-git-comparison-card {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 280px;
+    max-height: 360px;
+    padding: 6px;
+    background: var(--surface);
+    border: 1px solid var(--modal-border);
+    border-radius: var(--happy-radius-md);
+    box-shadow: 0 2px 8px var(--shadow-color);
+    color: var(--text);
+    font-family: var(--happy-font-ui);
+    font-synthesis: none;
+}
+
+/* The same well as the search field and the box that opened the card. */
+.happy-git-comparison-card__field {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 8px;
+    height: 32px;
+    padding: 0 8px;
+    background: var(--input-background);
+    border: 1px solid var(--divider);
+    border-radius: var(--happy-radius-sm);
+}
+
+.happy-git-comparison-card__field:focus-within {
+    outline: 2px solid var(--radio-active);
+    outline-offset: 1px;
+}
+
+.happy-git-comparison-card__field[data-invalid] {
+    border-color: var(--box-error-border);
+}
+
+.happy-git-comparison-card__field[data-invalid]:focus-within {
+    outline-color: var(--box-error-border);
+}
+
+.happy-git-comparison-card__field-icon {
+    display: flex;
+    flex: none;
+    color: var(--text-secondary);
+}
+
+.happy-git-comparison-card__input {
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 30px;
+    margin: 0;
+    padding: 0;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--text);
+    font-family: var(--happy-font-ui);
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 30px;
+    letter-spacing: 0;
+    font-synthesis: none;
+    caret-color: var(--radio-active);
+}
+
+.happy-git-comparison-card__input::placeholder {
+    color: var(--text-secondary);
+    opacity: 1;
+}
+
+.happy-git-comparison-card__refusal {
+    flex: none;
+    padding: 0 8px;
+    color: var(--box-error-text);
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 16px;
+}
+
+.happy-git-comparison-card__heading {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    height: 20px;
+    padding: 0 8px;
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 16px;
+}
+
+.happy-git-comparison-card__searching {
+    flex: none;
+}
+
+/* Why the list is only the known branches: quiet, and it elides first. */
+.happy-git-comparison-card__unavailable {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--box-warning-text);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-git-comparison-card__scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+.happy-git-comparison-card__scroll-viewport {
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+}
+
+.happy-git-comparison-card__list {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+}
+
+.happy-git-comparison-card__empty {
+    display: flex;
+    flex: none;
+    align-items: center;
+    height: 28px;
+    padding: 0 8px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 16px;
+}
+
+/* The field above and the actions below keep these rows out of the card's
+   corners, so they round as controls of their own rather than as its curve. */
+.happy-git-comparison-card__option {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    height: 28px;
+    margin: 0;
+    padding: 0 8px;
+    border: none;
+    border-radius: var(--happy-radius-sm);
+    background: transparent;
+    color: var(--text-secondary);
+    font-family: inherit;
+    text-align: left;
+    cursor: pointer;
+    appearance: none;
+}
+
+.happy-git-comparison-card__option[data-active] {
+    background: var(--surface-selected);
+    color: var(--text);
+}
+
+.happy-git-comparison-card__option[aria-disabled="true"] {
+    cursor: default;
+    opacity: 0.5;
+}
+
+.happy-git-comparison-card__option-icon {
+    display: flex;
+    flex: none;
+    align-items: center;
+}
+
+.happy-git-comparison-card__option-label {
+    display: block;
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--text);
+    font-family: var(--happy-font-mono);
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 16px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-git-comparison-card__option-typed {
+    display: flex;
+    flex: 0 1 auto;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 16px;
+    white-space: nowrap;
+}
+
+.happy-git-comparison-card__current {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 4px;
+    margin-left: auto;
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 16px;
+}
+
+.happy-git-comparison-card__actions {
+    display: flex;
+    flex: none;
+    align-items: center;
+    padding-top: 6px;
+    border-top: 1px solid var(--divider);
+}
