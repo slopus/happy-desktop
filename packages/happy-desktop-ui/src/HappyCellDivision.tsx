@@ -55,7 +55,8 @@ export interface HappyCellDivisionProps {
  * marks the caller shows again in `onDone`. With reduced motion the new stem
  * cell only fades in.
  *
- * Render it where no ancestor is transformed, so its fixed box is the window.
+ * It draws in window coordinates wherever its fixed box lands, so a
+ * containing ancestor shifts nothing.
  */
 export function HappyCellDivision(props: HappyCellDivisionProps) {
     const { from, daughters } = props;
@@ -66,11 +67,23 @@ export function HappyCellDivision(props: HappyCellDivisionProps) {
     const [sim] = useState(() => new HappyCellDivisionSim(from, shape));
     const { onDone, onSeed } = props;
 
+    // The rects are the window's, but the layer's fixed box is the window's
+    // only where nothing contains it: a connection beside the rail holds its
+    // fixed layers in its own box, which starts right of the rail. Drawing is
+    // moved back by wherever the layer's box actually starts.
+    const place = (svg: SVGSVGElement | null) => {
+        const page = svg?.querySelector(".happy-cell-division__page");
+        if (!svg || !page) return;
+        const origin = svg.getBoundingClientRect();
+        page.setAttribute("transform", `translate(${-origin.x} ${-origin.y})`);
+    };
+
     // Attached again whenever the props change: a new daughter divides Happy
     // again, a moved one is re-aimed, and the loop picks up the latest onDone. The sim keeps its own clock, so
     // re-attaching never stalls a frame.
     const play = (svg: SVGSVGElement | null) => {
         if (!svg) return;
+        place(svg);
         const membrane = svg.querySelector<SVGPathElement>(".happy-stem-cell__membrane");
         const core = svg.querySelector<SVGPathElement>(".happy-stem-cell__core");
         if (!membrane || !core) return;
@@ -105,41 +118,48 @@ export function HappyCellDivision(props: HappyCellDivisionProps) {
                 className="happy-cell-division"
                 data-happy-desktop-ui="happy-cell-division"
                 focusable="false"
+                ref={place}
             >
                 {variant === "clay" ? <CellClayDefs id={clay} size={from.width} /> : null}
-                <g transform={`translate(${from.x} ${from.y})`}>
-                    <path
-                        className="happy-stem-cell__membrane"
-                        d={happy.membrane}
-                        filter={filter(false)}
-                    />
-                    <path className="happy-stem-cell__core" d={happy.core} filter={filter(true)} />
+                <g className="happy-cell-division__page">
+                    <g transform={`translate(${from.x} ${from.y})`}>
+                        <path
+                            className="happy-stem-cell__membrane"
+                            d={happy.membrane}
+                            filter={filter(false)}
+                        />
+                        <path
+                            className="happy-stem-cell__core"
+                            d={happy.core}
+                            filter={filter(true)}
+                        />
+                    </g>
+                    {daughters.map(({ stemCellId, to }, index) => {
+                        const stem = stemCellGeometry(stemCellId);
+                        return (
+                            <g
+                                className="happy-cell-division__arrival"
+                                key={stemCellId}
+                                // The newest fade ends last; it reports that all are in.
+                                onAnimationEnd={
+                                    index === daughters.length - 1 ? () => onDone?.() : undefined
+                                }
+                                transform={`translate(${to.x} ${to.y})`}
+                            >
+                                <path
+                                    className="happy-stem-cell__membrane"
+                                    d={stemCellSmoothPath(stem.membrane, to.width)}
+                                    filter={filter(false)}
+                                />
+                                <path
+                                    className="happy-stem-cell__core"
+                                    d={stemCellSmoothPath(stem.core, to.width)}
+                                    filter={filter(true)}
+                                />
+                            </g>
+                        );
+                    })}
                 </g>
-                {daughters.map(({ stemCellId, to }, index) => {
-                    const stem = stemCellGeometry(stemCellId);
-                    return (
-                        <g
-                            className="happy-cell-division__arrival"
-                            key={stemCellId}
-                            // The newest fade ends last; it reports that all are in.
-                            onAnimationEnd={
-                                index === daughters.length - 1 ? () => onDone?.() : undefined
-                            }
-                            transform={`translate(${to.x} ${to.y})`}
-                        >
-                            <path
-                                className="happy-stem-cell__membrane"
-                                d={stemCellSmoothPath(stem.membrane, to.width)}
-                                filter={filter(false)}
-                            />
-                            <path
-                                className="happy-stem-cell__core"
-                                d={stemCellSmoothPath(stem.core, to.width)}
-                                filter={filter(true)}
-                            />
-                        </g>
-                    );
-                })}
             </svg>
         );
     }
@@ -152,8 +172,10 @@ export function HappyCellDivision(props: HappyCellDivisionProps) {
             ref={play}
         >
             {variant === "clay" ? <CellClayDefs id={clay} size={from.width} /> : null}
-            <path className="happy-stem-cell__membrane" filter={filter(false)} />
-            <path className="happy-stem-cell__core" filter={filter(true)} />
+            <g className="happy-cell-division__page">
+                <path className="happy-stem-cell__membrane" filter={filter(false)} />
+                <path className="happy-stem-cell__core" filter={filter(true)} />
+            </g>
         </svg>
     );
 }

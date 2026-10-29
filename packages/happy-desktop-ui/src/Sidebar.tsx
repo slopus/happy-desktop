@@ -2563,7 +2563,7 @@ function SidebarRow({
                     data-happy-desktop-ui="sidebar-item-leading"
                     data-context={item().contextAvatars?.length ? "" : undefined}
                     data-story={story() ? "" : undefined}
-                    style={props.markState?.hidden ? { visibility: "hidden" } : undefined}
+                    data-mark-hidden={props.markState?.hidden ? "" : undefined}
                 >
                     {/* Identity, unless the window asked for work to be reported
                         here. By default it is not: what the row is doing is
@@ -3498,7 +3498,13 @@ export function Sidebar(props: SidebarProps) {
                 (each) => each.getAttribute("data-item-id") === id,
             );
             const lane = row?.querySelector('[data-happy-desktop-ui="sidebar-item-leading"]');
-            const box = (lane?.firstElementChild ?? lane)?.getBoundingClientRect();
+            // The mark itself, as drawn: a story row's grows inside the disc
+            // of its ring, whose box is wider than the mark.
+            const mark =
+                lane?.querySelector('[data-happy-desktop-ui="story-ring-mark"] > *') ??
+                lane?.firstElementChild ??
+                lane;
+            const box = mark?.getBoundingClientRect();
             return box ? { x: box.x, y: box.y, width: box.width, height: box.height } : undefined;
         };
         const from = divisionPlay?.from ?? markRect(divisionFrom);

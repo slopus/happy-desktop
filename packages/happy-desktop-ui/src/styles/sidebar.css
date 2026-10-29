@@ -1138,6 +1138,14 @@
     color: var(--text-secondary);
 }
 
+/* Happy's division draws this mark over the window until it hands it back.
+   Only the mark is hidden: a story row's disc and ring, and the unread dot,
+   stay where they are, so the cells divide in their discs and nothing pops. */
+.happy-sidebar__item-leading[data-mark-hidden] > :first-child:not(.happy-story-ring),
+.happy-sidebar__item-leading[data-mark-hidden] .happy-story-ring__mark > * {
+    visibility: hidden;
+}
+
 /*
  * What the row is doing, as one mark inside the trailing slot.
  *
