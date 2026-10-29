@@ -77,6 +77,7 @@ import type {
     ServerCompatibility,
     TaskOwner,
 } from "./types.js";
+import { sidebarReadAheadOrder, type SidebarReadAheadRows } from "./types.js";
 
 const INITIAL_RECONNECT_MS = 250;
 const MAXIMUM_RECONNECT_MS = 5_000;
@@ -1608,11 +1609,19 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
     const preloadedSessions = new Set<string>();
     let preloading = false;
 
+    /** The sidebar's conversations as it last reported them; none until it has. */
+    let sidebarRows: SidebarReadAheadRows | undefined;
+    /** Whether the read-ahead may run: the first snapshot has landed and its delay passed. */
+    let preloadReady = false;
+    /** A new ranking arrived while a pass was running, which starts over once it is done. */
+    let preloadAgain = false;
+
     /**
-     * The sessions a reader most likely opens next: every active agent the sidebar can show,
-     * running ones first, then the most recently updated.
+     * The sessions a reader most likely opens next: the conversations whose rows are on screen in
+     * the sidebar, top to bottom, then the nearest ones off it. Only active agents count.
      */
     const recentAgents = (limit: number): Agent[] => {
+        if (sidebarRows === undefined || limit <= 0) return [];
         const { bots, projects, tasks, workspaces } = groupsStore.getState();
         // A workspace's agents are listed under its project too.
         const found = new Map<string, Agent>();
@@ -1624,24 +1633,32 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         for (const task of tasks) visit(task.agent);
         for (const owner of [...workspaces, ...projects])
             for (const root of owner.agents) visit(root);
-        const running = (agent: Agent) => (agent.status === "idle" ? 0 : 1);
-        return [...found.values()]
-            .sort(
-                (left, right) => running(right) - running(left) || right.updatedAt - left.updatedAt,
-            )
-            .slice(0, limit);
+        const ranked: Agent[] = [];
+        for (const id of sidebarReadAheadOrder(sidebarRows)) {
+            const agent = found.get(id);
+            if (agent === undefined) continue;
+            ranked.push(agent);
+            if (ranked.length === limit) break;
+        }
+        return ranked;
     };
 
     /**
      * Reads ahead, one at a time, the newest page of the sessions a reader most likely opens,
      * once nothing else is loading: an open or a prefetch always goes first. A session read this
      * way is an ordinary cached one, which the update feed keeps current; one that drops out of
-     * the recent set and is not open is let go.
+     * the recent set and is not open is let go. Nothing is read until the sidebar has said what
+     * it shows, and a new report during a pass starts it over after the load in flight.
      */
     const preloadRecentSessions = async (): Promise<void> => {
         const limit = options.preloadedSessions ?? 0;
-        if (limit <= 0 || preloading) return;
+        if (limit <= 0 || !preloadReady || sidebarRows === undefined) return;
+        if (preloading) {
+            preloadAgain = true;
+            return;
+        }
         preloading = true;
+        preloadAgain = false;
         try {
             const recent = recentAgents(limit);
             const wanted = new Set(recent.map((agent) => agent.id));
@@ -1657,6 +1674,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                 }
             }
             for (const agent of recent) {
+                if (preloadAgain) break;
                 for (;;) {
                     if (closed || rootController.signal.aborted) return;
                     if (![...sessions.values()].some((entry) => entry.loading !== undefined)) break;
@@ -1672,6 +1690,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         } finally {
             preloading = false;
         }
+        if (preloadAgain && !closed) await preloadRecentSessions();
     };
 
     const sessionEntryCreate = (sessionId: string): SessionEntry => {
@@ -1879,7 +1898,10 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
             });
             if ((options.preloadedSessions ?? 0) > 0) {
                 background(
-                    wait(PRELOAD_DELAY_MS, rootController.signal).then(preloadRecentSessions),
+                    wait(PRELOAD_DELAY_MS, rootController.signal).then(() => {
+                        preloadReady = true;
+                        return preloadRecentSessions();
+                    }),
                 );
             }
         })();
@@ -4147,6 +4169,23 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
             // A read that lands lets go of the ones kept while they loaded.
             const trim = (): void => trimPrefetchedSessions();
             ensureSessionLoaded(entry).then(trim, trim);
+        },
+        sidebarRowsUpdate(rows) {
+            if (closed) return;
+            const limit = options.preloadedSessions ?? 0;
+            const reported = sidebarRows !== undefined;
+            const before = recentAgents(limit).map((agent) => agent.id);
+            sidebarRows = rows;
+            // Only a change to what would be read ahead is worth a pass.
+            if (
+                reported &&
+                deepEqual(
+                    before,
+                    recentAgents(limit).map((agent) => agent.id),
+                )
+            )
+                return;
+            background(preloadRecentSessions());
         },
         connectSession(subscription) {
             if (closed) throw new Error("This Happy Agent connection is closed.");

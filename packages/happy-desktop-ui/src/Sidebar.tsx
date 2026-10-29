@@ -570,6 +570,16 @@ type SidebarMarkState = { readonly hidden: boolean; readonly happySeed?: number 
 const NO_DIVISIONS: readonly string[] = [];
 const MARK_HIDDEN: SidebarMarkState = { hidden: true };
 
+/**
+ * The rows a sidebar draws, by item ID in order, and the range of them on
+ * screen; `-1` for both when none is.
+ */
+export interface SidebarRowsVisible {
+    readonly itemIds: readonly string[];
+    readonly firstVisible: number;
+    readonly lastVisible: number;
+}
+
 export type SidebarProps = Omit<HTMLAttributes<HTMLElement>, "style"> & {
     /** Happy divides into the rows New makes. */
     division?: SidebarDivision;
@@ -657,6 +667,12 @@ export type SidebarProps = Omit<HTMLAttributes<HTMLElement>, "style"> & {
      * row does.
      */
     onBodyWheel?: (deltaY: number) => void;
+    /**
+     * The rows drawn, top to bottom, and which of them are on screen, after
+     * a scroll, a resize, a fold or a change of rows: at most once a frame,
+     * and only when something changed. A folded row is not drawn.
+     */
+    onRowsVisibleChange?: (rows: SidebarRowsVisible) => void;
     /** Compact context anchored at the trailing edge of the 56px top heading. */
     headerTrailing?: ReactNode;
     /**
@@ -3124,6 +3140,7 @@ export function Sidebar(props: SidebarProps) {
         "headerAccessory",
         "topAccessory",
         "onBodyWheel",
+        "onRowsVisibleChange",
         "headerAction",
         "onHeaderMenuSelect",
         "headerTrailing",
@@ -3889,9 +3906,51 @@ export function Sidebar(props: SidebarProps) {
                 nav.removeAttribute("data-pin-switch");
             }
         };
+        // Which rows are on screen, reported once per frame and only when it changed.
+        let sightFrame = 0;
+        let sighted = "";
+        let sightReport: SidebarProps["onRowsVisibleChange"];
+        let sightViewport: HTMLElement | undefined;
+        const rowsSight = (viewport: HTMLElement): void => {
+            if (sightFrame !== 0) return;
+            sightFrame = requestAnimationFrame(() => {
+                sightFrame = 0;
+                const report = sightReport;
+                if (!report) return;
+                const view = viewport.getBoundingClientRect();
+                const itemIds: string[] = [];
+                let firstVisible = -1;
+                let lastVisible = -1;
+                for (const row of viewport.querySelectorAll<HTMLElement>(
+                    '[data-happy-desktop-ui="sidebar-item"][data-item-id]',
+                )) {
+                    const box = row.getBoundingClientRect();
+                    // A row folded away draws no box.
+                    if (box.height === 0) continue;
+                    const index = itemIds.push(row.dataset.itemId ?? "") - 1;
+                    if (box.bottom > view.top && box.top < view.bottom) {
+                        if (firstVisible < 0) firstVisible = index;
+                        lastVisible = index;
+                    }
+                }
+                const key = `${String(firstVisible)}:${String(lastVisible)}:${itemIds.join(" ")}`;
+                if (key === sighted) return;
+                sighted = key;
+                report({ itemIds, firstVisible, lastVisible });
+            });
+        };
         return {
             hold,
+            /** Who hears which rows are on screen; the first listener hears it at once. */
+            rowsReportSet: (report: SidebarProps["onRowsVisibleChange"]) => {
+                const first = sightReport === undefined && report !== undefined;
+                sightReport = report;
+                if (!first || !sightViewport) return;
+                sighted = "";
+                rowsSight(sightViewport);
+            },
             scroll: (viewport: HTMLElement) => {
+                rowsSight(viewport);
                 hold(viewport);
                 const nav = viewport.closest<HTMLElement>(".happy-sidebar");
                 if (nav) pinsScroll(viewport, nav);
@@ -3902,12 +3961,17 @@ export function Sidebar(props: SidebarProps) {
                 mutations?.disconnect();
                 cancelAnimationFrame(frame);
                 cancelAnimationFrame(carry);
+                cancelAnimationFrame(sightFrame);
                 frame = 0;
                 carry = 0;
+                sightFrame = 0;
+                sighted = "";
+                sightViewport = viewport ?? undefined;
                 observer = undefined;
                 mutations = undefined;
                 if (!viewport) return;
                 observer = new ResizeObserver(() => {
+                    rowsSight(viewport);
                     hold(viewport);
                     pinsSchedule(viewport);
                 });
@@ -3917,6 +3981,7 @@ export function Sidebar(props: SidebarProps) {
                 // A drag moves rows by their `top`, and a drop or a fold
                 // changes which rows there are: both can move a pinned edge.
                 mutations = new MutationObserver((records) => {
+                    rowsSight(viewport);
                     pinsCarry(viewport);
                     // The held floor written on the rows' column is not one of them.
                     if (
@@ -3943,6 +4008,7 @@ export function Sidebar(props: SidebarProps) {
                     });
                 hold(viewport);
                 pinsMeasure(viewport);
+                rowsSight(viewport);
             },
         };
     });
@@ -4804,6 +4870,7 @@ export function Sidebar(props: SidebarProps) {
             openItemMenu,
             renameStart,
         };
+        floor.rowsReportSet(local.onRowsVisibleChange);
     });
     const [rowHandlers] = useState((): SidebarRowHandlers => {
         const latest = () => rowLatest.current!;

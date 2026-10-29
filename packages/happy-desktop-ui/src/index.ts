@@ -354,6 +354,7 @@ export {
     type SidebarNumberShortcutTarget,
     type SidebarProps,
     type SidebarReorder,
+    type SidebarRowsVisible,
     type SidebarSearch,
     type SidebarSection,
 } from "./Sidebar";

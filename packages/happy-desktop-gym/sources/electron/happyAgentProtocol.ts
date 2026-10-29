@@ -133,6 +133,12 @@ export class GymHappyAgentClient {
         return (await this.#client.getTask(cuid(taskId))).task.name;
     }
 
+    /** Makes a task the person owns and joins, with its own agent. */
+    async taskCreate(name: string): Promise<{ readonly taskId: string; readonly agentId: string }> {
+        const { task } = await this.#client.createTask({ mutationId: randomUUID(), name });
+        return { taskId: task.id, agentId: task.agent.id };
+    }
+
     /** Whether the task is archived. */
     async taskArchived(taskId: string): Promise<boolean> {
         return (await this.#client.getTask(cuid(taskId))).task.archivedAt !== null;

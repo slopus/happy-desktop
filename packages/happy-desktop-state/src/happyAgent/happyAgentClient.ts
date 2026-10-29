@@ -13,7 +13,7 @@ import {
     type HappyAgentAgentIdentitySource,
 } from "./happyAgentAgentIdentities.js";
 import type { MutationRejectedDelta } from "../happyAgentConnection/index.js";
-import type { HappyAgentConnection } from "../happyAgentConnection/index.js";
+import type { HappyAgentConnection, SidebarReadAheadRows } from "../happyAgentConnection/index.js";
 import {
     happyAgentTerminalOpen,
     type HappyAgentTerminalHandle,
@@ -398,6 +398,8 @@ export interface HappyAgentWorkspaceClient {
     chat(sessionId: HappyAgentSessionId): Promise<HappyAgentChatHandle>;
     /** Loads a session ahead of a likely `chat` acquisition, so that one opens at once. Only a hint. */
     chatPrefetch(sessionId: HappyAgentSessionId): void;
+    /** The conversations the sidebar draws and which are on screen, which the read-ahead loads first. */
+    sidebarRowsUpdate(rows: SidebarReadAheadRows): void;
     /** Stops background synchronization for an archived chat; its store remains subject to the bounded cache. */
     chatArchive(sessionId: HappyAgentSessionId): void;
     /** Lets a restored chat resume background synchronization when it is acquired again. */
@@ -1114,6 +1116,10 @@ export function happyAgentWorkspaceClientCreate(
         chatPrefetch(sessionId) {
             if (disposed || chats.get(sessionId)?.count) return;
             deps.transcriptPrefetch?.(sessionId);
+        },
+        sidebarRowsUpdate(rows) {
+            if (disposed) return;
+            deps.connection.sidebarRowsUpdate(rows);
         },
         chatArchive(sessionId) {
             const binding = chats.get(sessionId);

@@ -28,6 +28,7 @@ export type GymWorkloadName =
     | "jump-shimmer"
     | "new-work-reuse"
     | "row-removal"
+    | "sidebar-read-ahead"
     | "window-zoom"
     | "all";
 

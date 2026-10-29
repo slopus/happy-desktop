@@ -1,3 +1,4 @@
+import type { SidebarReadAheadRows } from "../happyAgentConnection/types.js";
 import { happyAgentPanelChatOpen, type HappyAgentPanelChatHandle } from "./happyAgentPanelChat.js";
 import type { HappyAgentDeviceBridgesStore } from "./happyAgentDeviceBridgesStore.js";
 import type { HappyAgentDeviceBridgeSupportStore } from "./happyAgentDeviceBridgeSupportStore.js";
@@ -1552,6 +1553,11 @@ export interface HappyAgentWorkspaceStore {
      * it ahead so that opening it shows it at once. Only a hint; nothing visible changes.
      */
     conversationPrefetch(conversationId: HappyAgentSessionId): void;
+    /**
+     * The conversations the sidebar draws, top to bottom, and which are on screen: the
+     * read-ahead loads those first, then the nearest off screen. Each report replaces the last.
+     */
+    sidebarRowsUpdate(rows: SidebarReadAheadRows): void;
     /**
      * Applies an addressed group that holds no conversation, giving it a composer
      * whose first submission starts one. Releases any open conversation, since
@@ -7079,6 +7085,7 @@ export function happyAgentWorkspaceStoreCreate(
         },
 
         conversationPrefetch: (conversationId) => client.chatPrefetch(conversationId),
+        sidebarRowsUpdate: (rows) => client.sidebarRowsUpdate(rows),
 
         conversationsRetained,
         conversationViewSizeUpdate(conversationId, size) {

@@ -406,6 +406,7 @@ import {
     type HappyAgentPreviewMedia,
 } from "./views/HappyAgentToolMediaPreview";
 import { BlueprintView } from "./views/BlueprintView";
+import { sidebarReadAheadRows } from "./sidebarReadAhead";
 import type {
     AppHappyAgentDaemonSnapshot,
     AppHappyAgentDaemonStore,
@@ -4105,6 +4106,9 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                 (onboarding.status === "waiting" || onboarding.status === "running")
                     ? { onboarding: { exampleSidebar: onboarding.exampleSidebar } }
                     : {})}
+                onConversationsVisibleChange={(rows) =>
+                    active?.session?.workspace.sidebarRowsUpdate(rows)
+                }
                 actions={{
                     taskLeave: (taskId) =>
                         (
@@ -4631,6 +4635,21 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                     happyAgent.session?.workspace.conversationPrefetch(
                         chatId as HappyAgentSessionId,
                     );
+            }}
+            // Each connected Happy Agent reads ahead the conversations of its
+            // rows on screen, then the ones just off it.
+            onRowsVisibleChange={(rows) => {
+                for (const happyAgent of directory.happyAgents) {
+                    if (happyAgent.status !== "connected") continue;
+                    happyAgent.session?.workspace.sidebarRowsUpdate(
+                        sidebarReadAheadRows(rows, (itemId) => {
+                            const row = happyAgentItemParse(itemId);
+                            if (row.happyAgentId !== happyAgent.id) return undefined;
+                            if (surfaceRowParse(row.id) !== undefined) return undefined;
+                            return rowDestination(happyAgent, row.id)?.chatId;
+                        }),
+                    );
+                }
             }}
             onItemAction={(id) => {
                 const row = happyAgentItemParse(id);

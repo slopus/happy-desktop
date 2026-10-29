@@ -287,6 +287,13 @@ and a mutation observer must not see it drawn again until four seconds after
 the daemon has archived it, while its sidebar catches up. It writes
 `row-removal.json`, a screenshot, and a video.
 
+`sidebar-read-ahead` turns on Stem Cells, makes 40 tasks, more than the
+sidebar shows, and reloads with the pointer off the sidebar. Once the window
+settles, every task on screen among the first 12 conversations must have been
+read and none more than 12 rows below the screen; scrolled to the bottom, the
+tasks that come on screen must be read next, top to bottom. It writes
+`sidebar-read-ahead.json`, a screenshot, and a video.
+
 `window-zoom` sweeps the window's zoom over 80, 90, 100, 110, 125 and 150%,
 each reached as the View menu does it and again after a reload (which keeps the
 zoom but not the menu's report of it), with the sidebar open and folded, in a

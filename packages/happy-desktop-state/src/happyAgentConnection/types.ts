@@ -1042,11 +1042,41 @@ export interface ConnectHappyAgentOptions {
      */
     memberProfileRequired?: boolean;
     /**
-     * How many of the most recently active sessions to read ahead once the sidebar is known and
-     * no session is loading, so opening one shows its transcript at once. The live update feed
-     * keeps them current from then on. Defaults to none.
+     * How many sessions to read ahead, ranked by where their rows stand in the sidebar (see
+     * `sidebarRowsUpdate`), once no session is loading, so opening one shows its transcript at
+     * once. The live update feed keeps them current from then on. Defaults to none.
      */
     preloadedSessions?: number;
+}
+
+/**
+ * The conversations a sidebar draws, in its order, each agent once at its first row, with the
+ * range of them on screen. `firstVisible` above `lastVisible` means none is measured on screen
+ * yet, and the rows are taken in order.
+ */
+export interface SidebarReadAheadRows {
+    readonly agentIds: readonly string[];
+    readonly firstVisible: number;
+    readonly lastVisible: number;
+}
+
+/**
+ * The read-ahead order of the sidebar's conversations: those on screen top to bottom, then the
+ * rest by distance in rows from them, the row below first at equal distance.
+ */
+export function sidebarReadAheadOrder(rows: SidebarReadAheadRows): readonly string[] {
+    const { agentIds } = rows;
+    const measured = rows.firstVisible <= rows.lastVisible && rows.firstVisible >= 0;
+    const first = measured ? rows.firstVisible : 0;
+    const last = measured ? Math.min(rows.lastVisible, agentIds.length - 1) : -1;
+    const order = agentIds.slice(first, last + 1);
+    for (let distance = 1; order.length < agentIds.length; distance += 1) {
+        const below = agentIds[last + distance];
+        const above = agentIds[first - distance];
+        if (below !== undefined) order.push(below);
+        if (above !== undefined) order.push(above);
+    }
+    return order;
 }
 
 export interface HappyAgentConnection {
@@ -1068,6 +1098,12 @@ export interface HappyAgentConnection {
      * and never opened are kept only a few at a time.
      */
     prefetchSession: (sessionId: string) => void;
+    /**
+     * The conversations the sidebar draws, top to bottom, and which of them are on screen. The
+     * read-ahead loads the ones on screen first, then the nearest off it, and lets go of any
+     * that falls out of the first `preloadedSessions`. Each report replaces the last.
+     */
+    sidebarRowsUpdate: (rows: SidebarReadAheadRows) => void;
     connectGroups: (options: HappyAgentGroupsSubscriptionOptions) => HappyAgentGroupsConnection;
     projects: {
         add(path: string, options?: ProjectAddOptions): Promise<Project>;

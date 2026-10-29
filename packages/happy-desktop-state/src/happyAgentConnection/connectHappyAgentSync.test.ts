@@ -22,6 +22,7 @@ import type {
     HappyAgentConnection,
     SessionState,
 } from "./types.js";
+import { sidebarReadAheadOrder } from "./types.js";
 import {
     fakeAgentMessage,
     fakeHappyAgentDaemonCreate,
@@ -1853,13 +1854,45 @@ it("opens a prefetched session with its transcript already there, reading histor
     expect(daemon.callCount("getMessages")).toBe(1);
 });
 
-it("reads the most recent sessions ahead once the sidebar is live, so opening one shows its transcript", async () => {
+it("ranks the sidebar's rows on screen first, top to bottom, then the nearest off it, below before above", () => {
+    const agentIds = ["a", "b", "c", "d", "e", "f", "g"];
+    expect(sidebarReadAheadOrder({ agentIds, firstVisible: 2, lastVisible: 3 })).toEqual([
+        "c",
+        "d",
+        "e",
+        "b",
+        "f",
+        "a",
+        "g",
+    ]);
+    // Rows on screen at the very end of the list leave only rows above.
+    expect(sidebarReadAheadOrder({ agentIds, firstVisible: 5, lastVisible: 6 })).toEqual([
+        "f",
+        "g",
+        "e",
+        "d",
+        "c",
+        "b",
+        "a",
+    ]);
+    // Before the sidebar has measured, the rows go in order.
+    expect(sidebarReadAheadOrder({ agentIds, firstVisible: -1, lastVisible: -1 })).toEqual(
+        agentIds,
+    );
+    expect(sidebarReadAheadOrder({ agentIds: [], firstVisible: -1, lastVisible: -1 })).toEqual([]);
+});
+
+const historyReads = (daemon: FakeHappyAgentDaemon): readonly unknown[] =>
+    daemon.calls.filter((call) => call.method === "getMessages").map((call) => call.args[0]);
+
+it("reads ahead the sessions whose sidebar rows are on screen, so opening one shows its transcript", async () => {
     const { connection, daemon } = harnessOpen(undefined, { preloadedSessions: 2 });
     const project = daemon.projectSeed({ id: "project-a" });
-    const old = daemon.agentSeed(project.id, { id: "agent-old", updatedAt: 1 });
-    const recent = daemon.agentSeed(project.id, { id: "agent-recent", updatedAt: 3 });
-    const newest = daemon.agentSeed(project.id, { id: "agent-newest", updatedAt: 4 });
-    daemon.historySet(recent.id, [
+    const above = daemon.agentSeed(project.id, { id: "agent-above", updatedAt: 9 });
+    const shown = daemon.agentSeed(project.id, { id: "agent-shown", updatedAt: 1 });
+    const below = daemon.agentSeed(project.id, { id: "agent-below", updatedAt: 2 });
+    const far = daemon.agentSeed(project.id, { id: "agent-far", updatedAt: 8 });
+    daemon.historySet(shown.id, [
         fakeRun({
             id: "r1",
             status: "completed",
@@ -1869,18 +1902,71 @@ it("reads the most recent sessions ahead once the sidebar is live, so opening on
     ]);
     const groups = groupsWatch(connection);
     await vi.waitFor(() => expect(groups.state.connection).toBe("live"));
+    // Nothing is read ahead before the sidebar says what it shows.
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(daemon.callCount("getMessages")).toBe(0);
+
+    connection.sidebarRowsUpdate({
+        agentIds: [above.id, shown.id, below.id, far.id],
+        firstVisible: 1,
+        lastVisible: 1,
+    });
     await vi.waitFor(() => expect(daemon.callCount("getMessages")).toBe(2));
     await new Promise((resolve) => setTimeout(resolve, 5));
+    // The row on screen first, then the one just below it; not the most recently updated.
+    expect(historyReads(daemon)).toEqual([shown.id, below.id]);
 
-    const reopened = sessionWatch(connection, recent.id);
+    const reopened = sessionWatch(connection, shown.id);
     expect(reopened.session?.historyLoading).not.toBe(true);
     expect(userMessages(reopened.elements).map((element) => element.text)).toEqual(["earlier"]);
-    sessionWatch(connection, newest.id);
+    sessionWatch(connection, below.id);
     await new Promise((resolve) => setTimeout(resolve, 5));
     expect(daemon.callCount("getMessages")).toBe(2);
-    // An older session was not read ahead, so opening it reads it.
-    sessionWatch(connection, old.id);
+    // A row further off screen was not read ahead, so opening it reads it.
+    sessionWatch(connection, far.id);
     await vi.waitFor(() => expect(daemon.callCount("getMessages")).toBe(3));
+});
+
+it("reads ahead again when the sidebar scrolls, letting go of rows that left the read-ahead", async () => {
+    const { connection, daemon } = harnessOpen(undefined, { preloadedSessions: 2 });
+    const project = daemon.projectSeed({ id: "project-a" });
+    const agentIds = ["agent-1", "agent-2", "agent-3", "agent-4", "agent-5", "agent-6"];
+    for (const id of agentIds) daemon.agentSeed(project.id, { id });
+    const groups = groupsWatch(connection);
+    await vi.waitFor(() => expect(groups.state.connection).toBe("live"));
+
+    connection.sidebarRowsUpdate({ agentIds, firstVisible: 0, lastVisible: 1 });
+    await vi.waitFor(() => expect(daemon.callCount("getMessages")).toBe(2));
+    // The same rows on screen again read nothing more.
+    connection.sidebarRowsUpdate({ agentIds, firstVisible: 0, lastVisible: 1 });
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    expect(daemon.callCount("getMessages")).toBe(2);
+
+    connection.sidebarRowsUpdate({ agentIds, firstVisible: 4, lastVisible: 5 });
+    await vi.waitFor(() => expect(daemon.callCount("getMessages")).toBe(4));
+    expect(historyReads(daemon)).toEqual(["agent-1", "agent-2", "agent-5", "agent-6"]);
+    // The rows scrolled away from were let go, so opening one reads it again.
+    sessionWatch(connection, "agent-1");
+    await vi.waitFor(() => expect(daemon.callCount("getMessages")).toBe(5));
+});
+
+it("starts a read-ahead pass over when the sidebar scrolls during it, after the load in flight", async () => {
+    const { connection, daemon } = harnessOpen(undefined, { preloadedSessions: 3 });
+    const project = daemon.projectSeed({ id: "project-a" });
+    const agentIds = ["agent-1", "agent-2", "agent-3", "agent-4", "agent-5", "agent-6", "agent-7"];
+    for (const id of agentIds) daemon.agentSeed(project.id, { id });
+    const groups = groupsWatch(connection);
+    await vi.waitFor(() => expect(groups.state.connection).toBe("live"));
+
+    const releaseHistory = daemon.pause("getMessages");
+    connection.sidebarRowsUpdate({ agentIds, firstVisible: 0, lastVisible: 0 });
+    await vi.waitFor(() => expect(daemon.callCount("getMessages")).toBe(1));
+    connection.sidebarRowsUpdate({ agentIds, firstVisible: 6, lastVisible: 6 });
+    releaseHistory();
+    await vi.waitFor(() => expect(daemon.callCount("getMessages")).toBe(4));
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    // The rows of the first ranking after the one in flight were never read.
+    expect(historyReads(daemon)).toEqual(["agent-1", "agent-7", "agent-6", "agent-5"]);
 });
 
 it("keeps an open session's question current while another loads in the background", async () => {

@@ -39,6 +39,7 @@ import {
     type ConversationNote,
     type ConversationSummary,
     type HappyAgentClockStore,
+    type SidebarReadAheadRows,
     happyAgentSpaceNewWorkIs,
 } from "happy-desktop-state";
 import {
@@ -59,6 +60,7 @@ import {
     type SidebarItem,
     type SidebarItemChange,
     type SidebarItemStory,
+    type SidebarRowsVisible,
     type StoryRingSegments,
     type TabItem,
 } from "happy-desktop-ui";
@@ -67,6 +69,7 @@ import {
     happyAgentSpacesExampleSection,
     type HappyAgentSpacesOnboarding,
 } from "./happyAgentSpacesOnboarding";
+import { sidebarReadAheadRows } from "../sidebarReadAhead";
 
 /** The places a space can open, as the window addresses them. */
 export interface HappyAgentSpacesNavigation {
@@ -629,6 +632,8 @@ export interface HappyAgentSpacesSidebarProps {
     readonly topAccessory?: ReactNode;
     /** The wheel turned over the rows, for a top accessory that folds away. */
     readonly onBodyWheel?: (deltaY: number) => void;
+    /** The conversations the rows open, top to bottom, and which are on screen, as they change. */
+    readonly onConversationsVisibleChange?: (rows: SidebarReadAheadRows) => void;
     /**
      * What the reader had folded and hidden in the classic sidebar. The
      * daemon's first document mirrors that sidebar without knowing these, so
@@ -1820,6 +1825,19 @@ export function HappyAgentSpacesSidebar(props: HappyAgentSpacesSidebarProps) {
             headerAccessory={props.headerAccessory}
             {...(props.topAccessory ? { topAccessory: props.topAccessory } : {})}
             {...(props.onBodyWheel ? { onBodyWheel: props.onBodyWheel } : {})}
+            {...(props.onConversationsVisibleChange
+                ? {
+                      onRowsVisibleChange: (rows: SidebarRowsVisible) =>
+                          props.onConversationsVisibleChange?.(
+                              sidebarReadAheadRows(rows, (itemId) => {
+                                  if (itemId.startsWith("session:"))
+                                      return itemId.slice("session:".length);
+                                  const space = spaceOf(itemId);
+                                  return space === undefined ? undefined : spaceAgentId(space);
+                              }),
+                          ),
+                  }
+                : {})}
             foldControlPlacement="trailing"
             foldControlReveal="hover"
             // Rows open their children as they are selected; only a section
