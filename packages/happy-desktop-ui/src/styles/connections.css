@@ -255,6 +255,13 @@
     contain: layout;
     isolation: isolate;
 }
+/* What covers the whole window, rail and all, hangs here, past every
+   connection's containment; it lays nothing out of its own. */
+.happy-connections__cover,
+.happy-window-cover {
+    display: contents;
+}
+
 .happy-connections__error {
     padding: 8px 16px;
     color: var(--text-secondary);

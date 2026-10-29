@@ -70,3 +70,32 @@ export function WindowOverlay(props: { children: ReactNode }) {
         host,
     );
 }
+
+/**
+ * The lane `ConnectionShell` keeps beside its connections, outside the box
+ * each connection holds its own fixed layers in. `null` where there is no
+ * connection shell.
+ */
+export const WindowCoverHostContext = createContext<HTMLElement | null>(null);
+
+/**
+ * Hangs a surface that blacks out the whole window, the connection rail
+ * included, off the connection shell. Every other modal stays inside its
+ * connection, so the rail keeps working beside it; a story is watched in a
+ * dark room, and the room is the window. Without a connection shell it is a
+ * `WindowOverlay`. A hidden connection hides its cover with it.
+ */
+export function WindowCover(props: { children: ReactNode }) {
+    const host = useContext(WindowCoverHostContext);
+    if (host === null) return <WindowOverlay>{props.children}</WindowOverlay>;
+    return createPortal(
+        <div
+            className="happy-window-cover"
+            data-happy-desktop-ui="window-cover"
+            ref={retainedOverlayFrame}
+        >
+            {props.children}
+        </div>,
+        host,
+    );
+}

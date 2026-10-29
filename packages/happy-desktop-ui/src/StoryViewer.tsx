@@ -10,6 +10,7 @@ import { Icon } from "./Icon";
 import { Ionicon } from "./vectorIcons/VectorIcon";
 import { ModalOverlay } from "./ModalOverlay";
 import { ScrollArea } from "./Scrollbar";
+import { WindowCover } from "./WindowOverlay";
 import { StoryCanvas, type StoryArtifactRender } from "./StoryCanvas";
 import type { StorySticker } from "./StickerView";
 import {
@@ -385,7 +386,7 @@ export function StoryViewer(props: StoryViewerProps) {
         onPointerUp: (event: ReactPointerEvent) => event.stopPropagation(),
     };
 
-    return (
+    const room = (
         <ModalOverlay
             className="happy-story-viewer"
             data-testid="story-viewer"
@@ -1045,4 +1046,5 @@ export function StoryViewer(props: StoryViewerProps) {
             </div>
         </ModalOverlay>
     );
+    return <WindowCover>{room}</WindowCover>;
 }

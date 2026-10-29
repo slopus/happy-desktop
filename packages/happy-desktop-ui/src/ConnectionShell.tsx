@@ -6,6 +6,7 @@ import type { MenuItem } from "./Menu";
 import { ScrollArea } from "./Scrollbar";
 import { thumbhashDataUrl } from "./thumbhashDataUrl";
 import { useConnectionReorder } from "./useConnectionReorder";
+import { WindowCoverHostContext } from "./WindowOverlay";
 
 export interface ConnectionShellItem {
     readonly id: string;
@@ -92,6 +93,9 @@ export function ConnectionShell(props: {
         readonly x: number;
         readonly y: number;
     }>();
+    // The lane a surface covering the whole window hangs from, rail and all.
+    // State, not a ref: the surfaces that portal into it must be told once it exists.
+    const [cover, coverSet] = useState<HTMLDivElement | null>(null);
     const local = props.items.filter((item) => item.local);
     const remotes = props.items.filter((item) => !item.local);
     const items = [...local, ...remotes];
@@ -246,8 +250,15 @@ export function ConnectionShell(props: {
                         {props.reorderError}
                     </div>
                 ) : null}
-                {props.children}
+                <WindowCoverHostContext.Provider value={cover}>
+                    {props.children}
+                </WindowCoverHostContext.Provider>
             </div>
+            <div
+                className="happy-connections__cover"
+                data-happy-desktop-ui="connection-shell-cover"
+                ref={coverSet}
+            />
             {menu ? (
                 <ContextMenu
                     data-testid="connection-menu"

@@ -5,6 +5,7 @@ import { StoryCanvas, StoryRoundVideo, type StoryArtifactRender } from "./StoryC
 import type { StorySticker } from "./StickerView";
 import type { Story, StoryTransform } from "./storyTypes";
 import { Ionicon } from "./vectorIcons/VectorIcon";
+import { WindowCover } from "./WindowOverlay";
 
 /** A round video the person recorded, as the editor hands it over. */
 export interface StoryEditorRecording {
@@ -248,7 +249,7 @@ export function StoryEditor(props: StoryEditorProps) {
             ? props.roundVideo
             : undefined;
     const recording = recorder.phase === "recording" ? recorder : undefined;
-    return (
+    const room = (
         <ModalOverlay
             className="happy-story-viewer happy-story-editor"
             data-testid="story-editor"
@@ -491,4 +492,5 @@ export function StoryEditor(props: StoryEditorProps) {
             </div>
         </ModalOverlay>
     );
+    return <WindowCover>{room}</WindowCover>;
 }
