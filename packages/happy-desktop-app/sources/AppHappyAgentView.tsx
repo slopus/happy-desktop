@@ -4288,7 +4288,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
             happySpace.target.agentId === sessionId
                 ? happyAgentSpacesNotes(spaces.batches)
                 : undefined,
-        newWorkLeave: (sessionId) => {
+        newWorkClose: (sessionId) => {
             const space = spaceOfChat(sessionId);
             if (
                 !active ||
@@ -4297,9 +4297,10 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                 space.target.workspaceId === null
             )
                 return false;
-            // Its tab closes and the reader goes back to where they were
-            // before it; the new work itself stays, for Create to come back to.
+            // As its row's Close new work: the reader goes back to where they
+            // were before Create, and the row goes in the same keystroke.
             props.onGroupClose?.(active.id, space.target.workspaceId);
+            spacesStore.stemCellDiscard(space.id);
             return true;
         },
     };
@@ -7114,11 +7115,11 @@ interface HappyAgentWorkspaceSpaces {
     /** Bookkeeping a conversation reads as one-line summaries, such as Happy's sidebar batches. */
     chatNotes(sessionId: string): ReadonlyMap<string, ConversationNote> | undefined;
     /**
-     * Closes the tab of new work nobody has named yet, taking the reader back
-     * to where they were before it, and says whether it was new work. The
-     * work stays: nothing is removed or archived.
+     * Closes new work nobody has named yet, as its row's Close new work does:
+     * the reader goes back to where they were before it and its row goes.
+     * Says whether it was new work.
      */
-    newWorkLeave(sessionId: string): boolean;
+    newWorkClose(sessionId: string): boolean;
 }
 
 /**
@@ -7672,9 +7673,9 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
             props.workspace.get().conversation,
             tabId as HappyAgentSessionId,
         );
-        // New work holding nothing is only left: it stays for Create to come
-        // back to, and there is nothing in it to archive.
-        if (content !== undefined && content !== "started" && props.spaces?.newWorkLeave(tabId))
+        // New work holding nothing closes, row and all: there is nothing in it
+        // to archive. Only leaving it by going elsewhere keeps it for Create.
+        if (content !== undefined && content !== "started" && props.spaces?.newWorkClose(tabId))
             return;
         const archive = conversationArchiveTargetFind(tabId);
         if (!archive) {
