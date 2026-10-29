@@ -266,11 +266,15 @@ function gitProject(
     git: GitChangeSnapshot | undefined,
 ): Pick<
     HappyAgentProject,
-    "changesStatus" | "changedFiles" | "addedLines" | "deletedLines" | "changes"
+    "changesStatus" | "changedFiles" | "addedLines" | "deletedLines" | "changes" | "comparedWith"
 > {
     if (git === undefined) return { changesStatus: "loading" };
-    if (git.comparison === "unavailable") return { changesStatus: "unavailable" };
+    // Kept even when nothing could be compared, so the branch that led nowhere
+    // is still named.
+    const comparedWith = git.comparedWith === undefined ? {} : { comparedWith: git.comparedWith };
+    if (git.comparison === "unavailable") return { changesStatus: "unavailable", ...comparedWith };
     return {
+        ...comparedWith,
         changesStatus: git.comparison,
         changedFiles: git.changedFiles,
         addedLines: git.insertions,
