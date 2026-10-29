@@ -564,11 +564,20 @@ export type SidebarDivision = {
     readonly onSeed?: (seed: number) => void;
 };
 
-/** How a row's mark is drawn while Happy divides: hidden under the overlay, or Happy re-formed. */
-type SidebarMarkState = { readonly hidden: boolean; readonly happySeed?: number };
+/**
+ * How a row's mark is drawn while Happy divides: hidden under the overlay, or
+ * Happy re-formed. A row still `arriving` is only its space, opening as the
+ * daughter peels off toward it; it shows itself whole once she is in it.
+ */
+type SidebarMarkState = {
+    readonly hidden: boolean;
+    readonly arriving?: boolean;
+    readonly happySeed?: number;
+};
 
 const NO_DIVISIONS: readonly string[] = [];
 const MARK_HIDDEN: SidebarMarkState = { hidden: true };
+const MARK_ARRIVING: SidebarMarkState = { hidden: true, arriving: true };
 
 /**
  * The rows a sidebar draws, by item ID in order, and the range of them on
@@ -2478,6 +2487,7 @@ function SidebarRow({
             data-story={story() ? "" : undefined}
             data-dragging={props.dragging ? "" : undefined}
             data-grabbed={props.grabbed ? "" : undefined}
+            data-arriving={props.markState?.arriving ? "" : undefined}
             onClick={() => {
                 if (!props.rename) props.onSelect(item().id);
             }}
@@ -3480,6 +3490,9 @@ export function Sidebar(props: SidebarProps) {
         ? divisionInto.filter((id) => !divisionSeen.has(id) && shownCells.has(id))
         : NO_DIVISIONS;
     const divisionHidden = new Set([...divisionArriving, ...(divisionPlay?.rows ?? [])]);
+    // The rows whose daughter has come to rest in them: each shows itself at
+    // once around the cell, which the overlay still draws until it is done.
+    const [divisionLanded, divisionLandedSet] = useState<ReadonlySet<string>>(() => new Set());
     const divisionFrom = local.division?.from;
     const markStateOf = (id: string): SidebarMarkState | undefined =>
         id === divisionFrom
@@ -3487,7 +3500,9 @@ export function Sidebar(props: SidebarProps) {
                 ? MARK_HIDDEN
                 : happyRest
             : divisionHidden.has(id)
-              ? MARK_HIDDEN
+              ? divisionLanded.has(id)
+                  ? MARK_HIDDEN
+                  : MARK_ARRIVING
               : undefined;
     const divisionStart = (node: HTMLSpanElement | null) => {
         const root = node?.closest(".happy-sidebar");
@@ -5958,7 +5973,18 @@ export function Sidebar(props: SidebarProps) {
                 <HappyCellDivision
                     daughters={divisionPlay.daughters}
                     from={divisionPlay.from}
-                    onDone={() => divisionPlaySet(undefined)}
+                    onArrive={(stemCellId) => {
+                        const index = divisionPlay.daughters.findIndex(
+                            (daughter) => daughter.stemCellId === stemCellId,
+                        );
+                        const row = divisionPlay.rows[index];
+                        if (row !== undefined)
+                            divisionLandedSet((landed) => new Set([...landed, row]));
+                    }}
+                    onDone={() => {
+                        divisionPlaySet(undefined);
+                        divisionLandedSet(new Set());
+                    }}
                     onSeed={(seed) => {
                         happyRestSet({ hidden: false, happySeed: seed });
                         local.division?.onSeed?.(seed);

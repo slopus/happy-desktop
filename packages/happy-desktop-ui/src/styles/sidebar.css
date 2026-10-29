@@ -2448,6 +2448,40 @@
     margin-top: 4.5px;
 }
 
+/* A row Happy is dividing into is only its space until the new cell is in it.
+   The rows below glide down to open that space as the cell peels off toward
+   it, and the row shows itself (card, name, status) in one go once the cell
+   comes to rest. Only the space under the row grows: the row stands where it
+   will stay, so the cell heads for its final place from the first frame. The
+   space is the row, the tree's 2px gap, and a card's own 4.5px above it. */
+.happy-sidebar__item[data-arriving] {
+    --happy-sidebar-arriving-space: 34px;
+    visibility: hidden;
+    animation: happy-sidebar-row-open 260ms cubic-bezier(0.33, 0, 0.2, 1) both;
+}
+
+.happy-sidebar__item[data-arriving][data-story]:not([data-depth]) {
+    --happy-sidebar-arriving-space: 66px;
+}
+
+.happy-sidebar__item[data-story]
+    + .happy-sidebar__item[data-arriving][data-story]:not([data-depth]),
+.happy-sidebar__section-item + .happy-sidebar__item[data-arriving][data-story]:not([data-depth]) {
+    --happy-sidebar-arriving-space: 70.5px;
+}
+
+@keyframes happy-sidebar-row-open {
+    from {
+        margin-bottom: calc(-1 * var(--happy-sidebar-arriving-space));
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .happy-sidebar__item[data-arriving] {
+        animation: none;
+    }
+}
+
 /* Hover is quieter than selection, in every theme. */
 .happy-sidebar__item[data-story]:hover:not([data-active]) {
     background: var(--happy-sidebar-story-hover);

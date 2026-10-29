@@ -187,7 +187,12 @@ interface Daughter extends Part {
     readonly start: Point;
     thinning: boolean;
     snapped: boolean;
+    /** It has come to rest in its row, reported once. */
+    arrived: boolean;
 }
+
+/** How still a daughter must be to count as in its row: still to the eye, before the last fraction of a pixel. */
+const ARRIVED = 0.5;
 
 export interface DivisionFrame {
     /** Membrane and cores, as SVG paths in page pixels. */
@@ -339,6 +344,7 @@ export class HappyCellDivisionSim {
             ),
             start: [bud.membrane.x.value, bud.membrane.y.value],
             thinning: false,
+            arrived: false,
             snapped: false,
         });
         // What is left of Happy forms again from a new seed: its outline morphs
@@ -397,6 +403,28 @@ export class HappyCellDivisionSim {
         this.clock = now;
         this.step(Math.max(seconds, 0));
         if (this.settled()) this.land();
+    }
+
+    /**
+     * The daughters that have come to rest in their rows since last asked,
+     * each once: let go of Happy and still to the eye, while Happy may still
+     * be forming again.
+     */
+    arrivedReport(): string[] {
+        const arrived: string[] = [];
+        for (const daughter of this.daughters) {
+            if (daughter.arrived || !daughter.snapped) continue;
+            const springs = [
+                ...daughter.membrane.springs,
+                ...daughter.core.springs,
+                daughter.join,
+                daughter.coreJoin,
+            ];
+            if (!springs.every((spring) => spring.settled(ARRIVED))) continue;
+            daughter.arrived = true;
+            arrived.push(daughter.id);
+        }
+        return arrived;
     }
 
     /** True once each time everything comes to rest. */

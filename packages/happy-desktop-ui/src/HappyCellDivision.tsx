@@ -42,6 +42,12 @@ export interface HappyCellDivisionProps {
     variant?: CellVariant;
     /** Everything is at rest: Happy whole again and every daughter in its row. */
     onDone?: () => void;
+    /**
+     * A daughter has come to rest in its row, while the overlay still draws it:
+     * the moment its row may show itself around it. With reduced motion there
+     * is no such moment before `onDone`.
+     */
+    onArrive?: (stemCellId: string) => void;
 }
 
 /**
@@ -65,7 +71,7 @@ export function HappyCellDivision(props: HappyCellDivisionProps) {
     const given = props.shape ?? HAPPY_CELL_SHAPE;
     const shape = happyCellSeeded(given, props.seed ?? given.seed);
     const [sim] = useState(() => new HappyCellDivisionSim(from, shape));
-    const { onDone, onSeed } = props;
+    const { onArrive, onDone, onSeed } = props;
 
     // The rects are the window's, but the layer's fixed box is the window's
     // only where nothing contains it: a connection beside the rail holds its
@@ -100,6 +106,7 @@ export function HappyCellDivision(props: HappyCellDivisionProps) {
         const tick = (now: number) => {
             sim.advance(now);
             draw();
+            for (const id of sim.arrivedReport()) onArrive?.(id);
             if (sim.restReport()) onDone?.();
             request = requestAnimationFrame(tick);
         };
