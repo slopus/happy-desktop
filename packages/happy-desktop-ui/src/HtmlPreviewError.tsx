@@ -102,6 +102,13 @@ function htmlPreviewFailureDescribe(failure: HtmlPreviewFailure): HtmlPreviewFai
                 "",
                 "doc",
             );
+        case "app-outdated":
+            return page(
+                "Update Happy to show this page",
+                "This version of the Happy app can show this file only as source. Update the app and restart it to see the page.",
+                "",
+                "doc",
+            );
         case "renderer-gone":
             return page(
                 "This page stopped responding",

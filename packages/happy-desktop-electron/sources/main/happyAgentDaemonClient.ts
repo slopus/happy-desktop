@@ -215,6 +215,26 @@ export class HappyAgentDaemonClient {
         );
     }
 
+    /**
+     * The bytes of one file a tool call presented: the daemon's private copy,
+     * read whole for the HTML preview, which serves it as a page.
+     */
+    async readToolCallMedia(
+        agentId: string,
+        toolCallId: string,
+        index: number,
+        signal?: AbortSignal,
+    ): Promise<Buffer> {
+        const media = await this.#client.getToolCallMedia(
+            agentId as Cuid2,
+            toolCallId as Cuid2,
+            index,
+            signal ? { signal } : undefined,
+        );
+        if (media === null) throw new Error("The presented file could not be read.");
+        return Buffer.from(media.data);
+    }
+
     writeWorkspaceFile(
         workspaceId: string,
         request: WriteFileRequest,

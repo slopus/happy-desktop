@@ -855,6 +855,9 @@ export function happyAgentWorkspaceClientCreate(
                 ...(deps.artifactDocumentInline
                     ? { documentInline: deps.artifactDocumentInline }
                     : {}),
+                ...(deps.hostServices.toolMediaPageOpen
+                    ? { pageOpen: deps.hostServices.toolMediaPageOpen.bind(deps.hostServices) }
+                    : {}),
             });
             return toolMediaDocument;
         },

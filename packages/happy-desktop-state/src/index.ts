@@ -93,6 +93,7 @@ export type {
     HappyAgentToolMediaDocumentSnapshot,
     HappyAgentToolMediaDocumentStore,
     HappyAgentToolMediaDocumentView,
+    HappyAgentToolMediaPage,
 } from "./happyAgent/happyAgentToolMediaDocumentStore.js";
 export type { HappyAgentArtifacts } from "./artifacts/artifacts.js";
 export type {

@@ -34,6 +34,8 @@ function previewFailureMessage(failure: HtmlPreviewFailure): string {
             return "This page stopped responding and was closed.";
         case "unsupported":
             return "This window cannot show pages.";
+        case "app-outdated":
+            return "Update Happy to show this page.";
     }
 }
 

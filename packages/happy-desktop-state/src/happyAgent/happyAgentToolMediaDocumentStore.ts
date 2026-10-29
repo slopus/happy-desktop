@@ -1,23 +1,39 @@
 import type { HappyAgentClient } from "@slopus/happy-agent-client";
 import { UserError } from "../types.js";
+import type { HappyAgentToolMediaPageOpening } from "./happyAgentHostServices.js";
 import { happyAgentUserError } from "./happyAgentSupport.js";
 
 /**
  * How a presented file is read for its preview: `document` as bytes for the
- * host's own viewer, `text` as characters for the Markdown and source views.
+ * host's own viewer, `text` as characters for the Markdown and source views,
+ * and `page` as characters for the source view while the host serves the same
+ * file as a page.
  */
-export type HappyAgentToolMediaDocumentView = "document" | "text";
+export type HappyAgentToolMediaDocumentView = "document" | "text" | "page";
 
 /** One document a tool call presented: the call, and the item's media position. */
 export interface HappyAgentToolMediaDocumentRef {
     readonly agentId: string;
     readonly toolCallId: string;
     readonly index: number;
+    /** The presented file's base name, which a page is served under. */
+    readonly name: string;
     readonly mimeType: string;
     readonly view: HappyAgentToolMediaDocumentView;
     /** Size of the presented bytes, which decides whether text is read at all. */
     readonly size: number;
 }
+
+/**
+ * Where a presented HTML file is served as a page. It is resolved beside the
+ * text rather than before it, so the source view never waits on the page.
+ */
+export type HappyAgentToolMediaPage =
+    | { readonly type: "resolving" }
+    | { readonly type: "opened"; readonly url: string }
+    /** The desktop app predates presented pages; updating it renders them. */
+    | { readonly type: "app-outdated" }
+    | { readonly type: "failed"; readonly error: UserError };
 
 /**
  * What the open document can be shown as. `ready` holds an object URL of its
@@ -36,6 +52,8 @@ export type HappyAgentToolMediaDocumentContent =
 export interface HappyAgentToolMediaDocumentSnapshot {
     readonly document?: HappyAgentToolMediaDocumentRef;
     readonly content: HappyAgentToolMediaDocumentContent;
+    /** Where a `page` document is served, present only where the host serves pages. */
+    readonly page?: HappyAgentToolMediaPage;
 }
 
 /**
@@ -43,7 +61,8 @@ export interface HappyAgentToolMediaDocumentSnapshot {
  * into memory and handed to the host's viewer as an object URL, because the
  * viewer runs in a frame that has no authenticated route to the daemon of its
  * own; a text file is read whole and decoded for the Markdown and source
- * views. Pictures and recordings never come here: they load by address.
+ * views, and an HTML file is also served by the host as a page of its own.
+ * Pictures and recordings never come here: they load by address.
  */
 export interface HappyAgentToolMediaDocumentStore {
     get(): HappyAgentToolMediaDocumentSnapshot;
@@ -57,6 +76,13 @@ export interface HappyAgentToolMediaDocumentDeps {
     readonly client: Pick<HappyAgentClient, "getToolCallMedia">;
     /** Whether this host renders a document of this media type inline. */
     readonly documentInline?: (mimeType: string) => boolean;
+    /** Serves a presented HTML file as a page, where the host has a guest to show it in. */
+    readonly pageOpen?: (
+        agentId: string,
+        toolCallId: string,
+        index: number,
+        name: string,
+    ) => Promise<HappyAgentToolMediaPageOpening>;
 }
 
 const IDLE: HappyAgentToolMediaDocumentSnapshot = { content: { type: "idle" } };
@@ -91,6 +117,7 @@ function refEqual(
         left.agentId === right.agentId &&
         left.toolCallId === right.toolCallId &&
         left.index === right.index &&
+        left.name === right.name &&
         left.mimeType === right.mimeType &&
         left.view === right.view &&
         left.size === right.size
@@ -129,7 +156,7 @@ export function happyAgentToolMediaDocumentStoreCreate(
                 { signal },
             );
             if (media === null) throw new UserError("The document could not be read.");
-            if (document.view === "text") {
+            if (document.view !== "document") {
                 const text = textDecode(media.data);
                 return text === undefined ? { type: "external" } : { type: "text", text };
             }
@@ -143,6 +170,25 @@ export function happyAgentToolMediaDocumentStoreCreate(
         } catch (error) {
             return { type: "failed", error: happyAgentUserError(error) };
         }
+    };
+    /**
+     * Asks the host to serve a page document, beside reading its text. The
+     * answer lands on the snapshot only while it still shows that document.
+     */
+    const pageOpen = (
+        document: HappyAgentToolMediaDocumentRef,
+    ): HappyAgentToolMediaPage | undefined => {
+        if (document.view !== "page" || !deps.pageOpen) return undefined;
+        const settle = (page: HappyAgentToolMediaPage): void => {
+            if (disposed || snapshot.document !== document) return;
+            publish({ ...snapshot, page });
+        };
+        void deps
+            .pageOpen(document.agentId, document.toolCallId, document.index, document.name)
+            .then(settle, (error: unknown) =>
+                settle({ type: "failed", error: happyAgentUserError(error) }),
+            );
+        return { type: "resolving" };
     };
 
     return {
@@ -158,7 +204,12 @@ export function happyAgentToolMediaDocumentStoreCreate(
                 publish(IDLE);
                 return;
             }
-            if (document.view === "text" && document.size > HAPPY_AGENT_TOOL_MEDIA_TEXT_MAX_BYTES) {
+            const page = pageOpen(document);
+            const pageField = page === undefined ? {} : { page };
+            if (
+                document.view !== "document" &&
+                document.size > HAPPY_AGENT_TOOL_MEDIA_TEXT_MAX_BYTES
+            ) {
                 publish({
                     document,
                     content: {
@@ -167,6 +218,7 @@ export function happyAgentToolMediaDocumentStoreCreate(
                             "This file is too large to preview. Download it to read it.",
                         ),
                     },
+                    ...pageField,
                 });
                 return;
             }
@@ -180,11 +232,12 @@ export function happyAgentToolMediaDocumentStoreCreate(
             }
             const active = new AbortController();
             controller = active;
-            publish({ document, content: { type: "loading" } });
+            publish({ document, content: { type: "loading" }, ...pageField });
             void load(document, active.signal).then((content) => {
                 if (active.signal.aborted || disposed) return;
                 controller = undefined;
-                publish({ document, content });
+                // The page may have answered first, so its address is kept.
+                publish({ ...snapshot, content });
             });
         },
         [Symbol.dispose]() {

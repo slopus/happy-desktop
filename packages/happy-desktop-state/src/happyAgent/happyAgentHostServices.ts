@@ -18,6 +18,15 @@ export type HappyAgentArtifactSiteOpening =
      */
     | { readonly type: "app-outdated" };
 
+/** What the host made of a request to serve a presented HTML file as a page. */
+export type HappyAgentToolMediaPageOpening =
+    | { readonly type: "opened"; readonly url: string }
+    /**
+     * The desktop app this renderer runs in predates presented pages, so the
+     * file is readable as source only until the app is updated.
+     */
+    | { readonly type: "app-outdated" };
+
 /**
  * Desktop-local services that are not Happy Agent product resources.
  *
@@ -49,6 +58,17 @@ export interface HappyAgentHostServices {
      * could not serve this one.
      */
     artifactSiteOpen?(artifactId: string, version: number): Promise<HappyAgentArtifactSiteOpening>;
+    /**
+     * Serves one HTML file a tool call presented as a page and names its
+     * address. Absent where the host has no isolated guest to show it in.
+     * Rejects when the host serves such pages and could not serve this one.
+     */
+    toolMediaPageOpen?(
+        agentId: string,
+        toolCallId: string,
+        index: number,
+        name: string,
+    ): Promise<HappyAgentToolMediaPageOpening>;
     /**
      * Where a file the reader chose lives on this machine, when it lives
      * anywhere. A pasted screenshot exists only in the browser and answers

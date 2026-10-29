@@ -6,6 +6,7 @@ import type {
     HappyAgentHostServices,
     HappyAgentOpenInTarget,
     HappyAgentOpenInTargets,
+    HappyAgentToolMediaPageOpening,
     HappyAgentWorkspaceFileBytes,
 } from "happy-desktop-state";
 
@@ -120,6 +121,30 @@ async function artifactSiteOpen(
         !response.headers.get("content-type")?.startsWith("application/json")
     )
         return { type: "app-outdated" };
+    return { type: "opened", url: (await jsonRead<{ readonly url: string }>(response)).url };
+}
+
+/**
+ * Asks the app to serve one file a tool call presented as a page. An app from
+ * before presented pages answers the route with a bare 404, as for artifact
+ * sites.
+ */
+async function toolMediaPageOpen(
+    baseUrl: string,
+    agentId: string,
+    toolCallId: string,
+    index: number,
+    name: string,
+): Promise<HappyAgentToolMediaPageOpening> {
+    const response = await fetch(
+        serviceUrl(baseUrl, "/tool-media-preview", {
+            agentId,
+            toolCallId,
+            index: String(index),
+            name,
+        }),
+    );
+    if (responseOutdated(response)) return { type: "app-outdated" };
     return { type: "opened", url: (await jsonRead<{ readonly url: string }>(response)).url };
 }
 
@@ -278,12 +303,19 @@ export function happyAgentHostServicesCreate(
                     path,
                 })
             ).url,
-        // Only the desktop window has a guest to show an artifact's site in;
-        // a browser tab keeps the static preview.
+        // Only the desktop window has a guest to show an artifact's site or a
+        // presented page in; a browser tab keeps the static preview and the
+        // source.
         ...(globalThis.window?.happyDesktop
             ? {
                   artifactSiteOpen: (artifactId: string, version: number) =>
                       artifactSiteOpen(baseUrl, artifactId, version),
+                  toolMediaPageOpen: (
+                      agentId: string,
+                      toolCallId: string,
+                      index: number,
+                      name: string,
+                  ) => toolMediaPageOpen(baseUrl, agentId, toolCallId, index, name),
               }
             : {}),
         ...(options.deviceBridges ? { deviceBridges: deviceBridgeHostCreate(baseUrl) } : {}),
