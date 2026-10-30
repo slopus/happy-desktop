@@ -156,31 +156,6 @@ async function prepare(
     return { node, entry, environment };
 }
 
-/** Resolve the existing CLI for status/removal; this path never installs it. */
-export async function legacyCliInstalledResolve(
-    launchEnvironment: () => Promise<NodeJS.ProcessEnv>,
-): Promise<PreparedLegacyCli | undefined> {
-    const nativeEnvironment = await launchEnvironment();
-    const { node, environment, pathKey } = await legacyCliEnvironmentResolve(nativeEnvironment);
-    // Terminal inspection uses the CLI's own selected server, not the Agent's
-    // separate override. It must not turn a mismatch into an apparent match.
-    const cliServer = nativeEnvironment.HAPPY_SERVER_URL?.trim();
-    if (cliServer) environment.HAPPY_SERVER_URL = cliServer;
-    else delete environment.HAPPY_SERVER_URL;
-    const override = process.env.HAPPY_DESKTOP_LEGACY_CLI_PATH;
-    if (override !== undefined) {
-        if (!isAbsolute(override) || !override.endsWith(".mjs"))
-            throw new Error("The review CLI path must name an absolute built .mjs file.");
-        return { node, environment, entry: await realpath(override) };
-    }
-    const npm = await npmEntryResolve(environment[pathKey] ?? "");
-    const root = (await command(node, [npm, "root", "--global"], environment, 30_000)).trim();
-    if (!isAbsolute(root))
-        throw new Error("npm did not report an absolute global package directory.");
-    const entry = await happyEntryResolve(root);
-    return entry ? { node, environment, entry } : undefined;
-}
-
 async function legacyCliEnvironmentResolve(nativeEnvironment: NodeJS.ProcessEnv): Promise<{
     node: string;
     environment: NodeJS.ProcessEnv;

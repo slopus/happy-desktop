@@ -965,12 +965,6 @@ export interface HappyDesktopBridge {
     legacyCliPrepare(): Promise<void>;
     /** Links the prepared terminal CLI to this machine's existing Mobile pairing. */
     legacyCliConnect(): Promise<void>;
-    /** Read-only status of this operating-system user's existing terminal CLI. */
-    legacyCliStatus?(): Promise<import("happy-desktop-state").HappyTerminalCliInspection>;
-    /** Acts only after the person confirms the exact inspected CLI scope. */
-    legacyCliReset?(
-        request: import("happy-desktop-state").HappyTerminalCliResetRequest,
-    ): Promise<import("happy-desktop-state").HappyTerminalCliResetOutcome>;
     /** Downloads and verifies the first Happy Agent release without running it. */
     daemonDownload(): Promise<void>;
     daemonGet(): Promise<DesktopDaemonSnapshot>;
@@ -1096,8 +1090,6 @@ export const desktopIpc = {
     daemonRestart: "happy:daemon:restart",
     legacyCliConnect: "happy:legacy-cli:connect",
     legacyCliPrepare: "happy:legacy-cli:prepare",
-    legacyCliStatus: "happy:legacy-cli:status",
-    legacyCliReset: "happy:legacy-cli:reset",
     daemonGet: "happy:daemon:get",
     daemonStart: "happy:daemon:start",
     daemonUpgrade: "happy:daemon:upgrade",

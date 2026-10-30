@@ -267,15 +267,6 @@ export * from "./happyAgent/happyAgentWindowStore.js";
 export * from "./happyAgent/happyAgentWorkspaceMemory.js";
 export * from "./happyAgent/happyAgentWorkspaceStore.js";
 export * from "./happyAgent/happyAgentViewPreferences.js";
-export type {
-    HappyTerminalCliSnapshot,
-    HappyTerminalCliResetPreview,
-    HappyTerminalCliInspection,
-    HappyTerminalCliResetRequest,
-    HappyTerminalCliResetOutcome,
-    HappyTerminalCliResetErrorCode,
-    HappyTerminalCliResetEffects,
-} from "./happyAgent/happyTerminalCli.js";
 export * from "./spaces/spaceTypes.js";
 export * from "./spaces/spacesStore.js";
 export * from "./spaces/spacesSidebarDocument.js";
