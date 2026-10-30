@@ -166,29 +166,30 @@
     display: none;
 }
 
-/* A tool the row has no word for is named by its own title, which is words,
-   not code: it is set in the UI face, still, where every other verb is the
-   terminal's typed label. */
-.happy-agent-activity[data-named] .happy-agent-activity__verb .happy-agent-activity__still-text {
-    font-family: var(--happy-font-ui);
-}
-
 /* A command or path longer than the row scrolls sideways (see ScrollingText)
    rather than losing its tail, so nothing an agent did is unreadable. */
 .happy-agent-activity__text {
     min-width: 0;
     flex: 1 1 auto;
-    font-family: var(--happy-font-mono);
-    font-size: 13px;
+    font-family: var(--happy-font-ui);
+    font-size: 14px;
     line-height: 20px;
     color: var(--text);
 }
 
-/* An agent a spawn made is named, then told what it was asked in words, not code. */
-.happy-agent-activity[data-spawned] .happy-agent-activity__text,
-.happy-agent-activity[data-spawned] .happy-agent-activity__text .happy-agent-activity__still-text,
-.happy-agent-activity[data-spawned] .happy-agent-activity__text .happy-typed-text {
+/* Every tool row's label and subject read as words, in the transcript's own
+   type, whatever the tool: a run of rows never switches face from one call to
+   the next. The label inside, typed or still, sets its own monospace, so the
+   row overrides it. The raw call keeps the monospace in the row's body. */
+.happy-agent-activity__verb .happy-typed-text,
+.happy-agent-activity__verb .happy-agent-activity__still-text,
+.happy-agent-activity__text .happy-typed-text,
+.happy-agent-activity__text .happy-agent-activity__still-text {
     font-family: var(--happy-font-ui);
+}
+
+/* An agent a spawn made is named, then told what it was asked. */
+.happy-agent-activity[data-spawned] .happy-agent-activity__text {
     color: var(--text-secondary);
 }
 
@@ -476,31 +477,14 @@
     color: var(--warning);
 }
 
-.happy-agent-activity[data-single-line][data-presentation="execCommand"]
-    .happy-agent-activity__text,
-.happy-agent-activity[data-single-line][data-presentation="backgroundTerminalInteraction"]
-    .happy-agent-activity__text,
-.happy-agent-activity[data-single-line][data-presentation="fileDiff"] .happy-agent-activity__text,
-.happy-agent-activity[data-single-line][data-mono] .happy-agent-activity__text {
+/* A step its producer marked as code keeps the monospace. */
+.happy-agent-activity[data-single-line][data-mono] .happy-agent-activity__text,
+.happy-agent-activity[data-single-line][data-mono] .happy-agent-activity__text .happy-typed-text,
+.happy-agent-activity[data-single-line][data-mono]
+    .happy-agent-activity__text
+    .happy-agent-activity__still-text {
     font-family: var(--happy-font-mono);
     font-size: 13px;
-}
-
-/* A call told as what it did reads as words, in the transcript's own type;
-   only a raw command, path, or argument list keeps the monospace. */
-.happy-agent-activity[data-action] .happy-agent-activity__text,
-.happy-agent-activity[data-single-line][data-action] .happy-agent-activity__text {
-    font-family: var(--happy-font-ui);
-    font-size: 14px;
-}
-
-/* The label inside, typed or still, sets its own monospace; here it reads in
-   the row's words too, verb included. */
-.happy-agent-activity[data-action] .happy-agent-activity__verb .happy-typed-text,
-.happy-agent-activity[data-action] .happy-agent-activity__verb .happy-agent-activity__still-text,
-.happy-agent-activity[data-action] .happy-agent-activity__text .happy-typed-text,
-.happy-agent-activity[data-action] .happy-agent-activity__text .happy-agent-activity__still-text {
-    font-family: var(--happy-font-ui);
 }
 
 /* An agent a message names: its name, marked as something to open only under

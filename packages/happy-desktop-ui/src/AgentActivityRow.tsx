@@ -1216,8 +1216,6 @@ function AgentToolActivity(props: {
             data-tone={tone}
             data-presentation={presentation?.type ?? "generic"}
             data-described={described ? "" : undefined}
-            data-action={action || presentation?.type === "fileDiff" ? "" : undefined}
-            data-named={named ? "" : undefined}
             data-spawned={spawned !== undefined ? "" : undefined}
             data-review={tool.review ? "" : undefined}
             data-elevated={elevated ? "" : undefined}

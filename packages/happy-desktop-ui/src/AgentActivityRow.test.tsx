@@ -601,6 +601,16 @@ it("tells each call as what it did, in words, and keeps the raw call one click a
         ],
         ["running", call("t-running", "Bash", {}, { status: "running" })],
         ["reading-early", call("t-reading-early", "Read", {}, { status: "running" })],
+        // A tool told by its own name and words rather than as an action.
+        [
+            "subtask",
+            call(
+                "t-subtask",
+                "create_subtask",
+                { title: "Desktop chat scroll" },
+                { summary: "Desktop chat scroll" },
+            ),
+        ],
     ];
     const view = createRenderer();
     view.render(
@@ -679,7 +689,8 @@ it("tells each call as what it did, in words, and keeps the raw call one click a
         part("read", "agent-activity-verb")!.getBoundingClientRect().x,
     );
 
-    // The words are the transcript's own type; only a raw command stays monospace.
+    // Every row's words are the transcript's own type, a raw command and a
+    // tool told by its own name included: a run of rows never switches face.
     // Read from the glyphs' own span, typed or still, which is what draws them.
     const fontOf = (row: string, name = "agent-activity-text") => {
         const label = part(row, name)!;
@@ -687,12 +698,23 @@ it("tells each call as what it did, in words, and keeps the raw call one click a
             label.querySelector(".happy-typed-text, .happy-agent-activity__still-text") ?? label;
         return getComputedStyle(glyphs).fontFamily;
     };
-    const mono = fontOf("raw");
-    expect(fontOf("raw-calm")).toBe(mono);
-    for (const row of ["read", "edit", "create", "update", "team", "tell", "ship", "tell-calm"])
-        expect(fontOf(row), row).not.toBe(mono);
-    for (const row of ["read", "tell", "tell-calm"])
-        expect(fontOf(row, "agent-activity-verb"), `${row} verb`).not.toBe(mono);
+    const words = fontOf("read");
+    expect(words).toContain("Figtree");
+    for (const row of [
+        "edit",
+        "create",
+        "update",
+        "team",
+        "tell",
+        "ship",
+        "tell-calm",
+        "raw",
+        "raw-calm",
+        "subtask",
+    ])
+        expect(fontOf(row), row).toBe(words);
+    for (const row of ["read", "tell", "tell-calm", "raw", "raw-calm", "subtask"])
+        expect(fontOf(row, "agent-activity-verb"), `${row} verb`).toBe(words);
 
     // A transcript row never opens, so the raw call is its hover title.
     expect(part("ship", "agent-activity-header")?.title).toBe("$ pnpm release --production");
