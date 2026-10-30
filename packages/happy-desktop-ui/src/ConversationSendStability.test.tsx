@@ -12,7 +12,6 @@ import "./styles.css";
 import { testDepthCount } from "./testing/testDepth";
 import { ConversationDock } from "./ConversationDock";
 import { ConversationView } from "./ConversationView";
-import { SEND_LIFT_TOP } from "./Message";
 import { createRenderer, pageViewport } from "./testing";
 import type { ConversationSwitchSource } from "./conversationSwitchTargets";
 
@@ -516,7 +515,7 @@ it.skipIf(server.browser === "firefox").each(["send", "draft"] as const)(
     },
 );
 
-it.each(["following", "parked"] as const)(
+it.each(["parked"] as const)(
     "lets a docked question use send space and returns it on answer for a %s reader",
     async (mode) => {
         const { view, send, question } = renderConversation(60);
@@ -713,7 +712,7 @@ it("keeps following after answering restores the viewport and native scrolling r
     }
 });
 
-it("lifts repeated idle sends in their first commit while retaining the visible message node", async () => {
+it("follows repeated idle sends to the end in their first commit while retaining the visible message node", async () => {
     const { view, send } = renderConversation(60);
     await view.ready();
     await frames();
@@ -723,7 +722,8 @@ it("lifts repeated idle sends in their first commit while retaining the visible 
         const row = [...viewport.querySelectorAll<HTMLElement>(".happy-message")].at(-1)!;
         const bounds = viewport.getBoundingClientRect();
         const top = row.getBoundingClientRect().top;
-        expect(Math.abs(top - bounds.top - Math.round(bounds.height * 0.3))).toBeLessThan(1);
+        // No lift: the send sits at the end, above the reply's status row.
+        expect(bounds.bottom - row.getBoundingClientRect().bottom).toBe(24);
         await frames();
         expect(row.isConnected).toBe(true);
         expect(row.getBoundingClientRect().top).toBe(top);
@@ -731,7 +731,7 @@ it("lifts repeated idle sends in their first commit while retaining the visible 
 });
 
 it.each([0, 40])(
-    "lifts a send to SEND_LIFT_TOP down the viewport with %i preceding messages",
+    "keeps a send at the end without lifting it, with %i preceding messages",
     async (count) => {
         const { view, send } = renderConversation(count);
         await view.ready();
@@ -747,18 +747,10 @@ it.each([0, 40])(
         )!;
         const bounds = viewport.getBoundingClientRect();
         const sent = row.getBoundingClientRect();
-        if (count === 0) {
-            // Nothing above it to scroll away: the send stays where it lands.
-            expect(sent.top).toBeGreaterThan(bounds.top + bounds.height / 2);
-            expect(bounds.bottom - sent.bottom).toBe(24);
-        } else {
-            // Its top edge sits SEND_LIFT_TOP down, the previous turn in view above it and
-            // the space below held for the reply.
-            expect(
-                Math.abs(sent.top - bounds.top - Math.round(bounds.height * SEND_LIFT_TOP)),
-            ).toBeLessThan(1);
-            expect(bounds.bottom - sent.bottom).toBeGreaterThan(bounds.height / 3);
-        }
+        // The send lands at the end, above the reply's status row; no space
+        // is held below it.
+        expect(sent.top).toBeGreaterThan(bounds.top + bounds.height / 2);
+        expect(bounds.bottom - sent.bottom).toBe(24);
         expect(view.container.querySelector(".happy-message-list__tail")).toBeNull();
         // What the reader sees, not the offset: idle refinement of rows far above
         // may move model coordinates and the offset with them in one commit.
@@ -978,7 +970,7 @@ it.skipIf(server.browser === "firefox").each([0.67, 0.9, 1.5, 2])(
 );
 
 it.each([2, 40])(
-    "keeps geometry slack while it is visible and lifts a send over it with %i preceding messages",
+    "keeps geometry slack while it is visible and lands a send in it with %i preceding messages",
     async (count) => {
         const { view, send, resize } = renderConversation(count);
         await view.ready();
@@ -1000,11 +992,10 @@ it.each([2, 40])(
         const sent = [...viewport.querySelectorAll<HTMLElement>(".happy-message")]
             .find((element) => element.textContent?.includes("The newly sent message"))!
             .getBoundingClientRect();
-        // A send never lands below where it would sit lifted, and the space it
-        // stands in never shrinks while it is in view.
-        expect(sent.top - bounds.top).toBeLessThanOrEqual(
-            Math.round(bounds.height * SEND_LIFT_TOP) + 1,
-        );
+        // The send is in view, and the space it stands in never shrinks while
+        // it is in view.
+        expect(sent.top).toBeGreaterThanOrEqual(bounds.top);
+        expect(sent.bottom).toBeLessThanOrEqual(bounds.bottom);
         expect(Number.parseFloat(content.style.minHeight || "0")).toBeGreaterThanOrEqual(
             Number.parseFloat(extent),
         );
@@ -1251,45 +1242,6 @@ it.each([2, 40])(
         expect(anchorTop()).toBe(top);
     },
 );
-
-it("keeps the space under a send until the reply grows into it", async () => {
-    const { view, send, stream } = renderConversation(40);
-    await view.ready();
-    await frames();
-    send();
-    await frames();
-    const viewport = view.container.querySelector<HTMLElement>(".happy-message-list__viewport")!;
-    const sentRow = () =>
-        [...viewport.querySelectorAll<HTMLElement>(".happy-message")].find((element) =>
-            element.textContent?.includes("The newly sent message"),
-        )!;
-    const top = sentRow().getBoundingClientRect().top;
-    // Scrolled far enough that the space is entirely off screen, and back.
-    viewport.dispatchEvent(new WheelEvent("wheel", { deltaY: -900 }));
-    viewport.scrollTop -= 900;
-    await frames();
-    viewport.scrollTop = viewport.scrollHeight;
-    viewport.dispatchEvent(new WheelEvent("wheel", { deltaY: 40, cancelable: true }));
-    await frames();
-    expect(sentRow().getBoundingClientRect().top).toBe(top);
-    // The reply grows into the space without moving what is above it, and
-    // once it outgrows the space the transcript follows its end.
-    const bounds = viewport.getBoundingClientRect();
-    let held = 0;
-    for (let lines = 1; lines < 40; lines += 1) {
-        stream(lines);
-        await frames();
-        if (sentRow().getBoundingClientRect().top === top) {
-            held += 1;
-            continue;
-        }
-        const reply = [...viewport.querySelectorAll<HTMLElement>(".happy-message")].at(-1)!;
-        expect(Math.round(bounds.bottom - reply.getBoundingClientRect().bottom)).toBe(24);
-        break;
-    }
-    expect(held).toBeGreaterThan(2);
-    expect(sentRow().getBoundingClientRect().top).toBeLessThan(top);
-});
 
 it("offers a way back to the newest row once the reader scrolls away, and moves nothing showing it", async () => {
     const { view, stream } = renderConversation(60);

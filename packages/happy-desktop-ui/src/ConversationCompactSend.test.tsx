@@ -318,13 +318,13 @@ it.each([false, true].flatMap((parked) => [11, 200].map((count) => ({ parked, co
             )!;
             const body = view.container.querySelector<HTMLElement>('[data-body-fold="closed"]')!;
             const row = body.closest<HTMLElement>(".happy-message-list__virtual-row")!;
-            expect(
-                Math.abs(
-                    row.getBoundingClientRect().top -
-                        viewport.getBoundingClientRect().top -
-                        Math.round(viewport.getBoundingClientRect().height * 0.3),
-                ),
-            ).toBeLessThanOrEqual(1);
+            // The folded send is followed into view at the end, not lifted.
+            expect(row.getBoundingClientRect().top).toBeGreaterThanOrEqual(
+                viewport.getBoundingClientRect().top,
+            );
+            expect(row.getBoundingClientRect().bottom).toBeLessThanOrEqual(
+                viewport.getBoundingClientRect().bottom,
+            );
             if (parked) {
                 viewport.dispatchEvent(new WheelEvent("wheel", { deltaY: -20 }));
                 viewport.scrollTop -= 20;

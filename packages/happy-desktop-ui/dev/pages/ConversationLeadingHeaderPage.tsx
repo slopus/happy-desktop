@@ -303,13 +303,13 @@ export function ConversationLeadingHeaderPage() {
         {
             id: "empty",
             label: "New work · before its first message",
-            detail: "The intro is the transcript's only row: the mark and its line sit above the send lift line, and the options start on it",
+            detail: "The intro is the transcript's only row: the mark and its line sit above the lift line, and the options start on it",
             view: conversation({ id: "empty", entries: [], text: draft }),
         },
         {
             id: "sent",
             label: "First message sent",
-            detail: "The mark and its line stay; the message takes the options' place, on the lift line, where every later send is lifted to",
+            detail: "The mark and its line stay; the message takes the options' place, on the lift line",
             view: conversation({
                 id: "sent",
                 entries: [message("1", "you", draft, "sending")],
@@ -331,7 +331,7 @@ export function ConversationLeadingHeaderPage() {
     return (
         <ComponentPage
             number={componentNumber}
-            summary="A conversation's leading header: MessageList's first row, with a reserved key and a height computed from its data, here new work's intro. The header rests with its lift line at the height a send is lifted to (SEND_LIFT_TOP), so the first message lands in the same slot as every later send, in place of the intro's options. The intro's mark grows from stem cell to icon in place whenever the icon arrives."
+            summary="A conversation's leading header: MessageList's first row, with a reserved key and a height computed from its data, here new work's intro. The header rests with its lift line LEADING_HEADER_REST_TOP down the viewport, so the first message lands there, in place of the intro's options. The intro's mark grows from stem cell to icon in place whenever the icon arrives."
             title="Conversation leading header"
         >
             {screens.map((screen, index) => {
@@ -365,7 +365,7 @@ export function ConversationLeadingHeaderPage() {
                 </ThemeScope>
             </FullScreenSpecimen>
             <FullScreenSpecimen
-                detail="A chat that already has content: Send lifts the message to the same slot the first send lands in"
+                detail="A chat that already has content: a send lands at the end, and a reader at the bottom keeps following it"
                 label="Live · a later send"
                 number="06"
                 screen={`06-later-${String(liveFrame.width)}x${String(liveFrame.height)}`}

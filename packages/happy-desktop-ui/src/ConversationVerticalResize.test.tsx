@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { flushSync } from "react-dom";
 import { expect, it } from "vitest";
 import {
     agentAuthor,
@@ -31,42 +30,36 @@ const composer: ComposerSnapshot = {
     submission: { status: "idle" },
     text: "",
 };
-function message(id: string, own = false): ConversationEntry {
+function message(id: string): ConversationEntry {
     return {
         kind: "message",
         source: "server",
         delivery: "sent",
-        ...(own ? { sentHere: true } : {}),
         message: {
             id,
             chatId: "resize",
             sequence: id,
             changePts: id,
-            sender: own ? happyAgentOwnerAuthor : agentAuthor,
-            text: own
-                ? "Please start this task."
-                : `${id}. ${"A completed reply holds its position through window resizing. ".repeat(4)}`,
+            sender: agentAuthor,
+            text: `${id}. ${"A completed reply holds its position through window resizing. ".repeat(4)}`,
             attachments: [],
             reactions: [],
             createdAt: "2026-10-23T13:27:00.000Z",
         },
     };
 }
-const cases = ["following", "following-held", "parked", "parked-held"].flatMap((state) =>
+const cases = ["following", "parked"].flatMap((state) =>
     ["bottom", "top"].flatMap((edge) => [1, 4, 20].map((step) => ({ state, edge, step }))),
 );
 
 it.each(cases)(
     "takes held space before carrying rows during a vertical drag: %j",
     async ({ state, edge, step }) => {
-        let send!: () => void;
         let following = false;
         function Harness() {
-            const [entries, setEntries] = useState<readonly ConversationEntry[]>(
+            const [entries] = useState<readonly ConversationEntry[]>(
                 Array.from({ length: 40 }, (_, index) => message(`history-${index}`)),
             );
-            send = () =>
-                flushSync(() => setEntries((previous) => [...previous, message("send", true)]));
             const ready = true;
             return (
                 <div
@@ -102,10 +95,6 @@ it.each(cases)(
             // a drag; every frame below then changes only viewport height.
             await new Promise((resolve) => setTimeout(resolve, 600));
             await frames();
-            if (state.endsWith("held")) {
-                send();
-                await frames();
-            }
             const panel = view.container.querySelector<HTMLElement>("[data-resize-panel]")!;
             const viewport = view.container.querySelector<HTMLElement>(
                 ".happy-message-list__viewport",
@@ -180,14 +169,6 @@ it.each(cases)(
                     }
                 }
                 previous = next;
-            }
-            if (state === "following-held") {
-                expect(initial.blank).toBeGreaterThan(250);
-                expect(initial.blank).toBeLessThan(320);
-                expect(
-                    Math.abs(previous.scrollTop - initial.scrollTop - (320 - initial.blank)),
-                ).toBeLessThanOrEqual(1);
-                expect(previous.blank).toBeLessThanOrEqual(1);
             }
             const grownHeight = state === "parked" ? 1100 : 700;
             for (; height < grownHeight; height += 20) {

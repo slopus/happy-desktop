@@ -6,7 +6,7 @@ import "./styles.css";
 import { ConversationDock } from "./ConversationDock";
 import { ConversationView } from "./ConversationView";
 import { makeStuffIntroHeader, type MakeStuffOption } from "./MakeStuffView";
-import { SEND_LIFT_TOP } from "./Message";
+import { LEADING_HEADER_REST_TOP } from "./Message";
 import { createRenderer } from "./testing";
 
 const reader: ConversationAuthor = {
@@ -127,8 +127,9 @@ function renderChat(height: number, history: number) {
             )!;
             return row.getBoundingClientRect().top - viewport().getBoundingClientRect().top;
         },
-        /** Where a send's top edge is lifted to in this viewport, from the shared constant. */
-        liftLine: () => Math.round(viewport().getBoundingClientRect().height * SEND_LIFT_TOP),
+        /** Where the header's lift line rests in this viewport, from the shared constant. */
+        liftLine: () =>
+            Math.round(viewport().getBoundingClientRect().height * LEADING_HEADER_REST_TOP),
         mark: () =>
             view.container
                 .querySelector<HTMLElement>("[data-happy-desktop-ui=stem-cell]")!
@@ -142,17 +143,8 @@ function renderChat(height: number, history: number) {
 }
 
 it.each([640, 900])(
-    "lands the first send under a leading header in the slot a later send is lifted to, in a %ipx column",
+    "lands the first send under a leading header in place of the intro's options, in a %ipx column",
     async (height) => {
-        const later = renderChat(height, 12);
-        await later.view.ready();
-        await frames();
-        later.send();
-        await frames();
-        const lifted = later.sentTop();
-        // A later send sits on the lift line the constant names.
-        expect(Math.abs(lifted - later.liftLine())).toBeLessThanOrEqual(0.5);
-
         const first = renderChat(height, 0);
         await first.view.ready();
         await frames();
@@ -161,8 +153,7 @@ it.each([640, 900])(
         const mark = first.mark();
         first.send();
         await frames();
-        // The first send takes the options' place, in the later send's slot.
-        expect(Math.abs(first.sentTop() - lifted)).toBeLessThanOrEqual(0.5);
+        // The first send takes the options' place.
         expect(Math.abs(first.sentTop() - first.liftLine())).toBeLessThanOrEqual(0.5);
         expect(
             first.view.container.querySelector("[data-happy-desktop-ui=make-stuff-offer]"),

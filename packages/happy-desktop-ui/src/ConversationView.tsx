@@ -111,9 +111,9 @@ export type ConversationLeadingHeader = {
     /** Computed from the block's own data, like every row's height; never measured. */
     readonly height: (width: number) => number;
     /**
-     * Where the first entry lands, from the block's top: the line that rests
-     * at the height a send is lifted to, so the first send takes the same
-     * slot as every later one.
+     * Where the first entry lands, from the block's top: the line the list
+     * rests at `LEADING_HEADER_REST_TOP` down the viewport, so the first send
+     * takes the place of what the block offered there.
      */
     readonly lift: (width: number) => number;
 };
@@ -210,8 +210,8 @@ export type ConversationViewProps = {
      * A fixed block that opens the transcript as its first row, such as new
      * work's mark and the line under it. With one, an empty conversation is
      * this row alone rather than `emptyContent`: it rests with its lift line
-     * at the height a send is lifted to, and the first message lands on that
-     * line without anything above it moving.
+     * at `LEADING_HEADER_REST_TOP` down the viewport, and the first message
+     * lands on that line without anything above it moving.
      */
     leadingHeader?: ConversationLeadingHeader;
     /** Agent identity shown when a tool/activity row opens a turn before prose exists. */
@@ -851,46 +851,26 @@ export function ConversationView(props: ConversationViewProps) {
        device: whatever the footer shows next is the start of its reply. */
     const newest = props.entries.at(-1);
     const replyNext = newest?.kind === "message" && newest.message.sender?.kind === "human";
-    /* A send made while the agent is idle is lifted to the top with room for
-       its reply. One made mid-turn waits under the streaming reply instead,
-       which would push a lifted row down. A send already present when the
+    /* A send made mid-turn waits under the streaming reply, and a reader near
+       the bottom follows it into view. A send made while the agent is idle
+       moves nothing: a reader following the bottom keeps following it, and
+       one scrolled into history stays put. A send already present when the
        view opens is history. */
     const sentKey = conversationSentHereKey(props.entries);
-    const [sendLift, setSendLift] = useState(() => ({
+    const [sendFollow, setSendFollow] = useState(() => ({
         conversationId: props.conversationId,
         sentKey,
-        liftKey: undefined as string | undefined,
-        /** The lift is an inline answer: its message is lifted by its end. */
-        liftEnd: false,
         followKey: undefined as string | undefined,
     }));
-    if (sendLift.conversationId !== props.conversationId)
-        setSendLift({
+    if (sendFollow.conversationId !== props.conversationId)
+        setSendFollow({ conversationId: props.conversationId, sentKey, followKey: undefined });
+    else if (sendFollow.sentKey !== sentKey)
+        setSendFollow({
             conversationId: props.conversationId,
             sentKey,
-            liftKey: undefined,
-            liftEnd: false,
-            followKey: undefined,
-        });
-    else if (sendLift.sentKey !== sentKey)
-        setSendLift({
-            conversationId: props.conversationId,
-            sentKey,
-            liftKey: sentKey !== undefined && props.running !== true ? sentKey : sendLift.liftKey,
-            liftEnd: sentKey !== undefined && props.running !== true ? false : sendLift.liftEnd,
             followKey:
-                sentKey !== undefined && props.running === true ? sentKey : sendLift.followKey,
+                sentKey !== undefined && props.running === true ? sentKey : sendFollow.followKey,
         });
-    /* An answer given with an inline action sends no message of its own, so the
-       message that asked is lifted by its end, where the chosen control
-       stands, with the same room for the reply a typed send gets. */
-    const chatActionRun = props.onChatAction
-        ? (invocation: ChatActionInvocation) => {
-              if (props.running !== true)
-                  setSendLift({ ...sendLift, liftKey: invocation.messageId, liftEnd: true });
-              props.onChatAction?.(invocation);
-          }
-        : undefined;
     /*
      * The turn ended and the agents it delegated to did not. That is a state of
      * its own rather than a continuation of the turn: the conversation is still
@@ -1223,9 +1203,7 @@ export function ConversationView(props: ConversationViewProps) {
                            held below the composer. */
                         footerFollowed={sendPending || replyNext}
                         footerReserveHeight={queuedStatusHeight}
-                        liftKey={sendLift.liftKey}
-                        liftEnd={sendLift.liftEnd}
-                        followKey={sendLift.followKey}
+                        followKey={sendFollow.followKey}
                         {...(props.leadingHeader
                             ? {
                                   header: props.leadingHeader.content,
@@ -1357,7 +1335,9 @@ export function ConversationView(props: ConversationViewProps) {
                                     {...(props.actionChoices
                                         ? { actionChoices: props.actionChoices }
                                         : {})}
-                                    {...(chatActionRun ? { onChatAction: chatActionRun } : {})}
+                                    {...(props.onChatAction
+                                        ? { onChatAction: props.onChatAction }
+                                        : {})}
                                     {...(props.chatActionFigures
                                         ? { chatActionFigures: props.chatActionFigures }
                                         : {})}
