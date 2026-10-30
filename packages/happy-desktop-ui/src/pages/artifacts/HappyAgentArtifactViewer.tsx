@@ -33,6 +33,7 @@ import {
 } from "./artifactPresentation";
 import { ArtifactHeader } from "./ArtifactHeader";
 import { HappyAgentArtifactHtmlFrame } from "./HappyAgentArtifactHtmlFrame";
+import type { MessageReferences } from "../../messageReferences";
 
 export interface HappyAgentArtifactViewerProps {
     /** The open artifact, its history, and the version on screen, as the viewer store holds them. */
@@ -76,6 +77,11 @@ export interface HappyAgentArtifactViewerProps {
      * where the host has none, in which case the viewer never holds a site.
      */
     renderPage?: HtmlPreviewRenderer;
+    /**
+     * Reads and opens the `happy://` links to Happy entities a Markdown
+     * version carries, as a message's do. Absent, each reads as its label.
+     */
+    entities?: MessageReferences;
     className?: string;
     "data-testid"?: string;
     style?: CSSProperties;
@@ -203,6 +209,7 @@ export function HappyAgentArtifactViewer(props: HappyAgentArtifactViewerProps) {
                             ) : (
                                 <ArtifactContent
                                     content={viewer.content}
+                                    {...(props.entities ? { entities: props.entities } : {})}
                                     files={viewer.files}
                                     key={viewer.version?.number ?? 0}
                                     onFileDownload={props.onFileDownload}
@@ -308,6 +315,7 @@ function ArtifactOlder(props: {
 /** The version on screen, shown the way its type reads best. */
 function ArtifactContent(props: {
     content: HappyAgentArtifactContent;
+    entities?: MessageReferences;
     files: readonly HappyAgentArtifactFileLink[];
     onFileDownload: (link: HappyAgentArtifactFileLink) => void;
     renderPage?: HtmlPreviewRenderer;
@@ -350,6 +358,7 @@ function ArtifactContent(props: {
             return (
                 <MarkdownDocument
                     className="happy-agent-artifact-viewer__markdown"
+                    {...(props.entities ? { entities: props.entities } : {})}
                     onFileOpen={(path) => {
                         const link = fileOf(path);
                         if (link) props.onFileDownload(link);

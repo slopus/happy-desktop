@@ -102,6 +102,7 @@ import {
     artifactWebPreferencesEnforce,
     artifactWebviewAdmitted,
 } from "./artifactBrowser";
+import { htmlPreviewGuestAttach, htmlPreviewUrl } from "./htmlPreviewGuest";
 import { happyAgentRendererOrigin } from "./happyAgentRendererProxy";
 import {
     happyAgentRendererSessionCreate,
@@ -768,6 +769,16 @@ function browserOpenPublish(window: BrowserWindow, candidate: string): void {
     window.webContents.send(desktopIpc.browserOpenRequested, url);
 }
 
+/**
+ * A Happy link the reader followed in a page the window shows goes to the
+ * window, which opens it as the same link in a message would open. It is
+ * never handed to the OS: the Happy mobile app may own the scheme here.
+ */
+function happyLinkOpenPublish(window: BrowserWindow, url: string): void {
+    if (window.isDestroyed() || window.webContents.isDestroyed()) return;
+    window.webContents.send(desktopIpc.happyLinkOpenRequested, url);
+}
+
 async function browserSessionConfigure(browserSession: Electron.Session): Promise<void> {
     // The browser names itself honestly, with Electron's and the app's tokens.
     // Google's sign-in refuses an embedded engine that claims to be Chrome but
@@ -828,25 +839,6 @@ async function htmlPreviewSessionConfigure(): Promise<void> {
     );
     previewSession.setPermissionCheckHandler(() => false);
     await previewSession.closeAllConnections();
-}
-
-/**
- * Whether an address is one of this process's own preview sites. The proxy
- * publishes each document folder under `.localhost`, which is loopback by
- * specification, so a page keeps the secure context it would have when served
- * for real.
- */
-function htmlPreviewUrl(candidate: string): string | undefined {
-    try {
-        const parsed = new URL(candidate);
-        return parsed.protocol === "http:" &&
-            parsed.port === "" &&
-            parsed.hostname.endsWith(".localhost")
-            ? parsed.href
-            : undefined;
-    } catch {
-        return undefined;
-    }
 }
 
 function artifactSessionGet() {
@@ -981,23 +973,21 @@ function browserGuestAttach(window: BrowserWindow): void {
                 guest.close();
                 return;
             }
-            artifactGuestAttach(guest, artifactGuests, (url) => void shell.openExternal(url));
+            artifactGuestAttach(
+                guest,
+                artifactGuests,
+                (url) => void shell.openExternal(url),
+                (url) => happyLinkOpenPublish(window, url),
+            );
             htmlPreviewLifecyclePublish(window, guest);
             return;
         }
         if (guest.session === htmlPreviewSessionGet()) {
-            // A preview is one page of one file. Following a link out of it, or
-            // opening a window from it, is browsing, and browsing is the browser
-            // tab's job — so the guest stays on the document it was opened with.
-            guest.setWindowOpenHandler(({ url }) => {
-                browserOpenPublish(window, url);
-                return { action: "deny" };
-            });
-            const stayOnPreview = (event: Electron.Event, candidate: string) => {
-                if (htmlPreviewUrl(candidate) === undefined) event.preventDefault();
-            };
-            guest.on("will-navigate", stayOnPreview);
-            guest.on("will-redirect", stayOnPreview);
+            htmlPreviewGuestAttach(
+                guest,
+                (url) => browserOpenPublish(window, url),
+                (url) => happyLinkOpenPublish(window, url),
+            );
             htmlPreviewLifecyclePublish(window, guest);
             return;
         }

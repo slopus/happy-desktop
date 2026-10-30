@@ -16,9 +16,14 @@ import { happyAgentHistoryCreate, type HappyAgentRouterHistory } from "./happyAg
 import { happyAgentRoutePathParse } from "./happyAgentRoute";
 import { useSyncExternalStore } from "react";
 import { HappyAgentOnboardingBoundary } from "../components/HappyAgentOnboardingBoundary";
-import { happyAgentConversationContent } from "happy-desktop-state";
+import {
+    happyAgentConversationContent,
+    happyAgentFileLinkParse,
+    parseHappyUrl,
+} from "happy-desktop-state";
 import type {
     AppearanceStore,
+    HappyAgentArtifactId,
     CommandPaletteStore,
     ExperimentsStore,
     ProjectsVisibilityStore,
@@ -51,8 +56,10 @@ import {
     type LivePerformanceStore,
     type MediaWindowOpener,
 } from "happy-desktop-ui";
+import { messageReferenceEntities, messageReferenceSurfaceNames } from "../messageReferences";
 import {
     AppHappyAgentView,
+    fileTabKind,
     type AppBuildIdentity,
     type AppHappyAgentDirectoryStore,
     type AppHappyAgentUpdate,
@@ -580,43 +587,6 @@ function HappyAgentWorkspaceLayout() {
     // so the very first render of a deep-linked URL can arrive with an empty
     // context; the provider's context lands on the next synchronous pass.
     if (!context.happyAgents) return null;
-    /**
-     * Shows a Surface's shared chat beside it, at the conversation it is, or
-     * hides it. The chat is found in the background; a reader who has moved
-     * on by the time it answers stays where they went.
-     */
-    const surfaceChatShow = (
-        happyAgentId: string,
-        surfaceId: string,
-        chat: HappyAgentSessionLocation | undefined,
-    ): void => {
-        const shown = happyAgentRoutePathParse(router.history.location.pathname);
-        if (
-            shown?.kind !== "surface" ||
-            shown.happyAgentId !== happyAgentId ||
-            shown.surfaceId !== surfaceId
-        )
-            return;
-        // Showing or hiding the chat is not a step to go back through.
-        void navigate(
-            chat === undefined
-                ? {
-                      params: { happyAgentId, surfaceId },
-                      replace: true,
-                      to: "/surfaces/$happyAgentId/$surfaceId",
-                  }
-                : {
-                      params: {
-                          chatAgentId: chat.sessionId,
-                          chatGroupId: chat.groupId,
-                          happyAgentId,
-                          surfaceId,
-                      },
-                      replace: true,
-                      to: "/surfaces/$happyAgentId/$surfaceId/chat/$chatGroupId/$chatAgentId",
-                  },
-        );
-    };
     return (
         <AppHappyAgentView
             appearance={context.appearance}
@@ -664,39 +634,12 @@ function HappyAgentWorkspaceLayout() {
             params.chatAgentId !== undefined
                 ? { surfaceChat: { groupId: params.chatGroupId, chatId: params.chatAgentId } }
                 : {})}
-            onSurfaceOpen={(happyAgentId, surfaceId) => {
-                // A Surface whose chat the reader left open opens with it.
-                const catalog = happyAgentSurfaces(context, happyAgentId)?.catalog();
-                const shown = catalog?.get().chatsShown.has(surfaceId as HappyAgentSurfaceId);
-                const found = shown
-                    ? catalog?.get().chats.get(surfaceId as HappyAgentSurfaceId)
-                    : undefined;
-                if (found !== undefined) {
-                    void navigate({
-                        params: {
-                            chatAgentId: found.sessionId,
-                            chatGroupId: found.groupId,
-                            happyAgentId,
-                            surfaceId,
-                        },
-                        to: "/surfaces/$happyAgentId/$surfaceId/chat/$chatGroupId/$chatAgentId",
-                    });
-                    return;
-                }
-                void navigate({
-                    params: { happyAgentId, surfaceId },
-                    to: "/surfaces/$happyAgentId/$surfaceId",
-                });
-                // Not found yet in this run: it opens beside the Surface the way
-                // the header's Chat opens it, saying so while it is found.
-                if (shown && catalog)
-                    catalog
-                        .chatOpen(surfaceId as HappyAgentSurfaceId)
-                        .then((location) => surfaceChatShow(happyAgentId, surfaceId, location))
-                        .catch(() => undefined);
-            }}
+            onSurfaceOpen={(happyAgentId, surfaceId) =>
+                happyAgentRouterSurfaceOpen(router, context, happyAgentId, surfaceId)
+            }
             onSurfaceChatShow={(happyAgentId, surfaceId, chat) =>
                 surfaceChatShow(
+                    router,
                     happyAgentId,
                     surfaceId,
                     chat === undefined
@@ -927,6 +870,148 @@ function conversationAddressed(
             return { happyAgentId: params.happyAgentId, chatId: chatId as HappyAgentSessionId };
     }
     return undefined;
+}
+
+/**
+ * Shows a Surface's shared chat beside it, at the conversation it is, or
+ * hides it. The chat is found in the background; a reader who has moved
+ * on by the time it answers stays where they went.
+ */
+function surfaceChatShow(
+    router: HappyAgentRouter,
+    happyAgentId: string,
+    surfaceId: string,
+    chat: HappyAgentSessionLocation | undefined,
+): void {
+    const shown = happyAgentRoutePathParse(router.history.location.pathname);
+    if (
+        shown?.kind !== "surface" ||
+        shown.happyAgentId !== happyAgentId ||
+        shown.surfaceId !== surfaceId
+    )
+        return;
+    // Showing or hiding the chat is not a step to go back through.
+    void router.navigate(
+        chat === undefined
+            ? {
+                  params: { happyAgentId, surfaceId },
+                  replace: true,
+                  to: "/surfaces/$happyAgentId/$surfaceId",
+              }
+            : {
+                  params: {
+                      chatAgentId: chat.sessionId,
+                      chatGroupId: chat.groupId,
+                      happyAgentId,
+                      surfaceId,
+                  },
+                  replace: true,
+                  to: "/surfaces/$happyAgentId/$surfaceId/chat/$chatGroupId/$chatAgentId",
+              },
+    );
+}
+
+/** Opens one Surface, as its sidebar row does: with its chat beside it if the reader left it open. */
+function happyAgentRouterSurfaceOpen(
+    router: HappyAgentRouter,
+    context: HappyAgentRouterContext,
+    happyAgentId: string,
+    surfaceId: string,
+): void {
+    const catalog = happyAgentSurfaces(context, happyAgentId)?.catalog();
+    const shown = catalog?.get().chatsShown.has(surfaceId as HappyAgentSurfaceId);
+    const found = shown ? catalog?.get().chats.get(surfaceId as HappyAgentSurfaceId) : undefined;
+    if (found !== undefined) {
+        void router.navigate({
+            params: {
+                chatAgentId: found.sessionId,
+                chatGroupId: found.groupId,
+                happyAgentId,
+                surfaceId,
+            },
+            to: "/surfaces/$happyAgentId/$surfaceId/chat/$chatGroupId/$chatAgentId",
+        });
+        return;
+    }
+    void router.navigate({
+        params: { happyAgentId, surfaceId },
+        to: "/surfaces/$happyAgentId/$surfaceId",
+    });
+    // Not found yet in this run: it opens beside the Surface the way
+    // the header's Chat opens it, saying so while it is found.
+    if (shown && catalog)
+        catalog
+            .chatOpen(surfaceId as HappyAgentSurfaceId)
+            .then((location) => surfaceChatShow(router, happyAgentId, surfaceId, location))
+            .catch(() => undefined);
+}
+
+/**
+ * Opens a Happy link the reader followed in a page the window shows — an
+ * artifact or an HTML preview — on the Happy Agent on screen, exactly as the
+ * same link in a message opens: an artifact beside the conversation, an
+ * agent on its conversation, a workspace or project where the reader left
+ * it, a Surface as its sidebar row does, and a file read-only beside the
+ * conversation at the lines it named. A malformed link, one naming something
+ * the reader's list does not hold, or a service or person does nothing.
+ */
+export function happyAgentRouterHappyLinkOpen(router: HappyAgentRouter, url: string): void {
+    const context = router.options.context;
+    const directory = context?.happyAgents?.get();
+    const happyAgentId = directory?.activeHappyAgentId;
+    const session = directory?.happyAgents.find((entry) => entry.id === happyAgentId)?.session;
+    if (context === undefined || happyAgentId === undefined || session === undefined) return;
+    const link = parseHappyUrl(url);
+    if (link === undefined) return;
+    if (link.type === "file") {
+        const file = happyAgentFileLinkParse(url);
+        if (file !== undefined) session.workspace.fileLinkOpen(file, fileTabKind(file.path));
+        return;
+    }
+    const reference = link.reference;
+    switch (reference.kind) {
+        case "artifact":
+            if (session.artifacts !== undefined)
+                session.workspace.panel.artifactViewOpen(
+                    reference.id as HappyAgentArtifactId,
+                    reference.version,
+                );
+            return;
+        case "surface": {
+            const catalog = session.surfaces?.catalog().get();
+            if (catalog && messageReferenceSurfaceNames(catalog).has(reference.id))
+                happyAgentRouterSurfaceOpen(router, context, happyAgentId, reference.id);
+            return;
+        }
+        case "agent":
+        case "workspace":
+        case "project": {
+            const workspace = session.workspace.get();
+            const entities = messageReferenceEntities(workspace.list);
+            const entity = (
+                reference.kind === "agent"
+                    ? entities.agents
+                    : reference.kind === "workspace"
+                      ? entities.workspaces
+                      : entities.projects
+            ).get(reference.id);
+            if (entity === undefined) return;
+            // A workspace or project opens where the reader left it, the way
+            // its sidebar row does; an agent opens on its own conversation.
+            const chatId = entity.agentId ?? workspace.groupResume.get(entity.groupId);
+            if (chatId === undefined)
+                happyAgentRouterGroupOpen(router, happyAgentId, entity.groupId);
+            else
+                happyAgentRouterConversationOpen(router, happyAgentId, {
+                    groupId: entity.groupId,
+                    sessionId: chatId as HappyAgentSessionId,
+                });
+            return;
+        }
+        default:
+            // Services and people open nowhere, in a message or here.
+            return;
+    }
 }
 
 /**

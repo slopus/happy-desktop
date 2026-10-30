@@ -11,6 +11,7 @@ import {
     happyAgentRouterConversationOpen,
     happyAgentRouterGroupOpen,
     happyAgentRouterGroupForget,
+    happyAgentRouterHappyLinkOpen,
     happyAgentRouterSubtasksForget,
     happyAgentRouterCreate,
     type AppHappyAgentDaemonStore,
@@ -1623,6 +1624,12 @@ if (mediaPreviewBridge) {
                     ?.router ?? happyAgentRouter
             );
         }
+        // A Happy link the reader followed in an artifact or HTML preview page
+        // opens on the Happy Agent on screen, as the same link in a message does.
+        const happyLinkUnsubscribe = desktopBridge.happyLinkOpenSubscribe?.((url) =>
+            happyAgentRouterHappyLinkOpen(activeRouter(), url),
+        );
+        if (happyLinkUnsubscribe) appDisposers.push(happyLinkUnsubscribe);
         // Native first-run setup retains its lifetime, while mobile pairing uses
         // the same local connection store and transport as the workspace.
         const onboardingStore = localOnboardingStoreCreate(desktopBridge, {

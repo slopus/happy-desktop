@@ -353,10 +353,16 @@ describe("artifact guest", () => {
         const guests = new ArtifactGuests(sites);
         const { guest, open } = guestFake();
         const opened: string[] = [];
-        artifactGuestAttach(guest, guests, (url) => opened.push(url));
+        const happy: string[] = [];
+        artifactGuestAttach(
+            guest,
+            guests,
+            (url) => opened.push(url),
+            (url) => happy.push(url),
+        );
         guest.emit("did-start-navigation", { url: ENTRY, isMainFrame: true });
         const click = () => guest.emit("input-event", {}, { type: "mouseUp" });
-        return { guests, guest, open, opened, click };
+        return { guests, guest, open, opened, happy, click };
     };
 
     it("never opens a window, and sends a clicked web link to the default browser once", () => {
@@ -402,6 +408,37 @@ describe("artifact guest", () => {
             expect(refused.prevented, url).toBe(true);
         }
         expect(opened).toEqual(["https://example.com/docs"]);
+    });
+
+    it("sends a clicked Happy link to the app once, and never to the browser", () => {
+        const { guest, open, opened, happy, click } = attached();
+        const scripted = navigation("happy://artifacts/a1");
+        guest.emit("will-frame-navigate", scripted);
+        expect(scripted.prevented).toBe(true);
+        expect(open("happy://agents/a1")).toEqual({ action: "deny" });
+        expect(happy).toEqual([]);
+
+        click();
+        const followed = navigation("happy://agents/a1/files/src/F.ts#L3");
+        guest.emit("will-frame-navigate", followed);
+        expect(followed.prevented).toBe(true);
+        const again = navigation("happy://agents/a2");
+        guest.emit("will-frame-navigate", again);
+        expect(again.prevented).toBe(true);
+        click();
+        expect(open("HAPPY-FILE://workspaces/w1/a.md#L2")).toEqual({ action: "deny" });
+        expect(happy).toEqual([
+            "happy://agents/a1/files/src/F.ts#L3",
+            "HAPPY-FILE://workspaces/w1/a.md#L2",
+        ]);
+
+        // A frame inside the page cannot send the reader anywhere in the app.
+        click();
+        const framed = navigation("happy://artifacts/a1", false);
+        guest.emit("will-frame-navigate", framed);
+        expect(framed.prevented).toBe(true);
+        expect(happy).toHaveLength(2);
+        expect(opened).toEqual([]);
     });
 
     it("lets its frames show the web or its own site, and nothing else", () => {

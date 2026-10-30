@@ -127,7 +127,12 @@ void app.whenReady().then(async () => {
         artifactWebPreferencesEnforce(webPreferences);
     });
     window.webContents.on("did-attach-webview", (_event, guest) => {
-        artifactGuestAttach(guest, guests, () => undefined);
+        artifactGuestAttach(
+            guest,
+            guests,
+            () => undefined,
+            () => undefined,
+        );
         guest.on("page-title-updated", (_titleEvent, title) => {
             if (title.startsWith(PAGE_DONE)) report(JSON.parse(title.slice(PAGE_DONE.length)));
         });

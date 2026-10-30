@@ -1911,7 +1911,7 @@ function fileTabItem(tab: HappyAgentFileTabSnapshot): TabItem {
  * state upgrades that intent to a diff only when its live Git snapshot says the
  * path is changed.
  */
-function fileTabKind(path: string): HappyAgentFileTabKind {
+export function fileTabKind(path: string): HappyAgentFileTabKind {
     const kind = filePreviewKind(path);
     if (kind === "image" || kind === "video" || kind === "audio" || kind === "pdf") return "media";
     if (kind === "binary") return "media";
@@ -6893,6 +6893,7 @@ function HappyAgentTodoSurface(props: {
  */
 function HappyAgentArtifactPanelViewerSurface(props: {
     artifacts: HappyAgentArtifacts;
+    entities?: MessageReferences;
     artifactPage?: HtmlPreviewRenderer;
     places: HappyAgentArtifactPlaces;
     view: HappyAgentPanelArtifactView;
@@ -6910,6 +6911,7 @@ function HappyAgentArtifactPanelViewerSurface(props: {
     const viewer = useSyncExternalStore(store.subscribe, store.get, store.get);
     return (
         <HappyAgentArtifactViewer
+            {...(props.entities ? { entities: props.entities } : {})}
             labels={artifactLabels(props.places, people)}
             onDeletionCancel={store.deletionCancel}
             onDeletionConfirm={store.deletionConfirm}
@@ -6936,6 +6938,7 @@ function HappyAgentArtifactPanelViewerSurface(props: {
  */
 function HappyAgentArtifactTabSurface(props: {
     artifacts: HappyAgentArtifacts;
+    entities?: MessageReferences;
     artifactPage?: HtmlPreviewRenderer;
     places: HappyAgentArtifactPlaces;
     tab: Extract<HappyAgentPanelTabSnapshot, { kind: "artifact" }>;
@@ -6953,6 +6956,7 @@ function HappyAgentArtifactTabSurface(props: {
     const viewer = useSyncExternalStore(store.subscribe, store.get, store.get);
     return (
         <HappyAgentArtifactViewer
+            {...(props.entities ? { entities: props.entities } : {})}
             labels={artifactLabels(props.places, people)}
             onDeletionCancel={store.deletionCancel}
             onDeletionConfirm={store.deletionConfirm}
@@ -8200,6 +8204,7 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                                       onOpen: props.onArtifactOpen,
                                       places: artifactPlaces,
                                       ...(props.artifactPage ? { page: props.artifactPage } : {}),
+                                      entities: documentEntities,
                                   },
                               }
                             : {})}
@@ -8810,6 +8815,7 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                                                               ...(props.artifactPage
                                                                   ? { page: props.artifactPage }
                                                                   : {}),
+                                                              entities: documentEntities,
                                                           },
                                                       }
                                                     : {})}
@@ -11382,6 +11388,8 @@ function HappyAgentPanelBody(props: {
         readonly onOpen: (artifactId: string) => void;
         /** Shows an HTML artifact opened here as a site of its own. */
         readonly page?: HtmlPreviewRenderer;
+        /** Reads and opens the `happy://` links to Happy entities a document carries. */
+        readonly entities?: MessageReferences;
     };
     browserContent?: BrowserContentRenderer;
     browserConnectionId: string | null;
@@ -11859,6 +11867,9 @@ function HappyAgentPanelBody(props: {
                         props.artifacts && props.panel.artifactView ? (
                             <HappyAgentArtifactPanelViewerSurface
                                 artifacts={props.artifacts.artifacts}
+                                {...(props.artifacts.entities
+                                    ? { entities: props.artifacts.entities }
+                                    : {})}
                                 {...(props.artifacts.page
                                     ? { artifactPage: props.artifacts.page }
                                     : {})}
@@ -12062,6 +12073,8 @@ function HappyAgentToolBodies(props: {
         readonly artifacts: HappyAgentArtifacts;
         readonly places: HappyAgentArtifactPlaces;
         readonly page?: HtmlPreviewRenderer;
+        /** Reads and opens the `happy://` links to Happy entities a document carries. */
+        readonly entities?: MessageReferences;
     };
     browserContent?: BrowserContentRenderer;
     browserConnectionId: string | null;
@@ -12135,6 +12148,9 @@ function HappyAgentToolBodies(props: {
                 props.artifacts ? (
                     <HappyAgentArtifactTabSurface
                         artifacts={props.artifacts.artifacts}
+                        {...(props.artifacts.entities
+                            ? { entities: props.artifacts.entities }
+                            : {})}
                         {...(props.artifacts.page ? { artifactPage: props.artifacts.page } : {})}
                         key={active.id}
                         places={props.artifacts.places}

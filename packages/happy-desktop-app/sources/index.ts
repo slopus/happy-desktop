@@ -57,6 +57,7 @@ export {
     happyAgentMemoryHistoryCreate,
     happyAgentRouterConversationOpen,
     happyAgentRouterGroupOpen,
+    happyAgentRouterHappyLinkOpen,
     happyAgentRouterWorkspaceVisible,
     happyAgentRouterGroupForget,
     happyAgentRouterSubtasksForget,

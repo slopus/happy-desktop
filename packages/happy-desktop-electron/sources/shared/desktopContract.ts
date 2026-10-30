@@ -870,6 +870,13 @@ export interface HappyDesktopBridge {
     ): () => void;
     /** Web links Happy itself was asked to open, outside any workspace browser. */
     browserOpenSubscribe(listener: (url: string) => void): () => void;
+    /**
+     * `happy://` and `happy-file://` links the reader followed in an artifact
+     * or HTML preview page, to open in the app. Each is the address as the page
+     * wrote it; the window reads it with the shared grammar. Absent on native
+     * hosts that do not forward them.
+     */
+    happyLinkOpenSubscribe?(listener: (url: string) => void): () => void;
     browserStatusSubscribe(listener: (status: DesktopBrowserStatus) => void): () => void;
     /** Absent on native hosts that do not report why a browser tunnel failed. */
     browserTunnelFailureSubscribe?(
@@ -1053,6 +1060,7 @@ export const desktopIpc = {
     browserNetworkCommand: "happy:browser:network-command",
     browserNetworkMissing: "happy:browser:network-missing",
     browserOpenRequested: "happy:browser:open-requested",
+    happyLinkOpenRequested: "happy:happy-link:open-requested",
     browserStatusChanged: "happy:browser:status-changed",
     browserTunnelFailed: "happy:browser:tunnel-failed",
     cloudAuthCallbackReceived: "happy:cloud-auth:callback-received",

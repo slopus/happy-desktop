@@ -7,6 +7,7 @@ import {
     artifactResponseHeaders,
 } from "./artifactNetwork";
 import { artifactSiteAddress, artifactSiteScheme, type ArtifactSiteHandle } from "./artifactSite";
+import { happyLinkUrl } from "./happyLink";
 
 /** A proxy that refuses everything, for a partition whose own proxy could not start. */
 const unavailableProxy = "http://127.0.0.1:9";
@@ -206,17 +207,25 @@ export async function artifactSessionConfigure(
  * The page stays where it was opened: navigating its own frame anywhere but
  * its site is refused, and a web link it follows, or a window it opens, goes
  * to the default browser instead — once per input from the reader, and never
- * to this machine or its network. A frame inside the page may show the web or
- * the site's own files, and nothing else. No window is ever opened from a guest.
+ * to this machine or its network. A Happy link it follows goes to the app
+ * itself, on the same terms, and never to the browser or the OS. A frame
+ * inside the page may show the web or the site's own files, and nothing else.
+ * No window is ever opened from a guest.
  */
 export function artifactGuestAttach(
     guest: WebContents,
     guests: ArtifactGuests,
     externalOpen: (url: string) => void,
+    happyLinkOpen: (url: string) => void,
 ): void {
     const guestId = guest.id;
     const activation = new ArtifactActivation();
     const outside = (candidate: string): void => {
+        const happy = happyLinkUrl(candidate);
+        if (happy !== undefined) {
+            if (activation.consume()) happyLinkOpen(happy);
+            return;
+        }
         const url = artifactExternalUrl(candidate);
         if (url !== undefined && activation.consume()) externalOpen(url);
     };

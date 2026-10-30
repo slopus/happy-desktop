@@ -119,6 +119,11 @@ const bridge: HappyDesktopBridge = {
         ipcRenderer.on(desktopIpc.browserOpenRequested, receive);
         return () => ipcRenderer.removeListener(desktopIpc.browserOpenRequested, receive);
     },
+    happyLinkOpenSubscribe(listener: (url: string) => void) {
+        const receive = (_event: Electron.IpcRendererEvent, url: string) => listener(url);
+        ipcRenderer.on(desktopIpc.happyLinkOpenRequested, receive);
+        return () => ipcRenderer.removeListener(desktopIpc.happyLinkOpenRequested, receive);
+    },
     browserStatusSubscribe(listener: (status: DesktopBrowserStatus) => void) {
         const receive = (_event: Electron.IpcRendererEvent, status: DesktopBrowserStatus) =>
             listener(status);
