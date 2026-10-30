@@ -1499,8 +1499,6 @@ if (mediaPreviewBridge) {
                     modelStop?.();
                 };
             },
-            readLegacyCli: window.happyDesktop?.legacyCliStatus,
-            resetLegacyCli: window.happyDesktop?.legacyCliReset,
             conversationOpen: (happyAgentId, location) =>
                 happyAgentRouterConversationOpen(
                     connectionUis.get(happyAgentId)?.router ?? happyAgentRouter,

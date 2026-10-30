@@ -422,12 +422,6 @@ export interface HappyAgentWorkspaceClientDeps {
      * onboarding. The owner disposes it; without one, the client makes its own.
      */
     readonly mobileConnector?: HappyAgentMobileConnectorStore;
-    readonly readLegacyCli?: () => Promise<
-        import("./happyTerminalCli.js").HappyTerminalCliInspection
-    >;
-    readonly resetLegacyCli?: (
-        request: import("./happyTerminalCli.js").HappyTerminalCliResetRequest,
-    ) => Promise<import("./happyTerminalCli.js").HappyTerminalCliResetOutcome>;
     readonly client: HappyAgentClient;
     readonly cloudHost: HappyAgentCloudHost;
     readonly connection: HappyAgentConnection;
@@ -927,8 +921,6 @@ export function happyAgentWorkspaceClientCreate(
                 sync: deps.connection.sync,
                 mobileConnector: mobileConnectorStore(),
                 guidedMobileSetup: deps.guidedMobileSetup,
-                readLegacyCli: deps.readLegacyCli,
-                resetLegacyCli: deps.resetLegacyCli,
             });
             return happyIntegrationStore;
         },

@@ -423,12 +423,6 @@ export function happyAgentConnectionOpen(input: {
      * machine's own Happy Agent is solo and never asks for one.
      */
     readonly memberProfileRequired: boolean;
-    readonly readLegacyCli?: () => Promise<
-        import("happy-desktop-state").HappyTerminalCliInspection
-    >;
-    readonly resetLegacyCli?: (
-        request: import("happy-desktop-state").HappyTerminalCliResetRequest,
-    ) => Promise<import("happy-desktop-state").HappyTerminalCliResetOutcome>;
     readonly cloudHost: HappyAgentCloudHost;
     readonly host: HappyAgentHost;
     readonly deps: HappyAgentSessionDeps;
@@ -552,8 +546,6 @@ export function happyAgentConnectionOpen(input: {
         guidedMobileSetup: input.guidedMobileSetup,
         mobileConnector,
         cloudHost: input.cloudHost,
-        readLegacyCli: input.readLegacyCli,
-        resetLegacyCli: input.resetLegacyCli,
         connection: agentConnection,
         hostServices,
         modelPreferencePersistence: input.modelPreferencePersistence,

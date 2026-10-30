@@ -918,16 +918,9 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                 <HappyAgentMobileSettings
                     configured={happyIntegration.configured}
                     updatedAt={happyIntegration.updatedAt}
-                    terminal={happyIntegration.terminalCli}
-                    terminalSetupSupport={happyIntegration.terminalSetupSupport}
-                    terminalReadError={happyIntegration.terminalCliReadError}
                     management={happyIntegration.management}
-                    onTerminalReset={happyIntegrationStore.terminalCliResetRequest}
                     onManagementCancel={happyIntegrationStore.mobileManagementCancel}
                     onManagementConfirm={happyIntegrationStore.mobileManagementConfirm}
-                    onTerminalRegistrationRemovalChange={
-                        happyIntegrationStore.terminalCliRegistrationRemovalUpdate
-                    }
                     // What Disconnect does depends on the running Agent: from
                     // this version it deletes the computer from the account.
                     removesComputer={happyAgentVersionAtLeast(

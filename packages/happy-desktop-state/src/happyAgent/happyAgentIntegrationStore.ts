@@ -19,13 +19,6 @@ import type {
     HappyDesktopMobileStep,
     HappyMobileOnboardingStore,
 } from "../onboarding/happyMobileOnboardingStore.js";
-import type {
-    HappyMobileManagementConfirmation,
-    HappyTerminalCliInspection,
-    HappyTerminalCliResetOutcome,
-    HappyTerminalCliResetRequest,
-    HappyTerminalCliSnapshot,
-} from "./happyTerminalCli.js";
 
 export type HappyAgentIntegrationStatus =
     | "loading"
@@ -36,6 +29,13 @@ export type HappyAgentIntegrationStatus =
     | "connected"
     | "failed"
     | "unavailable";
+
+/** The open Disconnect confirmation, kept until the request settles. */
+export interface HappyMobileManagementConfirmation {
+    readonly kind: "disconnect";
+    readonly pending: boolean;
+    readonly error?: string;
+}
 
 /** The Happy Mobile connection as the Happy settings category reads it. */
 export interface HappyAgentIntegrationSnapshot {
@@ -69,9 +69,6 @@ export interface HappyAgentIntegrationSnapshot {
     readonly messageCode?: string;
     readonly status: HappyAgentIntegrationStatus;
     readonly updatedAt?: number;
-    readonly terminalCli?: HappyTerminalCliSnapshot;
-    readonly terminalSetupSupport?: "standalone" | "personal" | "unknown";
-    readonly terminalCliReadError?: string;
     readonly management?: HappyMobileManagementConfirmation;
     /** Projection of the shared first-run flow while local setup is open. */
     readonly setup?: HappyDesktopMobileStep;
@@ -102,8 +99,6 @@ export interface HappyAgentIntegrationStore {
     /** Closes the pairing surface and cancels whichever code is still pending. */
     happyIntegrationPairingClose(): void;
     happyIntegrationDisconnectRequest(): void;
-    terminalCliResetRequest(): void;
-    terminalCliRegistrationRemovalUpdate(value: boolean): void;
     mobileManagementCancel(): void;
     mobileManagementConfirm(): void;
     /** Present only for the local Desktop; remote Agents retain Agent-only pairing. */
@@ -121,10 +116,6 @@ export interface HappyAgentIntegrationStoreDeps {
     readonly guidedMobileSetup?: boolean;
     /** The same Happy Agent's direct connector, opened alongside the relay code. */
     readonly mobileConnector?: HappyAgentMobileConnectorStore;
-    readonly readLegacyCli?: () => Promise<HappyTerminalCliInspection>;
-    readonly resetLegacyCli?: (
-        request: HappyTerminalCliResetRequest,
-    ) => Promise<HappyTerminalCliResetOutcome>;
     readonly sync: HappyAgentSync;
     readonly client: Pick<
         HappyAgentClient,
@@ -132,7 +123,6 @@ export interface HappyAgentIntegrationStoreDeps {
         | "disconnectHappyIntegration"
         | "getHappyIntegration"
         | "startHappyIntegration"
-        | "getProfile"
     >;
 }
 
@@ -158,15 +148,7 @@ const EMPTY: HappyAgentIntegrationSnapshot = {
 export function happyAgentIntegrationStoreCreate(
     deps: HappyAgentIntegrationStoreDeps,
 ): HappyAgentIntegrationStore {
-    const store = createStore<HappyAgentIntegrationSnapshot>()(() => ({
-        ...EMPTY,
-        ...(deps.readLegacyCli
-            ? {
-                  terminalSetupSupport: "unknown" as const,
-                  terminalCli: { status: "loading" as const },
-              }
-            : {}),
-    }));
+    const store = createStore<HappyAgentIntegrationSnapshot>()(() => EMPTY);
     const listeners = new Set<() => void>();
     const direct = deps.mobileConnector ?? happyAgentMobileConnectorStoreNoop;
     let controller: AbortController | undefined;
@@ -176,53 +158,8 @@ export function happyAgentIntegrationStoreCreate(
     /** The open pairing surface still owes a relay code, once the state is known. */
     let relayOwed = false;
     let setupUnsubscribe: (() => void) | undefined;
-    let terminalTimer: ReturnType<typeof setTimeout> | undefined;
-    let terminalGeneration = 0;
-    let terminalReading = false;
-    let terminalGuard: string | undefined;
-    let confirmationGuard: string | undefined;
 
-    const terminalStop = (): void => {
-        terminalGeneration += 1;
-        terminalReading = false;
-        if (terminalTimer !== undefined) clearTimeout(terminalTimer);
-        terminalTimer = undefined;
-    };
-    const terminalRead = (): void => {
-        const read = deps.readLegacyCli;
-        if (!read || disposed || listeners.size === 0 || terminalReading) return;
-        terminalReading = true;
-        const request = terminalGeneration;
-        void read()
-            .then(
-                (result) => {
-                    if (disposed || listeners.size === 0 || request !== terminalGeneration) return;
-                    terminalGuard = result.identityGuard;
-                    const { terminalCliReadError: _cleared, ...current } = store.getState();
-                    store.setState({ ...current, terminalCli: result.snapshot }, true);
-                },
-                (error: unknown) => {
-                    if (disposed || listeners.size === 0 || request !== terminalGeneration) return;
-                    const message = happyAgentUserError(error).message;
-                    store.setState({
-                        terminalCliReadError: message,
-                        ...(store.getState().terminalCli?.status === "loading"
-                            ? { terminalCli: { status: "unavailable", message } as const }
-                            : {}),
-                    });
-                },
-            )
-            .finally(() => {
-                if (disposed || listeners.size === 0 || request !== terminalGeneration) return;
-                terminalReading = false;
-                terminalTimer = setTimeout(() => {
-                    terminalTimer = undefined;
-                    terminalRead();
-                }, 3_000);
-            });
-    };
     const managementClose = (): void => {
-        confirmationGuard = undefined;
         const { management: _closed, ...current } = store.getState();
         if (_closed) store.setState(current, true);
     };
@@ -294,13 +231,6 @@ export function happyAgentIntegrationStoreCreate(
                 pairingCanceling: current.pairingCanceling,
                 pairingOpen: current.pairingOpen,
                 ...(current.setup ? { setup: current.setup } : {}),
-                ...(current.terminalCli ? { terminalCli: current.terminalCli } : {}),
-                ...(current.terminalSetupSupport
-                    ? { terminalSetupSupport: current.terminalSetupSupport }
-                    : {}),
-                ...(current.terminalCliReadError
-                    ? { terminalCliReadError: current.terminalCliReadError }
-                    : {}),
                 ...(current.management ? { management: current.management } : {}),
                 pairingStarting: current.pairingStarting,
                 ...(integration.configured && current.disconnectError
@@ -332,27 +262,6 @@ export function happyAgentIntegrationStoreCreate(
             try {
                 if (input.kind === "error") throw input.error;
                 if (input.kind === "bootstrap" || input.kind === "reconcile") {
-                    if (deps.readLegacyCli) {
-                        try {
-                            const profile =
-                                input.kind === "bootstrap"
-                                    ? input.bootstrap.profile
-                                    : (await deps.client.getProfile({ signal: active.signal }))
-                                          .profile;
-                            if (active.signal.aborted) return;
-                            store.setState({
-                                terminalSetupSupport:
-                                    profile.userId === null
-                                        ? "standalone"
-                                        : profile.userId === undefined
-                                          ? "unknown"
-                                          : "personal",
-                            });
-                        } catch {
-                            if (active.signal.aborted) return;
-                            store.setState({ terminalSetupSupport: "unknown" });
-                        }
-                    }
                     const integration =
                         input.kind === "bootstrap"
                             ? input.bootstrap.happyIntegration
@@ -360,23 +269,13 @@ export function happyAgentIntegrationStoreCreate(
                     if (active.signal.aborted) return;
                     if (input.kind === "bootstrap") version = undefined;
                     if (!integration) {
-                        const {
-                            setup,
-                            terminalCli,
-                            terminalCliReadError,
-                            terminalSetupSupport,
-                            management,
-                            pairingOpen,
-                        } = store.getState();
+                        const { setup, management, pairingOpen } = store.getState();
                         store.setState(
                             {
                                 ...EMPTY,
                                 pairingOpen,
                                 status: "unavailable",
                                 ...(setup ? { setup } : {}),
-                                ...(terminalCli ? { terminalCli } : {}),
-                                ...(terminalSetupSupport ? { terminalSetupSupport } : {}),
-                                ...(terminalCliReadError ? { terminalCliReadError } : {}),
                                 ...(management ? { management } : {}),
                             },
                             true,
@@ -431,10 +330,7 @@ export function happyAgentIntegrationStoreCreate(
             if (disposed) return () => undefined;
             listeners.add(listener);
             const unsubscribe = store.subscribe(listener);
-            if (listeners.size === 1) {
-                followEnsure();
-                terminalRead();
-            }
+            if (listeners.size === 1) followEnsure();
             let released = false;
             return () => {
                 if (released) return;
@@ -447,7 +343,6 @@ export function happyAgentIntegrationStoreCreate(
                 setupClose();
                 // No surface is left to show either code.
                 integrationStore.happyIntegrationPairingClose();
-                terminalStop();
                 if (!store.getState().management?.pending) managementClose();
             };
         },
@@ -515,42 +410,6 @@ export function happyAgentIntegrationStoreCreate(
                 return;
             store.setState({ management: { kind: "disconnect", pending: false } });
         },
-        terminalCliResetRequest() {
-            const current = store.getState();
-            const terminal = current.terminalCli;
-            if (
-                disposed ||
-                listeners.size === 0 ||
-                !deps.resetLegacyCli ||
-                !terminalGuard ||
-                terminal?.status !== "available" ||
-                current.management?.pending
-            )
-                return;
-            confirmationGuard = terminalGuard;
-            store.setState({
-                management: {
-                    kind: "terminal-reset",
-                    preview: terminal.resetPreview,
-                    ...(terminal.accountKeyFingerprint
-                        ? { accountKeyFingerprint: terminal.accountKeyFingerprint }
-                        : {}),
-                    removeRegistration: false,
-                    pending: false,
-                },
-            });
-        },
-        terminalCliRegistrationRemovalUpdate(value) {
-            const current = store.getState().management;
-            if (
-                disposed ||
-                current?.kind !== "terminal-reset" ||
-                current.pending ||
-                (value && !current.preview.registration)
-            )
-                return;
-            store.setState({ management: { ...current, removeRegistration: value } });
-        },
         mobileManagementCancel() {
             if (disposed || store.getState().management?.pending) return;
             managementClose();
@@ -558,53 +417,7 @@ export function happyAgentIntegrationStoreCreate(
         mobileManagementConfirm() {
             const current = store.getState().management;
             if (disposed || !current || current.pending) return;
-            if (current.kind === "disconnect") {
-                integrationStore.happyIntegrationDisconnect();
-                return;
-            }
-            const reset = deps.resetLegacyCli;
-            const guard = confirmationGuard;
-            if (!reset || !guard) return;
-            terminalStop();
-            const { error: _cleared, ...pending } = current;
-            store.setState({ management: { ...pending, pending: true } });
-            void reset({
-                expectedGuard: guard,
-                confirmed: true,
-                removeRegistration: current.removeRegistration,
-            })
-                .then(
-                    (outcome) => {
-                        if (disposed) return;
-                        if (outcome.status === "succeeded") managementClose();
-                        else
-                            store.setState({
-                                management: {
-                                    ...pending,
-                                    pending: false,
-                                    error: outcome.message,
-                                    effects: {
-                                        localAuthCleared: outcome.localAuthCleared,
-                                        registrationRemoved: outcome.registrationRemoved,
-                                        daemonStopped: outcome.daemonStopped,
-                                    },
-                                },
-                            });
-                    },
-                    (error: unknown) => {
-                        if (!disposed)
-                            store.setState({
-                                management: {
-                                    ...pending,
-                                    pending: false,
-                                    error: happyAgentUserError(error).message,
-                                },
-                            });
-                    },
-                )
-                .finally(() => {
-                    if (!disposed) terminalRead();
-                });
+            integrationStore.happyIntegrationDisconnect();
         },
         happyIntegrationPair() {
             if (deps.guidedMobileSetup) {
@@ -711,7 +524,6 @@ export function happyAgentIntegrationStoreCreate(
             setupClose();
             controller?.abort();
             controller = undefined;
-            terminalStop();
             listeners.clear();
         },
     };
@@ -785,8 +597,6 @@ export const happyAgentIntegrationStoreNoop: HappyAgentIntegrationStore = {
     happyIntegrationPairingOpen: () => undefined,
     happyIntegrationPairingClose: () => undefined,
     happyIntegrationDisconnectRequest: () => undefined,
-    terminalCliResetRequest: () => undefined,
-    terminalCliRegistrationRemovalUpdate: () => undefined,
     mobileManagementCancel: () => undefined,
     mobileManagementConfirm: () => undefined,
     [Symbol.dispose]: () => undefined,

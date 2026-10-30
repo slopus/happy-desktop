@@ -1,3 +1,9 @@
+/*
+ * The Electron host's legacy Happy CLI status and reset bridge
+ * (`legacyCliManagement.ts`) still answers in these types. No renderer surface
+ * calls it any more; delete this file together with that host code.
+ */
+
 /** Status of the operating-system user's existing Happy terminal CLI login. */
 export type HappyTerminalCliSnapshot =
     | { readonly status: "loading" }
@@ -83,16 +89,3 @@ export type HappyTerminalCliResetOutcome = HappyTerminalCliResetEffects &
               readonly message: string;
           }
     );
-
-/** One concrete confirmation retains the scope that the person actually saw. */
-export type HappyMobileManagementConfirmation =
-    | { readonly kind: "disconnect"; readonly pending: boolean; readonly error?: string }
-    | {
-          readonly kind: "terminal-reset";
-          readonly preview: HappyTerminalCliResetPreview;
-          readonly accountKeyFingerprint?: string;
-          readonly removeRegistration: boolean;
-          readonly pending: boolean;
-          readonly error?: string;
-          readonly effects?: HappyTerminalCliResetEffects;
-      };

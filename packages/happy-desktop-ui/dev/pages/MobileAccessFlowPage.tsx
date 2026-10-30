@@ -2,13 +2,11 @@ import type { ReactNode } from "react";
 import {
     HappyAgentMobileSettings,
     type HappyAgentMobileSettingsProps,
-    type HappyAgentMobileTerminal,
 } from "../../src/pages/settings/HappyAgentMobileSettings";
 import {
     HappyAgentSettingsShell,
     type HappyAgentSettingsCategory,
 } from "../../src/pages/settings/HappyAgentSettingsShell";
-import type { MobileAccessTerminalResetPreview } from "../../src/MobileAccessConfirmation";
 import { ComponentPage, FullScreenSpecimen } from "../kit";
 import { direct, relayWaiting } from "./mobilePairingFixtures";
 import { directSectionSpecimen, pairingOptionsSpecimen } from "./mobilePairingSpecimens";
@@ -35,44 +33,13 @@ const categories: readonly HappyAgentSettingsCategory[] = [
     { icon: "code", id: "debug", label: "Dev tools" },
 ];
 
-const accountKeyFingerprint = "4f9a1c07e2b85d36a0c4e7f19b2d58a3c6e0f47b19d2a85c3e6f07b41a9d2c58";
-const serverUrl = "https://api.cluster-fluster.com";
-const machineId = "8f3c2a71-5d0e-4b6a-9c1f-2e7d4a90b3c5";
 const updatedAt = 1_727_870_400_000;
-
-const terminalReady: HappyAgentMobileTerminal = {
-    status: "available",
-    cliVersion: "1.4.2",
-    auth: "v2",
-    accountKeyFingerprint,
-    serverUrl,
-    machineId,
-    daemon: { state: "online" },
-};
-
-const terminalSignedOut: HappyAgentMobileTerminal = {
-    status: "available",
-    cliVersion: "1.4.2",
-    auth: "missing",
-    serverUrl,
-    daemon: { state: "stopped" },
-};
-
-const resetPreview: MobileAccessTerminalResetPreview = {
-    credentialFile: "/Users/ada/.happy/access.key",
-    settingsFile: "/Users/ada/.happy/settings.json",
-    settingsFields: ["machineId", "machineIdConfirmedByServer"],
-    registration: { machineId, serverUrl, accountKeyFingerprint },
-    stopsDaemon: true,
-};
 
 const handlers = {
     onDisconnect: noop,
     onManagementCancel: noop,
     onManagementConfirm: noop,
     onPairingOptionsOpen: noop,
-    onTerminalRegistrationRemovalChange: noop,
-    onTerminalReset: noop,
     direct: directSectionSpecimen(),
 } satisfies Partial<HappyAgentMobileSettingsProps>;
 
@@ -82,8 +49,6 @@ const paired = {
     configured: true,
     status: "connected",
     updatedAt,
-    terminal: terminalReady,
-    terminalSetupSupport: "standalone",
 } satisfies HappyAgentMobileSettingsProps;
 
 const screens: readonly {
@@ -93,13 +58,11 @@ const screens: readonly {
 }[] = [
     {
         id: "not-set-up",
-        label: "Not set up · CLI not installed",
+        label: "Not set up",
         props: {
             ...handlers,
             configured: false,
             status: "disconnected",
-            terminal: { status: "not-installed" },
-            terminalSetupSupport: "standalone",
         },
     },
     {
@@ -113,73 +76,18 @@ const screens: readonly {
                 direct: direct.waiting,
                 relay: relayWaiting,
             }),
-            terminal: terminalSignedOut,
-            terminalSetupSupport: "standalone",
         },
     },
-    { id: "ready", label: "Ready · phone connected, terminal ready", props: paired },
+    { id: "ready", label: "Ready · phone connected", props: paired },
     {
-        id: "offline-terminal-setup",
-        label: "Offline · pairing saved, terminal not set up",
-        props: { ...paired, status: "disconnected", terminal: terminalSignedOut },
-    },
-    {
-        id: "personal-pairing",
-        label: "Personal pairing · separate terminal sign-in",
-        props: { ...paired, terminal: terminalSignedOut, terminalSetupSupport: "personal" },
-    },
-    {
-        id: "cli-unsupported",
-        label: "CLI too old · cannot report status",
-        props: {
-            ...paired,
-            terminal: {
-                status: "unavailable",
-                cliVersion: "0.11.3",
-                message:
-                    "This installed Happy CLI does not support terminal connection management yet. Its sign-in has not been changed; Happy Mobile pairing works independently.",
-            },
-        },
+        id: "offline",
+        label: "Offline · pairing saved",
+        props: { ...paired, status: "disconnected" },
     },
     {
         id: "disconnect",
         label: "Disconnect · confirmation",
         props: { ...paired, management: { kind: "disconnect", pending: false } },
-    },
-    {
-        id: "terminal-reset",
-        label: "Remove saved terminal login · confirmation",
-        props: {
-            ...paired,
-            management: {
-                kind: "terminal-reset",
-                preview: resetPreview,
-                accountKeyFingerprint,
-                removeRegistration: false,
-                pending: false,
-            },
-        },
-    },
-    {
-        id: "terminal-reset-failed",
-        label: "Remove saved terminal login · stopped part-way",
-        props: {
-            ...paired,
-            terminal: { ...terminalReady, daemon: { state: "stopped" } },
-            management: {
-                kind: "terminal-reset",
-                preview: resetPreview,
-                accountKeyFingerprint,
-                removeRegistration: true,
-                pending: false,
-                error: "Computer removal could not be confirmed. The CLI login was kept; try again when the server is reachable.",
-                effects: {
-                    localAuthCleared: false,
-                    registrationRemoved: false,
-                    daemonStopped: true,
-                },
-            },
-        },
     },
 ];
 
@@ -205,7 +113,7 @@ export function MobileAccessFlowPage() {
     return (
         <ComponentPage
             number={componentNumber}
-            summary="Settings › Mobile access in the order a person meets it, at the window Happy opens at and at its minimum window: pairing, the composed phone status, the terminal CLI, and the two destructive confirmations. Each viewport is named for `pnpm blueprint:screens`."
+            summary="Settings › Mobile access in the order a person meets it, at the window Happy opens at and at its minimum window: pairing, the composed phone status, and the disconnect confirmation. Each viewport is named for `pnpm blueprint:screens`."
             title="Mobile Access flow"
         >
             {windows.flatMap((window) =>

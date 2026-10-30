@@ -104,7 +104,6 @@ function harness() {
         cancelHappyIntegration: vi.fn(),
         disconnectHappyIntegration: vi.fn(),
         getHappyIntegration: vi.fn(),
-        getProfile: vi.fn(),
         startHappyIntegration: vi.fn(),
     };
     const store = happyAgentIntegrationStoreCreate({

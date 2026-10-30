@@ -972,7 +972,6 @@ export {
     HappyAgentMobileSettings,
     type HappyAgentMobileSettingsProps,
     type HappyAgentMobileStatus,
-    type HappyAgentMobileTerminal,
 } from "./pages/settings/HappyAgentMobileSettings";
 export {
     HappyAgentMobileLinkSettings,
@@ -1008,10 +1007,8 @@ export {
 } from "./MobilePairingOptions";
 export {
     MobileAccessConfirmation,
-    MobileAccessDetail,
     type MobileAccessConfirmationProps,
     type MobileAccessConfirmationState,
-    type MobileAccessTerminalResetPreview,
 } from "./MobileAccessConfirmation";
 export {
     HappyAgentDebugSettings,
