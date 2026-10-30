@@ -68,6 +68,7 @@ export function CopyButton(props: CopyButtonProps) {
                 void copy();
             }}
             style={props.style}
+            title={copied ? "Copied" : props.label}
             type="button"
         >
             <Icon name={copied ? "check" : "copy"} size={14} />

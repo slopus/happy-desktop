@@ -471,18 +471,14 @@ const MarkdownPre = ({
         );
     return (
         <div className="happy-message__code-block" data-happy-desktop-ui="message-code-block">
-            <div className="happy-message__code-toolbar">
-                <CopyButton
-                    caption="Copy"
-                    className="happy-message__code-copy"
-                    copiedCaption="Copied"
-                    label="Copy code"
-                    text={fence?.text ?? ""}
-                />
-            </div>
             <ScrollArea axes="horizontal" viewportClassName="happy-message__code-block-viewport">
                 <pre {...props}>{children}</pre>
             </ScrollArea>
+            <CopyButton
+                className="happy-message__code-copy"
+                label="Copy code"
+                text={fence?.text ?? ""}
+            />
         </div>
     );
 };
@@ -656,13 +652,14 @@ const MarkdownCode = ({
     return (
         <code
             {...props}
-            onDoubleClick={(event) => {
+            onMouseUp={(event) => {
+                if (event.detail !== 3) return;
                 const code = event.currentTarget;
                 if (code.closest("pre")) return;
                 const selection = code.ownerDocument.getSelection();
                 if (!selection) return;
-                // Only extend the completed double click. Keeping pointer-down
-                // native preserves drag selection and the next, triple click.
+                // Extend only the completed triple click so double-click word
+                // selection and pointer-down drag selection stay native.
                 const range = code.ownerDocument.createRange();
                 range.selectNodeContents(code);
                 selection.removeAllRanges();

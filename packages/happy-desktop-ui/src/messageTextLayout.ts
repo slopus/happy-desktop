@@ -66,8 +66,6 @@ const PARAGRAPH_LINE = MESSAGE_PLAIN_LINE_HEIGHT;
  */
 const CODE_LINE = 20;
 const CODE_PADDING = 9;
-/** `.happy-message__code-toolbar`: always present above ordinary code. */
-const CODE_TOOLBAR_HEIGHT = 36;
 /** `.happy-message__body--markdown code`: 14px mono with 5px of inline padding each side. */
 const INLINE_CODE_FONT = `14px ${MONO_FAMILY}`;
 /** `.happy-message__body > * + *` stacking, and the wider margin around `pre`. */
@@ -1420,8 +1418,7 @@ function markdownBlockHeight(
                 marginTop: codeMargins ? CODE_GAP : 0,
                 marginBottom: codeMargins ? CODE_GAP : 0,
             };
-        const source = codeBlock(node.value, codeMargins);
-        return { ...source, height: source.height + CODE_TOOLBAR_HEIGHT };
+        return codeBlock(node.value, codeMargins);
     }
     if (node.type === "math") {
         const rendered = mathFormulaRender(node.value, true);

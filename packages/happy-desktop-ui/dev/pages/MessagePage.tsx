@@ -490,7 +490,7 @@ export function MessagePage() {
             </Specimen>
 
             <Specimen
-                detail="Fenced code offers Copy / Copied above its horizontal scrollport. Double-click an inline command, path or expression to select its complete contents; prose and triple-click selection stay native"
+                detail="Fenced code reveals a copy icon at the top-right on hover or focus. Triple-click an inline command, path or expression to select its complete contents; double-click selects a word, and prose selection stays native"
                 label="Message — Markdown body (complete)"
                 number="08"
                 stage="app"
@@ -519,7 +519,7 @@ export function MessagePage() {
             </Specimen>
 
             <Specimen
-                detail="Unlabelled source, blank lines, tabs and overflow copy exactly. The action stays above the scrollport, including in lists and quotes"
+                detail="Unlabelled source, blank lines, tabs and overflow copy exactly. The icon stays at the frame's top-right while the source scrolls, including in lists and quotes"
                 label="Message — code copy edge cases"
                 number="18"
                 stage="app"
