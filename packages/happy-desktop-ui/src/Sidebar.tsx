@@ -1798,6 +1798,23 @@ function SidebarRowChange(props: {
     );
 }
 
+/**
+ * A status split at its first line break, the agent's own two lines; one
+ * entry when it has none. A carriage return is whitespace, and a later break
+ * is a space, so a status never asks for a third line.
+ */
+function statusLines(status: string): readonly [string] | readonly [string, string] {
+    const text = status.replace(/\r/g, " ");
+    const at = text.indexOf("\n");
+    if (at === -1) return [text];
+    const first = text.slice(0, at).trim();
+    const second = text
+        .slice(at + 1)
+        .replace(/\n/g, " ")
+        .trim();
+    return first && second ? [first, second] : [first || second];
+}
+
 /** Where one listed row is, as of the render that drew it. */
 interface SidebarRowTarget {
     readonly item: SidebarItem;
@@ -2711,24 +2728,44 @@ function SidebarRow({
                                      nothing at all to say; the status keeps the
                                      line above either. */
                                   const empty = !stats && !story()?.subtitle && draft === undefined;
+                                  const one = draft !== undefined || empty;
+                                  const lines = statusLines(story()?.subtitle ?? "");
+                                  const statsMark = stats ? (
+                                      <ChangeStats
+                                          added={story()?.changeStats?.added ?? 0}
+                                          className="happy-sidebar__item-subtitle-stats"
+                                          data-happy-desktop-ui="sidebar-item-subtitle-stats"
+                                          deleted={story()?.changeStats?.deleted ?? 0}
+                                      />
+                                  ) : null;
+                                  /* A status the agent wrote as two lines keeps
+                                     them, each cut on its own; with only one line
+                                     to stand on, its lines join with a dot. */
+                                  const split = lines.length === 2 && !one;
                                   return (
                                       <>
                                           <span
                                               className="happy-sidebar__item-subtitle"
                                               data-happy-desktop-ui="sidebar-item-subtitle"
-                                              data-lines={
-                                                  draft !== undefined || empty ? "1" : undefined
-                                              }
+                                              data-lines={one ? "1" : split ? "split" : undefined}
                                           >
-                                              {stats ? (
-                                                  <ChangeStats
-                                                      added={story()?.changeStats?.added ?? 0}
-                                                      className="happy-sidebar__item-subtitle-stats"
-                                                      data-happy-desktop-ui="sidebar-item-subtitle-stats"
-                                                      deleted={story()?.changeStats?.deleted ?? 0}
-                                                  />
-                                              ) : null}
-                                              {story()?.subtitle ?? ""}
+                                              {split ? (
+                                                  lines.map((text, index) => (
+                                                      <span
+                                                          className="happy-sidebar__item-subtitle-line"
+                                                          data-happy-desktop-ui="sidebar-item-subtitle-line"
+                                                          key={index}
+                                                      >
+                                                          {index === 0 ? statsMark : null}
+                                                          {text}
+                                                      </span>
+                                                  ))
+                                              ) : (
+                                                  <>
+                                                      {statsMark}
+                                                      {lines.join(" · ")}
+                                                  </>
+                                              )}
                                           </span>
                                           {draft !== undefined ? (
                                               <span

@@ -107,6 +107,88 @@ it("holds the same title, row and sibling boxes as statuses, rings, times and co
     }
 });
 
+it("shows a status written as two lines as two left-aligned lines, each cut on its own, and leaves a one-line status as it was", async () => {
+    const long =
+        "A long status that must wrap onto a second line and then ellipsize rather than running into a third line";
+    const items: SidebarItem[] = [
+        {
+            id: "split",
+            kind: "agent",
+            label: "Release",
+            story: {
+                subtitle: `1. Ship new onboarding and every follow-up it needs\r\n2. Submit iOS`,
+            },
+        },
+        {
+            id: "extra",
+            kind: "agent",
+            label: "Extra breaks",
+            story: { subtitle: "First\nSecond\nThird" },
+        },
+        { id: "plain", kind: "agent", label: "Plain", story: { subtitle: long } },
+        {
+            id: "draft",
+            kind: "agent",
+            label: "Drafted",
+            story: { subtitle: "One\nTwo", draft: "Hello" },
+        },
+    ];
+    const view = createRenderer().render(
+        () => (
+            <Sidebar
+                activeItemId=""
+                onItemSelect={() => {}}
+                style={{ width: 280 }}
+                sections={[{ id: "work", items }]}
+            />
+        ),
+        { width: 304, height: 360 },
+    );
+    await view.ready();
+    const root = view.$('[data-happy-desktop-ui="sidebar"]').element;
+    const lines = (id: string) => [
+        ...row(root, id).querySelectorAll<HTMLElement>(
+            '[data-happy-desktop-ui="sidebar-item-subtitle-line"]',
+        ),
+    ];
+
+    const split = lines("split");
+    expect(split.map((line) => line.textContent)).toEqual([
+        "1. Ship new onboarding and every follow-up it needs",
+        "2. Submit iOS",
+    ]);
+    const [first, second] = split.map((line) => line.getBoundingClientRect());
+    expect(first!.left).toBe(second!.left);
+    expect(first!.height).toBe(16);
+    expect(second!.top - first!.top).toBe(16);
+    // The long first line is cut on its own; the short second line is whole.
+    expect(split[0]!.scrollWidth).toBeGreaterThan(split[0]!.clientWidth);
+    expect(getComputedStyle(split[0]!).textOverflow).toBe("ellipsis");
+    expect(split[1]!.scrollWidth).toBeLessThanOrEqual(split[1]!.clientWidth);
+    expect(part(row(root, "split"), "sidebar-item-subtitle").getBoundingClientRect().height).toBe(
+        32,
+    );
+
+    // Only the first break splits; later ones are spaces.
+    expect(lines("extra").map((line) => line.textContent)).toEqual(["First", "Second Third"]);
+
+    // A status without a break wraps over two lines as before.
+    const plain = part(row(root, "plain"), "sidebar-item-subtitle");
+    expect(lines("plain")).toEqual([]);
+    expect(plain.dataset.lines).toBeUndefined();
+    expect(plain.textContent).toBe(long);
+    expect(getComputedStyle(plain).getPropertyValue("-webkit-line-clamp")).toBe("2");
+    expect(plain.getBoundingClientRect().height).toBe(32);
+
+    // With a draft, the status has one line, and its two lines join with a dot.
+    const drafted = part(row(root, "draft"), "sidebar-item-subtitle");
+    expect(lines("draft")).toEqual([]);
+    expect(drafted.textContent).toBe("One · Two");
+    expect(drafted.getBoundingClientRect().height).toBe(16);
+
+    for (const item of items) expect(row(root, item.id).getBoundingClientRect().height).toBe(64);
+});
+
 it("aligns each nested mark with its parent's text without connectors, and parts top-level cards by space alone", async () => {
     const items: SidebarItem[] = [
         { id: "parent", kind: "agent", label: "Happy", story: {}, collapsed: false },

@@ -2578,6 +2578,23 @@
     -webkit-line-clamp: 1;
 }
 
+/* A status the agent wrote as two lines keeps its break: each line stands on
+   its own 16px line from the same left edge and is cut on its own. */
+.happy-sidebar__item-subtitle[data-lines="split"] {
+    display: flex;
+    flex-direction: column;
+    -webkit-line-clamp: none;
+}
+
+.happy-sidebar__item-subtitle-line {
+    display: block;
+    flex: none;
+    height: 16px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .happy-sidebar__item-draft {
     display: block;
     flex: none;
