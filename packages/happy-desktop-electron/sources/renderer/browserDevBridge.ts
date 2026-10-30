@@ -153,12 +153,6 @@ export function browserDevBridgeCreate(): HappyDesktopBridge {
         daemonRestart: async () => {
             throw new Error("Happy Agent is restarted from the Electron desktop window.");
         },
-        legacyCliConnect: async () => {
-            throw new Error("Connect the terminal CLI from the Electron desktop window.");
-        },
-        legacyCliPrepare: async () => {
-            throw new Error("Install the terminal CLI from the Electron desktop window.");
-        },
         daemonStart: async () => {
             throw new Error("Happy Agent is started from the Electron desktop window.");
         },

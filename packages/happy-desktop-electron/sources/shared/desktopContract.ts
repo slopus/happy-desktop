@@ -961,10 +961,6 @@ export interface HappyDesktopBridge {
     daemonInstallKill(): Promise<void>;
     /** Drains and restarts the local daemon on the version it is already running. */
     daemonRestart(): Promise<void>;
-    /** Installs/checks the compatible CLI before any phone authorization. */
-    legacyCliPrepare(): Promise<void>;
-    /** Links the prepared terminal CLI to this machine's existing Mobile pairing. */
-    legacyCliConnect(): Promise<void>;
     /** Downloads and verifies the first Happy Agent release without running it. */
     daemonDownload(): Promise<void>;
     daemonGet(): Promise<DesktopDaemonSnapshot>;
@@ -1088,8 +1084,6 @@ export const desktopIpc = {
     daemonInstallDismiss: "happy:daemon:install-dismiss",
     daemonInstallKill: "happy:daemon:install-kill",
     daemonRestart: "happy:daemon:restart",
-    legacyCliConnect: "happy:legacy-cli:connect",
-    legacyCliPrepare: "happy:legacy-cli:prepare",
     daemonGet: "happy:daemon:get",
     daemonStart: "happy:daemon:start",
     daemonUpgrade: "happy:daemon:upgrade",
