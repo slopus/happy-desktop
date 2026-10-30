@@ -10,6 +10,7 @@ let completionChimeContext: AudioContext | undefined;
 let completionChimeBuffer: AudioBuffer | undefined;
 const completionChimeSources = new Set<AudioBufferSourceNode>();
 let completionChimeSuspendTimer: ReturnType<typeof setTimeout> | undefined;
+let completionChimeRequest = 0;
 
 /**
  * Plays a short two-note completion chime. The samples are computed here, once,
@@ -18,37 +19,51 @@ let completionChimeSuspendTimer: ReturnType<typeof setTimeout> | undefined;
  * and Accelerate runs that FFT in SME streaming mode on newer Apple Silicon,
  * where a signal arriving mid-FFT crashed the renderer with SIGILL.
  */
-export function completionChimePlay(): void {
+export function completionChimePlay(wanted: () => boolean): void {
+    if (!wanted()) return;
+    const request = ++completionChimeRequest;
     try {
         completionChimeContext ??= new window.AudioContext();
         const context = completionChimeContext;
-        completionChimeBuffer ??= completionChimeRender(context);
         clearTimeout(completionChimeSuspendTimer);
         completionChimeSuspendTimer = undefined;
         // Resume even if state is still "running": an idle suspend may be queued.
-        void context.resume().catch(() => {});
-        const source = context.createBufferSource();
-        source.buffer = completionChimeBuffer;
-        source.connect(context.destination);
-        source.onended = () => {
-            source.disconnect();
-            completionChimeSources.delete(source);
-            if (completionChimeSources.size > 0) return;
-            // `ended` follows rendering, so allow the device's buffered output to
-            // drain before releasing it. A new chime cancels this idle timer.
-            const drainSeconds = context.baseLatency + context.outputLatency;
-            completionChimeSuspendTimer = setTimeout(
-                () => {
-                    completionChimeSuspendTimer = undefined;
+        void context
+            .resume()
+            .then(() => {
+                // A suspended device must not accumulate scheduled sounds. Only
+                // the newest request may play, under the choices and focus now.
+                if (request !== completionChimeRequest) return;
+                if (context.state !== "running" || !wanted()) {
                     if (completionChimeSources.size === 0) {
                         void context.suspend().catch(() => {});
                     }
-                },
-                Math.max(250, drainSeconds * 1000 + 100),
-            );
-        };
-        source.start();
-        completionChimeSources.add(source);
+                    return;
+                }
+                completionChimeBuffer ??= completionChimeRender(context);
+                const source = context.createBufferSource();
+                source.buffer = completionChimeBuffer;
+                source.connect(context.destination);
+                source.onended = () => {
+                    source.disconnect();
+                    completionChimeSources.delete(source);
+                    if (completionChimeSources.size > 0) return;
+                    // Let buffered output drain before releasing the device.
+                    const drainSeconds = context.baseLatency + context.outputLatency;
+                    completionChimeSuspendTimer = setTimeout(
+                        () => {
+                            completionChimeSuspendTimer = undefined;
+                            if (completionChimeSources.size === 0) {
+                                void context.suspend().catch(() => {});
+                            }
+                        },
+                        Math.max(250, drainSeconds * 1000 + 100),
+                    );
+                };
+                source.start();
+                completionChimeSources.add(source);
+            })
+            .catch(() => {});
     } catch {
         // A missing or policy-blocked audio device must not interrupt reconciliation.
     }
@@ -95,10 +110,9 @@ export function completionChimeWanted(input: {
     readonly sessionId: string;
     readonly windowFocused: boolean;
 }): boolean {
-    const sound = happyAgentAttentionConnection(
-        input.attention,
-        input.happyAgentId,
-    ).completionSound;
+    const connection = happyAgentAttentionConnection(input.attention, input.happyAgentId);
+    if (!connection.completionSoundReady) return false;
+    const sound = connection.completionSound;
     if (sound === "never") return false;
     if (sound === "focused") {
         const selected = input.directory.activeHappyAgentId ?? LOCAL_HAPPY_AGENT_ID;

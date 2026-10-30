@@ -242,7 +242,7 @@ export interface HappyAgentSessionDeps {
      * subagent runs never arrive here; whether the window says anything about
      * it is the owner's to decide.
      */
-    readonly sessionFinished?: (sessionId: string) => void;
+    readonly sessionFinished?: (sessionId: string, stillCurrent: () => boolean) => void;
     /** Announces that this connection's session is ready or has been replaced. */
     readonly changed: () => void;
     readonly unavailable?: (error: unknown) => void;
@@ -512,8 +512,8 @@ export function happyAgentConnectionOpen(input: {
             input.deps.compatibility?.(mismatch);
             input.deps.changed();
         },
-        onTopLevelSessionFinished: (sessionId) => {
-            if (!disposed) input.deps.sessionFinished?.(sessionId);
+        onTopLevelSessionFinished: (sessionId, stillCurrent) => {
+            if (!disposed) input.deps.sessionFinished?.(sessionId, stillCurrent);
         },
     });
     const profile = happyAgentProfileSourceCreate(directClient, agentConnection.sync, () => {

@@ -1032,8 +1032,8 @@ export interface ConnectHappyAgentOptions {
     onCompatibilityChange?: (compatibility: ServerCompatibility) => void;
     /** Receives bounded, display-ready diagnostics without exposing credentials. */
     onDebugEntry?: (entry: HappyAgentDebugLogInput) => void;
-    /** Runs when a top-level session finishes; delegated subagent runs stay silent. */
-    onTopLevelSessionFinished?: (sessionId: string) => void;
+    /** Live completion only. `stillCurrent` expires on the next run or reconciliation. */
+    onTopLevelSessionFinished?: (sessionId: string, stillCurrent: () => boolean) => void;
     /**
      * Whether bootstrap and the event stream wait for the member's profile.
      * A team Happy Agent refuses both to a member who has none yet; the

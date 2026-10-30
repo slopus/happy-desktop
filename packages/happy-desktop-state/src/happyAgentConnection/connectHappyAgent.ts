@@ -415,6 +415,8 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
     let currentUserId: string | undefined;
     let viewerProfileLoading: Promise<void> | undefined;
     let cursor: string | undefined;
+    // Notification effects belong to live delivery, never to history replay.
+    const currentRuns = new Map<string, string>();
     let resyncTask: Promise<void> | undefined;
     const resyncBufferedEvents: HappyAgentEvent[] = [];
     const hydrationBroadcastEvents: HappyAgentEvent[] = [];
@@ -1739,6 +1741,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
      */
     const resync = (reconcileSessions: boolean, read?: DesktopBootstrapCurrent): Promise<void> => {
         if (resyncTask !== undefined) return resyncTask;
+        currentRuns.clear();
         reportDebug({
             detail: debugDetail({ after: cursor ?? null, reconcileSessions }),
             level: "info",
@@ -2443,9 +2446,6 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                 updateRun(event.payload.agentId, event.payload.run);
                 recoverCorruptedMessages(event.payload.agentId);
                 trimHistory(event.payload.agentId);
-                if (agentOf(event.payload.agentId)?.parentAgentId === null) {
-                    options.onTopLevelSessionFinished?.(event.payload.agentId);
-                }
                 return;
             case "message.created":
                 createMessage(event.payload.agentId, event.payload.message, event.payload.runId);
@@ -3655,6 +3655,34 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                         // snapshot boundary used by hydration and gap recovery.
                         rememberEvent(update.event);
                         applyEvent(update.event);
+                        if (update.event.type === "run.started") {
+                            currentRuns.set(
+                                update.event.payload.agentId,
+                                update.event.payload.run.id,
+                            );
+                        } else if (update.event.type === "run.boundary") {
+                            currentRuns.set(
+                                update.event.payload.agentId,
+                                update.event.payload.startedRun.id,
+                            );
+                        } else if (update.event.type === "agent.removed") {
+                            currentRuns.delete(update.event.payload.agentId);
+                        }
+                        if (update.event.type === "run.finished") {
+                            const { agentId, run } = update.event.payload;
+                            const current = currentRuns.get(agentId);
+                            if (
+                                agentOf(agentId)?.parentAgentId === null &&
+                                (current === undefined || current === run.id)
+                            ) {
+                                // Its start may predate this connection's bootstrap.
+                                currentRuns.set(agentId, run.id);
+                                options.onTopLevelSessionFinished?.(
+                                    agentId,
+                                    () => !closed && currentRuns.get(agentId) === run.id,
+                                );
+                            }
+                        }
                         advanceCursor(update.cursor);
                     }
                 }
@@ -5644,6 +5672,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
             processOwners.clear();
             hydrationBroadcastEvents.length = 0;
             recentEvents.length = 0;
+            currentRuns.clear();
             resyncBufferedEvents.length = 0;
         },
     };

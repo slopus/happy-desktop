@@ -11,6 +11,8 @@ export type HappyAgentCompletionSound = "always" | "focused" | "never";
 export type HappyAgentBotAttention = "normal" | "muted" | "hidden";
 export interface HappyAgentAttentionConnection {
     readonly completionSound: HappyAgentCompletionSound;
+    /** Preferences loaded for the current connection, including a confirmed device fallback. */
+    readonly completionSoundReady: boolean;
     readonly mutedBots: ReadonlySet<HappyAgentBotId>;
     readonly hiddenBots: ReadonlySet<HappyAgentBotId>;
     readonly saveError?: UserError;
@@ -63,6 +65,7 @@ const BOT_KEY_PREFIX = "happy-desktop.bot.";
 const NO_BOTS: ReadonlySet<HappyAgentBotId> = new Set();
 const CONNECTION_DEFAULT: HappyAgentAttentionConnection = {
     completionSound: "always",
+    completionSoundReady: false,
     mutedBots: NO_BOTS,
     hiddenBots: NO_BOTS,
 };
@@ -83,7 +86,7 @@ export function happyAgentBotAttention(
     if (connection?.hiddenBots.has(botId)) return "hidden";
     return connection?.mutedBots.has(botId) ? "muted" : "normal";
 }
-type Choices = Omit<HappyAgentAttentionConnection, "saveError">;
+type Choices = Omit<HappyAgentAttentionConnection, "saveError" | "completionSoundReady">;
 function attentionKey(key: string): boolean {
     return (
         key === COMPLETION_SOUND_KEY ||
@@ -222,15 +225,19 @@ export function happyAgentAttentionStoreOwnedCreate(options: HappyAgentAttention
             const connections = new Map<string, HappyAgentAttentionConnection>();
             for (const [id, entry] of current.connections) {
                 const prior = snapshot.connections.get(id);
+                const completionSoundReady = entry.online && entry.support !== "unknown";
                 connections.set(
                     id,
                     prior &&
+                        prior.completionSoundReady === completionSoundReady &&
                         prior.saveError === entry.saveError &&
                         choicesEqual(prior, entry.choices)
                         ? prior
-                        : entry.saveError
-                          ? { ...entry.choices, saveError: entry.saveError }
-                          : entry.choices,
+                        : {
+                              ...entry.choices,
+                              completionSoundReady,
+                              ...(entry.saveError ? { saveError: entry.saveError } : {}),
+                          },
                 );
             }
             snapshot = { connections };

@@ -1543,18 +1543,19 @@ if (mediaPreviewBridge) {
             // never hears about it again, so every terminal takes the appearance
             // showing at the moment it is opened and keeps it.
             terminalColorScheme: () => appearance.get().appearance,
-            sessionFinished: (happyAgentId, sessionId) => {
-                if (
-                    completionChimeWanted({
-                        attention: attention.get(),
-                        projectsVisibility: projectsVisibility.get(),
-                        directory: happyAgents.get(),
-                        happyAgentId,
-                        sessionId,
-                        windowFocused: document.hasFocus(),
-                    })
-                )
-                    completionChimePlay();
+            sessionFinished: (happyAgentId, sessionId, stillCurrent) => {
+                completionChimePlay(
+                    () =>
+                        stillCurrent() &&
+                        completionChimeWanted({
+                            attention: attention.get(),
+                            projectsVisibility: projectsVisibility.get(),
+                            directory: happyAgents.get(),
+                            happyAgentId,
+                            sessionId,
+                            windowFocused: document.hasFocus(),
+                        }),
+                );
             },
         });
         // What this window reports about how it is used, read from the same

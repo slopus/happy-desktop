@@ -156,7 +156,11 @@ export interface HappyAgentDirectoryDeps {
     /** Opens a vendor's sign-in page that this computer's own Happy Agent is waiting on. */
     readonly signInPageOpen?: (url: string) => void;
     /** A top-level session on one Happy Agent finished a turn. */
-    readonly sessionFinished?: (happyAgentId: string, sessionId: string) => void;
+    readonly sessionFinished?: (
+        happyAgentId: string,
+        sessionId: string,
+        stillCurrent: () => boolean,
+    ) => void;
     /** Desktop-wide model memory for this window's Happy Agent connection. */
     readonly modelPreferencePersistence: (id: string) => HappyAgentModelPreferencePersistence;
     /**
@@ -441,8 +445,8 @@ export function happyAgentDirectoryStoreCreate(
                 ...(deps.signInPageOpen && happyAgent.entry.id === LOCAL_HAPPY_AGENT_ID
                     ? { signInPageOpen: deps.signInPageOpen }
                     : {}),
-                sessionFinished: (sessionId) =>
-                    deps.sessionFinished?.(happyAgent.entry.id, sessionId),
+                sessionFinished: (sessionId, stillCurrent) =>
+                    deps.sessionFinished?.(happyAgent.entry.id, sessionId, stillCurrent),
                 compatibility: (mismatch) => {
                     if (happyAgent.protocolMismatch?.message === mismatch?.message) return;
                     happyAgent.protocolMismatch = mismatch;
