@@ -6,6 +6,7 @@ import { HappyCellDivision, type DivisionRect } from "../../src/HappyCellDivisio
 import { HappyCellDivisionSim } from "../../src/happyCellDivisionSim";
 import { HAPPY_CELL_SHAPE, type HappyCellShape } from "../../src/happyCellGeometry";
 import { Icon, type IconName } from "../../src/Icon";
+import { Sidebar } from "../../src/Sidebar";
 import { StemCell } from "../../src/StemCell";
 import { ThemeScope } from "../../src/ThemeScope";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
@@ -196,17 +197,26 @@ export function DivisionDemo(props: { screen: string; shape?: HappyCellShape }) 
     const [pending, setPending] = useState<readonly string[]>([]);
     const create = () => {
         const box = happy.current?.getBoundingClientRect();
-        if (!box) return;
+        const canvas = happy.current?.closest("[data-screen]")?.getBoundingClientRect();
+        if (!box || !canvas) return;
         const id = `new-chat-${props.screen}-${stems.length + 1}`;
         setStems([id, ...stems]);
         setPending([...pending, id]);
-        setFrom(from ?? { x: box.x, y: box.y, width: box.width, height: box.height });
+        setFrom(
+            from ?? {
+                x: box.x - canvas.x,
+                y: box.y - canvas.y,
+                width: box.width,
+                height: box.height,
+            },
+        );
     };
     const rowOf = (id: string) => stems.indexOf(id);
     return (
         <div
             data-screen={props.screen}
             style={{
+                position: "relative",
                 display: "flex",
                 flexDirection: "column",
                 width: 248,
@@ -271,6 +281,43 @@ export function DivisionDemo(props: { screen: string; shape?: HappyCellShape }) 
     );
 }
 
+/** The production scroll boundary: divide, then scroll Happy behind the header. */
+function SidebarDivisionDemo(props: { screen: string }) {
+    const [stems, setStems] = useState<readonly string[]>([]);
+    return (
+        <div data-screen={props.screen} style={{ display: "flex", height: 360 }}>
+            <Sidebar
+                activeItemId="happy"
+                composeLabel="New"
+                division={{ from: "happy", into: stems }}
+                onCompose={() => setStems([...stems, `work-${stems.length + 1}`])}
+                onItemSelect={() => {}}
+                sections={[
+                    {
+                        id: "work",
+                        items: [
+                            { id: "happy", label: "Happy", kind: "view", happyMark: true },
+                            ...[...stems].reverse().map((id) => ({
+                                id,
+                                label: "New work",
+                                kind: "view" as const,
+                                stemCell: { id },
+                            })),
+                            ...Array.from({ length: 12 }, (_, index) => ({
+                                id: `project-${index}`,
+                                label: `Project ${index + 1}`,
+                                kind: "view" as const,
+                                stemCell: { id: `project-${index}` },
+                            })),
+                        ],
+                    },
+                ]}
+                title="Projects"
+            />
+        </div>
+    );
+}
+
 export function HappyCellDivisionPage() {
     return (
         <ComponentPage
@@ -280,8 +327,21 @@ export function HappyCellDivisionPage() {
         >
             {modes.map((mode, index) => (
                 <Specimen
-                    key={`demo-${mode}`}
+                    key={`scroll-${mode}`}
                     number={`0${index + 1}`}
+                    label={`${mode} · real sidebar · scroll while dividing`}
+                    detail="Press New, then scroll: the cells travel with their rows and disappear beneath the header at the scroll boundary"
+                    stage="app"
+                >
+                    <ThemeScope mode={mode}>
+                        <SidebarDivisionDemo screen={`division-scroll-${mode}`} />
+                    </ThemeScope>
+                </Specimen>
+            ))}
+            {modes.map((mode, index) => (
+                <Specimen
+                    key={`demo-${mode}`}
+                    number={`0${index + 3}`}
                     label={`${mode} · sidebar · press New`}
                     detail="The real component in a sidebar mock: 32 px rows, a 20 px mark lane. Press New again mid-division to divide again"
                     stage="app"
@@ -294,7 +354,7 @@ export function HappyCellDivisionPage() {
             {modes.map((mode, index) => (
                 <Specimen
                     key={`frames-${mode}`}
-                    number={`0${index + 3}`}
+                    number={`0${index + 5}`}
                     label={`${mode} · frames · 20 / 64`}
                     detail="The division stepped to fixed moments (ms) and drawn with the clay paint, at row size and at 64 for detail"
                     stage="app"

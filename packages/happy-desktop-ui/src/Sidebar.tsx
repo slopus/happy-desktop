@@ -3543,7 +3543,9 @@ export function Sidebar(props: SidebarProps) {
               : undefined;
     const divisionStart = (node: HTMLSpanElement | null) => {
         const root = node?.closest(".happy-sidebar");
-        if (!root || divisionFrom === undefined) return;
+        const canvas = root?.querySelector(".happy-sidebar__body-content");
+        if (!root || !canvas || divisionFrom === undefined) return;
+        const origin = canvas.getBoundingClientRect();
         divisionSeenSet(new Set([...divisionSeen, ...divisionArriving]));
         const markRect = (id: string): DivisionRect | undefined => {
             const row = [...root.querySelectorAll("[data-item-id]")].find(
@@ -3557,7 +3559,16 @@ export function Sidebar(props: SidebarProps) {
                 lane?.firstElementChild ??
                 lane;
             const box = mark?.getBoundingClientRect();
-            return box ? { x: box.x, y: box.y, width: box.width, height: box.height } : undefined;
+            // Keep every mark in the scrolling canvas's coordinates. The
+            // canvas and its division then move together even mid-animation.
+            return box
+                ? {
+                      x: box.x - origin.x,
+                      y: box.y - origin.y,
+                      width: box.width,
+                      height: box.height,
+                  }
+                : undefined;
         };
         const from = divisionPlay?.from ?? markRect(divisionFrom);
         if (!from) return;
@@ -5937,6 +5948,31 @@ export function Sidebar(props: SidebarProps) {
                             </section>
                         );
                     })}
+                    {divisionPlay ? (
+                        <HappyCellDivision
+                            daughters={divisionPlay.daughters}
+                            from={divisionPlay.from}
+                            onArrive={(stemCellId) => {
+                                const index = divisionPlay.daughters.findIndex(
+                                    (daughter) => daughter.stemCellId === stemCellId,
+                                );
+                                const row = divisionPlay.rows[index];
+                                if (row !== undefined)
+                                    divisionLandedSet((landed) => new Set([...landed, row]));
+                            }}
+                            onDone={() => {
+                                divisionPlaySet(undefined);
+                                divisionLandedSet(new Set());
+                            }}
+                            onSeed={(seed) => {
+                                happyRestSet({ hidden: false, happySeed: seed });
+                                local.division?.onSeed?.(seed);
+                            }}
+                            {...(happyRest?.happySeed !== undefined
+                                ? { seed: happyRest.happySeed }
+                                : {})}
+                        />
+                    ) : null}
                 </div>
             </ScrollArea>
             {/* A row moved by keyboard travels without the reader's caret leaving
@@ -6006,29 +6042,6 @@ export function Sidebar(props: SidebarProps) {
                 </footer>
             ) : null}
             {divisionArriving.length > 0 ? <span hidden ref={divisionStart} /> : null}
-            {divisionPlay ? (
-                <HappyCellDivision
-                    daughters={divisionPlay.daughters}
-                    from={divisionPlay.from}
-                    onArrive={(stemCellId) => {
-                        const index = divisionPlay.daughters.findIndex(
-                            (daughter) => daughter.stemCellId === stemCellId,
-                        );
-                        const row = divisionPlay.rows[index];
-                        if (row !== undefined)
-                            divisionLandedSet((landed) => new Set([...landed, row]));
-                    }}
-                    onDone={() => {
-                        divisionPlaySet(undefined);
-                        divisionLandedSet(new Set());
-                    }}
-                    onSeed={(seed) => {
-                        happyRestSet({ hidden: false, happySeed: seed });
-                        local.division?.onSeed?.(seed);
-                    }}
-                    {...(happyRest?.happySeed !== undefined ? { seed: happyRest.happySeed } : {})}
-                />
-            ) : null}
             {itemMenu ? (
                 <div
                     className="happy-sidebar__item-menu"

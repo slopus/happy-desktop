@@ -50,15 +50,15 @@
     }
 }
 
-/* Happy dividing: a window-sized layer that draws in page pixels and takes no
-   input. */
+/* Happy dividing: a local paint layer in a positioned canvas. The scrollport
+   clips it along with its rows, below the header and above the footer. */
 .happy-cell-division {
-    position: fixed;
+    position: absolute;
     inset: 0;
-    z-index: var(--happy-z-overlay);
-    width: 100vw;
-    height: 100vh;
-    overflow: visible;
+    z-index: 5;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
     pointer-events: none;
 }
 

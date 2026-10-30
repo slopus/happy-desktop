@@ -20,7 +20,7 @@ import {
 } from "./happyCellGeometry";
 import type { Point } from "./stemCellGeometry";
 
-/** A mark's box on screen, in CSS pixels. */
+/** A mark's box in its animation canvas, in CSS pixels. */
 export interface DivisionRect {
     readonly x: number;
     readonly y: number;
@@ -195,12 +195,12 @@ interface Daughter extends Part {
 const ARRIVED = 0.5;
 
 export interface DivisionFrame {
-    /** Membrane and cores, as SVG paths in page pixels. */
+    /** Membrane and cores, as SVG paths in canvas pixels. */
     readonly membrane: string;
     readonly core: string;
 }
 
-/** A pose placed in a mark's box on screen. */
+/** A pose placed in a mark's box on the canvas. */
 function placedIn(lobe: CellLobe, rect: DivisionRect): CellLobe {
     return {
         ...lobe,

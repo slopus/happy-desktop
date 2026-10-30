@@ -17,11 +17,11 @@ export interface HappyCellDaughter {
 }
 
 export interface HappyCellDivisionProps {
-    /** Happy's mark on screen, from `getBoundingClientRect()`. */
+    /** Happy's mark in the containing canvas's CSS pixels. */
     from: DivisionRect;
     /**
      * One entry per division, oldest first: the stem cell each daughter
-     * becomes and its new row's mark on screen. A new entry divides Happy again
+     * becomes and its new row's mark in the same canvas. A new entry divides Happy again
      * at once, from wherever it is; a changed `to` — rows shifted by a newer
      * one — re-aims that daughter, which glides on without stopping.
      */
@@ -51,8 +51,8 @@ export interface HappyCellDivisionProps {
 }
 
 /**
- * C-319 — Happy dividing to make new work. Drawn in a fixed overlay over the
- * window while the caller hides Happy's mark and the new row's stem cell: the
+ * C-319 — Happy dividing to make new work. Drawn in an absolute overlay inside
+ * a positioned canvas while the caller hides Happy's mark and the new row's stem cell: the
  * lower right lobe peels away underneath Happy, its neck stretches thin and
  * lets go, and it slides into the new row as that row's stem cell, while
  * Happy swells round and starts to divide again. Every number is a spring
@@ -61,8 +61,8 @@ export interface HappyCellDivisionProps {
  * marks the caller shows again in `onDone`. With reduced motion the new stem
  * cell only fades in.
  *
- * It draws in window coordinates wherever its fixed box lands, so a
- * containing ancestor shifts nothing.
+ * The canvas owns its scrolling and clipping, so the division travels with
+ * its rows and cannot paint over the surrounding chrome.
  */
 export function HappyCellDivision(props: HappyCellDivisionProps) {
     const { from, daughters } = props;
@@ -73,23 +73,11 @@ export function HappyCellDivision(props: HappyCellDivisionProps) {
     const [sim] = useState(() => new HappyCellDivisionSim(from, shape));
     const { onArrive, onDone, onSeed } = props;
 
-    // The rects are the window's, but the layer's fixed box is the window's
-    // only where nothing contains it: a connection beside the rail holds its
-    // fixed layers in its own box, which starts right of the rail. Drawing is
-    // moved back by wherever the layer's box actually starts.
-    const place = (svg: SVGSVGElement | null) => {
-        const page = svg?.querySelector(".happy-cell-division__page");
-        if (!svg || !page) return;
-        const origin = svg.getBoundingClientRect();
-        page.setAttribute("transform", `translate(${-origin.x} ${-origin.y})`);
-    };
-
     // Attached again whenever the props change: a new daughter divides Happy
     // again, a moved one is re-aimed, and the loop picks up the latest onDone. The sim keeps its own clock, so
     // re-attaching never stalls a frame.
     const play = (svg: SVGSVGElement | null) => {
         if (!svg) return;
-        place(svg);
         const membrane = svg.querySelector<SVGPathElement>(".happy-stem-cell__membrane");
         const core = svg.querySelector<SVGPathElement>(".happy-stem-cell__core");
         if (!membrane || !core) return;
@@ -125,7 +113,6 @@ export function HappyCellDivision(props: HappyCellDivisionProps) {
                 className="happy-cell-division"
                 data-happy-desktop-ui="happy-cell-division"
                 focusable="false"
-                ref={place}
             >
                 {variant === "clay" ? <CellClayDefs id={clay} size={from.width} /> : null}
                 <g className="happy-cell-division__page">
