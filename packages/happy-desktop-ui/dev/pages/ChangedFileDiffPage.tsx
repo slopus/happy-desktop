@@ -2,6 +2,8 @@ import { type ReactNode, useState } from "react";
 import { ChangedFileDiff } from "../../src/ChangedFileDiff";
 import { CodeEditor } from "../../src/CodeEditor";
 import { FilePreview } from "../../src/FilePreview";
+import { MarkdownDiff } from "../../src/MarkdownDiff";
+import { markdownDiffCompute } from "../../src/markdownDiff";
 import { TabbedPane } from "../../src/TabbedPane";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
@@ -50,6 +52,11 @@ export const guidance = "Workspace writes stay inside the checkout.";
 const wide = `/** One sentence, kept on one line the way configuration prose often is. */
 export const guidance = "Workspace writes stay inside the checkout, its Git control directory, and temporary directories; everything else on the host is readable but never writable, and outbound network access flows through the managed proxy alone.";
 `;
+
+/** The rendered change a host hands in for a Markdown file with a committed version. */
+function renderedDiff(before: string, after: string) {
+    return <MarkdownDiff diff={markdownDiffCompute(before, after)} unchangedContext={2} />;
+}
 
 /** The preview a host hands in: the product's own file surface, over one file. */
 function preview(path: string, text: string) {
@@ -116,7 +123,7 @@ function frame(children: ReactNode, height = 420, appearance: "dark" | "light" =
 
 /** The real three-layer file surface, used twice so Preview and Pierre can be
  * compared without either specimen quietly changing the surrounding chrome. */
-function tabbedDiff(mode: "file" | "unified") {
+function tabbedDiff(mode: "rendered" | "file" | "unified") {
     return (
         <TabbedPane
             activeId="master-plans/03-file-viewer.md"
@@ -136,6 +143,7 @@ function tabbedDiff(mode: "file" | "unified") {
                 oldContent={oldContent}
                 path="master-plans/03-file-viewer.md"
                 preview={preview("master-plans/03-file-viewer.md", newContent)}
+                renderedDiff={renderedDiff(oldContent, newContent)}
             />
         </TabbedPane>
     );
@@ -210,9 +218,20 @@ export function ChangedFileDiffPage() {
     return (
         <ComponentPage
             number={componentNumber}
-            summary="One changed file, in the four ways there are to look at one. Preview is the product's own file preview over the working-tree copy, so a changed document reads as the document and changed source reads as numbered, highlighted source; Unified and Split are the diff; Edit is the text. A mode with nothing behind it is not offered."
+            summary="One changed file, in the ways there are to look at one. A Markdown document with a committed version opens on Rendered, its change drawn as the document. Preview is the product's own file preview over the working-tree copy, so a changed document reads as the document and changed source reads as numbered, highlighted source; Unified and Split are the diff; Edit is the text. A mode with nothing behind it is not offered."
             title="ChangedFileDiff"
         >
+            <Specimen
+                detail="A changed Markdown file with a committed version opens on its rendered change: the document, with what was added and removed marked inside it. Only such a file offers Rendered."
+                label="Rendered"
+                number="00"
+                stage="surface"
+            >
+                <div data-screen="00-rendered" style={{ display: "flex" }}>
+                    {frame(tabbedDiff("rendered"), 520)}
+                </div>
+            </Specimen>
+
             <Specimen
                 detail="Preview and Pierre share the same three 32px layers and path origin"
                 label="Chrome and path alignment"

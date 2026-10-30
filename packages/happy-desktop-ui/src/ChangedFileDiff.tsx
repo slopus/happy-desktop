@@ -13,6 +13,10 @@ import { SegmentedControl } from "./SegmentedControl";
 /**
  * How a changed file is being looked at.
  *
+ * - `rendered` — the change read as the document it changes: both versions
+ *   rendered as one, with what was added and removed marked inside it. Offered
+ *   only where the caller supplies one, which is a Markdown file that has a
+ *   committed version to compare with.
  * - `file` — the file as it now stands rather than the change to it: the
  *   document rendered, the picture shown, the text read and written. What the
  *   result reads like, which is the one question a diff cannot answer.
@@ -23,11 +27,17 @@ import { SegmentedControl } from "./SegmentedControl";
  * choices showing the same characters, one of which refused to accept any: a
  * reader who noticed a typo had to find the other tab to fix it.
  */
-export type ChangedFileDiffMode = "file" | "unified" | "split";
+export type ChangedFileDiffMode = "rendered" | "file" | "unified" | "split";
 
-export const CHANGED_FILE_DIFF_MODES: readonly ChangedFileDiffMode[] = ["file", "unified", "split"];
+export const CHANGED_FILE_DIFF_MODES: readonly ChangedFileDiffMode[] = [
+    "rendered",
+    "file",
+    "unified",
+    "split",
+];
 
 const MODE_LABELS: Record<ChangedFileDiffMode, string> = {
+    rendered: "Rendered",
     file: "File",
     unified: "Unified",
     split: "Split",
@@ -92,6 +102,13 @@ export type ChangedFileDiffProps = {
      */
     preview?: ReactNode;
     /**
+     * The change drawn as the document it changes — a `MarkdownDiff` of the
+     * committed and current text. It is the caller's for the same reason the
+     * preview is: only the caller knows the file is a document and how its
+     * links open. Without one the mode is not offered.
+     */
+    renderedDiff?: ReactNode;
+    /**
      * Review notes to draw under the lines they are about, and the one being
      * written. Without `onCommentDraftOpen` there is nobody to hand a new note
      * to, so the gutter offers none and the diff reads exactly as it does now.
@@ -134,6 +151,40 @@ type ChangedFileDiffAnnotation =
     | { readonly type: "draft" };
 
 /**
+ * The views a changed file can be shown in, in the order the switch lists
+ * them. The two diffs always are. The rendered diff needs a document to draw
+ * it; the file needs a preview or an editor, which a change that deleted the
+ * file has neither of, having left no copy to read or write.
+ */
+export function changedFileDiffModesOffered(available: {
+    readonly renderedDiff: boolean;
+    readonly file: boolean;
+}): readonly ChangedFileDiffMode[] {
+    return CHANGED_FILE_DIFF_MODES.filter((candidate) =>
+        candidate === "rendered"
+            ? available.renderedDiff
+            : candidate === "file"
+              ? available.file
+              : true,
+    );
+}
+
+/**
+ * The view a changed file opens in. Which view is on is one preference
+ * remembered across files, so the one asked for may not exist for the file now
+ * open — the rendered diff for a source file, the file for a deleted one. Such
+ * a file falls back to the unified diff, which every change has, rather than
+ * leaving the switch pointing at a view this pane cannot draw. Nothing asked
+ * for at all is the unified diff too.
+ */
+export function changedFileDiffModeResolve(
+    requested: ChangedFileDiffMode | undefined,
+    offered: readonly ChangedFileDiffMode[],
+): ChangedFileDiffMode {
+    return requested !== undefined && offered.includes(requested) ? requested : "unified";
+}
+
+/**
  * C-237 ChangedFileDiff — a complete working-tree diff surface. Pierre Diffs
  * owns parsing, syntax highlighting, hunk expansion, and line layout; Happy owns
  * the product boundary, the view modes, and the colors.
@@ -151,21 +202,16 @@ type ChangedFileDiffAnnotation =
  * full-file view carrying a second palette that merely resembles the first.
  */
 export function ChangedFileDiff(props: ChangedFileDiffProps) {
-    const editable = props.onContentChange !== undefined;
-    const previewable = props.preview !== undefined;
-    // A change that deleted the file left no copy of it: nothing to read and
-    // nothing to write, so the file itself is not offered.
-    const segments = CHANGED_FILE_DIFF_MODES.filter((candidate) =>
-        candidate === "file" ? previewable || editable : true,
-    ).map((candidate) => ({ value: candidate, label: MODE_LABELS[candidate] }));
-    // Which view is on is remembered across files, so the one that was chosen
-    // may not exist for the file that is now open — a deleted file has no copy
-    // left to read. It falls back to the diff, which is the only thing such a
-    // file still has, rather than leaving the switch pointing at a mode this
-    // pane cannot draw.
+    const offered = changedFileDiffModesOffered({
+        renderedDiff: props.renderedDiff !== undefined,
+        file: props.preview !== undefined || props.onContentChange !== undefined,
+    });
+    const segments = offered.map((candidate) => ({
+        value: candidate,
+        label: MODE_LABELS[candidate],
+    }));
     const commenting = props.onCommentDraftOpen !== undefined;
-    const requested = props.mode ?? "unified";
-    const mode = segments.some((segment) => segment.value === requested) ? requested : "unified";
+    const mode = changedFileDiffModeResolve(props.mode, offered);
     const newContent = props.newContent;
     // Parsing the patch is synchronous. Keep its inputs stable across unrelated
     // workspace notifications while this diff remains mounted; switching files
@@ -412,7 +458,10 @@ export function ChangedFileDiff(props: ChangedFileDiffProps) {
                 viewportClassName="happy-changed-file-diff__viewport"
                 viewportRef={viewportRef}
             >
-                {mode === "file" ? (
+                {mode === "rendered" ? (
+                    // A whole document viewer that scrolls itself, like the file.
+                    props.renderedDiff
+                ) : mode === "file" ? (
                     // The caller's preview is the whole file surface — rendered
                     // face, source, and the editor inside it — so it wins where
                     // there is one. Without it, the file is its text.

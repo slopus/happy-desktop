@@ -32,6 +32,7 @@ import {
     type MessageReferenceSurfaces,
 } from "./messageReferences";
 import type {
+    HappyAgentGitChangedFile,
     AppearanceStore,
     CommandPaletteStore,
     HappyAgentArtifactCatalogStore,
@@ -247,6 +248,8 @@ import {
     type FilePreviewKind,
     filePreviewKind,
     Lightbox,
+    MarkdownDiff,
+    markdownDiffCompute,
     MarkdownDocument,
     ConfirmPopover,
     Modal,
@@ -396,6 +399,7 @@ import {
     type CommandPaletteTab,
 } from "./commandPaletteResults";
 import { openExternalLink } from "./externalLink";
+import { changedFileRenderedDiffOffered } from "./changedFileRenderedDiff";
 import { fileDownload } from "./fileDownload";
 import { imageCopy } from "./imageCopy";
 import { reactFrameInputUpdate, reactFrameSubscribe } from "./reactFrameSubscribe";
@@ -7782,6 +7786,11 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
             key={`${file.id}:${file.kind}`}
             {...(props.mediaWindow ? { mediaWindow: props.mediaWindow } : {})}
             mode={workspace.fileViewMode}
+            {...((change) => (change === undefined ? {} : { changeStatus: change.status }))(
+                openGroup?.id === file.groupId
+                    ? openGroup.changes.find((candidate) => candidate.path === file.path)
+                    : undefined,
+            )}
             comments={workspace.fileComments.comments.filter(
                 (comment) => comment.anchor.path === file.path,
             )}
@@ -8881,6 +8890,11 @@ function HappyAgentFileBody(props: {
     htmlPreview?: HtmlPreviewRenderer;
     mediaWindow?: MediaWindowOpener;
     mode: HappyAgentFileViewMode;
+    /**
+     * What the live Git snapshot says happened to this file, when its checkout
+     * lists it as changed. It decides whether the change can be read rendered.
+     */
+    changeStatus?: HappyAgentGitChangedFile["status"];
     /** Whether long diff lines wrap to the pane or scroll out of it. */
     wrap: boolean;
     /** Re-reads Happy Agent availability when a retained file handler fires. */
@@ -9119,6 +9133,26 @@ function HappyAgentFileBody(props: {
                         : {})}
                     onModeChange={(mode) => workspace.fileViewModeUpdate(mode)}
                     onWrapChange={(wrap) => workspace.fileViewWrapUpdate(wrap)}
+                    {...(changedFileRenderedDiffOffered(file.path, props.changeStatus)
+                        ? {
+                              renderedDiff: (
+                                  <HappyAgentChangedFileRenderedDiff
+                                      after={current}
+                                      before={change.oldContent}
+                                      // A link in the document follows the same
+                                      // file-open path the preview's links do.
+                                      onFileOpen={(href, selection) => {
+                                          if (props.saveRefusal !== undefined) return;
+                                          linkedFileOpen(
+                                              documentLinkResolve(file.path, href),
+                                              selection,
+                                          );
+                                      }}
+                                      onFileLinkOpen={fileLinkOpen}
+                                  />
+                              ),
+                          }
+                        : {})}
                     wrap={props.wrap}
                     // A change that deleted the file left no copy to look at, which
                     // the read reports by having no working-tree identity for it.
@@ -9233,6 +9267,29 @@ function HappyAgentFileBody(props: {
  * including an edit that has been typed and not yet saved. Nothing is fetched
  * here, so switching to Preview cannot land another file's bytes.
  */
+/**
+ * A changed document read as the change to it: the committed text and the
+ * current one — an unsaved edit included — compared as rendered Markdown. It is
+ * its own component so the comparison runs only while this view is showing.
+ */
+function HappyAgentChangedFileRenderedDiff(props: {
+    before: string;
+    after: string;
+    onFileOpen: FileOpenHandler;
+    onFileLinkOpen: FileLinkOpenHandler;
+}) {
+    return (
+        <MarkdownDiff
+            diff={markdownDiffCompute(props.before, props.after)}
+            onFileLinkOpen={props.onFileLinkOpen}
+            onFileOpen={props.onFileOpen}
+            // A long document is mostly unchanged, and the reader opened it
+            // for the change; a little context stays beside each one.
+            unchangedContext={2}
+        />
+    );
+}
+
 function HappyAgentChangedFilePreview(props: {
     file: HappyAgentFileTabSnapshot;
     openDisabled: boolean;

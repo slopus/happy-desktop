@@ -10,6 +10,9 @@ export {
 export { happyLogoBlackUrl, happyLogoWhiteUrl } from "./assets";
 export {
     ChangedFileDiff,
+    changedFileDiffModeResolve,
+    changedFileDiffModesOffered,
+    type ChangedFileDiffMode,
     type ChangedFileDiffComment,
     type ChangedFileDiffCommentDraft,
     type ChangedFileDiffCommentSide,

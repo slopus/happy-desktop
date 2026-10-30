@@ -1256,10 +1256,13 @@ const FILE_SEARCH_IDLE: HappyAgentFileSearch = { query: "", searching: false };
 /**
  * How a changed file is displayed. Mirrors the UI's `ChangedFileDiffMode`.
  *
- * `file` is the file itself rather than the change to it — read or written, one
- * face. Reading a file and writing it are not two places to be.
+ * `rendered` is the change read as the document it changes, which only a
+ * Markdown file with a committed version has; any other file asked for it
+ * shows the unified diff. `file` is the file itself rather than the change to
+ * it — read or written, one face. Reading a file and writing it are not two
+ * places to be.
  */
-export type HappyAgentFileViewMode = "file" | "unified" | "split";
+export type HappyAgentFileViewMode = "rendered" | "file" | "unified" | "split";
 
 /**
  * A rename the reader has opened but not committed. The draft lives here rather
@@ -2497,7 +2500,9 @@ export function happyAgentWorkspaceStoreCreate(
      * readable where it is.
      */
     const tasksArchivedHere = new Set<HappyAgentTaskId>();
-    let fileViewMode: HappyAgentFileViewMode = "unified";
+    // A changed document opens as the rendered change; every other file, having
+    // no rendering, opens on the unified diff it falls back to.
+    let fileViewMode: HappyAgentFileViewMode = "rendered";
     let fileViewWrap = false;
     /**
      * Looking for a file is not a preference, so it is neither written to the
