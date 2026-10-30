@@ -400,7 +400,7 @@ const DocumentImage = ({ alt, src }: ComponentPropsWithoutRef<"img"> & ExtraProp
  * block in a document reads exactly like the same lines opened as a file. The
  * wrapper keeps the block's spacing in the document flow.
  */
-const DocumentPre = ({
+export const MarkdownDocumentPre = ({
     children,
     node,
     ...props
@@ -538,13 +538,18 @@ const headingOverride = (
     return DocumentHeading as NonNullable<Components[typeof tag]>;
 };
 
-const documentComponents: Components = {
+/**
+ * The document's element renderers — links, pictures, fenced code, tables,
+ * headings — for a component that renders a document tree of its own inside a
+ * `MarkdownDocumentFrame`, as the Markdown diff does.
+ */
+export const markdownDocumentComponents: Components = {
     a: DocumentLink,
     code: DocumentCode,
     td: documentCell("td"),
     th: documentCell("th"),
     img: DocumentImage,
-    pre: DocumentPre,
+    pre: MarkdownDocumentPre,
     table: DocumentTable,
     h1: headingOverride("h1"),
     h2: headingOverride("h2"),
@@ -580,41 +585,82 @@ export function MarkdownDocument(props: MarkdownDocumentProps) {
         "sourceOffsets",
         "flow",
     ]);
+    return (
+        <MarkdownDocumentFrame
+            cacheKey={local.cacheKey}
+            className={local.className}
+            data-testid={local["data-testid"]}
+            flow={local.flow}
+            onFileLinkOpen={local.onFileLinkOpen}
+            onFileOpen={local.onFileOpen}
+            part="markdown-document"
+            references={local.references}
+            style={local.style}
+        >
+            <MemoMarkdown
+                components={markdownDocumentComponents}
+                urlTransform={markdownFileUrlTransform}
+                rehypePlugins={
+                    local.sourceOffsets
+                        ? MARKDOWN_REHYPE_PLUGINS_SOURCE_OFFSETS
+                        : MARKDOWN_REHYPE_PLUGINS_NONE
+                }
+                remarkPlugins={MARKDOWN_REMARK_PLUGINS}
+            >
+                {local.text}
+            </MemoMarkdown>
+        </MarkdownDocumentFrame>
+    );
+}
+
+export type MarkdownDocumentFrameProps = Pick<
+    MarkdownDocumentProps,
+    | "className"
+    | "data-testid"
+    | "style"
+    | "cacheKey"
+    | "onFileOpen"
+    | "onFileLinkOpen"
+    | "references"
+    | "flow"
+> & {
+    /** The rendered document, drawn with `markdownDocumentComponents`. */
+    children: ReactNode;
+    /** The frame's `data-happy-desktop-ui` part name. */
+    part: string;
+};
+
+/**
+ * The surface a document is read on — its scrollport or inline flow, the
+ * reading measure, the type ramp — and what its links and fenced code are
+ * given. `MarkdownDocument` renders Markdown text inside it; another document
+ * view renders its own tree here with the same components and reads the same.
+ */
+export function MarkdownDocumentFrame(props: MarkdownDocumentFrameProps) {
     const body = (
         <article
             className="happy-markdown-document__body"
             data-happy-desktop-ui="markdown-document-body"
         >
-            <MarkdownCacheKeyContext.Provider value={local.cacheKey}>
-                <MarkdownReferencesContext.Provider value={local.references}>
-                    <FileOpenContext.Provider value={local.onFileOpen}>
-                        <FileLinkOpenContext.Provider value={local.onFileLinkOpen}>
-                            <MemoMarkdown
-                                components={documentComponents}
-                                urlTransform={markdownFileUrlTransform}
-                                rehypePlugins={
-                                    local.sourceOffsets
-                                        ? MARKDOWN_REHYPE_PLUGINS_SOURCE_OFFSETS
-                                        : MARKDOWN_REHYPE_PLUGINS_NONE
-                                }
-                                remarkPlugins={MARKDOWN_REMARK_PLUGINS}
-                            >
-                                {local.text}
-                            </MemoMarkdown>
+            <MarkdownCacheKeyContext.Provider value={props.cacheKey}>
+                <MarkdownReferencesContext.Provider value={props.references}>
+                    <FileOpenContext.Provider value={props.onFileOpen}>
+                        <FileLinkOpenContext.Provider value={props.onFileLinkOpen}>
+                            {props.children}
                         </FileLinkOpenContext.Provider>
                     </FileOpenContext.Provider>
                 </MarkdownReferencesContext.Provider>
             </MarkdownCacheKeyContext.Provider>
         </article>
     );
-    if (local.flow === "inline")
+    if (props.flow === "inline")
         return (
             <div
-                className={["happy-markdown-document", local.className].filter(Boolean).join(" ")}
+                className={["happy-markdown-document", props.className].filter(Boolean).join(" ")}
                 data-flow="inline"
-                data-happy-desktop-ui="markdown-document"
-                data-testid={local["data-testid"]}
-                style={local.style}
+                data-happy-desktop-ui={props.part}
+                data-testid={props["data-testid"]}
+                style={props.style}
             >
                 {body}
             </div>
@@ -622,10 +668,10 @@ export function MarkdownDocument(props: MarkdownDocumentProps) {
     return (
         <ScrollArea
             axes="both"
-            className={["happy-markdown-document", local.className].filter(Boolean).join(" ")}
-            data-happy-desktop-ui="markdown-document"
-            data-testid={local["data-testid"]}
-            style={local.style}
+            className={["happy-markdown-document", props.className].filter(Boolean).join(" ")}
+            data-happy-desktop-ui={props.part}
+            data-testid={props["data-testid"]}
+            style={props.style}
             viewportClassName="happy-markdown-document__viewport"
         >
             {body}

@@ -286,6 +286,26 @@ export {
     type MarkdownDocumentProps,
     type MarkdownDocumentReferences,
 } from "./MarkdownDocument";
+export { MarkdownDiff, type MarkdownDiffProps } from "./MarkdownDiff";
+export {
+    markdownDiffCompute,
+    type MarkdownDiffModel,
+    type MarkdownDiffBlock,
+    type MarkdownDiffBlockquote,
+    type MarkdownDiffChange,
+    type MarkdownDiffCode,
+    type MarkdownDiffCodeLine,
+    type MarkdownDiffHeading,
+    type MarkdownDiffInlineRun,
+    type MarkdownDiffList,
+    type MarkdownDiffListItem,
+    type MarkdownDiffOpaque,
+    type MarkdownDiffParagraph,
+    type MarkdownDiffStatus,
+    type MarkdownDiffTable,
+    type MarkdownDiffTableCell,
+    type MarkdownDiffTableRow,
+} from "./markdownDiff";
 export {
     fileReferenceFragment,
     fileReferenceSplit,

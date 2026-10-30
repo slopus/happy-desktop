@@ -102,6 +102,7 @@
 @import "./styles/review-stream.css";
 @import "./styles/file-path-label.css";
 @import "./styles/markdown-document.css";
+@import "./styles/markdown-diff.css";
 @import "./styles/mermaid-diagram.css";
 @import "katex/dist/katex.min.css";
 @import "./styles/math-formula.css";

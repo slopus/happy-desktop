@@ -1,0 +1,240 @@
+/*
+ * C-331 MarkdownDiff — two versions of a Markdown document read as one.
+ *
+ * The document itself is C-171's: same surface, measure, type ramp, and block
+ * rhythm. This sheet only adds what a change looks like. A whole added or
+ * removed block sits on its diff wash, with no bar or border of its own; the
+ * wash bleeds 8px past the text on both sides so the text stays exactly where
+ * it would be unchanged. Inside a changed block, inserted words are underlined
+ * on the inline green and deleted words struck on the inline red. Moved
+ * blocks take the link colour instead, because they are the same content
+ * found elsewhere rather than content gained or lost.
+ */
+
+/* Struck through and in the removed ink, whatever kind of block it is. */
+.happy-markdown-diff [data-markdown-diff="removed"] {
+    color: var(--diff-removed-text);
+    text-decoration: line-through;
+    text-decoration-color: var(--diff-removed-border);
+}
+
+.happy-markdown-diff
+    :is(p, h1, h2, h3, h4, h5, h6, ul, ol, .happy-markdown-diff__code):is(
+        [data-markdown-diff="added"],
+        [data-markdown-diff="removed"]
+    ) {
+    margin-inline: -8px;
+    padding-inline: 8px;
+    border-radius: 4px;
+}
+
+.happy-markdown-diff
+    :is(p, h1, h2, h3, h4, h5, h6, ul, ol, .happy-markdown-diff__code)[data-markdown-diff="added"] {
+    background: var(--diff-added-bg);
+}
+
+.happy-markdown-diff
+    :is(
+        p,
+        h1,
+        h2,
+        h3,
+        h4,
+        h5,
+        h6,
+        ul,
+        ol,
+        .happy-markdown-diff__code
+    )[data-markdown-diff="removed"] {
+    background: var(--diff-removed-bg);
+}
+
+/* A list item's wash reaches back over its marker, which sits in the list's
+   24px inset. Moving the item's own box would move an outside marker with it,
+   so the wash is painted behind the item instead, and the item keeps its box. */
+.happy-markdown-diff li:is([data-markdown-diff="added"], [data-markdown-diff="removed"]) {
+    position: relative;
+    z-index: 0;
+}
+
+.happy-markdown-diff li:is([data-markdown-diff="added"], [data-markdown-diff="removed"])::before {
+    content: "";
+    /* A wash painted behind the item, reaching 32px into the list inset and
+       8px past its end, without moving the item or its marker. */
+    position: absolute;
+    inset: 0 -8px 0 -32px;
+    z-index: -1;
+    border-radius: 4px;
+}
+
+.happy-markdown-diff li[data-markdown-diff="added"]::before {
+    background: var(--diff-added-bg);
+}
+
+.happy-markdown-diff li[data-markdown-diff="removed"]::before {
+    background: var(--diff-removed-bg);
+}
+
+/* A task item has no marker: its checkbox is pulled 20px into the inset. */
+.happy-markdown-diff
+    li:is([data-markdown-diff="added"], [data-markdown-diff="removed"]):has(
+        > input[type="checkbox"]
+    )::before {
+    inset-inline-start: -28px;
+}
+
+.happy-markdown-diff li[data-markdown-diff][data-markdown-diff-moved]::before {
+    background: color-mix(in srgb, var(--text-link) 10%, var(--surface));
+}
+
+/* A whole list keeps its own 24px inset inside the same reach. */
+.happy-markdown-diff :is(ul, ol):is([data-markdown-diff="added"], [data-markdown-diff="removed"]) {
+    padding-inline-start: 32px;
+}
+
+/* A quote keeps its own neutral rule; the wash alone says what changed. */
+.happy-markdown-diff blockquote[data-markdown-diff="added"] {
+    background: var(--diff-added-bg);
+}
+
+.happy-markdown-diff blockquote[data-markdown-diff="removed"] {
+    background: var(--diff-removed-bg);
+}
+
+/* A rule is nothing but its line, so the line takes the colour. */
+.happy-markdown-diff hr[data-markdown-diff="added"] {
+    background: var(--diff-added-border);
+}
+
+.happy-markdown-diff hr[data-markdown-diff="removed"] {
+    background: var(--diff-removed-border);
+}
+
+/* Tables are washed cell by cell: a row has no box of its own to bleed, and a
+   header cell paints its own fill over anything behind it. */
+.happy-markdown-diff
+    :is(
+        table[data-markdown-diff="added"] :is(th, td),
+        tr[data-markdown-diff="added"] > :is(th, td),
+        :is(th, td)[data-markdown-diff="added"]
+    ) {
+    background: var(--diff-added-bg);
+}
+
+.happy-markdown-diff
+    :is(
+        table[data-markdown-diff="removed"] :is(th, td),
+        tr[data-markdown-diff="removed"] > :is(th, td),
+        :is(th, td)[data-markdown-diff="removed"]
+    ) {
+    background: var(--diff-removed-bg);
+}
+
+/* A fenced block keeps its own inset well; an added or removed one sits in
+   a wash that frames it on every side. */
+.happy-markdown-diff
+    .happy-markdown-diff__code:is([data-markdown-diff="added"], [data-markdown-diff="removed"]) {
+    padding-block: 8px;
+}
+
+/* ---- Moves --------------------------------------------------------------- */
+
+.happy-markdown-diff
+    :is(
+        p,
+        h1,
+        h2,
+        h3,
+        h4,
+        h5,
+        h6,
+        ul,
+        ol,
+        .happy-markdown-diff__code
+    )[data-markdown-diff][data-markdown-diff-moved] {
+    background: color-mix(in srgb, var(--text-link) 10%, var(--surface));
+    color: var(--text);
+    text-decoration: none;
+}
+
+/* Where a block moved from, it is only a ghost — a fainter wash and faded
+   ink — so the reader finds it in full where it arrived. */
+.happy-markdown-diff [data-markdown-diff="removed"][data-markdown-diff-moved],
+.happy-markdown-diff
+    :is(
+        p,
+        h1,
+        h2,
+        h3,
+        h4,
+        h5,
+        h6,
+        ul,
+        ol,
+        .happy-markdown-diff__code
+    )[data-markdown-diff="removed"][data-markdown-diff-moved] {
+    background: color-mix(in srgb, var(--text-link) 4%, var(--surface));
+    color: var(--text-secondary);
+    text-decoration: none;
+}
+
+.happy-markdown-diff li[data-markdown-diff="removed"][data-markdown-diff-moved]::before {
+    background: color-mix(in srgb, var(--text-link) 4%, var(--surface));
+}
+
+/* ---- Inline changes ------------------------------------------------------ */
+
+.happy-markdown-diff ins[data-markdown-diff-inline] {
+    border-radius: 2px;
+    background: var(--diff-inline-added-bg);
+    color: var(--diff-inline-added-text);
+    text-decoration: underline;
+    text-decoration-color: var(--diff-added-border);
+    text-decoration-thickness: 1px;
+    text-underline-offset: 3px;
+    box-decoration-break: clone;
+}
+
+.happy-markdown-diff del[data-markdown-diff-inline] {
+    border-radius: 2px;
+    background: var(--diff-inline-removed-bg);
+    color: var(--diff-inline-removed-text);
+    text-decoration: line-through;
+    text-decoration-color: var(--diff-removed-border);
+    box-decoration-break: clone;
+}
+
+/* A link or code span inside a change keeps its own face and takes the
+   change's ink, so the change reads first. */
+.happy-markdown-diff :is(ins, del)[data-markdown-diff-inline] .happy-markdown-document__link {
+    color: inherit;
+}
+
+/* ---- Notes and folds ----------------------------------------------------- */
+
+/* A short pill after a block's text for a change the rendering cannot show,
+   such as a heading's previous level. It is set in the body size whatever the
+   block's size, and as an atomic box it is never struck through. */
+.happy-markdown-diff [data-markdown-diff-note] {
+    display: inline-flex;
+    align-items: center;
+    margin-inline-start: 8px;
+    padding: 0 6px;
+    border-radius: 999px;
+    background: var(--surface-pressed);
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0;
+    line-height: 20px;
+    text-decoration: none;
+    vertical-align: middle;
+}
+
+/* The control's ink lines up with the text column; its 10px padding and
+   hover fill hang into the gutter, as a wash does. */
+.happy-markdown-diff__fold {
+    display: flex;
+    align-items: center;
+    margin-inline-start: -10px;
+}
