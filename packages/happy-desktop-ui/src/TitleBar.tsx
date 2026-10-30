@@ -5,6 +5,7 @@ import type { Dimension } from "./dimensions";
 import { toCssDimension } from "./dimensions";
 import { Icon } from "./Icon";
 import { commandShortcut } from "./keyboardShortcut";
+import { imeCompositionHandlers, imeKeyboardEvent } from "./imeComposition";
 type SearchFieldSharedProps = {
     placeholder?: string;
     /**
@@ -61,6 +62,7 @@ export function WindowDragRegion(props: WindowDragRegionProps) {
 export function SearchField(props: SearchFieldProps) {
     return (
         <div
+            {...imeCompositionHandlers}
             className="happy-search-field"
             data-happy-desktop-ui="search-field"
             style={props.width === undefined ? undefined : { width: toCssDimension(props.width) }}
@@ -81,6 +83,7 @@ export function SearchField(props: SearchFieldProps) {
                     if (!props.onOpen) props.onChange?.(event.currentTarget.value);
                 }}
                 onKeyDown={(event) => {
+                    if (imeKeyboardEvent(event.nativeEvent)) return;
                     if (props.onOpen) {
                         if (event.key === "Enter" || event.key === " ") {
                             event.preventDefault();

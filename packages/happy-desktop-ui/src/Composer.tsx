@@ -27,6 +27,7 @@ import { EmojiPicker, type EmojiItem } from "./EmojiPicker";
 import { Icon, type IconName } from "./Icon";
 import { ScrollbarTracks, useScrollbarController } from "./Scrollbar";
 import { focusUnlessWritingElsewhere, useFocusOnType } from "./useFocusOnType";
+import { imeCompositionHandlers, imeKeyboardEvent } from "./imeComposition";
 /* ---- ContextChips ----------------------------------------------------- */
 export type ContextKind = "file" | "run";
 export type ContextItem = {
@@ -765,6 +766,8 @@ export function Composer(props: ComposerProps) {
         });
     };
     const onKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
+        // Candidate navigation belongs to the IME before any picker/shortcut.
+        if (imeKeyboardEvent(event.nativeEvent)) return;
         if (
             event.key === "Tab" &&
             event.shiftKey &&
@@ -1070,6 +1073,7 @@ export function Composer(props: ComposerProps) {
                         ref={draftScrollbarHost}
                     >
                         <textarea
+                            {...imeCompositionHandlers}
                             className="happy-composer__textarea"
                             data-happy-desktop-ui="composer-textarea"
                             disabled={props.disabled}

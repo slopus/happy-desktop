@@ -19,6 +19,7 @@ import {
 } from "../../messageTextLayout";
 import { Modal } from "../../Modal";
 import { ModalOverlay } from "../../ModalOverlay";
+import { imeKeyboardEvent } from "../../imeComposition";
 import {
     HappyAgentSurfaceHeader,
     type HappyAgentSurfaceChatToggle,
@@ -321,6 +322,7 @@ export function HappyAgentMessagesSurfacePage(props: HappyAgentMessagesSurfacePa
             data-testid={props["data-testid"]}
             data-width={expanded ? "expanded" : "centered"}
             onKeyDown={(event) => {
+                if (imeKeyboardEvent(event.nativeEvent)) return;
                 if (event.key !== "Escape" || editing === undefined) return;
                 event.preventDefault();
                 props.onMessageEditCancel();

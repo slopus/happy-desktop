@@ -3,6 +3,7 @@ import { useCallback, useId, useRef, type CSSProperties } from "react";
 import { Icon, type IconName } from "./Icon";
 import { ScrollbarTracks, useScrollbarController } from "./Scrollbar";
 import { useFocusOnType } from "./useFocusOnType";
+import { imeCompositionHandlers, imeKeyboardEvent } from "./imeComposition";
 export type TextFieldType = "text" | "email" | "password" | "search";
 export type TextFieldSize = "small" | "medium" | "large";
 export type TextFieldProps = {
@@ -122,6 +123,7 @@ export function TextField(props: TextFieldProps) {
     );
     return (
         <div
+            {...imeCompositionHandlers}
             className={["happy-text-field", local.className].filter(Boolean).join(" ")}
             data-disabled={local.disabled ? "" : undefined}
             data-full-width={local.fullWidth ? "" : undefined}
@@ -213,6 +215,7 @@ export function TextField(props: TextFieldProps) {
                         onBlur={() => local.onBlur?.()}
                         onInput={(event) => local.onValueChange?.(event.currentTarget.value)}
                         onKeyDown={(event) => {
+                            if (imeKeyboardEvent(event.nativeEvent)) return;
                             if (event.key !== "Enter" || local.onSubmit === undefined) return;
                             // The Enter is the submit's. Left to the browser, it
                             // would also reach whatever the submit puts focus in —

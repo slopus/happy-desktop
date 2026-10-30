@@ -1,3 +1,5 @@
+import { imeKeyboardEvent } from "./imeComposition";
+
 export interface KeyboardShortcut {
     readonly aria: string;
     readonly caps: string;
@@ -68,8 +70,7 @@ export function commandShortcut(
 
 /** Matches one exact chord while leaving unrelated and composing input untouched. */
 export function commandShortcutMatches(event: KeyboardEvent, shortcut: CommandShortcut): boolean {
-    if (event.defaultPrevented || event.isComposing || event.keyCode === 229 || event.repeat)
-        return false;
+    if (event.defaultPrevented || imeKeyboardEvent(event) || event.repeat) return false;
     if (
         !commandModifierHeld(event, shortcut.modifier) ||
         event.altKey !== shortcut.alt ||

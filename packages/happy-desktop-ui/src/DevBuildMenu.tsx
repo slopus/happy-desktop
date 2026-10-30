@@ -1,5 +1,6 @@
 import { useLayoutEffect, useState, type CSSProperties } from "react";
 import { Icon } from "./Icon";
+import { imeKeyboardEvent } from "./imeComposition";
 import { LivePerformanceIndicator, type LivePerformanceStore } from "./LivePerformanceIndicator";
 import { Octicon } from "./vectorIcons/VectorIcon";
 
@@ -39,7 +40,7 @@ export function DevBuildMenu(props: DevBuildMenuProps) {
     useLayoutEffect(() => {
         if (!open) return;
         const closeOnEscape = (event: KeyboardEvent) => {
-            if (event.key === "Escape") setOpen(false);
+            if (event.key === "Escape" && !imeKeyboardEvent(event)) setOpen(false);
         };
         document.addEventListener("keydown", closeOnEscape, true);
         return () => {

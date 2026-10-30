@@ -3,6 +3,7 @@ import { Button } from "../../Button";
 import { Checkbox } from "../../Checkbox";
 import { REORDERING_LIST_STATIC } from "../../ReorderingList";
 import { Tooltip } from "../../Tooltip";
+import { imeCompositionHandlers, imeKeyboardEvent } from "../../imeComposition";
 import { initialsOf, type HappyAgentSurfacePersonView } from "./surfacePresentation";
 
 /** The todo's text is bounded by the daemon. */
@@ -67,6 +68,7 @@ export function HappyAgentTodoRow(props: HappyAgentTodoRowProps) {
             {props.editing !== undefined ? (
                 <input
                     {...REORDERING_LIST_STATIC}
+                    {...imeCompositionHandlers}
                     aria-label="Todo text"
                     autoFocus
                     className="happy-agent-todo-row__field"
@@ -75,7 +77,8 @@ export function HappyAgentTodoRow(props: HappyAgentTodoRowProps) {
                     onChange={(event) => props.onEditTextChange(event.currentTarget.value)}
                     onFocus={(event) => event.currentTarget.select()}
                     onKeyDown={(event) => {
-                        if (event.key === "Enter" && !event.nativeEvent.isComposing) {
+                        if (imeKeyboardEvent(event.nativeEvent)) return;
+                        if (event.key === "Enter") {
                             event.preventDefault();
                             props.onEditCommit();
                         } else if (event.key === "Escape") {

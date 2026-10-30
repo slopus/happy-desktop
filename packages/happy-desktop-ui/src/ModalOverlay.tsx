@@ -1,5 +1,6 @@
 import { partitionComponentProps } from "./componentProps";
 import { useEffectEvent, useLayoutEffect, useRef, type CSSProperties, type ReactNode } from "react";
+import { imeCompositionHandlers, imeKeyboardEvent } from "./imeComposition";
 export type ModalOverlayProps = {
     className?: string;
     "data-testid"?: string;
@@ -114,6 +115,7 @@ export function ModalOverlay(props: ModalOverlayProps) {
     return (
         <div
             {...rest}
+            {...imeCompositionHandlers}
             className={["happy-modal-overlay", local.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="modal-overlay"
             data-backdrop={clear ? "clear" : undefined}
@@ -129,6 +131,7 @@ export function ModalOverlay(props: ModalOverlayProps) {
                     local.onDismiss();
             }}
             onKeyDown={(event) => {
+                if (imeKeyboardEvent(event.nativeEvent)) return;
                 if (event.key === "Escape") (local.onEscape ?? local.onDismiss)?.();
             }}
             ref={overlayEl}

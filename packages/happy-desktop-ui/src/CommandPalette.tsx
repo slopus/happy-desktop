@@ -1,15 +1,10 @@
 import { partitionComponentProps } from "./componentProps";
-import {
-    useLayoutEffect,
-    useRef,
-    type CSSProperties,
-    type KeyboardEvent as ReactKeyboardEvent,
-    type ReactNode,
-} from "react";
+import { useLayoutEffect, useRef, type CSSProperties, type ReactNode } from "react";
 import { Button } from "./Button";
 import { Icon } from "./Icon";
 import { commandShortcut, commandShortcutMatches } from "./keyboardShortcut";
 import { ScrollArea } from "./Scrollbar";
+import { imeCompositionActive, imeCompositionHandlers, imeKeyboardEvent } from "./imeComposition";
 /**
  * The chord that opens the palette, owned here as well so it can close it. The
  * window dispatcher cannot: an open palette is a dialog, and every window
@@ -86,7 +81,6 @@ export function CommandPalette(props: CommandPaletteProps) {
     ]);
     const inputRef = useRef<HTMLInputElement>(null);
     const invokerRef = useRef<HTMLElement | null>(null);
-    const composingRef = useRef(false);
     const label = () => local.placeholder ?? "Search";
     // eslint-disable-next-line happy-react/no-layout-effect -- opening the palette must capture the live invoking element and move browser focus into the committed input before paint
     useLayoutEffect(() => {
@@ -109,19 +103,17 @@ export function CommandPalette(props: CommandPaletteProps) {
         },
         [],
     );
-    // 229 is the legacy IME "processing" keyCode some engines still report when
-    // `isComposing` is not yet set on the keydown that starts a composition.
-    const isComposing = (event: ReactKeyboardEvent) =>
-        composingRef.current || event.nativeEvent.isComposing || event.keyCode === 229;
     return (
         <div
             {...rest}
+            {...imeCompositionHandlers}
             aria-label={label()}
             aria-modal="true"
             className={["happy-command-palette", local.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="command-palette"
             onKeyDown={(event) => {
-                if (event.key === "Escape" && !isComposing(event)) {
+                if (imeKeyboardEvent(event.nativeEvent)) return;
+                if (event.key === "Escape") {
                     event.preventDefault();
                     event.stopPropagation();
                     local.onClose();
@@ -166,12 +158,6 @@ export function CommandPalette(props: CommandPaletteProps) {
                     aria-label={label()}
                     className="happy-command-palette__input"
                     data-happy-desktop-ui="command-palette-input"
-                    onCompositionEnd={() => {
-                        composingRef.current = false;
-                    }}
-                    onCompositionStart={() => {
-                        composingRef.current = true;
-                    }}
                     onInput={(event) => {
                         // Single commit path. Intermediate composition input events
                         // are held back on either signal: the local composition flag
@@ -180,14 +166,20 @@ export function CommandPalette(props: CommandPaletteProps) {
                         // `compositionend` clears the flag before the browser's
                         // trailing input (isComposing === false), so that one event is
                         // the sole commit — a value is never emitted twice.
-                        if (composingRef.current || event.nativeEvent.isComposing) return;
+                        if (imeCompositionActive(event.target) || event.nativeEvent.isComposing)
+                            return;
                         local.onQueryChange(event.currentTarget.value);
                     }}
                     onKeyDown={(event) => {
                         // Travelling the result list is typing, so it is read
                         // here rather than on the card: the list never takes
                         // focus, and Escape keeps the card-level path above.
-                        if (isComposing(event) || event.metaKey || event.ctrlKey || event.altKey)
+                        if (
+                            imeKeyboardEvent(event.nativeEvent) ||
+                            event.metaKey ||
+                            event.ctrlKey ||
+                            event.altKey
+                        )
                             return;
                         if (event.key === "ArrowDown" && local.onSelectionMove) {
                             // Without this the caret jumps to the end of the query.

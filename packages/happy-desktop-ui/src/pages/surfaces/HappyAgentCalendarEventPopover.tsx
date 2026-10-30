@@ -21,6 +21,7 @@ import { SegmentedControl } from "../../SegmentedControl";
 import { Select } from "../../Select";
 import { Switch } from "../../Switch";
 import { TextField } from "../../TextField";
+import { imeCompositionHandlers, imeKeyboardEvent } from "../../imeComposition";
 
 /** What the popover tells its owner as the reader edits the event. */
 export interface HappyAgentCalendarEditorHandlers {
@@ -226,11 +227,13 @@ export function HappyAgentCalendarEventPopover(props: HappyAgentCalendarEventPop
     const unit = recurrence === null ? undefined : INTERVAL_UNITS[recurrence.frequency];
     return (
         <div
+            {...imeCompositionHandlers}
             aria-label={isNew ? "New event" : "Event"}
             className={["happy-calendar-popover", props.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="calendar-popover"
             data-testid={props["data-testid"]}
             onKeyDown={(event) => {
+                if (imeKeyboardEvent(event.nativeEvent)) return;
                 if (event.key === "Escape") {
                     event.stopPropagation();
                     props.onClose();
