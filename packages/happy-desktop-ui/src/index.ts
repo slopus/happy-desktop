@@ -308,7 +308,7 @@ export {
     type MarkdownDiffTable,
     type MarkdownDiffTableCell,
     type MarkdownDiffTableRow,
-} from "./markdownDiff";
+} from "./markdownDiffModel";
 export {
     fileReferenceFragment,
     fileReferenceSplit,

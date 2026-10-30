@@ -1,7 +1,7 @@
 import { expect, it } from "vitest";
 import "./styles.css";
 import { MarkdownDiff } from "./MarkdownDiff";
-import { markdownDiffCompute } from "./markdownDiff";
+import { markdownDiffCompute } from "./markdownDiffModel";
 import { createRenderer } from "./testing";
 
 const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));

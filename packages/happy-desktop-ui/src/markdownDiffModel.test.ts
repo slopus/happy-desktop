@@ -10,7 +10,7 @@ import {
     type MarkdownDiffParagraph,
     type MarkdownDiffPhrasing,
     type MarkdownDiffTable,
-} from "./markdownDiff";
+} from "./markdownDiffModel";
 import { markdownDiffTree } from "./markdownDiffTree";
 import { sequenceDiff, sequenceDiffMatches } from "./sequenceDiff";
 

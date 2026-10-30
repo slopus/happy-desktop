@@ -3,7 +3,7 @@ import { ChangedFileDiff } from "../../src/ChangedFileDiff";
 import { CodeEditor } from "../../src/CodeEditor";
 import { FilePreview } from "../../src/FilePreview";
 import { MarkdownDiff } from "../../src/MarkdownDiff";
-import { markdownDiffCompute } from "../../src/markdownDiff";
+import { markdownDiffCompute } from "../../src/markdownDiffModel";
 import { TabbedPane } from "../../src/TabbedPane";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 

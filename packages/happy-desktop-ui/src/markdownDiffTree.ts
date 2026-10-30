@@ -8,7 +8,7 @@ import type {
     MarkdownDiffPhrasing,
     MarkdownDiffRoot,
     MarkdownDiffStatus,
-} from "./markdownDiff";
+} from "./markdownDiffModel";
 
 type MarkdownData = NonNullable<MarkdownDiffFlow["data"]>;
 type MarkdownProperties = NonNullable<MarkdownData["hProperties"]>;

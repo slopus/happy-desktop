@@ -6,7 +6,7 @@ import {
     changedFileDiffModesOffered,
 } from "./ChangedFileDiff";
 import { MarkdownDiff } from "./MarkdownDiff";
-import { markdownDiffCompute } from "./markdownDiff";
+import { markdownDiffCompute } from "./markdownDiffModel";
 import { createRenderer } from "./testing";
 
 describe("changedFileDiffModesOffered", () => {

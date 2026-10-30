@@ -1,6 +1,6 @@
 import { type ReactNode } from "react";
 import { MarkdownDiff } from "../../src/MarkdownDiff";
-import { markdownDiffCompute } from "../../src/markdownDiff";
+import { markdownDiffCompute } from "../../src/markdownDiffModel";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
 /** The component plan this page documents. The selector and the page header read the same value. */

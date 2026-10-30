@@ -13,7 +13,7 @@ import { Button } from "./Button";
 import { DiffSnippet, type DiffLine } from "./DiffSnippet";
 import type { FileLinkOpenHandler, FileOpenHandler } from "./fileReference";
 import type { MessageReferences } from "./messageReferences";
-import type { MarkdownDiffCode, MarkdownDiffModel } from "./markdownDiff";
+import type { MarkdownDiffCode, MarkdownDiffModel } from "./markdownDiffModel";
 import { markdownDiffTree, type MarkdownDiffSlot } from "./markdownDiffTree";
 import {
     MarkdownDocumentFrame,
