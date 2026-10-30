@@ -863,6 +863,23 @@
     background: var(--surface-pressed);
 }
 
+/* A fixed row keeps the action clear of source text and horizontal scrolling.
+   Its 36px height is also reserved by messageTextLayout's code-block model. */
+.happy-message__code-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    box-sizing: border-box;
+    height: 36px;
+    padding: 8px 8px 0;
+    user-select: none;
+}
+
+/* Reserve the wider confirmation caption so copying never moves the action. */
+.happy-message__code-copy {
+    min-width: 88px;
+}
+
 .happy-message__code-block-viewport {
     overflow-x: auto;
     overflow-y: hidden;
@@ -887,6 +904,8 @@
 .happy-message__body--markdown pre code {
     display: block;
     margin: 0;
+    /* Empty fences still reserve the source line in the chat height model. */
+    min-height: calc(20px + 2 * var(--happy-chat-frame-text-inset));
     font-family: var(--happy-font-mono);
     background: transparent;
     border-radius: 0;

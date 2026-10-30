@@ -72,7 +72,7 @@ export function CopyButton(props: CopyButtonProps) {
         >
             <Icon name={copied ? "check" : "copy"} size={14} />
             {props.caption === undefined ? null : (
-                <span className="happy-copy-button__caption">
+                <span aria-atomic="true" aria-live="polite" className="happy-copy-button__caption">
                     {copied ? (props.copiedCaption ?? props.caption) : props.caption}
                 </span>
             )}

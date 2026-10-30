@@ -11,6 +11,7 @@ import { happyAgentFileLinkParse, isHappyUrl, type HappyReference } from "happy-
 import Markdown, { type Components, type ExtraProps, type UrlTransform } from "react-markdown";
 import type { Processor } from "unified";
 import { LinkContextMenu } from "./LinkContextMenu";
+import { CopyButton } from "./CopyButton";
 import { filePreviewKind } from "./FilePreview";
 import { type MenuItem } from "./Menu";
 import { markdownFence, markdownFenceIsMermaid } from "./markdownFence";
@@ -469,14 +470,20 @@ const MarkdownPre = ({
             />
         );
     return (
-        <ScrollArea
-            axes="horizontal"
-            className="happy-message__code-block"
-            data-happy-desktop-ui="message-code-block"
-            viewportClassName="happy-message__code-block-viewport"
-        >
-            <pre {...props}>{children}</pre>
-        </ScrollArea>
+        <div className="happy-message__code-block" data-happy-desktop-ui="message-code-block">
+            <div className="happy-message__code-toolbar">
+                <CopyButton
+                    caption="Copy"
+                    className="happy-message__code-copy"
+                    copiedCaption="Copied"
+                    label="Copy code"
+                    text={fence?.text ?? ""}
+                />
+            </div>
+            <ScrollArea axes="horizontal" viewportClassName="happy-message__code-block-viewport">
+                <pre {...props}>{children}</pre>
+            </ScrollArea>
+        </div>
     );
 };
 /** The TeX a formula element was given by `messageMathTreeShape`. */
@@ -649,6 +656,18 @@ const MarkdownCode = ({
     return (
         <code
             {...props}
+            onDoubleClick={(event) => {
+                const code = event.currentTarget;
+                if (code.closest("pre")) return;
+                const selection = code.ownerDocument.getSelection();
+                if (!selection) return;
+                // Only extend the completed double click. Keeping pointer-down
+                // native preserves drag selection and the next, triple click.
+                const range = code.ownerDocument.createRange();
+                range.selectNodeContents(code);
+                selection.removeAllRanges();
+                selection.addRange(range);
+            }}
             className={
                 keepsLine
                     ? [className, "happy-message__table-code-line"].filter(Boolean).join(" ")

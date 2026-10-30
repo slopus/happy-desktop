@@ -490,7 +490,7 @@ export function MessagePage() {
             </Specimen>
 
             <Specimen
-                detail="String body renders as Markdown — headings, lists, emphasis, inline + fenced code, isolated Mermaid diagrams, and safe links, all on theme tokens"
+                detail="Fenced code offers Copy / Copied above its horizontal scrollport. Double-click an inline command, path or expression to select its complete contents; prose and triple-click selection stay native"
                 label="Message — Markdown body (complete)"
                 number="08"
                 stage="app"
@@ -504,6 +504,7 @@ export function MessagePage() {
                             "Moved token registration behind the **handshake promise** and added a *cold-start* retry.\n\n" +
                             "- Registers after `handshake.settled`\n" +
                             "- Retries once on `isColdStart()`\n\n" +
+                            'Run `pnpm --filter happy-desktop-ui build`, open `/Users/kirill/Happy/My Project/config.json`, or inspect `agent = "claude"`.\n\n' +
                             "```ts\nawait handshake.settled;\nconst token = await requestPushToken({ retry: isColdStart() });\n```\n\n" +
                             "```mermaid\nflowchart LR\n  Handshake --> Token\n  Token --> Retry\n```\n\n" +
                             "See the [launch checklist](https://example.com/launch) for the rollout steps."
@@ -511,6 +512,30 @@ export function MessagePage() {
                         generationStatus="complete"
                         initials="CX"
                         onLinkOpen={() => {}}
+                        time="10:58"
+                        tone="mint"
+                    />,
+                )}
+            </Specimen>
+
+            <Specimen
+                detail="Unlabelled source, blank lines, tabs and overflow copy exactly. The action stays above the scrollport, including in lists and quotes"
+                label="Message — code copy edge cases"
+                number="18"
+                stage="app"
+            >
+                {channelFrame(
+                    <Message
+                        agent
+                        author="Codex"
+                        body={
+                            '```\n\tconst message = "This intentionally long source line remains fully copyable even when most of its contents are outside the horizontal viewport.";\n\nconsole.log(message);\n\n```\n\n' +
+                            "> ```sh\n> pnpm build\n> ```\n\n" +
+                            "- A nested command:\n\n  ```sh\n  pnpm typecheck\n  ```\n\n" +
+                            "```\n```"
+                        }
+                        generationStatus="complete"
+                        initials="CX"
                         time="10:58"
                         tone="mint"
                     />,
