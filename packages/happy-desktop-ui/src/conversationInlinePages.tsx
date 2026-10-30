@@ -11,6 +11,7 @@ import {
 import { Icon } from "./Icon";
 import type { InlinePageProps } from "./InlinePage";
 import type { InlinePageFit, InlinePageGeometry } from "./inlinePageFit";
+import type { MessageReferences } from "./messageReferences";
 import { ArtifactInlineContent } from "./pages/artifacts/ArtifactInlineContent";
 import { ArtifactTypeGlyph } from "./pages/artifacts/artifactPresentation";
 
@@ -58,6 +59,11 @@ export interface ConversationInlinePages {
     artifactOpen(artifactId: HappyAgentArtifactId, version?: number): void;
     /** Opens a web page beside the conversation. */
     pageOpen(url: string): void;
+    /**
+     * Reads and opens the `happy://` links to Happy entities a Markdown
+     * artifact carries, as the transcript's own messages do.
+     */
+    readonly entities?: MessageReferences;
 }
 
 /** One row's artifact: its geometry for the row model and the props that draw it. */
@@ -252,6 +258,7 @@ export function conversationInlinePage(
                                     <ArtifactInlineContent
                                         artifactType={type}
                                         content={content}
+                                        {...(pages.entities ? { entities: pages.entities } : {})}
                                         fit={fit}
                                         {...(openSide ? { onOpen: openSide } : {})}
                                     />

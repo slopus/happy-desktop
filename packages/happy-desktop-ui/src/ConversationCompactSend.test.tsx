@@ -76,7 +76,7 @@ it("keeps the first ten lines visible when a clipped reference receives keyboard
             <div style={{ height: 760, width: 880 }}>
                 <ConversationView
                     conversationId="compact-focus"
-                    entries={[message("focus", `${lines(20)}\n<happy-artifact id="visible-ref"/>`)]}
+                    entries={[message("focus", `${lines(20)}\n[](happy://artifacts/visible-ref)`)]}
                     viewerId={happyAgentOwnerAuthor.id}
                     references={{
                         view: () => ({ type: "link", label: "Reference", busy: false }),

@@ -325,7 +325,7 @@ export interface HappyAgentWorkspaceClient {
         signal?: AbortSignal,
     ): Promise<HappyAgentWorkspaceFileBytes>;
     /**
-     * The workspace a `happy-file:` link reads from, after the host has said
+     * The workspace a `happy://` or `happy-file://` file link reads from, after the host has said
      * the agent or workspace it names is there and ready to be read. Rejects
      * with a `UserError` naming the reason when it is not.
      */

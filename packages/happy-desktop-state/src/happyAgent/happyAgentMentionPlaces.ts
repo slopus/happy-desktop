@@ -1,4 +1,4 @@
-import { formatHappyReferenceTag, isKnownHappyReferenceKind } from "@slopus/happy-agent-client";
+import { formatHappyMarkdownLink, isKnownHappyReferenceKind } from "@slopus/happy-agent-client";
 import type { ComposerMention } from "../modules/composer/composerState.js";
 import type { HappyAgentSurfaceCatalogSnapshot } from "../surfaces/surfaceCatalogStore.js";
 import type { HappyAgentSessionListSnapshot } from "./happyAgentSessionListStore.js";
@@ -10,7 +10,8 @@ const MENTION_PLACES_LIMIT = 5;
 /**
  * The Surfaces and chats an `@` token names, before the files it does: the
  * reader's own Surfaces, then the bots, tasks, and project chats in their
- * list, each written as the Happy reference that names it. The chat the draft
+ * list, each written as the `happy://` link that names it, labelled with its
+ * name so the words read on any surface that cannot look it up. The chat the draft
  * is written in is not offered to itself.
  *
  * Surfaces are offered once the reference grammar knows them; until then a
@@ -38,7 +39,10 @@ export function happyAgentMentionPlaces(input: {
                       id: `surface:${surface.id}`,
                       label: surface.name,
                       subject: { kind: "surface", type: surface.type },
-                      insertion: formatHappyReferenceTag({ kind: surfaceKind, id: surface.id }),
+                      insertion: formatHappyMarkdownLink(
+                          { type: "reference", reference: { kind: surfaceKind, id: surface.id } },
+                          surface.name,
+                      ),
                   }));
     const chats: ComposerMention[] = [];
     const chatAdd = (
@@ -54,7 +58,10 @@ export function happyAgentMentionPlaces(input: {
             label,
             ...(detail === undefined ? {} : { detail }),
             subject: { kind: "agent", owner },
-            insertion: formatHappyReferenceTag({ kind: "agent", id: agentId }),
+            insertion: formatHappyMarkdownLink(
+                { type: "reference", reference: { kind: "agent", id: agentId } },
+                label,
+            ),
         });
     };
     for (const bot of input.list.bots) chatAdd(bot.conversation.id, bot.name, "bot");

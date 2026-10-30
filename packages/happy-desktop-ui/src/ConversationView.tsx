@@ -305,7 +305,7 @@ export type ConversationViewProps = {
      */
     onFileOpen?: FileOpenHandler;
     /**
-     * Opens a file a `happy-file:` link in a message names in another agent's
+     * Opens a file a `happy://` or `happy-file://` file link in a message names in another agent's
      * or workspace's folder, beside this transcript. Absent leaves such links
      * inert.
      */

@@ -35,7 +35,7 @@ function referencesOf(
 const REPORT: MessageReferenceView = { type: "link", label: "Q3 revenue report", busy: false };
 const REPORT_BUSY: MessageReferenceView = { type: "link", label: "Q3 revenue report", busy: true };
 
-it("renders a reference as an underlined link titled with its live label, opening a pinned version", async () => {
+it("renders a happy:// link as an underlined link titled with its live label, opening a pinned version", async () => {
     const opened: HappyReference[] = [];
     const references = referencesOf({ "artifact:q3": REPORT }, opened);
     const view = createRenderer();
@@ -46,7 +46,7 @@ it("renders a reference as an underlined link titled with its live label, openin
                     agent
                     author="Happy"
                     body={
-                        'See <happy-artifact id="q3"/> and [the docs](https://example.com).\n\n<happy-artifact id="q3" version="2"/>'
+                        "See [the report](happy://artifacts/q3) and [the docs](https://example.com).\n\n[](happy://artifacts/q3?version=2)"
                     }
                     references={references}
                 />
@@ -56,17 +56,22 @@ it("renders a reference as an underlined link titled with its live label, openin
     );
     await view.ready();
     const body = view.$('[data-testid="idle"] [data-happy-desktop-ui="message-body"]').element;
-    expect(body.textContent).not.toContain("<happy-");
+    expect(body.textContent).not.toContain("happy:");
     const links = [
         ...body.querySelectorAll<HTMLAnchorElement>(
             '[data-happy-desktop-ui="message-md-reference"]',
         ),
     ];
+    /* The live title wins over the label the writer put on the link. */
     expect(links.map((link) => link.textContent)).toEqual([
         "Q3 revenue report",
         "Q3 revenue report",
     ]);
-    /* A tag alone on its line is a paragraph holding one link, not an HTML block. */
+    expect(links.map((link) => link.getAttribute("href"))).toEqual([
+        "happy://artifacts/q3",
+        "happy://artifacts/q3?version=2",
+    ]);
+    /* A link alone on its line is a paragraph holding one link. */
     expect(links[1]!.parentElement!.tagName).toBe("P");
     const web = body.querySelector<HTMLAnchorElement>('[data-happy-desktop-ui="message-md-link"]')!;
     const linkStyle = getComputedStyle(links[0]!);
@@ -108,10 +113,11 @@ it("links agents, workspaces, and projects, shimmering each while busy", async (
                     author="Happy"
                     body={["agent", "workspace", "project"]
                         .map(
-                            (kind) => `<happy-${kind} id="idle"/> and <happy-${kind} id="busy"/>; `,
+                            (kind) =>
+                                `[](happy://${kind}s/idle) and [${kind}](happy://${kind}s/busy); `,
                         )
                         .join("")
-                        .concat('<happy-service id="s1"/> stays text.')}
+                        .concat("[](happy://workspaces/w1/services/s1) stays text.")}
                     references={referencesOf(views, opened)}
                 />
             </div>
@@ -155,7 +161,7 @@ it("opens a reference in the app on modified and middle clicks, never in the bro
                 <Message
                     agent
                     author="Happy"
-                    body={'Open <happy-agent id="a1"/>.'}
+                    body="Open [the release](happy://agents/a1)."
                     references={referencesOf(
                         { "agent:a1": { type: "link", label: "Release", busy: false } },
                         opened,
@@ -195,7 +201,7 @@ it("resolves references in expanded reasoning and agent-message activity", async
                 <AgentActivityRow
                     activity={{
                         kind: "reasoning",
-                        text: 'Checking <happy-artifact id="q3"/> first.',
+                        text: "Checking [the report](happy://artifacts/q3) first.",
                         streaming: false,
                     }}
                     defaultExpanded
@@ -222,11 +228,12 @@ it("resolves references in expanded reasoning and agent-message activity", async
         ),
     ).toEqual(["Q3 revenue report", "Q3 revenue report"]);
     expect(root.textContent).not.toContain("<happy-");
+    expect(root.textContent).not.toContain("happy:");
 });
 
 it("shimmers a busy reference inline without moving its words", async () => {
     const body =
-        'Packaging is running in <happy-agent id="builder"/> and should finish soon after the checks.';
+        "Packaging is running in [](happy://agents/builder) and should finish soon after the checks.";
     const view = createRenderer();
     for (const [testid, busy] of [
         ["idle", false],
@@ -276,7 +283,7 @@ it("shimmers a busy reference inline without moving its words", async () => {
     }
 });
 
-it("reads unknown, deleted, and unknown-kind references as plain text", async () => {
+it("reads unknown, deleted, malformed, and unknown-kind references as plain text", async () => {
     const view = createRenderer();
     view.render(
         () => (
@@ -285,13 +292,17 @@ it("reads unknown, deleted, and unknown-kind references as plain text", async ()
                     agent
                     author="Happy"
                     body={
-                        'Gone: <happy-artifact id="gone"/>, missing: <happy-artifact id="nope"/>, odd: <happy-gizmo id="x1"/>, without a resolver too.'
+                        'Gone: [the deck](happy://artifacts/gone), missing: [](happy://artifacts/nope), named: [the old plan](happy://artifacts/nope2), odd: <happy-gizmo id="x1"/>, broken: [half a link](happy://artifacts/a/b), mobile: [a session](happy://session/s1), without a resolver too.'
                     }
                     references={referencesOf({
                         "artifact:gone": { type: "text", label: "Old deck" },
                     })}
                 />
-                <Message agent author="Happy" body={'Plain <happy-artifact id="q3"/>.'} />
+                <Message
+                    agent
+                    author="Happy"
+                    body={'Plain <happy-artifact id="q3"/> and [the report](happy://artifacts/q3).'}
+                />
             </div>
         ),
         { width: 640, height: 200 },
@@ -301,14 +312,22 @@ it("reads unknown, deleted, and unknown-kind references as plain text", async ()
     expect(root.querySelector("a")).toBeNull();
     expect(root.textContent).not.toContain("<happy-");
     expect(root.textContent).toContain("Gone: Old deck, missing: an unavailable artifact");
+    /* A label the writer gave says more than a placeholder would. */
+    expect(root.textContent).toContain("named: the old plan");
     expect(root.textContent).toContain("odd: an unavailable reference");
-    expect(root.textContent).toContain("Plain an unavailable artifact.");
+    /* Anything else under happy:// is its label, never a link. */
+    expect(root.textContent).toContain("broken: half a link, mobile: a session,");
+    expect(root.textContent).toContain("Plain an unavailable artifact and the report.");
 });
 
-it("never flashes a partly streamed tag and keeps tags in code literal", async () => {
+it("never flashes a partly streamed link or tag and keeps links in code literal", async () => {
     const references = referencesOf({ "artifact:q3": REPORT_BUSY });
     const view = createRenderer();
     const prefixes = [
+        "See [the report]",
+        "See [the report](",
+        "See [the report](hap",
+        "See [the report](happy://artifacts/q",
         "See <",
         "See <happy-",
         'See <happy-artifact id="q',
@@ -336,7 +355,7 @@ it("never flashes a partly streamed tag and keeps tags in code literal", async (
                     agent
                     author="Happy"
                     body={
-                        'Write `<happy-artifact id="q3"/>`:\n\n```md\n<happy-artifact id="q3"/>\n```'
+                        "Write `[Q3](happy://artifacts/q3)`:\n\n```md\n[Q3](happy://artifacts/q3)\n```"
                     }
                     references={references}
                 />
@@ -350,13 +369,14 @@ it("never flashes a partly streamed tag and keeps tags in code literal", async (
             `[data-testid="partial-${String(index)}"] [data-happy-desktop-ui="message-body"]`,
         ).element;
         expect(body.textContent, prefixes[index]).not.toContain("<");
+        expect(body.textContent, prefixes[index]).not.toContain("the report");
         expect(body.textContent).toContain("See");
     }
     const code = view.$('[data-testid="code"]').element;
     expect(code.querySelector("a")).toBeNull();
     expect([...code.querySelectorAll("code")].map((node) => node.textContent)).toEqual([
-        '<happy-artifact id="q3"/>',
-        '<happy-artifact id="q3"/>\n',
+        "[Q3](happy://artifacts/q3)",
+        "[Q3](happy://artifacts/q3)\n",
     ]);
 });
 
@@ -399,12 +419,12 @@ function bodies(labels: { plan: string; builder: string }) {
     return [
         {
             reference: [
-                'I published <happy-artifact id="plan"/> and the shorter <happy-artifact id="q3"/>.',
+                "I published [the plan](happy://artifacts/plan) and the shorter [](happy://artifacts/q3).",
                 "",
                 '<happy-artifact id="plan" version="2"/>',
                 "",
-                '- <happy-agent id="builder"/> is packaging it',
-                '- <happy-gizmo id="x1"/> is unknown, <happy-artifact id="gone"/> was deleted',
+                "- [](happy://agents/builder) is packaging it",
+                '- <happy-gizmo id="x1"/> is unknown, [](happy://artifacts/gone) was deleted',
             ].join("\n"),
             literal: [
                 `I published [${labels.plan}](https://example.com/1) and the shorter [Q3 revenue report](https://example.com/2).`,
@@ -417,7 +437,7 @@ function bodies(labels: { plan: string; builder: string }) {
             streaming: false,
         },
         {
-            reference: 'Almost there: <happy-artifact id="q3"/> then <happy-arti',
+            reference: "Almost there: [](happy://artifacts/q3) then [Q3](happy://arti",
             literal: "Almost there: [Q3 revenue report](https://example.com/5) then ",
             streaming: true,
         },

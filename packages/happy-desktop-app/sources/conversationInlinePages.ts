@@ -68,6 +68,7 @@ export function conversationInlinePagesCreate(input: {
     readonly agentId: string;
     readonly artifactOpen: (artifactId: HappyAgentArtifactId, version?: number) => void;
     readonly pageOpen: (url: string) => void;
+    readonly entities?: ConversationInlinePages["entities"];
 }): ConversationInlinePages {
     const artifactPage = input.artifactPage;
     const browserContent = input.browserContent;
@@ -114,5 +115,6 @@ export function conversationInlinePagesCreate(input: {
         ...(input.storyRender ? { storyRender: input.storyRender } : {}),
         artifactOpen: input.artifactOpen,
         pageOpen: input.pageOpen,
+        ...(input.entities ? { entities: input.entities } : {}),
     };
 }

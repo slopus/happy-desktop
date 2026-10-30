@@ -1,5 +1,6 @@
 import { partitionComponentProps } from "./componentProps";
 import type { FileLinkOpenHandler, FileOpenHandler } from "./fileReference";
+import type { MessageReferences } from "./messageReferences";
 import { useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Button } from "./Button";
 import { CodeBlock } from "./CodeBlock";
@@ -84,8 +85,13 @@ export type FilePreviewProps = {
      * behind it.
      */
     onFileOpen?: FileOpenHandler;
-    /** Opens a `happy-file:` link a rendered Markdown document carries. Absent leaves it inert. */
+    /** Opens a `happy://` or `happy-file://` file link a rendered Markdown document carries. Absent leaves it inert. */
     onFileLinkOpen?: FileLinkOpenHandler;
+    /**
+     * Reads and opens the `happy://` links to Happy entities a rendered
+     * Markdown document carries. Absent, each reads as its written label.
+     */
+    entities?: MessageReferences;
     /**
      * The file as a page rather than as characters, supplied by the host: an
      * HTML document has a rendered face this surface cannot draw itself, since
@@ -243,6 +249,7 @@ export function FilePreview(props: FilePreviewProps) {
         "onDownload",
         "onFileOpen",
         "onFileLinkOpen",
+        "entities",
         "onMediaWindowOpen",
         "rendered",
         "editor",
@@ -406,6 +413,7 @@ export function FilePreview(props: FilePreviewProps) {
                     name={name}
                     onFileOpen={local.onFileOpen}
                     onFileLinkOpen={local.onFileLinkOpen}
+                    entities={local.entities}
                     onMediaMeasure={(size) =>
                         setMeasured({
                             source,
@@ -433,6 +441,7 @@ function FilePreviewBody(props: {
     name: string;
     onFileOpen?: FileOpenHandler;
     onFileLinkOpen?: FileLinkOpenHandler;
+    entities?: MessageReferences | undefined;
     onMediaMeasure: (size: { readonly width: number; readonly height: number }) => void;
     onMediaWindowOpen?: () => void;
     rendered?: ReactNode;
@@ -546,6 +555,7 @@ function FilePreviewBody(props: {
             <MarkdownDocument
                 {...(props.onFileOpen ? { onFileOpen: props.onFileOpen } : {})}
                 {...(props.onFileLinkOpen ? { onFileLinkOpen: props.onFileLinkOpen } : {})}
+                {...(props.entities ? { entities: props.entities } : {})}
                 {...(props.cacheKey ? { cacheKey: props.cacheKey } : {})}
                 text={props.content.text}
             />

@@ -195,19 +195,20 @@ export type {
     HappyAgentArtifactTitlesSnapshot,
     HappyAgentArtifactTitlesStore,
 } from "./artifacts/artifactTitlesStore.js";
-// The Happy reference grammar is the daemon client's; the app reads it from here.
+// The Happy link grammar is the daemon client's; the app reads it from here.
 export {
     HAPPY_REFERENCE_KINDS,
-    formatHappyReferenceTag,
-    happyReferencePartialTagLength,
+    formatHappyFileUrl,
+    formatHappyReferenceUrl,
     happyReferencePlaceholder,
+    isHappyUrl,
     isKnownHappyReferenceKind,
-    parseHappyReferenceTag,
-    parseHappyReferences,
-    replaceHappyReferences,
+    parseHappyLinks,
+    parseHappyUrl,
+    replaceHappyLinks,
+    type HappyLinkMatch,
     type HappyReference,
     type HappyReferenceKind,
-    type HappyReferenceSegment,
 } from "@slopus/happy-agent-client";
 export {
     HAPPY_AGENT_FILE_LINK_READ_ONLY_REFUSAL,

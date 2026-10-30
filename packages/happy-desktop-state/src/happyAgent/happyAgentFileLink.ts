@@ -1,6 +1,6 @@
 import {
     HappyAgentApiError,
-    parseHappyFileLink,
+    parseHappyUrl,
     type HappyAgentClient,
 } from "@slopus/happy-agent-client";
 import { UserError } from "../types.js";
@@ -9,7 +9,7 @@ import type { HappyAgentGroupId, HappyAgentSessionId } from "./happyAgentTypes.j
 import type { HappyAgentFileLineRange } from "./happyAgentWorkspaceStore.js";
 
 /**
- * Whose folder a `happy-file:` link names: an agent's, which is the workspace
+ * Whose folder a file link names: an agent's, which is the workspace
  * that agent works in, or a workspace's directly. Either may be a project, a
  * worktree, or a bot's, task's, or subtask's own folder, and need not be one
  * this Happy Agent's catalog lists.
@@ -35,12 +35,15 @@ export interface HappyAgentFileLink {
 
 /**
  * The file a link points at, or nothing when the URL is not a well-formed
- * `happy-file:` link. The grammar is the daemon client's own, shared by every
- * Happy surface; this only restates its answer in the desktop's types.
+ * file link: `happy://agents/<id>/files/<path>#L42`, as agents write it in
+ * Markdown, or `happy-file://agents/<id>/<path>#L42`, as the API names a file.
+ * Both read the same way. The grammar is the daemon client's own, shared by
+ * every Happy surface; this only restates its answer in the desktop's types.
  */
 export function happyAgentFileLinkParse(url: string): HappyAgentFileLink | undefined {
-    const link = parseHappyFileLink(url);
-    if (link === undefined) return undefined;
+    const parsed = parseHappyUrl(url);
+    if (parsed?.type !== "file") return undefined;
+    const link = parsed.file;
     const target: HappyAgentFileLinkTarget =
         link.target.type === "agent"
             ? { type: "agent", agentId: link.target.agentId as HappyAgentSessionId }

@@ -134,7 +134,7 @@ function LinkMenuSpecimen() {
                     <a href="https://example.com/destination?from=menu#details">
                         <strong>Right-click this link label</strong>
                     </a>
-                    <a href="happy-file://agents/example/docs/plan.md#L12-L15">Happy file link</a>
+                    <a href="happy://agents/example/files/docs/plan.md#L12-L15">Happy file link</a>
                     <a href="docs/plan.md#L12-L15">Workspace file link</a>
                     <output>Shell clicks: {clicks}</output>
                 </div>

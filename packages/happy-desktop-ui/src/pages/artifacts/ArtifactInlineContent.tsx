@@ -6,10 +6,13 @@ import {
 import { ConversationMedia } from "../../ConversationMedia";
 import type { InlinePageFit } from "../../inlinePageFit";
 import { MarkdownDocument, type MarkdownDocumentReferences } from "../../MarkdownDocument";
+import type { MessageReferences } from "../../messageReferences";
 
 export interface ArtifactInlineContentProps {
     readonly artifactType: HappyAgentArtifactType;
     readonly content: HappyAgentInlineArtifactContent;
+    /** Reads and opens the `happy://` links to Happy entities a document carries. */
+    readonly entities?: MessageReferences;
     /** Told every height the content settles on, or that it could not be read. */
     readonly fit: InlinePageFit;
     /** Opens the artifact beside the conversation, from one of its pictures. */
@@ -44,6 +47,7 @@ export function ArtifactInlineContent(props: ArtifactInlineContentProps) {
             <div className="happy-artifact-inline-content__measure" ref={measure}>
                 {content.type === "markdown" ? (
                     <MarkdownDocument
+                        {...(props.entities ? { entities: props.entities } : {})}
                         flow="inline"
                         references={markdownReferences(content)}
                         text={content.text}

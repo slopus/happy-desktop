@@ -9,6 +9,7 @@ import type {
     ConversationJson,
     ConversationMediaItem,
     ConversationToolCall,
+    HappyReference,
 } from "happy-desktop-state";
 import { happyReferencePlaceholder } from "happy-desktop-state";
 import { compactCount, changeCountLabel } from "./countText";
@@ -1488,7 +1489,7 @@ function ArtifactTitleRow(props: {
     // Only a creation makes version 1, and an agent writes a new artifact's
     // files after the call that created it, so that row follows the artifact
     // instead of opening the entry it started from.
-    const reference =
+    const reference: HappyReference =
         presentation.version === 1 || presentation.shows === "latest"
             ? { kind: "artifact", id: presentation.artifactId }
             : { kind: "artifact", id: presentation.artifactId, version: presentation.version };
@@ -1764,7 +1765,7 @@ function agentIdSegments(
         const id = match[0];
         // A run of 24 digits is a number, whatever else it might name.
         if (!/[a-z]/.test(id)) continue;
-        const reference = { kind: "agent", id };
+        const reference: HappyReference = { kind: "agent", id };
         const view = references.view(reference);
         // A child the reader cannot open still has a name worth more than its
         // ID; an agent the window cannot name keeps the ID that tells it apart.

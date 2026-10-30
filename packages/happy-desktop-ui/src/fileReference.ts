@@ -21,7 +21,7 @@ export interface FileReference {
 export type FileOpenHandler = (path: string, selection?: HappyAgentFileLineRange) => void;
 
 /**
- * Opens a file a `happy-file:` link names in another agent's or workspace's
+ * Opens a file a `happy://` or `happy-file://` file link names in another agent's or workspace's
  * folder. A separate handler from `FileOpenHandler` because the path means
  * nothing in the surface's own checkout: a surface that cannot reach other
  * folders leaves such links inert rather than opening the wrong file.

@@ -15,7 +15,12 @@ import Markdown, {
     type UrlTransform,
 } from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { happyAgentFileLinkParse } from "happy-desktop-state";
+import {
+    happyAgentFileLinkParse,
+    happyReferencePlaceholder,
+    isHappyUrl,
+    type HappyReference,
+} from "happy-desktop-state";
 import { CodeBlock } from "./CodeBlock";
 import {
     fileReferenceFragment,
@@ -27,6 +32,7 @@ import {
 import { markdownFence, markdownFenceIsMermaid } from "./markdownFence";
 import { MermaidDiagram } from "./MermaidDiagram";
 import { markdownTableCodeKeepsLine } from "./messageTextLayout";
+import { messageReferenceFromHref, type MessageReferences } from "./messageReferences";
 import { ScrollArea } from "./Scrollbar";
 
 // react-markdown reparses the document when this plugin list changes identity.
@@ -120,10 +126,17 @@ export type MarkdownDocumentProps = {
      */
     onFileOpen?: FileOpenHandler;
     /**
-     * Opens a `happy-file:` link — a file in another agent's or workspace's
+     * Opens a `happy://` or `happy-file://` file link — a file in another agent's or workspace's
      * folder. Without it such links render inert.
      */
     onFileLinkOpen?: FileLinkOpenHandler;
+    /**
+     * The live side of the `happy://` links to agents, artifacts, workspaces,
+     * and the rest of Happy a document carries: what each reads as now, and
+     * where opening one goes. Without it each reads as the label it was
+     * written with, inert.
+     */
+    entities?: MessageReferences;
     /**
      * Resolves the document's own relative references, for a document that is
      * one file of a bundle whose other files it can show — an artifact's entry
@@ -255,13 +268,14 @@ export function markdownDocumentLinkPath(value: unknown): string | undefined {
 
 // Preserve file targets for our explicit viewer callback. react-markdown's
 // default filter otherwise removes file: URLs, Windows drives, file:line
-// references and well-formed happy-file: links before the link component can
-// handle them. All other URLs keep its default filter, and images never gain
-// filesystem navigation.
+// references and every `happy://` address before the link component can handle
+// them; the link component decides what a Happy address is, so even a malformed
+// one reaches it and is drawn inert rather than as an empty link. All other URLs
+// keep its default filter, and images never gain filesystem navigation.
 export const markdownFileUrlTransform: UrlTransform = (url, key, node) =>
     key === "href" &&
     node.tagName === "a" &&
-    (markdownDocumentLinkPath(url) !== undefined || happyAgentFileLinkParse(url) !== undefined)
+    (markdownDocumentLinkPath(url) !== undefined || isHappyUrl(url))
         ? url
         : defaultUrlTransform(url);
 
@@ -269,13 +283,53 @@ const FileOpenContext = createContext<FileOpenHandler | undefined>(undefined);
 const FileLinkOpenContext = createContext<FileLinkOpenHandler | undefined>(undefined);
 const MarkdownCacheKeyContext = createContext<string | undefined>(undefined);
 const MarkdownReferencesContext = createContext<MarkdownDocumentReferences | undefined>(undefined);
+const EntitiesContext = createContext<MessageReferences | undefined>(undefined);
+
+/**
+ * A `happy://` link to something in Happy — an agent, an artifact, a
+ * workspace. It reads as the live title of what it names, as messages do,
+ * and opens it in the app; the label it was written with stands in while
+ * that title is being read, and for something this reader cannot look up.
+ * An empty label means "fill in the name", so it is never drawn empty.
+ */
+function DocumentEntityLink(props: {
+    children: ReactNode;
+    reference: HappyReference;
+    written: boolean;
+}) {
+    const entities = useContext(EntitiesContext);
+    const view = entities?.view(props.reference);
+    const placeholder = happyReferencePlaceholder(props.reference);
+    if (view?.type === "link")
+        return (
+            <button
+                className="happy-markdown-document__link happy-markdown-document__link--file"
+                data-happy-desktop-ui="markdown-document-entity-link"
+                data-reference-kind={props.reference.kind}
+                onClick={() => entities?.open(props.reference)}
+                type="button"
+            >
+                {view.reading === true && props.written ? props.children : view.label}
+            </button>
+        );
+    return (
+        <span
+            className="happy-markdown-document__link"
+            data-happy-desktop-ui="markdown-document-link"
+        >
+            {props.written && (view === undefined || view.label === placeholder)
+                ? props.children
+                : (view?.label ?? placeholder)}
+        </span>
+    );
+}
 
 /**
  * A link in a document. A web address opens in a fresh browsing context severed
  * from the app; a link to another file opens in the viewer itself, which is the
  * whole reason a document reads better here than in a browser.
  */
-const DocumentLink = ({ children, href }: ComponentPropsWithoutRef<"a"> & ExtraProps) => {
+const DocumentLink = ({ children, href, node }: ComponentPropsWithoutRef<"a"> & ExtraProps) => {
     const onFileOpen = useContext(FileOpenContext);
     const onFileLinkOpen = useContext(FileLinkOpenContext);
     const references = useContext(MarkdownReferencesContext);
@@ -313,6 +367,24 @@ const DocumentLink = ({ children, href }: ComponentPropsWithoutRef<"a"> & ExtraP
             >
                 {children}
             </button>
+        );
+    const reference = typeof href === "string" ? messageReferenceFromHref(href) : undefined;
+    if (reference !== undefined)
+        return (
+            <DocumentEntityLink reference={reference} written={(node?.children.length ?? 0) > 0}>
+                {children}
+            </DocumentEntityLink>
+        );
+    // Any other Happy address is malformed, or something this build does not
+    // know: its words, and never a link anything outside the app could open.
+    if (typeof href === "string" && isHappyUrl(href))
+        return (
+            <span
+                className="happy-markdown-document__link"
+                data-happy-desktop-ui="markdown-document-link"
+            >
+                {children}
+            </span>
         );
     // A document that is one file of a bundle names its neighbours relative to
     // itself, so the bundle decides what a link means; nothing it does not
@@ -581,6 +653,7 @@ export function MarkdownDocument(props: MarkdownDocumentProps) {
         "cacheKey",
         "onFileOpen",
         "onFileLinkOpen",
+        "entities",
         "references",
         "sourceOffsets",
         "flow",
@@ -590,6 +663,7 @@ export function MarkdownDocument(props: MarkdownDocumentProps) {
             cacheKey={local.cacheKey}
             className={local.className}
             data-testid={local["data-testid"]}
+            entities={local.entities}
             flow={local.flow}
             onFileLinkOpen={local.onFileLinkOpen}
             onFileOpen={local.onFileOpen}
@@ -621,6 +695,7 @@ export type MarkdownDocumentFrameProps = Pick<
     | "cacheKey"
     | "onFileOpen"
     | "onFileLinkOpen"
+    | "entities"
     | "references"
     | "flow"
 > & {
@@ -646,7 +721,9 @@ export function MarkdownDocumentFrame(props: MarkdownDocumentFrameProps) {
                 <MarkdownReferencesContext.Provider value={props.references}>
                     <FileOpenContext.Provider value={props.onFileOpen}>
                         <FileLinkOpenContext.Provider value={props.onFileLinkOpen}>
-                            {props.children}
+                            <EntitiesContext.Provider value={props.entities}>
+                                {props.children}
+                            </EntitiesContext.Provider>
                         </FileLinkOpenContext.Provider>
                     </FileOpenContext.Provider>
                 </MarkdownReferencesContext.Provider>

@@ -102,7 +102,7 @@ export function MessageReferencesPage() {
     return (
         <ComponentPage
             number={componentNumber}
-            summary="Happy references an agent writes as <happy-KIND id/> tags, read as underlined links titled with the live name of what they point at. A busy target carries the shimmer band; anything that cannot be opened is plain words; a tag still arriving never shows."
+            summary="Happy references an agent writes as ordinary Markdown links to happy:// URLs, read as underlined links titled with the live name of what they point at. A busy target carries the shimmer band; anything that cannot be opened is plain words; a link still arriving never shows. Legacy <happy-KIND id/> tags in older history read the same way."
             title="Message references"
         >
             <Specimen
@@ -115,13 +115,13 @@ export function MessageReferencesPage() {
                     {channelFrame(
                         agentReply(
                             [
-                                'I published <happy-artifact id="q3report"/> with the numbers you asked for.',
+                                "I published [the Q3 report](happy://artifacts/q3report) with the numbers you asked for.",
                                 "",
-                                '<happy-artifact id="q3report" version="2"/>',
+                                "[](happy://artifacts/q3report?version=2)",
                                 "",
-                                'The longer one wraps like prose: <happy-artifact id="longtitle"/>.',
+                                "The longer one wraps like prose: [](happy://artifacts/longtitle).",
                                 "",
-                                '<happy-agent id="reviewer"/> checked it in <happy-workspace id="quiet"/> of <happy-project id="desktop"/>.',
+                                "[](happy://agents/reviewer) checked it in [](happy://workspaces/quiet) of [](happy://projects/desktop).",
                             ].join("\n"),
                         ),
                     )}
@@ -137,22 +137,22 @@ export function MessageReferencesPage() {
                 {channelFrame(
                     agentReply(
                         [
-                            'Handed the packaging to <happy-agent id="builder"/>, which is still working.',
+                            "Handed the packaging to [](happy://agents/builder), which is still working.",
                             "",
-                            'The new checkout <happy-workspace id="cloning"/> is being prepared, and <happy-project id="importing"/> is still cloning.',
+                            "The new checkout [](happy://workspaces/cloning) is being prepared, and [](happy://projects/importing) is still cloning.",
                         ].join("\n"),
                     ),
                 )}
             </Specimen>
             <Specimen
-                detail="Deleted, missing, not visible, services, and unknown kinds read as plain text and never as the raw tag"
+                detail="Deleted, missing, not visible, services, malformed links, and unknown legacy kinds read as plain text: the live name, the writer's label, or a placeholder"
                 label="Unavailable references"
                 number="03"
                 stage="app"
             >
                 {channelFrame(
                     agentReply(
-                        '<happy-artifact id="gone"/> was deleted, <happy-agent id="hidden"/> is not visible here, <happy-service id="preview"/> does not open yet, and <happy-gizmo id="x1"/> is a kind this build does not know.',
+                        '[](happy://artifacts/gone) was deleted, [the hidden reviewer](happy://agents/hidden) is not visible here, [](happy://workspaces/quiet/services/preview) does not open yet, [a broken link](happy://artifacts/a/b) is malformed, and <happy-gizmo id="x1"/> is a legacy kind this build does not know.',
                     ),
                 )}
             </Specimen>
@@ -164,20 +164,20 @@ export function MessageReferencesPage() {
             >
                 {channelFrame(
                     ownMessage(
-                        'Ask <happy-agent id="reviewer"/> to fold the notes into <happy-project id="desktop"/>  — **not** <happy-artifact id="gone"/>.',
+                        "Ask [Reviewer](happy://agents/reviewer) to fold the notes into [happy-desktop](happy://projects/desktop)  — **not** [](happy://artifacts/gone).",
                     ),
                 )}
             </Specimen>
             <Specimen
-                detail="A tag that has only partly arrived is held back until it completes"
+                detail="A link that has only partly arrived is held back until it completes"
                 label="Streaming"
                 number="04"
                 stage="app"
             >
-                {channelFrame(agentReply("Here is the report: <happy-arti", true))}
+                {channelFrame(agentReply("Here is the report: [Q3 report](happy://arti", true))}
             </Specimen>
             <Specimen
-                detail="Tags inside inline code and fenced code stay literal"
+                detail="Links inside inline code and fenced code stay literal"
                 label="Code stays code"
                 number="05"
                 stage="app"
@@ -185,10 +185,10 @@ export function MessageReferencesPage() {
                 {channelFrame(
                     agentReply(
                         [
-                            'Write `<happy-artifact id="q3report"/>` to link it:',
+                            "Write `[Q3](happy://artifacts/q3report)` to link it:",
                             "",
                             "```md",
-                            '<happy-artifact id="q3report"/>',
+                            "[Q3](happy://artifacts/q3report)",
                             "```",
                         ].join("\n"),
                     ),

@@ -231,7 +231,7 @@ export type MessageProps = Omit<HTMLAttributes<HTMLDivElement>, "style"> & {
      */
     onFileOpen?: FileOpenHandler;
     /**
-     * Opens a file a `happy-file:` link in this message names in another
+     * Opens a file a `happy://` or `happy-file://` file link in this message names in another
      * agent's or workspace's folder. Absent leaves such links inert.
      */
     onFileLinkOpen?: FileLinkOpenHandler;
@@ -338,7 +338,7 @@ function renderMessagePlainText(
     if (text.length === 0) return null;
     return (
         <p className="happy-message__plain-text" data-happy-desktop-ui="message-plain-text">
-            {!text.includes("<happy-")
+            {!/happy/iu.test(text)
                 ? text
                 : messagePlainTextSegments(text, references).map((segment, index) =>
                       segment.type === "text" ? (

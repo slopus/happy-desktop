@@ -1,8 +1,11 @@
 import {
+    formatHappyFileUrl,
+    formatHappyReferenceUrl,
     happyReferencePlaceholder,
-    isKnownHappyReferenceKind,
-    parseHappyReferences,
-    replaceHappyReferences,
+    parseHappyLinks,
+    parseHappyUrl,
+    replaceHappyLinks,
+    type HappyLinkMatch,
     type HappyReference,
 } from "happy-desktop-state";
 
@@ -38,27 +41,17 @@ export interface MessageReferences {
     open(reference: HappyReference): void;
 }
 
-/**
- * The scheme of the links this module writes. A random part is minted once per
- * load so a link an author wrote by hand can never pass for one of these: only
- * a tag the grammar accepted becomes a reference link.
- */
-const REFERENCE_SCHEME = `happy-reference-${Math.random().toString(36).slice(2, 10)}`;
-const REFERENCE_PREFIX = `${REFERENCE_SCHEME}:`;
-
 /** The view a surface with no live stores behind it gives every reference. */
 function placeholderView(reference: HappyReference): MessageReferenceView {
     return { type: "text", label: happyReferencePlaceholder(reference) };
 }
 
-/** What one reference reads as: a kind this build does not know is never asked about. */
+/** What one reference reads as live, or as a placeholder with nothing behind it. */
 function referenceView(
     reference: HappyReference,
     references: MessageReferences | undefined,
 ): MessageReferenceView {
-    if (references === undefined || !isKnownHappyReferenceKind(reference.kind))
-        return placeholderView(reference);
-    return references.view(reference);
+    return references === undefined ? placeholderView(reference) : references.view(reference);
 }
 
 /** Escapes a label so Markdown reads every character of it literally. */
@@ -69,63 +62,101 @@ function labelEscape(label: string): string {
         .replace(/[!-/:-@[-`{-~]/gu, (character) => `\\${character}`);
 }
 
-function referenceHref(reference: HappyReference): string {
-    const query = new URLSearchParams();
-    if (reference.version !== undefined) query.set("version", String(reference.version));
-    if (reference.workspaceId !== undefined) query.set("workspace", reference.workspaceId);
-    const search = query.toString();
-    return `${REFERENCE_PREFIX}${reference.kind}/${reference.id}${search ? `?${search}` : ""}`;
-}
-
-/** The reference a link written by `messageReferencesResolve` points at, or nothing. */
-export function messageReferenceFromHref(href: string | undefined): HappyReference | undefined {
-    if (href === undefined || !href.startsWith(REFERENCE_PREFIX)) return undefined;
-    const match = /^([a-z][a-z0-9-]*)\/([A-Za-z0-9_-]+)(?:\?(.*))?$/u.exec(
-        href.slice(REFERENCE_PREFIX.length),
-    );
-    if (!match) return undefined;
-    const reference: HappyReference = { kind: match[1]!, id: match[2]! };
-    const query = new URLSearchParams(match[3] ?? "");
-    const version = query.get("version");
-    if (version !== null) reference.version = Number(version);
-    const workspaceId = query.get("workspace");
-    if (workspaceId !== null) reference.workspaceId = workspaceId;
-    return reference;
-}
-
-/** Whether a URL is a reference link, so the Markdown URL filter keeps it. */
-export function messageReferenceHrefIs(url: string): boolean {
-    return url.startsWith(REFERENCE_PREFIX);
+/** The words of a link label written as Markdown, for a surface that shows plain text. */
+function labelPlain(label: string): string {
+    return label
+        .replace(/\s+/gu, " ")
+        .trim()
+        .replace(/\\([!-/:-@[-`{-~])/gu, "$1");
 }
 
 /**
- * The Markdown a message body is rendered and measured from: every Happy
- * reference tag replaced by what it reads as now.
+ * The canonical `happy://` address of a reference, or nothing for one no
+ * address can express: a legacy service tag written without its workspace.
+ */
+function referenceHref(reference: HappyReference): string | undefined {
+    try {
+        return formatHappyReferenceUrl(reference);
+    } catch {
+        return undefined;
+    }
+}
+
+/**
+ * Which words one reference reads as, given the label its writer put on the
+ * link. The live title wins whenever there is one; the writer's label stands in
+ * while the title is still being read, and for a thing this reader cannot look
+ * up at all, where it says more than "an unavailable artifact" would.
+ */
+function referenceWords(
+    view: MessageReferenceView,
+    reference: HappyReference,
+    written: string,
+): { readonly link: boolean; readonly label: string; readonly written: boolean } {
+    const writtenUsable = written.trim().length > 0;
+    if (view.type === "link")
+        return view.reading === true && writtenUsable
+            ? { link: true, label: written, written: true }
+            : { link: true, label: view.label, written: false };
+    return view.label === happyReferencePlaceholder(reference) && writtenUsable
+        ? { link: false, label: written, written: true }
+        : { link: false, label: view.label, written: false };
+}
+
+/** The reference a `happy://` address names, or nothing for a file link or anything malformed. */
+export function messageReferenceFromHref(href: string | undefined): HappyReference | undefined {
+    if (href === undefined) return undefined;
+    const link = parseHappyUrl(href);
+    return link?.type === "reference" ? link.reference : undefined;
+}
+
+/**
+ * The Markdown a message body is rendered and measured from: every Happy link
+ * replaced by what it reads as now.
  *
- * An openable reference becomes an ordinary Markdown link whose text is the
- * escaped live title, so it renders and wraps exactly like any other link in
- * the body and the row-height model measures the same words the reader sees.
- * An inert one becomes the escaped label as plain text. While a reply is
- * still streaming, a tag that has only partly arrived is held back rather
- * than flashing as raw text. Tags in code stay literal.
+ * A link to something openable stays an ordinary Markdown link to its
+ * canonical `happy://` address, titled with the escaped live title, so it
+ * renders and wraps exactly like any other link in the body and the row-height
+ * model measures the same words the reader sees. An inert one becomes its
+ * words as plain text. A file link, `happy://` or `happy-file://`, stays as
+ * written, with its path filled in when the writer left the label empty. The
+ * legacy `<happy-KIND id/>` tags older history holds read exactly like their
+ * `happy://` forms. While a reply is still streaming, a link that has only partly arrived
+ * is held back rather than flashing as raw text. Links in code stay literal.
  *
  * Rendering and row geometry must both go through this with the same inputs;
- * a body with no tag in it comes back unchanged.
+ * a body with no Happy link in it comes back unchanged.
  */
 export function messageReferencesResolve(
     text: string,
     references: MessageReferences | undefined,
     streaming: boolean,
 ): string {
-    if (!streaming && !text.includes("<happy-")) return text;
-    if (streaming && !text.includes("<")) return text;
-    return replaceHappyReferences(
+    return replaceHappyLinks(
         text,
-        (reference) => {
-            const view = referenceView(reference, references);
+        (match) => {
+            const link = match.link;
+            if (link === undefined)
+                return match.label.trim().length > 0
+                    ? match.label
+                    : match.syntax === "legacyTag"
+                      ? "an unavailable reference"
+                      : "";
+            if (link.type === "file") {
+                if (match.image || match.label.trim().length > 0) return match.source;
+                return `[${labelEscape(link.file.path)}](${formatHappyFileUrl(link.file)})`;
+            }
+            const reference = link.reference;
+            const words = referenceWords(
+                referenceView(reference, references),
+                reference,
+                match.label,
+            );
             const label =
-                labelEscape(view.label) || labelEscape(happyReferencePlaceholder(reference));
-            const shown = view.type === "link" ? `[${label}](${referenceHref(reference)})` : label;
+                (words.written ? words.label.trim() : labelEscape(words.label)) ||
+                labelEscape(happyReferencePlaceholder(reference));
+            const href = words.link ? referenceHref(reference) : undefined;
+            const shown = href === undefined ? label : `[${label}](${href})`;
             // A person a message mentions stands out from the words around them.
             return reference.kind === "user" ? `**${shown}**` : shown;
         },
@@ -133,16 +164,32 @@ export function messageReferencesResolve(
     );
 }
 
+/** The words one Happy link in a plain body reads as. */
+function linkPlainWords(match: HappyLinkMatch, references: MessageReferences | undefined): string {
+    const link = match.link;
+    if (link?.type === "reference") {
+        const words = referenceWords(
+            referenceView(link.reference, references),
+            link.reference,
+            match.label,
+        );
+        return words.written ? labelPlain(words.label) : words.label;
+    }
+    const written = labelPlain(match.label);
+    if (written.length > 0) return written;
+    if (link?.type === "file") return link.file.path;
+    return match.syntax === "legacyTag" ? "an unavailable reference" : "";
+}
+
 /**
  * One line of a body as plain words, for a one-line summary that is not
- * rendered as Markdown: every reference reads as its label.
+ * rendered as Markdown: every Happy link reads as its words.
  */
 export function messageReferencesPlainText(
     text: string,
     references: MessageReferences | undefined,
 ): string {
-    if (!text.includes("<happy-")) return text;
-    return replaceHappyReferences(text, (reference) => referenceView(reference, references).label);
+    return replaceHappyLinks(text, (match) => linkPlainWords(match, references));
 }
 
 /** One run of a plain body: its own words, or a reference read as a link. */
@@ -166,28 +213,28 @@ export function messagePlainTextSegments(
     text: string,
     references: MessageReferences | undefined,
 ): readonly MessagePlainTextSegment[] {
-    if (!text.includes("<happy-")) return [{ type: "text", text }];
     const segments: MessagePlainTextSegment[] = [];
     const textAdd = (words: string) => {
+        if (words.length === 0) return;
         const last = segments.at(-1);
         if (last?.type === "text")
             segments[segments.length - 1] = { type: "text", text: last.text + words };
         else segments.push({ type: "text", text: words });
     };
-    for (const segment of parseHappyReferences(text)) {
+    for (const segment of parseHappyLinks(text)) {
         if (segment.type === "text") {
             textAdd(segment.text);
             continue;
         }
-        const view = referenceView(segment.reference, references);
-        if (view.type === "link")
-            segments.push({
-                type: "reference",
-                reference: segment.reference,
-                href: referenceHref(segment.reference),
-                label: view.label,
-            });
-        else textAdd(view.label);
+        const label = linkPlainWords(segment, references);
+        const link = segment.link;
+        const href =
+            link?.type === "reference" && references?.view(link.reference).type === "link"
+                ? referenceHref(link.reference)
+                : undefined;
+        if (link?.type === "reference" && href !== undefined)
+            segments.push({ type: "reference", reference: link.reference, href, label });
+        else textAdd(label);
     }
     return segments;
 }
@@ -197,9 +244,10 @@ export function messagePlainTextSegments(
  * holding the same body can keep this and skip the parse next time.
  */
 export function messageReferencesNamed(text: string): readonly HappyReference[] {
-    if (!text.includes("<happy-")) return [];
-    return parseHappyReferences(text).flatMap((segment) =>
-        segment.type === "text" ? [] : [segment.reference],
+    return parseHappyLinks(text).flatMap((segment) =>
+        segment.type === "link" && segment.link?.type === "reference"
+            ? [segment.link.reference]
+            : [],
     );
 }
 

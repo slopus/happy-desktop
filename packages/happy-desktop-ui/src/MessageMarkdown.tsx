@@ -7,7 +7,7 @@ import {
     type ComponentPropsWithoutRef,
     type ReactNode,
 } from "react";
-import { happyAgentFileLinkParse } from "happy-desktop-state";
+import { happyAgentFileLinkParse, isHappyUrl, type HappyReference } from "happy-desktop-state";
 import Markdown, { type Components, type ExtraProps, type UrlTransform } from "react-markdown";
 import type { Processor } from "unified";
 import { LinkContextMenu } from "./LinkContextMenu";
@@ -24,7 +24,6 @@ import { MESSAGE_MARKDOWN_REMARK_PLUGINS, type MessageMarkdownAst } from "./mess
 import { messageInlineLayoutKey } from "./conversationInlineLayouts";
 import {
     messageReferenceFromHref,
-    messageReferenceHrefIs,
     messageReferencesResolve,
     type MessageReferences,
 } from "./messageReferences";
@@ -78,7 +77,7 @@ const MarkdownLinkContext = createContext(false);
  */
 const MarkdownFileOpenContext = createContext<FileOpenHandler | undefined>(undefined);
 /**
- * Opens a file a `happy-file:` link names in another agent's or workspace's
+ * Opens a file a `happy://` or `happy-file://` file link names in another agent's or workspace's
  * folder. Absent, such a link stays inert like any other target this surface
  * cannot open.
  */
@@ -143,7 +142,7 @@ export const MessageReferenceLink = ({
     children?: ReactNode;
     href: string;
     references: MessageReferences;
-    reference: NonNullable<ReturnType<typeof messageReferenceFromHref>>;
+    reference: HappyReference;
 }) => {
     const view = references.view(reference);
     const busy = view.type === "link" && view.busy;
@@ -154,10 +153,10 @@ export const MessageReferenceLink = ({
             data-happy-desktop-ui="message-md-reference"
             data-reference-kind={reference.kind}
             href={href}
-            // The href exists only so this is a real, focusable link. Its
-            // private scheme means nothing outside this window, so no click —
-            // plain, modified, or middle — may hand it to the browser or the
-            // OS: every one opens the reference here instead.
+            // The href exists so this is a real, focusable link whose address
+            // can be copied. `happy://` belongs to Happy, and the mobile app may
+            // own it on this machine, so no click — plain, modified, or middle —
+            // may hand it to the browser or the OS: every one opens it here.
             onClick={(event) => {
                 event.preventDefault();
                 references.open(reference);
@@ -291,7 +290,9 @@ const MarkdownLink = ({
     // The link's own context menu, while it is up: where the pointer asked
     // for it. Local to the link because nothing else in the message reads it.
     const [menuAt, setMenuAt] = useState<{ x: number; y: number }>();
-    if (reference !== undefined && references !== undefined)
+    // Only something this reader can open is offered as a click; anything
+    // else is its words, below.
+    if (reference !== undefined && references?.view(reference).type === "link")
         return (
             <MessageReferenceLink href={href!} reference={reference} references={references}>
                 {children}
@@ -300,8 +301,7 @@ const MarkdownLink = ({
     // A link into another workspace's folder carries that folder, so it opens
     // the same file wherever the message is read. Its scheme means nothing to
     // the browser or the OS, so no click may hand it to either.
-    const fileLink =
-        safe === undefined && typeof href === "string" ? happyAgentFileLinkParse(href) : undefined;
+    const fileLink = typeof href === "string" ? happyAgentFileLinkParse(href) : undefined;
     if (
         fileLink !== undefined &&
         onFileLinkOpen !== undefined &&
@@ -326,6 +326,11 @@ const MarkdownLink = ({
                 <MarkdownLinkContext.Provider value={true}>{children}</MarkdownLinkContext.Provider>
             </a>
         );
+    // Any other Happy address — one this surface cannot open, or one that is
+    // malformed — is its words. It is never a link the browser or the OS
+    // could be handed.
+    if (typeof href === "string" && isHappyUrl(href))
+        return <MarkdownLinkContext.Provider value={true}>{children}</MarkdownLinkContext.Provider>;
     const target = safe === undefined ? markdownDocumentLinkTarget(href) : undefined;
     // Only a file this product can actually show is offered as a click. An
     // archive or an executable stays plain text rather than promising a preview
@@ -692,9 +697,13 @@ const markdownComponents: Components = {
     h5: headingOverride("h5"),
     h6: headingOverride("h6"),
 };
-/** Keeps the reference links this module wrote; every other URL is filtered as before. */
+/**
+ * Keeps every Happy address a link carries, well-formed or not, so the link
+ * component decides what it is rather than the filter turning it into an
+ * empty link; every other URL is filtered as before.
+ */
 const messageUrlTransform: UrlTransform = (url, key, node) =>
-    key === "href" && node.tagName === "a" && messageReferenceHrefIs(url)
+    key === "href" && node.tagName === "a" && isHappyUrl(url)
         ? url
         : markdownFileUrlTransform(url, key, node);
 /**
@@ -704,11 +713,11 @@ const messageUrlTransform: UrlTransform = (url, key, node) =>
  * content is injected into the final paragraph's inline flow so it cannot wrap
  * independently at the paragraph boundary. `onFileOpen` turns a link that names
  * a workspace file into a click that opens Happy's own viewer instead of an
- * inert anchor, and `onFileLinkOpen` does the same for a `happy-file:` link
+ * inert anchor, and `onFileLinkOpen` does the same for a `happy://` or `happy-file://` file link
  * into another agent's or workspace's folder. `onLinkOpen` gives a web link a context menu offering the
- * machine's browser, the side panel, or copying its destination. `references` resolves the Happy
- * reference tags an agent wrote to their live titles; without it each reads as
- * inert placeholder text, and a tag never shows raw. `layoutRender` draws the
+ * machine's browser, the side panel, or copying its destination. `references` resolves the
+ * `happy://` links an agent wrote to entities to their live titles; without it each reads as
+ * inert text, and a legacy reference tag never shows raw. `layoutRender` draws the
  * layouts a reply placed (see `conversationInlineLayouts`) where their
  * placeholders stand.
  */

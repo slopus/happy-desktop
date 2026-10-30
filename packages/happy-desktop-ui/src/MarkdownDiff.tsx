@@ -12,6 +12,7 @@ import Markdown, { type Components, type ExtraProps } from "react-markdown";
 import { Button } from "./Button";
 import { DiffSnippet, type DiffLine } from "./DiffSnippet";
 import type { FileLinkOpenHandler, FileOpenHandler } from "./fileReference";
+import type { MessageReferences } from "./messageReferences";
 import type { MarkdownDiffCode, MarkdownDiffModel } from "./markdownDiff";
 import { markdownDiffTree, type MarkdownDiffSlot } from "./markdownDiffTree";
 import {
@@ -36,8 +37,10 @@ export type MarkdownDiffProps = {
     unchangedContext?: number;
     /** Opens a link to another file, as `MarkdownDocument` does. */
     onFileOpen?: FileOpenHandler;
-    /** Opens a `happy-file:` link, as `MarkdownDocument` does. */
+    /** Opens a `happy://` or `happy-file://` file link, as `MarkdownDocument` does. */
     onFileLinkOpen?: FileLinkOpenHandler;
+    /** Reads and opens the `happy://` links to Happy entities, as `MarkdownDocument` does. */
+    entities?: MessageReferences;
     /** Resolves the document's own relative references, as `MarkdownDocument` does. */
     references?: MarkdownDocumentReferences;
     /** `scroll`, the default, or `inline`, as `MarkdownDocument` lays out. */
@@ -199,6 +202,7 @@ export function MarkdownDiff(props: MarkdownDiffProps) {
         "unchangedContext",
         "onFileOpen",
         "onFileLinkOpen",
+        "entities",
         "references",
         "flow",
     ]);
@@ -215,6 +219,7 @@ export function MarkdownDiff(props: MarkdownDiffProps) {
         <MarkdownDocumentFrame
             className={["happy-markdown-diff", local.className].filter(Boolean).join(" ")}
             data-testid={local["data-testid"]}
+            entities={local.entities}
             flow={local.flow}
             onFileLinkOpen={local.onFileLinkOpen}
             onFileOpen={local.onFileOpen}

@@ -4,6 +4,7 @@ import {
     HappyAgentSystemMonitorSurfacePage,
     makeStuffIntroHeader,
     type InlinePageFit,
+    type MessageReferences,
 } from "happy-desktop-ui";
 import {
     conversationFileChanges,
@@ -7337,6 +7338,14 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
         artifactTitlesStore.get,
         artifactTitlesStore.get,
     );
+    // The people a document names, read through one subscription as the
+    // transcript's are.
+    const peopleStore = props.artifacts?.people();
+    useSyncExternalStore(
+        peopleStore?.subscribe ?? peopleSubscribeNoop,
+        peopleStore?.get ?? peopleNoop,
+        peopleStore?.get ?? peopleNoop,
+    );
     const activeMainTool = mainTools.find((tab) => tab.id === workspace.activeMainViewId);
     const displayedMainTool = mainTools.find((tab) => tab.id === workspace.displayedMainViewId);
     const openInRecent = workspace.openInRecent;
@@ -7777,9 +7786,47 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
         displayedFile === undefined &&
         (conversation.type === "ready" ||
             (openGroup?.conversations.length === 0 && workspace.groupComposer !== undefined));
+    // A workspace or project a reference names opens where the reader left it,
+    // the way its sidebar row does; an agent opens on its own conversation.
+    const referenceGroupOpen = (groupId: HappyAgentGroupId, agentId?: string): void =>
+        props.onChatSelect(
+            groupId,
+            agentId ??
+                workspace.groupResume.get(groupId) ??
+                openGroupFind(rows, workspace.list.bots, workspace.list.tasks, [], groupId)
+                    ?.conversations[0]?.id,
+        );
+    // The `happy://` links a document names read and open the way a message's
+    // do, from the same snapshots this surface already holds.
+    const documentEntities = messageReferencesCreate({
+        titles: artifactTitles,
+        titlesStore: artifactTitlesStore,
+        ...(peopleStore ? { people: peopleStore } : {}),
+        entities: messageReferenceEntities(workspace.list),
+        onGroupOpen: (groupId, agentId) => {
+            if (happyAgentOnline()) referenceGroupOpen(groupId, agentId);
+        },
+        ...(props.referenceSurfaces
+            ? {
+                  surfaces: {
+                      names: props.referenceSurfaces.names,
+                      open: (surfaceId: HappyAgentSurfaceId) => {
+                          if (happyAgentOnline()) props.referenceSurfaces?.open(surfaceId);
+                      },
+                  },
+              }
+            : {}),
+        ...(props.artifacts
+            ? {
+                  onArtifactOpen: (artifactId: HappyAgentArtifactId, version?: number) =>
+                      props.workspace.panel.artifactViewOpen(artifactId, version),
+              }
+            : {}),
+    });
     const mainFileBody = (file: HappyAgentFileTabSnapshot): ReactNode => (
         <HappyAgentFileBody
             appearance={appearance.appearance}
+            entities={documentEntities}
             file={file}
             tabNamed
             {...(props.htmlPreview ? { htmlPreview: props.htmlPreview } : {})}
@@ -8008,23 +8055,7 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                 }}
                 referenceEntities={messageReferenceEntities(workspace.list)}
                 {...(props.referenceSurfaces ? { referenceSurfaces: props.referenceSurfaces } : {})}
-                onReferenceGroupOpen={(groupId, agentId) => {
-                    // A workspace or project a reference names opens where the
-                    // reader left it, the way its sidebar row does; an agent
-                    // opens on its own conversation.
-                    props.onChatSelect(
-                        groupId,
-                        agentId ??
-                            workspace.groupResume.get(groupId) ??
-                            openGroupFind(
-                                rows,
-                                workspace.list.bots,
-                                workspace.list.tasks,
-                                [],
-                                groupId,
-                            )?.conversations[0]?.id,
-                    );
-                }}
+                onReferenceGroupOpen={referenceGroupOpen}
                 activitySelected={panel.open && panel.activeViewId === "activity"}
                 conversation={conversation}
                 {...(workspace.fileOpenFailure === undefined
@@ -8885,6 +8916,8 @@ function happyAgentFileNotices(file: HappyAgentFileTabSnapshot): ReactNode {
 function HappyAgentFileBody(props: {
     appearance: "dark" | "light";
     file: HappyAgentFileTabSnapshot;
+    /** Reads and opens the `happy://` links to Happy entities a document carries. */
+    entities: MessageReferences;
     /** The file's tab names it, so its content does not name it again. */
     tabNamed?: boolean;
     htmlPreview?: HtmlPreviewRenderer;
@@ -8939,7 +8972,7 @@ function HappyAgentFileBody(props: {
             workspace.fileReferenceOpen(file.groupId, target, kind, selection);
         else props.onMainFileOpen(target, kind, selection);
     };
-    /** Follows a `happy-file:` link the document carries, into the panel. */
+    /** Follows a `happy://` or `happy-file://` file link the document carries, into the panel. */
     const fileLinkOpen: FileLinkOpenHandler = (link): void =>
         workspace.fileLinkOpen(link, fileTabKind(link.path));
     // Typing into a document that could never be written back is worse than not
@@ -9016,6 +9049,7 @@ function HappyAgentFileBody(props: {
                                       )
                                   }
                                   onFileLinkOpen={fileLinkOpen}
+                                  entities={props.entities}
                                   {...(markdownCacheKey === undefined
                                       ? {}
                                       : { cacheKey: markdownCacheKey })}
@@ -9149,6 +9183,7 @@ function HappyAgentFileBody(props: {
                                           );
                                       }}
                                       onFileLinkOpen={fileLinkOpen}
+                                      entities={props.entities}
                                   />
                               ),
                           }
@@ -9162,6 +9197,7 @@ function HappyAgentFileBody(props: {
                         : {
                               preview: (
                                   <HappyAgentChangedFilePreview
+                                      entities={props.entities}
                                       file={file}
                                       onFileOpen={linkedFileOpen}
                                       onFileLinkOpen={fileLinkOpen}
@@ -9277,10 +9313,12 @@ function HappyAgentChangedFileRenderedDiff(props: {
     after: string;
     onFileOpen: FileOpenHandler;
     onFileLinkOpen: FileLinkOpenHandler;
+    entities: MessageReferences;
 }) {
     return (
         <MarkdownDiff
             diff={markdownDiffCompute(props.before, props.after)}
+            entities={props.entities}
             onFileLinkOpen={props.onFileLinkOpen}
             onFileOpen={props.onFileOpen}
             // A long document is mostly unchanged, and the reader opened it
@@ -9292,10 +9330,12 @@ function HappyAgentChangedFileRenderedDiff(props: {
 
 function HappyAgentChangedFilePreview(props: {
     file: HappyAgentFileTabSnapshot;
+    /** Reads and opens the `happy://` links to Happy entities the document carries. */
+    entities: MessageReferences;
     openDisabled: boolean;
     /** Opens a linked file on the side this one is being read on. */
     onFileOpen: FileOpenHandler;
-    /** Opens a `happy-file:` link the document carries, into the panel. */
+    /** Opens a `happy://` or `happy-file://` file link the document carries, into the panel. */
     onFileLinkOpen: FileLinkOpenHandler;
     text: string;
     /** The file's characters, editable, where this checkout can be written. */
@@ -9336,6 +9376,7 @@ function HappyAgentChangedFilePreview(props: {
                 props.onFileOpen(documentLinkResolve(file.path, href), selection);
             }}
             onFileLinkOpen={props.onFileLinkOpen}
+            entities={props.entities}
             path={file.path}
         />
     );
@@ -9588,7 +9629,7 @@ function HappyAgentConversationBody(props: {
     onCreate?: () => void;
     onChatSelect: HappyAgentWorkspaceSurfaceProps["onChatSelect"];
     onFileOpen: FileOpenHandler;
-    /** Opens a file a `happy-file:` link names in another workspace, beside this one. */
+    /** Opens a file a `happy://` or `happy-file://` file link names in another workspace, beside this one. */
     onFileLinkOpen: FileLinkOpenHandler;
     /** Opens a web link a message carries where its context menu asked for it. */
     onLinkOpen: LinkOpenHandler;
@@ -10050,7 +10091,7 @@ function HappyAgentConversationSurface(props: {
     onChatSelect: HappyAgentWorkspaceSurfaceProps["onChatSelect"];
     /** Opens a file the transcript names, in the panel beside it, at the lines it named. */
     onFileOpen: FileOpenHandler;
-    /** Opens a file a `happy-file:` link names in another workspace, beside this one. */
+    /** Opens a file a `happy://` or `happy-file://` file link names in another workspace, beside this one. */
     onFileLinkOpen: FileLinkOpenHandler;
     /** Opens a web link a message carries where its context menu asked for it. */
     onLinkOpen: LinkOpenHandler;
@@ -10226,6 +10267,7 @@ function HappyAgentConversationSurface(props: {
               artifactOpen: (artifactId, version) =>
                   workspace.panel.artifactViewOpen(artifactId, version),
               pageOpen: (url) => workspace.panel.browserAdd(url),
+              entities: references,
           })
         : undefined;
     return (

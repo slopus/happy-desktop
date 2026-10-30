@@ -410,7 +410,7 @@ export interface HappyAgentFileTabSnapshot {
      */
     readonly reveal?: HappyAgentFileReveal;
     /**
-     * What a `happy-file:` link named, for a file of another agent's or
+     * What a file link (`happy://` or `happy-file://`) named, for a file of another agent's or
      * workspace's folder opened beside this conversation. `groupId` is then
      * that folder's workspace, which this Happy Agent's catalog need not list.
      *
@@ -1784,7 +1784,7 @@ export interface HappyAgentWorkspaceStore {
         selection?: HappyAgentFileLineRange,
     ): void;
     /**
-     * Follows a `happy-file:` link — a file in another agent's or workspace's
+     * Follows a `happy://` or `happy-file://` file link — a file in another agent's or workspace's
      * folder — into the panel's file viewer, without leaving this
      * conversation. The host is asked first whether the agent or workspace the
      * link names is there and ready, and whether the file is in it; when any

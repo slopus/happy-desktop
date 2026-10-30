@@ -144,7 +144,7 @@ export type ConversationEntryViewProps = {
     now?: number;
     /** Opens a workspace file named by a tool call or linked from a message. */
     onFileOpen?: FileOpenHandler;
-    /** Opens a file a `happy-file:` link in a message names in another workspace. */
+    /** Opens a file a `happy://` or `happy-file://` file link in a message names in another workspace. */
     onFileLinkOpen?: FileLinkOpenHandler;
     /** Opens a web link from a message where its context menu asked for it. */
     onLinkOpen?: LinkOpenHandler;
