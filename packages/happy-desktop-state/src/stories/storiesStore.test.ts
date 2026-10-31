@@ -1,6 +1,8 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { connectHappyAgent } from "../happyAgentConnection/connectHappyAgent.js";
 import { happyAgentRichTasksStoreCreate } from "../richTasks/richTasksStore.js";
+import { happyAgentArtifactTitlesStoreCreate } from "../artifacts/artifactTitlesStore.js";
+import type { HappyAgentArtifactId } from "../artifacts/artifactTypes.js";
 import { fakeHappyAgentDaemonCreate, fakeStory as story } from "../testing/fakeHappyAgentDaemon.js";
 import { happyAgentStoriesStoreCreate, type HappyAgentStoriesStore } from "./storiesStore.js";
 
@@ -74,4 +76,27 @@ it("reconciles story.changed, marks an opened story seen once, and walks in the 
     expect(daemon.callCount("listStoryReplies")).toBe(2);
     const snapshot = store.get();
     expect(snapshot.mode === "on" && snapshot.open?.story.artifactId).toBe("story_1");
+});
+
+it("rich off on a story-capable daemon: title reads name no story type", async () => {
+    const { daemon, richTasks } = await open(true);
+    await daemon.client.saveUserSetting("tasks.rich", { value: false });
+    await vi.waitFor(() => expect(richTasks.get().mode).toBe("classic"));
+    daemon.artifactSeed({ id: "art_1", title: "Post", agentId: null });
+    const { client } = daemon;
+    const connection = connectHappyAgent({ endpoint: "http://agent.test/", token: "t", client });
+    closes.push(() => connection.close());
+    const titles = happyAgentArtifactTitlesStoreCreate({
+        client,
+        sync: connection.sync,
+        rich: () => richTasks.get().mode === "rich",
+    });
+    titles.subscribe(() => undefined);
+    titles.request(["art_1" as HappyAgentArtifactId]);
+    await vi.waitFor(() =>
+        expect(titles.get().get("art_1" as HappyAgentArtifactId)?.type).toBe("ready"),
+    );
+    const reads = daemon.calls.filter((call) => call.method === "getArtifact");
+    expect(JSON.stringify(reads)).not.toContain("story");
+    titles[Symbol.dispose]();
 });

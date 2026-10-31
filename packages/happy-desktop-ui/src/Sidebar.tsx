@@ -2540,7 +2540,10 @@ export function Sidebar(props: SidebarProps) {
             ...root.querySelectorAll<HTMLElement>(
                 '[data-happy-desktop-ui="sidebar-item"]:not([data-kind="separator"], [data-kind="widget"])',
             ),
-        ].filter((node) => !node.hasAttribute("data-renaming"));
+        ].filter(
+            (node) =>
+                !node.hasAttribute("data-renaming") && node.getAttribute("data-away") !== "true",
+        );
     const keyboardWalk = (event: ReactKeyboardEvent<HTMLElement>): void => {
         if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
         if (event.nativeEvent.isComposing) return;
@@ -3997,7 +4000,7 @@ export function Sidebar(props: SidebarProps) {
                   ? []
                   : sectionRows(section, local.activeItemId)
                         .map((row) => row.item)
-                        .filter((item) => item.kind !== "separator")
+                        .filter((item) => item.kind !== "separator" && item.away !== true)
                         .map((item) => item.id),
           )
         : [];

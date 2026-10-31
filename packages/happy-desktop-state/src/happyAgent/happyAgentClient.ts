@@ -767,6 +767,7 @@ export function happyAgentWorkspaceClientCreate(
             artifacts ??= happyAgentArtifactsCreate({
                 client: deps.client,
                 sync: deps.connection.sync,
+                rich: () => workspace.richTasks().get().mode === "rich",
                 ...(deps.artifactDocumentInline
                     ? { documentInline: deps.artifactDocumentInline }
                     : {}),

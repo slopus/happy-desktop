@@ -52,3 +52,31 @@ it("folds a hidden bot shut where it stands and opens the same row again with it
     ]).toEqual([32, below]);
     expect(node.hasAttribute("data-unread")).toBe(true);
 });
+
+it("walks the arrows past a row that is away", async () => {
+    const view = createRenderer({ width: 280, height: 400 });
+    view.render(() => (
+        <Sidebar
+            activeItemId=""
+            keyboardNavigation
+            onItemSelect={() => undefined}
+            sections={[
+                {
+                    id: "bots",
+                    label: "Bots",
+                    items: [
+                        { id: "a", kind: "project", label: "A" },
+                        { id: "b", kind: "project", label: "B", away: true },
+                        { id: "c", kind: "project", label: "C" },
+                    ],
+                },
+            ]}
+        />
+    ));
+    await view.ready();
+    const row = (id: string) =>
+        view.container.querySelector<HTMLElement>(`[data-item-id="${id}"]`)!;
+    row("a").focus();
+    row("a").dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+    expect(document.activeElement).toBe(row("c"));
+});

@@ -748,6 +748,7 @@ export function ConversationView(props: ConversationViewProps) {
                   inlinePages,
                   inlineLeads,
                   inlinePageLocal,
+                  props.rich !== undefined,
               );
     const currentFailureId =
         props.running === true ? undefined : conversationCurrentFailure(transcript);

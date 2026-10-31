@@ -53,6 +53,8 @@ export interface HappyAgentArtifactTitlesStore {
 export interface HappyAgentArtifactTitlesDeps {
     readonly client: Pick<HappyAgentClient, "getArtifact">;
     readonly sync: HappyAgentSync;
+    /** Whether the Tasks area is rich; story links resolve only then. */
+    readonly rich?: () => boolean;
 }
 
 function notFound(error: unknown): boolean {
@@ -105,7 +107,9 @@ export function happyAgentArtifactTitlesStoreCreate(
             async () => {
                 try {
                     // A story's artifact answers only a read that names stories.
-                    const story = deps.sync.health()?.capabilities?.storyArtifacts === true;
+                    const story =
+                        deps.sync.health()?.capabilities?.storyArtifacts === true &&
+                        deps.rich?.() === true;
                     return (
                         await deps.client.getArtifact(artifactId, {
                             signal,

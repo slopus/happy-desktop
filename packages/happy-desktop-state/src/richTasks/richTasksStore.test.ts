@@ -169,3 +169,23 @@ it("reads a shown artifact the bootstrap did not list, once, and puts it under i
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(daemon.callCount("getArtifact")).toBe(1);
 });
+
+it("leaves the reader out of a card's faces, also when the reader is known only later", async () => {
+    const daemon = await daemonSeed({ capable: true, rich: true });
+    const task = daemon.taskGet("task_a");
+    const unread = { reason: "message", since: 1, from: ["usr_me", "usr_steve"] };
+    daemon.taskReplace({ ...task, agent: { ...task.agent, unread } });
+    const { store } = open(daemon, true);
+    const faces = () => {
+        const snapshot = store.get();
+        if (snapshot.mode !== "rich") return undefined;
+        const card = snapshot.entries.find(
+            (entry) => entry.kind === "task" && entry.task.id === "task_a",
+        );
+        return card?.kind === "task" ? card.faces : undefined;
+    };
+    await vi.waitFor(() => expect(faces()).toEqual(["usr_me", "usr_steve"]));
+    daemon.profileSet({ userId: "usr_me" });
+    daemon.eventEmit("profile.updated", { userId: "usr_me" });
+    await vi.waitFor(() => expect(faces()).toEqual(["usr_steve"]));
+});

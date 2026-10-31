@@ -437,7 +437,11 @@ export function happyAgentStoriesStoreCreate(deps: HappyAgentStoriesDeps): Happy
             if (now.mode !== "on") return;
             const walk = now.rings.flatMap((ring) => ring.stories.map((each) => each.artifactId));
             if (walk.includes(artifactId)) return show(walk, walk.indexOf(artifactId));
-            client.getStory(artifactId).then(({ story }) => {
+            // Read under the feed's lifetime: closing a gate or disposing aborts it.
+            const signal = following?.signal;
+            if (!signal) return;
+            client.getStory(artifactId, { signal }).then(({ story }) => {
+                if (signal.aborted || disposed || !capable()) return;
                 linked = story;
                 show([artifactId], 0);
             }, noop);

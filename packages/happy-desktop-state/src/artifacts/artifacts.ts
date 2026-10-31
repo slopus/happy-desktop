@@ -79,6 +79,7 @@ export interface HappyAgentArtifactsDeps {
         | "getUsers"
     >;
     readonly sync: HappyAgentSync;
+    readonly rich?: () => boolean;
     /** Whether this host renders a document of this media type inline. */
     readonly documentInline?: (mimeType: string) => boolean;
     /** Serves an HTML version as a live site, where the host has a guest to show it in. */
@@ -153,7 +154,11 @@ export function happyAgentArtifactsCreate(deps: HappyAgentArtifactsDeps): HappyA
         },
         titles() {
             return (titles ??= inert(
-                happyAgentArtifactTitlesStoreCreate({ client: deps.client, sync: deps.sync }),
+                happyAgentArtifactTitlesStoreCreate({
+                    client: deps.client,
+                    sync: deps.sync,
+                    ...(deps.rich ? { rich: deps.rich } : {}),
+                }),
             ));
         },
         inline() {

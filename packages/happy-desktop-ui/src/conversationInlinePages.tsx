@@ -118,8 +118,10 @@ export function conversationInlinePage(
     pages: ConversationInlinePages,
     leads: ReadonlyMap<HappyAgentArtifactId, string>,
     local: ConversationInlinePageLocal,
+    /** Whether replies embed the artifacts they link: only in rich mode. */
+    embeds = false,
 ): ConversationInlinePage | undefined {
-    if (entry.kind === "message" && entry.message.sender?.kind === "agent")
+    if (embeds && entry.kind === "message" && entry.message.sender?.kind === "agent")
         return conversationMessageEmbed(entry, rowKey, pages, local);
     if (entry.kind !== "agentActivity" || entry.activity.kind !== "tool") return undefined;
     const presentation = entry.activity.tool.presentation;
