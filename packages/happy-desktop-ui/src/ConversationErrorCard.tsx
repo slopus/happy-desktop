@@ -20,7 +20,7 @@ export interface ConversationErrorCardProps {
 
 /**
  * A failed turn's complete explanation, aligned to the assistant activity rail.
- * The reason retains its paragraphs and wraps in place. Happy
+ * The reason retains its paragraphs and wraps in place. The Chief of Staff
  * receives an unsent diagnostic draft. Server-curated manual
  * commands are text with Copy only; this card never executes them.
  */

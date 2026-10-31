@@ -24,7 +24,7 @@ const sections: SidebarSection[] = [
         action: { icon: "plus", label: "Create bot" },
         id: "bots",
         label: "Bots",
-        items: ["Happy", "Growth", "Release notes", "Support triage"].map((label) => ({
+        items: ["Chief of Staff", "Growth", "Release notes", "Support triage"].map((label) => ({
             icon: "chat" as const,
             id: label,
             kind: "agent" as const,

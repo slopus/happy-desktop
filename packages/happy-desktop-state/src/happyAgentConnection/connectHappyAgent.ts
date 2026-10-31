@@ -5012,13 +5012,13 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                     "This Happy Agent is offline or updating. Try again when it is available.",
                 );
             if (draftRevisions.has(sessionId))
-                throw new Error("Happy's draft is still saving. Try again.");
+                throw new Error("The Chief of Staff draft is still saving. Try again.");
             const previous = agentDrafts.get(sessionId);
             const bootstrap = await client.getAgentBootstrap(sessionId, {
                 signal: deadlineSignal(),
             });
             if (closed || writesHeld()) throw new Error("This Happy Agent is no longer available.");
-            if (bootstrap.agent.archivedAt !== null) throw new Error("Happy is archived.");
+            if (bootstrap.agent.archivedAt !== null) throw new Error("Chief of Staff is archived.");
             // A local edit during the read must never be replaced by its answer.
             if (draftRevisions.has(sessionId) || agentDrafts.get(sessionId) !== previous)
                 throw new Error("The draft changed. Try again.");

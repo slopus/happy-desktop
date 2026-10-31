@@ -6,22 +6,23 @@ export function conversationErrorAssistanceText(assistance: ConversationErrorAss
     readonly detail?: string;
     readonly disabled: boolean;
 } {
+    const name = assistance.chiefName ?? "Chief of Staff";
     switch (assistance.status) {
         case "ready":
-            return { label: "Ask Happy", disabled: false };
+            return { label: `Ask ${name}`, disabled: false };
         case "pending":
-            return { label: "Preparing Happy draft…", disabled: true };
+            return { label: `Preparing ${name} draft…`, disabled: true };
         case "prepared":
-            return { label: "Draft prepared in Happy", disabled: true };
+            return { label: `Draft prepared in ${name}`, disabled: true };
         case "failed":
             return {
-                label: "Ask Happy",
+                label: `Ask ${name}`,
                 detail: `Could not prepare the draft: ${assistance.reason}`,
                 disabled: false,
             };
         case "unavailable":
             return {
-                label: "Ask Happy",
+                label: `Ask ${name}`,
                 detail: assistance.reason,
                 disabled: true,
             };

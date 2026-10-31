@@ -254,6 +254,7 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
                     .filter(Boolean)
                     .join(" ")}
                 initials={initialsOf(props.activityAuthor.displayName)}
+                {...authorAvatar(props.activityAuthor)}
                 metaAccessory={traceRow}
                 style={props.style}
                 time={eventTime(entry.child.createdAt)}
@@ -331,6 +332,7 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
                     .filter(Boolean)
                     .join(" ")}
                 initials={initialsOf(props.activityAuthor.displayName)}
+                {...authorAvatar(props.activityAuthor)}
                 metaAccessory={leadTrace}
                 style={props.style}
                 time={time}
@@ -376,6 +378,7 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
                     .filter(Boolean)
                     .join(" ")}
                 initials={initialsOf(props.activityAuthor.displayName)}
+                {...authorAvatar(props.activityAuthor)}
                 style={props.style}
             >
                 {summary}
@@ -481,6 +484,7 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
                     .filter(Boolean)
                     .join(" ")}
                 initials={initialsOf(props.activityAuthor.displayName)}
+                {...authorAvatar(props.activityAuthor)}
                 style={props.style}
             >
                 {notice}
@@ -522,6 +526,7 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
                     .filter(Boolean)
                     .join(" ")}
                 initials={initialsOf(props.activityAuthor.displayName)}
+                {...authorAvatar(props.activityAuthor)}
                 style={props.style}
             >
                 {request}
@@ -584,10 +589,7 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
         <Message
             agent={author?.kind === "agent"}
             author={author?.displayName ?? "Unknown"}
-            imageUrl={
-                author?.imageUrl ??
-                (author?.avatar ? thumbhashDataUrl(author.avatar.thumbhash) : undefined)
-            }
+            {...(author ? authorAvatar(author) : {})}
             body={props.messageLayouts?.text ?? message.text}
             bodyFormat={messageBodyFormat(author)}
             {...(compact
@@ -740,6 +742,23 @@ function messageTime(value: string): string | undefined {
 function eventTime(value: number | undefined): string | undefined {
     if (value === undefined || !Number.isFinite(value)) return undefined;
     return MESSAGE_TIME_FORMATTER.format(value);
+}
+
+/**
+ * An author's picture: its own photo, or the placeholder its thumbhash draws
+ * while the photo loads. The conversation's own agent (`agentRole: "default"`)
+ * wears the Happy logo when it has neither.
+ */
+export function authorAvatar(author: ConversationAuthor): {
+    readonly imageUrl?: string;
+    readonly brandAvatar: boolean;
+} {
+    const imageUrl =
+        author.imageUrl ?? (author.avatar ? thumbhashDataUrl(author.avatar.thumbhash) : undefined);
+    return {
+        ...(imageUrl === undefined ? {} : { imageUrl }),
+        brandAvatar: author.agentRole === "default",
+    };
 }
 
 function initialsOf(displayName: string | undefined): string {

@@ -3,7 +3,7 @@
  *
  * It wears a warning frame around the turn's recovery actions. The message line holds the
  * message and its own action; one left-aligned row below holds the switch
- * split button and Ask Happy. Every constant here is mirrored in
+ * split button and Ask Chief of Staff. Every constant here is mirrored in
  * `conversationRowHeight.ts`, which models this card without mounting it.
  */
 
@@ -76,7 +76,7 @@
     line-height: 20px;
 }
 
-/* The message's own action and Ask Happy, as quiet text buttons a
+/* The message's own action and Ask Chief of Staff, as quiet text buttons a
    little apart. Their 28px boxes hang 4px over and under the message's 20px
    line, so the line keeps the icon's height, and their labels sit on the
    message's baseline. Button's optical lift centres a label in a filled pill;

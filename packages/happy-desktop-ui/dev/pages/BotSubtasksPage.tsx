@@ -5,7 +5,7 @@ import { ComponentPage, DimensionRule, Specimen } from "../kit";
 export const componentNumber = "C-009b";
 
 const items: SidebarItem[] = [
-    { id: "chief", kind: "project", label: "Happy", initials: "CS", status: "working" },
+    { id: "chief", kind: "project", label: "Chief of Staff", initials: "CS", status: "working" },
     {
         id: "trip",
         depth: 1,

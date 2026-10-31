@@ -172,7 +172,7 @@ const states: readonly {
     {
         id: "14",
         label: "Failed",
-        detail: "The pairing's own English error, Ask Happy, and Try again",
+        detail: "The pairing's own English error, Ask Chief of Staff, and Try again",
         render: () => panel(direct.failed),
     },
     {

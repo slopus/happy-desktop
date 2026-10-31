@@ -23,7 +23,7 @@ const SOURCE_MODE: MessageMode = {
     serviceTier: "fast",
 };
 
-/** Happy's own choice, which a handoff must keep. */
+/** The Chief of Staff's own choice, which a handoff must keep. */
 const CHIEF_MODE: MessageMode = {
     effort: "high",
     modelId: "gpt-6-sol",
@@ -69,7 +69,7 @@ afterEach(() => {
 
 /**
  * A real connection and chat store over the fake daemon, holding a failing
- * session and Happy conversation whose draft is `chiefDraft`.
+ * session and a Chief of Staff conversation whose draft is `chiefDraft`.
  */
 function handoffHarness(chiefDraft: AgentDraftSnapshot) {
     const daemon = fakeHappyAgentDaemonCreate();
@@ -117,7 +117,7 @@ function handoffHarness(chiefDraft: AgentDraftSnapshot) {
             confirmed: true,
         });
     };
-    /** The draft the daemon saved for Happy, once the debounced save lands. */
+    /** The draft the daemon saved for the Chief of Staff, once the debounced save lands. */
     const savedDraft = async () => {
         await vi.waitFor(() => expect(daemon.callCount("saveAgentDraft")).toBe(1));
         const call = daemon.calls.find((candidate) => candidate.method === "saveAgentDraft")!;
@@ -127,7 +127,7 @@ function handoffHarness(chiefDraft: AgentDraftSnapshot) {
     return { daemon, connection, store, handoff, savedDraft };
 }
 
-describe("Happy error handoff", () => {
+describe("Chief of Staff error handoff", () => {
     it("asks for diagnosis only and withholds display-only source, host, steps and commands", () => {
         const text = happyAgentErrorAssistanceText(DIAGNOSTIC);
         expect(text.split("\n\n")[0]).toBe("Troubleshooting: conversation failure");
@@ -204,7 +204,7 @@ describe("Happy error handoff", () => {
         expect(happyAgentDraftAppended("helpful", "help")).toBe("helpful\n\nhelp");
     });
 
-    it("writes an empty Happy draft in its own mode and sends nothing", async () => {
+    it("writes an empty Chief of Staff draft in its own mode and sends nothing", async () => {
         const { daemon, handoff, savedDraft } = handoffHarness({ value: null, updatedAt: null });
         await handoff();
         const saved = await savedDraft();
@@ -228,7 +228,7 @@ describe("Happy error handoff", () => {
             ...draftMode,
             text: `my notes\n\n${happyAgentErrorAssistanceText(DIAGNOSTIC)}`,
         });
-        // Opening Happy shows the combined draft in its composer.
+        // Opening the Chief of Staff shows the combined draft in its composer.
         const unsubscribe = store.subscribe(() => undefined);
         await vi.waitFor(() => expect(store.get().draft).toBe(saved.draft?.text));
         unsubscribe();

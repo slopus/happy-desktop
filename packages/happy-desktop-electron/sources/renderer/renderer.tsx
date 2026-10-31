@@ -528,7 +528,7 @@ function DesktopOnboardingGate(props: {
     if (!snapshot.onboarding) return null;
     const reached = localOnboardingReachedStage(snapshot);
     // The interface is the final onboarding step. Keep the sidebar (+) usable
-    // while Happy's unsent draft is being prepared in the background.
+    // while Chief of Staff's unsent draft is being prepared in the background.
     if (!view || view.kind === "finishing")
         return (
             <SetupHandoff
@@ -1530,11 +1530,12 @@ if (mediaPreviewBridge) {
                 const bot = session?.workspace
                     .get()
                     .list.bots.find((entry) => entry.systemKey === "chief_of_staff");
-                if (!session || !bot) throw new Error("Happy is not available yet. Try again.");
+                if (!session || !bot)
+                    throw new Error("Chief of Staff is not available yet. Try again.");
                 const location = await session.workspace.sessionLocationRead(
                     bot.conversation.id as HappyAgentSessionId,
                 );
-                if (!location) throw new Error("Happy's conversation is not available yet.");
+                if (!location) throw new Error(`${bot.name}'s conversation is not available yet.`);
                 await session.workspace.draftAppend(
                     location.sessionId,
                     "Help me get started with Happy. Let’s choose one project or create a new one, " +

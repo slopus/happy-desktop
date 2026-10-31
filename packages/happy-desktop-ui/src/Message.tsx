@@ -208,6 +208,8 @@ export type MessageProps = Omit<HTMLAttributes<HTMLDivElement>, "style"> & {
      * Defaults to `time`. */
     gutterTime?: string;
     imageUrl?: string;
+    /** The conversation's own agent, which wears the Happy logo while it has no picture. */
+    brandAvatar?: boolean;
     /** Unframed entity artwork, shared with its sidebar row and tab. */
     imageMark?: { src: string; srcSet?: string; alt?: string };
     /** Inline photo attachments rendered as a clickable thumbnail grid. */
@@ -382,6 +384,7 @@ export function Message(props: MessageProps) {
         "grouped",
         "gutterTime",
         "imageUrl",
+        "brandAvatar",
         "imageMark",
         "images",
         "onImageOpen",
@@ -415,7 +418,10 @@ export function Message(props: MessageProps) {
        their hover metadata inline after the body instead of repeating identity. */
     const showIncomingMeta = () => !local.own && !grouped();
     const authorActionLabel = () => `View ${local.author}’s profile`;
-    const happyAgent = () => local.agent && local.author.trim().toLocaleLowerCase() === "happy";
+    /* The conversation's own agent wears the Happy logo; a bot keeps the picture
+       its Happy Agent gives it. */
+    const happyAgent = () =>
+        local.agent && local.brandAvatar === true && local.imageUrl === undefined;
     const renderAvatar = (size: AvatarSize) =>
         local.imageMark ? (
             <img

@@ -171,6 +171,8 @@ export type ComposerModelControlProps = {
     selectionModel?: ComposerModelChoice;
     /** Shown beside the pill when the selected account is not an ordinary choice. */
     accountNotice?: ComposerModelAccountNotice;
+    /** The Chief of Staff bot's live name, which help is asked of. Defaults to "Chief of Staff". */
+    chiefOfStaffName?: string;
     /**
      * Each service header names its account but cannot change it. Settings
      * picks a default model this way: the account is whichever one was picked
@@ -757,7 +759,11 @@ function failureMessage(error: unknown, fallback: string) {
  * An unavailable one is red and opens a small popover above it, holding the
  * request for help and the one button that asks for it.
  */
-function AccountNotice(props: { notice: ComposerModelAccountNotice; open?: boolean }) {
+function AccountNotice(props: {
+    notice: ComposerModelAccountNotice;
+    open?: boolean;
+    chiefOfStaffName: string;
+}) {
     const notice = props.notice;
     const [open, setOpen] = useState(props.open ?? false);
     const [ask, setAsk] = useState<{ pending: boolean; error?: string }>({ pending: false });
@@ -840,7 +846,7 @@ function AccountNotice(props: { notice: ComposerModelAccountNotice; open?: boole
                                                 pending: false,
                                                 error: failureMessage(
                                                     error,
-                                                    "Could not ask Happy.",
+                                                    `Could not ask ${props.chiefOfStaffName}.`,
                                                 ),
                                             }),
                                     );
@@ -848,7 +854,7 @@ function AccountNotice(props: { notice: ComposerModelAccountNotice; open?: boole
                                 size="small"
                                 variant="primary"
                             >
-                                Ask Happy
+                                Ask {props.chiefOfStaffName}
                             </Button>
                             {ask.error ? (
                                 <span
@@ -1345,7 +1351,11 @@ export function ComposerModelControl(props: ComposerModelControlProps) {
             style={props.style}
         >
             {props.accountNotice ? (
-                <AccountNotice notice={props.accountNotice} open={preview?.accountNoticeOpen} />
+                <AccountNotice
+                    chiefOfStaffName={props.chiefOfStaffName ?? "Chief of Staff"}
+                    notice={props.accountNotice}
+                    open={preview?.accountNoticeOpen}
+                />
             ) : null}
             <button
                 aria-expanded={hasModels ? open : undefined}
@@ -1559,7 +1569,7 @@ export function ComposerModelControl(props: ComposerModelControlProps) {
                                                         pending: false,
                                                         error: failureMessage(
                                                             error,
-                                                            "Could not open Happy.",
+                                                            `Could not open ${props.chiefOfStaffName ?? "Chief of Staff"}.`,
                                                         ),
                                                     }),
                                             );

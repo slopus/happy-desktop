@@ -659,7 +659,7 @@ const QUIET_BOTS: readonly {
     readonly label: string;
     readonly unread: boolean;
 }[] = [
-    { id: "chief-of-staff", label: "Happy", unread: true },
+    { id: "chief-of-staff", label: "Chief of Staff", unread: true },
     { id: "growth", label: "Growth", unread: true },
     { id: "release-notes", label: "Release notes", unread: false },
     { id: "scraper", label: "Scraper", unread: true },

@@ -8,13 +8,13 @@ export function ConversationErrorCardPage() {
     return (
         <ComponentPage
             number={componentNumber}
-            summary="Full diagnostic text stays readable in the transcript: paragraphs and indentation are preserved, long identifiers wrap, and the one way out is Ask Happy, which receives the error itself."
+            summary="Full diagnostic text stays readable in the transcript: paragraphs and indentation are preserved, long identifiers wrap, and the one way out is Ask Chief of Staff, which receives the error itself."
             title="Conversation error card"
         >
             <Specimen
                 label="Source-specific manual recovery"
                 number="05"
-                detail="Manual steps and exact Copy stay usable without Happy. Nothing executes or sends automatically."
+                detail="Manual steps and exact Copy stay usable without Chief of Staff. Nothing executes or sends automatically."
                 stage="surface"
             >
                 <div
@@ -32,7 +32,7 @@ export function ConversationErrorCardPage() {
                         }
                         assistance={{
                             status: "unavailable",
-                            reason: "Happy is not available on this Happy Agent.",
+                            reason: "Chief of Staff is not available on this Happy Agent.",
                         }}
                         error={{
                             code: "authentication_failed",
@@ -89,8 +89,8 @@ export function ConversationErrorCardPage() {
                 </div>
             </Specimen>
             <Specimen
-                detail="An explicit click adds the quoted diagnostic to Happy's draft and opens that conversation; nothing is sent. Pending, unavailable, and failed handoffs say so."
-                label="Happy handoff"
+                detail="An explicit click adds the quoted diagnostic to the Chief of Staff's draft and opens that conversation; nothing is sent. Pending, unavailable, and failed handoffs say so."
+                label="Chief of Staff handoff"
                 number="04"
                 stage="surface"
             >
@@ -116,7 +116,7 @@ export function ConversationErrorCardPage() {
                     <ConversationErrorCard
                         assistance={{
                             status: "unavailable",
-                            reason: "Happy is not available on this Happy Agent.",
+                            reason: "Chief of Staff is not available on this Happy Agent.",
                         }}
                         reason="The provider connection closed."
                         title="Failure"

@@ -447,7 +447,7 @@ it("keeps an Antigravity task's selected model before and after a first agent-ro
             providerId: "antigravity",
         });
 
-        // Deliver first accepted message in role: "agent" (e.g. Happy) to both tasks.
+        // Deliver first accepted message in role: "agent" (e.g. Chief of Staff) to both tasks.
         // The daemon writes lastMode = ANTIGRAVITY_FLASH_MODE on acceptance; on taskWithDraft
         // the creation draft persists (no agent.draft.updated { value: null }).
         for (const [agentId, taskId] of [

@@ -33,7 +33,7 @@ export interface DesktopCloudSignInNoticeStore {
     signInStart(): void;
     teamsCheck(): void;
     chiefOfStaffAsk(): void;
-    /** Hands one team that isn't added yet to Happy to connect. */
+    /** Hands one team that isn't added yet to the Chief of Staff to connect. */
     teamConnect(teamId: string): void;
     connectionOpen(teamId: string): void;
     accountSettingsOpen(): void;
@@ -56,7 +56,7 @@ type Notice =
  * Happy Agent's typed answer. A completed sign-in shows the account's teams
  * from the connection that signed in. Those teams are joined by organization
  * ID against the saved connections in the local roster, which is also where
- * Happy that adds a missing one runs. The teams are read only
+ * the Chief of Staff that adds a missing one runs. The teams are read only
  * while that notice is on screen.
  */
 export function desktopCloudSignInNoticeStoreCreate(input: {
@@ -66,7 +66,7 @@ export function desktopCloudSignInNoticeStoreCreate(input: {
 }): DesktopCloudSignInNoticeStore {
     const listeners = new Set<() => void>();
     let notice: Notice | undefined;
-    // Which notice Happy handoff belongs to, so a late answer for
+    // Which notice a Chief of Staff handoff belongs to, so a late answer for
     // a replaced notice changes nothing.
     let generation = 0;
     let chiefOfStaff:
@@ -116,6 +116,14 @@ export function desktopCloudSignInNoticeStoreCreate(input: {
     };
 
     const chiefOfStaffRead = (): CloudSignInNoticeChiefOfStaff => {
+        const status = chiefOfStaffStatusRead();
+        const chief = entry(LOCAL_HAPPY_AGENT_ID)?.bots.find(
+            (bot) => bot.systemKey === "chief_of_staff",
+        );
+        return chief ? { ...status, name: chief.name } : status;
+    };
+
+    const chiefOfStaffStatusRead = (): CloudSignInNoticeChiefOfStaff => {
         if (chiefOfStaff !== "idle" && "pending" in chiefOfStaff)
             return chiefOfStaff.pending === undefined
                 ? { status: "pending" }
@@ -129,7 +137,7 @@ export function desktopCloudSignInNoticeStoreCreate(input: {
         )
             return { status: "available" };
         return {
-            reason: "This Mac's Happy Agent isn't running Happy.",
+            reason: "This Mac's Happy Agent isn't running a Chief of Staff.",
             status: "unavailable",
         };
     };
@@ -227,7 +235,7 @@ export function desktopCloudSignInNoticeStoreCreate(input: {
         return undefined;
     };
 
-    /** Writes one request into this Mac's Happy draft, opens it, and closes the notice. */
+    /** Writes one request into This Mac's Chief of Staff draft, opens it, and closes the notice. */
     const handoff = (request: HappyAgentChiefOfStaffRequest, teamId?: string): void => {
         const workspace = entry(LOCAL_HAPPY_AGENT_ID)?.session?.workspace;
         if (!workspace || (chiefOfStaff !== "idle" && "pending" in chiefOfStaff)) return;
@@ -237,7 +245,7 @@ export function desktopCloudSignInNoticeStoreCreate(input: {
         workspace.chiefOfStaffDraftAppend(request).then(
             () => {
                 if (asked !== generation) return;
-                // The draft opened in Happy's conversation, which
+                // The draft opened in the Chief of Staff's conversation, which
                 // lives on This Mac.
                 input.happyAgents.happyAgentActivate(LOCAL_HAPPY_AGENT_ID);
                 noticeSet(undefined);
@@ -246,7 +254,9 @@ export function desktopCloudSignInNoticeStoreCreate(input: {
                 if (asked !== generation) return;
                 chiefOfStaff = {
                     refused:
-                        error instanceof Error ? error.message : "Happy couldn't take the draft.",
+                        error instanceof Error
+                            ? error.message
+                            : `${chiefOfStaffRead().name ?? "Chief of Staff"} couldn't take the draft.`,
                 };
                 reconcile();
             },

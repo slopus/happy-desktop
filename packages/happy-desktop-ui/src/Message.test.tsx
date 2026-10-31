@@ -1031,12 +1031,19 @@ it("makes the avatar and author name a profile affordance without shifting geome
     expect(groupedRoot.element.querySelector('[data-happy-desktop-ui="avatar"]')).toBeNull();
     await view.screenshot("Message.identity.test");
 });
-it("uses the Happy logo as Happy’s compact inline agent avatar", async () => {
+it("uses the Happy logo as the conversation agent’s compact inline avatar", async () => {
     const view = createRenderer().render(
         () =>
             stage(
                 "happy-agent",
-                <Message agent author="Happy" body="On it." initials="H" time="10:43" />,
+                <Message
+                    agent
+                    author="Happy"
+                    body="On it."
+                    brandAvatar
+                    initials="H"
+                    time="10:43"
+                />,
             ),
         { width: 560, height: 80 },
     );

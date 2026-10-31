@@ -23,7 +23,7 @@ const sections = (focus: "row" | "folded"): SidebarSection[] => [
         id: "bots",
         label: "Bots",
         items: [
-            { id: "chief", kind: "agent", label: "Happy", icon: "chat" },
+            { id: "chief", kind: "agent", label: "Chief of Staff", icon: "chat" },
             { id: "release", kind: "agent", label: "Release bot", icon: "chat", status: "working" },
         ],
     },

@@ -1215,7 +1215,7 @@ export function conversationRowHeight(
                     layout.resolution ?? "",
                 ].join(":"),
                 () => {
-                    /* The message's own action and Ask Happy follow
+                    /* The message's own action and Ask Chief of Staff follow
                        it on its line, and the message wraps beside them. */
                     const lineButtons = [
                         ...(layout.lineAction

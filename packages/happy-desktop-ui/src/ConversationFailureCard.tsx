@@ -31,7 +31,7 @@ export interface ConversationFailureCardProps extends ConversationFailureActions
     readonly clock?: ConversationFailureClock;
     /**
      * Whether the card still offers its actions. A failure the conversation has
-     * since moved past keeps its message, and offers only Ask Happy.
+     * since moved past keeps its message, and offers only Ask Chief of Staff.
      */
     readonly current: boolean;
     /**
@@ -54,7 +54,7 @@ export interface ConversationFailureCardProps extends ConversationFailureActions
 
 /**
  * A failed turn, written by the client from the failure's kind: the message
- * with its own action and Ask Happy after it as quiet text buttons,
+ * with its own action and Ask Chief of Staff after it as quiet text buttons,
  * then the switch split button on a row of its own that starts on the warning
  * icon. Exactly one button is primary: the switch when it is offered,
  * otherwise the message's own action. Once acted on, the card stays in the

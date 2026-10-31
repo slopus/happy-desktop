@@ -40,7 +40,7 @@ export type EmptyStateProps = {
      * chosen for what it says, not for decoration. See `LottieScene` for what
      * each name means.
      *
-     * Happy scene uses a rounded silent MP4 with a still poster.
+     * The Chief of Staff scene uses a rounded silent MP4 with a still poster.
      * Other scenes use Lottie. The glyph stays required and is drawn until Lottie
      * paints: it is what the reader sees while the runtime loads, and what they
      * keep if it cannot load at all.

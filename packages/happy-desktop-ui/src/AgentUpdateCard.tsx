@@ -62,12 +62,14 @@ export interface AgentUpdateCardProps {
     /** Runs the update again. Offered only on a failed card. */
     onRetry?(): void;
     /**
-     * Hands the failure to Happy. Absent while Happy
+     * Hands the failure to the Chief of Staff. Absent while the Chief of Staff
      * cannot be reached, so the card never offers a link that goes nowhere.
      */
     onChiefOfStaffAsk?(): void;
     /** The handoff is being written; the link waits for it. */
     chiefOfStaffPending?: boolean;
+    /** The Chief of Staff bot's live name. Defaults to "Chief of Staff". */
+    chiefOfStaffName?: string;
     /**
      * Stops waiting for the work still running and restarts at once. Offered
      * only while work is finishing; the link says what it costs.
@@ -151,6 +153,7 @@ export function AgentUpdateCard(props: AgentUpdateCardProps) {
             line={line}
             onChiefOfStaffAsk={props.onChiefOfStaffAsk}
             chiefOfStaffPending={props.chiefOfStaffPending === true}
+            chiefOfStaffName={props.chiefOfStaffName ?? "Chief of Staff"}
             onRestartNow={props.onRestartNow}
             restartNowPending={props.restartNowPending === true}
             onRetry={props.onRetry}
@@ -256,6 +259,7 @@ function DetailLine(props: {
     onRetry: (() => void) | undefined;
     onChiefOfStaffAsk: (() => void) | undefined;
     chiefOfStaffPending: boolean;
+    chiefOfStaffName: string;
     onRestartNow: (() => void) | undefined;
     restartNowPending: boolean;
 }) {
@@ -396,7 +400,7 @@ function DetailLine(props: {
                             onClick={props.onChiefOfStaffAsk}
                             type="button"
                         >
-                            Ask Happy
+                            Ask {props.chiefOfStaffName}
                         </button>
                     ) : null}
                 </span>

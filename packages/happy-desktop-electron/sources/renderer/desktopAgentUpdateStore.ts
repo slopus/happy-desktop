@@ -317,7 +317,9 @@ export function desktopAgentUpdateStoreCreate(input: {
     const compute = (): AppHappyAgentUpdateSnapshot | undefined => {
         const progress = progressRead();
         if (!progress) return undefined;
+        const chief = local()?.bots.find((bot) => bot.systemKey === "chief_of_staff");
         return {
+            ...(chief ? { chiefOfStaffName: chief.name } : {}),
             chiefOfStaff:
                 chiefOfStaff === "pending"
                     ? "pending"

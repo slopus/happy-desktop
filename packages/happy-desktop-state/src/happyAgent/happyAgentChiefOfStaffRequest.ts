@@ -1,7 +1,7 @@
 import type { HappyAgentSessionId } from "./happyAgentTypes.js";
 
 /**
- * Something the reader asks Happy for from outside its
+ * Something the reader asks the Chief of Staff for from outside its
  * conversation. Each is written into that conversation's draft as a labelled
  * request, never sent on the reader's behalf.
  */
@@ -21,7 +21,7 @@ export type HappyAgentChiefOfStaffRequest =
           /**
            * The reader belongs to Happy teams that this Happy Agent has no
            * connection to. Only each team's name and organization ID travel;
-           * Happy resolves the server through its own
+           * the Chief of Staff resolves the server through its own
            * authenticated team tools.
            */
           readonly kind: "teamConnectionAdd";
@@ -43,7 +43,7 @@ export type HappyAgentChiefOfStaffRequest =
           readonly message: string;
       };
 
-/** A Happy team named to Happy: its display name and WorkOS organization ID. */
+/** A Happy team named to the Chief of Staff: its display name and WorkOS organization ID. */
 export interface HappyAgentChiefOfStaffTeam {
     readonly id: string;
     readonly name: string;

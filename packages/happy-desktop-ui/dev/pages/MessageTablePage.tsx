@@ -142,6 +142,7 @@ export function MessageTablePage() {
                             <Message
                                 agent
                                 author="Happy"
+                                brandAvatar
                                 body={markdownTableFixtures[item.fixture]}
                             />,
                         )}
@@ -151,6 +152,7 @@ export function MessageTablePage() {
                             <Message
                                 agent
                                 author="Happy"
+                                brandAvatar
                                 body={markdownTableFixtures[item.fixture]}
                             />,
                         )}

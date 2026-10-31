@@ -822,15 +822,19 @@ export interface ConversationError {
 }
 
 /**
- * Whether an error can be handed to Happy. A handoff writes that
+ * Whether an error can be handed to the Chief of Staff. A handoff writes that
  * conversation's draft and opens it; a prepared handoff is not sent.
  */
-export type ConversationErrorAssistance =
+export type ConversationErrorAssistance = (
     | { readonly status: "ready" }
     | { readonly status: "pending" }
     | { readonly status: "prepared" }
     | { readonly status: "failed"; readonly reason: string }
-    | { readonly status: "unavailable"; readonly reason: string };
+    | { readonly status: "unavailable"; readonly reason: string }
+) & {
+    /** The Chief of Staff bot's live name; absent while this Happy Agent lists no such bot. */
+    readonly chiefName?: string;
+};
 
 export interface ConversationErrorAssistanceEntry {
     readonly entryId: string;

@@ -73,6 +73,7 @@ function agentReply(body: string, streaming = false) {
         <Message
             agent
             author="Happy"
+            brandAvatar
             body={body}
             {...(streaming ? { generationStatus: "streaming" as const } : {})}
             initials="HA"

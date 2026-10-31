@@ -404,7 +404,7 @@ it.each([360, 720])(
             .element as HTMLElement;
         expect(buttons(card)).toEqual([
             { text: "Retry", variant: "ghost", height: 28 },
-            { text: "Ask Happy", variant: "ghost", height: 28 },
+            { text: "Ask Chief of Staff", variant: "ghost", height: 28 },
             {
                 text: "Switch to claude_work · Opus 5.5 and continue",
                 variant: "primary",
@@ -414,7 +414,7 @@ it.each([360, 720])(
         ]);
         /* Retry follows the message 8px after it, centred on its first 20px line
            and hanging 4px over it, so the line keeps the icon's height; Ask
-           Happy follows Retry 4px after it. */
+           Chief of Staff follows Retry 4px after it. */
         const message = view.$('[data-happy-desktop-ui="conversation-error-reason"]').bounds();
         const retry = view.$(".happy-conversation-failure-card__line-action").bounds();
         const ask = view.$(".happy-conversation-failure-card__ask").bounds();
@@ -455,7 +455,7 @@ it("makes the message line's own action primary when nothing can be switched to"
     const card = view.$('[data-happy-desktop-ui="conversation-error-card"]').element as HTMLElement;
     expect(buttons(card)).toEqual([
         { text: "New chat", variant: "primary", height: 28 },
-        { text: "Ask Happy", variant: "ghost", height: 28 },
+        { text: "Ask Chief of Staff", variant: "ghost", height: 28 },
     ]);
     card.querySelector<HTMLButtonElement>(".happy-conversation-failure-card__line-action")!.click();
     expect(onNewChat).toHaveBeenCalledOnce();
@@ -658,7 +658,7 @@ it("keeps a resolved card in history with a muted record and no actions", async 
     ).toEqual(["Switched to claude_work · Opus 5.5", "Handled"]);
 });
 
-it("offers only Ask Happy on a failure the conversation has moved past", async () => {
+it("offers only Ask Chief of Staff on a failure the conversation has moved past", async () => {
     const view = createRenderer();
     view.render(
         () => (
@@ -674,7 +674,7 @@ it("offers only Ask Happy on a failure the conversation has moved past", async (
     );
     await view.ready();
     const card = view.$('[data-happy-desktop-ui="conversation-error-card"]').element as HTMLElement;
-    expect(buttons(card).map((button) => button.text)).toEqual(["Ask Happy"]);
+    expect(buttons(card).map((button) => button.text)).toEqual(["Ask Chief of Staff"]);
     expect(card.textContent).toContain("claude auth login");
     expect(card.getBoundingClientRect().height).toBe(
         modeled(signin(), 720, { retry: false, newChat: false, switch: false }, false),

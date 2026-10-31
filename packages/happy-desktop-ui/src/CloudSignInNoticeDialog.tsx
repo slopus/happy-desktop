@@ -58,19 +58,23 @@ export type CloudSignInNoticeView =
     | { kind: "unmatched"; account: CloudSignInNoticeAccount }
     | { kind: "failed"; reason: CloudSignInNoticeFailure };
 
-export type CloudSignInNoticeChiefOfStaff =
+export type CloudSignInNoticeChiefOfStaff = (
     | { status: "available" }
     /** A handoff is in flight; `teamId` names the team row that asked, if one did. */
     | { status: "pending"; teamId?: string }
-    | { status: "unavailable"; reason: string };
+    | { status: "unavailable"; reason: string }
+) & {
+    /** The Chief of Staff bot's live name, while This Mac's Happy Agent lists one. */
+    name?: string;
+};
 
 export type CloudSignInNoticeDialogProps = {
     view: CloudSignInNoticeView;
     chiefOfStaff: CloudSignInNoticeChiefOfStaff;
     onClose: () => void;
-    /** Hands the failure to Happy. */
+    /** Hands the failure to the Chief of Staff. */
     onChiefOfStaffAsk: () => void;
-    /** Hands one team that isn't added yet to Happy to connect. */
+    /** Hands one team that isn't added yet to the Chief of Staff to connect. */
     onTeamConnect: (teamId: string) => void;
     /** Starts a fresh sign-in that this window records and can match. */
     onSignIn: () => void;
@@ -147,7 +151,7 @@ interface Presentation {
  * It says only what the app knows. A completed sign-in shows "Your teams":
  * the account's teams against the saved connections, joined by organization
  * ID, not-added teams first. Each row carries its own action: a team that
- * isn't added asks Happy to connect it, and one already added
+ * isn't added asks the Chief of Staff to connect it, and one already added
  * opens.
  * A sign-in this window didn't start is never used; the only way forward is a
  * fresh sign-in started here. A failure names its reason and offers a direct
@@ -188,9 +192,13 @@ function paragraph(text: string): ReactNode {
     );
 }
 
+function chiefOfStaffName(props: CloudSignInNoticeDialogProps): string {
+    return props.chiefOfStaff.name ?? "Chief of Staff";
+}
+
 function chiefOfStaffBanner(props: CloudSignInNoticeDialogProps): ReactNode {
     return props.chiefOfStaff.status === "unavailable" ? (
-        <Banner tone="neutral" title="Happy isn't running here">
+        <Banner tone="neutral" title={`${chiefOfStaffName(props)} unavailable`}>
             {props.chiefOfStaff.reason}
         </Banner>
     ) : null;
@@ -266,7 +274,11 @@ function present(props: CloudSignInNoticeDialogProps): Presentation {
                 footer: (
                     <>
                         {failure.chiefOfStaff && props.chiefOfStaff.status !== "unavailable"
-                            ? chiefOfStaffButton(props, "Ask Happy", "secondary")
+                            ? chiefOfStaffButton(
+                                  props,
+                                  `Ask ${chiefOfStaffName(props)}`,
+                                  "secondary",
+                              )
                             : closeButton(props)}
                         <Button onClick={props.onSignIn} variant="primary">
                             {failure.retry}
@@ -321,7 +333,7 @@ function teamRows(props: CloudSignInNoticeDialogProps, teams: readonly CloudSign
                         </Button>
                     ) : (
                         <Button
-                            aria-label={`Ask Happy to connect ${team.name}`}
+                            aria-label={`Ask ${chiefOfStaffName(props)} to connect ${team.name}`}
                             disabled={chief.status === "unavailable"}
                             loading={chief.status === "pending" && chief.teamId === team.id}
                             onClick={() => props.onTeamConnect(team.id)}
@@ -329,7 +341,7 @@ function teamRows(props: CloudSignInNoticeDialogProps, teams: readonly CloudSign
                             title={chief.status === "unavailable" ? chief.reason : undefined}
                             variant="primary"
                         >
-                            Ask Happy to connect
+                            Ask {chiefOfStaffName(props)} to connect
                         </Button>
                     )}
                 </li>
@@ -375,7 +387,7 @@ function signedIn(
                             Open account settings
                         </Button>
                     ) : (
-                        chiefOfStaffButton(props, "Ask Happy", "secondary")
+                        chiefOfStaffButton(props, `Ask ${chiefOfStaffName(props)}`, "secondary")
                     )}
                 </>
             ),

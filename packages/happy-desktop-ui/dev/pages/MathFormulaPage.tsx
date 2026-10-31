@@ -265,7 +265,13 @@ export function MathFormulaPage() {
                             body={String.raw`Isn't it just \(\rho\sigma^2\) in the limit? That matches $\lim_{n\to\infty}\frac{1+(n-1)\rho}{n} = \rho$.`}
                             time="9:41"
                         />
-                        <Message agent author="Happy" body={SERIES_FOLLOW_UP} time="9:42" />
+                        <Message
+                            agent
+                            author="Happy"
+                            body={SERIES_FOLLOW_UP}
+                            brandAvatar
+                            time="9:42"
+                        />
                     </>,
                 )}
             </Specimen>

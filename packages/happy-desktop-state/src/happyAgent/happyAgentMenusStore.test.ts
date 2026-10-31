@@ -188,7 +188,7 @@ describe("pools in the pickers", () => {
     });
 });
 
-describe("Happy account requests", () => {
+describe("Chief of Staff account requests", () => {
     it("labels an unavailable account with its id, model, and conversation", () => {
         const text = happyAgentChiefOfStaffRequestText({
             kind: "accountUnavailable",

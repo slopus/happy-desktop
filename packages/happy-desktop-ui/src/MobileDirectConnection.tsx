@@ -154,8 +154,10 @@ export interface MobileDirectPairingPanelProps {
     onConfirm(): void;
     /** The person says they don't match, or stops the pairing. */
     onReject(): void;
-    /** Hands a failure to Happy. */
+    /** Hands a failure to the Chief of Staff. */
     onErrorAssist?(): void;
+    /** The Chief of Staff bot's live name. Defaults to "Chief of Staff". */
+    readonly chiefOfStaffName?: string;
 }
 
 /**
@@ -201,7 +203,7 @@ function DirectPairingBody(props: MobileDirectPairingPanelProps & { readonly blo
             <PairingNote detail={connector.message} title="Couldn't read direct connection">
                 {props.onErrorAssist ? (
                     <Button onClick={props.onErrorAssist} size="small" variant="ghost">
-                        Ask Happy
+                        Ask {props.chiefOfStaffName ?? "Chief of Staff"}
                     </Button>
                 ) : null}
             </PairingNote>
@@ -607,7 +609,7 @@ function DirectFailure(
             <PairingActions>
                 {props.onErrorAssist ? (
                     <Button onClick={props.onErrorAssist} size="small" variant="ghost">
-                        Ask Happy
+                        Ask {props.chiefOfStaffName ?? "Chief of Staff"}
                     </Button>
                 ) : null}
                 <Button
@@ -693,6 +695,8 @@ export interface MobileDirectConnectionSectionProps {
     onDeviceRemoveCancel(): void;
     onDeviceRemoveConfirm(): void;
     onErrorAssist?(): void;
+    /** The Chief of Staff bot's live name. Defaults to "Chief of Staff". */
+    readonly chiefOfStaffName?: string;
 }
 
 /**
@@ -742,7 +746,7 @@ export function MobileDirectConnectionSection(props: MobileDirectConnectionSecti
                         <Box className="happy-mobile-direct-section__status-control">
                             {failure && props.onErrorAssist ? (
                                 <Button onClick={props.onErrorAssist} size="small" variant="ghost">
-                                    Ask Happy
+                                    Ask {props.chiefOfStaffName ?? "Chief of Staff"}
                                 </Button>
                             ) : null}
                             <HappyAgentSettingsStatus label={state.label} variant={state.variant} />

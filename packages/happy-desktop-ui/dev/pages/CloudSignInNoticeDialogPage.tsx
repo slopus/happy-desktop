@@ -48,7 +48,7 @@ const handlers = {
 
 const AVAILABLE: CloudSignInNoticeChiefOfStaff = { status: "available" };
 const UNAVAILABLE: CloudSignInNoticeChiefOfStaff = {
-    reason: "This Mac's Happy Agent isn't running Happy.",
+    reason: "This Mac's Happy Agent isn't running a Chief of Staff.",
     status: "unavailable",
 };
 const EMAIL = "ada@example.com";
@@ -84,7 +84,7 @@ const SPECIMENS: readonly {
         },
     },
     {
-        detail: "one team, no saved connection · row action hands an unsent draft to Happy",
+        detail: "one team, no saved connection · row action hands an unsent draft to Chief of Staff",
         label: "Team not added",
         view: {
             email: EMAIL,
@@ -109,8 +109,8 @@ const SPECIMENS: readonly {
         },
     },
     {
-        detail: "no Happy · row action disabled, reason and settings in the body",
-        label: "Team not added · no Happy",
+        detail: "no Chief of Staff · row action disabled, reason and settings in the body",
+        label: "Team not added · no Chief of Staff",
         chiefOfStaff: UNAVAILABLE,
         view: {
             email: EMAIL,
@@ -242,7 +242,7 @@ const SPECIMENS: readonly {
         view: { kind: "failed", reason: "unavailable" },
     },
     {
-        detail: "Happy Agent did not answer · no Happy",
+        detail: "Happy Agent did not answer · no Chief of Staff",
         label: "Failed",
         chiefOfStaff: UNAVAILABLE,
         view: { kind: "failed", reason: "failed" },
@@ -254,7 +254,7 @@ export function CloudSignInNoticeDialogPage() {
         <ComponentPage
             contract="Props only"
             number={componentNumber}
-            summary="The centered notice for a Happy account sign-in that came back to the app: teams to add through Happy, teams already added, a sign-in this window didn't start, and each failure with its recovery."
+            summary="The centered notice for a Happy account sign-in that came back to the app: teams to add through Chief of Staff, teams already added, a sign-in this window didn't start, and each failure with its recovery."
             title="CloudSignInNoticeDialog"
         >
             {SPECIMENS.map((specimen, index) => {

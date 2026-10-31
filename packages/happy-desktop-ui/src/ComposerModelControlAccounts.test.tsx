@@ -126,7 +126,7 @@ it("keeps a hidden selection named, marked grey, and off the account list", asyn
     expect(accounts.element.textContent).not.toContain("claude_extra");
 }, 60000);
 
-it("marks an unavailable selection red and asks Happy from its popover", async () => {
+it("marks an unavailable selection red and asks the Chief of Staff from its popover", async () => {
     let settle: { resolve(): void; reject(error: Error): void } | undefined;
     const onAsk = vi.fn(
         () =>
@@ -161,13 +161,13 @@ it("marks an unavailable selection red and asks Happy from its popover", async (
     // Opening it sends nothing; only the button asks.
     expect(onAsk).not.toHaveBeenCalled();
     const ask = view.$('[data-happy-desktop-ui="composer-model-control-notice-popover"] button');
-    expect(ask.element.textContent).toContain("Ask Happy");
+    expect(ask.element.textContent).toContain("Ask Chief of Staff");
     await userEvent.click(ask.element);
     expect(onAsk).toHaveBeenCalledTimes(1);
-    settle!.reject(new Error("Happy is not available on this Happy Agent."));
+    settle!.reject(new Error("Chief of Staff is not available on this Happy Agent."));
     await vi.waitFor(() =>
         expect(popover.element.textContent).toContain(
-            "Happy is not available on this Happy Agent.",
+            "Chief of Staff is not available on this Happy Agent.",
         ),
     );
     await userEvent.click(ask.element);

@@ -1003,7 +1003,7 @@ export interface HappyDesktopBridge {
      * already receive in a snapshot.
      */
     onboardingProjectChoose(): Promise<void>;
-    /** Remembers the explicit handoff to Happy without importing a project. */
+    /** Remembers the explicit handoff to Chief of Staff without importing a project. */
     onboardingChiefOfStaffComplete(): Promise<void>;
     /** Leaves provider authentication setup after its report, or skips it while it runs. */
     onboardingAssistantsContinue(): Promise<void>;

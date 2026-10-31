@@ -381,7 +381,7 @@ const PARTIAL_SERVICES: readonly ComposerModelService[] = SERVICES.map((service)
         : service,
 );
 
-/** Asking Happy only writes its draft; here it settles at once. */
+/** Asking the Chief of Staff only writes its draft; here it settles at once. */
 const chiefOfStaffAsk = () => Promise.resolve();
 
 /* claude_extra is hidden: its account is not offered, but a conversation on it
@@ -869,7 +869,7 @@ export function ComposerModelControlPage() {
             <Specimen
                 number="20"
                 label="Unavailable account selected"
-                detail="The conversation is set to grok_api, which is switched off. The triangle is red; clicking it explains what happened, shows the exact request, and offers to put it in Happy's draft. Nothing is sent."
+                detail="The conversation is set to grok_api, which is switched off. The triangle is red; clicking it explains what happened, shows the exact request, and offers to put it in the Chief of Staff's draft. Nothing is sent."
                 stage="surface"
             >
                 <Anchor height={400}>
@@ -885,7 +885,7 @@ export function ComposerModelControlPage() {
             <Specimen
                 number="21"
                 label="Manage accounts"
-                detail="The model list's footer offers Manage accounts directly above Latest benchmarks, on the same line style. It adds a Manage connected accounts request to Happy's draft and opens that conversation."
+                detail="The model list's footer offers Manage accounts directly above Latest benchmarks, on the same line style. It adds a Manage connected accounts request to the Chief of Staff's draft and opens that conversation."
                 stage="surface"
             >
                 <Open

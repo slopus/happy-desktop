@@ -25,6 +25,7 @@ import {
 } from "./AgentWorkingStatus";
 import { ChannelHeader } from "./ChannelHeader";
 import {
+    authorAvatar,
     ConversationEntryView,
     type ConversationEntryFailureProps,
     type ConversationEntryViewProps,
@@ -945,6 +946,7 @@ export function ConversationView(props: ConversationViewProps) {
                 body=""
                 className="happy-message--activity-lead happy-message--working-lead"
                 initials={initialsOf(props.agentAuthor.displayName)}
+                {...authorAvatar(props.agentAuthor)}
             >
                 {workingStatusLine}
             </Message>

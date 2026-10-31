@@ -110,7 +110,7 @@ export function EmptyStatePage() {
             </div>
             <Specimen
                 detail="128px silent MP4 · plays once · thumbhash preview · 14px rounded border · title 24/32"
-                label="Happy conversation"
+                label="Chief of Staff conversation"
                 number="E-05"
                 stage="surface"
             >
@@ -119,7 +119,7 @@ export function EmptyStatePage() {
                         dock={
                             <ConversationDock
                                 composer={composer}
-                                composerPlaceholder="Message Happy…"
+                                composerPlaceholder="Message Chief of Staff…"
                                 onComposerSend={noop}
                                 onComposerValueChange={noop}
                             />
@@ -132,7 +132,7 @@ export function EmptyStatePage() {
                                 emphasis="prominent"
                                 icon="shield"
                                 size="panel"
-                                title="Happy"
+                                title="Your Chief of Staff"
                             />
                         }
                         entries={[]}

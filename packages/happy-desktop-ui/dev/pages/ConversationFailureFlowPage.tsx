@@ -459,7 +459,7 @@ export function ConversationFailureFlowPage() {
     return (
         <ComponentPage
             number={componentNumber}
-            summary="Failed turns as the client writes them from the failure's kind: the message with Retry or New chat after it, then the switch split button and Ask Happy. The switch lists the conversation's model picker's own accounts and live usage, never a list stored with the failure. Reset times are told on the viewer's own clock; this page pins it to Los Angeles. Each viewport is named for `pnpm blueprint:screens`."
+            summary="Failed turns as the client writes them from the failure's kind: the message with Retry or New chat after it, then the switch split button and Ask Chief of Staff. The switch lists the conversation's model picker's own accounts and live usage, never a list stored with the failure. Reset times are told on the viewer's own clock; this page pins it to Los Angeles. Each viewport is named for `pnpm blueprint:screens`."
             title="Conversation failure flow"
         >
             {[

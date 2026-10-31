@@ -13,7 +13,7 @@ import {
 import type { ArtifactAuthor, ArtifactSource } from "@slopus/happy-agent-client";
 
 const names: HappyAgentArtifactNames = {
-    bot: (id) => (id === "bot_chief" ? "Happy" : undefined),
+    bot: (id) => (id === "bot_chief" ? "Chief of Staff" : undefined),
     task: (id) => (id === "task_q3" ? "Q3 report" : undefined),
     project: (id) => (id === "prj_happy" ? "happy" : undefined),
     workspace: (id) => (id === "wsp_feature" ? "artifacts" : undefined),
@@ -31,7 +31,7 @@ describe("where an artifact was made", () => {
                 { kind: "bot", botId: "bot_chief", agentId: "agt_1" },
                 names,
             ),
-        ).toBe("Happy");
+        ).toBe("Chief of Staff");
         expect(
             happyAgentArtifactSourceLabel(
                 { kind: "task", taskId: "task_q3", agentId: null },
@@ -104,7 +104,7 @@ describe("who made a change", () => {
                 { kind: "agent", agentId: "agt_sub", botId: "bot_chief" },
                 names,
             ),
-        ).toBe("Happy");
+        ).toBe("Chief of Staff");
         expect(
             happyAgentArtifactAuthorLabel(
                 { kind: "agent", agentId: "agt_chat", botId: null },

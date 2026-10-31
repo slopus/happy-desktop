@@ -57,7 +57,7 @@ function WindowedBesideSidebar() {
                                         {
                                             id: "chief-of-staff",
                                             kind: "agent",
-                                            label: "Happy",
+                                            label: "Chief of Staff",
                                             icon: "chat",
                                         },
                                         {

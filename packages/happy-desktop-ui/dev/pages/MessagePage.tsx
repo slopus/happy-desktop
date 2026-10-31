@@ -812,6 +812,7 @@ export function MessagePage() {
                     <Message
                         agent
                         author="Happy"
+                        brandAvatar
                         body=""
                         emptyText="(no text)"
                         time="9:14"

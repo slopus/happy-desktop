@@ -772,7 +772,7 @@ export function SetupPagePage() {
             {handoffSteps.map(({ label, busy, message }, index) => (
                 <Specimen
                     key={label}
-                    detail="Link Mobile App is the last page · the app opens to an unsent editable Happy draft · manual projects use the sidebar + button"
+                    detail="Link Mobile App is the last page · the app opens to an unsent editable Chief of Staff draft · manual projects use the sidebar + button"
                     label={label}
                     number={String(index + 18 + desktopSteps.length + mobileSteps.length)}
                     stage="surface"

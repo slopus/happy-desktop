@@ -441,6 +441,9 @@ function AgentUpdateSidebar(props: {
     return (
         <SidebarAgentUpdate
             chiefOfStaffPending={snapshot.chiefOfStaff === "pending"}
+            {...(snapshot.chiefOfStaffName === undefined
+                ? {}
+                : { chiefOfStaffName: snapshot.chiefOfStaffName })}
             expanded={snapshot.expanded}
             hidden={!snapshot.revealed}
             onCollapse={store.cardToggle}
@@ -5740,6 +5743,7 @@ function HappyAgentSurfaceChat(props: {
             activitySelected={false}
             {...(props.artifacts ? { artifacts: props.artifacts } : {})}
             referenceEntities={messageReferenceEntities(workspace.list)}
+            {...chiefOfStaffNameProps(workspace.list.bots)}
             onReferenceGroupOpen={(groupId, agentId) => props.onChatSelect(groupId, agentId)}
             {...(props.referenceSurfaces ? { referenceSurfaces: props.referenceSurfaces } : {})}
             modelUsageWatch={modelUsageWatch}
@@ -7113,6 +7117,7 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
             // Files or tools are open here, but no session exists yet. The body
             // under the strip is the same composer that starts the first one.
             <HappyAgentGroupComposer
+                {...chiefOfStaffNameProps(workspace.list.bots)}
                 composer={workspace.groupComposer}
                 composerNotice={workspaceComposerNotice}
                 modelUsageWatch={modelUsageWatch}
@@ -7138,6 +7143,7 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                     browserConnectionId: props.browserConnectionId,
                 }}
                 referenceEntities={messageReferenceEntities(workspace.list)}
+                {...chiefOfStaffNameProps(workspace.list.bots)}
                 {...(props.referenceSurfaces ? { referenceSurfaces: props.referenceSurfaces } : {})}
                 onReferenceGroupOpen={referenceGroupOpen}
                 activitySelected={panel.open && panel.activeViewId === "activity"}
@@ -7166,7 +7172,7 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                             emphasis="prominent"
                             icon="shield"
                             size="panel"
-                            title="Happy"
+                            title={openBot.name}
                         />
                     ) : undefined
                 }
@@ -8537,6 +8543,12 @@ function HappyAgentComposerDock(
  * tabs are files and tools — because two of them on one screen would be two
  * places to type the same first message.
  */
+/** The Chief of Staff bot's live name, for copy that names it, when this Happy Agent lists one. */
+function chiefOfStaffNameProps(bots: readonly HappyAgentBot[]): { chiefOfStaffName?: string } {
+    const chief = bots.find((bot) => bot.systemKey === "chief_of_staff");
+    return chief ? { chiefOfStaffName: chief.name } : {};
+}
+
 function HappyAgentGroupComposer(props: {
     composer: ComposerSource;
     composerNotice?: readonly string[];
@@ -8561,6 +8573,8 @@ function HappyAgentGroupComposer(props: {
      */
     restarting?: boolean;
     workspace: HappyAgentWorkspaceStore;
+    /** The Chief of Staff bot's live name, while this Happy Agent lists one. */
+    chiefOfStaffName?: string;
 }) {
     const workspace = props.workspace;
     const draftMenus = props.draftMenus;
@@ -8597,6 +8611,9 @@ function HappyAgentGroupComposer(props: {
                             <ComposerModelControl
                                 {...happyAgentComposerModelControlProps(draftMenus, {
                                     usageWatch: props.modelUsageWatch,
+                                    ...(props.chiefOfStaffName === undefined
+                                        ? {}
+                                        : { chiefOfStaffName: props.chiefOfStaffName }),
                                     onChiefOfStaffAsk: (request) =>
                                         workspace.chiefOfStaffDraftAppend(request),
                                     onEffortChange: (effort?: HappyAgentThinkingLevel) =>
@@ -8667,6 +8684,8 @@ function HappyAgentConversationBody(props: {
     };
     /** The agents, workspaces, and projects the transcript's references can name. */
     referenceEntities: MessageReferenceEntities;
+    /** The Chief of Staff bot's live name, while this Happy Agent lists one. */
+    chiefOfStaffName?: string;
     /** Opens a group a reference names, on one of its conversations or where it was left. */
     onReferenceGroupOpen: (groupId: HappyAgentGroupId, agentId?: string) => void;
     /** The Surfaces the transcript's references can name, and where one opens. */
@@ -8731,6 +8750,9 @@ function HappyAgentConversationBody(props: {
                 {...(props.artifacts ? { artifacts: props.artifacts } : {})}
                 {...(props.inlineEngines ? { inlineEngines: props.inlineEngines } : {})}
                 referenceEntities={props.referenceEntities}
+                {...(props.chiefOfStaffName === undefined
+                    ? {}
+                    : { chiefOfStaffName: props.chiefOfStaffName })}
                 onReferenceGroupOpen={props.onReferenceGroupOpen}
                 {...(props.referenceSurfaces ? { referenceSurfaces: props.referenceSurfaces } : {})}
                 modelUsageWatch={props.modelUsageWatch}
@@ -9122,6 +9144,8 @@ function HappyAgentConversationSurface(props: {
     };
     /** The agents, workspaces, and projects the transcript's references can name. */
     referenceEntities: MessageReferenceEntities;
+    /** The Chief of Staff bot's live name, while this Happy Agent lists one. */
+    chiefOfStaffName?: string;
     /** Opens a group a reference names, on one of its conversations or where it was left. */
     onReferenceGroupOpen: (groupId: HappyAgentGroupId, agentId?: string) => void;
     /** The Surfaces the transcript's references can name, and where one opens. */
@@ -9251,6 +9275,9 @@ function HappyAgentConversationSurface(props: {
         ? happyAgentComposerModelControlProps(conversation.menus, {
               usageWatch: props.modelUsageWatch,
               sessionId: conversation.conversationId as HappyAgentSessionId,
+              ...(props.chiefOfStaffName === undefined
+                  ? {}
+                  : { chiefOfStaffName: props.chiefOfStaffName }),
               onChiefOfStaffAsk: (request) => workspace.chiefOfStaffDraftAppend(request),
               disabled: !configurable || conversation.modelLocked,
               onEffortChange: (effort?: HappyAgentThinkingLevel) => {
@@ -10042,11 +10069,12 @@ function HappyAgentCreateBotSurface(props: {
     unavailable?: string;
     workspace: HappyAgentWorkspaceStore;
 }) {
-    const botCreate = useSyncExternalStore(
+    const snapshot = useSyncExternalStore(
         reactFrameSubscribe(props.workspace),
         props.workspace.get,
         props.workspace.get,
-    ).botCreate;
+    );
+    const botCreate = snapshot.botCreate;
     const modelUsageWatch = useComposerModelUsageWatch(props.providerUsage);
     if (!botCreate) return null;
     const store = props.workspace;
@@ -10071,6 +10099,7 @@ function HappyAgentCreateBotSurface(props: {
                             <ComposerModelControl
                                 {...happyAgentComposerModelControlProps(menus, {
                                     usageWatch: modelUsageWatch,
+                                    ...chiefOfStaffNameProps(snapshot.list.bots),
                                     onChiefOfStaffAsk: (request) =>
                                         store.chiefOfStaffDraftAppend(request),
                                     onEffortChange: (effort?: HappyAgentThinkingLevel) =>
@@ -10165,11 +10194,12 @@ function HappyAgentCreateTaskSurface(props: {
     unavailable?: string;
     workspace: HappyAgentWorkspaceStore;
 }) {
-    const taskCreate = useSyncExternalStore(
+    const snapshot = useSyncExternalStore(
         reactFrameSubscribe(props.workspace),
         props.workspace.get,
         props.workspace.get,
-    ).taskCreate;
+    );
+    const taskCreate = snapshot.taskCreate;
     const modelUsageWatch = useComposerModelUsageWatch(props.providerUsage);
     if (!taskCreate) return null;
     const store = props.workspace;
@@ -10187,6 +10217,7 @@ function HappyAgentCreateTaskSurface(props: {
                             <ComposerModelControl
                                 {...happyAgentComposerModelControlProps(menus, {
                                     usageWatch: modelUsageWatch,
+                                    ...chiefOfStaffNameProps(snapshot.list.bots),
                                     onChiefOfStaffAsk: (request) =>
                                         store.chiefOfStaffDraftAppend(request),
                                     onEffortChange: (effort?: HappyAgentThinkingLevel) =>

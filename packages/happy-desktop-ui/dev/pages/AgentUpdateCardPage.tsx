@@ -161,7 +161,7 @@ const SECTIONS: SidebarSection[] = [
     {
         id: "bots",
         items: [
-            { id: "chief", kind: "agent", label: "Happy" },
+            { id: "chief", kind: "agent", label: "Chief of Staff" },
             { id: "release", kind: "agent", label: "Release bot", status: "working" },
         ],
         label: "Bots",
@@ -306,7 +306,7 @@ export function AgentUpdateCardPage() {
             ))}
 
             <Specimen
-                detail="Try again · Ask Happy while Happy can be reached; only Try again when it cannot, rather than a link that goes nowhere"
+                detail="Try again · Ask Chief of Staff while the Chief of Staff can be reached; only Try again when it cannot, rather than a link that goes nowhere"
                 label="Failure actions"
                 number="03"
                 stage="surface"

@@ -634,10 +634,10 @@ const SURFACES: readonly MockSurface[] = [
     },
     { id: "house", joined: true, view: HOUSE },
     { id: "weekend", joined: true, view: MESSAGES_SURFACE },
-    reference("ref-chief", "Happy", "bot", {
+    reference("ref-chief", "Chief of Staff", "bot", {
         face: { initials: "CS" },
         opens: "chief",
-        view: { phase: "available", kind: "bot", name: "Happy", action: "open" },
+        view: { phase: "available", kind: "bot", name: "Chief of Staff", action: "open" },
     }),
     { id: "launch", joined: true, view: KANBAN },
     reference("ref-spec", "Launch spec", "artifact", {
@@ -728,7 +728,7 @@ const ARTIFACTS: SidebarItem = {
 };
 
 const BOTS: readonly SidebarItem[] = [
-    { initials: "CS", id: "chief", kind: "agent", label: "Happy" },
+    { initials: "CS", id: "chief", kind: "agent", label: "Chief of Staff" },
     { initials: "RN", id: "notes", kind: "agent", label: "Release notes" },
 ];
 
@@ -1034,7 +1034,7 @@ const MENTIONS: Mentionable[] = [
     { id: "s1", name: "House rules", description: "Document", icon: "doc", initials: "H" },
     { id: "s2", name: "Groceries", description: "Todo list", icon: "tasks", initials: "G" },
     { id: "s3", name: "Weekend trip", description: "Chat", icon: "users", initials: "W" },
-    { id: "a1", name: "Happy", description: "Bot", icon: "agents", initials: "C" },
+    { id: "a1", name: "Chief of Staff", description: "Bot", icon: "agents", initials: "C" },
     {
         id: "a2",
         name: "Rewrite onboarding guide",
@@ -1127,7 +1127,7 @@ export function HappyAgentSurfacesBlueprintPage() {
             title="HappyAgentSurfaces"
         >
             <FullScreenSpecimen
-                detail="Live, in the window. Artifacts heads the first group and never moves; drag a Surface among the others. Happy, Launch spec, and Rewrite onboarding guide are a bot, an artifact, and a task kept among the Surfaces, wearing their own faces and opening where they always open; Old pricing page was deleted since. + beside the collapse control offers a todo list or a document; the search above everything replaces the sidebar with what matches. The list's add field has the caret, and typing anywhere no other control wants lands in it, as in a chat."
+                detail="Live, in the window. Artifacts heads the first group and never moves; drag a Surface among the others. Chief of Staff, Launch spec, and Rewrite onboarding guide are a bot, an artifact, and a task kept among the Surfaces, wearing their own faces and opening where they always open; Old pricing page was deleted since. + beside the collapse control offers a todo list or a document; the search above everything replaces the sidebar with what matches. The list's add field has the caret, and typing anywhere no other control wants lands in it, as in a chat."
                 label="Window"
                 number="00"
                 screen="00-window-1100x760"
