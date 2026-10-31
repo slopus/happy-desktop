@@ -15,6 +15,8 @@ export type RichTaskMark =
 export type RichTaskFace = {
     readonly id: string;
     readonly label: string;
+    /** Drawn when there is no picture; the label's first letter otherwise. */
+    readonly initials?: string;
     readonly imageUrl?: string;
     readonly tone?: ToneName;
 };
@@ -181,7 +183,10 @@ export function RichTaskCard(props: RichTaskCardProps) {
                                         <Avatar
                                             aria-label={face.label}
                                             imageUrl={face.imageUrl}
-                                            initials={face.label.slice(0, 1).toUpperCase()}
+                                            initials={
+                                                face.initials ??
+                                                face.label.slice(0, 1).toUpperCase()
+                                            }
                                             key={face.id}
                                             size="xs"
                                             tone={face.tone}

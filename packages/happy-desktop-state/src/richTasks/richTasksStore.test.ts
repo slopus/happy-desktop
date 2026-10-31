@@ -121,3 +121,33 @@ it("switches between the lists when user_settings.updated flips tasks.rich", asy
     await daemon.client.saveUserSetting("tasks.rich", { value: "yes" });
     await vi.waitFor(() => expect(store.get()).toEqual({ mode: "classic" }));
 });
+
+it("reads a shown artifact the bootstrap did not list, once, and puts it under its card", async () => {
+    const daemon = await daemonSeed({ capable: true, rich: true });
+    daemon.artifactSeed({ id: "art_old", title: "Old notes", agentId: null });
+    const by = { agentId: null, userId: null };
+    daemon.taskReplace({
+        ...daemon.taskGet("task_a"),
+        children: [
+            { ref: { kind: "artifact", id: "art_old" }, visibility: "shown", by, updatedAt: 1 },
+        ],
+    });
+    const { store } = open(daemon, true);
+    const children = () => {
+        const snapshot = store.get();
+        const card = snapshot.mode === "rich" ? snapshot.entries[0] : undefined;
+        return card?.kind === "task" ? card.children : [];
+    };
+
+    await vi.waitFor(() =>
+        expect(children()).toEqual([
+            expect.objectContaining({
+                kind: "artifact",
+                artifact: expect.objectContaining({ id: "art_old" }),
+            }),
+        ]),
+    );
+    store.taskExpandToggle("task_b");
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(daemon.callCount("getArtifact")).toBe(1);
+});

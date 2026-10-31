@@ -1796,6 +1796,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                 workspaces: owners.workspaces,
             });
             taskOwnersEnsure(bootstrap.tasks ?? []);
+            richArtifactsAsked.clear();
             const gitWorkspaceIds = new Set(
                 activeGitWorkspaceIds(bootstrap.projects, bootstrap.workspaces),
             );
@@ -2111,6 +2112,8 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         publishGroups();
     };
 
+    /** Artifacts read for a shown child since the last bootstrap, which replaces them all. */
+    const richArtifactsAsked = new Set<string>();
     /** The rich task list's input, one object for as long as nothing in it changes. */
     let richTasks: HappyAgentRichTasksInput | undefined;
     const richTasksGet = (): HappyAgentRichTasksInput => {
@@ -5429,6 +5432,33 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         richTasks: {
             get: richTasksGet,
             subscribe: (listener) => groupsStore.subscribe(() => listener()),
+            artifactRead(artifactId) {
+                if (closed || richArtifactsAsked.has(artifactId)) return;
+                richArtifactsAsked.add(artifactId);
+                void client
+                    .getArtifact(artifactId, {
+                        signal: deadlineSignal(SNAPSHOT_RESPONSE_TIMEOUT_MS),
+                    })
+                    .then(({ artifact }) => {
+                        if (closed || artifact.status !== "active") return;
+                        const { id, type, title, updatedAt } = artifact;
+                        const entry = {
+                            id,
+                            type,
+                            title,
+                            source: { agentId: artifact.source?.agentId ?? null },
+                            updatedAt,
+                        };
+                        groupsStore.setState((state) => ({
+                            taskArtifacts: [
+                                ...state.taskArtifacts.filter((held) => held.id !== id),
+                                entry,
+                            ],
+                        }));
+                    })
+                    // A child that is gone stays out; the next bootstrap may ask again.
+                    .catch(() => undefined);
+            },
         },
         replaceTaskSections(sections) {
             const mutationId = nextId();

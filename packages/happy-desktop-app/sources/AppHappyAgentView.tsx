@@ -3408,8 +3408,15 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
             props.onArtifactOpen?.(happyAgent.id, row.ref.id);
             return;
         }
+        // A shown agent may be another task's or a bot's own, whose row is its workspace.
+        const root =
+            row?.ref.kind === "agent"
+                ? [...happyAgent.bots, ...(happyAgent.tasks ?? [])].find(
+                      (owner) => owner.conversation.id === row.ref.id,
+                  )
+                : undefined;
         const rowId = row
-            ? row.ref.id
+            ? (root?.workspaceId ?? row.ref.id)
             : happyAgent.tasks?.find((task) => task.id === id)?.workspaceId;
         const destination = rowId === undefined ? undefined : rowDestination(happyAgent, rowId);
         if (destination) props.onChatSelect(happyAgent.id, destination.groupId, destination.chatId);
@@ -3429,6 +3436,9 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                           entries={richTasks.entries}
                           {...(props.groupId === undefined ? {} : { groupId: props.groupId })}
                           onSelect={(id) => richTaskOpen(active, id)}
+                          {...(active.session.artifacts
+                              ? { people: active.session.artifacts.people() }
+                              : {})}
                           store={richTasksStore}
                           tasks={active.tasks ?? []}
                       />

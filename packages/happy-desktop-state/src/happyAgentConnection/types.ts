@@ -1212,6 +1212,11 @@ export interface HappyAgentConnection {
     readonly richTasks: {
         get(): HappyAgentRichTasksInput;
         subscribe(listener: () => void): () => void;
+        /**
+         * Reads one artifact a child choice shows but the bootstrap did not list,
+         * and adds it to `artifacts`. Asked once per id until the next bootstrap.
+         */
+        artifactRead(artifactId: string): void;
     };
     /** Replaces the caller's sections, each keeping its place. Only with `capabilities.taskSections`. */
     replaceTaskSections(sections: readonly TaskSection[]): MutationId;

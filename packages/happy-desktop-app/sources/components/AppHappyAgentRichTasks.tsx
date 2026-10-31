@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from "react";
 import type {
+    HappyAgentArtifactPeopleStore,
     HappyAgentClockStore,
     HappyAgentRichTasksStore,
     HappyAgentTask,
@@ -66,8 +67,8 @@ function subRowOf(taskId: string, child: RichTaskSubWork): RichTaskSubRowModel {
 }
 
 /**
- * What the open conversation is in the list: a subtask or workspace sub-row
- * when one is open, else the card of the task whose workspace is.
+ * What the open conversation is in the list: the subtask sub-row or card that
+ * is it, else a sub-row for its workspace, else the card of its workspace.
  */
 function selectedOf(
     entries: readonly RichTaskListEntry[],
@@ -75,16 +76,44 @@ function selectedOf(
     groupId: string | undefined,
     chatId: string | undefined,
 ): string | null {
-    for (const entry of entries) {
-        if (entry.kind !== "task") continue;
-        for (const child of entry.children)
-            if (
-                (child.kind === "agent" && child.agent.id === chatId) ||
-                (child.kind === "workspace" && child.workspace.id === groupId)
-            )
-                return subRowOf(entry.task.id, child).id;
+    const cards = entries.flatMap((entry) => (entry.kind === "task" ? [entry] : []));
+    const own = (task: HappyAgentTask) => task.conversation.id === chatId;
+    for (const match of [
+        (child: RichTaskSubWork) => child.kind === "agent" && child.agent.id === chatId,
+        (child: RichTaskSubWork) => child.kind === "workspace" && child.workspace.id === groupId,
+    ]) {
+        for (const entry of cards) {
+            const child = entry.children.find(match);
+            if (child) return subRowOf(entry.task.id, child).id;
+        }
+        // After the subtasks, before the workspaces: the card whose own conversation is open.
+        const card = tasks.find(own);
+        if (card && chatId !== undefined) return card.id;
     }
     return tasks.find((task) => task.workspaceId === groupId)?.id ?? null;
+}
+
+const NO_NAMES: ReadonlyMap<string, string> = new Map();
+const NO_SUBSCRIBE = () => () => undefined;
+const NO_NAMES_GET = () => NO_NAMES;
+
+/**
+ * A writer's face: a task owner's photo, else the name the connection knows,
+ * else a placeholder while the name is read.
+ */
+function faceOf(
+    userId: string,
+    owners: ReadonlyMap<string, RichTaskFace>,
+    names: ReadonlyMap<string, string>,
+    people: HappyAgentArtifactPeopleStore | undefined,
+): RichTaskFace {
+    const owner = owners.get(userId);
+    if (owner) return owner;
+    const name = names.get(userId);
+    if (name === undefined) people?.userNameRequest(userId);
+    return name === undefined
+        ? { id: userId, label: "Someone", initials: "?" }
+        : { id: userId, label: name };
 }
 
 /** The minute the clock is in, so the cards' times redraw once a minute. */
@@ -102,6 +131,8 @@ export function AppHappyAgentRichTasks(props: {
     readonly clock: HappyAgentClockStore;
     /** The reader's tasks as the classic list knows them, for their owners' faces. */
     readonly tasks: readonly HappyAgentTask[];
+    /** Everyone else the connection can name, read as a face needs them. */
+    readonly people?: HappyAgentArtifactPeopleStore;
     /** The open conversation and its group, which the selection follows. */
     readonly groupId?: string;
     readonly chatId?: string;
@@ -111,6 +142,11 @@ export function AppHappyAgentRichTasks(props: {
         props.clock.subscribe,
         () => minuteOf(props.clock),
         () => minuteOf(props.clock),
+    );
+    const names = useSyncExternalStore(
+        props.people?.subscribe ?? NO_SUBSCRIBE,
+        props.people?.get ?? NO_NAMES_GET,
+        props.people?.get ?? NO_NAMES_GET,
     );
     const people = new Map<string, RichTaskFace>();
     for (const { owner } of props.tasks)
@@ -131,7 +167,7 @@ export function AppHappyAgentRichTasks(props: {
                 time: localAgoTime(task.agent.lastActivityAt ?? now, now),
                 status: task.agent.statusLine?.text ?? null,
                 iconSlug: task.icon?.slug ?? null,
-                faces: entry.faces.flatMap((userId) => people.get(userId) ?? []),
+                faces: entry.faces.map((userId) => faceOf(userId, people, names, props.people)),
                 signal: task.agent.unread
                     ? "unread"
                     : task.agent.status !== "idle"

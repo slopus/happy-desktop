@@ -149,9 +149,27 @@ export function happyAgentRichTasksStoreCreate(
         }
     };
 
+    // A shown artifact the bootstrap did not list (it lists each task's latest
+    // twenty) is read on its own, only while the list is rich.
+    const artifactsRead = (): void => {
+        if (listeners.size === 0 || get().mode !== "rich") return;
+        const { tasks, memberships, artifacts } = deps.connection.richTasks.get();
+        const joined = new Set(memberships.map((membership) => membership.taskId));
+        const held = new Set(artifacts.map((artifact) => artifact.id));
+        for (const task of tasks)
+            for (const child of joined.has(task.id) ? (task.children ?? []) : [])
+                if (
+                    child.ref.kind === "artifact" &&
+                    child.visibility === "shown" &&
+                    !held.has(child.ref.id)
+                )
+                    deps.connection.richTasks.artifactRead(child.ref.id);
+    };
+
     const notify = (): void => {
         if (disposed) return;
         settingsFollow();
+        artifactsRead();
         for (const listener of listeners) listener();
     };
 
@@ -165,6 +183,7 @@ export function happyAgentRichTasksStoreCreate(
             if (release.length === 0)
                 release = [deps.connection.richTasks.subscribe(notify), settings.subscribe(notify)];
             settingsFollow();
+            artifactsRead();
             return () => {
                 listeners.delete(listener);
                 if (listeners.size > 0) return;

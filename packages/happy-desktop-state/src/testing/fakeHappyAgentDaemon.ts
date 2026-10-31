@@ -195,6 +195,12 @@ export interface FakeHappyAgentDaemon {
      * sections in its bootstrap; `undefined`, the default, is one without.
      */
     taskSectionsSet(sections: readonly TaskSection[] | undefined): void;
+    /** An artifact only `getArtifact` answers for; the bootstrap never lists it. */
+    artifactSeed(artifact: {
+        readonly id: string;
+        readonly title: string;
+        readonly agentId: string | null;
+    }): void;
 
     /** The effective configuration `getConfig` and the desktop bootstrap serve. */
     configGet(): DaemonConfig;
@@ -417,6 +423,7 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
     let journal: HappyAgentEvent[] = [];
     let desktopLiveControl: boolean | undefined;
     let taskSections: readonly TaskSection[] | undefined;
+    const artifacts = new Map<string, { id: string; title: string; agentId: string | null }>();
     const liveSessions = new Map<string, LiveSession>();
     const liveUrls = new HappyAgentClient({ endpoint: "http://fake-happy-agent.test/" });
     let protocol = HAPPY_AGENT_PROTOCOL_VERSION;
@@ -992,6 +999,17 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
             emit("task.sections.updated", { sections: [...taskSections] });
             return { sections: [...taskSections] };
         },
+        async getArtifact(artifactId: string, ...rest: unknown[]) {
+            await record("getArtifact", [artifactId, ...rest]);
+            const held = artifacts.get(artifactId);
+            if (held === undefined)
+                throw new HappyAgentApiError(404, "Not found.", "not_found", null);
+            const { id, title, agentId } = held;
+            const source = { kind: "workspace", workspaceId: "ws", projectId: null, agentId };
+            return {
+                artifact: { id, title, type: "html", status: "active", updatedAt: 1, source },
+            };
+        },
         async setTaskChild(taskId: string, ...rest: unknown[]) {
             await record("setTaskChild", [taskId, ...rest]);
             return taskResponse(taskId);
@@ -1565,6 +1583,9 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
         userSettingsGet: userSettingsOrdered,
         taskSectionsSet(sections) {
             taskSections = sections;
+        },
+        artifactSeed(artifact) {
+            artifacts.set(artifact.id, { ...artifact });
         },
         configGet: () => config,
         configSet(next) {
