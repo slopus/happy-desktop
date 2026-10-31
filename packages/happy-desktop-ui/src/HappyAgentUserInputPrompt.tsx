@@ -3,7 +3,7 @@ import { userInputRuleText, type HappyAgentUserInputPromptVariant } from "./user
 import type { HappyAgentUserInputRequest, UserError } from "happy-desktop-state";
 import { Banner } from "./Banner";
 import { Button } from "./Button";
-import { Checkbox } from "./Checkbox";
+import { ChoiceList } from "./ChoiceList";
 import { renderMessageMarkdown } from "./MessageMarkdown";
 import { ShimmerText } from "./ShimmerText";
 
@@ -161,50 +161,24 @@ export function HappyAgentUserInputPrompt(props: HappyAgentUserInputPromptProps)
                                 </span>
                             </legend>
                             <div className="happy-agent-input__options">
-                                {question.options.map((option, optionIndex) => {
-                                    const descriptionId = `${request.requestId}-${question.id}-${optionIndex}-description`;
-                                    return (
-                                        <label
-                                            className="happy-agent-input__option"
-                                            data-disabled={frozen ? "" : undefined}
-                                            data-happy-desktop-ui="happy-agent-user-input-option"
-                                            data-selected={
-                                                selected.includes(option.label) ? "" : undefined
-                                            }
-                                            key={option.label}
-                                            title={option.description || undefined}
-                                        >
-                                            <Checkbox
-                                                aria-describedby={
-                                                    option.description ? descriptionId : undefined
-                                                }
-                                                aria-label={option.label}
-                                                checked={selected.includes(option.label)}
-                                                disabled={frozen}
-                                                onChange={() =>
-                                                    select(
-                                                        question.id,
-                                                        option.label,
-                                                        question.multiSelect,
-                                                    )
-                                                }
-                                            />
-                                            <span className="happy-agent-input__option-body">
-                                                <span className="happy-agent-input__option-label">
-                                                    {option.label}
-                                                </span>
-                                                {option.description ? (
-                                                    <span
-                                                        className="happy-agent-input__option-description"
-                                                        id={descriptionId}
-                                                    >
-                                                        {option.description}
-                                                    </span>
-                                                ) : null}
-                                            </span>
-                                        </label>
-                                    );
-                                })}
+                                {question.options.length === 0 ? null : (
+                                    <ChoiceList
+                                        chosen={question.options.flatMap((option, index) =>
+                                            selected.includes(option.label) ? [index] : [],
+                                        )}
+                                        idPrefix={`${request.requestId}-${question.id}`}
+                                        locked={frozen}
+                                        multi={question.multiSelect}
+                                        onPress={(index) =>
+                                            select(
+                                                question.id,
+                                                question.options[index]!.label,
+                                                question.multiSelect,
+                                            )
+                                        }
+                                        options={question.options}
+                                    />
+                                )}
                             </div>
                             {resolved && unoffered.length > 0 ? (
                                 <div

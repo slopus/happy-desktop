@@ -97,6 +97,7 @@ function message(
         },
     };
 }
+const MENU = `<menu><button data-action="reply">Push it</button><button data-action="reply">Not yet</button></menu>`;
 const chatReply = message("4", "Use batches of 500. The rollout checklist is attached.", false);
 function QuestionConversation(props: { count: number; answered: boolean; lead?: boolean }) {
     const request: ConversationEntry = {
@@ -296,6 +297,30 @@ export function HappyAgentUserInputPromptPage() {
                     <HappyAgentUserInputPrompt
                         request={happyAgentUserInputWithContext}
                         resolvedAnswers={{ approach: ["In batches"] }}
+                    />
+                </div>
+            </Specimen>
+
+            <Specimen
+                detail="the same controls for a <menu> in a reply: open with its first button filled, then chosen and locked"
+                label="Menus"
+                number="06"
+                stage="surface"
+            >
+                <div style={{ width: "560px", height: "300px", display: "flex" }}>
+                    <ConversationView
+                        actions={{ onPress: () => Promise.resolve() }}
+                        agentAuthor={agentAuthor}
+                        conversationId="menus"
+                        entries={[0, 1].map((at) => {
+                            const entry = message(String(at), `Ready to push?\n\n${MENU}`, true);
+                            const choice = { kind: "button" as const, index: 1 };
+                            const choices: Record<string, typeof choice> = at
+                                ? { "0": choice }
+                                : {};
+                            const actions = { messageId: String(at), blockStart: 0, choices };
+                            return { ...entry, message: { ...entry.message, actions } };
+                        })}
                     />
                 </div>
             </Specimen>

@@ -23,7 +23,11 @@ import type {
     Workspace,
 } from "@slopus/happy-agent-client";
 import type { RichTaskArtifact } from "../richTasks/richTaskList.js";
-import type { ConversationMediaLayout } from "../conversation/conversationEntry.js";
+import type {
+    ConversationActionPress,
+    ConversationMediaLayout,
+    ConversationMessageActions,
+} from "../conversation/conversationEntry.js";
 import type { HappyAgentDebugLogInput } from "../happyAgent/happyAgentDebugLogStore.js";
 import type {
     HappyAgentAnsweredUserInput,
@@ -226,6 +230,7 @@ export interface AgentTextElement extends BaseChatElement {
     messageId: string;
     text: string;
     complete: boolean;
+    actions?: ConversationMessageActions;
 }
 
 export interface AgentAttachmentsElement extends BaseChatElement {
@@ -1156,6 +1161,8 @@ export interface HappyAgentConnection {
      * when it refused it. Ask in the same call stack the send started in.
      */
     sendAcceptanceWait(mutationId: MutationId): Promise<void>;
+    /** Presses a menu button; resolves once taken, or when another choice already holds the block. */
+    sendAction(sessionId: string, press: ConversationActionPress): Promise<void>;
     /** Invokes one slash command under the session's current composer selection. */
     invokeSlashCommand(sessionId: string, name: string, argumentsValue?: string): MutationId;
     stopBackgroundProcess(sessionId: string, projectedProcessId: number): MutationId;

@@ -11,6 +11,7 @@ import {
     type ConversationRequestEntry,
     type ConversationToolCall,
 } from "../conversation/conversationEntry.js";
+import { conversationTextPlain } from "../happyAgentConnection/conversationTextLayouts.js";
 import { inlineImageSize } from "../conversation/inlineImageSize.js";
 import { happyAgentArtifactTypeProject } from "../artifacts/artifactProject.js";
 import type { HappyAgentArtifactId } from "../artifacts/artifactTypes.js";
@@ -478,7 +479,9 @@ type ProjectableUserInput =
  */
 function inboundAgentText(text: string, agentId: string): string {
     const lead = `Message from agent ${agentId}:`;
-    return text.startsWith(lead) ? text.slice(lead.length).trimStart() : text;
+    return conversationTextPlain(
+        text.startsWith(lead) ? text.slice(lead.length).trimStart() : text,
+    );
 }
 
 /**
@@ -684,7 +687,7 @@ function happyAgentConnectGroupProject(
                             ...(collaborator.explanation === undefined
                                 ? {}
                                 : { explanation: collaborator.explanation }),
-                            text: element.text,
+                            text: conversationTextPlain(element.text),
                         },
                     });
                     break;
@@ -838,6 +841,7 @@ function happyAgentConnectGroupProject(
                         createdAt: element.createdAt,
                         author: agentAuthor,
                         generationStatus: element.complete ? "complete" : "streaming",
+                        ...(element.actions ? { actions: element.actions } : {}),
                     }),
                     messageId: element.messageId,
                     runId: element.runId,
@@ -1140,7 +1144,10 @@ function happyAgentConnectGroupProject(
     if (finalAgent?.kind === "message") {
         const status = entries[statusIndex];
         if (status?.kind === "turnStatus" && finalAgent.message.text.trim().length > 0)
-            entries[statusIndex] = { ...status, copyText: finalAgent.message.text };
+            entries[statusIndex] = {
+                ...status,
+                copyText: conversationTextPlain(finalAgent.message.text),
+            };
     }
 
     /*
@@ -1286,6 +1293,7 @@ function messageProject(input: {
     readonly attachments?: ConversationMessageProjection["attachments"];
     readonly replyTo?: ConversationMessageProjection["replyTo"];
     readonly generationStatus?: ConversationMessageProjection["generationStatus"];
+    readonly actions?: ConversationMessageProjection["actions"];
 }): ConversationMessageProjection {
     return {
         id: input.id,
@@ -1300,6 +1308,7 @@ function messageProject(input: {
         createdAt: new Date(input.createdAt).toISOString(),
         ...(input.generationStatus ? { generationStatus: input.generationStatus } : {}),
         ...(input.replyTo ? { replyTo: input.replyTo } : {}),
+        ...(input.actions ? { actions: input.actions } : {}),
     };
 }
 

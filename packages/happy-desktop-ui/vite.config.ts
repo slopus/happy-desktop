@@ -10,6 +10,10 @@ import { testDepthBrowsers, testDepthRead } from "happy-desktop-gym/test-depth";
 
 const depth = testDepthRead(process.env.HAPPY_TEST_DEPTH);
 const browsers = testDepthBrowsers(depth);
+const CHAT_ACTION_VECTORS = resolve(
+    import.meta.dirname,
+    "../../../../happy-agent/rich-tasks/packages/happy-agent-client/tests/fixtures",
+);
 
 export default defineConfig({
     define: { "import.meta.env.HAPPY_TEST_DEPTH": JSON.stringify(depth) },
@@ -29,6 +33,8 @@ export default defineConfig({
             external: ["react", "react-dom", "react/jsx-runtime"],
         },
     },
+    /* The workspace, and the client's inline-action test vectors beside it. */
+    server: { fs: { allow: ["../..", CHAT_ACTION_VECTORS] } },
     test: {
         exclude: [...configDefaults.exclude, "eslint/**"],
         // Optical tests take several black/white Retina captures per fixture.

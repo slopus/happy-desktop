@@ -1,4 +1,9 @@
-import { parseMediaLayoutHtml, splitMediaLayoutBlocks } from "@slopus/happy-agent-client";
+import {
+    parseMediaLayoutHtml,
+    splitChatActionBlocks,
+    splitMediaLayoutBlocks,
+    stripChatActionBlocks,
+} from "@slopus/happy-agent-client";
 import type { ConversationMediaLayoutNode } from "../conversation/conversationEntry.js";
 import { mediaLayoutProject } from "./mediaLayoutProject.js";
 
@@ -6,12 +11,18 @@ import { mediaLayoutProject } from "./mediaLayoutProject.js";
  * One stretch of an agent's reply: Markdown, or an HTML block that may lay
  * out pictures. Joined, the stretches are the reply's text exactly.
  *
- * A `layout` is a block that holds an `<img>`; `complete` is false for the
- * block still open at the end of the text, which may close as more arrives.
+ * A `layout` is a block that holds an `<img>`, an `action` a `<menu>`; `complete`
+ * is false for the block still open at the end of the text, which may close as
+ * more arrives.
  */
 export type ConversationTextSegment =
     | { readonly type: "markdown"; readonly text: string }
-    | { readonly type: "layout"; readonly html: string; readonly complete: boolean };
+    | { readonly type: "layout" | "action"; readonly html: string; readonly complete: boolean };
+
+export {
+    parseChatActionBlock as conversationMenuParse,
+    type ChatActionBlock as ConversationMenu,
+} from "@slopus/happy-agent-client";
 
 /**
  * A reply's text cut into Markdown and the HTML blocks that may lay out
@@ -20,9 +31,20 @@ export type ConversationTextSegment =
  */
 export function conversationTextSegments(text: string): readonly ConversationTextSegment[] {
     try {
-        return splitMediaLayoutBlocks(text);
+        return splitMediaLayoutBlocks(text).flatMap((segment): ConversationTextSegment[] =>
+            segment.type === "markdown" ? splitChatActionBlocks(segment.text) : [segment],
+        );
     } catch {
         return [{ type: "markdown", text }];
+    }
+}
+
+/** Agent text for a surface that draws no menus: previews, copies, voice. */
+export function conversationTextPlain(text: string): string {
+    try {
+        return text.includes("<menu") ? stripChatActionBlocks(text) : text;
+    } catch {
+        return text;
     }
 }
 

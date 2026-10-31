@@ -5,6 +5,7 @@ import type {
     LivePublicText,
     LiveWorkspaceStatus,
 } from "@slopus/happy-agent-client";
+import { conversationTextPlain } from "../happyAgentConnection/conversationTextLayouts.js";
 import type { ConversationEntry } from "../conversation/conversationEntry.js";
 import type { HappyAgentChatSnapshot } from "../happyAgent/happyAgentChatStore.js";
 import type { HappyAgentWorktreeLifecycle } from "../happyAgent/happyAgentProjectGroupProject.js";
@@ -48,8 +49,10 @@ export function gptLivePublicText(entries: readonly ConversationEntry[]): {
             continue;
         const sender = entry.message.sender.kind;
         if (sender !== "human" && sender !== "agent") continue;
-        const text = entry.message.text.slice(0, 16_384);
-        if (text.length !== entry.message.text.length) truncated = true;
+        const full =
+            sender === "agent" ? conversationTextPlain(entry.message.text) : entry.message.text;
+        const text = full.slice(0, 16_384);
+        if (text.length !== full.length) truncated = true;
         messages.push({
             id: entry.message.id,
             role: sender === "human" ? "user" : "assistant",

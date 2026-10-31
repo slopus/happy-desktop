@@ -1,0 +1,24 @@
+/* C-331 ChoiceList: a wrapping row of 36px outline buttons 8px apart, or a
+   checklist of rows 4px apart. The chosen button takes the selected fill;
+   choosing changes no size. */
+.happy-choice-list {
+    display: flex;
+    flex-flow: row wrap;
+    gap: 8px;
+}
+
+.happy-choice-list[data-multi] {
+    flex-flow: column;
+    gap: 4px;
+}
+
+.happy-choice-list__button.happy-button[data-variant="secondary"] {
+    max-width: 100%;
+    background-color: transparent;
+}
+
+.happy-choice-list__button.happy-button[data-chosen] {
+    border-color: transparent;
+    background-color: var(--surface-selected);
+    cursor: default;
+}

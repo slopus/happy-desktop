@@ -1,3 +1,4 @@
+import type { ActionChoice, SendActionMessageRequest } from "@slopus/happy-agent-client";
 import type {
     HappyAgentArtifactDisplay,
     HappyAgentArtifactId,
@@ -91,7 +92,21 @@ export interface ConversationMessageProjection {
     readonly createdAt: string;
     /** The story a person's message answers, drawn as a quote above it. */
     readonly replyTo?: { readonly kind: "story"; readonly artifactId: string };
+    /** The `<menu>` blocks in an agent's text, when it has any. */
+    readonly actions?: ConversationMessageActions;
 }
+
+/** Where a text block's menus sit in their message; `blockIndex` counts across its text blocks. */
+export interface ConversationMessageActions {
+    readonly messageId: string;
+    /** The `blockIndex` of this text's first menu. */
+    readonly blockStart: number;
+    /** Each pressed block's choice, by `blockIndex`; a block with one is locked. */
+    readonly choices: Readonly<Record<string, ActionChoice>>;
+}
+
+/** One press of a menu button: the daemon's `action` block. */
+export type ConversationActionPress = Omit<SendActionMessageRequest["content"][0], "type">;
 
 /**
  * How an agent is pictured, the same way its own row pictures it: a bot's

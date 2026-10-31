@@ -20,6 +20,7 @@ import type {
     UsageBreakdown,
     Workspace,
 } from "@slopus/happy-agent-client";
+import { chatActionBlocksOf } from "@slopus/happy-agent-client";
 import { happyAgentServiceTierFromWire } from "../happyAgentServiceTier.js";
 import { deepEqual } from "../happyAgent/happyAgentSupport.js";
 import { happyAgentConversationActivityProject } from "../happyAgent/happyAgentConversationAuthors.js";
@@ -1217,12 +1218,16 @@ function messageElementsProject(
     }
 
     const elements: ChatElement[] = [];
+    /* Menus are numbered across all of the message's text blocks, in order. */
+    let menus = 0;
     for (let index = 0; index < message.content.length; index += 1) {
         const block = message.content[index];
         if (block === undefined) continue;
         const id = `message:${elementId}:${String(index)}`;
         if (block.type === "text") {
             if (message.role === "agent") {
+                const blockStart = menus;
+                if (block.text.includes("<menu")) menus += chatActionBlocksOf(block.text).length;
                 elements.push({
                     ...base,
                     id,
@@ -1230,6 +1235,15 @@ function messageElementsProject(
                     messageId: message.id,
                     text: block.text,
                     complete: runStatus !== "running",
+                    ...(menus > blockStart
+                        ? {
+                              actions: {
+                                  messageId: message.id,
+                                  blockStart,
+                                  choices: message.actionChoices ?? {},
+                              },
+                          }
+                        : {}),
                 });
             } else if (
                 message.role === "service" &&

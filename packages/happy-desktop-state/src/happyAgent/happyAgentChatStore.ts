@@ -3,6 +3,7 @@ import { entriesMerge } from "../conversation/conversationEntries.js";
 import type { Loadable } from "../conversation/loadable.js";
 import {
     conversationMediaOrder,
+    type ConversationActionPress,
     type ConversationAttachment,
     type ConversationEntry,
     type ConversationRequestSubmission,
@@ -680,6 +681,8 @@ export interface HappyAgentChatSnapshot {
      * offered Retry instead.
      */
     readonly failureSwitchSupported: boolean;
+    /** Whether menus can be pressed: the daemon has `capabilities.chatActions`. */
+    readonly actionsPressable: boolean;
 }
 
 export type HappyAgentChatOutput =
@@ -731,6 +734,8 @@ export interface HappyAgentChatStore {
      */
     subagentsAbort(): Promise<void>;
     answerInput(input: HappyAgentUserInputAnswers): Promise<void>;
+    /** Presses a menu button; rejects, with a notice shown, when the daemon refuses it. */
+    actionPress(press: ConversationActionPress): Promise<void>;
     requestSelectionUpdate(
         requestId: string,
         answers: Readonly<Record<string, readonly string[]>>,
@@ -806,6 +811,7 @@ export interface HappyAgentChatDeps {
         | "sendMessage"
         | "sendMessageConfirmed"
         | "sendAcceptanceWait"
+        | "sendAction"
         | "setDraft"
         | "draftAppendConfirmed"
         | "setEffort"
@@ -833,6 +839,7 @@ export interface HappyAgentChatDeps {
     readonly agentIdentities?: HappyAgentAgentIdentitySource;
     /** The protocol the connection's daemon last reported in its health, once heard. */
     readonly daemonProtocol?: () => number | undefined;
+    readonly chatActions?: () => boolean;
 }
 
 /** Protocol 32 validates a failure switch against the live catalog, not a stored list. */
@@ -898,6 +905,7 @@ export function happyAgentChatStoreCreate(
         usageLoading: false,
         activityPanelOpen: false,
         failureSwitchSupported: false,
+        actionsPressable: false,
     }));
 
     const listeners = new Set<() => void>();
@@ -1226,6 +1234,7 @@ export function happyAgentChatStoreCreate(
                   }),
             failureSwitchSupported:
                 (deps.daemonProtocol?.() ?? 0) >= HAPPY_AGENT_FAILURE_SWITCH_PROTOCOL_VERSION,
+            actionsPressable: deps.chatActions?.() === true,
         };
         /* The transcript answers for itself: `entriesMerge` returns the very
            list it was given when nothing moved, so a new one is a change and
@@ -1654,6 +1663,18 @@ export function happyAgentChatStoreCreate(
                 output({ type: "subagentsAborted", sessionId });
             }),
         answerInput: answerInputRun,
+        actionPress: (press) =>
+            deps.connectActions.sendAction(sessionId, press).catch((caught: unknown) => {
+                const error = happyAgentUserError(caught);
+                mutationRejection = {
+                    type: "mutation_rejected",
+                    action: "send_action",
+                    mutationId: `${press.messageId}:${String(press.blockIndex)}`,
+                    message: error.message,
+                };
+                if (!disposed) commit();
+                throw error;
+            }),
         requestSelectionUpdate(requestId, answers) {
             requestSelections.set(requestId, answers);
             commit();

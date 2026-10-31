@@ -119,6 +119,7 @@
     /* What a story's scrims darken with, mixed to their stops: black in every
        appearance, because it is laid over a picture rather than our surfaces. */
     --story-scrim: #000000;
+    --story-quote-scrim: color-mix(in srgb, var(--story-scrim) 64%, transparent);
     /* What names a QR code's destination inside the symbol. A QR code is always
        dark modules on white paper, so this grey is the same in both
        appearances: far enough from the modules that a camera and a reader never

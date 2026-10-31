@@ -9694,6 +9694,11 @@ function HappyAgentConversationSurface(props: {
                               : undefined,
                   }
                 : {})}
+            actions={
+                conversation.actionsPressable && props.writeRefusal === undefined
+                    ? { onPress: (press) => workspace.actionPress(press) }
+                    : {}
+            }
             expandedTurnIds={conversation.expandedTurnIds}
             expandedMessageIds={conversation.expandedMessageIds}
             onMessageExpandedChange={(messageId, expanded) =>

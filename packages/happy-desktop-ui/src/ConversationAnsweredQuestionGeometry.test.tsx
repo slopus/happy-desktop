@@ -181,7 +181,7 @@ it.each([360, 880])(
                 card: { top: origin.top - list.top, height: origin.height, width: origin.width },
                 parts: [
                     ...root.querySelectorAll<HTMLElement>(
-                        ".happy-agent-input__context, .happy-agent-input__question, .happy-agent-input__option, .happy-agent-input__footer, [data-action='submit']",
+                        ".happy-agent-input__context, .happy-agent-input__question, .happy-agent-input__option, .happy-choice-list__button, .happy-agent-input__footer, [data-action='submit']",
                     ),
                 ].map((element) => {
                     const rect = element.getBoundingClientRect();
@@ -207,10 +207,16 @@ it.each([360, 880])(
             await view.ready();
             await frame();
             await frame();
+            // A single choice is a button, a multiple choice a checkbox.
             const boxes = () => [
-                ...card(view).querySelectorAll<HTMLInputElement>('input[type="checkbox"]'),
+                ...card(view).querySelectorAll<HTMLButtonElement>(
+                    'input[type="checkbox"], .happy-choice-list__button',
+                ),
             ];
+            const on = (box: HTMLElement) =>
+                box instanceof HTMLInputElement ? box.checked : box.ariaPressed === "true";
             boxes()[1]!.click();
+            await frame();
             boxes()[3]!.click();
             const submit = card(view).querySelector<HTMLButtonElement>('[data-action="submit"]')!;
             await vi.waitFor(() => expect(submit.disabled).toBe(false));
@@ -238,12 +244,12 @@ it.each([360, 880])(
                 check(`frame ${String(index)}`);
             }
             // Read-only: the same answers ticked, and nothing can change them.
-            expect(boxes().map((box) => box.checked)).toEqual([false, true, false, true, false]);
-            expect(boxes().every((box) => box.disabled)).toBe(true);
+            expect(boxes().map(on)).toEqual([false, true, false, true, false]);
+            expect(boxes().every((box) => box.disabled || on(box))).toBe(true);
             boxes()[0]!.click();
             boxes()[4]!.click();
             await frame();
-            expect(boxes().map((box) => box.checked)).toEqual([false, true, false, true, false]);
+            expect(boxes().map(on)).toEqual([false, true, false, true, false]);
             const settled = card(view).querySelector<HTMLButtonElement>('[data-action="submit"]')!;
             expect(settled.disabled).toBe(true);
             settled.click();

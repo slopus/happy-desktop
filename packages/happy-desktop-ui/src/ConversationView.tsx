@@ -95,6 +95,7 @@ import { toolCallStillGlyph } from "./toolCallStillGlyph";
 import { WindowOverlay } from "./WindowOverlay";
 import { conversationMediaRunRows, conversationMediaRuns } from "./conversationMediaRuns";
 import { conversationInlineLayouts } from "./conversationInlineLayouts";
+import type { ConversationActions } from "./ChoiceList";
 import {
     mediaVideoFramesSignature,
     mediaVideoFramesSubscribe,
@@ -333,6 +334,8 @@ export type ConversationViewProps = {
      * draw them. Absent, every such call keeps its card.
      */
     inlinePages?: ConversationInlinePages;
+    /** How the menus in replies are pressed; absent, they are drawn but cannot be. */
+    actions?: ConversationActions;
     onRequestAnswer?: (requestId: string, answers: HappyAgentUserInputAnswerMap) => void;
     /** Request-id-scoped local answer submission lifecycles. */
     requestSubmissions?: readonly ConversationRequestSubmission[];
@@ -1284,6 +1287,7 @@ export function ConversationView(props: ConversationViewProps) {
                                         ? { contextNote: entry.contextNote }
                                         : {})}
                                     storyQuote={quoteOf(entry)}
+                                    actions={props.actions}
                                     faceOf={faceOf}
                                     activityAuthor={
                                         props.agentAuthor &&

@@ -5,8 +5,11 @@ export { happyAgentSyncRead } from "./happyAgentSyncRead.js";
 export { chatElementRequest, projectNumericIdentity } from "./projection.js";
 export { mediaLayoutProject } from "./mediaLayoutProject.js";
 export {
+    conversationMenuParse,
     conversationTextLayoutParse,
+    conversationTextPlain,
     conversationTextSegments,
+    type ConversationMenu,
     type ConversationTextLayout,
     type ConversationTextSegment,
 } from "./conversationTextLayouts.js";

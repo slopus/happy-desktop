@@ -10,6 +10,7 @@ import {
     type HappyAgentSubtaskRoot,
 } from "./happyAgentBotSubtasks.js";
 import type {
+    ConversationActionPress,
     ConversationEntry,
     ConversationErrorAssistance,
     ConversationErrorAssistanceEntry,
@@ -317,6 +318,7 @@ export interface HappyAgentConversationSnapshot {
     readonly modelLocked: boolean;
     /** Whether a failure card may offer switching to another account and model. */
     readonly failureSwitchSupported: boolean;
+    readonly actionsPressable: boolean;
     /**
      * Where this conversation was last being read, when it has been read before.
      * Absent opens at the newest message.
@@ -1944,6 +1946,7 @@ export interface HappyAgentWorkspaceStore {
     /** Stops the open conversation's working subagents; see `HappyAgentChatStore.subagentsAbort`. */
     subagentsAbort(): Promise<void>;
     answerInput(input: HappyAgentUserInputAnswers): Promise<void>;
+    actionPress(press: ConversationActionPress): Promise<void>;
     /**
      * Records the options ticked into the open conversation's pending question
      * before it is submitted, so switching views preserves the card's choices.
@@ -3030,6 +3033,7 @@ export function happyAgentWorkspaceStoreCreate(
             ...(chat.menus ? { menus: chat.menus } : pendingMenus ? { menus: pendingMenus } : {}),
             modelLocked: chat.modelLocked,
             failureSwitchSupported: chat.failureSwitchSupported,
+            actionsPressable: chat.actionsPressable,
             ...(scrollPositions.has(chat.sessionId)
                 ? { scrollPosition: scrollPositions.get(chat.sessionId)! }
                 : {}),
@@ -8204,6 +8208,7 @@ export function happyAgentWorkspaceStoreCreate(
         requestSelectionUpdate: (requestId, answers) => {
             chatStore?.requestSelectionUpdate(requestId, answers);
         },
+        actionPress: (press) => withChat((store) => store.actionPress(press)),
         backgroundProcessStop: (processId) =>
             withChat((store) => store.backgroundProcessStop(processId)),
         // These four speak to the session rather than to the directory: the host
@@ -8892,6 +8897,7 @@ function conversationAcquiring(
         ...(menus ? { menus } : {}),
         modelLocked: false,
         failureSwitchSupported: false,
+        actionsPressable: false,
     };
 }
 

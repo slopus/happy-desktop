@@ -745,7 +745,7 @@ export function messageRowHeight(input: MessageRowHeightInput): number {
             input.trailingExtraWidth,
             input.mermaidEnabled,
             input.streaming,
-            messageLayoutsHeight(input.layouts),
+            messageLayoutsHeight(input.layouts, input.textCache),
         )
     );
 }
@@ -757,10 +757,13 @@ export function messageRowHeight(input: MessageRowHeightInput): number {
  */
 function messageLayoutsHeight(
     layouts: MessageInlineLayouts | undefined,
+    cache: MessageTextLayoutCache | undefined,
 ): ((html: string, measure: number) => number | undefined) | undefined {
-    if (layouts === undefined || layouts.layouts.size === 0) return undefined;
+    if (layouts === undefined || layouts.layouts.size + layouts.menus.size === 0) return undefined;
     return (html, measure) => {
         const key = messageInlineLayoutKey(html);
+        const menu = key === undefined ? undefined : layouts.menus.get(key);
+        if (menu) return choiceButtonsHeight(menu.menu.buttons, measure, cache);
         const layout = key === undefined ? undefined : layouts.layouts.get(key);
         if (layout === undefined) return undefined;
         return mediaTreeHeight(
@@ -951,7 +954,13 @@ function userInputRequestHeight(
             ) +
             uiTextHeight(question.question, 16, 24, promptMeasure, cache);
         if (question.options.length > 0) total += USER_INPUT_CONTENT_INSET;
-        for (const [optionIndex, option] of question.options.entries()) {
+        /* A single choice is a row of buttons; several are a checklist. */
+        if (!question.multiSelect && question.options.length > 0)
+            total += choiceButtonsHeight(question.options, promptMeasure, cache);
+        for (const [optionIndex, option] of (question.multiSelect
+            ? question.options
+            : []
+        ).entries()) {
             if (optionIndex > 0) total += USER_INPUT_OPTION_GAP;
             const contentHeight =
                 uiTextHeight(option.label, 16, 24, optionMeasure, cache) +
@@ -975,6 +984,25 @@ function userInputRequestHeight(
     }
     const submitVisible = request.questions.every((question) => question.options.length > 0);
     return 2 * CHAT_FRAME_TEXT_INSET + total + (submitVisible ? USER_INPUT_FOOTER_HEIGHT : 0);
+}
+
+/** `.happy-choice-list` buttons: 36px rows 8px apart; a 13/700 label at 0.01em plus 30px chrome. */
+function choiceButtonsHeight(
+    options: readonly { readonly label: string }[],
+    measure: number,
+    cache?: MessageTextLayoutCache,
+): number {
+    let rows = 1;
+    let x = -8;
+    for (const { label } of options) {
+        const width = uiTextNaturalWidth(label, 13, cache, 700) + 0.13 * label.length + 30;
+        x += 8 + Math.min(width, measure);
+        if (x > measure + 0.5 && x > Math.min(width, measure)) {
+            rows += 1;
+            x = Math.min(width, measure);
+        }
+    }
+    return rows * 44 - 8;
 }
 
 /** Pending permission gate in its default collapsed transcript state. */

@@ -22,6 +22,7 @@ import {
     type Project,
     type Question,
     type Run,
+    type SendActionMessageRequest,
     type SendMessageRequest,
     type SendMessageResponse,
     type SlashCommand,
@@ -3835,14 +3836,18 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
 
     const sendMessageWithRetry = async (
         sessionId: string,
-        request: SendMessageRequest,
+        request: SendMessageRequest | SendActionMessageRequest,
         confirmed: Promise<void>,
     ): Promise<SendMessageResponse | undefined> => {
         let retryMs = INITIAL_SEND_RETRY_MS;
         for (let attempt = 1; ; attempt += 1) {
             // A story reply is sent only while the daemon still serves stories; one
             // that lost them fails the send rather than delivering it without its story.
-            if (request.replyTo && sync.source.health()?.capabilities?.storyArtifacts !== true)
+            if (
+                "replyTo" in request &&
+                request.replyTo &&
+                sync.source.health()?.capabilities?.storyArtifacts !== true
+            )
                 throw new UserError("Stories are no longer available on this Happy Agent.");
             try {
                 return await Promise.race([
@@ -4825,6 +4830,28 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         sendMessageConfirmed(sessionId, message) {
             const id = this.sendMessage(sessionId, message);
             return this.sendAcceptanceWait(id);
+        },
+        async sendAction(sessionId, press) {
+            if (config === undefined) throw new UserError("The agent is not loaded.");
+            const mode = modeOf(
+                config,
+                agentDrafts.get(sessionId),
+                agentModes.get(sessionId),
+                intendedModes.get(sessionId),
+            );
+            /* One id across every retry; the person's message arrives as the daemon's. */
+            const request: SendActionMessageRequest = {
+                id: nextId(),
+                content: [{ type: "action", ...press, params: { ...press.params } }],
+                delivery: "steer",
+                mode,
+            };
+            try {
+                await sendMessageWithRetry(sessionId, request, new Promise(() => undefined));
+            } catch (error) {
+                // Another choice already took the block; the message says which.
+                if (!(error instanceof HappyAgentApiError && error.status === 409)) throw error;
+            }
         },
         sendAcceptanceWait(mutationId) {
             return (
@@ -5939,14 +5966,6 @@ function messageBlockSame(previous: MessageBlock, next: MessageBlock): boolean {
                 previous.beforeMessageId === next.beforeMessageId &&
                 deepEqual(previous.before, next.before) &&
                 deepEqual(previous.after, next.after)
-            );
-        // Reads never ask for action blocks (`includeActions`), so one only
-        // arrives from a newer daemon; it is the same press when it names the same block.
-        case "action":
-            return (
-                next.type === "action" &&
-                previous.messageId === next.messageId &&
-                previous.blockIndex === next.blockIndex
             );
     }
 }

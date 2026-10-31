@@ -44,11 +44,16 @@ const request: HappyAgentUserInputRequest = {
     ],
 };
 
+/** A single choice is a button, a multiple choice a checkbox. */
+const CONTROLS = `input[type="checkbox"], .happy-choice-list__button`;
+const on = (control: HTMLElement) =>
+    control instanceof HTMLInputElement ? control.checked : control.ariaPressed === "true";
+
 function control(view: ReturnType<typeof createRenderer>, questionId: string, index: number) {
-    const options = view.container.querySelectorAll(
-        `[data-question-id="${questionId}"] [data-happy-desktop-ui="happy-agent-user-input-option"] .happy-checkbox__control`,
+    const options = view.container.querySelectorAll<HTMLElement>(
+        `[data-question-id="${questionId}"] :is(${CONTROLS})`,
     );
-    return options[index] as HTMLInputElement;
+    return options[index]!;
 }
 
 it("gates submit on required questions and reports single/multi select answers", async () => {
@@ -105,12 +110,10 @@ it("gates submit on required questions and reports single/multi select answers",
     // answer ticked, nothing editable, and Submit kept in place.
     const answered = view.$('[data-testid="answered-input"]');
     expect(answered.element.getAttribute("data-state")).toBe("answered");
-    const boxes = [
-        ...answered.element.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'),
-    ];
+    const boxes = [...answered.element.querySelectorAll<HTMLButtonElement>(CONTROLS)];
     expect(boxes).toHaveLength(4);
-    expect(boxes.map((box) => box.checked)).toEqual([true, false, false, false]);
-    expect(boxes.every((box) => box.disabled)).toBe(true);
+    expect(boxes.map(on)).toEqual([true, false, false, false]);
+    expect(boxes.every((box) => box.disabled || on(box))).toBe(true);
     const settled = answered.element.querySelector<HTMLButtonElement>('[data-action="submit"]')!;
     expect(settled.disabled).toBe(true);
     expect(settled.textContent).toBe("Submitted");
@@ -151,13 +154,13 @@ it("shimmers on Submit without moving the button, choices, or following content"
     for (const variant of ["card", "flat"] as const) {
         const root = view.$(`[data-testid="loading-${variant}"]`).element;
         const submit = root.querySelector<HTMLButtonElement>('[data-action="submit"]')!;
-        const checkbox = root.querySelector<HTMLInputElement>('input[type="checkbox"]')!;
+        const checkbox = root.querySelector<HTMLButtonElement>(CONTROLS)!;
         checkbox.click();
         await vi.waitFor(() => expect(submit.disabled).toBe(false));
         const elements = [
             root,
             ...root.querySelectorAll(
-                '.happy-agent-input__question, .happy-agent-input__option, .happy-agent-input__footer, [data-action="submit"], .happy-button__label',
+                '.happy-agent-input__question, .happy-agent-input__option, .happy-choice-list__button, .happy-agent-input__footer, [data-action="submit"], .happy-button__label',
             ),
             view.$(`[data-testid="following-${variant}"]`).element,
         ];
@@ -170,10 +173,9 @@ it("shimmers on Submit without moving the button, choices, or following content"
         expect(getComputedStyle(shimmer).animationName).toBe("happy-shimmer-text-sweep");
         expect(getComputedStyle(submit).opacity).toBe("1");
         expect(submit.disabled).toBe(true);
-        expect(checkbox.disabled).toBe(true);
-        expect(checkbox.checked).toBe(true);
+        expect(on(checkbox)).toBe(true);
         expect(root.querySelector('[data-action="submit"]')).toBe(submit);
-        expect(root.querySelector('input[type="checkbox"]')).toBe(checkbox);
+        expect(root.querySelector(CONTROLS)).toBe(checkbox);
         expect(geometry(), `${variant}: pending transition must not reflow`).toEqual(before);
         submit.click();
         expect(submissions.filter((value) => value === variant)).toHaveLength(1);
@@ -200,7 +202,7 @@ it("shimmers on Submit without moving the button, choices, or following content"
         expect(root.querySelector('[data-action="submit"]')).toBe(submit);
         expect(root.querySelector('[data-happy-desktop-ui="shimmer-text"]')).toBeNull();
         expect(submit.getBoundingClientRect().toJSON()).toEqual(before);
-        expect(root.querySelector<HTMLInputElement>('input[type="checkbox"]')!.checked).toBe(true);
+        expect(on(root.querySelector<HTMLElement>(CONTROLS)!)).toBe(true);
     }
 }, 120_000);
 

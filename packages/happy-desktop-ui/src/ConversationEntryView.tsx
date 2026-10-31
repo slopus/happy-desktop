@@ -12,6 +12,7 @@ import type {
     ConversationAuthor,
     ConversationEntry,
     ConversationErrorAssistance,
+    ConversationMessageActions,
     ConversationToolCall,
     UserError,
 } from "happy-desktop-state";
@@ -25,6 +26,7 @@ import {
 import type { ConversationMediaRun } from "./conversationMediaRuns";
 import type { MessageInlineLayouts } from "./conversationInlineLayouts";
 import { ConversationMedia } from "./ConversationMedia";
+import { MessageMenu, type ConversationActions } from "./ChoiceList";
 import { InlinePage, type InlinePageProps } from "./InlinePage";
 import { ConversationComputeEvent } from "./ConversationComputeEvent";
 import { ConversationErrorCard } from "./ConversationErrorCard";
@@ -120,6 +122,8 @@ export type ConversationEntryViewProps = {
      * `conversationMediaRuns`. Absent, a tool call draws its own pictures.
      */
     mediaRun?: ConversationMediaRun;
+    /** How the menus in a reply are pressed. */
+    actions?: ConversationActions;
     /** This call's pictures a reply placed in its own layout, from `conversationInlineLayouts`. */
     mediaPlaced?: ReadonlySet<number>;
     /**
@@ -609,7 +613,14 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
                   }
                 : {})}
             {...(props.messageLayouts
-                ? { layoutRender: messageLayoutRender(props.messageLayouts, props.onToolMediaOpen) }
+                ? {
+                      layoutRender: messageLayoutRender(
+                          props.messageLayouts,
+                          props.onToolMediaOpen,
+                          message.actions,
+                          props.actions,
+                      ),
+                  }
                 : {})}
             className={props.className}
             {...(props.contextNote === undefined ? {} : { contextNote: props.contextNote })}
@@ -813,8 +824,12 @@ function activityMediaRun(
 function messageLayoutRender(
     layouts: MessageInlineLayouts,
     open: ConversationEntryViewProps["onToolMediaOpen"],
+    message: ConversationMessageActions | undefined,
+    actions: ConversationActions | undefined,
 ) {
     return function messageLayout(key: string): ReactNode {
+        const menu = layouts.menus.get(key);
+        if (menu) return <MessageMenu actions={actions} message={message} {...menu} />;
         const layout = layouts.layouts.get(key);
         if (layout === undefined) return null;
         return (

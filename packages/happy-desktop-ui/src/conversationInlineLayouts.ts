@@ -1,10 +1,12 @@
 import {
+    conversationMenuParse,
     conversationTextLayoutParse,
     conversationTextSegments,
     type ConversationEntry,
     type ConversationMediaItem,
     type ConversationMediaLayout,
     type ConversationMediaLayoutNode,
+    type ConversationMenu,
     type ConversationTextSegment,
     type ConversationToolCall,
 } from "happy-desktop-state";
@@ -44,10 +46,14 @@ export type MessageInlineLayout = {
     readonly members: readonly ConversationMediaRunMember[];
 };
 
+export type MessageInlineMenu = { readonly blockIndex: number; readonly menu: ConversationMenu };
+
 /** A reply's layouts, and its text with each one replaced by its placeholder. */
 export type MessageInlineLayouts = {
     readonly text: string;
     readonly layouts: ReadonlyMap<string, MessageInlineLayout>;
+    /** Its `<menu>` blocks, by placeholder key, with their `blockIndex`. */
+    readonly menus: ReadonlyMap<string, MessageInlineMenu>;
     /** Everything the reply's height reads of its layouts, for a row's cache key. */
     readonly signature: string;
 };
@@ -98,7 +104,7 @@ export function conversationInlineLayouts(
             continue;
         }
         if (entry.kind !== "message" || entry.message.sender?.kind !== "agent") continue;
-        if (shown.size === 0) continue;
+        if (shown.size === 0 && !entry.message.text.includes("<menu")) continue;
         const layouts = messageInlineLayouts(entry, shown, framesAt);
         if (layouts === undefined) continue;
         messages ??= new Map();
@@ -152,13 +158,15 @@ function messageInlineLayouts(
     const streaming = message.generationStatus === "streaming";
     const pieces: string[] = [];
     const layouts = new Map<string, MessageInlineLayout>();
+    const menus = new Map<string, MessageInlineMenu>();
+    let blockIndex = message.actions?.blockStart ?? 0;
     let changed = false;
     let segments = segmentsOf.get(entry);
     if (segments === undefined) {
         segments = conversationTextSegments(message.text);
         segmentsOf.set(entry, segments);
     }
-    if (!segments.some((segment) => segment.type === "layout")) return undefined;
+    if (segments.every((segment) => segment.type === "markdown")) return undefined;
     for (const [position, segment] of segments.entries()) {
         if (segment.type === "markdown") {
             pieces.push(segment.text);
@@ -168,7 +176,17 @@ function messageInlineLayouts(
            never flash; one the reply ended without closing is plain text. */
         if (!segment.complete) {
             if (streaming) changed = true;
-            else pieces.push(segment.html);
+            else pieces.push(segment.type === "action" ? inert(segment.html) : segment.html);
+            continue;
+        }
+        /* A menu takes its number even when it is broken, and is then its text. */
+        if (segment.type === "action") {
+            const menu = conversationMenuParse(segment.html);
+            const key = `menu-${String(blockIndex)}`;
+            changed = true;
+            if (menu) menus.set(key, { blockIndex, menu });
+            blockIndex += 1;
+            pieces.push(menu ? `\n\n<!--happy-layout:${key}-->\n\n` : inert(segment.html));
             continue;
         }
         const layout = blockLayout(segment.html, shown);
@@ -195,10 +213,10 @@ function messageInlineLayouts(
     }
     if (!changed) return undefined;
     const text = pieces.join("");
-    const signature = [...layouts.keys()].join(",");
+    const signature = [...layouts.keys(), ...menus.keys()].join(",");
     const held = resolved.get(entry);
     if (held?.text === text && held.signature === signature) return held;
-    const value = { text, layouts, signature };
+    const value = { text, layouts, menus, signature };
     resolved.set(entry, value);
     return value;
 }
@@ -240,6 +258,11 @@ function blockLayout(html: string, shown: Shown): Omit<MessageInlineLayout, "key
     blockParses.set(html, { asked, layout });
     if (blockParses.size > BLOCK_PARSES) blockParses.delete(blockParses.keys().next().value!);
     return layout;
+}
+
+/** HTML the reader sees as the characters written. */
+function inert(html: string): string {
+    return html.replaceAll("&", "&amp;").replaceAll("<", "&lt;");
 }
 
 function memberSignature(member: ConversationMediaRunMember): string {
