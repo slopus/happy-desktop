@@ -51,8 +51,10 @@
 
 /* ---- Section header --------------------------------------------------- */
 
-/* The space above a header is part of its own box: 8px, or 2px once folded. */
+/* The space above a header is part of its own box: 8px, or 2px once folded.
+   Relative, as every row is, so a reorder can glide it by its offset. */
 .happy-rich-task-section {
+    position: relative;
     display: flex;
     flex: none;
     align-items: center;
@@ -387,6 +389,7 @@
 /* ---- "+k more" under the sub-rows -------------------------------------- */
 
 .happy-rich-task-more {
+    position: relative;
     display: flex;
     flex: none;
     align-items: center;

@@ -319,6 +319,7 @@ function Fixture(props: {
     const [sections, setSections] = useState(SECTIONS);
     const entries = richTaskList({
         tasks: TASKS,
+        agents: TASKS.map((value) => value.agent),
         memberships: MEMBERSHIPS,
         sections,
         workspaces: WORKSPACES,

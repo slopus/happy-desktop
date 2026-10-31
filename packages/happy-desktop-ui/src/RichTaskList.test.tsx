@@ -1,4 +1,7 @@
 import "./styles.css";
+import { useState } from "react";
+import { flushSync } from "react-dom";
+import { richTaskList, type RichTask, type RichTaskAgent } from "happy-desktop-state";
 import { expect, it } from "vitest";
 import { RichTaskList, type RichTaskCardModel, type RichTaskListRow } from "./RichTaskList";
 import { createRenderer } from "./testing";
@@ -172,4 +175,138 @@ it("keeps the card, corner and sub-row redlines", async () => {
     }
     expect.soft(highlight(rows[0]!).right).toBeCloseTo(highlight(cards[0]!).right, 3);
     console.log(navigator.userAgent.slice(-30), JSON.stringify(report));
+});
+
+it("keeps each card's and sub-row's node and focus across a reorder and a fold, and glides only the reorder", async () => {
+    const [section, faces, working, more] = ROWS as [RichTaskListRow, ...RichTaskListRow[]];
+    const later: RichTaskListRow = {
+        kind: "section",
+        id: "later",
+        name: "Later",
+        collapsed: false,
+    };
+    let rowsSet: (rows: readonly RichTaskListRow[]) => void = () => {};
+    const Fixture = () => {
+        const [rows, setRows] = useState<readonly RichTaskListRow[]>([
+            section,
+            faces!,
+            later,
+            working!,
+            more!,
+        ]);
+        rowsSet = (next) => flushSync(() => setRows(next));
+        return (
+            <RichTaskList
+                onMoreToggle={() => {}}
+                onSectionCollapseToggle={() => {}}
+                onSelect={() => {}}
+                rows={rows}
+                selectedId="faces/ask"
+                workingFrame={0}
+            />
+        );
+    };
+    const view = createRenderer({ width: 304, height: 640 });
+    view.render(() => <Fixture />);
+    await view.ready();
+    const node = (key: string) =>
+        view.container.querySelector<HTMLElement>(`[data-row-key="${key}"]`);
+    const card = node("task:faces")!;
+    const subRow = node("faces/ask")!;
+    const moving = node("task:more")!;
+    moving.querySelector("button")!.focus();
+    const all = () => [...view.container.querySelectorAll<HTMLElement>("[data-row-key]")];
+    const cancel = () =>
+        all().forEach((row) => row.getAnimations().forEach((animation) => animation.cancel()));
+
+    // Focus moves "more" to the top: same nodes, same focus, and the rows that moved glide.
+    rowsSet([section, more!, faces!, later, working!]);
+    expect(node("task:faces")).toBe(card);
+    expect(node("faces/ask")).toBe(subRow);
+    expect(node("task:more")).toBe(moving);
+    expect(document.activeElement).toBe(moving.querySelector("button"));
+    expect(moving.getAnimations()).toHaveLength(1);
+    expect(card.getAnimations()).toHaveLength(1);
+    cancel();
+
+    // Folding the first section drops its cards; what stays keeps its node and nothing glides.
+    const kept = node("task:working")!;
+    rowsSet([
+        { kind: "section", id: "priorities", name: "Priorities", collapsed: true },
+        later,
+        working!,
+    ]);
+    expect(node("task:working")).toBe(kept);
+    rowsSet([section, more!, faces!, later, working!]);
+    expect(node("task:working")).toBe(kept);
+    expect(all().flatMap((row) => row.getAnimations())).toHaveLength(0);
+});
+
+it("puts a shown child under a task even when another task made it", () => {
+    const agent = (id: string, subtasks: RichTaskAgent[] = []): RichTaskAgent => ({
+        id,
+        title: id,
+        status: "idle",
+        pendingQuestionId: null,
+        lastActivityAt: 1,
+        statusLine: null,
+        unread: null,
+        subtasks,
+    });
+    const helper = agent("b-helper");
+    const a: RichTask = {
+        id: "a",
+        name: "A",
+        agent: agent("a-agent"),
+        children: [
+            {
+                ref: { kind: "agent", id: "b-helper" },
+                visibility: "shown",
+                by: { agentId: null, userId: "u" },
+                updatedAt: 1,
+            },
+            {
+                ref: { kind: "workspace", id: "b-ws" },
+                visibility: "shown",
+                by: { agentId: null, userId: "u" },
+                updatedAt: 1,
+            },
+        ],
+    };
+    const b: RichTask = { id: "b", name: "B", agent: agent("b-agent", [helper]) };
+    const entries = richTaskList({
+        tasks: [a, b],
+        agents: [a.agent, b.agent],
+        memberships: [
+            { taskId: "a", orderKey: "a" },
+            { taskId: "b", orderKey: "b" },
+        ],
+        sections: [],
+        workspaces: [
+            {
+                id: "b-ws",
+                name: "b-ws",
+                projectId: "p",
+                creatorAgentId: "b-agent",
+                updatedAt: 2,
+                addedLines: 0,
+                deletedLines: 0,
+            },
+        ],
+        artifacts: [],
+        viewerUserId: null,
+        expandedTaskIds: new Set(),
+    });
+    const children = (id: string) =>
+        entries.flatMap((entry) =>
+            entry.kind === "task" && entry.task.id === id
+                ? entry.children.map(
+                      (child) =>
+                          `${child.kind}:${child.kind === "agent" ? child.agent.id : child.kind === "workspace" ? child.workspace.id : child.artifact.id}`,
+                  )
+                : [],
+        );
+    expect(children("a")).toEqual(["workspace:b-ws", "agent:b-helper"]);
+    // B made the workspace; its idle subtask is not derived, so only the workspace shows there.
+    expect(children("b")).toEqual(["workspace:b-ws"]);
 });

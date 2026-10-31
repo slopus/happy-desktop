@@ -1,5 +1,7 @@
+import { useLayoutEffect, useRef, type ReactNode } from "react";
 import { Avatar, type ToneName } from "./Avatar";
 import { ClayIcon } from "./ClayIcon";
+import { SIDEBAR_SETTLE } from "./Sidebar";
 import { Spinner } from "./Spinner";
 import { Ionicon, type IoniconName } from "./vectorIcons/VectorIcon";
 
@@ -110,6 +112,7 @@ export function RichTaskCard(props: RichTaskCardProps) {
         <div
             className="happy-rich-task-card"
             data-happy-desktop-ui="rich-task-card"
+            data-row-key={`task:${card.id}`}
             data-selected={props.selected ? "" : undefined}
         >
             <button
@@ -216,6 +219,7 @@ export function RichTaskSubRow(props: RichTaskSubRowProps) {
             className="happy-rich-task-row"
             data-dimmed={row.dimmed ? "" : undefined}
             data-happy-desktop-ui="rich-task-row"
+            data-row-key={row.id}
             data-selected={props.selected ? "" : undefined}
             onClick={() => props.onSelect(row.id)}
             type="button"
@@ -283,6 +287,7 @@ export function RichTaskSectionHeader(props: RichTaskSectionHeaderProps) {
             className="happy-rich-task-section"
             data-collapsed={props.collapsed ? "" : undefined}
             data-happy-desktop-ui="rich-task-section"
+            data-row-key={`section:${props.id}`}
             onClick={() => props.onCollapseToggle(props.id)}
             type="button"
         >
@@ -292,62 +297,124 @@ export function RichTaskSectionHeader(props: RichTaskSectionHeaderProps) {
     );
 }
 
-/** The rich task list: section headers, cards, and each card's sub-rows and "+k more". */
+/** Whether two orders list the rows they share in a different sequence. */
+function orderChanged(previous: readonly string[], next: readonly string[]): boolean {
+    const shared = new Set(previous.filter((key) => next.includes(key)));
+    const after = next.filter((key) => shared.has(key));
+    return previous.filter((key) => shared.has(key)).some((key, index) => after[index] !== key);
+}
+
+type RowLayout = { readonly order: readonly string[]; readonly tops: ReadonlyMap<string, number> };
+
+/**
+ * A reorder glides: every row that changed place travels from where it was
+ * painted to its new slot, with the sidebar's settle glide. Folding a section,
+ * expanding a card, and rows coming or going stay instant, as in the sidebar.
+ * Positions are read relative to the list, so content moving above it is not
+ * a reorder.
+ */
+function rowsGlide(root: HTMLElement, previous: RowLayout | undefined): RowLayout {
+    const origin = root.getBoundingClientRect().top;
+    const nodes = [...root.children].filter(
+        (node): node is HTMLElement =>
+            node instanceof HTMLElement && node.dataset.rowKey !== undefined,
+    );
+    const order = nodes.map((node) => node.dataset.rowKey!);
+    const glide =
+        previous !== undefined &&
+        orderChanged(previous.order, order) &&
+        !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const tops = new Map<string, number>();
+    for (const node of nodes) {
+        const key = node.dataset.rowKey!;
+        // A row mid-glide is painted at its offset; its slot is the layout under it.
+        const offset = Number.parseFloat(getComputedStyle(node).top) || 0;
+        const layout = node.getBoundingClientRect().top - origin - offset;
+        tops.set(key, layout);
+        const first = previous?.tops.get(key);
+        if (!glide || first === undefined) continue;
+        const delta = first + offset - layout;
+        if (Math.abs(delta) < 0.001) continue;
+        node.getAnimations().forEach((animation) => animation.cancel());
+        node.animate([{ top: `${delta}px` }, { top: "0px" }], {
+            duration: SIDEBAR_SETTLE.durationMs,
+            easing: SIDEBAR_SETTLE.easing,
+        });
+    }
+    return { order, tops };
+}
+
+/**
+ * The rich task list: section headers, cards, and each card's sub-rows and
+ * "+k more", as one flat run of rows keyed by id, so a card or sub-row keeps
+ * its node, focus and selection when the list reorders or a section folds.
+ */
 export function RichTaskList(props: RichTaskListProps) {
+    const root = useRef<HTMLDivElement>(null);
+    const layout = useRef<RowLayout | undefined>(undefined);
+    // eslint-disable-next-line happy-react/no-layout-effect -- a reorder glide must measure the rows laid out by the render it follows, before paint, which no declarative or event-driven boundary exposes
+    useLayoutEffect(() => {
+        if (root.current) layout.current = rowsGlide(root.current, layout.current);
+    });
+    const rows = props.rows.flatMap((row): ReactNode[] => {
+        if (row.kind === "section")
+            return [
+                <RichTaskSectionHeader
+                    collapsed={row.collapsed}
+                    id={row.id}
+                    key={`section:${row.id}`}
+                    name={row.name}
+                    onCollapseToggle={props.onSectionCollapseToggle}
+                />,
+            ];
+        const card = row.card;
+        const footer = card.expanded
+            ? "hide"
+            : card.subRows.length > 0 && card.more > 0
+              ? `+${card.more} more`
+              : null;
+        return [
+            <RichTaskCard
+                card={card}
+                key={`task:${card.id}`}
+                onMoreToggle={props.onMoreToggle}
+                onSelect={props.onSelect}
+                selected={props.selectedId === card.id}
+                workingFrame={props.workingFrame}
+            />,
+            ...card.subRows.map((subRow) => (
+                <RichTaskSubRow
+                    key={subRow.id}
+                    onSelect={props.onSelect}
+                    row={subRow}
+                    selected={props.selectedId === subRow.id}
+                    workingFrame={props.workingFrame}
+                />
+            )),
+            ...(footer
+                ? [
+                      <button
+                          className="happy-rich-task-more"
+                          data-happy-desktop-ui="rich-task-more-row"
+                          data-row-key={`more:${card.id}`}
+                          key={`more:${card.id}`}
+                          onClick={() => props.onMoreToggle(card.id)}
+                          type="button"
+                      >
+                          <span className="happy-rich-task-more__label">{footer}</span>
+                      </button>,
+                  ]
+                : []),
+        ];
+    });
     return (
         <div
             className="happy-rich-tasks"
             data-happy-desktop-ui="rich-tasks"
             data-selection={props.selection ?? "inset"}
+            ref={root}
         >
-            {props.rows.map((row) => {
-                if (row.kind === "section")
-                    return (
-                        <RichTaskSectionHeader
-                            collapsed={row.collapsed}
-                            id={row.id}
-                            key={row.id}
-                            name={row.name}
-                            onCollapseToggle={props.onSectionCollapseToggle}
-                        />
-                    );
-                const card = row.card;
-                const footer = card.expanded
-                    ? "hide"
-                    : card.subRows.length > 0 && card.more > 0
-                      ? `+${card.more} more`
-                      : null;
-                return [
-                    <RichTaskCard
-                        card={card}
-                        key={card.id}
-                        onMoreToggle={props.onMoreToggle}
-                        onSelect={props.onSelect}
-                        selected={props.selectedId === card.id}
-                        workingFrame={props.workingFrame}
-                    />,
-                    ...card.subRows.map((subRow) => (
-                        <RichTaskSubRow
-                            key={subRow.id}
-                            onSelect={props.onSelect}
-                            row={subRow}
-                            selected={props.selectedId === subRow.id}
-                            workingFrame={props.workingFrame}
-                        />
-                    )),
-                    footer ? (
-                        <button
-                            className="happy-rich-task-more"
-                            data-happy-desktop-ui="rich-task-more-row"
-                            key={`${card.id}/more`}
-                            onClick={() => props.onMoreToggle(card.id)}
-                            type="button"
-                        >
-                            <span className="happy-rich-task-more__label">{footer}</span>
-                        </button>
-                    ) : null,
-                ];
-            })}
+            {rows}
         </div>
     );
 }

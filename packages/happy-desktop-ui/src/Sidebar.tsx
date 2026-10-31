@@ -783,6 +783,8 @@ const LIFT_MS = 120;
 /** How long a dropped row takes to travel from where it was to where it now is. */
 const SETTLE_MS = 160;
 const SETTLE_EASING = "cubic-bezier(0.22, 1, 0.36, 1)";
+/** The settle glide, for other lists that move rows the way this one does. */
+export const SIDEBAR_SETTLE = { durationMs: SETTLE_MS, easing: SETTLE_EASING } as const;
 /**
  * How long a drop holds the geometry it captured while it waits for the render
  * that rearranges the rows. Long enough for a reorder to come back through the

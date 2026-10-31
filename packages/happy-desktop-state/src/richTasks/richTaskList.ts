@@ -107,6 +107,11 @@ export type RichTaskListEntry =
 
 export type RichTaskListInput = {
     readonly tasks: readonly RichTask[];
+    /**
+     * Every agent the client holds, other tasks' and bots' included: a "shown"
+     * choice may put any of them, or any of their subtasks, under a task.
+     */
+    readonly agents: readonly RichTaskAgent[];
     readonly memberships: readonly RichTaskMembership[];
     readonly sections: readonly RichTaskSection[];
     readonly workspaces: readonly RichTaskWorkspace[];
@@ -143,11 +148,13 @@ function urgencyOrder(left: RichTaskSubWork, right: RichTaskSubWork): number {
 
 /**
  * A task's sub-work: the workspaces and artifacts its agents made and the
- * subtasks that are working or asking (derived), plus what an edge shows,
- * minus what an edge hides.
+ * subtasks that are working or asking (derived), plus what a choice shows,
+ * minus what a choice hides. A shown child is looked up in the whole
+ * collections, since it may be something the task did not make.
  */
 export function richTaskChildren(
     task: RichTask,
+    agents: readonly RichTaskAgent[],
     workspaces: readonly RichTaskWorkspace[],
     artifacts: readonly RichTaskArtifact[],
 ): readonly RichTaskSubWork[] {
@@ -169,10 +176,19 @@ export function richTaskChildren(
             children.push(child(false));
         else if (derived) children.push(child(true));
     };
-    for (const agent of subtasks)
+    const candidates = new Map(
+        [...subtasks, ...agents.flatMap((agent) => [agent, ...descendants(agent)])].map((agent) => [
+            agent.id,
+            agent,
+        ]),
+    );
+    candidates.delete(task.agent.id);
+    const subtaskIds = new Set(subtasks.map((agent) => agent.id));
+    for (const agent of candidates.values())
         consider(
             { kind: "agent", id: agent.id },
-            agent.status === "working" || agent.pendingQuestionId !== null,
+            subtaskIds.has(agent.id) &&
+                (agent.status === "working" || agent.pendingQuestionId !== null),
             (hidden) => ({ kind: "agent", agent, hidden }),
         );
     for (const workspace of workspaces)
@@ -222,7 +238,7 @@ export function richTaskList(input: RichTaskListInput): readonly RichTaskListEnt
         }
         if (collapsed) continue;
         const task = item.task;
-        const children = richTaskChildren(task, input.workspaces, input.artifacts);
+        const children = richTaskChildren(task, input.agents, input.workspaces, input.artifacts);
         const expanded = input.expandedTaskIds.has(task.id);
         const visible = children.filter((child) => !child.hidden);
         const drawn = expanded
