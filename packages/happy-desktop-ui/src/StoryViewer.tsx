@@ -30,6 +30,7 @@ export type StoryViewerProps = {
     /** A repost's round video, laid over the frame's corner. */
     readonly roundUrl?: string | null;
     readonly caption: string | null;
+    /** Replies oldest first: the drawer lists them top down and the peek shows the last two. */
     readonly replies:
         | { readonly status: "loading" }
         | { readonly status: "ready"; readonly items: readonly StoryViewerReply[] }
@@ -92,7 +93,7 @@ export function StoryViewer(props: StoryViewerProps) {
         for (const video of canvas.current?.querySelectorAll("video") ?? [])
             if (open) video.pause();
             else video.play().catch(() => undefined);
-        if (open) input.current?.focus();
+        input.current?.focus();
     };
     // A sent reply empties the field; worked out while rendering, from the phase it last saw.
     const [phaseSeen, setPhaseSeen] = useState(props.reply.phase);
@@ -190,7 +191,7 @@ export function StoryViewer(props: StoryViewerProps) {
                     />
                 ) : frame.kind === "video" ? (
                     <video
-                        autoPlay
+                        autoPlay={!drawer}
                         className="happy-story-viewer__media"
                         loop
                         muted
@@ -204,7 +205,7 @@ export function StoryViewer(props: StoryViewerProps) {
                 )}
                 {live || roundUrl ? (
                     <video
-                        autoPlay
+                        autoPlay={Boolean(live) || !drawer}
                         className="happy-story-viewer__round"
                         data-happy-desktop-ui="story-viewer-round"
                         data-live={live ? "" : undefined}

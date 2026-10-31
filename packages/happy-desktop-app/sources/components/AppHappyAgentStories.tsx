@@ -136,7 +136,8 @@ export function AppHappyAgentStoryViewer(props: {
                 poster={posterOf(story.poster, directory)}
                 replies={
                     replies.status === "ready"
-                        ? { status: "ready", items: replies.messages.map(reply) }
+                        ? // The daemon reads replies newest first; the viewer wants them oldest first.
+                          { status: "ready", items: replies.messages.map(reply).reverse() }
                         : replies
                 }
                 reply={open.reply}
