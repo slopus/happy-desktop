@@ -27,8 +27,6 @@ export interface ConversationSummary {
      */
     readonly lastActivityAt?: number;
     readonly unread?: boolean;
-    /** The person has written a message here and not sent it. */
-    readonly drafted?: boolean;
     readonly mentions?: number;
     readonly avatarFileId?: string;
     readonly participants: readonly ConversationAuthor[];

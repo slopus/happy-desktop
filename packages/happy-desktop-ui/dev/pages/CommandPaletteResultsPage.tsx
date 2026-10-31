@@ -8,7 +8,7 @@ import { SegmentedControl } from "../../src/SegmentedControl";
 import { Switch } from "../../src/Switch";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 import { type ReactNode } from "react";
-import happyMark from "../../src/assets/sidebar-icons/happy@40.png";
+import { happyLogoBlackUrl as happyMark } from "../../src/assets";
 
 /** The component plan this page documents. The selector and the page header read the same value. */
 export const componentNumber = "C-273";

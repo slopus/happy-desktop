@@ -117,23 +117,7 @@ export {
     type AvatarType,
     type ToneName,
 } from "./Avatar";
-export { StemCell, type StemCellMark, type StemCellProps } from "./StemCell";
-export { type CellVariant } from "./CellPaint";
-export { HappyCell, type HappyCellProps, type HappyCellSize } from "./HappyCell";
-export {
-    HappyCellDivision,
-    type DivisionRect,
-    type HappyCellDaughter,
-    type HappyCellDivisionProps,
-} from "./HappyCellDivision";
-export { HappyMark, type HappyMarkSize } from "./HappyMark";
-export { StemCellGrowth, type ImageMark, type StemCellGrowthProps } from "./StemCellGrowth";
-export {
-    playStemCellToIcon,
-    stemCellSupportProbe,
-    type StemCellPlay,
-    type StemCellPlayOptions,
-} from "./stemCellPlay";
+export { type ImageMark } from "./imageMark";
 export {
     BotFace,
     botFaceCredit,
@@ -370,10 +354,6 @@ export {
     type SidebarHeaderAction,
     type SidebarItem,
     type SidebarItemAction,
-    type SidebarItemChange,
-    type SidebarItemStory,
-    type SidebarItemChangeKind,
-    type SidebarSeparatorPinEdge,
     type SidebarNumberShortcutTarget,
     type SidebarProps,
     type SidebarReorder,
@@ -381,13 +361,6 @@ export {
     type SidebarSearch,
     type SidebarSection,
 } from "./Sidebar";
-export { SidebarChanges, type SidebarChangesProps } from "./SidebarChanges";
-export {
-    SidebarProposal,
-    type SidebarProposalProps,
-    type SidebarProposalStatus,
-} from "./SidebarProposal";
-export { SIDEBAR_WIDGET_HEIGHT_MAX, SidebarWidget, type SidebarWidgetProps } from "./SidebarWidget";
 export {
     SidebarSectionContext,
     SidebarSectionTail,
@@ -457,8 +430,8 @@ export { fileEntriesSort, fileNameCompare, filePathCompare } from "./fileTreeSor
 export {
     ConversationStatus,
     ConversationView,
-    type ConversationLeadingHeader,
     type ConversationViewProps,
+    type ConversationLeadingHeader,
 } from "./ConversationView";
 export {
     ComposerFooterBar,
@@ -957,10 +930,6 @@ export {
     type HappyAgentExperimentalSettingsProps,
 } from "./pages/settings/HappyAgentExperimentalSettings";
 export {
-    HappyAgentStemCellsSettings,
-    type HappyAgentStemCellsSettingsProps,
-} from "./pages/settings/HappyAgentStemCellsSettings";
-export {
     HappyAgentProductAnalyticsSettings,
     type HappyAgentProductAnalyticsSettingsProps,
 } from "./pages/settings/HappyAgentProductAnalyticsSettings";
@@ -1090,26 +1059,6 @@ export { FileChangeDiff, type FileChangeDiffProps } from "./FileChangeDiff";
 export { WorkTabControls, type WorkTabControlsProps } from "./WorkTabControls";
 export { ConversationSummaryRow, type ConversationSummaryRowProps } from "./ConversationSummaryRow";
 export {
-    MakeStuffIntro,
-    MakeStuffView,
-    makeStuffIntroHeader,
-    makeStuffIntroHeight,
-    makeStuffIntroLift,
-    type MakeStuffIntroProps,
-    type MakeStuffOption,
-    type MakeStuffStage,
-    type MakeStuffViewProps,
-} from "./MakeStuffView";
-export {
-    CLAY_ICON_SLUGS,
-    clayIconMark,
-    clayIconMarkLarge,
-    clayIconSlugIs,
-    happyIconMark,
-    type ClayIconSlug,
-} from "./clayIcons";
-export { WorkTranscript, type WorkTranscriptRow, type WorkTranscriptProps } from "./WorkTranscript";
-export {
     DataDisclosure,
     type DataDisclosureGroup,
     type DataDisclosureProps,
@@ -1118,52 +1067,4 @@ export {
     HappyAgentSystemMonitorSurfacePage,
     type HappyAgentSystemMonitorSurfacePageProps,
 } from "./pages/surfaces/HappyAgentSystemMonitorSurfacePage";
-export {
-    HappyAgentStoriesSettings,
-    type HappyAgentStoriesSettingsProps,
-} from "./pages/settings/HappyAgentStoriesSettings";
-export { StoriesRow, type StoriesRowAuthor, type StoriesRowProps } from "./StoriesRow";
-export { StoryRing, type StoryRingProps, type StoryRingSegments } from "./StoryRing";
 export { localAgoTime, localAgoTimeChangedAt, localListTime } from "./localTime";
-export {
-    StoryCanvas,
-    StoryOverlayView,
-    StoryRoundVideo,
-    STORY_FONTS,
-    storyContrastInk,
-    storyLinkHost,
-    type StoryArtifactPage,
-    type StoryArtifactRender,
-    type StoryArtifactTarget,
-    type StoryCanvasProps,
-    type StoryOverlayViewProps,
-} from "./StoryCanvas";
-export { StoryEditor, type StoryEditorProps, type StoryEditorRecording } from "./StoryEditor";
-export {
-    StoryViewer,
-    STORY_QUICK_REACTIONS,
-    type StoryViewerAuthor,
-    type StoryViewerProps,
-    type StoryViewerViewers,
-} from "./StoryViewer";
-export {
-    StoryInlineCard,
-    STORY_INLINE_HEIGHT,
-    STORY_INLINE_WIDTH,
-    type StoryInlineCardProps,
-    type StoryInlineCardState,
-} from "./StoryInlineCard";
-export { StickerView, type StickerViewProps, type StorySticker } from "./StickerView";
-
-export {
-    ChatActionBlock,
-    chatActionBlockHeight,
-    type ChatActionBlockProps,
-    type ChatActionFigures,
-} from "./ChatActionBlock";
-export {
-    ChatDefaultModelFigure,
-    ChatProviderCliFigure,
-    type ChatDefaultModelFigureProps,
-    type ChatProviderCliFigureProps,
-} from "./ChatActionFigures";

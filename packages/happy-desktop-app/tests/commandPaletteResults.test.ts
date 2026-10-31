@@ -112,7 +112,7 @@ const input = (overrides: Partial<CommandPaletteInput> = {}): CommandPaletteInpu
     bots: BOTS,
     tasks: TASKS,
     taskDirectory: [...TASKS, OLD_TASK],
-    sidebarMode: { kind: "classic", botsHidden: new Set(), projectsHidden: false },
+    sidebarListing: { botsHidden: new Set(), projectsHidden: false },
     visits: [],
     archivedSessions: [],
     tabs: [],
@@ -167,8 +167,7 @@ it("offers archived work in the empty palette only when nothing live is left", (
 it("puts the sidebar first: a hidden bot or a project left out of the sidebar sinks", () => {
     const result = commandPaletteResults(
         input({
-            sidebarMode: {
-                kind: "classic",
+            sidebarListing: {
                 botsHidden: new Set(["bot_happy"]),
                 projectsHidden: true,
             },
@@ -217,40 +216,6 @@ it("ranks a recently opened match above an older one of the same quality", () =>
     );
     const work = result.sections.find((section) => section.id === "work");
     expect(work?.rows[0]?.id).toBe("task:release");
-});
-
-it("lists the spaces sidebar's rows first, under their names and marks", () => {
-    const result = commandPaletteResults(
-        input({
-            sidebarMode: {
-                kind: "spaces",
-                spaces: [
-                    {
-                        id: "spc_release",
-                        title: "Ship 0.4.90",
-                        glyph: { kind: "mark", imageMark: { src: "rocket.png" } },
-                        target: { kind: "task", id: "release" },
-                        destination: { kind: "chat", groupId: "ws_release", chatId: "ses_release" },
-                    },
-                    {
-                        id: "spc_list",
-                        title: "Movies",
-                        glyph: { kind: "icon", name: "doc" },
-                        target: { kind: "surface" },
-                        destination: { kind: "surface", surfaceId: "srf_movies" },
-                    },
-                ],
-            },
-        }),
-    );
-    expect(ids(result).slice(0, 2)).toEqual(["task:release", "space:spc_list"]);
-    expect(result.rows[0]).toMatchObject({
-        title: "Ship 0.4.90",
-        glyph: { kind: "mark", imageMark: { src: "rocket.png" } },
-    });
-    expect(result.rows[1]).toMatchObject({
-        command: { kind: "surfaceOpen", surfaceId: "srf_movies" },
-    });
 });
 
 it("answers “fold sidebar” with the sidebar's own action and chord", () => {

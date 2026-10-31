@@ -296,17 +296,6 @@ export function happyAgentArtifactViewerStoreCreate(
                     ),
                 };
             }
-            case "sidebar":
-            case "sidebar_proposal": {
-                // Its custom tags draw nothing as a page; what it says is its markup.
-                const { data } = await fileText(id, number, version.entry.path, signal);
-                return {
-                    type: "markdown",
-                    entryPath: version.entry.path,
-                    text: `\`\`\`html\n${new TextDecoder().decode(data).trimEnd()}\n\`\`\``,
-                    files: new Map(),
-                };
-            }
             case "html": {
                 // Whatever keeps the page from running as a site, the static
                 // preview is still shown, and says why it is not the page.
@@ -378,8 +367,6 @@ export function happyAgentArtifactViewerStoreCreate(
                 inlineUrl = url;
                 return { type: "document", document: entry, inlineUrl: url };
             }
-            // A story is drawn from its story object, never from its files.
-            case "story":
             case "unknown":
                 return { type: "files" };
         }

@@ -628,20 +628,6 @@
     animation-play-state: paused;
 }
 
-/* Seeded marks stay on the tuned resting geometry in every capture. */
-.happy-cell-paint[data-wobble] > path {
-    animation-play-state: paused;
-}
-
-/* The grown icon in the live growth specimen fills the mark's box, as the
-   sidebar's and tabs' image marks fill their lanes. */
-.blueprint-stem-cell-growth-image {
-    display: block;
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
-}
-
 /* Two windows on one document, side by side, a hairline between them. */
 .blueprint-document-pair {
     display: flex;

@@ -12,8 +12,8 @@ import { createRenderer } from "./testing";
  * Every iteration carries a random row, section, separator, Search or Create a
  * random number of slots at a random speed, while a fake daemon answers the way
  * a real one can: late, twice, out of order, after the next drag has started,
- * with batches of new names and marks for unrelated rows (what Prioritizing
- * sends), or by refusing the move. Every element's box is read on every frame,
+ * with batches of new names and marks for unrelated rows (what an agent
+ * renaming its work sends), or by refusing the move. Every element's box is read on every frame,
  * and the run fails on the first frame that breaks the property:
  *
  *   - an element nobody is carrying moves only while it is gliding: it never
@@ -354,8 +354,8 @@ const chaos = async (seed: number, iterations: number) => {
         version = written;
         show(shown.map((item) => ({ ...item })));
     };
-    // Prioritizing: new names and marks for rows, never a new order.
-    const prioritize = () => {
+    // Renames: new names and marks for rows, never a new order.
+    const rename = () => {
         const names = ["Planning", "Ship it", "Fix login", "Review", "Notes", "Inbox zero"];
         show(
             shown.map((item) =>
@@ -483,7 +483,7 @@ const chaos = async (seed: number, iterations: number) => {
             );
             for (let wait = Math.floor(next() * 3); wait >= 0; wait -= 1) await frame();
             if (next() < 0.25) later.shift()?.();
-            if (next() < 0.2) prioritize();
+            if (next() < 0.2) rename();
             if (next() < 0.1) show(shown.map((item) => ({ ...item })));
         }
         for (let wait = Math.floor(next() * 4); wait >= 0; wait -= 1) await frame();
@@ -557,9 +557,9 @@ const chaos = async (seed: number, iterations: number) => {
             landed = visibleIds(before);
             landedDepth = depthOf(before.find((item) => item.id === id));
         }
-        // Echoes and Prioritizing after the drop as well.
+        // Echoes and renames after the drop as well.
         setTimeout(() => show(shown.map((item) => ({ ...item }))), next() * 300);
-        setTimeout(prioritize, next() * 300);
+        setTimeout(rename, next() * 300);
         await wait(outcome === "decline" ? 1000 : 700);
         recording = false;
         await frame();

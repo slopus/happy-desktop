@@ -22,7 +22,7 @@ it.each([false, true])(
             );
         store.featureUpdate("inbox", true, "experiments");
         expect(store.get().inbox).toBe(true);
-        expect(store.get().batchNotes).toBe(false);
+        expect(store.get().voice).toBe(enabled);
         expect(experimentsStoreCreate(persistence).get()).toEqual(store.get());
     },
 );

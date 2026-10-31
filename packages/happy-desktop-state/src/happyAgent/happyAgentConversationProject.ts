@@ -840,10 +840,6 @@ function happyAgentConnectGroupProject(
                     }),
                     messageId: element.messageId,
                     runId: element.runId,
-                    ...(element.actionChoices ? { actionChoices: element.actionChoices } : {}),
-                    ...(element.actionBlockOffset
-                        ? { actionBlockOffset: element.actionBlockOffset }
-                        : {}),
                 });
                 break;
             }

@@ -72,7 +72,7 @@ export function AgentActivityRowPage() {
                 </div>
             </Specimen>
             <Specimen
-                detail="The agent a spawn made, as the window knows it: its sidebar row's clay icon and name, shimmering while it works, then what it was asked and its model · a click opens it"
+                detail="The agent a spawn made, as the window knows it: its name and face, then what it was asked and its model · a click opens it"
                 label="A spawned agent, by its own name"
                 number="spawn-named"
                 stage="surface"

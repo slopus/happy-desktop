@@ -28,7 +28,6 @@ import {
     type Run,
     type SaveUserSettingRequest,
     type SendMessageRequest,
-    type Space,
     type ServiceMessage,
     type StoredUserSetting,
     type Task,
@@ -39,7 +38,6 @@ import {
 } from "@slopus/happy-agent-client";
 import { MINIMUM_HAPPY_AGENT_VERSION } from "../happyAgentConnection/compatibility.js";
 import { generateKeyBetween } from "../utils/fractionalIndexing.js";
-import { sidebarDocumentEdit, sidebarDocumentInsert } from "../spaces/spacesSidebarDocument.js";
 
 /**
  * A programmable in-memory Happy Agent daemon for state-package tests.
@@ -169,13 +167,7 @@ export interface FakeHappyAgentDaemon {
         ready?: boolean;
         protocol?: number;
         desktopLiveControl?: boolean;
-        stemCellIdentities?: boolean;
-        sidebarOperations?: boolean;
     }): void;
-    /** Replace the rows `listSpaces` answers; announcing them is up to the test. */
-    spacesSet(spaces: readonly Space[]): void;
-    /** Replace the document `getSpaceSidebar` answers; announcing it is up to the test. */
-    spaceSidebarSet(sidebar: { readonly version: number; readonly html: string }): void;
     /** Replace what `getOnboarding` and the desktop bootstrap report. */
     onboardingSet(state: {
         completed: boolean;
@@ -418,13 +410,6 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
     /** Every event this process journaled; a replacement starts with none. */
     let journal: HappyAgentEvent[] = [];
     let desktopLiveControl: boolean | undefined;
-    let stemCellIdentities: boolean | undefined;
-    let sidebarOperations: boolean | undefined;
-    let spaceRows: readonly Space[] = [];
-    let spaceSidebar: { readonly version: number; readonly html: string } = {
-        version: 1,
-        html: "<nav></nav>",
-    };
     const liveSessions = new Map<string, LiveSession>();
     const liveUrls = new HappyAgentClient({ endpoint: "http://fake-happy-agent.test/" });
     let protocol = HAPPY_AGENT_PROTOCOL_VERSION;
@@ -613,8 +598,6 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
         emit("task.joined", { membership });
         return taskResponse(id);
     };
-    /** New work made, by its row's id, so a repeat answers the same. */
-    const stemCells = new Map<string, { readonly space: Space; readonly agent: Agent }>();
     const taskArchivalSet = (taskId: string, ifMatch: string, archived: boolean) => {
         const current = taskRequired(taskId);
         if (current.canArchive !== true)
@@ -692,17 +675,7 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
         ready: healthReady,
         status: healthReady ? ("ready" as const) : ("starting" as const),
         version: { daemon: daemonVersion, protocol },
-        ...(desktopLiveControl === undefined &&
-        stemCellIdentities === undefined &&
-        sidebarOperations === undefined
-            ? {}
-            : {
-                  capabilities: {
-                      ...(desktopLiveControl === undefined ? {} : { desktopLiveControl }),
-                      ...(stemCellIdentities === undefined ? {} : { stemCellIdentities }),
-                      ...(sidebarOperations === undefined ? {} : { sidebarOperations }),
-                  },
-              }),
+        ...(desktopLiveControl === undefined ? {} : { capabilities: { desktopLiveControl } }),
     });
 
     const client = {
@@ -716,21 +689,6 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
             if (!usageRefreshSupported)
                 throw new HappyAgentApiError(404, "Not found.", "not_found", null);
             return { started: request.providerIds ?? [] };
-        },
-        async listSpaces(...args: unknown[]) {
-            await record("listSpaces", args);
-            return {
-                spaces: [...spaceRows, ...[...stemCells.values()].map((made) => made.space)],
-                sections: [],
-            };
-        },
-        async listSpaceBatches(...args: unknown[]) {
-            await record("listSpaceBatches", args);
-            return { batches: [] };
-        },
-        async getSpaceSidebar(...args: unknown[]) {
-            await record("getSpaceSidebar", args);
-            return { artifactId: "sidebar", ...spaceSidebar, spaces: [...spaceRows] };
         },
         async getHealth(...args: unknown[]) {
             await record("getHealth", args);
@@ -928,66 +886,6 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
         ) {
             await record("createTask", [request, ...rest]);
             return taskMake(request);
-        },
-        async createStemCell(
-            request: {
-                readonly id?: string;
-                readonly taskId?: string;
-                readonly workspaceId?: string;
-                readonly agentId?: string;
-                readonly sectionId?: string | null;
-            } = {},
-            ...rest: unknown[]
-        ) {
-            await record("createStemCell", [request, ...rest]);
-            const id = request.id ?? `space-${String((idCounter += 1))}`;
-            // Repeated, the work already made is answered again.
-            const made = stemCells.get(id);
-            if (made !== undefined) return made;
-            const response = taskMake({
-                ...(request.taskId === undefined ? {} : { id: request.taskId }),
-                ...(request.workspaceId === undefined ? {} : { workspaceId: request.workspaceId }),
-                ...(request.agentId === undefined ? {} : { agentId: request.agentId }),
-            });
-            const space: Space = {
-                createdAt: 1,
-                icon: { type: "stem_cell" },
-                id,
-                orderKey: id,
-                placement: "pending",
-                sectionId: request.sectionId ?? null,
-                target: {
-                    agentId: response.task.agent.id,
-                    id: response.task.id,
-                    kind: "task",
-                    workspaceId: response.task.workspaceId,
-                },
-                title: null,
-                updatedAt: 1,
-                version: 1,
-                visibility: "shown",
-                working: false,
-            };
-            const answer = { space, agent: response.task.agent };
-            stemCells.set(id, answer);
-            // Written into the document where it was asked for, as the daemon does.
-            const html = sidebarDocumentEdit(spaceSidebar.html, (view) =>
-                sidebarDocumentInsert(view, id, request.sectionId ?? null, null),
-            );
-            if (html !== undefined) spaceSidebar = { version: spaceSidebar.version + 1, html };
-            emit("space.created", { space });
-            return answer;
-        },
-        /** Takes new work out, as the daemon does, and refuses once its chat holds a message. */
-        async removeSpace(spaceId: string, ...rest: unknown[]) {
-            await record("removeSpace", [spaceId, ...rest]);
-            const made = stemCells.get(spaceId);
-            if (made === undefined) return;
-            const history = historyOf(made.agent.id);
-            if (history.pending.length > 0 || history.runs.length > 0)
-                throw new HappyAgentApiError(409, "The new work has a message.", "conflict", null);
-            stemCells.delete(spaceId);
-            emit("space.removed", { spaceId });
         },
         async renameTask(
             taskId: string,
@@ -1621,16 +1519,6 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
             if (options.daemon !== undefined) daemonVersion = options.daemon;
             if (options.desktopLiveControl !== undefined)
                 desktopLiveControl = options.desktopLiveControl;
-            if (options.stemCellIdentities !== undefined)
-                stemCellIdentities = options.stemCellIdentities;
-            if (options.sidebarOperations !== undefined)
-                sidebarOperations = options.sidebarOperations;
-        },
-        spacesSet(next) {
-            spaceRows = next;
-        },
-        spaceSidebarSet(next) {
-            spaceSidebar = next;
         },
         liveSessionSet(session) {
             liveSessions.set(session.id, session);

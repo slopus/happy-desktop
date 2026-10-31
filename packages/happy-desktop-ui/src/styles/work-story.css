@@ -1,22 +1,3 @@
-.happy-work-transcript {
-    box-sizing: border-box;
-    display: flex;
-    flex: 1;
-    gap: 16px;
-    min-width: 0;
-    min-height: 0;
-    padding: 16px;
-    background: var(--surface);
-}
-
-.happy-work-transcript__conversation {
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-    min-width: 0;
-    min-height: 0;
-}
-
 .happy-work-coordination {
     display: flex;
     flex-direction: column;
@@ -52,23 +33,6 @@
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
-}
-
-.happy-work-transcript__artifact {
-    display: flex;
-    padding: 8px 0 16px 36px;
-}
-
-.happy-work-transcript__conflict {
-    display: flex;
-    flex: none;
-    align-items: center;
-    gap: 8px;
-    padding: 4px 0 4px 36px;
-    color: var(--text-secondary);
-    font-size: 12px;
-    line-height: 20px;
-    white-space: nowrap;
 }
 
 .happy-conversation-summary__toggle {
@@ -109,83 +73,6 @@
     min-width: 0;
     max-height: 480px;
     padding: 8px 16px 16px 36px;
-}
-
-.happy-make-stuff {
-    box-sizing: border-box;
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-    align-items: stretch;
-    min-width: 0;
-    min-height: 0;
-    padding: 16px;
-    background: var(--surface);
-}
-
-.happy-make-stuff__empty {
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    min-height: 0;
-    padding: 16px;
-}
-
-/* Begun work: the first message lands right under the line, where the options began. */
-.happy-make-stuff__empty[data-settled] {
-    padding-bottom: 0;
-}
-
-.happy-make-stuff__lead {
-    display: flex;
-    flex: none;
-    flex-direction: column;
-    align-items: center;
-    gap: 16px;
-}
-
-.happy-make-stuff__image-mark {
-    display: block;
-    flex: none;
-    width: 64px;
-    height: 64px;
-}
-
-.happy-make-stuff__line,
-.happy-make-stuff__caption {
-    margin: 0;
-    color: var(--text);
-    font-size: 14px;
-    line-height: 20px;
-    text-align: center;
-}
-
-/* The line keeps its place once the work has begun, so the mark stays put. */
-.happy-make-stuff__empty[data-settled] .happy-make-stuff__line {
-    visibility: hidden;
-}
-
-.happy-make-stuff__offer {
-    display: flex;
-    flex: none;
-    flex-direction: column;
-    align-items: center;
-    gap: 16px;
-    padding-top: 4px;
-}
-
-.happy-make-stuff__caption {
-    color: var(--text-secondary);
-}
-
-.happy-make-stuff__options {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 8px;
-    max-width: 480px;
 }
 
 .happy-tabs__tab-icon:has(> .happy-tabs__image-mark) {

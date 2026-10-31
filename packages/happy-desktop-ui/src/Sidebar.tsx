@@ -14,8 +14,6 @@ import {
     type ReactNode,
 } from "react";
 import { Avatar, type ToneName } from "./Avatar";
-import { HappyCellDivision, type DivisionRect, type HappyCellDaughter } from "./HappyCellDivision";
-import { HappyMark } from "./HappyMark";
 import { ChangeStats } from "./ChangeStats";
 import { haptic } from "./haptics";
 import { CountBadge, KeyCap } from "./Badge";
@@ -33,16 +31,11 @@ import { Menu, type MenuItem } from "./Menu";
 import { MenuButton } from "./MenuButton";
 import { ShimmerText } from "./ShimmerText";
 import { Spinner } from "./Spinner";
-import { type StemCellMark } from "./StemCell";
-import { StemCellGrowth, type ImageMark } from "./StemCellGrowth";
-import { StoryEmptyMark } from "./StoryEmptyMark";
-import { StoryRing, type StoryRingSegments } from "./StoryRing";
+import { type ImageMark } from "./imageMark";
 import { ScrollArea } from "./Scrollbar";
 import { SidebarSectionContext, SidebarSectionTail } from "./SidebarSectionDetails";
 import { TextField } from "./TextField";
 import { sidebarSectionsReuser } from "./sidebarSectionsReuser";
-import { Ionicon } from "./vectorIcons/VectorIcon";
-import { SidebarWidget } from "./SidebarWidget";
 /** One control on a row: its glyph, what it does, and when it shows. */
 export type SidebarItemAction = {
     icon: IconName;
@@ -59,11 +52,6 @@ export type SidebarItem = {
     /** Marks a row as archived; the row keeps its position but paints muted. */
     archived?: boolean;
     badge?: number;
-    /**
-     * A few quiet words at the row's trailing edge saying what it is, such
-     * as "new" or "new · ongoing" in a proposed sidebar.
-     */
-    note?: string;
     /** Git line totals painted as a compact green/red diff pair. */
     changeStats?: {
         added: number;
@@ -112,10 +100,6 @@ export type SidebarItem = {
     imageUrl?: string;
     /** Unframed entity artwork in the existing 20px leading lane. */
     imageMark?: ImageMark;
-    /** Identity for an item that has not taken shape yet, in the same 20px lane. */
-    stemCell?: StemCellMark;
-    /** Happy's own mark (`HappyMark`) in the 20px lane, in place of a picture. */
-    happyMark?: true;
     initials?: string;
     /**
      * `section` is a titled heading rather than a destination. It is arranged
@@ -133,11 +117,8 @@ export type SidebarItem = {
         | "folder"
         | "action"
         | "section"
-        | "separator"
-        | "widget";
+        | "separator";
     label: string;
-    /** A `widget` row's markup, drawn by `SidebarWidget`. */
-    widgetHtml?: string;
     /**
      * A window chord shown at the row's trailing edge at all times, for a row
      * that is itself a window command, such as Search or Create.
@@ -216,111 +197,6 @@ export type SidebarItem = {
      * go without the sidebar claiming they already went there.
      */
     voiceFocus?: boolean;
-    /**
-     * A change someone proposed for this row and the person has not answered:
-     * the row wears its kind as a backdrop and a mark at its trailing edge.
-     * The mark accepts it, through `onItemChangeAccept`.
-     */
-    change?: SidebarItemChange;
-    /**
-     * Something the person should notice, or that is proposed and not theirs
-     * yet: the row is drawn with dashed yellow hairlines. Paint only; the row
-     * keeps its size and place.
-     */
-    attention?: boolean;
-    /**
-     * Pointed out while something about it is explained, such as a tour stop:
-     * a solid ring, never the dashed attention a proposal wears, so a row that
-     * is already the person's never looks unaccepted. Paint only.
-     */
-    spotlight?: boolean;
-    /**
-     * A `separator` the person pinned. `top`: everything above it holds still
-     * and only what is below scrolls; `bottom`: everything below it holds still
-     * at the foot of the column. A pinned rule runs edge to edge, where a plain
-     * one is as wide as a selected row's straight edge. The sidebar measures
-     * whether a pin can hold — the rows left to scroll must keep at least half
-     * the scrollport — and when it cannot, the rule keeps its plain width, the
-     * column scrolls as usual, and pointing at the separator says why. That measure is never part of the item.
-     */
-    pin?: SidebarSeparatorPinEdge;
-    /**
-     * Draws the row as a messenger's chat row: one fixed height, the row's mark
-     * enlarged inside the ring of its stories, the name on a first line that
-     * never moves, one status line under it, and at
-     * most one signal in the row's bottom-right corner. Such a row reports only
-     * through these: it has no title shimmer, no activity glyph, no unread
-     * weight and no unread dot of its own. A row with no agent behind it
-     * states this empty, to stand in the same column at the same height.
-     *
-     * Nested under another row, it is one compact line instead: its mark,
-     * its name, its `changeStats`, and the same one signal at its end. It has
-     * no ring, no time and no status.
-     */
-    story?: SidebarItemStory;
-};
-/** What a story row shows besides its name. See `SidebarItem.story`. */
-export type SidebarItemStory = {
-    /** The agent's status; absent leaves the status lines empty. */
-    subtitle?: string;
-    /**
-     * The lines the work behind the row has added and deleted, summed over
-     * every workspace it owns. Drawn at the start of the status, which flows
-     * after it; zero or absent draws nothing.
-     */
-    changeStats?: { added: number; deleted: number };
-    /**
-     * The start of what the person typed and has not sent. It takes the last
-     * status line, after "Draft:", and the status keeps the line above.
-     */
-    draft?: string;
-    /** How long since the agent's last activity ("now", "5m", "Tue"); shown at the first line's end. */
-    time?: string;
-    /** The agent's stories, one segment each; absent draws no ring. */
-    ring?: StoryRingSegments;
-    /**
-     * The one thing the corner says: `unread` is a dot, there is something
-     * new for the reader; `working` is the chat's braille spinner, and takes
-     * the dot's place. Absent says nothing.
-     */
-    signal?: "unread" | "working";
-    /**
-     * Where the agent says the work stands, set with its status. It colours
-     * the corner signal; absent leaves the signal neutral.
-     */
-    state?: "needsYou" | "done" | "blocked" | "working";
-};
-/**
- * What a proposed change does to one row. A move is drawn twice: `move` where
- * the row stands now, dimmed, and `arrive` where it would land, as its own
- * row, washed like an insert, with an arrow pointing back at it. `insert`
- * is a row that is not in the sidebar yet, drawn where it would go. `remove`
- * takes a row out of the sidebar without archiving it: a space or session
- * hidden, or a heading deleted on its own.
- */
-/** Which end of the column a pinned separator holds still. */
-export type SidebarSeparatorPinEdge = "top" | "bottom";
-export type SidebarItemChangeKind = "move" | "arrive" | "insert" | "archive" | "remove";
-export type SidebarItemChange = {
-    kind: SidebarItemChangeKind;
-    /**
-     * What will happen, said in full above the row while its mark is pointed
-     * at: "Moving here from Desktop", "Archiving". A row without one wears the
-     * change's backdrop and no mark, as the rows of a block do under the
-     * heading that carries it.
-     */
-    label?: string;
-    /**
-     * One change that spans a whole section: the heading is its `head`, every
-     * row it folds is a `member`, and adjacent rows of one block are drawn as
-     * a single backdrop rather than one per row.
-     */
-    block?: "head" | "member";
-    /**
-     * The row an `arrive` row leaves, by ID, when this sidebar draws it.
-     * Pointing at the mark lights it.
-     */
-    from?: string;
 };
 /**
  * Left inset of the row content at depth 0: `--happy-sidebar-row-leading`,
@@ -331,11 +207,7 @@ export type SidebarItemChange = {
 export const SIDEBAR_ROW_PADDING_X = 6;
 /** Additional left inset applied per nesting level so children sit under their parent. */
 export const SIDEBAR_ROW_INDENT = 16;
-/**
- * A plain row's height, which the drag surface and the tree connectors assume.
- * Story rows state their own heights in `sidebar.css`, hide their connectors,
- * and are measured by the drag.
- */
+/** A plain row's height, which the drag surface and the tree connectors assume. */
 export const SIDEBAR_ROW_HEIGHT = 32;
 export const SIDEBAR_ROW_GAP = 2;
 /** Width of the leading lane whose centre carries a tree stem. */
@@ -481,12 +353,6 @@ export type SidebarSection = {
     headingOnly?: boolean;
     items: SidebarItem[];
     label?: string;
-    /** Static space identity separating global rows from the space's sections. */
-    spaceHeading?: {
-        icon?: IconName;
-        imageMark?: { src: string; srcSet?: string; alt?: string };
-        label: string;
-    };
     /** A controlled fold for a whole work section. */
     collapsed?: boolean;
     /**
@@ -506,13 +372,6 @@ export type SidebarSection = {
      * is folded away — so the heading carries the microphone for it.
      */
     voiceFocus?: boolean;
-    /**
-     * The whole section is an example, or a proposal not accepted yet: it is
-     * drawn inside dashed yellow hairlines with `tag` ("Example", "Proposed")
-     * on its edge. Several marked sections in a row are one example, so only
-     * the last needs to say so. Paint only; nothing in it moves.
-     */
-    attention?: { tag?: string };
 };
 
 /** One visible sidebar destination the caller wants Command-numbered. */
@@ -550,36 +409,6 @@ export interface SidebarReorder {
 export type SidebarActivityPlacement = "leading" | "trailing";
 
 /**
- * Happy dividing into new work: `from` is the row wearing Happy's mark, and
- * `into` the rows New made from it, oldest first. Each row in `into` that
- * comes on screen after this sidebar did is drawn as Happy's daughter peeling
- * off and sliding into it; rows already there never divide again.
- */
-export type SidebarDivision = {
-    readonly from: string;
-    readonly into: readonly string[];
-    /** Happy's membrane seed as its owner keeps it; absent, its shape's own. */
-    readonly seed?: number;
-    /** Happy divided and formed again from `seed`, for its owner to keep. */
-    readonly onSeed?: (seed: number) => void;
-};
-
-/**
- * How a row's mark is drawn while Happy divides: hidden under the overlay, or
- * Happy re-formed. A row still `arriving` is only its space, opening as the
- * daughter peels off toward it; it shows itself whole once she is in it.
- */
-type SidebarMarkState = {
-    readonly hidden: boolean;
-    readonly arriving?: boolean;
-    readonly happySeed?: number;
-};
-
-const NO_DIVISIONS: readonly string[] = [];
-const MARK_HIDDEN: SidebarMarkState = { hidden: true };
-const MARK_ARRIVING: SidebarMarkState = { hidden: true, arriving: true };
-
-/**
  * The rows a sidebar draws, by item ID in order, and the range of them on
  * screen; `-1` for both when none is.
  */
@@ -590,8 +419,6 @@ export interface SidebarRowsVisible {
 }
 
 export type SidebarProps = Omit<HTMLAttributes<HTMLElement>, "style"> & {
-    /** Happy divides into the rows New makes. */
-    division?: SidebarDivision;
     /** Gesture attention ends outside this surface too, and on disposal. */
     onInteractionChange?: (interacting: boolean) => void;
     /** The pointer gesture's lifetime, independent of hover and menus. */
@@ -612,10 +439,6 @@ export type SidebarProps = Omit<HTMLAttributes<HTMLElement>, "style"> & {
      * while it shows; without this, it is the row's always-visible last column.
      */
     foldControlReveal?: "hover";
-    /** Omit identity lanes entirely, or use plain type glyphs instead of avatars. */
-    itemMarkPresentation?: "default" | "glyph" | "none";
-    /** Hide tree ribbons while retaining ordinary indentation. Defaults to true. */
-    treeConnectors?: boolean;
     onSectionCollapseToggle?: (sectionId: string) => void;
     onSectionTailToggle?: (sectionId: string) => void;
     activeItemId: string;
@@ -653,29 +476,11 @@ export type SidebarProps = Omit<HTMLAttributes<HTMLElement>, "style"> & {
     /** Always-visible compose hint. Its aria value may include equivalent chords. */
     composeShortcut?: KeyboardShortcut;
     composeTooltip?: string;
-    /**
-     * Everything in the sidebar is an example: one dashed yellow box around all
-     * of it, header and footer too, inside the panel inset, with `tag` on its
-     * top edge. Paint only.
-     */
-    attention?: { tag: string };
     /** A row above the compose row that opens the window's search. */
     searchRow?: { label: string; shortcut?: KeyboardShortcut; onOpen: () => void };
     footer?: ReactNode;
     /** Stable product context rendered between the 56px heading and scrollport. */
     headerAccessory?: ReactNode;
-    /**
-     * A band directly under the 56px heading, above the search field and every
-     * row, such as the stories row. It owns its height, so it never moves what
-     * is under it.
-     */
-    topAccessory?: ReactNode;
-    /**
-     * The wheel turned over the sidebar's rows, with its vertical delta: the
-     * top accessory may fold away as the person scrolls on, as the stories
-     * row does.
-     */
-    onBodyWheel?: (deltaY: number) => void;
     /**
      * The rows drawn, top to bottom, and which of them are on screen, after
      * a scroll, a resize, a fold or a change of rows: at most once a frame,
@@ -719,18 +524,6 @@ export type SidebarProps = Omit<HTMLAttributes<HTMLElement>, "style"> & {
     onItemAction?: (id: string) => void;
     /** Invoked when a row's name-side `secondaryAction` control is used. */
     onItemSecondaryAction?: (id: string) => void;
-    /** The person accepted one row's proposed `change` from its mark. */
-    onItemChangeAccept?: (id: string) => void;
-    /** The person declined one row's proposed `change`, from the ✕ beside its explanation. */
-    onItemChangeReject?: (id: string) => void;
-    /** The person pressed a story row's ring: open its stories rather than the row. */
-    onItemStoryOpen?: (id: string) => void;
-    /**
-     * Floats over the foot of the rows, above the footer, inside the column:
-     * the answer to everything proposed at once. The rows keep room under
-     * their last one so none is ever out of reach behind it.
-     */
-    bodyFloat?: ReactNode;
     /**
      * Enables arranging the pinned `actions` and reports the one move a drag or
      * a keyboard move made. Without it the pinned rows are fixed, which is what
@@ -815,44 +608,11 @@ function leadingIcon(item: SidebarItem): IconName {
  * carries it.
  */
 function showsLeadingSlot(item: SidebarItem): boolean {
-    if (item.stemCell) return true;
     if (item.contextAvatars?.length) return true;
     if ((item.depth ?? 0) === 0) return true;
     if (item.kind === "person" || item.kind === "agent" || item.kind === "project") return true;
     return item.icon !== undefined || item.emoji !== undefined;
 }
-/**
- * The change each row is drawn with. A row's nested rows are part of its
- * change: they carry its kind as members of its block, and the row heads that
- * block. Read from the stated rows, folded ones included, so a row unfolds
- * with its children already washed or dimmed on the very first frame. A row
- * that states its own change keeps it, and so do the rows nested under it.
- */
-function changesInherited(items: readonly SidebarItem[]): ReadonlyMap<string, SidebarItemChange> {
-    const changes = new Map<string, SidebarItemChange>();
-    // The rows above with a change, nearest last, at the depth each stands.
-    const stack: { depth: number; kind: SidebarItemChangeKind }[] = [];
-    for (const [index, item] of items.entries()) {
-        const depth = item.depth ?? 0;
-        while (stack.length > 0 && stack[stack.length - 1]!.depth >= depth) stack.pop();
-        const parent = stack[stack.length - 1];
-        const nests = (items[index + 1]?.depth ?? 0) > depth;
-        const own = item.change;
-        const change: SidebarItemChange | undefined = own
-            ? nests && own.block === undefined
-                ? { ...own, block: "head" }
-                : own
-            : parent
-              ? { kind: parent.kind, block: "member" }
-              : undefined;
-        if (change) {
-            changes.set(item.id, change);
-            stack.push({ depth, kind: change.kind });
-        }
-    }
-    return changes;
-}
-
 /** One row as it is drawn: the row itself, and whether it has a tree to fold. */
 interface SidebarVisibleRow {
     readonly item: SidebarItem;
@@ -1428,8 +1188,6 @@ interface SidebarTreeConnectorsProps {
     readonly drag?: SidebarDrag;
     readonly listId: SidebarListId;
     readonly onElement: (key: string, element: HTMLSpanElement | null) => void;
-    /** The pinned block a parent stands in, whose stem holds still with it. */
-    readonly pinAreaOf?: (id: string) => SidebarSeparatorPinEdge | undefined;
 }
 
 /**
@@ -1450,7 +1208,7 @@ function SidebarTreeConnectors(props: SidebarTreeConnectorsProps) {
             // Relative drag offsets do not change the flex tree's extent. Read
             // its uniform row geometry once, then apply the same explicit drag
             // shift as the rows. Reading moving row tops would count it twice.
-            // The rows fill only the content box: a pinned group's padding and
+            // The rows fill only the content box: a group's padding and
             // divider sit below its last row and must not stretch the pitch.
             // Rows are not all one height — a folded section is half of one —
             // so each row's own height is read, and the gap is what the tree's
@@ -1461,8 +1219,8 @@ function SidebarTreeConnectors(props: SidebarTreeConnectorsProps) {
                 rows.length === props.items.length
                     ? rows.map((row) => row.getBoundingClientRect().height)
                     : props.items.map(() => firstHeight);
-            // A row may stand apart by a margin of its own — the floor above a
-            // block pinned to the bottom — which is not gap between rows.
+            // A row may stand apart by a margin of its own, which is not gap
+            // between rows.
             const margins =
                 rows.length === props.items.length
                     ? rows.map((row) => parseFloat(getComputedStyle(row).marginTop) || 0)
@@ -1550,8 +1308,6 @@ function SidebarTreeConnectors(props: SidebarTreeConnectorsProps) {
                                 : undefined
                         }
                         data-parent-id={group.parentId}
-                        data-story={props.items[group.parentIndex]?.story ? "" : undefined}
-                        data-pin-area={props.pinAreaOf?.(group.parentId)}
                         data-happy-desktop-ui="sidebar-tree-connector"
                         key={group.parentId}
                         ref={(element) => props.onElement(key, element)}
@@ -1648,173 +1404,6 @@ function SidebarRowAction(props: { action: SidebarItemAction; onAction: () => vo
     );
 }
 
-/** The glyph each kind of change wears: where a row goes, that it is put away, or that it is new. */
-const CHANGE_ICONS: Record<Exclude<SidebarItemChangeKind, "arrive">, IconName> = {
-    move: "arrow-right",
-    archive: "archive",
-    remove: "eye-off",
-    insert: "check",
-};
-
-/**
- * Why a pinned separator's pin is not holding: a note shown while the
- * separator is pointed at or focused. The rule's width is the only sign that a
- * separator is pinned; whether the pin holds is measured by the sidebar and
- * set on the separator as `data-pin-tall`, so the note is always drawn and
- * shown only then, and a measure never renders anything.
- */
-function SidebarSeparatorPinNote(props: { readonly pin: SidebarSeparatorPinEdge }) {
-    return (
-        <span
-            className="happy-sidebar__separator-pin-note"
-            data-happy-desktop-ui="sidebar-separator-pin-note"
-            role="tooltip"
-        >
-            <span className="happy-sidebar__separator-pin-note-title">Pin section too tall.</span>{" "}
-            Pinning isn’t taking effect because the section{" "}
-            {props.pin === "top" ? "above" : "below"} is too tall. Try moving this separator{" "}
-            {props.pin === "top" ? "up" : "down"}.
-        </span>
-    );
-}
-
-/**
- * Reads the rows where they rest, as if no pinned block were holding: held
- * rows stand at their place in the column rather than where the scroll offset
- * has left them, so distances read across a holding rule are the ones the
- * rows would travel. Released and restored in the same task, restyled with no
- * row transitions, so nothing paints or glides in between.
- */
-function pinsReleasedRead<T>(near: Element, read: () => T): T {
-    const nav = near.closest<HTMLElement>(".happy-sidebar");
-    if (!nav || (!nav.hasAttribute("data-pin-top") && !nav.hasAttribute("data-pin-bottom")))
-        return read();
-    nav.setAttribute("data-pin-switch", "");
-    nav.setAttribute("data-pin-measuring", "");
-    const value = read();
-    nav.removeAttribute("data-pin-measuring");
-    void nav.offsetHeight;
-    nav.removeAttribute("data-pin-switch");
-    return value;
-}
-
-/**
- * Lights or unlights the row an `arrive` mark's row comes from. Imperative
- * because it is pointer feedback between two rows already on screen: an
- * attribute React never renders, set and cleared by the mark's own events.
- */
-function changeSourceLight(near: HTMLElement, from: string | undefined, lit: boolean) {
-    if (from === undefined) return;
-    const row = Array.from(
-        near.closest(".happy-sidebar")?.querySelectorAll("[data-item-id]") ?? [],
-    ).find((node) => node.getAttribute("data-item-id") === from);
-    // A whole section leaving lights as the one block it is drawn as.
-    for (
-        let node: Element | null | undefined = row;
-        node && (node === row || node.getAttribute("data-change-block") === "member");
-        node = node.nextElementSibling
-    )
-        node.toggleAttribute("data-change-source", lit);
-}
-
-/**
- * A row's proposed change, as one mark in the row's trailing column: the glyph
- * of what would happen to it, which accepts that one change. Pointed at or
- * focused, it says in full what will happen in a note above the row, ending
- * just left of the mark so the row itself stays readable, with a ✕ that
- * declines the change. A row a move brings here points back at itself and
- * lights the row it leaves.
- */
-function SidebarRowChange(props: {
-    change: SidebarItemChange;
-    onAccept?: () => void;
-    onReject?: () => void;
-}) {
-    const { change, onAccept: accept, onReject: reject } = props;
-    const light = (event: { currentTarget: HTMLElement }, lit: boolean) =>
-        changeSourceLight(event.currentTarget, change.from, lit);
-    const activate = (event: { currentTarget: HTMLElement }, act: () => void) => {
-        light(event, false);
-        act();
-    };
-    const keyActivate = (event: ReactKeyboardEvent<HTMLElement>, act: () => void) => {
-        if (event.key !== "Enter" && event.key !== " ") return;
-        event.preventDefault();
-        event.stopPropagation();
-        activate(event, act);
-    };
-    return (
-        /* Spans for the same reason as a row action: the row is the button. The
-           note stands outside the row's flow, so showing it moves nothing. */
-        // eslint-disable-next-line jsx-a11y/click-events-have-key-events -- only keeps a click on the mark or its note from also opening the row; the mark answers keys itself
-        <span
-            className="happy-sidebar__item-change"
-            data-change={change.kind}
-            data-happy-desktop-ui="sidebar-item-change"
-            onBlur={(event) => light(event, false)}
-            onClick={(event) => event.stopPropagation()}
-            onFocus={(event) => light(event, true)}
-            onPointerDown={(event) => event.stopPropagation()}
-            onPointerEnter={(event) => light(event, true)}
-            onPointerLeave={(event) => light(event, false)}
-        >
-            <span
-                aria-label={change.label}
-                className="happy-sidebar__item-change-mark"
-                data-acceptable={accept ? "" : undefined}
-                onClick={accept ? (event) => activate(event, accept) : undefined}
-                onKeyDown={accept ? (event) => keyActivate(event, accept) : undefined}
-                role={accept ? "button" : "img"}
-                tabIndex={accept ? 0 : undefined}
-            >
-                {change.kind === "arrive" ? (
-                    <Ionicon name="arrow-back-outline" size={12} />
-                ) : (
-                    <Icon name={CHANGE_ICONS[change.kind]} size={12} />
-                )}
-            </span>
-            <span
-                className="happy-sidebar__item-change-note"
-                data-happy-desktop-ui="sidebar-item-change-note"
-            >
-                <span aria-hidden="true" className="happy-sidebar__item-change-note-text">
-                    {change.label}
-                </span>
-                {reject ? (
-                    <span
-                        aria-label="Keep as it is"
-                        className="happy-sidebar__item-change-note-reject"
-                        data-happy-desktop-ui="sidebar-item-change-reject"
-                        onClick={(event) => activate(event, reject)}
-                        onKeyDown={(event) => keyActivate(event, reject)}
-                        role="button"
-                        tabIndex={0}
-                    >
-                        <Icon name="close" size={12} />
-                    </span>
-                ) : null}
-            </span>
-        </span>
-    );
-}
-
-/**
- * A status split at its first line break, the agent's own two lines; one
- * entry when it has none. A carriage return is whitespace, and a later break
- * is a space, so a status never asks for a third line.
- */
-function statusLines(status: string): readonly [string] | readonly [string, string] {
-    const text = status.replace(/\r/g, " ");
-    const at = text.indexOf("\n");
-    if (at === -1) return [text];
-    const first = text.slice(0, at).trim();
-    const second = text
-        .slice(at + 1)
-        .replace(/\n/g, " ")
-        .trim();
-    return first && second ? [first, second] : [first || second];
-}
-
 /** Where one listed row is, as of the render that drew it. */
 interface SidebarRowTarget {
     readonly item: SidebarItem;
@@ -1848,9 +1437,6 @@ interface SidebarRowHandlers {
     readonly renameRequest: (key: string) => boolean;
     readonly renameSubmit: (key: string, name: string) => void;
     readonly secondaryAction: (key: string) => void;
-    readonly changeAccept: (key: string) => void;
-    readonly changeReject: (key: string) => void;
-    readonly storyOpen: (key: string) => void;
     readonly select: (id: string) => void;
 }
 
@@ -1863,9 +1449,6 @@ const SidebarListRow = memo(function SidebarListRow({
     canCollapse,
     canRename,
     canSecondaryAction,
-    canChangeAccept,
-    canChangeReject,
-    canStoryOpen,
     ...rest
 }: {
     handlers: SidebarRowHandlers;
@@ -1877,20 +1460,11 @@ const SidebarListRow = memo(function SidebarListRow({
     canCollapse: boolean;
     canRename: boolean;
     canSecondaryAction: boolean;
-    canChangeAccept: boolean;
-    canChangeReject: boolean;
-    canStoryOpen: boolean;
     active: boolean;
-    /** See `SidebarRow.pinArea`. */
-    pinArea?: SidebarSeparatorPinEdge;
     /** See `SidebarRow.tabStop`. */
     tabStop?: boolean;
     activityPlacement?: SidebarActivityPlacement;
     foldControlPlacement?: "leading" | "trailing";
-    itemMarkPresentation?: "default" | "glyph" | "none";
-    /** See `SidebarRow.markState`. */
-    markState?: SidebarMarkState;
-    treeConnectors?: boolean;
     dragging: boolean;
     expandable: boolean;
     grabbed: boolean;
@@ -1929,9 +1503,6 @@ const SidebarListRow = memo(function SidebarListRow({
             onSecondaryAction={
                 canSecondaryAction ? () => handlers.secondaryAction(rowId) : undefined
             }
-            onChangeAccept={canChangeAccept ? () => handlers.changeAccept(rowId) : undefined}
-            onChangeReject={canChangeReject ? () => handlers.changeReject(rowId) : undefined}
-            onStoryOpen={canStoryOpen ? () => handlers.storyOpen(rowId) : undefined}
             nodeRef={(node) => handlers.node(rowId, node)}
             onSelect={handlers.select}
         />
@@ -1974,17 +1545,6 @@ function SidebarRow({
     onAction?: () => void;
     /** Invoked by the control left of it; absent when the row offers no second one. */
     onSecondaryAction?: () => void;
-    /** Accepts the row's proposed change from its mark; absent, the mark only reports. */
-    onChangeAccept?: () => void;
-    /** Declines the row's proposed change, from the ✕ beside its explanation. */
-    onChangeReject?: () => void;
-    /** Opens the stories of a story row from its ring; absent, the ring only reports. */
-    onStoryOpen?: () => void;
-    /**
-     * The block of a pinned separator the row stands in, the separator
-     * included: it holds still at that edge whenever the pin holds.
-     */
-    pinArea?: SidebarSeparatorPinEdge;
     /** Folds or unfolds this row; absent when the row draws no fold control. */
     onCollapseToggle?: () => void;
     /**
@@ -1993,10 +1553,6 @@ function SidebarRow({
      */
     expandable?: boolean;
     foldControlPlacement?: "leading" | "trailing";
-    itemMarkPresentation?: "default" | "glyph" | "none";
-    /** While Happy divides: the mark hidden under the overlay, or Happy re-formed. */
-    markState?: SidebarMarkState;
-    treeConnectors?: boolean;
     onSelect: (id: string) => void;
     /** The row can be arranged, which is what the keyboard shortcut is offered for. */
     reorderable?: boolean;
@@ -2032,18 +1588,10 @@ function SidebarRow({
     // An editing row hosts an editable label, so it must not be a native button.
     const Row = props.rename ? "div" : "button";
     const unread = () => item().unread === true;
-    /* A story row reports through its ring, its status line and its one
-       corner signal only; everything the plain row reports otherwise steps
-       aside, so the row never shows two dots or a dot and a spinner. */
-    const story = () => item().story;
-    /** A story row nested under another: one compact line. See `SidebarItem.story`. */
-    const compact = () => story() !== undefined && (item().depth ?? 0) > 0;
     // A muted row keeps the unread weight on its name and gives up only the dot.
-    const unreadDot = () => unread() && item().muted !== true && story() === undefined;
+    const unreadDot = () => unread() && item().muted !== true;
     const unreadOnLeading = () =>
-        props.itemMarkPresentation !== "none" &&
-        unreadDot() &&
-        (item().kind === "project" || item().kind === "workspace");
+        unreadDot() && (item().kind === "project" || item().kind === "workspace");
     const mentioned = () => (item().badge ?? 0) > 0;
     const hasChangeStats = () =>
         (item().changeStats?.added ?? 0) > 0 || (item().changeStats?.deleted ?? 0) > 0;
@@ -2092,7 +1640,6 @@ function SidebarRow({
     const depth = () => Math.max(0, item().depth ?? 0);
     const lifecycle = () => item().lifecycle;
     const showStatus = () =>
-        story() === undefined &&
         item().kind === "agent" &&
         item().activityIndicator !== "glyph" &&
         item().status !== undefined &&
@@ -2103,19 +1650,9 @@ function SidebarRow({
     // count of what is inside it: the reader is being told the row's own news.
     const showLifecycle = () => lifecycle() !== undefined && item().lifecycleLabel !== undefined;
     const showMeta = () =>
-        story() === undefined &&
-        item().meta !== undefined &&
-        !unread() &&
-        !mentioned() &&
-        !showStatus() &&
-        !showLifecycle();
+        item().meta !== undefined && !unread() && !mentioned() && !showStatus() && !showLifecycle();
     const showCount = () =>
-        story() === undefined &&
-        (item().count ?? 0) > 0 &&
-        !unread() &&
-        !mentioned() &&
-        !showStatus() &&
-        !showLifecycle();
+        (item().count ?? 0) > 0 && !unread() && !mentioned() && !showStatus() && !showLifecycle();
     /*
      * A place that is being made, or has work running inside it, says so in its
      * own name: the name shimmers for as long as that lasts. It is the same
@@ -2128,7 +1665,6 @@ function SidebarRow({
      * names would leave the sidebar permanently in motion and say nothing.
      */
     const shimmerLabel = () =>
-        story() === undefined &&
         item().labelShimmer !== false &&
         (item().kind === "project" || item().kind === "workspace") &&
         (lifecycle() === "creating" || (lifecycle() === undefined && item().status === "working"));
@@ -2148,7 +1684,6 @@ function SidebarRow({
         | { kind: "spinner"; tone: "accent" | "muted"; label: string }
         | { kind: "glyph"; icon: IconName; label: string; lifecycle: string }
         | undefined => {
-        if (story() !== undefined) return undefined;
         if (lifecycle() === "creating")
             return {
                 kind: "spinner",
@@ -2268,15 +1803,6 @@ function SidebarRow({
     const foldInBranch = () => !showsLeadingSlot(item()) && !activityLeading();
     // A trailing fold puts the row in fixed lanes: name and marks, then controls, then the fold.
     const lanes = props.foldControlPlacement === "trailing";
-    // A proposed change ends the row, on the trailing column every mark shares.
-    const changeMark = () =>
-        item().change?.label !== undefined ? (
-            <SidebarRowChange
-                change={item().change!}
-                onAccept={props.onChangeAccept}
-                onReject={props.onChangeReject}
-            />
-        ) : null;
     // The row is already a button, so its pointer disclosure stays a span.
     const foldControl = () =>
         props.onCollapseToggle ? (
@@ -2299,8 +1825,6 @@ function SidebarRow({
                opens nothing and folds nothing; it can still be carried, so it
                is a control that announces itself as a separator. */
             <button
-                data-pin={item().pin}
-                data-pin-area={props.pinArea}
                 aria-keyshortcuts={props.reorderable ? "Alt+ArrowUp Alt+ArrowDown" : undefined}
                 aria-label="Separator"
                 aria-roledescription="separator"
@@ -2323,39 +1847,7 @@ function SidebarRow({
                 type="button"
             >
                 <span aria-hidden="true" className="happy-sidebar__separator-rule" />
-                {item().pin ? <SidebarSeparatorPinNote pin={item().pin!} /> : null}
             </button>
-        );
-    if (item().kind === "widget")
-        return (
-            /* A widget draws its markup across the row and opens nothing. The
-               row, not the frame, takes the pointer, so it is grabbed, carried
-               and opened for its menu like a separator. */
-            <div
-                aria-keyshortcuts={props.reorderable ? "Alt+ArrowUp Alt+ArrowDown" : undefined}
-                aria-label={item().label}
-                aria-roledescription="widget"
-                className="happy-sidebar__item happy-sidebar__widget"
-                data-dragging={props.dragging ? "" : undefined}
-                data-grabbed={props.grabbed ? "" : undefined}
-                data-happy-desktop-ui="sidebar-item"
-                data-item-id={item().id}
-                data-pin-area={props.pinArea}
-                data-kind="widget"
-                onContextMenu={(event) => props.onContextMenu?.(item(), event)}
-                onKeyDown={props.onKeyDown}
-                onLostPointerCapture={props.onPointerCancel}
-                onPointerCancel={props.onPointerCancel}
-                onPointerDown={props.onPointerDown}
-                onPointerMove={props.onPointerMove}
-                onPointerUp={props.onPointerUp}
-                ref={(node) => nodeRef?.(node)}
-                role="group"
-                style={props.shift ? { top: props.shift } : undefined}
-                tabIndex={props.reorderable && props.tabStop === undefined ? 0 : -1}
-            >
-                <SidebarWidget html={item().widgetHtml ?? ""} title={item().label} />
-            </div>
         );
     if (item().kind === "section" && props.rename)
         return (
@@ -2407,17 +1899,12 @@ function SidebarRow({
                 aria-keyshortcuts={props.reorderable ? "Alt+ArrowUp Alt+ArrowDown" : undefined}
                 className="happy-sidebar__item happy-sidebar__section-item"
                 data-actionable={item().action && props.onAction ? "" : undefined}
-                data-attention={item().attention ? "" : undefined}
-                data-spotlight={item().spotlight ? "" : undefined}
-                data-change={item().change?.kind}
-                data-change-block={item().change?.block}
                 data-collapsed={item().collapsed ? "" : undefined}
                 data-dragging={props.dragging ? "" : undefined}
                 data-foldable={props.onCollapseToggle ? "" : undefined}
                 data-grabbed={props.grabbed ? "" : undefined}
                 data-happy-desktop-ui="sidebar-item"
                 data-item-id={item().id}
-                data-pin-area={props.pinArea}
                 data-kind="section"
                 onClick={() => props.onCollapseToggle?.()}
                 onContextMenu={(event) => props.onContextMenu?.(item(), event)}
@@ -2448,7 +1935,6 @@ function SidebarRow({
                         <SidebarRowAction action={item().action!} onAction={props.onAction} />
                     </span>
                 ) : null}
-                {changeMark()}
                 {props.onCollapseToggle ? (
                     <span
                         aria-hidden="true"
@@ -2475,10 +1961,6 @@ function SidebarRow({
             className={["happy-sidebar__item", props.className].filter(Boolean).join(" ")}
             data-active={props.active ? "" : undefined}
             data-archived={item().archived ? "" : undefined}
-            data-change={item().change?.kind}
-            data-change-block={item().change?.block}
-            data-attention={item().attention ? "" : undefined}
-            data-spotlight={item().spotlight ? "" : undefined}
             /* Both are needed and neither implies the other: a row that folds is
                styled as one whether it is open or shut, and a row still says it
                is shut while the pointer is elsewhere. */
@@ -2489,7 +1971,6 @@ function SidebarRow({
             data-fold-in-branch={props.onCollapseToggle && foldInBranch() ? "" : undefined}
             data-depth={depth() > 0 ? String(depth()) : undefined}
             data-item-id={item().id}
-            data-pin-area={props.pinArea}
             data-kind={item().kind}
             data-mentioned={mentioned() ? "" : undefined}
             data-happy-desktop-ui="sidebar-item"
@@ -2501,10 +1982,8 @@ function SidebarRow({
             data-unread={unread() ? "" : undefined}
             data-muted={item().muted ? "" : undefined}
             data-voice-focus={item().voiceFocus ? "" : undefined}
-            data-story={story() ? "" : undefined}
             data-dragging={props.dragging ? "" : undefined}
             data-grabbed={props.grabbed ? "" : undefined}
-            data-arriving={props.markState?.arriving ? "" : undefined}
             onClick={() => {
                 if (!props.rename) props.onSelect(item().id);
             }}
@@ -2552,12 +2031,8 @@ function SidebarRow({
                 }
             }}
             style={{
-                /* A story row's indent is laid out in `sidebar.css` from the
-                   story geometry; the row says only how deep it stands. */
                 ...(depth() > 0
-                    ? story()
-                        ? { "--happy-sidebar-story-depth": depth() - 1 }
-                        : { paddingLeft: SIDEBAR_ROW_PADDING_X + depth() * SIDEBAR_ROW_INDENT }
+                    ? { paddingLeft: SIDEBAR_ROW_PADDING_X + depth() * SIDEBAR_ROW_INDENT }
                     : {}),
                 ...(props.shift ? { top: props.shift } : {}),
             }}
@@ -2566,7 +2041,7 @@ function SidebarRow({
             }
             type={props.rename ? undefined : "button"}
         >
-            {depth() > 0 && props.treeConnectors !== false && !story() ? (
+            {depth() > 0 ? (
                 <span
                     aria-hidden="true"
                     className="happy-sidebar__item-branch"
@@ -2577,20 +2052,11 @@ function SidebarRow({
                         : null}
                 </span>
             ) : null}
-            {(props.itemMarkPresentation !== "none" || item().kind === "action") &&
-            (story() !== undefined ||
-                props.itemMarkPresentation === "glyph" ||
-                item().stemCell ||
-                item().imageMark ||
-                item().happyMark ||
-                showsLeadingSlot(item()) ||
-                activityLeading()) ? (
+            {item().imageMark || showsLeadingSlot(item()) || activityLeading() ? (
                 <span
                     className="happy-sidebar__item-leading"
                     data-happy-desktop-ui="sidebar-item-leading"
                     data-context={item().contextAvatars?.length ? "" : undefined}
-                    data-story={story() ? "" : undefined}
-                    data-mark-hidden={props.markState?.hidden ? "" : undefined}
                 >
                     {/* Identity, unless the window asked for work to be reported
                         here. By default it is not: what the row is doing is
@@ -2605,82 +2071,60 @@ function SidebarRow({
                         none when it folds: the branch line beside it already says
                         what it is, and opening the lane for the chevron must not
                         put back the glyph that line replaced. */}
-                    {((mark: ReactNode) =>
-                        /* A story row's mark grows inside the ring of its stories,
-                           which opens them; the rest of the row opens its chat. A
-                           compact nested row keeps its mark at its own size. */
-                        story() && !compact() ? (
-                            <StoryRing
-                                label={`Watch ${item().label}'s stories`}
-                                onOpen={props.onStoryOpen}
-                                segments={story()?.ring}
-                                size={58}
+                    {item().imageMark ? (
+                        <img
+                            alt={item().imageMark!.alt ?? ""}
+                            className="happy-sidebar__image-mark"
+                            src={item().imageMark!.src}
+                            srcSet={item().imageMark!.srcSet}
+                        />
+                    ) : activityLeading() ? (
+                        activityMark()
+                    ) : item().contextAvatars?.length ? (
+                        item().contextAvatars?.map((avatar) => (
+                            <span
+                                key={avatar.id}
+                                aria-label={avatar.label}
+                                role="img"
+                                title={avatar.label}
+                                className="happy-sidebar__item-context-avatar"
+                                data-happy-desktop-ui="sidebar-item-context-avatar"
                             >
-                                {mark}
-                            </StoryRing>
-                        ) : (
-                            mark
-                        ))(
-                        item().happyMark ? (
-                            <HappyMark seed={props.markState?.happySeed} size={20} />
-                        ) : item().stemCell || item().imageMark ? (
-                            <StemCellGrowth
-                                imageClassName="happy-sidebar__image-mark"
-                                imageMark={item().imageMark}
-                                size={20}
-                                stemCell={item().stemCell}
-                            />
-                        ) : props.itemMarkPresentation === "glyph" ? (
-                            <Icon name={leadingIcon(item())} size={16} />
-                        ) : activityLeading() ? (
-                            activityMark()
-                        ) : item().contextAvatars?.length ? (
-                            item().contextAvatars?.map((avatar) => (
-                                <span
-                                    key={avatar.id}
-                                    aria-label={avatar.label}
-                                    role="img"
-                                    title={avatar.label}
-                                    className="happy-sidebar__item-context-avatar"
-                                    data-happy-desktop-ui="sidebar-item-context-avatar"
-                                >
-                                    <Avatar
-                                        imageUrl={avatar.imageUrl}
-                                        initials={
-                                            avatar.initials ??
-                                            avatar.label.slice(0, 1).toUpperCase()
-                                        }
-                                        icon={avatar.icon}
-                                        size="xs"
-                                        style={{ width: 16, height: 16, borderRadius: 4 }}
-                                        type="agent"
-                                    />
-                                </span>
-                            ))
-                        ) : !showsLeadingSlot(item()) ? null : item().kind === "person" ||
-                          item().kind === "agent" ||
-                          item().kind === "project" ? (
-                            identityMark()
-                        ) : item().emoji !== undefined ? (
-                            /* The character the reader chose, in a fixed square the
+                                <Avatar
+                                    imageUrl={avatar.imageUrl}
+                                    initials={
+                                        avatar.initials ?? avatar.label.slice(0, 1).toUpperCase()
+                                    }
+                                    icon={avatar.icon}
+                                    size="xs"
+                                    style={{ width: 16, height: 16, borderRadius: 4 }}
+                                    type="agent"
+                                />
+                            </span>
+                        ))
+                    ) : !showsLeadingSlot(item()) ? null : item().kind === "person" ||
+                      item().kind === "agent" ||
+                      item().kind === "project" ? (
+                        identityMark()
+                    ) : item().emoji !== undefined ? (
+                        /* The character the reader chose, in a fixed square the
                            same size as the glyph lane beside it, so a row whose
                            emoji is wide or tall still occupies exactly one lane
                            and the column of names below it never shifts. */
+                        <span
+                            aria-hidden="true"
+                            className="happy-sidebar__item-emoji"
+                            data-happy-desktop-ui="sidebar-item-emoji"
+                        >
                             <span
-                                aria-hidden="true"
-                                className="happy-sidebar__item-emoji"
-                                data-happy-desktop-ui="sidebar-item-emoji"
+                                className="happy-sidebar__item-emoji-glyph"
+                                data-happy-desktop-ui="sidebar-item-emoji-glyph"
                             >
-                                <span
-                                    className="happy-sidebar__item-emoji-glyph"
-                                    data-happy-desktop-ui="sidebar-item-emoji-glyph"
-                                >
-                                    {item().emoji}
-                                </span>
+                                {item().emoji}
                             </span>
-                        ) : (
-                            <Icon name={leadingIcon(item())} size={16} />
-                        ),
+                        </span>
+                    ) : (
+                        <Icon name={leadingIcon(item())} size={16} />
                     )}
                     {unreadOnLeading() ? (
                         <span
@@ -2703,294 +2147,182 @@ function SidebarRow({
                     {props.foldControlPlacement !== "trailing" ? foldControl() : null}
                 </span>
             ) : null}
-            {((line: ReactNode) =>
-                /* A story row is a messenger's chat row: everything a plain row
-                   lays out in one line is its first line, and the agent's status
-                   runs under all of it in one reserved line,
-                   so the name never moves when the status comes, changes
-                   or goes. */
-                story() ? (
-                    <span
-                        className="happy-sidebar__item-body"
-                        data-happy-desktop-ui="sidebar-item-body"
-                    >
-                        <span
-                            className="happy-sidebar__item-line"
-                            data-happy-desktop-ui="sidebar-item-line"
-                        >
-                            {line}
-                        </span>
-                        {compact()
-                            ? null
-                            : ((stats: boolean, draft: string | undefined) => {
-                                  /* The last line is the draft's when there is
-                                     one, and the empty mark's when the row has
-                                     nothing at all to say; the status keeps the
-                                     line above either. */
-                                  const empty = !stats && !story()?.subtitle && draft === undefined;
-                                  const one = draft !== undefined || empty;
-                                  const lines = statusLines(story()?.subtitle ?? "");
-                                  const statsMark = stats ? (
-                                      <ChangeStats
-                                          added={story()?.changeStats?.added ?? 0}
-                                          className="happy-sidebar__item-subtitle-stats"
-                                          data-happy-desktop-ui="sidebar-item-subtitle-stats"
-                                          deleted={story()?.changeStats?.deleted ?? 0}
-                                      />
-                                  ) : null;
-                                  /* A status the agent wrote as two lines keeps
-                                     them, each cut on its own; with only one line
-                                     to stand on, its lines join with a dot. */
-                                  const split = lines.length === 2 && !one;
-                                  return (
-                                      <>
-                                          <span
-                                              className="happy-sidebar__item-subtitle"
-                                              data-happy-desktop-ui="sidebar-item-subtitle"
-                                              data-lines={one ? "1" : split ? "split" : undefined}
-                                          >
-                                              {split ? (
-                                                  lines.map((text, index) => (
-                                                      <span
-                                                          className="happy-sidebar__item-subtitle-line"
-                                                          data-happy-desktop-ui="sidebar-item-subtitle-line"
-                                                          key={index}
-                                                      >
-                                                          {index === 0 ? statsMark : null}
-                                                          {text}
-                                                      </span>
-                                                  ))
-                                              ) : (
-                                                  <>
-                                                      {statsMark}
-                                                      {lines.join(" · ")}
-                                                  </>
-                                              )}
-                                          </span>
-                                          {draft !== undefined ? (
-                                              <span
-                                                  className="happy-sidebar__item-draft"
-                                                  data-happy-desktop-ui="sidebar-item-draft"
-                                              >
-                                                  <span className="happy-sidebar__item-draft-label">
-                                                      Draft:{" "}
-                                                  </span>
-                                                  {draft}
-                                              </span>
-                                          ) : empty ? (
-                                              <span
-                                                  className="happy-sidebar__item-empty"
-                                                  data-happy-desktop-ui="sidebar-item-empty"
-                                              >
-                                                  <StoryEmptyMark />
-                                              </span>
-                                          ) : null}
-                                      </>
-                                  );
-                              })(
-                                  (story()?.changeStats?.added ?? 0) > 0 ||
-                                      (story()?.changeStats?.deleted ?? 0) > 0,
-                                  story()?.draft || undefined,
-                              )}
-                    </span>
-                ) : (
-                    line
-                ))(
-                <>
-                    {((marks: ReactNode) =>
-                        /* With trailing folds, what the row is doing follows its name: the
+            <>
+                {((marks: ReactNode) =>
+                    /* With trailing folds, what the row is doing follows its name: the
                    name gives up its width first, so the mark is never pushed off
                    or under the chevron, and the controls at the far edge hold one
                    column whatever the name says. */
-                        lanes ? (
-                            <span
-                                className="happy-sidebar__item-main"
-                                data-happy-desktop-ui="sidebar-item-main"
-                            >
-                                {marks}
-                            </span>
-                        ) : (
-                            marks
-                        ))(
-                        <>
-                            <span
-                                aria-label={
-                                    props.rename ? `Rename ${props.rename.initialValue}` : undefined
-                                }
-                                aria-multiline={props.rename ? false : undefined}
-                                className={
-                                    props.rename
-                                        ? "happy-sidebar__item-label happy-sidebar__item-rename"
-                                        : "happy-sidebar__item-label"
-                                }
-                                contentEditable={props.rename ? "plaintext-only" : undefined}
-                                data-happy-desktop-ui="sidebar-item-label"
-                                onBlur={
-                                    props.rename
-                                        ? (event) =>
-                                              renameFinish(event.currentTarget.textContent ?? "")
-                                        : undefined
-                                }
-                                onClick={
-                                    props.rename ? (event) => event.stopPropagation() : undefined
-                                }
-                                onContextMenu={
-                                    props.rename ? (event) => event.stopPropagation() : undefined
-                                }
-                                onPointerDown={
-                                    props.rename ? (event) => event.stopPropagation() : undefined
-                                }
-                                onPaste={
-                                    props.rename
-                                        ? (event) => {
+                    lanes ? (
+                        <span
+                            className="happy-sidebar__item-main"
+                            data-happy-desktop-ui="sidebar-item-main"
+                        >
+                            {marks}
+                        </span>
+                    ) : (
+                        marks
+                    ))(
+                    <>
+                        <span
+                            aria-label={
+                                props.rename ? `Rename ${props.rename.initialValue}` : undefined
+                            }
+                            aria-multiline={props.rename ? false : undefined}
+                            className={
+                                props.rename
+                                    ? "happy-sidebar__item-label happy-sidebar__item-rename"
+                                    : "happy-sidebar__item-label"
+                            }
+                            contentEditable={props.rename ? "plaintext-only" : undefined}
+                            data-happy-desktop-ui="sidebar-item-label"
+                            onBlur={
+                                props.rename
+                                    ? (event) => renameFinish(event.currentTarget.textContent ?? "")
+                                    : undefined
+                            }
+                            onClick={props.rename ? (event) => event.stopPropagation() : undefined}
+                            onContextMenu={
+                                props.rename ? (event) => event.stopPropagation() : undefined
+                            }
+                            onPointerDown={
+                                props.rename ? (event) => event.stopPropagation() : undefined
+                            }
+                            onPaste={
+                                props.rename
+                                    ? (event) => {
+                                          event.preventDefault();
+                                          // insertText preserves the browser's undo history for single-line paste.
+                                          document.execCommand(
+                                              "insertText",
+                                              false,
+                                              event.clipboardData
+                                                  .getData("text/plain")
+                                                  .replace(/[\r\n]+/g, " "),
+                                          );
+                                      }
+                                    : undefined
+                            }
+                            onKeyDown={
+                                props.rename
+                                    ? (event) => {
+                                          event.stopPropagation();
+                                          if (event.nativeEvent.isComposing) return;
+                                          if (event.key === "Enter" || event.key === "Escape") {
                                               event.preventDefault();
-                                              // insertText preserves the browser's undo history for single-line paste.
-                                              document.execCommand(
-                                                  "insertText",
-                                                  false,
-                                                  event.clipboardData
-                                                      .getData("text/plain")
-                                                      .replace(/[\r\n]+/g, " "),
+                                              if (event.repeat) return;
+                                              renameRestoreFocus.current = true;
+                                              renameFinish(
+                                                  event.key === "Enter"
+                                                      ? (event.currentTarget.textContent ?? "")
+                                                      : undefined,
                                               );
                                           }
-                                        : undefined
-                                }
-                                onKeyDown={
-                                    props.rename
-                                        ? (event) => {
-                                              event.stopPropagation();
-                                              if (event.nativeEvent.isComposing) return;
-                                              if (event.key === "Enter" || event.key === "Escape") {
-                                                  event.preventDefault();
-                                                  if (event.repeat) return;
-                                                  renameRestoreFocus.current = true;
-                                                  renameFinish(
-                                                      event.key === "Enter"
-                                                          ? (event.currentTarget.textContent ?? "")
-                                                          : undefined,
-                                                  );
-                                              }
-                                          }
-                                        : undefined
-                                }
-                                ref={props.rename ? renameLabelRef : undefined}
-                                role={props.rename ? "textbox" : undefined}
-                                suppressContentEditableWarning={props.rename !== undefined}
-                                tabIndex={props.rename ? 0 : undefined}
-                            >
-                                {/* The row's own colour, with a near-white band wiping through
+                                      }
+                                    : undefined
+                            }
+                            ref={props.rename ? renameLabelRef : undefined}
+                            role={props.rename ? "textbox" : undefined}
+                            suppressContentEditableWarning={props.rename !== undefined}
+                            tabIndex={props.rename ? 0 : undefined}
+                        >
+                            {/* The row's own colour, with a near-white band wiping through
                         it. Busy is a passing state, so it may not restyle the name:
                         an unread row is already heavier and darker than its
                         neighbours, and painting the name again here would stack a
                         second emphasis on top of one the row had already earned.
                         Only the travelling band is new. */}
-                                {props.rename ? (
-                                    props.rename.initialValue
-                                ) : shimmerLabel() ? (
-                                    <ShimmerText sweep="sheen" tone="inherit">
-                                        {item().label}
-                                    </ShimmerText>
-                                ) : (
-                                    item().label
-                                )}
+                            {props.rename ? (
+                                props.rename.initialValue
+                            ) : shimmerLabel() ? (
+                                <ShimmerText sweep="sheen" tone="inherit">
+                                    {item().label}
+                                </ShimmerText>
+                            ) : (
+                                item().label
+                            )}
+                        </span>
+                        {item().voiceFocus ? (
+                            <span
+                                aria-label="Voice focus"
+                                className="happy-sidebar__item-voice"
+                                data-happy-desktop-ui="sidebar-item-voice"
+                                role="img"
+                            >
+                                <Icon name="mic" size={12} />
                             </span>
-                            {item().note ? (
-                                <span
-                                    className="happy-sidebar__item-note"
-                                    data-happy-desktop-ui="sidebar-item-note"
-                                >
-                                    {item().note}
-                                </span>
-                            ) : null}
-                            {item().voiceFocus ? (
-                                <span
-                                    aria-label="Voice focus"
-                                    className="happy-sidebar__item-voice"
-                                    data-happy-desktop-ui="sidebar-item-voice"
-                                    role="img"
-                                >
-                                    <Icon name="mic" size={12} />
-                                </span>
-                            ) : null}
-                            {props.shortcut ? (
-                                <KeyCap
-                                    className="happy-sidebar__item-shortcut"
-                                    decorative
-                                    keys={props.shortcut.caps}
-                                />
-                            ) : null}
-                            {unreadDot() && !unreadOnLeading() && !mentioned() ? (
-                                <span
-                                    aria-label="Unread"
-                                    className="happy-sidebar__item-unread"
-                                    data-happy-desktop-ui="sidebar-item-unread"
-                                />
-                            ) : null}
-                            {mentioned() ? (
-                                <CountBadge
-                                    className="happy-sidebar__item-badge"
-                                    count={item().badge!}
-                                />
-                            ) : null}
+                        ) : null}
+                        {props.shortcut ? (
+                            <KeyCap
+                                className="happy-sidebar__item-shortcut"
+                                decorative
+                                keys={props.shortcut.caps}
+                            />
+                        ) : null}
+                        {unreadDot() && !unreadOnLeading() && !mentioned() ? (
+                            <span
+                                aria-label="Unread"
+                                className="happy-sidebar__item-unread"
+                                data-happy-desktop-ui="sidebar-item-unread"
+                            />
+                        ) : null}
+                        {mentioned() ? (
+                            <CountBadge
+                                className="happy-sidebar__item-badge"
+                                count={item().badge!}
+                            />
+                        ) : null}
 
-                            {showLifecycle() ? (
-                                <span
-                                    className="happy-sidebar__item-lifecycle"
-                                    data-happy-desktop-ui="sidebar-item-lifecycle"
-                                    data-lifecycle={lifecycle()}
-                                >
-                                    {item().lifecycleLabel}
-                                </span>
-                            ) : null}
-                            {showStatus() ? (
-                                <>
-                                    {item().status === "working" ? (
-                                        <span
-                                            className="happy-sidebar__item-working"
-                                            data-happy-desktop-ui="sidebar-item-working"
-                                        >
-                                            working
-                                        </span>
-                                    ) : null}
+                        {showLifecycle() ? (
+                            <span
+                                className="happy-sidebar__item-lifecycle"
+                                data-happy-desktop-ui="sidebar-item-lifecycle"
+                                data-lifecycle={lifecycle()}
+                            >
+                                {item().lifecycleLabel}
+                            </span>
+                        ) : null}
+                        {showStatus() ? (
+                            <>
+                                {item().status === "working" ? (
                                     <span
-                                        aria-hidden="true"
-                                        className="happy-sidebar__item-status"
-                                        data-happy-desktop-ui="sidebar-item-status"
-                                        data-status={item().status}
-                                    />
-                                </>
-                            ) : null}
-                            {lanes && showCount() ? (
+                                        className="happy-sidebar__item-working"
+                                        data-happy-desktop-ui="sidebar-item-working"
+                                    >
+                                        working
+                                    </span>
+                                ) : null}
                                 <span
-                                    className="happy-sidebar__item-count"
-                                    data-happy-desktop-ui="sidebar-item-count"
-                                >
-                                    {String(item().count)}
-                                </span>
-                            ) : null}
-                            {lanes && !activityLeading() ? activityMark() : null}
-                        </>,
-                    )}
+                                    aria-hidden="true"
+                                    className="happy-sidebar__item-status"
+                                    data-happy-desktop-ui="sidebar-item-status"
+                                    data-status={item().status}
+                                />
+                            </>
+                        ) : null}
+                        {lanes && showCount() ? (
+                            <span
+                                className="happy-sidebar__item-count"
+                                data-happy-desktop-ui="sidebar-item-count"
+                            >
+                                {String(item().count)}
+                            </span>
+                        ) : null}
+                        {lanes && !activityLeading() ? activityMark() : null}
+                    </>,
+                )}
 
-                    {showMeta() && item().trailingWidth === undefined ? (
-                        <span
-                            className="happy-sidebar__item-meta"
-                            data-happy-desktop-ui="sidebar-item-meta"
-                        >
-                            {item().meta}
-                        </span>
-                    ) : null}
-                    {story()?.time !== undefined && !compact() ? (
-                        <span
-                            className="happy-sidebar__item-time"
-                            data-happy-desktop-ui="sidebar-item-time"
-                        >
-                            {story()?.time}
-                        </span>
-                    ) : null}
+                {showMeta() && item().trailingWidth === undefined ? (
+                    <span
+                        className="happy-sidebar__item-meta"
+                        data-happy-desktop-ui="sidebar-item-meta"
+                    >
+                        {item().meta}
+                    </span>
+                ) : null}
 
-                    {((state, controls, stats, swaps, count) =>
-                        /* One lane at the trailing edge, and everything in it is ranged
+                {((state, controls, stats, swaps, count) =>
+                    /* One lane at the trailing edge, and everything in it is ranged
                    right. The Git delta is the last thing in flow, so at rest it
                    ends the row on the same column as the marks above and below
                    it. Work adds the activity cell after the delta and moves it
@@ -2999,94 +2331,70 @@ function SidebarRow({
                    controls are laid over the lane rather than placed in it, so
                    arriving and leaving costs no reflow: what they cover is
                    hidden where it stands. */
-                        state ||
-                        controls ||
-                        stats ||
-                        count !== undefined ||
-                        item().trailingWidth !== undefined ? (
-                            <span
-                                className="happy-sidebar__item-trailing"
-                                data-happy-desktop-ui="sidebar-item-trailing"
-                                data-fixed={item().trailingWidth !== undefined ? "" : undefined}
-                                data-swaps={controls && swaps ? "" : undefined}
-                                style={{
-                                    columnGap: SIDEBAR_TRAILING_GAP,
-                                    minWidth: lanes ? 0 : trailingLaneMinWidth(),
-                                    ...(item().trailingWidth !== undefined
-                                        ? {
-                                              width: item().trailingWidth,
-                                              minWidth: item().trailingWidth,
-                                          }
-                                        : {}),
-                                }}
-                            >
-                                {showMeta() && item().trailingWidth !== undefined ? (
-                                    <span
-                                        className="happy-sidebar__item-meta"
-                                        data-happy-desktop-ui="sidebar-item-meta"
-                                    >
-                                        {item().meta}
-                                    </span>
-                                ) : null}
-                                {count !== undefined ? (
-                                    <span
-                                        className="happy-sidebar__item-count"
-                                        data-happy-desktop-ui="sidebar-item-count"
-                                    >
-                                        {String(count)}
-                                    </span>
-                                ) : null}
-                                {stats ? (
-                                    <ChangeStats
-                                        added={stats.added}
-                                        className="happy-sidebar__item-change-stats"
-                                        data-happy-desktop-ui="sidebar-item-change-stats"
-                                        deleted={stats.deleted}
-                                    />
-                                ) : null}
-                                {state ? activityMark() : null}
-                                {controls ? trailingLane() : null}
-                            </span>
-                        ) : null)(
-                        lanes || activityLeading() ? undefined : activity(),
-                        trailingActions().length > 0,
-                        hasChangeStats() ? item().changeStats! : undefined,
-                        // Beside a trailing fold the controls take a place of their own:
-                        // nothing a row reports is covered while the pointer is on it.
-                        !lanes && swapsTrailing(),
-                        !lanes && showCount() ? item().count : undefined,
-                    )}
-                    {/* Only a row that folds has a fold at its edge. Revealed on hover, it
+                    state ||
+                    controls ||
+                    stats ||
+                    count !== undefined ||
+                    item().trailingWidth !== undefined ? (
+                        <span
+                            className="happy-sidebar__item-trailing"
+                            data-happy-desktop-ui="sidebar-item-trailing"
+                            data-fixed={item().trailingWidth !== undefined ? "" : undefined}
+                            data-swaps={controls && swaps ? "" : undefined}
+                            style={{
+                                columnGap: SIDEBAR_TRAILING_GAP,
+                                minWidth: lanes ? 0 : trailingLaneMinWidth(),
+                                ...(item().trailingWidth !== undefined
+                                    ? {
+                                          width: item().trailingWidth,
+                                          minWidth: item().trailingWidth,
+                                      }
+                                    : {}),
+                            }}
+                        >
+                            {showMeta() && item().trailingWidth !== undefined ? (
+                                <span
+                                    className="happy-sidebar__item-meta"
+                                    data-happy-desktop-ui="sidebar-item-meta"
+                                >
+                                    {item().meta}
+                                </span>
+                            ) : null}
+                            {count !== undefined ? (
+                                <span
+                                    className="happy-sidebar__item-count"
+                                    data-happy-desktop-ui="sidebar-item-count"
+                                >
+                                    {String(count)}
+                                </span>
+                            ) : null}
+                            {stats ? (
+                                <ChangeStats
+                                    added={stats.added}
+                                    className="happy-sidebar__item-change-stats"
+                                    data-happy-desktop-ui="sidebar-item-change-stats"
+                                    deleted={stats.deleted}
+                                />
+                            ) : null}
+                            {state ? activityMark() : null}
+                            {controls ? trailingLane() : null}
+                        </span>
+                    ) : null)(
+                    lanes || activityLeading() ? undefined : activity(),
+                    trailingActions().length > 0,
+                    hasChangeStats() ? item().changeStats! : undefined,
+                    // Beside a trailing fold the controls take a place of their own:
+                    // nothing a row reports is covered while the pointer is on it.
+                    !lanes && swapsTrailing(),
+                    !lanes && showCount() ? item().count : undefined,
+                )}
+                {/* Only a row that folds has a fold at its edge. Revealed on hover, it
                 is laid over the trailing lane and takes the delta's place while
                 it shows; always shown, it is the row's last column and the delta
                 stands left of it. A row with nothing to fold keeps no empty
                 column: what it reports ends at the row's edge. */}
-                    {changeMark()}
-                    {lanes ? foldControl() : null}
-                </>,
-            )}
-            {/* One signal, always in the row's bottom-right corner, where a
-                messenger puts its unread dot: the chat's spinner while the
-                agent works, else a dot while something is unread, nothing
-                otherwise. */}
-            {story()?.signal ? (
-                <span
-                    aria-label={
-                        story()?.signal === "unread"
-                            ? `${item().label} has unread activity`
-                            : `${item().label} is working`
-                    }
-                    className="happy-sidebar__item-corner"
-                    data-happy-desktop-ui="sidebar-item-corner"
-                    data-signal={story()?.signal}
-                    data-state={story()?.state}
-                    role="img"
-                >
-                    {story()?.signal === "working" ? (
-                        <Spinner variant="braille-2" size={14} />
-                    ) : null}
-                </span>
-            ) : null}
+                {lanes ? foldControl() : null}
+            </>
         </Row>
     );
 }
@@ -3180,20 +2488,16 @@ export function Sidebar(props: SidebarProps) {
         "composeShortcut",
         "composeTooltip",
         "searchRow",
-        "attention",
         "footer",
         "foldControlPlacement",
         "foldControlReveal",
         "headerAccessory",
-        "topAccessory",
-        "onBodyWheel",
         "onRowsVisibleChange",
         "headerAction",
         "onHeaderMenuSelect",
         "headerTrailing",
         "itemMenuItems",
         "itemRename",
-        "itemMarkPresentation",
         "onActionReorder",
         "onBack",
         "onHeaderAction",
@@ -3202,10 +2506,6 @@ export function Sidebar(props: SidebarProps) {
         "onItemIntent",
         "onItemAction",
         "onItemSecondaryAction",
-        "onItemChangeAccept",
-        "onItemChangeReject",
-        "onItemStoryOpen",
-        "bodyFloat",
         "onItemMenuSelect",
         "onItemCollapseToggle",
         "itemFoldControls",
@@ -3222,12 +2522,10 @@ export function Sidebar(props: SidebarProps) {
         "onSectionTailToggle",
         "search",
         "onSectionMenuSelect",
-        "division",
         "sections",
         "style",
         "subtitle",
         "title",
-        "treeConnectors",
     ]);
     const interactionEnabled = props.interactionEnabled !== false;
     const menuRoot = useRef<HTMLDivElement>(null);
@@ -3484,108 +2782,6 @@ export function Sidebar(props: SidebarProps) {
     // the sidebar shows leaves every row's memoized render standing. See the reuser.
     const [sectionsReuse] = useState(sidebarSectionsReuser);
     const stableSections = sectionsReuse(local.sections);
-    /*
-     * Happy dividing into new work (C-319). A row New made is laid out with
-     * its mark hidden, measured, and drawn as Happy's daughter peeling off and
-     * sliding into it; Happy's mark is hidden too until the overlay hands both
-     * back. Happy then wears the membrane seed it re-formed from.
-     */
-    const divisionInto = local.division?.into ?? NO_DIVISIONS;
-    const [divisionSeen, divisionSeenSet] = useState<ReadonlySet<string>>(
-        () => new Set(divisionInto),
-    );
-    const [divisionPlay, divisionPlaySet] = useState<{
-        readonly from: DivisionRect;
-        readonly daughters: readonly HappyCellDaughter[];
-        /** The rows the daughters go to, in the same order. */
-        readonly rows: readonly string[];
-    }>();
-    // Happy at rest in the seed it last formed again from, one object for as
-    // long as that seed holds. The newest division here wins over the owner's
-    // copy until the owner has caught up.
-    const [happyRest, happyRestSet] = useState<SidebarMarkState>();
-    const happySeedKept = local.division?.seed;
-    if (happyRest === undefined && happySeedKept !== undefined)
-        happyRestSet({ hidden: false, happySeed: happySeedKept });
-    // Each shown row, and the stem cell it wears: the daughter becomes that
-    // exact cell, which need not be named like its row.
-    const shownCells = new Map(
-        [...(local.actions ?? []), ...stableSections.flatMap((section) => section.items)].map(
-            (item) => [item.id, item.stemCell?.id ?? item.id] as const,
-        ),
-    );
-    /* Rows that are there when Happy's own row first is were not made from it:
-       only a row arriving after Happy is shown divides from it. */
-    const divisionFromShown =
-        local.division?.from !== undefined && shownCells.has(local.division.from);
-    const [divisionFromSeen, divisionFromSeenSet] = useState(divisionFromShown);
-    if (divisionFromShown && !divisionFromSeen) {
-        divisionFromSeenSet(true);
-        divisionSeenSet(new Set([...divisionSeen, ...divisionInto]));
-    }
-    const divisionArriving = divisionFromSeen
-        ? divisionInto.filter((id) => !divisionSeen.has(id) && shownCells.has(id))
-        : NO_DIVISIONS;
-    const divisionHidden = new Set([...divisionArriving, ...(divisionPlay?.rows ?? [])]);
-    // The rows whose daughter has come to rest in them: each shows itself at
-    // once around the cell, which the overlay still draws until it is done.
-    const [divisionLanded, divisionLandedSet] = useState<ReadonlySet<string>>(() => new Set());
-    const divisionFrom = local.division?.from;
-    const markStateOf = (id: string): SidebarMarkState | undefined =>
-        id === divisionFrom
-            ? divisionHidden.size > 0
-                ? MARK_HIDDEN
-                : happyRest
-            : divisionHidden.has(id)
-              ? divisionLanded.has(id)
-                  ? MARK_HIDDEN
-                  : MARK_ARRIVING
-              : undefined;
-    const divisionStart = (node: HTMLSpanElement | null) => {
-        const root = node?.closest(".happy-sidebar");
-        const canvas = root?.querySelector(".happy-sidebar__body-content");
-        if (!root || !canvas || divisionFrom === undefined) return;
-        const origin = canvas.getBoundingClientRect();
-        divisionSeenSet(new Set([...divisionSeen, ...divisionArriving]));
-        const markRect = (id: string): DivisionRect | undefined => {
-            const row = [...root.querySelectorAll("[data-item-id]")].find(
-                (each) => each.getAttribute("data-item-id") === id,
-            );
-            const lane = row?.querySelector('[data-happy-desktop-ui="sidebar-item-leading"]');
-            // The mark itself, as drawn: a story row's grows inside the disc
-            // of its ring, whose box is wider than the mark.
-            const mark =
-                lane?.querySelector('[data-happy-desktop-ui="story-ring-mark"] > *') ??
-                lane?.firstElementChild ??
-                lane;
-            const box = mark?.getBoundingClientRect();
-            // Keep every mark in the scrolling canvas's coordinates. The
-            // canvas and its division then move together even mid-animation.
-            return box
-                ? {
-                      x: box.x - origin.x,
-                      y: box.y - origin.y,
-                      width: box.width,
-                      height: box.height,
-                  }
-                : undefined;
-        };
-        const from = divisionPlay?.from ?? markRect(divisionFrom);
-        if (!from) return;
-        const daughters = divisionArriving.flatMap((id) => {
-            const to = markRect(id);
-            return to ? [{ row: id, daughter: { stemCellId: shownCells.get(id) ?? id, to } }] : [];
-        });
-        if (daughters.length === 0 && !divisionPlay) return;
-        divisionPlaySet({
-            from,
-            daughters: [
-                ...(divisionPlay?.daughters ?? []),
-                ...daughters.map((arrival) => arrival.daughter),
-            ],
-            rows: [...(divisionPlay?.rows ?? []), ...daughters.map((arrival) => arrival.row)],
-        });
-    };
     // Cross-section moves use the same measured units and settling animation as
     // production reordering, while previewing the actual eventual row order.
     const sections = (() => {
@@ -3776,21 +2972,18 @@ export function Sidebar(props: SidebarProps) {
     /*
      * The top of the rows never moves for something below it. The rows stand
      * at least as tall as the bottom of what is on screen, so a fold, a row
-     * leaving or a change accepted near the end shortens them without the
+     * leaving near the end shortens them without the
      * scrollport pulling everything down to its new end: the space they gave
      * up stays, blank, where they were. It is let go only as the reader
      * scrolls up away from it, which moves nothing they can see — the same
      * held space the transcript keeps under its last message. At the top
-     * nothing is held: no shortening can move rows that are not scrolled, and
-     * a sidebar drawn at its full height, as a proposal is, keeps fitting its
-     * rows. Imperative because the scroll offset is DOM state; the identity is
+     * nothing is held: no shortening can move rows that are not scrolled.
+     * Imperative because the scroll offset is DOM state; the identity is
      * stable so the scrollport's ref is set once.
      */
     const [floor] = useState(() => {
         let observer: ResizeObserver | undefined;
         let mutations: MutationObserver | undefined;
-        let frame = 0;
-        let carry = 0;
         const hold = (viewport: HTMLElement) => {
             const content = viewport.querySelector<HTMLElement>(".happy-sidebar__body-content");
             if (!content) return;
@@ -3800,180 +2993,6 @@ export function Sidebar(props: SidebarProps) {
                     "min-height",
                     `${String(viewport.scrollTop + viewport.clientHeight)}px`,
                 );
-        };
-        const styleSet = (node: HTMLElement, name: string, value: string | null) => {
-            if (value === null) {
-                if (node.style.getPropertyValue(name) !== "") node.style.removeProperty(name);
-            } else if (node.style.getPropertyValue(name) !== value)
-                node.style.setProperty(name, value);
-        };
-        const attributeSet = (node: Element, name: string, value: string | null) => {
-            if (value === null) {
-                if (node.hasAttribute(name)) node.removeAttribute(name);
-            } else if (node.getAttribute(name) !== value) node.setAttribute(name, value);
-        };
-        /*
-         * Whether each pinned separator can hold. The rows left to scroll
-         * between the pinned blocks must keep at least half the scrollport; a
-         * block that would leave them less does not pin, and says so. With both
-         * edges pinned and too little left between them, the bottom block gives
-         * way first: the top is what the column is read from. Measured on the
-         * rows' resting layout (pins released for the reading, in the same
-         * task, so nothing paints in between, and restyled with no row
-         * transitions so the swap glides nothing) and written as attributes
-         * and custom properties only — the measure never renders.
-         */
-        const pinsMeasure = (viewport: HTMLElement) => {
-            const nav = viewport.closest<HTMLElement>(".happy-sidebar");
-            const content = viewport.querySelector<HTMLElement>(".happy-sidebar__body-content");
-            if (!nav || !content) return;
-            const top = content.querySelector<HTMLElement>(
-                '.happy-sidebar__separator[data-pin="top"][data-pin-area="top"]',
-            );
-            const bottom = content.querySelector<HTMLElement>(
-                '.happy-sidebar__separator[data-pin="bottom"][data-pin-area="bottom"]',
-            );
-            if (!top && !bottom) {
-                attributeSet(nav, "data-pin-top", null);
-                attributeSet(nav, "data-pin-bottom", null);
-                styleSet(nav, "--happy-sidebar-pin-top", null);
-                styleSet(nav, "--happy-sidebar-pin-bottom", null);
-                return;
-            }
-            nav.setAttribute("data-pin-switch", "");
-            nav.setAttribute("data-pin-measuring", "");
-            const origin = content.getBoundingClientRect().top;
-            const inset = parseFloat(getComputedStyle(content).paddingTop) || 0;
-            const height = viewport.clientHeight;
-            // A held block ends at its rule: the rows that scroll run right
-            // up to the hairline, as a conversation runs under its header,
-            // and the separator's room past the rule is theirs to pass under.
-            const ruleOf = (separator: HTMLElement) =>
-                (
-                    separator.querySelector<HTMLElement>(".happy-sidebar__separator-rule") ??
-                    separator
-                ).getBoundingClientRect();
-            const topHeight = top ? ruleOf(top).bottom - origin : 0;
-            const tree = bottom?.parentElement;
-            const end = tree ? tree.getBoundingClientRect().bottom - origin + inset : 0;
-            const bottomStart = bottom ? ruleOf(bottom).top - origin : 0;
-            const bottomHeight = bottom ? end - bottomStart : 0;
-            const offsets = [...content.querySelectorAll<HTMLElement>("[data-pin-area]")].map(
-                (row) => {
-                    const box = row.getBoundingClientRect();
-                    return { row, top: box.top - origin, bottom: box.bottom - origin };
-                },
-            );
-            nav.removeAttribute("data-pin-measuring");
-            const half = height / 2;
-            const topHolds = top !== null && topHeight <= half;
-            const bottomHolds =
-                bottom !== null &&
-                bottomHeight <= half &&
-                (!topHolds || height - topHeight - bottomHeight >= half);
-            // Holding moves the floor above a bottom block, which moves the
-            // edge it is measured from: measure once more when that changes.
-            const changed =
-                nav.getAttribute("data-pin-bottom") !==
-                (bottom ? (bottomHolds ? "hold" : "tall") : null);
-            attributeSet(nav, "data-pin-top", top ? (topHolds ? "hold" : "tall") : null);
-            attributeSet(nav, "data-pin-bottom", bottom ? (bottomHolds ? "hold" : "tall") : null);
-            if (top) attributeSet(top, "data-pin-tall", topHolds ? null : "");
-            if (bottom) attributeSet(bottom, "data-pin-tall", bottomHolds ? null : "");
-            styleSet(nav, "--happy-sidebar-pin-top", topHolds ? `${String(topHeight)}px` : null);
-            styleSet(
-                nav,
-                "--happy-sidebar-pin-bottom",
-                bottomHolds ? `${String(bottomHeight)}px` : null,
-            );
-            // Where each pinned row sticks: at its resting distance from the
-            // edge it is pinned to, so holding still is all it ever does.
-            for (const { row, top: rowTop, bottom: rowBottom } of offsets)
-                styleSet(
-                    row,
-                    "--happy-sidebar-pin-at",
-                    row.dataset.pinArea === "top"
-                        ? `${String(rowTop)}px`
-                        : `${String(end - rowBottom)}px`,
-                );
-            pinsScroll(viewport, nav, end);
-            void content.offsetHeight;
-            nav.removeAttribute("data-pin-switch");
-            if (changed) pinsSchedule(viewport);
-        };
-        /*
-         * While a row is carried its offset is its own `top`, so the pinned
-         * rows stop sticking and are carried along by the scroll offset
-         * instead, which is kept here.
-         */
-        const pinsScroll = (viewport: HTMLElement, nav: HTMLElement, end?: number) => {
-            if (!nav.hasAttribute("data-pin-top") && !nav.hasAttribute("data-pin-bottom")) return;
-            styleSet(nav, "--happy-sidebar-pin-scroll", `${String(viewport.scrollTop)}px`);
-            const bottomEnd = end ?? Number.parseFloat(nav.dataset.pinEnd ?? "0");
-            if (end !== undefined) nav.dataset.pinEnd = String(end);
-            styleSet(
-                nav,
-                "--happy-sidebar-pin-lift",
-                `${String(Math.min(0, viewport.scrollTop + viewport.clientHeight - bottomEnd))}px`,
-            );
-        };
-        const pinsSchedule = (viewport: HTMLElement) => {
-            if (frame !== 0) return;
-            frame = requestAnimationFrame(() => {
-                frame = 0;
-                pinsMeasure(viewport);
-            });
-        };
-        /*
-         * A drag and the glide that settles it move rows by their `top`,
-         * which on a sticking row is where it sticks, not an offset. For as
-         * long as either lasts the held rows are carried by the scroll offset
-         * instead (`data-pin-carry`), which reads the same at rest; they stick
-         * again, measured afresh, once the last glide on a held row is done.
-         * Set from the mutation that starts the drag or the drop, before that
-         * frame paints, and checked once a frame while it lasts.
-         */
-        const pinsCarry = (viewport: HTMLElement) => {
-            const nav = viewport.closest<HTMLElement>(".happy-sidebar");
-            const content = viewport.querySelector<HTMLElement>(".happy-sidebar__body-content");
-            if (!nav || !content) return;
-            const carried =
-                (nav.hasAttribute("data-pin-top") || nav.hasAttribute("data-pin-bottom")) &&
-                (content.hasAttribute("data-dragging") ||
-                    content.getAnimations({ subtree: true }).some((animation) => {
-                        const effect = animation.effect;
-                        if (!(effect instanceof KeyframeEffect)) return false;
-                        const target = effect.target;
-                        return (
-                            target instanceof HTMLElement &&
-                            (target.dataset.pinArea === "top" ||
-                                target.dataset.pinArea === "bottom") &&
-                            effect.getKeyframes().some((keyframe) => "top" in keyframe)
-                        );
-                    }));
-            // Swapping how the held rows stand changes their `top`, which the
-            // rows being arranged would glide: the swap is styled once with
-            // their transitions off (`data-pin-switch`), so it is never seen.
-            if (carried) {
-                if (!nav.hasAttribute("data-pin-carry")) {
-                    pinsScroll(viewport, nav);
-                    nav.setAttribute("data-pin-switch", "");
-                    nav.setAttribute("data-pin-carry", "");
-                    void content.offsetHeight;
-                    nav.removeAttribute("data-pin-switch");
-                }
-                if (carry === 0)
-                    carry = requestAnimationFrame(() => {
-                        carry = 0;
-                        pinsCarry(viewport);
-                    });
-            } else if (nav.hasAttribute("data-pin-carry")) {
-                nav.setAttribute("data-pin-switch", "");
-                nav.removeAttribute("data-pin-carry");
-                pinsMeasure(viewport);
-                void content.offsetHeight;
-                nav.removeAttribute("data-pin-switch");
-            }
         };
         // Which rows are on screen, reported once per frame and only when it changed.
         let sightFrame = 0;
@@ -4021,18 +3040,12 @@ export function Sidebar(props: SidebarProps) {
             scroll: (viewport: HTMLElement) => {
                 rowsSight(viewport);
                 hold(viewport);
-                const nav = viewport.closest<HTMLElement>(".happy-sidebar");
-                if (nav) pinsScroll(viewport, nav);
             },
             ref: (viewport: HTMLDivElement | null) => {
                 bodyViewport.current = viewport;
                 observer?.disconnect();
                 mutations?.disconnect();
-                cancelAnimationFrame(frame);
-                cancelAnimationFrame(carry);
                 cancelAnimationFrame(sightFrame);
-                frame = 0;
-                carry = 0;
                 sightFrame = 0;
                 sighted = "";
                 sightViewport = viewport ?? undefined;
@@ -4042,41 +3055,20 @@ export function Sidebar(props: SidebarProps) {
                 observer = new ResizeObserver(() => {
                     rowsSight(viewport);
                     hold(viewport);
-                    pinsSchedule(viewport);
                 });
                 observer.observe(viewport);
                 const content = viewport.querySelector<HTMLElement>(".happy-sidebar__body-content");
                 if (content) observer.observe(content);
-                // A drag moves rows by their `top`, and a drop or a fold
-                // changes which rows there are: both can move a pinned edge.
-                mutations = new MutationObserver((records) => {
-                    rowsSight(viewport);
-                    pinsCarry(viewport);
-                    // The held floor written on the rows' column is not one of them.
-                    if (
-                        records.every(
-                            (record) =>
-                                record.target === content && record.attributeName === "style",
-                        )
-                    )
-                        return;
-                    pinsSchedule(viewport);
-                });
+                // A drop or a fold changes which rows there are.
+                mutations = new MutationObserver(() => rowsSight(viewport));
                 if (content)
                     mutations.observe(content, {
-                        attributeFilter: [
-                            "style",
-                            "data-pin",
-                            "data-pin-area",
-                            "data-collapsed",
-                            "data-dragging",
-                        ],
+                        attributeFilter: ["data-collapsed"],
                         attributes: true,
                         childList: true,
                         subtree: true,
                     });
                 hold(viewport);
-                pinsMeasure(viewport);
                 rowsSight(viewport);
             },
         };
@@ -4202,11 +3194,7 @@ export function Sidebar(props: SidebarProps) {
         // Keep pointer travel, peer distances, and the drop capture in the same
         // fractional CSS coordinates. offsetTop/offsetHeight round these values
         // and make displaced neighbours land short at fractional browser zoom.
-        // Held rows are read where they rest, so a step across a pinned rule
-        // is the distance the rows travel, whatever the scroll offset.
-        const bounds = pinsReleasedRead(event.currentTarget, () =>
-            rows.map((row) => row.getBoundingClientRect()),
-        );
+        const bounds = rows.map((row) => row.getBoundingClientRect());
         const top = (blockIndex: number): number => bounds[blocks[blockIndex]?.[0] ?? -1]?.top ?? 0;
         const bottom = (block: readonly number[]): number => {
             return bounds[block[block.length - 1] ?? -1]?.bottom ?? 0;
@@ -4219,9 +3207,7 @@ export function Sidebar(props: SidebarProps) {
         );
         const across =
             local.itemDragAcrossSections && listId !== ACTIONS_LIST && parentId === undefined
-                ? pinsReleasedRead(event.currentTarget, () =>
-                      dropSlotsOf(event.currentTarget, listId, items[rowIndex]!.id, event.clientY),
-                  )
+                ? dropSlotsOf(event.currentTarget, listId, items[rowIndex]!.id, event.clientY)
                 : undefined;
         previewHeldTops.current.clear();
         if (across) {
@@ -4992,12 +3978,6 @@ export function Sidebar(props: SidebarProps) {
                 void latest().act(key, ({ item }) =>
                     latest().local.onItemSecondaryAction?.(item.id),
                 ),
-            changeAccept: (key) =>
-                void latest().act(key, ({ item }) => latest().local.onItemChangeAccept?.(item.id)),
-            changeReject: (key) =>
-                void latest().act(key, ({ item }) => latest().local.onItemChangeReject?.(item.id)),
-            storyOpen: (key) =>
-                void latest().act(key, ({ item }) => latest().local.onItemStoryOpen?.(item.id)),
             select: (id) => {
                 if (dragClick.current) {
                     dragClick.current = false;
@@ -5015,7 +3995,7 @@ export function Sidebar(props: SidebarProps) {
                   ? []
                   : sectionRows(section, local.activeItemId)
                         .map((row) => row.item)
-                        .filter((item) => item.kind !== "separator" && item.kind !== "widget")
+                        .filter((item) => item.kind !== "separator")
                         .map((item) => item.id),
           )
         : [];
@@ -5034,22 +4014,11 @@ export function Sidebar(props: SidebarProps) {
             ref={interactionRef}
             data-back={local.onBack ? "" : undefined}
             data-actions-divider={local.actionsDivider ? "" : undefined}
-            data-attention={local.attention ? "" : undefined}
-            data-float={local.bodyFloat ? "" : undefined}
             data-fold-control-reveal={local.foldControlReveal}
             data-happy-desktop-ui="sidebar"
             data-scrolled={scrolled ? "" : undefined}
             style={local.style}
         >
-            {local.attention ? (
-                <span
-                    className="happy-sidebar__attention-tag"
-                    data-happy-desktop-ui="sidebar-attention-tag"
-                    data-placement="sidebar"
-                >
-                    {local.attention.tag}
-                </span>
-            ) : null}
             <header className="happy-sidebar__header" data-happy-desktop-ui="sidebar-header">
                 {local.onBack ? (
                     <div className="happy-sidebar__heading" data-happy-desktop-ui="sidebar-heading">
@@ -5137,14 +4106,6 @@ export function Sidebar(props: SidebarProps) {
                     </button>
                 ) : null}
             </header>
-            {local.topAccessory ? (
-                <div
-                    className="happy-sidebar__top-accessory"
-                    data-happy-desktop-ui="sidebar-top-accessory"
-                >
-                    {local.topAccessory}
-                </div>
-            ) : null}
             {local.search ? (
                 // Escape empties a search that holds anything, which puts the
                 // sidebar's usual contents back.
@@ -5190,11 +4151,6 @@ export function Sidebar(props: SidebarProps) {
                         setScrolled(scrollTop > 0);
                         dragScroll(scrollTop);
                         floor.scroll(event.currentTarget);
-                    },
-                    // Only a mostly vertical turn: a sideways trackpad swipe folds nothing.
-                    onWheel: (event) => {
-                        if (Math.abs(event.deltaY) > Math.abs(event.deltaX))
-                            local.onBodyWheel?.(event.deltaY);
                     },
                 }}
             >
@@ -5244,7 +4200,6 @@ export function Sidebar(props: SidebarProps) {
                                 label: local.searchRow.label,
                             }}
                             onSelect={local.searchRow.onOpen}
-                            itemMarkPresentation={local.itemMarkPresentation}
                             shortcut={local.searchRow.shortcut}
                             shortcutActive={local.searchRow.shortcut !== undefined}
                             shortcutAlwaysVisible={local.searchRow.shortcut !== undefined}
@@ -5261,7 +4216,6 @@ export function Sidebar(props: SidebarProps) {
                                 label: local.composeLabel ?? "Create",
                             }}
                             onSelect={local.onCompose}
-                            itemMarkPresentation={local.itemMarkPresentation}
                             shortcut={local.composeShortcut}
                             shortcutActive={local.composeShortcut !== undefined}
                             shortcutAlwaysVisible={local.composeShortcut !== undefined}
@@ -5284,7 +4238,7 @@ export function Sidebar(props: SidebarProps) {
                             data-happy-desktop-ui="sidebar-actions"
                             data-reordering={dragOf(ACTIONS_LIST) ? "" : undefined}
                         >
-                            {actionsTree && local.treeConnectors !== false ? (
+                            {actionsTree ? (
                                 <SidebarTreeConnectors
                                     carriedItemIds={[]}
                                     drag={
@@ -5307,9 +4261,6 @@ export function Sidebar(props: SidebarProps) {
                                     <SidebarRow
                                         active={local.activeItemId === action.id}
                                         foldControlPlacement={local.foldControlPlacement}
-                                        itemMarkPresentation={local.itemMarkPresentation}
-                                        markState={markStateOf(action.id)}
-                                        treeConnectors={local.treeConnectors}
                                         // A nested row is drawn as a section's is.
                                         className={
                                             (action.depth ?? 0) > 0
@@ -5377,7 +4328,7 @@ export function Sidebar(props: SidebarProps) {
                             {local.bodyAccessory}
                         </div>
                     ) : null}
-                    {sections.map((section, sectionIndex) => {
+                    {sections.map((section) => {
                         // The rows as they stand on screen. Everything below —
                         // the tree connectors, a drag's units, a keyboard move —
                         // is stated against these rather than against the rows
@@ -5396,28 +4347,6 @@ export function Sidebar(props: SidebarProps) {
                               )
                             : 0;
                         const shownItems = shown.map((row) => row.item);
-                        // Each row's change, its children's taken from it.
-                        const changes = changesInherited(section.items);
-                        // Pins hold in the first list, the one the column
-                        // opens on: down to the separator pinned to the top,
-                        // and from the one pinned to the bottom to the end.
-                        const pinIndex = (edge: SidebarSeparatorPinEdge) =>
-                            sectionIndex === 0
-                                ? shownItems.findIndex(
-                                      (item) =>
-                                          item.kind === "separator" &&
-                                          item.pin === edge &&
-                                          (item.depth ?? 0) === 0,
-                                  )
-                                : -1;
-                        const pinTopAt = pinIndex("top");
-                        const pinBottomAt = pinIndex("bottom");
-                        const pinAreaOf = (index: number): SidebarSeparatorPinEdge | undefined =>
-                            index <= pinTopAt
-                                ? "top"
-                                : pinBottomAt > pinTopAt && index >= pinBottomAt
-                                  ? "bottom"
-                                  : undefined;
                         const sectionDrag = sectionDragOf(section.id, shownItems);
                         // The lift belongs to the live gesture while there is one
                         // — from the moment a row is touched, so the shadow has a
@@ -5454,40 +4383,7 @@ export function Sidebar(props: SidebarProps) {
                                         : undefined
                                 }
                                 data-section-id={section.id}
-                                data-attention={section.attention ? "" : undefined}
                             >
-                                {section.attention?.tag ? (
-                                    <span
-                                        className="happy-sidebar__attention-tag"
-                                        data-happy-desktop-ui="sidebar-attention-tag"
-                                    >
-                                        {section.attention.tag}
-                                    </span>
-                                ) : null}
-                                {section.spaceHeading ? (
-                                    <div
-                                        className="happy-sidebar__space-head"
-                                        data-happy-desktop-ui="sidebar-space-head"
-                                    >
-                                        {local.itemMarkPresentation === "none" ? null : section
-                                              .spaceHeading.imageMark ? (
-                                            <img
-                                                alt={section.spaceHeading.imageMark.alt ?? ""}
-                                                className="happy-sidebar__image-mark"
-                                                src={section.spaceHeading.imageMark.src}
-                                                srcSet={section.spaceHeading.imageMark.srcSet}
-                                            />
-                                        ) : section.spaceHeading.icon ? (
-                                            <Icon name={section.spaceHeading.icon} size={20} />
-                                        ) : null}
-                                        <span
-                                            className="happy-sidebar__title"
-                                            data-happy-desktop-ui="sidebar-space-title"
-                                        >
-                                            {section.spaceHeading.label}
-                                        </span>
-                                    </div>
-                                ) : null}
                                 {section.label && local.foldControlPlacement === "trailing" ? (
                                     /* The heading in the rows' lanes: its name and what
                                        is waiting inside, then its controls with the fold
@@ -5750,38 +4646,20 @@ export function Sidebar(props: SidebarProps) {
                                                 }}
                                             />
                                         ) : null}
-                                        {local.treeConnectors !== false ? (
-                                            <SidebarTreeConnectors
-                                                carriedItemIds={carriedItemIds}
-                                                drag={
-                                                    sectionDrag?.moved === true
-                                                        ? sectionDrag
-                                                        : undefined
-                                                }
-                                                items={shownItems}
-                                                listId={section.id}
-                                                pinAreaOf={(id) =>
-                                                    pinAreaOf(
-                                                        shownItems.findIndex(
-                                                            (item) => item.id === id,
-                                                        ),
-                                                    )
-                                                }
-                                                onElement={(key, node) => {
-                                                    if (node) connectorNodes.set(key, node);
-                                                    else connectorNodes.delete(key);
-                                                }}
-                                            />
-                                        ) : null}
-                                        {pinTopAt >= 0 ? (
-                                            // Under the block pinned to the top, over the rows
-                                            // scrolling past: they never show through it.
-                                            <span
-                                                aria-hidden="true"
-                                                className="happy-sidebar__pin-cover"
-                                                data-edge="top"
-                                            />
-                                        ) : null}
+                                        <SidebarTreeConnectors
+                                            carriedItemIds={carriedItemIds}
+                                            drag={
+                                                sectionDrag?.moved === true
+                                                    ? sectionDrag
+                                                    : undefined
+                                            }
+                                            items={shownItems}
+                                            listId={section.id}
+                                            onElement={(key, node) => {
+                                                if (node) connectorNodes.set(key, node);
+                                                else connectorNodes.delete(key);
+                                            }}
+                                        />
                                         {shown.map(({ foldable, item }, index) => {
                                             const reorderable =
                                                 local.onItemReorder !== undefined &&
@@ -5808,9 +4686,6 @@ export function Sidebar(props: SidebarProps) {
                                                 listId: section.id,
                                             });
                                             const held = dragging && unitIndex === drag.from;
-                                            const change = changes.get(item.id);
-                                            const shownItem =
-                                                change !== item.change ? { ...item, change } : item;
                                             return (
                                                 <SidebarListRow
                                                     handlers={rowHandlers}
@@ -5843,29 +4718,11 @@ export function Sidebar(props: SidebarProps) {
                                                         local.onItemSecondaryAction !== undefined &&
                                                         item.secondaryAction !== undefined
                                                     }
-                                                    canChangeAccept={
-                                                        local.onItemChangeAccept !== undefined &&
-                                                        item.change !== undefined
-                                                    }
-                                                    canChangeReject={
-                                                        local.onItemChangeReject !== undefined &&
-                                                        item.change !== undefined
-                                                    }
-                                                    canStoryOpen={
-                                                        local.onItemStoryOpen !== undefined &&
-                                                        (item.story?.ring?.total ?? 0) > 0
-                                                    }
-                                                    pinArea={pinAreaOf(index)}
                                                     active={item.id === local.activeItemId}
                                                     activityPlacement={local.activityPlacement}
                                                     foldControlPlacement={
                                                         local.foldControlPlacement
                                                     }
-                                                    itemMarkPresentation={
-                                                        local.itemMarkPresentation
-                                                    }
-                                                    markState={markStateOf(item.id)}
-                                                    treeConnectors={local.treeConnectors}
                                                     dragging={
                                                         held ||
                                                         (dropped?.listId === section.id &&
@@ -5875,7 +4732,7 @@ export function Sidebar(props: SidebarProps) {
                                                     }
                                                     grabbed={held}
                                                     key={item.id}
-                                                    item={shownItem}
+                                                    item={item}
                                                     reorderable={reorderable}
                                                     shortcutActive={
                                                         item.shortcut !== undefined ||
@@ -5893,13 +4750,6 @@ export function Sidebar(props: SidebarProps) {
                                                 />
                                             );
                                         })}
-                                        {pinBottomAt > pinTopAt ? (
-                                            <span
-                                                aria-hidden="true"
-                                                className="happy-sidebar__pin-cover"
-                                                data-edge="bottom"
-                                            />
-                                        ) : null}
                                     </div>
                                 ) : null}
                                 {!section.headingOnly &&
@@ -5948,31 +4798,6 @@ export function Sidebar(props: SidebarProps) {
                             </section>
                         );
                     })}
-                    {divisionPlay ? (
-                        <HappyCellDivision
-                            daughters={divisionPlay.daughters}
-                            from={divisionPlay.from}
-                            onArrive={(stemCellId) => {
-                                const index = divisionPlay.daughters.findIndex(
-                                    (daughter) => daughter.stemCellId === stemCellId,
-                                );
-                                const row = divisionPlay.rows[index];
-                                if (row !== undefined)
-                                    divisionLandedSet((landed) => new Set([...landed, row]));
-                            }}
-                            onDone={() => {
-                                divisionPlaySet(undefined);
-                                divisionLandedSet(new Set());
-                            }}
-                            onSeed={(seed) => {
-                                happyRestSet({ hidden: false, happySeed: seed });
-                                local.division?.onSeed?.(seed);
-                            }}
-                            {...(happyRest?.happySeed !== undefined
-                                ? { seed: happyRest.happySeed }
-                                : {})}
-                        />
-                    ) : null}
                 </div>
             </ScrollArea>
             {/* A row moved by keyboard travels without the reader's caret leaving
@@ -6021,7 +4846,6 @@ export function Sidebar(props: SidebarProps) {
                                         active={local.activeItemId === item.id}
                                         onContextMenu={openItemMenu}
                                         onSelect={local.onItemSelect}
-                                        itemMarkPresentation={local.itemMarkPresentation}
                                     />
                                 ))}
                             </div>
@@ -6029,19 +4853,11 @@ export function Sidebar(props: SidebarProps) {
                     ) : null}
                 </section>
             ) : null}
-            {local.bodyFloat ? (
-                /* No height of its own: what it holds floats up over the foot of
-                   the rows, so it moves nothing above or below it. */
-                <div className="happy-sidebar__float" data-happy-desktop-ui="sidebar-float">
-                    {local.bodyFloat}
-                </div>
-            ) : null}
             {local.footer ? (
                 <footer className="happy-sidebar__footer" data-happy-desktop-ui="sidebar-footer">
                     {local.footer}
                 </footer>
             ) : null}
-            {divisionArriving.length > 0 ? <span hidden ref={divisionStart} /> : null}
             {itemMenu ? (
                 <div
                     className="happy-sidebar__item-menu"

@@ -6,19 +6,9 @@ import type { ElectronApplication, Locator, Page } from "playwright";
 
 import { gymGoldReplayMaterialRead, type GymGoldReplayMaterial } from "./goldReplay.js";
 import { hiddenWindowRun } from "./hiddenWindow.js";
-import { sidebarDragChaosRun } from "./sidebarDragChaos.js";
-import { nestedRowMenusRun } from "./nestedRowMenus.js";
-import { sectionCreateRun } from "./sectionCreate.js";
 import { mobileDirectExperimentRun } from "./mobileDirectExperiment.js";
 import { jumpShimmerRun } from "./jumpShimmer.js";
-import { newWorkReuseRun } from "./newWorkReuse.js";
-import { rowRemovalRun } from "./rowRemoval.js";
-import { sidebarReadAheadRun } from "./sidebarReadAhead.js";
-import {
-    stopShimmerRun,
-    stopShimmerSpacesSubtaskStart,
-    stopShimmerSpacesWorkStart,
-} from "./stopShimmer.js";
+import { stopShimmerRun } from "./stopShimmer.js";
 import { windowZoomRun } from "./windowZoom.js";
 import { GYM_STOP_SHIMMER_PROMPT, gymLiveToolMutationLineCount } from "./inferenceServer.js";
 import { gymElectronInvisibleAssert, gymElectronLaunch } from "./launch.js";
@@ -623,35 +613,11 @@ export async function completeOnboarding(page: Page): Promise<void> {
         .catch(() => undefined);
     let welcomeClicked = await clickButtonIfVisible(page, "Go Happy");
     let sawOnboarding = false;
-    let sawFirstRun = false;
     const clickIfVisible = async (label: string | RegExp): Promise<boolean> => {
         return clickButtonIfVisible(page, label);
     };
 
     while (Date.now() < deadline) {
-        // A first launch opens on Happy's first conversation. Workloads that are
-        // not about it record it as had, and the native setup below continues.
-        if (
-            !sawFirstRun &&
-            (await page.evaluate(() => {
-                const held = localStorage.getItem("happy.welcome.v1");
-                return (
-                    !held ||
-                    !(JSON.parse(held) as { welcomeAcknowledged?: boolean }).welcomeAcknowledged
-                );
-            }))
-        ) {
-            sawFirstRun = true;
-            await page.evaluate(() =>
-                localStorage.setItem(
-                    "happy.welcome.v1",
-                    JSON.stringify({ welcomeAcknowledged: true }),
-                ),
-            );
-            await page.reload();
-            welcomeClicked = true;
-            continue;
-        }
         if (!welcomeClicked) {
             const welcomeAction = page
                 .locator('[data-happy-desktop-ui="welcome-screen"] .happy-welcome-screen__action')
@@ -905,53 +871,9 @@ async function workloadRun(
             ...(await performanceCapture(page, app, options.profilerActive())),
         });
     }
-    if (workload === "new-work-reuse") {
-        await options.runtime.client.stemCellsEnable();
-        await page.reload();
-        await page
-            .locator('[data-happy-desktop-ui="sidebar-item"][data-item-id="create"]')
-            .first()
-            .waitFor({ timeout: 45_000 });
-        await mark("sidebar-ready");
-        return finish({
-            ...(await newWorkReuseRun(page, options.runtime.client, options.paths.artifacts)),
-        });
-    }
-    if (workload === "row-removal") {
-        await options.runtime.client.stemCellsEnable();
-        await page.reload();
-        await page
-            .locator('[data-happy-desktop-ui="sidebar-item"][data-item-id="create"]')
-            .first()
-            .waitFor({ timeout: 45_000 });
-        await mark("sidebar-ready");
-        return finish({
-            ...(await rowRemovalRun(page, options.runtime.client, options.paths.artifacts)),
-        });
-    }
-    if (workload === "sidebar-read-ahead") {
-        await options.runtime.client.stemCellsEnable();
-        return finish({
-            ...(await sidebarReadAheadRun(
-                page,
-                options.runtime.client,
-                options.paths.artifacts,
-                async () => {
-                    await page.reload();
-                    await page
-                        .locator('[data-happy-desktop-ui="sidebar-item"][data-item-id="create"]')
-                        .first()
-                        .waitFor({ timeout: 45_000 });
-                    await mark("sidebar-ready");
-                },
-            )),
-        });
-    }
     if (workload === "jump-shimmer") {
         if (location === undefined)
             return finish({ reason: "No seeded session location.", status: "skipped" });
-        // The classic sidebar, whatever an earlier run left the setting at.
-        await options.runtime.client.stemCellsSet(false);
         await page.reload();
         // Back out of Settings if an earlier run left the window there.
         const back = page.locator('[data-happy-desktop-ui="sidebar"] button[aria-label="Back"]');
@@ -973,8 +895,6 @@ async function workloadRun(
     if (workload === "stop-shimmer") {
         if (location === undefined)
             return finish({ reason: "No seeded session location.", status: "skipped" });
-        // The classic sidebar first, whatever an earlier run left the setting at.
-        await options.runtime.client.stemCellsSet(false);
         await page.reload();
         await navigateRoute(page, location.route);
         await waitForSessionUiReady(page, location.route, location.sessionId);
@@ -994,31 +914,6 @@ async function workloadRun(
             }),
         ];
         await mark("classic-stopped");
-        await options.runtime.client.stemCellsEnable();
-        await page.reload();
-        await page
-            .locator('[data-happy-desktop-ui="sidebar-item"][data-item-id="create"]')
-            .first()
-            .waitFor({ timeout: 45_000 });
-        await mark("spaces-ready");
-        results.push(
-            await stopShimmerRun(page, options.runtime.client, {
-                artifacts: options.paths.artifacts,
-                sidebar: "spaces",
-                start: () => stopShimmerSpacesWorkStart(page),
-                video: true,
-            }),
-        );
-        await mark("spaces-stopped");
-        results.push(
-            await stopShimmerRun(page, options.runtime.client, {
-                artifacts: options.paths.artifacts,
-                sidebar: "spaces-subtask",
-                start: () => stopShimmerSpacesSubtaskStart(page, options.runtime.client),
-                video: true,
-            }),
-        );
-        await mark("spaces-subtask-stopped");
         const problems = results.flatMap((result) =>
             result.problems.map((problem) => `${result.sidebar}: ${problem}`),
         );
@@ -1039,57 +934,6 @@ async function workloadRun(
         return finish(await hiddenWindowRun(page, app, options.paths.artifacts, mark));
     if (workload === "mobile-direct-experiment")
         return finish({ ...(await mobileDirectExperimentRun(page, options.paths.artifacts)) });
-    if (workload === "section-create") {
-        await options.runtime.client.stemCellsEnable();
-        await page.reload();
-        await page
-            .locator('[data-happy-desktop-ui="sidebar-item"][data-item-id="create"]')
-            .first()
-            .waitFor({ timeout: 45_000 });
-        await mark("sidebar-ready");
-        return finish({
-            ...(await sectionCreateRun(page, options.runtime.client, options.paths.artifacts)),
-        });
-    }
-    if (workload === "nested-row-menus") {
-        await options.runtime.client.stemCellsEnable();
-        await page.reload();
-        await page
-            .locator('[data-happy-desktop-ui="sidebar-item"][data-item-id="create"]')
-            .first()
-            .waitFor({ timeout: 45_000 });
-        await mark("sidebar-ready");
-        const result = await nestedRowMenusRun(
-            page,
-            options.runtime.client,
-            options.paths.artifacts,
-        );
-        return finish({ ...result });
-    }
-    if (workload === "sidebar-drag") {
-        await options.runtime.client.stemCellsEnable();
-        await page.evaluate(() =>
-            localStorage.setItem("happy.experiments.v1", JSON.stringify({ batchNotes: false })),
-        );
-        await page.reload();
-        await page
-            .locator('[data-happy-desktop-ui="sidebar-item"][data-item-id="create"]')
-            .first()
-            .waitFor({ timeout: 45_000 });
-        await mark("sidebar-ready");
-        const result = await sidebarDragChaosRun(page, {
-            drags: depth === "full" ? 10 : 3,
-            echo: () => options.runtime.client.spaceSidebarEcho(),
-            seed: 7,
-        });
-        await writeFile(
-            join(options.paths.artifacts, "sidebar-drag.json"),
-            JSON.stringify(result, null, 2),
-        );
-        if (result.problems.length > 0)
-            throw new Error(`Something jumped in the sidebar:\n${result.problems.join("\n")}`);
-        return finish({ drags: result.drags.length });
-    }
     await options.profilerStart();
     await mark("profiler-started");
     if (workload === "long-transcript") {

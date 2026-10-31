@@ -258,41 +258,16 @@ pnpm --dir packages/happy-desktop-gym gym:electron run \
 
 `stop-shimmer` starts a slow turn, presses the composer's Stop, and requires
 every sidebar row the turn made `working` to settle within a second. It runs
-on a project conversation in the classic sidebar, then turns on Stem Cells and
-runs on new work made from the Spaces sidebar's Create row, and on a subtask
-that work hands its turn to, opened from its row under the work's row. The
-inference server streams any turn opened by `GYM_STOP_SHIMMER_PROMPT` for
-about a minute. Each run writes `stop-shimmer-<sidebar>.json` with the rows
-sampled every 50ms after Stop, before/after screenshots, and a video. Prepare
-a fresh root for it: a daemon restart resumes a turn that was stopped
-mid-stream.
+on a project conversation. The inference server streams any turn opened by
+`GYM_STOP_SHIMMER_PROMPT` for about a minute. The run writes
+`stop-shimmer-classic.json` with the rows sampled every 50ms after Stop,
+before/after screenshots, and a video. Prepare a fresh root for it: a daemon
+restart resumes a turn that was stopped mid-stream.
 
 `jump-shimmer` starts the same slow turn in the seeded long chat, scrolls the
 transcript up, and requires the jump-to-latest button to shimmer while the
 agent works and to show the plain arrow, on the same pixels, after Stop. It
 writes `jump-shimmer.json`, working/idle screenshots, and a video.
-
-`new-work-reuse` turns on Stem Cells and requires there to be at most one
-empty new work: Create twice stays in the same one; leaving it removes
-nothing; Create from another row goes back to it. A draft keeps new work and
-makes Create make another, which Create then goes back to. A section heading's
-`+` makes new work under that heading whatever stands empty elsewhere, and goes
-to it when pressed again. Two quick Creates make one new work, and a reload
-keeps all of it. It writes `new-work-reuse.json`, screenshots, and a video.
-
-`row-removal` turns on Stem Cells, makes work that hands its turn to a
-subtask and a second piece of work, then archives the subtask and the second
-work from their rows' menus. Each row must be gone within 100ms of the press,
-and a mutation observer must not see it drawn again until four seconds after
-the daemon has archived it, while its sidebar catches up. It writes
-`row-removal.json`, a screenshot, and a video.
-
-`sidebar-read-ahead` turns on Stem Cells, makes 40 tasks, more than the
-sidebar shows, and reloads with the pointer off the sidebar. Once the window
-settles, every task on screen among the first 12 conversations must have been
-read and none more than 12 rows below the screen; scrolled to the bottom, the
-tasks that come on screen must be read next, top to bottom. It writes
-`sidebar-read-ahead.json`, a screenshot, and a video.
 
 `window-zoom` sweeps the window's zoom over 80, 90, 100, 110, 125 and 150%,
 each reached as the View menu does it and again after a reload (which keeps the

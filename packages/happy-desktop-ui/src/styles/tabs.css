@@ -401,12 +401,6 @@
 
 /* The close affordance intentionally overlays the trailing title ink. It
    fades in with its own surface-tone mask, without changing the tab's width. */
-.happy-tabs__tab-icon:has(> .happy-stem-cell),
-.happy-tabs__tab-icon:has(> .happy-stem-cell-growth) {
-    width: 20px;
-    height: 20px;
-}
-
 .happy-tabs__image-mark {
     display: block;
     width: 20px;

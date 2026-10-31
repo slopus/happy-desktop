@@ -17,8 +17,6 @@ import {
     type CommandPaletteRowEmphasis,
     type CommandShortcut,
     type IconName,
-    type ImageMark,
-    type StemCellMark,
 } from "happy-desktop-ui";
 import { APP_SHORTCUTS } from "./appShortcuts";
 
@@ -56,14 +54,6 @@ export type CommandPaletteGlyph =
           readonly initials: string;
           readonly imageUrl?: string;
           readonly icon?: IconName;
-      }
-    /** The artwork a spaces row wears: a clay icon, or new work's stem cell. */
-    | {
-          readonly kind: "mark";
-          readonly imageMark?: ImageMark;
-          readonly stemCell?: StemCellMark;
-          /** Happy's own mark, as its sidebar row wears it. */
-          readonly happyMark?: true;
       }
     | { readonly kind: "emphasis"; readonly emphasis: CommandPaletteRowEmphasis };
 
@@ -209,20 +199,6 @@ export interface CommandPaletteResults {
     readonly numbered: readonly number[];
 }
 
-/** One row of the spaces sidebar: its name, its mark, and where it opens. */
-export interface CommandPaletteSpace {
-    readonly id: string;
-    readonly title: string;
-    readonly glyph: CommandPaletteGlyph;
-    readonly target:
-        | { readonly kind: "task" | "bot"; readonly id: string }
-        | { readonly kind: "agent" }
-        | { readonly kind: "surface" };
-    readonly destination:
-        | { readonly kind: "chat"; readonly groupId: string; readonly chatId: string }
-        | { readonly kind: "surface"; readonly surfaceId: string };
-}
-
 /** One tab of the open workspace, as the surface that owns the strip states it. */
 export type CommandPaletteTab =
     | { readonly kind: "session"; readonly id: string; readonly title: string }
@@ -257,18 +233,14 @@ export interface CommandPaletteContext {
      */
     readonly taskDirectory?: readonly HappyAgentTask[];
     /**
-     * What the sidebar on screen lists at its top level. The classic sidebar
-     * lists the joined tasks, the bots the reader has not hidden, and the
-     * projects with their worktrees unless Projects is switched off. The spaces
-     * sidebar lists its spaces instead, each under its own name and mark.
+     * What the sidebar on screen lists at its top level: the joined tasks, the
+     * bots the reader has not hidden, and the projects with their worktrees
+     * unless Projects is switched off.
      */
-    readonly sidebarMode:
-        | {
-              readonly kind: "classic";
-              readonly botsHidden: ReadonlySet<string>;
-              readonly projectsHidden: boolean;
-          }
-        | { readonly kind: "spaces"; readonly spaces: readonly CommandPaletteSpace[] };
+    readonly sidebarListing: {
+        readonly botsHidden: ReadonlySet<string>;
+        readonly projectsHidden: boolean;
+    };
     /**
      * The sessions this window has opened, most recently first, as the
      * workspace remembers them across launches. It is the one record of the
@@ -398,7 +370,7 @@ const SETTINGS_JUMPS: readonly {
         section: "experimental",
         sectionLabel: "Experimental",
         icon: "zap",
-        keywords: "spaces sidebar stem cells batch notes inbox",
+        keywords: "inbox direct phone connection experimental features",
     },
     {
         id: "settings:file-tiers",
@@ -653,7 +625,7 @@ function subtasksOf(subtasks: readonly HappyAgentBotSubtask[]): HappyAgentBotSub
 
 /**
  * One piece of top-level work the palette can open — a task, a bot, a project
- * or one of its worktrees, a project's chat, a closed session, a space — with
+ * or one of its worktrees, a project's chat, a closed session — with
  * what orders it against the rest.
  *
  * Subtasks are never work of their own here. They are opened from the work
@@ -686,21 +658,14 @@ const NONE: ReadonlySet<string> = new Set();
  * Everything the reader could open on this machine, each once, as the sidebar
  * on screen would place it.
  *
- * In the classic sidebar the top level is the joined tasks, the bots not
- * hidden, and the projects with their worktrees unless Projects is switched
- * off. In the spaces sidebar it is the spaces, and a task or bot a space holds
- * goes by that space's name and mark. Everything else — tasks not joined or
+ * The sidebar's top level is the joined tasks, the bots not hidden, and the
+ * projects with their worktrees unless Projects is switched off. Everything else — tasks not joined or
  * archived, hidden bots, a project's chats, sessions the host has closed — is
  * still found, below.
  */
 function workOffers(context: CommandPaletteContext): WorkOffer[] {
     const happyAgentId = context.happyAgentId;
-    const mode = context.sidebarMode;
-    const spaces = mode.kind === "spaces" ? mode.spaces : [];
-    const spaceOf = (kind: "task" | "bot", id: string) =>
-        spaces.find(
-            (space) => space.target.kind === kind && "id" in space.target && space.target.id === id,
-        );
+    const listing = context.sidebarListing;
     const offers: WorkOffer[] = [];
     const offered = new Set<string>();
     const push = (offer: WorkOffer) => {
@@ -726,9 +691,7 @@ function workOffers(context: CommandPaletteContext): WorkOffer[] {
     for (const task of tasks) {
         const subtasks = subtasksOf(task.subtasks);
         for (const subtask of subtasks) subtaskWorkspaces.add(subtask.workspaceId);
-        const space = spaceOf("task", task.id);
-        const listed =
-            mode.kind === "spaces" ? space !== undefined : joined.has(task.id) && !task.archived;
+        const listed = joined.has(task.id) && !task.archived;
         push({
             tier: task.archived ? 2 : listed ? 0 : 1,
             sessions: new Set([
@@ -741,7 +704,7 @@ function workOffers(context: CommandPaletteContext): WorkOffer[] {
             row: {
                 kind: "command",
                 id: `task:${task.id}`,
-                title: space?.title ?? task.name,
+                title: task.name,
                 meta: task.archived
                     ? "Archived task"
                     : !joined.has(task.id)
@@ -749,7 +712,7 @@ function workOffers(context: CommandPaletteContext): WorkOffer[] {
                       : task.owner?.name
                         ? `Task · ${task.owner.name}`
                         : "Task",
-                glyph: space?.glyph ?? taskGlyph(task),
+                glyph: taskGlyph(task),
                 command: chatOpen(task.workspaceId, task.conversation.id),
             },
         });
@@ -757,8 +720,7 @@ function workOffers(context: CommandPaletteContext): WorkOffer[] {
     for (const bot of context.bots) {
         const subtasks = subtasksOf(bot.subtasks);
         for (const subtask of subtasks) subtaskWorkspaces.add(subtask.workspaceId);
-        const space = spaceOf("bot", bot.id);
-        const listed = mode.kind === "spaces" ? space !== undefined : !mode.botsHidden.has(bot.id);
+        const listed = !listing.botsHidden.has(bot.id);
         push({
             tier: listed ? 0 : 1,
             sessions: new Set([bot.conversation.id, ...subtasks.map((sub) => sub.conversation.id)]),
@@ -768,39 +730,14 @@ function workOffers(context: CommandPaletteContext): WorkOffer[] {
             row: {
                 kind: "command",
                 id: `bot:${bot.id}`,
-                title: space?.title ?? bot.name,
+                title: bot.name,
                 meta: listed ? "Bot" : "Hidden bot",
-                glyph: space?.glyph ?? botGlyph(bot),
+                glyph: botGlyph(bot),
                 command: chatOpen(bot.workspaceId, bot.conversation.id),
             },
         });
     }
-    // Spaces that hold neither a task nor a bot: a session of its own, or a Surface.
-    for (const space of spaces) {
-        if (space.target.kind === "task" || space.target.kind === "bot") continue;
-        const destination = space.destination;
-        push({
-            tier: 0,
-            sessions: destination.kind === "chat" ? new Set([destination.chatId]) : NONE,
-            groups: NONE,
-            keywords: [],
-            updatedAt: 0,
-            row: {
-                kind: "command",
-                id:
-                    destination.kind === "chat"
-                        ? `chat:${destination.chatId}`
-                        : `space:${space.id}`,
-                title: space.title,
-                glyph: space.glyph,
-                command:
-                    destination.kind === "chat"
-                        ? chatOpen(destination.groupId, destination.chatId)
-                        : { kind: "surfaceOpen", happyAgentId, surfaceId: destination.surfaceId },
-            },
-        });
-    }
-    const projectsListed = mode.kind === "classic" && !mode.projectsHidden;
+    const projectsListed = !listing.projectsHidden;
     for (const project of context.projects) {
         push({
             tier: projectsListed ? 0 : 1,
@@ -836,8 +773,7 @@ function workOffers(context: CommandPaletteContext): WorkOffer[] {
             });
         }
     }
-    // A project's chats are its tabs, not sidebar rows. One a space holds was
-    // offered above, under the space's name.
+    // A project's chats are its tabs, not sidebar rows.
     for (const project of context.projects) {
         const groups = [
             { worktree: undefined, conversations: project.conversations },

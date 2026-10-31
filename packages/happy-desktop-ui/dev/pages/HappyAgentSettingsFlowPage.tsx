@@ -17,8 +17,6 @@ import {
     HappyAgentSecretSettings,
     HappyAgentSettingsShell,
     HappyAgentStateSettings,
-    HappyAgentStemCellsSettings,
-    HappyAgentStoriesSettings,
     HappyAgentSurfaceSettings,
     HappyAgentTaskSettings,
     HappyAgentUsageSettings,
@@ -339,30 +337,11 @@ export function HappyAgentSettingsFlowPage() {
             <Screen id="experimental" number="13" screen="13-experimental">
                 <HappyAgentExperimentalSettings
                     features={[
-                        { id: "batchNotes", label: "Sidebar batch notes", enabled: false },
                         { id: "inbox", label: "Inbox", enabled: true },
-                        {
-                            id: "stemCellAnimation",
-                            label: "Animate new work’s icon",
-                            enabled: true,
-                        },
+                        { id: "voice", label: "Voice calls", enabled: false },
                     ]}
                     onFeatureChange={noop}
                 />
-                <HappyAgentConnectionSettingsSection connectionLabel="This Mac">
-                    <HappyAgentStemCellsSettings
-                        connectionLabel="This Mac"
-                        enabled
-                        onEnabledChange={noop}
-                        status="ready"
-                    />
-                    <HappyAgentStoriesSettings
-                        connectionLabel="This Mac"
-                        enabled={false}
-                        onEnabledChange={noop}
-                        status="ready"
-                    />
-                </HappyAgentConnectionSettingsSection>
             </Screen>
             <Screen id="debug" number="14" screen="14-dev-tools">
                 <HappyAgentStateSettings

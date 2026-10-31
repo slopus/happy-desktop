@@ -77,78 +77,6 @@ export class GymHappyAgentClient {
         return await this.#client.getHealth();
     }
 
-    /** Turns on Stem Cells for the person, which the Spaces sidebar's Create row needs. */
-    async stemCellsEnable(): Promise<void> {
-        await this.stemCellsSet(true);
-    }
-
-    /** Turns Stem Cells on or off for the person, which picks the Spaces or classic sidebar. */
-    async stemCellsSet(value: boolean): Promise<void> {
-        await this.#client.saveUserSetting("happy-desktop.experiments.stemCells", {
-            mutationId: randomUUID(),
-            updatedAt: Date.now(),
-            value,
-        });
-    }
-
-    /** Writes the Spaces sidebar back unchanged, as another author would echo it. */
-    async spaceSidebarEcho(): Promise<void> {
-        const sidebar = await this.#client.getSpaceSidebar();
-        await this.#client.updateSpaceSidebar({
-            baseVersion: sidebar.version,
-            html: sidebar.html,
-            mutationId: randomUUID(),
-        });
-    }
-
-    /** The Spaces sidebar document as the daemon holds it, and the person's spaces. */
-    async spaceSidebar(): Promise<{
-        readonly html: string;
-        readonly spaces: readonly {
-            readonly id: string;
-            readonly title: string | null;
-            readonly icon?: { readonly type: string } | null;
-            readonly target: {
-                readonly kind: string;
-                readonly id: string;
-                readonly agentId?: string | null;
-            };
-        }[];
-    }> {
-        return await this.#client.getSpaceSidebar();
-    }
-
-    /** Attaches one space under another row, as the person carrying it there would. */
-    async spaceAttach(spaceId: string, parentId: string): Promise<void> {
-        const sidebar = await this.#client.getSpaceSidebar();
-        await this.#client.applySpaceSidebarOperations({
-            baseVersion: sidebar.version,
-            mutationId: randomUUID(),
-            operations: [{ type: "move", id: spaceId, to: { parent: parentId } }],
-        });
-    }
-
-    /** A task's current name. */
-    async taskName(taskId: string): Promise<string> {
-        return (await this.#client.getTask(cuid(taskId))).task.name;
-    }
-
-    /** Makes a task the person owns and joins, with its own agent. */
-    async taskCreate(name: string): Promise<{ readonly taskId: string; readonly agentId: string }> {
-        const { task } = await this.#client.createTask({ mutationId: randomUUID(), name });
-        return { taskId: task.id, agentId: task.agent.id };
-    }
-
-    /** Whether the task is archived. */
-    async taskArchived(taskId: string): Promise<boolean> {
-        return (await this.#client.getTask(cuid(taskId))).task.archivedAt !== null;
-    }
-
-    /** Whether the agent is archived. */
-    async agentArchived(agentId: string): Promise<boolean> {
-        return (await this.#client.getAgent(cuid(agentId))).agent.archivedAt !== null;
-    }
-
     async projects(): Promise<{ readonly projects: readonly HappyAgentProject[] }> {
         const response = await this.#client.listProjects();
         return { projects: response.projects.map(projectProject) };
@@ -242,12 +170,6 @@ export class GymHappyAgentClient {
     async getAgent(agentId: string): Promise<{ readonly agent: HappyAgent }> {
         const response = await this.#client.getAgent(cuid(agentId));
         return { agent: await this.#agentProject(response.agent) };
-    }
-
-    /** The agent's direct, non-archived subtasks. */
-    async subtaskIds(agentId: string): Promise<readonly string[]> {
-        const response = await this.#client.getAgent(cuid(agentId));
-        return (response.agent.subtasks ?? []).map((subtask) => subtask.id);
     }
 
     async agentMessageCount(agentId: string): Promise<number> {

@@ -406,8 +406,6 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
     };
     const mutationQueues = new Map<string, Promise<void>>();
     const sessionCreations = new Map<string, Promise<void>>();
-    /** Tasks behind new work this connection listed before the daemon made them. */
-    const stemCellTasks = new Set<string>();
     const sessionMutationCounts = new Map<string, number>();
     const gitStates = new Map<string, GitSnapshotState>();
     const processOwners = new Map<string, string>();
@@ -1775,29 +1773,8 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                 bots: bootstrap.bots ?? [],
                 projects: owners.projects,
                 // The same for tasks: absent together on a daemon that predates them.
-                // New work still being made is not listed yet, and stays.
-                taskMemberships: [
-                    ...(bootstrap.taskMemberships ?? []),
-                    ...groupsStore
-                        .getState()
-                        .taskMemberships.filter(
-                            (membership) =>
-                                stemCellTasks.has(membership.taskId) &&
-                                !(bootstrap.taskMemberships ?? []).some(
-                                    (listed) => listed.taskId === membership.taskId,
-                                ),
-                        ),
-                ],
-                tasks: [
-                    ...(bootstrap.tasks ?? []),
-                    ...groupsStore
-                        .getState()
-                        .tasks.filter(
-                            (task) =>
-                                stemCellTasks.has(task.id) &&
-                                !(bootstrap.tasks ?? []).some((listed) => listed.id === task.id),
-                        ),
-                ],
+                taskMemberships: bootstrap.taskMemberships ?? [],
+                tasks: bootstrap.tasks ?? [],
                 workspaces: owners.workspaces,
             });
             taskOwnersEnsure(bootstrap.tasks ?? []);
@@ -2103,7 +2080,6 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         const latest = taskOf(task.id);
         const adoptTask =
             latest === undefined ||
-            latest.version === latest.id ||
             latest.version.localeCompare(task.version) <= 0 ||
             (latest.canArchive === undefined && task.canArchive !== undefined);
         groupsStore.setState((state) => ({
@@ -2900,9 +2876,9 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         ) {
             return;
         }
-        // A message no provider produced, such as Happy's scripted onboarding
-        // messages, has no provider segments: its snapshot is the whole message,
-        // even when the daemon rewrote it in place.
+        // A message no provider produced, such as Happy Agent's own, has no
+        // provider segments: its snapshot is the whole message, even when the
+        // daemon rewrote it in place.
         if (
             entry === undefined ||
             current?.message.role !== "agent" ||
@@ -5407,94 +5383,6 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                 return response.task;
             })();
             return { agentId, task, taskId, workspaceId };
-        },
-        beginStemCellTask({ taskId, workspaceId, agentId }, created) {
-            // Written the way a conversation named here is: version equal to
-            // its id, so anything the daemon says replaces it, and its agent
-            // unannounced, so opening it reads no history that is not there.
-            const createdAt = now();
-            const agent: Agent = {
-                id: agentId,
-                workspaceId,
-                parentAgentId: null,
-                title: null,
-                titleStatus: "idle",
-                status: "idle",
-                subagents: { total: 0, running: 0 },
-                processes: { running: 0 },
-                pendingQuestionId: null,
-                unread: null,
-                orderKey: agentId,
-                lastCursor: cursor ?? "",
-                version: agentId,
-                createdAt,
-                updatedAt: createdAt,
-                archivedAt: null,
-            };
-            const task: Task = {
-                id: taskId,
-                workspaceId,
-                name: "",
-                agent,
-                archivedAt: null,
-                compute: { type: "host", path: "" },
-                createdAt,
-                creatorAgentId: null,
-                folderName: "",
-                ownerUserId: null,
-                status: "active",
-                updatedAt: createdAt,
-                version: taskId,
-            };
-            unannouncedAgents.add(agentId);
-            stemCellTasks.add(taskId);
-            // Joined at the top of the reader's list, where the daemon puts it:
-            // the empty key sorts before every key the daemon mints, until the
-            // daemon's own membership replaces it.
-            groupsStore.setState((state) => ({
-                tasks: replaceResource(state.tasks, task),
-                taskMemberships: taskMembershipsReplace(state.taskMemberships, {
-                    joinedAt: createdAt,
-                    orderKey: "",
-                    taskId,
-                    userId: currentUserId ?? null,
-                }),
-            }));
-            publishGroups([{ type: "session_added", sessionId: agentId }]);
-            // The first message waits for this, not for the work queue.
-            const settled = created.then(
-                (answer) => {
-                    stemCellTasks.delete(taskId);
-                    unannouncedAgents.delete(agentId);
-                    if (closed) return;
-                    adoptAgent(answer.agent);
-                    // Read whole: the task's folder, owner and membership are
-                    // the daemon's to say.
-                    taskRefetch(taskId);
-                    const entry = sessions.get(agentId);
-                    if (entry !== undefined) background(requestSessionLoad(entry));
-                },
-                (error: unknown) => {
-                    stemCellTasks.delete(taskId);
-                    unannouncedAgents.delete(agentId);
-                    if (!closed && taskOf(taskId)?.version === taskId) {
-                        groupsStore.setState((state) => ({
-                            tasks: state.tasks.filter((candidate) => candidate.id !== taskId),
-                            taskMemberships: state.taskMemberships.filter(
-                                (membership) => membership.taskId !== taskId,
-                            ),
-                        }));
-                        publishGroups([{ type: "session_removed", sessionId: agentId }]);
-                    }
-                    throw error;
-                },
-            );
-            sessionCreations.set(agentId, settled);
-            void settled
-                .catch(() => undefined)
-                .finally(() => {
-                    if (sessionCreations.get(agentId) === settled) sessionCreations.delete(agentId);
-                });
         },
         renameTask(taskId, name) {
             const mutationId = nextId();

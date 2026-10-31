@@ -83,12 +83,6 @@ export function happyAgentArtifactTypeLabel(type: HappyAgentArtifactType): strin
             return "Video";
         case "document":
             return "Document";
-        case "sidebar":
-            return "Sidebar";
-        case "sidebar_proposal":
-            return "Sidebar proposal";
-        case "story":
-            return "Story";
         case "unknown":
             return "Artifact";
     }

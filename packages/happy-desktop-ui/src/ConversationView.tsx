@@ -1,4 +1,3 @@
-import type { ChatActionChoice, ChatActionInvocation } from "happy-desktop-state";
 import { type CSSProperties, type ReactNode, useRef, useState, useSyncExternalStore } from "react";
 import type { FileLinkOpenHandler, FileOpenHandler } from "./fileReference";
 import {
@@ -24,7 +23,6 @@ import {
     type AgentWaitStatus,
     type AgentWorkingPhase,
 } from "./AgentWorkingStatus";
-import type { ChatActionFigures } from "./ChatActionBlock";
 import { ChannelHeader } from "./ChannelHeader";
 import {
     ConversationEntryView,
@@ -99,11 +97,6 @@ import {
     mediaVideoFramesSubscribe,
     mediaVideoFramesVersion,
 } from "./mediaVideoFrames";
-import {
-    chatActionFigureHeightsSubscribe,
-    chatActionFigureHeightsVersion,
-    chatActionFigureSignature,
-} from "./chatActionFigureHeights";
 
 /** The transcript's first row: what it shows, and how tall it is at a row width. */
 export type ConversationLeadingHeader = {
@@ -117,6 +110,7 @@ export type ConversationLeadingHeader = {
      */
     readonly lift: (width: number) => number;
 };
+
 export type ConversationViewProps = {
     /**
      * Titles this conversation's own 56px header. Omit it when the surface that
@@ -129,11 +123,6 @@ export type ConversationViewProps = {
     subtitle?: string;
     /** True while the agent is working; drives the live activity line. */
     running?: boolean;
-    /**
-     * The running turn is no model's work, such as messages Happy Agent writes
-     * itself: it still runs, but no working line reports it.
-     */
-    runningQuiet?: boolean;
     /** True while the addressed conversation is hydrating its transcript. */
     loading?: boolean;
     /** Elapsed run time in ms, supplied by the owner (no timers live in the UI). */
@@ -207,8 +196,8 @@ export type ConversationViewProps = {
     /** Custom introduction for a loaded conversation with no transcript entries. */
     emptyContent?: ReactNode;
     /**
-     * A fixed block that opens the transcript as its first row, such as new
-     * work's mark and the line under it. With one, an empty conversation is
+     * A fixed block that opens the transcript as its first row, such as a
+     * conversation's own header. With one, an empty conversation is
      * this row alone rather than `emptyContent`: it rests with its lift line
      * at `LEADING_HEADER_REST_TOP` down the viewport, and the first message
      * lands on that line without anything above it moving.
@@ -329,15 +318,6 @@ export type ConversationViewProps = {
      * draw them. Absent, every such call keeps its card.
      */
     inlinePages?: ConversationInlinePages;
-    /**
-     * What the reader chose in each inline action block an agent wrote, by
-     * `chatActionBlockKey`. A block with a choice shows it and is locked.
-     */
-    actionChoices?: ReadonlyMap<string, ChatActionChoice>;
-    /** Runs a press in an inline action block. Absent, every block is shown locked. */
-    onChatAction?: (invocation: ChatActionInvocation) => void;
-    /** What a reply's live figures show: the phone pairing, a provider CLI, a setting. */
-    chatActionFigures?: ChatActionFigures;
     onRequestAnswer?: (requestId: string, answers: HappyAgentUserInputAnswerMap) => void;
     /** Request-id-scoped local answer submission lifecycles. */
     requestSubmissions?: readonly ConversationRequestSubmission[];
@@ -666,12 +646,6 @@ export function ConversationView(props: ConversationViewProps) {
         mediaVideoFramesVersion,
         mediaVideoFramesVersion,
     );
-    /* A figure whose height is learned resizes its reply once it has drawn. */
-    const figuresAt = useSyncExternalStore(
-        chatActionFigureHeightsSubscribe,
-        chatActionFigureHeightsVersion,
-        chatActionFigureHeightsVersion,
-    );
     const conversationCacheKey =
         props.conversationId === undefined ? "anonymous" : `conversation:${props.conversationId}`;
     const [rowExpansion, setRowExpansion] = useState(() => new Map<string, boolean>());
@@ -897,11 +871,7 @@ export function ConversationView(props: ConversationViewProps) {
      * line that reports what this conversation is doing is the place that says
      * so, rather than leaving the transcript looking finished.
      */
-    const statusVisible =
-        (props.running === true && props.runningQuiet !== true) ||
-        awaitingInput ||
-        delegating ||
-        awaitingReply;
+    const statusVisible = props.running === true || awaitingInput || delegating || awaitingReply;
     const workingStatusStartsGroup =
         statusVisible &&
         !delegating &&
@@ -1168,16 +1138,10 @@ export function ConversationView(props: ConversationViewProps) {
                                 if (layouts === undefined) return fold;
                                 let frames = "";
                                 for (const layout of layouts.layouts.values())
-                                    if (layout.kind === "media")
-                                        frames += mediaVideoFramesSignature(
-                                            layout.members.map((member) => member.item),
-                                            framesAt,
-                                        );
-                                    else if (layout.kind === "actions")
-                                        frames += chatActionFigureSignature(
-                                            layout.block,
-                                            figuresAt,
-                                        );
+                                    frames += mediaVideoFramesSignature(
+                                        layout.members.map((member) => member.item),
+                                        framesAt,
+                                    );
                                 return `${fold}|${layouts.signature}|${frames}`;
                             }
                             const placed = [
@@ -1332,15 +1296,6 @@ export function ConversationView(props: ConversationViewProps) {
                                         mediaRuns.get(entryKey(entry)),
                                     )}
                                     {...placedOf(entry)}
-                                    {...(props.actionChoices
-                                        ? { actionChoices: props.actionChoices }
-                                        : {})}
-                                    {...(props.onChatAction
-                                        ? { onChatAction: props.onChatAction }
-                                        : {})}
-                                    {...(props.chatActionFigures
-                                        ? { chatActionFigures: props.chatActionFigures }
-                                        : {})}
                                     onDelegationSelect={props.onDelegationSelect}
                                     now={props.now}
                                     {...(props.onFileOpen ? { onFileOpen: props.onFileOpen } : {})}

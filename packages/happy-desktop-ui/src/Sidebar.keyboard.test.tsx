@@ -16,7 +16,7 @@ const items: SidebarItem[] = [
     { icon: "compose", id: "create", kind: "action", label: "Create" },
     { collapsed: false, icon: "doc", id: "happy", kind: "project", label: "Happy" },
     { depth: 1, icon: "doc", id: "happy-session", kind: "project", label: "A session" },
-    { icon: "doc", id: "stem", kind: "project", label: "New" },
+    { icon: "doc", id: "notes", kind: "project", label: "Notes" },
     { id: "rule", kind: "separator", label: "" },
     { collapsed: false, id: "desktop", kind: "section", label: "Desktop" },
     ...Array.from(
@@ -38,7 +38,7 @@ it("walks every item but the separators with the arrows, Home and End, and activ
     view.render(
         () => (
             <Sidebar
-                activeItemId="stem"
+                activeItemId="notes"
                 data-testid="walked"
                 foldControlPlacement="trailing"
                 keyboardNavigation
@@ -71,7 +71,7 @@ it("walks every item but the separators with the arrows, Home and End, and activ
     };
 
     // One Tab stop, the row on screen; the separator is never one.
-    expect(stops()).toEqual(["stem"]);
+    expect(stops()).toEqual(["notes"]);
 
     node("search").focus();
     const walked: (string | null | undefined)[] = [focused()];
@@ -89,9 +89,9 @@ it("walks every item but the separators with the arrows, Home and End, and activ
     expect(inView("search")).toBe(true);
     await userEvent.keyboard("{End}");
     expect(focused()).toBe(WALKED.at(-1));
-    // Back up past the heading and the separator to the stem cell.
+    // Back up past the heading and the separator to the notes row.
     for (let step = 0; step < 13; step += 1) await userEvent.keyboard("{ArrowUp}");
-    expect(focused()).toBe("stem");
+    expect(focused()).toBe("notes");
 
     // Enter and Space activate what has focus.
     await userEvent.keyboard("{Enter}");
@@ -104,7 +104,7 @@ it("walks every item but the separators with the arrows, Home and End, and activ
     node("search").focus();
     await userEvent.keyboard("{Enter}");
     expect(acts).toEqual([
-        "open:stem",
+        "open:notes",
         "fold:desktop",
         "fold:desktop",
         "open:create",

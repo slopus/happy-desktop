@@ -160,7 +160,7 @@ export interface HappyAgentPanelSnapshot {
      */
     readonly fileViewOpen: boolean;
     /**
-     * The chats and spaces whose work floaty the reader opened by hand. The
+     * The conversations whose work floaty the reader opened by hand. The
      * floaty never opens on its own: it stays shut until opened here.
      */
     readonly floatyOpened: ReadonlySet<string>;

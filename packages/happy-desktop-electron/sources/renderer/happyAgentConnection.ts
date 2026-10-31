@@ -1,9 +1,5 @@
 import { terminalDriverCreate, type AppHappyAgentSetup } from "happy-desktop-app";
 import {
-    happyAgentChatActionsClientHttp,
-    happyAgentChatActionsStoreCreate,
-    happyAgentProviderClisStoreCreate,
-    providerCliClientHttp,
     connectHappyAgent,
     describeServerCompatibility,
     HappyAgentClient,
@@ -15,7 +11,6 @@ import {
     happyAgentDebugLogStoreCreate,
     happyAgentWorkspaceStoreCreate,
     happyAgentConversationRetentionFor,
-    happyAgentStemCellsChosen,
     happyAgentOnboardingStoreCreate,
     happyAgentMobileConnectorStoreCreate,
     welcomeStoreCreate,
@@ -48,12 +43,8 @@ import {
     type HappyAgentSecretsStore,
     type HappyAgentArtifacts,
     type HappyAgentSurfaces,
-    type HappyAgentSpacesStore,
-    type HappyAgentSidebarProposalsStore,
     type HappyAgentSessionLocation,
     type HappyAgentWorkspaceMemoryDocument,
-    type HappyAgentStemCellsHintPersistence,
-    type HappyAgentStoriesHintPersistence,
     type HappyAgentWorkspaceMemoryPersistence,
     type HappyAgentWorkspaceStore,
     type ServerCompatibility,
@@ -88,8 +79,6 @@ function protocolMismatchOf(
 }
 
 const WORKSPACE_MEMORY_PREFIX = "happy.happy-agent.workspace-memory.v1:";
-const STEM_CELLS_HINT_PREFIX = "happy.happy-agent.stem-cells-hint.v1:";
-const STORIES_HINT_PREFIX = "happy.happy-agent.stories-hint.v1:";
 const RETRY_MS = 1_000;
 const PRELOADED_SESSIONS = 12;
 
@@ -109,60 +98,6 @@ function workspaceMemoryPersistence(happyAgentId: string): HappyAgentWorkspaceMe
                 localStorage.setItem(key, JSON.stringify(document));
             } catch {
                 // Storage-denied windows retain the in-memory store for this run.
-            }
-        },
-    };
-}
-
-/**
- * The connection's last Stories answer, so a reload draws the stories row's
- * band at once instead of pushing the sidebar down when the daemon answers.
- */
-function storiesHintPersistence(happyAgentId: string): HappyAgentStoriesHintPersistence {
-    const key = `${STORIES_HINT_PREFIX}${happyAgentId}`;
-    return {
-        read() {
-            try {
-                const value = localStorage.getItem(key);
-                return value === "on" ? true : value === "off" ? false : undefined;
-            } catch {
-                return undefined;
-            }
-        },
-        write(enabled) {
-            try {
-                if (enabled === undefined) localStorage.removeItem(key);
-                else localStorage.setItem(key, enabled ? "on" : "off");
-            } catch {
-                // Storage-denied windows wait for the daemon's answer.
-            }
-        },
-    };
-}
-
-/**
- * The connection's last Stem Cells answer, so a reload paints the sidebar that
- * person chose at once instead of the classic one for a frame. A connection is
- * one account (a team or remote connection is keyed by it), and the daemon's
- * own answer replaces the hint as soon as it is read.
- */
-function stemCellsHintPersistence(happyAgentId: string): HappyAgentStemCellsHintPersistence {
-    const key = `${STEM_CELLS_HINT_PREFIX}${happyAgentId}`;
-    return {
-        read() {
-            try {
-                const value = localStorage.getItem(key);
-                return value === "on" ? true : value === "off" ? false : undefined;
-            } catch {
-                return undefined;
-            }
-        },
-        write(enabled) {
-            try {
-                if (enabled === undefined) localStorage.removeItem(key);
-                else localStorage.setItem(key, enabled ? "on" : "off");
-            } catch {
-                // Storage-denied windows wait for the daemon's answer.
             }
         },
     };
@@ -188,8 +123,6 @@ export interface HappyAgentSession {
     readonly voiceSettings: HappyAgentVoiceSettingsStore;
     readonly taskSettings: () => import("happy-desktop-state").HappyAgentTaskSettingsStore;
     readonly surfaceSettings: () => import("happy-desktop-state").HappyAgentSurfaceSettingsStore;
-    readonly stemCellsSettings: () => import("happy-desktop-state").HappyAgentStemCellsSettingsStore;
-    readonly stories: () => import("happy-desktop-state").HappyAgentStories;
     readonly workspace: HappyAgentWorkspaceStore;
     readonly instructions: HappyAgentInstructionsStore;
     readonly securityPolicy: HappyAgentSecurityPolicyStore;
@@ -198,19 +131,7 @@ export interface HappyAgentSession {
     readonly artifacts: HappyAgentArtifacts;
     /** This Happy Agent's shared Surfaces, such as todo lists, materialized as they open. */
     readonly surfaces: HappyAgentSurfaces;
-    /** The redesigned sidebar, read once something subscribes to it. */
-    readonly spaces: HappyAgentSpacesStore;
-    /** The sidebar proposals Prioritizing's chat shows, read as a chat asks for them. */
-    readonly sidebarProposals: HappyAgentSidebarProposalsStore;
     readonly clock: HappyAgentClockStore;
-    /** This connection's transport input, which first-run onboarding follows its flow on. */
-    readonly sync: import("happy-desktop-state").HappyAgentSync;
-    /** Presses of the inline actions agents write into this Happy Agent's chats. */
-    readonly chatActions: import("happy-desktop-state").HappyAgentChatActionsStore;
-    /** This Happy Agent's provider CLIs, as a chat's provider-CLI figures draw them. */
-    readonly providerClis: import("happy-desktop-state").HappyAgentProviderClisStore;
-    /** The model new chats start on, as a chat's default-model figure draws it. */
-    readonly defaultModel: () => import("happy-desktop-state").HappyAgentDefaultModelStore;
 }
 
 export interface HappyAgentSessionDeps {
@@ -231,12 +152,6 @@ export interface HappyAgentSessionDeps {
     readonly activity?: (activity: HappyAgentActivity) => void;
     /** Observes this connection's phone pairings while a pairing page shows them. */
     readonly mobilePairingObserve?: HappyAgentMobilePairingObserve;
-    /**
-     * Opens a vendor's sign-in page in the person's browser, for a sign-in a
-     * chat figure started. Only this computer's own Happy Agent has one: a
-     * browser sign-in completes on the daemon's machine.
-     */
-    readonly signInPageOpen?: (url: string) => void;
     /**
      * A top-level session on this connection finished a turn. Delegated
      * subagent runs never arrive here; whether the window says anything about
@@ -445,8 +360,6 @@ export function happyAgentConnectionOpen(input: {
     readonly terminalColorScheme: () => TerminalColorScheme;
 }): HappyAgentConnectionHandle {
     let disposed = false;
-    /** When this connection began opening, for how long its sidebar took to be ready. */
-    const openedAt = performance.now();
     let session: HappyAgentSession | undefined;
     let sessionConnection: ReturnType<typeof streamConnectionStoreCreate> | undefined;
     let retry: ReturnType<typeof setTimeout> | undefined;
@@ -468,22 +381,6 @@ export function happyAgentConnectionOpen(input: {
             token: "happy-local-capability",
         });
     const mutationListeners = new Set<(rejection: MutationRejectedDelta) => void>();
-    // One connection's presses, in every chat it serves; it opens nothing until one is made.
-    const chatActions = happyAgentChatActionsStoreCreate({
-        client: happyAgentChatActionsClientHttp({
-            endpoint: input.happyAgentHttpUrl,
-            token: "happy-local-capability",
-        }),
-    });
-    // The provider CLIs a chat's figures draw; read once a figure is shown.
-    const signInPageOpen = input.deps.signInPageOpen;
-    const providerClis = happyAgentProviderClisStoreCreate({
-        client: providerCliClientHttp({
-            endpoint: input.happyAgentHttpUrl,
-            token: "happy-local-capability",
-        }),
-        ...(signInPageOpen ? { listener: (event) => signInPageOpen(event.url) } : {}),
-    });
     const agentConnection: HappyAgentConnection = connectHappyAgent({
         client: directClient,
         endpoint: input.happyAgentHttpUrl,
@@ -550,8 +447,6 @@ export function happyAgentConnectionOpen(input: {
         hostServices,
         modelPreferencePersistence: input.modelPreferencePersistence,
         workspaceMemoryPersistence: workspaceMemoryPersistence(input.happyAgentId),
-        stemCellsHintPersistence: stemCellsHintPersistence(input.happyAgentId),
-        storiesHintPersistence: storiesHintPersistence(input.happyAgentId),
         catalogSource,
         profileActions: profile.actions,
         profilePhotoCodec: { open: imageCropOpen },
@@ -559,22 +454,6 @@ export function happyAgentConnectionOpen(input: {
         providerUsageSource: happyAgentUsageSourceCreate(directClient, agentConnection.sync),
         transcriptConnect: happyAgentTranscriptConnectCreate(agentConnection),
         transcriptPrefetch: (sessionId) => agentConnection.prefetchSession(sessionId),
-        spacesReadObserve: (read) => {
-            const durationMs = Math.round(read.durationMs);
-            debugEntry({
-                detail: JSON.stringify(
-                    { connectionId: input.happyAgentId, ...read, durationMs },
-                    null,
-                    2,
-                ),
-                level: "info",
-                message:
-                    read.scope === "all"
-                        ? `Spaces sidebar and rows read in ${durationMs} ms`
-                        : `Spaces sidebar document read in ${durationMs} ms`,
-                source: "sync",
-            });
-        },
         connectMutationSubscribe: (listener) => {
             mutationListeners.add(listener);
             return () => mutationListeners.delete(listener);
@@ -603,54 +482,6 @@ export function happyAgentConnectionOpen(input: {
 
     let workspace: HappyAgentWorkspaceStore | undefined;
     let workspaceKeepWarm: (() => void) | undefined;
-    let stemCellsKeepWarm: (() => void) | undefined;
-    let spacesKeepWarm: (() => void) | undefined;
-    /**
-     * Keeps the spaces sidebar following this connection's daemon while Stem
-     * Cells is chosen here, whether or not its workspace is on screen, so
-     * switching to it paints the current sidebar with no read and no jump.
-     * Following opens no request of its own; turning Stem Cells off lets go.
-     */
-    const spacesFollow = (spaces: HappyAgentSpacesStore): void => {
-        const stemCells = client.stemCellsSettings();
-        const sessionAt = performance.now();
-        let readyRecorded = false;
-        const spacesReady = (): void => {
-            const current = spaces.get();
-            if (readyRecorded || current.availability !== "available") return;
-            readyRecorded = true;
-            const now = performance.now();
-            const sinceOpenMs = Math.round(now - openedAt);
-            debugEntry({
-                detail: JSON.stringify(
-                    {
-                        connectionId: input.happyAgentId,
-                        sinceOpenMs,
-                        sinceSessionMs: Math.round(now - sessionAt),
-                        document: current.sidebar !== undefined,
-                    },
-                    null,
-                    2,
-                ),
-                level: "info",
-                message: `Spaces sidebar ready ${sinceOpenMs} ms after the connection opened`,
-                source: "sync",
-            });
-        };
-        const follow = (): void => {
-            if (disposed) return;
-            const chosen = happyAgentStemCellsChosen(stemCells.get());
-            if (chosen && !spacesKeepWarm) {
-                spacesKeepWarm = spaces.subscribe(spacesReady);
-                spacesReady();
-            } else if (!chosen && spacesKeepWarm) {
-                spacesKeepWarm();
-                spacesKeepWarm = undefined;
-            }
-        };
-        stemCellsKeepWarm = stemCells.subscribe(follow);
-        follow();
-    };
     let modelsLoading = false;
     const modelsLoad = (): void => {
         retry = undefined;
@@ -756,8 +587,6 @@ export function happyAgentConnectionOpen(input: {
                     voiceSettings: client.voiceSettings(),
                     taskSettings: () => client.taskSettings(),
                     surfaceSettings: () => client.surfaceSettings(),
-                    stemCellsSettings: () => client.stemCellsSettings(),
-                    stories: () => client.stories(),
                     workspace: preparedWorkspace,
                     instructions: client.instructions(),
                     securityPolicy: client.securityPolicy(),
@@ -765,12 +594,6 @@ export function happyAgentConnectionOpen(input: {
                     artifacts: client.artifacts(),
                     surfaces: client.surfaces(),
                     clock,
-                    spaces: client.spaces(),
-                    sidebarProposals: client.sidebarProposals(),
-                    sync: agentConnection.sync,
-                    chatActions,
-                    providerClis,
-                    defaultModel: () => client.defaultModel(),
                 };
                 debugEntry({
                     level: "info",
@@ -783,7 +606,6 @@ export function happyAgentConnectionOpen(input: {
                 // The directory now owns the live workspace subscription.
                 workspaceKeepWarm?.();
                 workspaceKeepWarm = undefined;
-                if (!disposed && session) spacesFollow(session.spaces);
             },
             (error: unknown) => {
                 modelsLoading = false;
@@ -837,14 +659,9 @@ export function happyAgentConnectionOpen(input: {
                 source: "connection",
             });
             disposed = true;
-            providerClis[Symbol.dispose]();
             if (retry) clearTimeout(retry);
             workspaceKeepWarm?.();
             workspace?.[Symbol.dispose]();
-            spacesKeepWarm?.();
-            spacesKeepWarm = undefined;
-            stemCellsKeepWarm?.();
-            stemCellsKeepWarm = undefined;
             if (session) {
                 session.connection[Symbol.dispose]();
                 session = undefined;

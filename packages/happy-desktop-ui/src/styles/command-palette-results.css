@@ -159,7 +159,7 @@
     color: var(--text-secondary);
 }
 
-/* A clay icon stands as drawn, in the 20px box the sidebar gives it. */
+/* An image mark stands as drawn, in the 20px box the sidebar gives it. */
 .happy-command-palette-results__image-mark {
     display: block;
     flex: none;

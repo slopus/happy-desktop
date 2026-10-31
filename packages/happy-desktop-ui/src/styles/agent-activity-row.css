@@ -139,12 +139,6 @@
     color: var(--text-secondary);
 }
 
-/* An agent's clay icon fills the glyph lane, as its sidebar row wears it. */
-.happy-agent-activity__face-icon {
-    display: block;
-    object-fit: contain;
-}
-
 /* A question still waiting for the reader is the one still glyph that needs
    them, so it is red where every other glyph — the wait's clock included —
    stays grey. Once it is answered it is history, and greys like the rest. */

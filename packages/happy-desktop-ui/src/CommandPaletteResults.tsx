@@ -1,12 +1,10 @@
-import { HappyMark } from "./HappyMark";
 import { useCallback, type CSSProperties, type ReactNode } from "react";
 import { Avatar, type ToneName } from "./Avatar";
 import { KeyCap } from "./Badge";
 import { EmptyState } from "./EmptyState";
 import { Icon, type IconName } from "./Icon";
 import type { KeyboardShortcut } from "./keyboardShortcut";
-import type { StemCellMark } from "./StemCell";
-import { StemCellGrowth, type ImageMark } from "./StemCellGrowth";
+import { type ImageMark } from "./imageMark";
 import { Ionicon } from "./vectorIcons/VectorIcon";
 /**
  * A row whose leading lane is the product's own mark for one kind of news
@@ -43,14 +41,8 @@ export type CommandPaletteCommandRow = {
     /** Leading glyph. An `avatar` takes the lane instead when both are given. */
     icon?: IconName;
     avatar?: CommandPaletteResultsAvatar;
-    /**
-     * The artwork a sidebar row wears — a clay icon, or the stem cell of work
-     * still taking shape — at the sidebar's own 20px. It outranks `avatar`.
-     */
+    /** The artwork a sidebar row wears, at the sidebar's own 20px. It outranks `avatar`. */
     imageMark?: ImageMark;
-    stemCell?: StemCellMark;
-    /** Happy's own mark (`HappyMark`), as its sidebar row wears it. It outranks `avatar`. */
-    happyMark?: true;
     /** The product's own mark for this row's kind of news; it wins the lane. */
     emphasis?: CommandPaletteRowEmphasis;
     /** Trailing cap. The chord is announced on the row and drawn decoratively. */
@@ -146,14 +138,12 @@ function commandRowContent(row: CommandPaletteCommandRow) {
             >
                 {row.emphasis === "update" ? (
                     <Ionicon name="arrow-up-circle" size={18} />
-                ) : row.happyMark ? (
-                    <HappyMark size={20} />
-                ) : row.imageMark || row.stemCell ? (
-                    <StemCellGrowth
-                        imageClassName="happy-command-palette-results__image-mark"
-                        imageMark={row.imageMark}
-                        size={20}
-                        stemCell={row.stemCell}
+                ) : row.imageMark ? (
+                    <img
+                        alt={row.imageMark.alt ?? ""}
+                        className="happy-command-palette-results__image-mark"
+                        src={row.imageMark.src}
+                        srcSet={row.imageMark.srcSet}
                     />
                 ) : row.avatar ? (
                     <Avatar

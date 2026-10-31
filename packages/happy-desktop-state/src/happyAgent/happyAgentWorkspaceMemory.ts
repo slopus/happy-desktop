@@ -131,8 +131,6 @@ export interface HappyAgentWorkspaceMemoryDocument {
     readonly surfaceChatsShown?: readonly string[];
     /** The Surfaces the reader widened to the whole pane, oldest first. */
     readonly surfacesExpanded?: readonly string[];
-    /** The sidebar proposal version the reader last saw in Prioritizing's chat. */
-    readonly sidebarProposalSeen?: { readonly artifactId: string; readonly version: number };
 }
 
 /**
@@ -192,11 +190,6 @@ export interface HappyAgentWorkspaceMemoryStore {
     /** The Surfaces the reader widened to the whole pane. */
     surfacesExpandedRead(): readonly string[];
     surfacesExpandedWrite(surfaceIds: readonly string[]): void;
-    /** The sidebar proposal version the reader last saw in Prioritizing's chat. */
-    sidebarProposalSeenRead():
-        | { readonly artifactId: string; readonly version: number }
-        | undefined;
-    sidebarProposalSeenWrite(seen: { readonly artifactId: string; readonly version: number }): void;
 }
 
 const FILE_KINDS: readonly HappyAgentFileTabKind[] = ["file", "diff", "document", "media"];
@@ -421,7 +414,6 @@ export function happyAgentWorkspaceMemoryStoreCreate(
     let floatyOpened: readonly string[] = [];
     let surfaceChatsShown: readonly string[] = [];
     let surfacesExpanded: readonly string[] = [];
-    let sidebarProposalSeen: { readonly artifactId: string; readonly version: number } | undefined;
     const stored = (() => {
         try {
             return persistence?.read();
@@ -453,18 +445,6 @@ export function happyAgentWorkspaceMemoryStoreCreate(
         floatyOpened = storedKeysParse(document.floatyOpened, FLOATY_OPENED_LIMIT);
         surfaceChatsShown = storedKeysParse(document.surfaceChatsShown, SURFACE_CHATS_SHOWN_LIMIT);
         surfacesExpanded = storedKeysParse(document.surfacesExpanded, SURFACES_EXPANDED_LIMIT);
-        const seen: unknown = document.sidebarProposalSeen;
-        if (
-            seen !== null &&
-            typeof seen === "object" &&
-            "artifactId" in seen &&
-            "version" in seen &&
-            typeof seen.artifactId === "string" &&
-            seen.artifactId.length > 0 &&
-            typeof seen.version === "number" &&
-            Number.isInteger(seen.version)
-        )
-            sidebarProposalSeen = { artifactId: seen.artifactId, version: seen.version };
     }
 
     const flush = (): void => {
@@ -476,7 +456,6 @@ export function happyAgentWorkspaceMemoryStoreCreate(
                 ...(floatyOpened.length === 0 ? {} : { floatyOpened }),
                 ...(surfaceChatsShown.length === 0 ? {} : { surfaceChatsShown }),
                 ...(surfacesExpanded.length === 0 ? {} : { surfacesExpanded }),
-                ...(sidebarProposalSeen ? { sidebarProposalSeen } : {}),
             });
         } catch {
             // Storage the host refused still keeps this client's memory alive.
@@ -567,11 +546,6 @@ export function happyAgentWorkspaceMemoryStoreCreate(
         surfacesExpandedRead: () => surfacesExpanded,
         surfacesExpandedWrite(surfaceIds) {
             surfacesExpanded = [...new Set(surfaceIds)].slice(-SURFACES_EXPANDED_LIMIT);
-            flush();
-        },
-        sidebarProposalSeenRead: () => sidebarProposalSeen,
-        sidebarProposalSeenWrite(seen) {
-            sidebarProposalSeen = { artifactId: seen.artifactId, version: seen.version };
             flush();
         },
     };

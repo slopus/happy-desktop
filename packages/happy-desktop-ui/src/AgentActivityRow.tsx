@@ -26,9 +26,7 @@ import { renderMessageMarkdown } from "./MessageMarkdown";
 import { conversationMediaVisible } from "./conversationInlineLayouts";
 import { messageReferencesPlainText, type MessageReferences } from "./messageReferences";
 import { ArtifactTypeGlyph } from "./pages/artifacts/artifactPresentation";
-import { clayIconMark, clayIconSlugIs } from "./clayIcons";
 import { ScrollingText } from "./ScrollingText";
-import { ShimmerText } from "./ShimmerText";
 import { Spinner } from "./Spinner";
 import { toolCallStillGlyph } from "./toolCallStillGlyph";
 import { TypedText } from "./TypedText";
@@ -1137,12 +1135,7 @@ function AgentToolActivity(props: {
                 data-empty={verb === "" ? "" : undefined}
                 data-happy-desktop-ui="agent-activity-verb"
             >
-                {/* An agent it made shimmers its name while it works, as its sidebar row does. */}
-                {spawned?.working ? (
-                    <ShimmerText inline>{verb}</ShimmerText>
-                ) : (
-                    <AgentActivityChangingText typed={verbTyped && !named} value={verb} />
-                )}
+                <AgentActivityChangingText typed={verbTyped && !named} value={verb} />
             </span>
             {stats ? (
                 <span
@@ -1697,25 +1690,10 @@ const AGENT_MESSAGE_FACE_SIZE = 14;
 
 /**
  * The sender's face, as its own row elsewhere pictures it, shrunk to the glyph
- * lane: a picture, initials, the tasks glyph, its clay icon, or the generated
- * mark.
+ * lane: a picture, initials, the tasks glyph, or the generated mark.
  */
 function AgentMessageFace(props: { face: ConversationAgentFace }) {
     const face = props.face;
-    // A clay icon this library doesn't draw is the agents glyph.
-    if (face.kind === "library")
-        return clayIconSlugIs(face.slug) ? (
-            <img
-                {...clayIconMark(face.slug)}
-                alt=""
-                className="happy-agent-activity__face-icon"
-                draggable={false}
-                height={AGENT_MESSAGE_FACE_SIZE}
-                width={AGENT_MESSAGE_FACE_SIZE}
-            />
-        ) : (
-            <Icon name="agents" size={12} />
-        );
     return (
         <Avatar
             {...(face.kind === "image" ? { imageUrl: face.url } : {})}

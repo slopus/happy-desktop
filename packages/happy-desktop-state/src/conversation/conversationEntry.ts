@@ -3,7 +3,6 @@ import type {
     HappyAgentArtifactId,
     HappyAgentArtifactType,
 } from "../artifacts/artifactTypes.js";
-import type { HappyAgentActionChoice } from "../chatActions/chatActionChoices.js";
 import type { AgentTurnTraceSummary, UserError } from "../types.js";
 import type { ConversationAuthor } from "./conversationAuthor.js";
 
@@ -95,21 +94,17 @@ export interface ConversationMessageProjection {
 /**
  * How an agent is pictured, the same way its own row pictures it: a bot's
  * picture, a team task's owner's photo or initials, the tasks glyph for a task
- * on a standalone machine, the library icon its sidebar row wears, or the mark
- * generated from a seed for anything with no picture of its own.
+ * on a standalone machine, or the mark generated from a seed for anything with no picture of its own.
  */
 export type ConversationAgentFace =
     | { readonly kind: "image"; readonly url: string }
     | { readonly kind: "initials"; readonly initials: string }
-    | { readonly kind: "task" }
-    | { readonly kind: "library"; readonly slug: string };
+    | { readonly kind: "task" };
 
 /** A known agent as a transcript names it. */
 export interface ConversationAgentIdentity {
     readonly name: string;
     readonly face: ConversationAgentFace;
-    /** Whether its conversation is running now, where its sidebar row says so. */
-    readonly working?: boolean;
 }
 
 /** Lifecycle of one piece of agent activity, shared by tool calls and shell runs. */
@@ -613,17 +608,6 @@ export interface ConversationMessageEntry {
     readonly contextNote?: string;
     /** The durable message an agent's text came from, when the Happy Agent served it. */
     readonly messageId?: string;
-    /**
-     * What the person chose in that message's inline action blocks, by the
-     * daemon's block index across the whole message, when the Happy Agent
-     * records choices.
-     */
-    readonly actionChoices?: ReadonlyMap<number, HappyAgentActionChoice>;
-    /**
-     * How many inline action blocks come before this text in its message: a
-     * block's index here plus this is the daemon's `blockIndex` for it.
-     */
-    readonly actionBlockOffset?: number;
     /** The run that produced it, when the Happy Agent served it. */
     readonly runId?: string;
 }

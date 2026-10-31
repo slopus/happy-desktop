@@ -85,19 +85,6 @@ const A = "/chats/local/prj_a/ses_a";
 const B = "/chats/local/prj_b/ses_b";
 const C = "/chats/local/prj_c/ses_c";
 
-describe("closing new work from Create", () => {
-    it("lands on the conversation Create was clicked from", async () => {
-        // Create opens the new work's chat in a workspace of its own.
-        const window = await windowAt(A, "/chats/local/ws_new/ses_new");
-
-        happyAgentRouterGroupForget(window.router, "local", "ws_new");
-        await window.router.load();
-
-        expect(window.at()).toBe(A);
-        expect(window.history.length).toBe(1);
-    });
-});
-
 describe("closing a place", () => {
     it("lands on the place before it", async () => {
         const window = await windowAt(A, B);

@@ -16,7 +16,6 @@ import type {
     SlashCommand,
     Task,
 } from "@slopus/happy-agent-client";
-import type { HappyAgentActionChoice } from "../chatActions/chatActionChoices.js";
 import type { ConversationMediaLayout } from "../conversation/conversationEntry.js";
 import type { HappyAgentDebugLogInput } from "../happyAgent/happyAgentDebugLogStore.js";
 import type {
@@ -218,15 +217,6 @@ export interface AgentTextElement extends BaseChatElement {
     messageId: string;
     text: string;
     complete: boolean;
-    /** No model wrote it: Happy Agent's own message, which names no provider. */
-    scripted?: true;
-    /** What the person chose in the message's inline action blocks, by the daemon's block index. */
-    actionChoices?: ReadonlyMap<number, HappyAgentActionChoice>;
-    /**
-     * How many inline action blocks the message's earlier text blocks hold: a
-     * block's index in this text plus this is the daemon's index for it.
-     */
-    actionBlockOffset?: number;
 }
 
 export interface AgentAttachmentsElement extends BaseChatElement {
@@ -482,11 +472,6 @@ export interface SessionState {
     activeTurn?: { runId: string; startedAt: number; kind?: "compaction" };
     status: "idle" | "running" | "completed" | "failed" | "suspended";
     archived: boolean;
-    /**
-     * What the composer invites, in the agent's own words, such as "Or just
-     * tell me in your own words…"; absent for the window's own prompt.
-     */
-    composerPlaceholder?: string;
     sessionId: string;
     ownerInstanceId: string;
     scope:
@@ -633,8 +618,6 @@ export interface GroupSession {
     archivedAt?: number;
     createdAt: number;
     cwd: string;
-    /** The person has written a message here and not sent it: its draft holds text. */
-    drafted?: true;
     effort?: string;
     id: string;
     /** The agent's last important activity, its latest person message or status update. */
@@ -1209,19 +1192,6 @@ export interface HappyAgentConnection {
      * message. The task id doubles as the retry key.
      */
     createTask(name?: string): TaskCreationRequest;
-    /**
-     * Lists the unnamed task behind new work the window named and is asking
-     * the daemon to make (`created`), so its chat opens empty at once. A first
-     * message waits for `created`; when it fails the task leaves the list.
-     */
-    beginStemCellTask(
-        identity: {
-            readonly taskId: string;
-            readonly workspaceId: string;
-            readonly agentId: string;
-        },
-        created: Promise<{ readonly agent: Agent }>,
-    ): void;
     /** Renames a task for everyone, guarded by its version; ends automatic naming. */
     renameTask(taskId: string, name: string): MutationId;
     close(): void;

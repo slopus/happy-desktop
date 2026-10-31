@@ -7,7 +7,7 @@ import { Icon, type IconName } from "./Icon";
 import type { KeyboardShortcut } from "./keyboardShortcut";
 import { Spinner } from "./Spinner";
 export type ButtonSize = "small" | "medium" | "large";
-export type ButtonVariant = "primary" | "secondary" | "outline" | "ghost" | "danger" | "success";
+export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger" | "success";
 export type ButtonProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, "style"> & {
     fullWidth?: boolean;
     icon?: IconName;
@@ -88,9 +88,7 @@ export function Button(props: ButtonProps) {
                         <Spinner
                             size={iconSizes[size()]}
                             tone={
-                                variant() === "secondary" ||
-                                variant() === "outline" ||
-                                variant() === "ghost"
+                                variant() === "secondary" || variant() === "ghost"
                                     ? "default"
                                     : "inverse"
                             }

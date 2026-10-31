@@ -54,14 +54,6 @@ const SAFE_PROFILE_ENVIRONMENT = new Set([
     "TEMP",
     "TMP",
     "BUN_OPTIONS",
-    // The onboarding scenario's stand-ins: run-owned folders, or empty to look nowhere else.
-    "CODEX_HOME",
-    "GROK_HOME",
-    "HAPPY_AGENT_APPLICATIONS_DIRECTORY",
-    "HAPPY_AGENT_PROGRAM_DIRECTORIES",
-    "HAPPY_AGENT_LOCAL_MODEL_PORTS",
-    // A stand-in Tailcat in the run's root, so the phone connector never reaches the network.
-    "HAPPY_AGENT_TAILCAT_PATH",
 ]);
 
 export function workspaceRootResolve(): string {

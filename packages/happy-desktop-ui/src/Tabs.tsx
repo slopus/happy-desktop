@@ -1,4 +1,3 @@
-import { HappyMark } from "./HappyMark";
 import { partitionComponentProps } from "./componentProps";
 import { Avatar } from "./Avatar";
 import {
@@ -18,8 +17,7 @@ import type { KeyboardShortcut } from "./keyboardShortcut";
 import { Menu, type MenuItem } from "./Menu";
 import { ShimmerText } from "./ShimmerText";
 import { Spinner } from "./Spinner";
-import { type StemCellMark } from "./StemCell";
-import { StemCellGrowth, type ImageMark } from "./StemCellGrowth";
+import { type ImageMark } from "./imageMark";
 import {
     transferFocusClaim,
     transferFocusRequest,
@@ -78,10 +76,6 @@ export type TabItem = {
      * sidebar row draws it with, so a tab and its row wear one shape.
      */
     imageUrl?: string;
-    /** Identity for an item that has not taken shape yet, in the same 20px lane. */
-    stemCell?: StemCellMark;
-    /** Happy's own mark (`HappyMark`) in the 20px lane, as its sidebar row wears it. */
-    happyMark?: true;
     /**
      * The tab is what a voice call is pointing at. Its own ring and microphone,
      * never the active or unread treatment.
@@ -102,14 +96,12 @@ export type TabItem = {
  * reader was most likely to be looking for it.
  */
 function tabLeadingMark(tab: TabItem, iconSize: 14 | 16 | 18) {
-    const mark = tab.happyMark ? (
-        <HappyMark size={20} />
-    ) : tab.stemCell || tab.imageMark ? (
-        <StemCellGrowth
-            imageClassName="happy-tabs__image-mark"
-            imageMark={tab.imageMark}
-            size={20}
-            stemCell={tab.stemCell}
+    const mark = tab.imageMark ? (
+        <img
+            alt={tab.imageMark.alt ?? ""}
+            className="happy-tabs__image-mark"
+            src={tab.imageMark.src}
+            srcSet={tab.imageMark.srcSet}
         />
     ) : tab.imageUrl !== undefined ? (
         <Avatar imageUrl={tab.imageUrl} initials="" size="xs" type="agent" />

@@ -274,8 +274,6 @@ export interface HappyAgentConversationSnapshot {
      */
     readonly subagentsRunning: boolean;
     readonly workingPhase: HappyAgentWorkingPhase;
-    /** The running turn is Happy Agent's own writing, no model's: no working line reports it. */
-    readonly turnScripted: boolean;
     /** Display-ready activity text from the agent, when it describes its work. */
     readonly workingLabel?: string;
     /** The scheduled wait the agent is inside, so a surface can count it down. */
@@ -317,11 +315,6 @@ export interface HappyAgentConversationSnapshot {
      * letting a choice be made that the next message would fail to apply.
      */
     readonly modelLocked: boolean;
-    /**
-     * What the composer invites, in the agent's own words, such as "Or just
-     * tell me in your own words…"; absent for the window's own prompt.
-     */
-    readonly composerPlaceholder?: string;
     /** Whether a failure card may offer switching to another account and model. */
     readonly failureSwitchSupported: boolean;
     /**
@@ -3007,7 +3000,6 @@ export function happyAgentWorkspaceStoreCreate(
             running: chat.runStatus === "running",
             subagentsRunning: chat.subagentsRunning,
             workingPhase: chat.workingPhase,
-            turnScripted: chat.turnScripted,
             ...(chat.workingLabel !== undefined ? { workingLabel: chat.workingLabel } : {}),
             ...(chat.workingWait !== undefined ? { workingWait: chat.workingWait } : {}),
             ...(chat.retrying !== undefined ? { retrying: chat.retrying } : {}),
@@ -3036,9 +3028,6 @@ export function happyAgentWorkspaceStoreCreate(
             ...(chat.openImage ? { openImage: chat.openImage } : {}),
             ...(chat.menus ? { menus: chat.menus } : pendingMenus ? { menus: pendingMenus } : {}),
             modelLocked: chat.modelLocked,
-            ...(chat.composerPlaceholder === undefined
-                ? {}
-                : { composerPlaceholder: chat.composerPlaceholder }),
             failureSwitchSupported: chat.failureSwitchSupported,
             ...(scrollPositions.has(chat.sessionId)
                 ? { scrollPosition: scrollPositions.get(chat.sessionId)! }
@@ -8884,7 +8873,6 @@ function conversationAcquiring(
         running: false,
         subagentsRunning: false,
         workingPhase: "working",
-        turnScripted: false,
         transcriptComplete: true,
         loadingMore: false,
         queuedMessages: NO_QUEUED,

@@ -1,5 +1,6 @@
 import { messageListRowHeightCheckInstall } from "happy-desktop-ui";
-import { desktopPreviewBuild } from "./desktopPreviewBuild";
+
+declare const __HAPPY_RENDERER_VERSION__: string;
 
 /**
  * A development or preview renderer (`X.Y.Z-preview.N`) warns about every
@@ -10,7 +11,7 @@ import { desktopPreviewBuild } from "./desktopPreviewBuild";
  * debug log while local debug mode is on.
  */
 export function desktopRowHeightCheckInstall(): void {
-    if (!desktopPreviewBuild) return;
+    if (!import.meta.env.DEV && !__HAPPY_RENDERER_VERSION__.includes("-preview.")) return;
     messageListRowHeightCheckInstall((mismatch) => {
         const difference = mismatch.actual - mismatch.predicted;
         console.warn(

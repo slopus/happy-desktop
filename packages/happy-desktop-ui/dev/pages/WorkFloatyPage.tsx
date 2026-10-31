@@ -19,7 +19,7 @@ const desktop: WorkFloatyRow = {
 };
 const agent: WorkFloatyRow = {
     id: "agent",
-    label: "spaces-api",
+    label: "sync-api",
     mark: { type: "project", label: "Project: happy-agent", initials: "A" },
     trailing: { type: "changes", added: 1240, deleted: 312 },
 };

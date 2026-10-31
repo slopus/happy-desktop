@@ -9,25 +9,18 @@ import {
     useParams,
     useRouteContext,
     useRouter,
-    type AnyRouteMatch,
-    type ParsedLocation,
 } from "@tanstack/react-router";
 import { happyAgentHistoryCreate, type HappyAgentRouterHistory } from "./happyAgentHistory";
 import { happyAgentRoutePathParse } from "./happyAgentRoute";
 import { useSyncExternalStore } from "react";
 import { HappyAgentOnboardingBoundary } from "../components/HappyAgentOnboardingBoundary";
-import {
-    happyAgentConversationContent,
-    happyAgentFileLinkParse,
-    parseHappyUrl,
-} from "happy-desktop-state";
+import { happyAgentFileLinkParse, parseHappyUrl } from "happy-desktop-state";
 import type {
     AppearanceStore,
     HappyAgentArtifactId,
     CommandPaletteStore,
     ExperimentsStore,
     ProjectsVisibilityStore,
-    StemCellAnimationStore,
     GptLiveStore,
     HappyAgentGroupId,
     UsageAnalyticsStore,
@@ -113,8 +106,6 @@ export interface HappyAgentRouterContext {
     /** The local Happy Agent update card, beside `daemon` and only with it. */
     readonly agentUpdate?: AppHappyAgentUpdateStore;
     readonly agentReleaseNotes?: AppHappyAgentReleaseNotesStore;
-    /** First run on this machine, in Happy's own chat, until it is over. */
-    readonly happyOnboarding?: import("happy-desktop-state").HappyOnboardingStore;
     readonly profiler?: AppHappyAgentProfilerStore;
     readonly happyAgents: AppHappyAgentDirectoryStore;
     /** This build's development identity; absent in the packaged product. */
@@ -157,7 +148,6 @@ export interface HappyAgentRouterContext {
      * connection. Absent in a host that remembers no such choice, which shows them.
      */
     readonly projectsVisibility?: ProjectsVisibilityStore;
-    readonly stemCellAnimation?: StemCellAnimationStore;
     /** Whether this window sends product analytics events. Absent where it sends none. */
     readonly usageAnalytics?: UsageAnalyticsStore;
     /** Window-owned GPT-Live opt-in; unrelated to coding-provider settings. */
@@ -602,12 +592,10 @@ function HappyAgentWorkspaceLayout() {
             {...(context.daemon ? { daemon: context.daemon } : {})}
             {...(context.agentUpdate ? { agentUpdate: context.agentUpdate } : {})}
             {...(context.agentReleaseNotes ? { agentReleaseNotes: context.agentReleaseNotes } : {})}
-            {...(context.happyOnboarding ? { happyOnboarding: context.happyOnboarding } : {})}
             {...(context.experiments ? { experiments: context.experiments } : {})}
             {...(context.projectsVisibility
                 ? { projectsVisibility: context.projectsVisibility }
                 : {})}
-            {...(context.stemCellAnimation ? { stemCellAnimation: context.stemCellAnimation } : {})}
             {...(context.gptLive ? { gptLive: context.gptLive } : {})}
             {...(context.keepAwake ? { keepAwake: context.keepAwake } : {})}
             {...(context.statusBar ? { statusBar: context.statusBar } : {})}
@@ -715,9 +703,6 @@ function HappyAgentWorkspaceLayout() {
                     void router.load({ action: { type: "REPLACE" } });
                 return changed;
             }}
-            onGroupClose={(happyAgentId, groupId) =>
-                happyAgentRouterGroupForget(router, happyAgentId, groupId)
-            }
             onFileClose={(happyAgentId, groupId, path) => {
                 // The route helper owns history repair; the surface owns the
                 // tab bytes and closes those immediately after this callback.
@@ -784,7 +769,6 @@ function HappyAgentSettingsRoute() {
             {...(context.projectsVisibility
                 ? { projectsVisibility: context.projectsVisibility }
                 : {})}
-            {...(context.stemCellAnimation ? { stemCellAnimation: context.stemCellAnimation } : {})}
             {...(context.usageAnalytics ? { usageAnalytics: context.usageAnalytics } : {})}
             {...(context.gptLive ? { gptLive: context.gptLive } : {})}
             {...(context.keepAwake ? { keepAwake: context.keepAwake } : {})}
@@ -816,7 +800,7 @@ function HappyAgentSettingsRoute() {
  * store.
  */
 export function happyAgentRouterCreate(history: HappyAgentRouterHistory = defaultHistory()) {
-    const router = createRouter({
+    return createRouter({
         context: undefined as unknown as HappyAgentRouterContext,
         defaultPreload: false,
         history,
@@ -831,45 +815,6 @@ export function happyAgentRouterCreate(history: HappyAgentRouterHistory = defaul
         scrollRestoration: false,
         scrollToTopSelectors: [],
     });
-    // Every navigation that leaves a conversation passes here first, while the
-    // conversation being left is still the open one: what it holds is noted,
-    // so Create never takes the reader back to new work they left a draft in.
-    router.subscribe("onBeforeNavigate", (event) => {
-        if (event.fromLocation === undefined) return;
-        const left = conversationAddressed(router, event.fromLocation);
-        if (left === undefined) return;
-        const staying = conversationAddressed(router, event.toLocation);
-        if (staying?.happyAgentId === left.happyAgentId && staying.chatId === left.chatId) return;
-        const session = router.options.context?.happyAgents
-            ?.get()
-            .happyAgents.find((happyAgent) => happyAgent.id === left.happyAgentId)?.session;
-        if (session?.spaces === undefined) return;
-        const content = happyAgentConversationContent(
-            session.workspace.get().conversation,
-            left.chatId,
-        );
-        if (content !== undefined) session.spaces.stemCellContentUpdate(left.chatId, content);
-    });
-    return router;
-}
-
-/** The conversation one address shows, by the router's own route identity. */
-function conversationAddressed(
-    router: { matchRoutes: (location: ParsedLocation) => readonly AnyRouteMatch[] },
-    location: ParsedLocation,
-): { readonly happyAgentId: string; readonly chatId: HappyAgentSessionId } | undefined {
-    for (const match of router.matchRoutes(location)) {
-        const params = match.params as Record<string, string | undefined>;
-        const chatId =
-            match.routeId === chatRoute.id || match.routeId === chatFileRoute.id
-                ? params.chatId
-                : match.routeId === surfaceChatRoute.id
-                  ? params.chatAgentId
-                  : undefined;
-        if (chatId !== undefined && params.happyAgentId !== undefined)
-            return { happyAgentId: params.happyAgentId, chatId: chatId as HappyAgentSessionId };
-    }
-    return undefined;
 }
 
 /**

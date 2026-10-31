@@ -16,8 +16,6 @@ export interface ConversationAuthor {
     readonly photoFileId?: string;
     /** Already-safe display URL for an inline profile photo. */
     readonly imageUrl?: string;
-    /** Happy's own mark (`HappyMark`) beside the name, in place of a picture. */
-    readonly mark?: "happy";
     /**
      * The session this author speaks for, when the author is another session
      * rather than a person or this session's own agent. A surface renders it as

@@ -75,9 +75,7 @@ import {
     type MediaFlowImage,
 } from "./mediaLayout";
 import { mediaItemsFramed, mediaVideoFramesSignature } from "./mediaVideoFrames";
-import { chatActionFigureSignature } from "./chatActionFigureHeights";
 import { mediaTreeHeight } from "./MediaTree";
-import { chatActionBlockHeight } from "./ChatActionBlock";
 import { userInputRuleText } from "./userInputRule";
 import { conversationMediaRunSignature, type ConversationMediaRun } from "./conversationMediaRuns";
 import {
@@ -593,9 +591,7 @@ function messageLayoutsFramesSignature(layouts: MessageInlineLayouts | undefined
     if (layouts === undefined) return "";
     let signature = "";
     for (const layout of layouts.layouts.values())
-        if (layout.kind === "media")
-            signature += mediaVideoFramesSignature(layout.members.map((member) => member.item));
-        else if (layout.kind === "actions") signature += chatActionFigureSignature(layout.block);
+        signature += mediaVideoFramesSignature(layout.members.map((member) => member.item));
     return signature;
 }
 
@@ -763,7 +759,6 @@ function messageLayoutsHeight(
         const key = messageInlineLayoutKey(html);
         const layout = key === undefined ? undefined : layouts.layouts.get(key);
         if (layout === undefined) return undefined;
-        if (layout.kind === "actions") return chatActionBlockHeight(layout.block, measure);
         return mediaTreeHeight(
             layout.root,
             mediaItemsFramed(layout.members.map((member) => member.item)),

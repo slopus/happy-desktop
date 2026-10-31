@@ -20,7 +20,7 @@ import {
 } from "react";
 import { flushSync } from "react-dom";
 import { Avatar, type AvatarSize, type ToneName } from "./Avatar";
-import { HappyMark } from "./HappyMark";
+import { happyLogoBlackUrl } from "./assets";
 import { AutomatedTag } from "./AutomatedTag";
 import { ReactionChip } from "./Badge";
 import { Button } from "./Button";
@@ -52,7 +52,6 @@ import { ScrollArea } from "./Scrollbar";
 import { ShimmerText } from "./ShimmerText";
 import { AgentTraceRow } from "./AgentTraceRow";
 import { MessageListRowWidthContext } from "./messageListRowWidth";
-import { StemCell, type StemCellMark } from "./StemCell";
 export type MessageSegment =
     | {
           kind: "text";
@@ -209,12 +208,8 @@ export type MessageProps = Omit<HTMLAttributes<HTMLDivElement>, "style"> & {
      * Defaults to `time`. */
     gutterTime?: string;
     imageUrl?: string;
-    /** Happy's own mark (`HappyMark`) in the identity gutter, in place of a picture. */
-    happyMark?: boolean;
     /** Unframed entity artwork, shared with its sidebar row and tab. */
     imageMark?: { src: string; srcSet?: string; alt?: string };
-    /** Unformed item identity, retained until its artwork is assigned. */
-    stemCell?: StemCellMark;
     /** Inline photo attachments rendered as a clickable thumbnail grid. */
     images?: MessageImage[];
     /** Opens an image (by id) — wire to a web-modal lightbox, never a new tab. */
@@ -387,9 +382,7 @@ export function Message(props: MessageProps) {
         "grouped",
         "gutterTime",
         "imageUrl",
-        "happyMark",
         "imageMark",
-        "stemCell",
         "images",
         "onImageOpen",
         "layoutRender",
@@ -422,18 +415,9 @@ export function Message(props: MessageProps) {
        their hover metadata inline after the body instead of repeating identity. */
     const showIncomingMeta = () => !local.own && !grouped();
     const authorActionLabel = () => `View ${local.author}’s profile`;
-    /* Happy wears the product mark unless it brings a face of its own, as its
-       bot does. */
-    const happyAgent = () =>
-        local.agent &&
-        local.imageUrl === undefined &&
-        local.author.trim().toLocaleLowerCase() === "happy";
+    const happyAgent = () => local.agent && local.author.trim().toLocaleLowerCase() === "happy";
     const renderAvatar = (size: AvatarSize) =>
-        local.happyMark || happyAgent() ? (
-            <HappyMark size={16} />
-        ) : local.stemCell ? (
-            <StemCell {...local.stemCell} size={16} />
-        ) : local.imageMark ? (
+        local.imageMark ? (
             <img
                 alt={local.imageMark.alt ?? ""}
                 className="happy-message__image-mark"
@@ -442,7 +426,8 @@ export function Message(props: MessageProps) {
             />
         ) : (
             <Avatar
-                imageUrl={local.imageUrl}
+                imageTheme={happyAgent() ? "brand" : undefined}
+                imageUrl={happyAgent() ? happyLogoBlackUrl : local.imageUrl}
                 initials={local.initials ?? deriveInitials(local.author)}
                 size={size}
                 tone={local.tone}

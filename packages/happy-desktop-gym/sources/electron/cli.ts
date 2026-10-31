@@ -4,7 +4,6 @@ import { gymRunClean, gymRunsRootResolve } from "./paths.js";
 import { gymSmokeRun } from "./smoke.js";
 import { gymPublicRepositoryAttach } from "./publicRepository.js";
 import { gymLiveVoiceRun } from "./liveVoice.js";
-import { gymOnboardingRun } from "./onboarding.js";
 import type { GymProfile, GymWorkloadName } from "./types.js";
 import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
@@ -27,15 +26,9 @@ const workloads: readonly GymWorkloadName[] = [
     "memory-idle",
     "window-edge-resize",
     "archive-reconcile",
-    "sidebar-drag",
     "stop-shimmer",
-    "nested-row-menus",
-    "section-create",
     "mobile-direct-experiment",
     "jump-shimmer",
-    "new-work-reuse",
-    "row-removal",
-    "sidebar-read-ahead",
     "window-zoom",
     "all",
 ];
@@ -65,16 +58,6 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
             authFile: flags.authFile,
             artifactDirectory: flags.artifactDir,
             poolDefault: flags.poolDefault,
-        });
-        return;
-    }
-    if (command === "onboarding") {
-        if (!flags.out) throw new Error(`${command} requires --out ABSOLUTE_DIRECTORY.`);
-        await gymOnboardingRun({
-            out: flags.out,
-            record: flags.record,
-            video: flags.video,
-            stable: flags.stable,
         });
         return;
     }
@@ -136,10 +119,6 @@ function parseFlags(args: readonly string[]): {
     readonly repository?: string;
     readonly authFile?: string;
     readonly poolDefault?: boolean;
-    readonly out?: string;
-    readonly record?: boolean;
-    readonly video?: string;
-    readonly stable?: boolean;
 } {
     const result: {
         profile?: string;
@@ -150,10 +129,6 @@ function parseFlags(args: readonly string[]): {
         repository?: string;
         authFile?: string;
         poolDefault?: boolean;
-        out?: string;
-        record?: boolean;
-        video?: string;
-        stable?: boolean;
     } = {};
     for (let index = 0; index < args.length; index += 1) {
         const value = args[index];
@@ -170,10 +145,6 @@ function parseFlags(args: readonly string[]): {
         else if (value === "--auth-file")
             result.authFile = requiredValue(value, next, () => index++);
         else if (value === "--pool-default") result.poolDefault = true;
-        else if (value === "--out") result.out = requiredValue(value, next, () => index++);
-        else if (value === "--record") result.record = true;
-        else if (value === "--video") result.video = requiredValue(value, next, () => index++);
-        else if (value === "--stable") result.stable = true;
         else throw new Error(`Unknown option '${value}'.`);
     }
     return result;
@@ -218,13 +189,12 @@ Commands:
   run [--profile PROFILE] [--root PATH] [--workload WORKLOAD] [--ui-trace]
   smoke
   live-voice --auth-file ABSOLUTE_CODEX_AUTH_PATH [--artifact-dir PATH] [--pool-default]
-  onboarding --out ABSOLUTE_DIRECTORY [--record [--video FILE.mp4]] [--stable]   (gym scenario: first conversation on a fresh install, run by Happy Agent on stand-in providers; the mp4 is labelled "Gym data". The build decides the flavor: a preview build (RELEASE_VERSION=X.Y.Z-preview.N) runs the chat; --stable expects a stable build's welcome and setup instead)
   clean --root PATH
 
 Workloads:
   hidden-window, boot, catalog-switch, long-transcript, file-switch-warm,
   long-chat-scroll, session-switch-load, highlight-warm, changed-files-warm,
-  streaming, mixed-replay, memory-idle, window-edge-resize, archive-reconcile, sidebar-drag, stop-shimmer, nested-row-menus, section-create, mobile-direct-experiment, jump-shimmer, new-work-reuse, row-removal, sidebar-read-ahead, window-zoom, public-repository,
+  streaming, mixed-replay, memory-idle, window-edge-resize, archive-reconcile, stop-shimmer, mobile-direct-experiment, jump-shimmer, window-zoom, public-repository,
   background-drafts, all
 
 The default root is ${gymRunsRootResolve()}/g-<run-id>.

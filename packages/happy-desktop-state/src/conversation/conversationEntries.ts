@@ -629,15 +629,12 @@ function agentIdentityEqual(
     const other = right.face;
     return (
         left.name === right.name &&
-        left.working === right.working &&
         face.kind === other.kind &&
         (face.kind === "image" && other.kind === "image"
             ? face.url === other.url
             : face.kind === "initials" && other.kind === "initials"
               ? face.initials === other.initials
-              : face.kind === "library" && other.kind === "library"
-                ? face.slug === other.slug
-                : true)
+              : true)
     );
 }
 

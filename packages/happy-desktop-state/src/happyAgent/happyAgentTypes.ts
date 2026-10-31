@@ -792,8 +792,6 @@ export interface HappyAgentSessionSummary {
     readonly pendingQuestion: boolean;
     /** Why this chat is waiting for the person, as durably tracked by Happy Agent. */
     readonly unreadReason?: "attention_needed" | "turn_finished";
-    /** The person has written a message here and not sent it. */
-    readonly drafted?: true;
     /** The line the agent last wrote about where its work stands, with `set_status`. */
     readonly statusLine?: HappyAgentStatusLine;
     /** The start of an unsent composer draft, on one line; absent while there is none. */

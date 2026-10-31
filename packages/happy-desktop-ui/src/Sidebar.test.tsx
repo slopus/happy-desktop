@@ -1059,7 +1059,7 @@ it("stops a pinned parent's stem at its child above the divider", async () => {
             <Sidebar
                 actions={[
                     { id: "happy", kind: "channel", label: "Happy" },
-                    { depth: 1, id: "prioritizing", kind: "channel", label: "Prioritizing" },
+                    { depth: 1, id: "inbox", kind: "channel", label: "Inbox" },
                 ]}
                 actionsDivider
                 activeItemId="happy"
@@ -1073,7 +1073,7 @@ it("stops a pinned parent's stem at its child above the divider", async () => {
     );
     await view.ready();
 
-    const child = view.$('[data-testid="pinned"] [data-item-id="prioritizing"]').bounds();
+    const child = view.$('[data-testid="pinned"] [data-item-id="inbox"]').bounds();
     const stem = view
         .$(
             '[data-testid="pinned"] [data-happy-desktop-ui="sidebar-tree-connector"][data-parent-id="happy"]',

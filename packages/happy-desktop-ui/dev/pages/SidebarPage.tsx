@@ -818,7 +818,7 @@ const SECTION_NEW = (label: string) => ({
 });
 
 /** One list where Search, Create, separators and rows are all items of it. */
-const SPACES_LIST: SidebarItem[] = [
+const LIST_ROWS: SidebarItem[] = [
     {
         icon: "search",
         id: "search",
@@ -834,7 +834,6 @@ const SPACES_LIST: SidebarItem[] = [
         shortcut: commandShortcut("n"),
     },
     { emoji: "🙂", id: "happy", kind: "view", label: "Happy" },
-    { emoji: "🌱", id: "new", kind: "view", label: "New" },
     { id: "divider", kind: "separator", label: "" },
     { collapsed: false, id: "bots", kind: "section", label: "Bots" },
     { emoji: "🤖", id: "release-bot", kind: "view", label: "Release bot" },
@@ -851,7 +850,7 @@ const SPACES_LIST: SidebarItem[] = [
         emoji: "🧱",
         id: "model",
         kind: "view",
-        label: "Prioritizer model",
+        label: "Release notes",
     },
     { collapsed: true, id: "later", kind: "section", label: "Later" },
     { emoji: "🎲", id: "flaky", kind: "view", label: "Fix flaky CI" },
@@ -862,7 +861,7 @@ const SPACES_LIST: SidebarItem[] = [
  * whole block, every row up to the next section or separator, and lands after
  * the block it was dropped behind.
  */
-function spacesListMove(items: readonly SidebarItem[], move: SidebarReorder): SidebarItem[] {
+function oneListMove(items: readonly SidebarItem[], move: SidebarReorder): SidebarItem[] {
     if (move.parentId !== undefined) return [...items];
     const section = items.find((item) => item.id === move.id)?.kind === "section";
     const blocks: SidebarItem[][] = [];
@@ -882,14 +881,14 @@ function spacesListMove(items: readonly SidebarItem[], move: SidebarReorder): Si
     ).flatMap(({ block }) => block);
 }
 
-function SpacesListDemo() {
-    const [items, setItems] = useState(SPACES_LIST);
+function OneListDemo() {
+    const [items, setItems] = useState(LIST_ROWS);
     return (
         <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
             <Frame height={460}>
                 <Sidebar
                     activeItemId="sidebar"
-                    data-testid="spaces-list"
+                    data-testid="one-list"
                     foldControlPlacement="trailing"
                     foldControlReveal="hover"
                     onItemCollapseToggle={(id) =>
@@ -902,7 +901,7 @@ function SpacesListDemo() {
                         )
                     }
                     onItemReorder={(_section, move) =>
-                        setItems((current) => spacesListMove(current, move))
+                        setItems((current) => oneListMove(current, move))
                     }
                     onItemAction={(id) =>
                         setItems((current) => {
@@ -919,7 +918,7 @@ function SpacesListDemo() {
                     onItemSelect={() => {}}
                     sections={[
                         {
-                            id: "spaces",
+                            id: "one-list",
                             // Only an open heading offers new work under it.
                             items: items.map((item) =>
                                 item.kind === "section" && item.collapsed === false
@@ -928,7 +927,7 @@ function SpacesListDemo() {
                             ),
                         },
                     ]}
-                    title="Spaces"
+                    title="Work"
                 />
             </Frame>
             <DimensionRule label="section 28 px open or folded, title only · an open section's + on hover makes new work under it · separator 17 px, full width · key caps on the row's edge" />
@@ -1321,7 +1320,7 @@ const UPDATE_NOTES: readonly {
                     "New work appears instantly",
                     "MCP servers can ask approval",
                     "Sidebar keeps your manual changes",
-                    "Self-organizing Spaces sidebar",
+                    "Spawned agents show their names",
                 ],
                 total: 7,
             },
@@ -2147,12 +2146,12 @@ export function SidebarPage() {
                 </div>
             </Specimen>
             <Specimen
-                detail="The spaces sidebar is one list. By default: Search, Create, Happy, new work right below Happy, a separator, then the Bots and Tasks sections. Search and Create are rows with their key caps at the edge; a section is a title alone (no rule) that folds the run up to the next section or separator, keeping its height and look when folded (only the chevron turns); a separator is only a full-width rule. Everything is carried like any other row, and a section carries its whole block. A row with nothing trailing keeps no empty column. Rows are flat: Prioritizing shows no nested sessions for now, though the list still draws them if a document has them."
-                label="Spaces list · items, sections, separators"
+                detail="A sidebar can be one list: Search, Create, rows, separators and sections are all items of it. Search and Create are rows with their key caps at the edge; a section is a title alone (no rule) that folds the run up to the next section or separator, keeping its height and look when folded (only the chevron turns); a separator is only a full-width rule. Everything is carried like any other row, and a section carries its whole block. A row with nothing trailing keeps no empty column."
+                label="One list · items, sections, separators"
                 number="10"
                 stage="app"
             >
-                <SpacesListDemo />
+                <OneListDemo />
             </Specimen>
         </ComponentPage>
     );

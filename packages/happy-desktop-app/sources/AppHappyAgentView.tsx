@@ -1,15 +1,9 @@
 import { useCallback, useMemo, useRef, useSyncExternalStore, type ReactNode } from "react";
 import type { HappyAgentSystemMonitorStore } from "happy-desktop-state";
-import {
-    HappyAgentSystemMonitorSurfacePage,
-    makeStuffIntroHeader,
-    type InlinePageFit,
-    type MessageReferences,
-} from "happy-desktop-ui";
+import { HappyAgentSystemMonitorSurfacePage, type MessageReferences } from "happy-desktop-ui";
 import {
     conversationFileChanges,
     conversationFileDiff,
-    conversationNotesFold,
     gptLiveStoreNoop,
     happyAgentBotSubtasks,
     happyAgentClockStoreCreate,
@@ -17,7 +11,6 @@ import {
     happyAgentTabsOrdered,
     happyAgentTodoHeading,
     type ConversationFileDiff,
-    type ConversationNote,
     type GptLiveVoiceFocus,
     type HappyAgentSidebarProject,
 } from "happy-desktop-state";
@@ -112,12 +105,8 @@ import type {
     HappyAgentSubtaskRoot,
     HappyAgentTask,
     HappyAgentTaskId,
-    HappyAgentBotId,
-    HappyAgentSpace,
-    SidebarDocumentClassic,
     ProjectsVisibilityStore,
     ProjectsVisibilitySnapshot,
-    StemCellAnimationStore,
     HappyAgentGroupLifecycle,
     HappyAgentChangeTier,
     HappyAgentChangeTierId,
@@ -166,11 +155,8 @@ import {
     happyAgentArtifactSourceLabel,
     commandPaletteStoreNoop,
     experimentsStoreNoop,
-    happyAgentStemCellsSettingsStoreNoop,
-    happyAgentStoriesSettingsStoreNoop,
     projectsVisibilityStoreNoop,
     projectsVisibilityConnection,
-    stemCellAnimationStoreNoop,
     happyAgentVersionAtLeast,
     HAPPY_AGENT_TASKS_VERSION,
     HAPPY_AGENT_TASK_CREATE_VERSION,
@@ -200,8 +186,6 @@ import {
     type HappyAgentSurfaceSupportSnapshot,
     type HappyAgentSurfaceId,
     type HappyAgentSurfaces,
-    type HappyAgentSpacesStore,
-    type HappyAgentStemCell,
     type HappyAgentTodoListStore,
     type HappyAgentSurfaceMessagesStore,
     type HappyAgentSurfaceDocumentStore,
@@ -237,7 +221,6 @@ import {
     type ComposerModelUsageWatch,
     ConversationDock,
     type ConversationDockProps,
-    type ConversationLeadingHeader,
     type ConversationSwitchTarget,
     ConversationView,
     DeferredPane,
@@ -322,7 +305,6 @@ import {
     happyAgentComposerModelUsageWatch,
     sidebarReorderMove,
     type IconName,
-    type MakeStuffOption,
     type MenuItem,
     type FileTreeNode,
     type KeyboardShortcut,
@@ -341,49 +323,7 @@ import {
     type WorkspaceLifecyclePhase,
 } from "happy-desktop-ui";
 import { APP_SHORTCUTS } from "./appShortcuts";
-import {
-    happyAgentChatActionsStoreNoop,
-    happyAgentMobileConnectorStoreNoop,
-    happyAgentSpacesStoreNoop,
-    happyAgentStemCellsChosen,
-    happyOnboardingStoreNoop,
-    UserError,
-    type ChatActionInvocation,
-    type ChatProviderId,
-    type HappyAgentSidebarProposalsStore,
-    happyAgentSpaceNewWorkIs,
-    happyAgentConversationContent,
-    type HappyAgentSpaceId,
-} from "happy-desktop-state";
-import {
-    HappyAgentChatDefaultModel,
-    HappyAgentChatPhonePairing,
-    HappyAgentChatProviderCli,
-    type AppChatActions,
-} from "./components/HappyAgentChatActions";
-import { HappyAgentSidebarProposal } from "./components/HappyAgentSidebarProposal";
-import {
-    HappyAgentStoriesRow,
-    HappyAgentStoriesScreens,
-    HappyAgentStoryInline,
-} from "./components/HappyAgentStories";
-import {
-    happyAgentSpaceFocused,
-    happyAgentSpaceHappyIs,
-    happyAgentSpaceDestination,
-    happyAgentSpaceLabel,
-    happyAgentSpaceMark,
-    happyAgentSpaceOpen,
-    happyAgentSpacesNotes,
-    happyAgentSessionMark,
-    happyAgentSpacesChildDestination,
-    happyAgentSpacesAgentIdentity,
-    happyAgentSpacesIntroHeader,
-    HappyAgentSpacesSidebar,
-    type HappyAgentSpacesNavigation,
-    type HappyAgentSpacesPlaces,
-    type HappyAgentSpacesStories,
-} from "./components/HappyAgentSpacesSidebar";
+import { happyAgentConversationContent } from "happy-desktop-state";
 import { HappyAgentVersionProvider } from "./HappyAgentVersionProvider";
 import {
     COMMAND_PALETTE_PREVIEW_LIMIT,
@@ -393,9 +333,7 @@ import {
     commandPaletteQuickActionRows,
     type CommandPaletteCommand,
     type CommandPaletteContext,
-    type CommandPaletteGlyph,
     type CommandPaletteRow,
-    type CommandPaletteSpace,
     type CommandPaletteSettingRow,
     type CommandPaletteTab,
 } from "./commandPaletteResults";
@@ -427,7 +365,6 @@ import { agentUpdateCardView, type AgentUpdateCatalog } from "./agentUpdateCardV
 const PEOPLE_NONE: ReadonlyMap<string, string> = new Map();
 const peopleNoop = () => PEOPLE_NONE;
 const peopleSubscribeNoop = () => () => undefined;
-const storiesFeedNone = () => undefined;
 
 const sidebarDaemonUnavailable: AppHappyAgentDaemonSnapshot = {
     install: { phase: "idle" },
@@ -672,9 +609,6 @@ export interface AppHappyAgentSession {
     readonly taskSettings?: () => import("happy-desktop-state").HappyAgentTaskSettingsStore;
     /** This connection's authenticated person's Surface membership preference. */
     readonly surfaceSettings?: () => import("happy-desktop-state").HappyAgentSurfaceSettingsStore;
-    readonly stemCellsSettings?: () => import("happy-desktop-state").HappyAgentStemCellsSettingsStore;
-    /** Stories on this connection: its setting, the row, stickers and the editor. */
-    readonly stories?: () => import("happy-desktop-state").HappyAgentStories;
     /** This Happy Agent's machine-wide instructions, as the settings window edits them. */
     readonly instructions?: HappyAgentInstructionsStore;
     /** This Happy Agent's machine-wide permission-review policy. */
@@ -692,16 +626,6 @@ export interface AppHappyAgentSession {
      * without them says so through its catalog, and the sidebar offers none.
      */
     readonly surfaces?: HappyAgentSurfaces;
-    /** The spaces sidebar, on a Happy Agent new enough to keep one. */
-    readonly spaces?: HappyAgentSpacesStore;
-    /** The sidebar proposals Prioritizing's chat shows inline. */
-    readonly sidebarProposals?: HappyAgentSidebarProposalsStore;
-    /** Presses of the inline actions agents write into this Happy Agent's chats. */
-    readonly chatActions?: import("happy-desktop-state").HappyAgentChatActionsStore;
-    /** This Happy Agent's provider CLIs, as a chat's provider-CLI figures draw them. */
-    readonly providerClis?: import("happy-desktop-state").HappyAgentProviderClisStore;
-    /** The model new chats start on, as a chat's default-model figure draws it. */
-    readonly defaultModel?: () => import("happy-desktop-state").HappyAgentDefaultModelStore;
 }
 
 export interface AppHappyAgentDirectorySnapshot {
@@ -823,11 +747,6 @@ export interface AppHappyAgentViewProps {
      * remembers no such choice supplies none, and the projects stay listed.
      */
     projectsVisibility?: ProjectsVisibilityStore;
-    /**
-     * Whether new work's stem cell grows into its icon when the icon arrives.
-     * A host that remembers no such choice supplies none, and it does.
-     */
-    stemCellAnimation?: StemCellAnimationStore;
     gptLive?: GptLiveStore;
     /**
      * Whether running session, project, and workspace titles shimmer. A host
@@ -857,12 +776,6 @@ export interface AppHappyAgentViewProps {
     agentUpdate?: AppHappyAgentUpdateStore;
     /** Compact notes for the local Happy Agent update on offer. */
     agentReleaseNotes?: AppHappyAgentReleaseNotesStore;
-    /**
-     * First run on this machine, which happens in Happy's own chat: supplied
-     * with `daemon`, until it is over. The sidebar shows its example and the
-     * work it proposes.
-     */
-    happyOnboarding?: import("happy-desktop-state").HappyOnboardingStore;
     /** Native page renderer supplied only by the packaged Electron host. */
     browserContent?: BrowserContentRenderer;
     /**
@@ -913,12 +826,6 @@ export interface AppHappyAgentViewProps {
         chatId: string,
         fallbackChatId?: string,
     ): boolean;
-    /**
-     * Removes every history visit inside a group the reader closed, such as new
-     * work from Create. A reader standing in it goes back to where they were
-     * before it. Absent in a host with no navigation stack.
-     */
-    onGroupClose?(happyAgentId: string, groupId: string): void;
     /** Removes every history visit to a file tab that the reader closed. */
     onFileClose(happyAgentId: string, groupId: string, path: string): void;
     /**
@@ -1156,83 +1063,6 @@ function taskSidebarItem(task: HappyAgentTask, titleShimmerEnabled: boolean): Si
         ...sidebarActivity(task.conversation.activity),
         ...(task.conversation.unread ? { unread: true } : {}),
     };
-}
-
-/** One subtask anywhere in a tree, by its conversation. */
-function subtaskFind(
-    subtasks: readonly HappyAgentBotSubtask[],
-    conversationId: string,
-): HappyAgentBotSubtask | undefined {
-    for (const subtask of subtasks) {
-        if (subtask.conversation.id === conversationId) return subtask;
-        const nested = subtaskFind(subtask.subtasks, conversationId);
-        if (nested) return nested;
-    }
-    return undefined;
-}
-
-/** The task or bot a space opens, of one kind. */
-function targetOfSpace(
-    space: HappyAgentSpace,
-    places: HappyAgentSpacesPlaces,
-    kind: "task" | "bot",
-): { readonly workspaceId: string } | undefined {
-    if (space.target.kind !== kind) return undefined;
-    const id = space.target.id;
-    return kind === "task"
-        ? places.tasks.find((task) => task.id === id)
-        : places.bots.find((bot) => bot.id === id);
-}
-
-/** What the stem cell offers beside the Surfaces: naming a bot. */
-const STEM_CELL_BOT = "bot";
-
-/**
- * The worktrees one agent made, which no subtask works in: a subtask's own
- * worktree is already that subtask's row.
- */
-function agentWorktreeSidebarItems(
-    agentId: string,
-    projects: readonly HappyAgentSidebarProject[],
-    titleShimmerEnabled: boolean,
-): SidebarItem[] {
-    return projects.flatMap(({ project, worktrees }) =>
-        worktrees
-            .filter((worktree) => worktree.creatorAgentId === agentId)
-            .map(
-                (worktree): SidebarItem => ({
-                    id: worktree.id,
-                    kind: "workspace",
-                    depth: 1,
-                    label: worktree.name,
-                    labelShimmer: titleShimmerEnabled,
-                    // The project says whose checkout it is: its picture, or
-                    // its initials or home glyph where it has none.
-                    contextAvatars: [
-                        {
-                            id: project.id,
-                            label: `Project: ${project.name}`,
-                            initials: project.name.slice(0, 1).toUpperCase(),
-                            ...(project.kind === "home" ? { icon: "home" as const } : {}),
-                            ...(project.avatar ? { imageUrl: project.avatar.url } : {}),
-                        },
-                    ],
-                    ...sidebarLifecycle(worktree.lifecycle),
-                    ...sidebarActivity(worktree.activity),
-                    ...(worktree.conversations.some((conversation) => conversation.unread)
-                        ? { unread: true }
-                        : {}),
-                    ...((worktree.addedLines ?? 0) > 0 || (worktree.deletedLines ?? 0) > 0
-                        ? {
-                              changeStats: {
-                                  added: worktree.addedLines ?? 0,
-                                  deleted: worktree.deletedLines ?? 0,
-                              },
-                          }
-                        : {}),
-                }),
-            ),
-    );
 }
 
 function botSubtaskSidebarItems(
@@ -3415,14 +3245,6 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
         projectsVisibilityStore.get,
         projectsVisibilityStore.get,
     );
-    // Whether a row or tab that sees its stem cell get an icon grows it there.
-    const stemCellAnimationStore = props.stemCellAnimation ?? stemCellAnimationStoreNoop;
-    const cellPaint = useSyncExternalStore(
-        stemCellAnimationStore.subscribe,
-        stemCellAnimationStore.get,
-        stemCellAnimationStore.get,
-    );
-    const stemCellAnimation = cellPaint.stemCellAnimationEnabled;
     const navigationOrderStore = props.navigationOrder ?? happyAgentNavigationOrderStoreNoop;
     const navigationOrder = useSyncExternalStore(
         navigationOrderStore.subscribe,
@@ -3491,19 +3313,6 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
         directory.happyAgents[0] ??
         undefined;
     const viewerId = happyAgentOwnerAuthor.id;
-    const stemCellsSettingsStore =
-        active?.session?.stemCellsSettings?.() ?? happyAgentStemCellsSettingsStoreNoop;
-    const stemCellsSettings = useSyncExternalStore(
-        stemCellsSettingsStore.subscribe,
-        stemCellsSettingsStore.get,
-        stemCellsSettingsStore.get,
-    );
-    // Creation waits for the daemon to acknowledge an opt-in. Turning it off
-    // withholds creation immediately, including while the clear is in flight.
-    const stemCellsEnabled =
-        stemCellsSettings.status === "ready" &&
-        stemCellsSettings.stemCellsEnabled &&
-        !stemCellsSettings.saving;
     const activeAvailability = active ? happyAgentEntryAvailability(active) : undefined;
     const addressedProject =
         active && props.groupId ? rowOwnerFind(active.projects, props.groupId)?.project : undefined;
@@ -3747,568 +3556,6 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
             onSettingsOpen={props.onSettingsOpen}
         />
     );
-    // The spaces sidebar comes with Stem Cells: the person turned it on for
-    // this Happy Agent and it keeps one. It follows the switch at once, before
-    // the daemon confirms, and until the daemon first answers it follows this
-    // connection's last answer, so a reload paints the chosen sidebar at once.
-    // Anything older, or Stem Cells off, keeps the classic sidebar.
-    const stemCellsChosen = happyAgentStemCellsChosen(stemCellsSettings);
-    const spacesStore =
-        (stemCellsChosen ? active?.session?.spaces : undefined) ?? happyAgentSpacesStoreNoop;
-    const spaces = useSyncExternalStore(spacesStore.subscribe, spacesStore.get, spacesStore.get);
-    const spacesEnabled = stemCellsChosen && spaces.availability !== "unsupported";
-    const spacesPlaces: HappyAgentSpacesPlaces = {
-        bots: active?.bots ?? [],
-        tasks: active?.tasks ?? NO_TASKS,
-        chatGroupOf: (agentId) => chatGroupFind(active?.projects ?? NO_PROJECTS, agentId),
-        surfaceIcon: (surfaceId) => {
-            const surface = surfaceCatalog.surfaces.find((entry) => entry.id === surfaceId);
-            return surface ? surfaceTypeIcon(surface.type) : undefined;
-        },
-    };
-    const spacesProjects = active ? happyAgentSidebarTree(active).projects : [];
-    const spacesSessionRow = (agentId: string): SidebarItem | undefined => {
-        // A session is a subtask at any depth, or a task of its own
-        // that Prioritizing shows under the work that started it.
-        const subtask =
-            subtaskFind(
-                [...spacesPlaces.tasks, ...spacesPlaces.bots].flatMap((owner) => owner.subtasks),
-                agentId,
-            ) ?? spacesPlaces.tasks.find((task) => task.conversation.id === agentId);
-        if (!subtask) return undefined;
-        // A subtask with a checkout of its own is that checkout's
-        // row, and names its project like the task's other worktrees.
-        const [row] = botSubtaskSidebarItems(
-            [
-                {
-                    workspaceId: subtask.workspaceId,
-                    path: subtask.path,
-                    conversation: subtask.conversation,
-                    subtasks: [],
-                },
-            ],
-            active?.projects ?? NO_PROJECTS,
-            titleShimmerEnabled,
-        );
-        return row;
-    };
-    // Stories are an experiment each person turns on. Until the daemon answers,
-    // the device's last answer decides, so the row's band is there (or not)
-    // from the first frame and never pushes the sidebar down afterwards.
-    const storiesHub = active?.session?.stories?.();
-    const storiesSettingsStore = storiesHub?.settings() ?? happyAgentStoriesSettingsStoreNoop;
-    const storiesSettings = useSyncExternalStore(
-        storiesSettingsStore.subscribe,
-        storiesSettingsStore.get,
-        storiesSettingsStore.get,
-    );
-    const storiesOn =
-        storiesSettings.status === "ready"
-            ? storiesSettings.storiesEnabled
-            : storiesSettings.status === "loading" && storiesSettings.hint === true;
-    const stories = storiesOn ? storiesHub : undefined;
-    const storiesRow = stories ? <HappyAgentStoriesRow hub={stories} /> : undefined;
-    // Each agent's story ring, drawn around its row's picture.
-    const storiesFeedStore = stories?.stories();
-    const storiesFeed = useSyncExternalStore(
-        storiesFeedStore?.subscribe ?? peopleSubscribeNoop,
-        storiesFeedStore?.get ?? storiesFeedNone,
-        storiesFeedStore?.get ?? storiesFeedNone,
-    )?.feed;
-    const storiesSidebar: HappyAgentSpacesStories | undefined = stories
-        ? {
-              rings: new Map(
-                  (storiesFeed?.status === "ready" ? storiesFeed.rings : []).map((ring) => [
-                      ring.agentId,
-                      { total: ring.storyIds.length, unseen: ring.unseenCount },
-                  ]),
-              ),
-              worktrees: spacesProjects.flatMap((entry) => entry.worktrees),
-              onRingOpen: (agentId) => stories.screen().viewerOpen({ kind: "ring", agentId }),
-          }
-        : undefined;
-    // Scrolling on through the sidebar's rows folds the stories row out of the way.
-    const storiesBodyWheel = stories
-        ? (deltaY: number) => {
-              if (deltaY > 0) stories.row().rowCollapse();
-          }
-        : undefined;
-    const storyRender = stories
-        ? (artifactId: string, fit: InlinePageFit) => (
-              <HappyAgentStoryInline fit={fit} hub={stories} storyId={artifactId} />
-          )
-        : undefined;
-    // A proposal Prioritizing makes is drawn in its chat by the sidebar's own rows.
-    const sidebarProposalsStore = spacesEnabled ? active?.session?.sidebarProposals : undefined;
-    const sidebarProposal = sidebarProposalsStore
-        ? (artifactId: string, fit: InlinePageFit) => (
-              <HappyAgentSidebarProposal
-                  artifactId={artifactId}
-                  fit={fit}
-                  places={spacesPlaces}
-                  sessionRow={spacesSessionRow}
-                  snapshot={spaces}
-                  stemCellAnimation={stemCellAnimation}
-                  store={sidebarProposalsStore}
-                  titleShimmerEnabled={titleShimmerEnabled}
-              />
-          )
-        : undefined;
-    const spacesNavigation: HappyAgentSpacesNavigation | undefined = active
-        ? {
-              onChatSelect: (groupId, chatId) => props.onChatSelect(active.id, groupId, chatId),
-              onGroupClose: (groupId) => props.onGroupClose?.(active.id, groupId),
-              onSurfaceOpen: (surfaceId) => props.onSurfaceOpen?.(active.id, surfaceId),
-          }
-        : undefined;
-    // What the reader had folded and hidden in the classic sidebar, which the
-    // daemon's first Spaces document mirrors without knowing.
-    const spacesClassic: SidebarDocumentClassic = (() => {
-        const rowIdOf = (workspaceId: string) =>
-            active ? happyAgentItemId(active.id, workspaceId) : workspaceId;
-        const foldedSpaceIds = new Set<string>();
-        const hiddenSpaceIds = new Set<string>();
-        for (const space of spaces.spaces.values()) {
-            const owner =
-                targetOfSpace(space, spacesPlaces, "task") ??
-                targetOfSpace(space, spacesPlaces, "bot");
-            if (owner && sidebarCollapse.collapsed.has(rowIdOf(owner.workspaceId)))
-                foldedSpaceIds.add(space.id);
-            if (
-                active &&
-                space.target.kind === "bot" &&
-                happyAgentBotAttention(attention, active.id, space.target.id as HappyAgentBotId) ===
-                    "hidden"
-            )
-                hiddenSpaceIds.add(space.id);
-        }
-        const foldedSectionIds = new Set<string>(
-            active
-                ? [
-                      ...(sidebarCollapse.collapsed.has(happyAgentBotsSectionId(active.id))
-                          ? ["bots"]
-                          : []),
-                      ...(sidebarCollapse.collapsed.has(happyAgentTasksSectionId(active.id))
-                          ? ["tasks"]
-                          : []),
-                  ]
-                : [],
-        );
-        return { foldedSpaceIds, foldedSectionIds, hiddenSpaceIds };
-    })();
-    // The stem cell and its empty chat are one thing, opened together: in the
-    // click itself on a daemon that takes the window's names for them, where
-    // the first message waits for the daemon; otherwise once it has made them.
-    // A section heading's `+` makes it right under that heading instead.
-    const makeStuff = (sectionId: string | null = null): void => {
-        if (!stemCellsEnabled || !active || !activeHappyAgentOnline()) return;
-        // Without a section, new work lands right below Happy's row, wherever
-        // the reader keeps it.
-        const happySpace = [...spaces.spaces.values()].find((space) =>
-            happyAgentSpaceHappyIs(space, spacesPlaces),
-        );
-        // New work open with nothing sent or drafted is what Create would
-        // make, so Create leaves the reader in it. A heading's `+` is only
-        // about that heading, so the store decides whether it stands there.
-        // Holding something, it is noted as such before Create looks for
-        // empty new work, since its draft may not have reached the daemon.
-        const workspace = active.session?.workspace;
-        const openWork =
-            props.chatId === undefined
-                ? undefined
-                : [...spaces.spaces.values()].find(
-                      (space) =>
-                          space.target.kind === "task" && space.target.agentId === props.chatId,
-                  );
-        if (
-            openWork !== undefined &&
-            props.chatId !== undefined &&
-            workspace !== undefined &&
-            happyAgentSpaceNewWorkIs(openWork)
-        ) {
-            const content = happyAgentConversationContent(
-                workspace.get().conversation,
-                props.chatId as HappyAgentSessionId,
-            );
-            if (sectionId === null && content !== undefined && content !== "started") return;
-            if (content === "started") spacesStore.stemCellContentUpdate(props.chatId, content);
-        }
-        // Otherwise empty new work is gone to as it is, anywhere for Create and
-        // only under the heading for its `+`, or new work is made.
-        const creation = spacesStore.stemCellCreate(sectionId, happySpace?.id ?? null);
-        const open = (cell: HappyAgentStemCell): void => {
-            spacesStore.happyFocusUpdate(false);
-            props.onChatSelect(active.id, cell.workspaceId, cell.agentId);
-        };
-        const opened = creation.cell;
-        if (opened === undefined) {
-            void creation.created.then(open).catch(() => undefined);
-            return;
-        }
-        const { groupId, chatId } = props;
-        open(opened);
-        // Refused — one round trip after the click — the work never existed:
-        // the window forgets it, which takes a reader still in it back to
-        // where the click was made. A host with no navigation stack is sent
-        // there directly.
-        void creation.created.catch(() => {
-            if (props.onGroupClose) props.onGroupClose(active.id, opened.workspaceId);
-            else props.onChatSelect(active.id, groupId, chatId, true);
-        });
-    };
-    // Try Create in a chat makes new work the way Create does, right below
-    // Happy's row, and stays in the chat it was pressed in.
-    const stemCellMake = async (): Promise<string> => {
-        if (!stemCellsEnabled || !active || !activeHappyAgentOnline())
-            throw new UserError("Create isn't available right now.");
-        const happySpace = [...spaces.spaces.values()].find((space) =>
-            happyAgentSpaceHappyIs(space, spacesPlaces),
-        );
-        const creation = spacesStore.stemCellCreate(null, happySpace?.id ?? null);
-        return creation.cell?.space.id ?? (await creation.created).space.id;
-    };
-    // The inline actions agents write into chats are pressed through this
-    // connection, and the daemon records each choice on its message. The few
-    // that are the window's own run here first.
-    const chatActionsStore = active?.session?.chatActions ?? happyAgentChatActionsStoreNoop;
-    const chatActionsSnapshot = useSyncExternalStore(
-        chatActionsStore.subscribe,
-        chatActionsStore.get,
-        chatActionsStore.get,
-    );
-    const onboardingStore = props.happyOnboarding ?? happyOnboardingStoreNoop;
-    const onboarding = useSyncExternalStore(
-        onboardingStore.subscribe,
-        onboardingStore.get,
-        onboardingStore.get,
-    );
-    const chatActionPress = (agentId: string, invocation: ChatActionInvocation): void => {
-        const { action } = invocation;
-        // A vendor's page opens here, and the daemon hears nothing of it.
-        if (onboardingStore.actionClientRun(action)) return;
-        // Another way to reach a model is added among the providers.
-        if (action.id === "onboarding.apiKeyOpen") {
-            if (props.onSettingsSectionOpen) props.onSettingsSectionOpen("providers");
-            else props.onSettingsOpen();
-            return;
-        }
-        chatActionsStore.actionPress(agentId, invocation, {
-            ...(action.id === "onboarding.newChat"
-                ? {
-                      run: async () => ({
-                          kind: "post" as const,
-                          values: [await stemCellMake()],
-                      }),
-                  }
-                : {}),
-            sent: () => {
-                onboardingStore.actionSent(action);
-                // Opening a proposed chat ends onboarding there, in the chat Looks right made.
-                const spaceId = action.id === "onboarding.workOpen" ? action.item : undefined;
-                const space = spaceId
-                    ? spacesStore.get().spaces.get(spaceId as HappyAgentSpaceId)
-                    : undefined;
-                if (space && spacesNavigation)
-                    happyAgentSpaceOpen(space, spacesPlaces, spacesStore.get(), spacesNavigation);
-            },
-        });
-    };
-    const phoneConnector = active?.session?.mobileConnector?.();
-    // Followed only while onboarding offers to pair a phone, so an everyday
-    // window opens no connector reads of its own.
-    const phoneConnectorStore =
-        (onboarding.status === "running" ? phoneConnector : undefined) ??
-        happyAgentMobileConnectorStoreNoop;
-    const phoneConnectorSnapshot = useSyncExternalStore(
-        phoneConnectorStore.subscribe,
-        phoneConnectorStore.get,
-        phoneConnectorStore.get,
-    );
-    const phoneConnectorRead = phoneConnectorSnapshot.connector;
-    const providerClis = active?.session?.providerClis;
-    const defaultModel = active?.session?.defaultModel?.();
-    const chatActions: AppChatActions = {
-        pending: chatActionsSnapshot.pending,
-        press: chatActionPress,
-        figures: {
-            ...(phoneConnector && active?.session
-                ? {
-                      phonePairing: (
-                          <HappyAgentChatPhonePairing
-                              clock={active.session.clock}
-                              phone={phoneConnector}
-                          />
-                      ),
-                      phonePaired:
-                          phoneConnectorRead.kind === "ready" &&
-                          phoneConnectorRead.connector.pairing?.status === "completed",
-                  }
-                : {}),
-            ...(providerClis
-                ? {
-                      providerCli: (cliId: ChatProviderId) => (
-                          <HappyAgentChatProviderCli
-                              cliId={cliId}
-                              linkOpen={props.onExternalLinkOpen ?? openExternalLink}
-                              store={providerClis}
-                          />
-                      ),
-                  }
-                : {}),
-            ...(defaultModel
-                ? {
-                      setting: (setting: string) =>
-                          setting === "default-model" ? (
-                              <HappyAgentChatDefaultModel store={defaultModel} />
-                          ) : null,
-                  }
-                : {}),
-            // A proposal a reply previews, drawn as Focus's own chat draws it.
-            ...(sidebarProposalsStore
-                ? {
-                      sidebarProposal: (artifactId: string) => (
-                          <HappyAgentSidebarProposal
-                              artifactId={artifactId}
-                              places={spacesPlaces}
-                              sessionRow={spacesSessionRow}
-                              snapshot={spaces}
-                              stemCellAnimation={stemCellAnimation}
-                              store={sidebarProposalsStore}
-                              titleShimmerEnabled={titleShimmerEnabled}
-                          />
-                      ),
-                  }
-                : {}),
-        },
-    };
-    // What can be made: the Surfaces this Happy Agent serves, and a bot. The
-    // Create row's › lists them directly and a new stem cell offers the same.
-    const createOffers: readonly MakeStuffOption[] = [
-        ...(surfaceCatalog.availability === "available"
-            ? surfaceCreateMenu(surfaceSupport).flatMap((item) =>
-                  item.kind === "item" && item.icon
-                      ? [{ id: item.id, icon: item.icon, label: item.label }]
-                      : [],
-              )
-            : []),
-        ...(active && props.onBotCreateOpen
-            ? [{ id: STEM_CELL_BOT, icon: "agents" as const, label: "New bot" }]
-            : []),
-    ];
-    const createOfferSelect = (id: string): void => {
-        if (id === STEM_CELL_BOT) {
-            if (active) props.onBotCreateOpen?.(active.id);
-            return;
-        }
-        const offer = SURFACE_CREATE_OFFERS.find((entry) => entry.kind === id);
-        if (offer !== undefined) surfaceCatalogStore.createOpen(offer.kind);
-    };
-    const spacesSidebar =
-        spacesEnabled && spacesNavigation ? (
-            <HappyAgentSpacesSidebar
-                // While onboarding goes on, a proposal is decided in Happy's chat.
-                {...(props.happyOnboarding &&
-                (onboarding.status === "waiting" || onboarding.status === "running")
-                    ? { onboarding: { exampleSidebar: onboarding.exampleSidebar } }
-                    : {})}
-                onConversationsVisibleChange={(rows) =>
-                    active?.session?.workspace.sidebarRowsUpdate(rows)
-                }
-                actions={{
-                    taskLeave: (taskId) =>
-                        (
-                            active?.session?.workspace.taskLeave(taskId as HappyAgentTaskId) ??
-                            Promise.resolve(false)
-                        ).catch(() => false),
-                    taskArchive: (taskId) =>
-                        (
-                            active?.session?.workspace.taskArchive(taskId as HappyAgentTaskId) ??
-                            Promise.resolve(false)
-                        ).catch(() => false),
-                    botArchive: (botId) =>
-                        (
-                            active?.session?.workspace.botArchive(botId as HappyAgentBotId) ??
-                            Promise.resolve(false)
-                        ).catch(() => false),
-                    surfaceLeave: (surfaceId) =>
-                        surfaceCatalogStore.surfaceLeave(surfaceId as HappyAgentSurfaceId),
-                    subtaskArchive: (agentId) =>
-                        void active?.session?.workspace
-                            .subtaskArchive(agentId as HappyAgentSessionId)
-                            .catch(() => undefined),
-                    worktreeArchive: (worktreeId) => {
-                        const owner = rowOwnerFind(active?.projects ?? NO_PROJECTS, worktreeId);
-                        if (owner?.worktreeId === undefined) return;
-                        void active?.session?.workspace
-                            .worktreeArchive(owner.project.id, owner.worktreeId)
-                            .catch(() => undefined);
-                    },
-                    worktreeRename: (worktreeId, name) => {
-                        const owner = rowOwnerFind(active?.projects ?? NO_PROJECTS, worktreeId);
-                        if (owner?.worktreeId === undefined) return;
-                        void active?.session?.workspace
-                            .worktreeRename(owner.project.id, owner.worktreeId, name)
-                            .catch(() => undefined);
-                    },
-                    ...(active && happyAgentTaskCreateSupported(active)
-                        ? {
-                              taskRename: (taskId: string, name: string) =>
-                                  (
-                                      active.session?.workspace.taskRename(
-                                          taskId as HappyAgentTaskId,
-                                          name,
-                                      ) ?? Promise.resolve(false)
-                                  ).catch(() => false),
-                          }
-                        : {}),
-                    botRename: (botId, name) =>
-                        (
-                            active?.session?.workspace.botRename(botId as HappyAgentBotId, name) ??
-                            Promise.resolve(false)
-                        ).catch(() => false),
-                }}
-                // The integrated header holds the toggle in this lane, so the
-                // spaces sidebar never shows the wordmark.
-                brand={false}
-                {...(storiesRow ? { topAccessory: storiesRow } : {})}
-                {...(storiesBodyWheel ? { onBodyWheel: storiesBodyWheel } : {})}
-                {...(storiesSidebar ? { stories: storiesSidebar } : {})}
-                {...(spaces.stemCellError
-                    ? {
-                          headerAccessory: (
-                              <Banner
-                                  onDismiss={() => spacesStore.stemCellErrorDismiss()}
-                                  tone="danger"
-                              >
-                                  {spaces.stemCellError.message}
-                              </Banner>
-                          ),
-                      }
-                    : {})}
-                {...(sidebarSearchRow ? { search: sidebarSearchRow } : {})}
-                {...(stemCellsEnabled
-                    ? {
-                          create: {
-                              label: "Create",
-                              shortcut: APP_SHORTCUTS.taskCreate,
-                              onOpen: () => makeStuff(),
-                          },
-                      }
-                    : {})}
-                classic={spacesClassic}
-                {...(stemCellsEnabled ? { onSectionCreate: makeStuff } : {})}
-                focus={{
-                    ...(props.chatId !== undefined ? { chatId: props.chatId } : {}),
-                    ...(props.groupId !== undefined ? { groupId: props.groupId } : {}),
-                    ...(props.surfaceId !== undefined ? { surfaceId: props.surfaceId } : {}),
-                    ...(props.artifactsOpen && props.artifactId !== undefined
-                        ? { artifactId: props.artifactId }
-                        : {}),
-                }}
-                footer={sidebarFooter}
-                navigation={spacesNavigation}
-                now={spaces.readAt}
-                {...(active?.session ? { clock: active.session.clock } : {})}
-                titleShimmerEnabled={titleShimmerEnabled}
-                stemCellAnimation={stemCellAnimation}
-                {...(cellPaint.happySeed !== undefined ? { happySeed: cellPaint.happySeed } : {})}
-                onHappySeed={stemCellAnimationStore.happySeedUpdate}
-                sessionRow={spacesSessionRow}
-                worktreeRows={(agentId) =>
-                    agentWorktreeSidebarItems(agentId, spacesProjects, titleShimmerEnabled)
-                }
-                onChildSelect={(child) => {
-                    if (!active) return;
-                    const worktrees = spacesProjects.flatMap((entry) => entry.worktrees);
-                    const destination = happyAgentSpacesChildDestination(
-                        child,
-                        spacesPlaces,
-                        worktrees,
-                        (worktreeId) =>
-                            active.session?.workspace
-                                .get()
-                                .groupResume?.get(worktreeId as HappyAgentGroupId),
-                    );
-                    if (!destination) return;
-                    if (child.kind === "worktree") {
-                        const worktree = worktrees.find((entry) => entry.id === child.worktreeId);
-                        if (worktree)
-                            workspaceChangesShowOnOpen(active.session?.workspace, worktree);
-                    }
-                    props.onChatSelect(active.id, destination.groupId, destination.chatId);
-                }}
-                onChatAside={(agentId, label) =>
-                    active?.session?.workspace.panel.chatTabOpen(
-                        agentId as HappyAgentSessionId,
-                        label,
-                    )
-                }
-                onSidebarOpen={(artifactId) =>
-                    active?.session?.workspace.panel.artifactViewOpen(
-                        artifactId as HappyAgentArtifactId,
-                    )
-                }
-                places={spacesPlaces}
-                {...(sidebarProposalsStore ? { proposals: sidebarProposalsStore } : {})}
-                {...(onboarding.status === "running" ? { onboarding } : {})}
-                snapshot={spaces}
-                store={spacesStore}
-            />
-        ) : undefined;
-    const spaceOfChat = (sessionId: string) =>
-        happyAgentSpaceFocused(spaces, { chatId: sessionId });
-    const happySpace = [...spaces.spaces.values()].find((space) =>
-        happyAgentSpaceHappyIs(space, spacesPlaces),
-    );
-    const workspaceSpaces: HappyAgentWorkspaceSpaces = {
-        chatMark: (sessionId) => {
-            const space = spaceOfChat(sessionId);
-            // A session wears the picture Prioritizing chose for it, whether or
-            // not its row is shown.
-            return space
-                ? {
-                      ...happyAgentSpaceMark(space, spacesPlaces, stemCellAnimation),
-                      label: happyAgentSpaceLabel(space),
-                  }
-                : happyAgentSessionMark(spaces, sessionId);
-        },
-        floatyKey: (sessionId) => spaceOfChat(sessionId)?.id,
-        chatHeader: (sessionId, settled) => {
-            const space = spaceOfChat(sessionId);
-            if (space === undefined) return undefined;
-            // Happy's chat opens as new work does: its mark at the top, and its
-            // first message streaming in right under it.
-            if (happyAgentSpaceHappyIs(space, spacesPlaces))
-                return makeStuffIntroHeader({ id: space.id, happy: true, settled });
-            return happyAgentSpacesIntroHeader(space, {
-                settled,
-                stemCellAnimation,
-                options: createOffers,
-                onOptionSelect: createOfferSelect,
-            });
-        },
-        chatNotes: (sessionId) =>
-            experimental.batchNotes &&
-            happySpace !== undefined &&
-            happySpace.target.agentId === sessionId
-                ? happyAgentSpacesNotes(spaces.batches)
-                : undefined,
-        newWorkClose: (sessionId) => {
-            const space = spaceOfChat(sessionId);
-            if (
-                !active ||
-                space === undefined ||
-                !happyAgentSpaceNewWorkIs(space) ||
-                space.target.workspaceId === null
-            )
-                return false;
-            // As its row's Close new work: the reader goes back to where they
-            // were before Create, and the row goes in the same keystroke.
-            props.onGroupClose?.(active.id, space.target.workspaceId);
-            spacesStore.stemCellDiscard(space.id);
-            return true;
-        },
-    };
     const sidebar = (
         <Sidebar
             // A search replaces everything below the field, pinned rows too.
@@ -4367,8 +3614,6 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
             // The integrated band holds the toggle and search in this lane, so
             // the product mark stands down.
             brand={false}
-            {...(storiesRow ? { topAccessory: storiesRow } : {})}
-            {...(storiesBodyWheel ? { onBodyWheel: storiesBodyWheel } : {})}
             footer={sidebarFooter}
             headerAccessory={
                 // Reachability is the footer's line, not this heading's. What
@@ -4885,47 +4130,19 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
         ...(props.sidebarVisibility ? { sidebar: { hidden: sidebarVisibility.hidden } } : {}),
         // What the sidebar on screen lists at its top level, so the palette
         // offers those rows first and wears their marks.
-        sidebarMode: spacesSidebar
-            ? {
-                  kind: "spaces",
-                  spaces: [...spaces.spaces.values()].flatMap((space): CommandPaletteSpace[] => {
-                      const destination = happyAgentSpaceDestination(space, spacesPlaces, spaces);
-                      if (!destination) return [];
-                      const title = happyAgentSpaceLabel(space);
-                      const target = space.target;
-                      return [
-                          {
-                              id: space.id,
-                              title,
-                              glyph: paletteMarkGlyph(
-                                  happyAgentSpaceMark(space, spacesPlaces, false),
-                                  title,
-                              ),
-                              target:
-                                  target.kind === "task" || target.kind === "bot"
-                                      ? { kind: target.kind, id: target.id }
-                                      : { kind: target.kind === "surface" ? "surface" : "agent" },
-                              destination,
-                          },
-                      ];
-                  }),
-              }
-            : {
-                  kind: "classic",
-                  botsHidden: new Set(
-                      (active?.bots ?? [])
-                          .filter(
-                              (bot) =>
-                                  happyAgentBotAttention(attention, active!.id, bot.id) ===
-                                  "hidden",
-                          )
-                          .map((bot) => bot.id as string),
-                  ),
-                  projectsHidden: projectsVisibilityConnection(
-                      projectsVisibility,
-                      active?.id ?? props.happyAgentId,
-                  ).projectsHidden,
-              },
+        sidebarListing: {
+            botsHidden: new Set(
+                (active?.bots ?? [])
+                    .filter(
+                        (bot) => happyAgentBotAttention(attention, active!.id, bot.id) === "hidden",
+                    )
+                    .map((bot) => bot.id as string),
+            ),
+            projectsHidden: projectsVisibilityConnection(
+                projectsVisibility,
+                active?.id ?? props.happyAgentId,
+            ).projectsHidden,
+        },
     };
     // The same suggestions the empty palette offers, on the gesture the reader
     // already has for discovering chords. The shell mounts it only while
@@ -5142,14 +4359,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
         if (active?.session)
             return (
                 <HappyAgentWorkspaceSurface
-                    {...(props.happyOnboarding &&
-                    (onboarding.status === "waiting" || onboarding.status === "running")
-                        ? { happyOpening: true }
-                        : {})}
                     {...(referenceSurfaces ? { referenceSurfaces } : {})}
-                    {...(sidebarProposal ? { sidebarProposal } : {})}
-                    chatActions={chatActions}
-                    {...(storyRender ? { storyRender } : {})}
                     availability={
                         activeAvailability ??
                         happyAgentAvailabilityProject(active.session.connection.get(), true, {
@@ -5191,7 +4401,6 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                         ? { voiceFocusSessionId: voiceFocus.target.sessionId }
                         : {})}
                     workspace={active.session.workspace}
-                    {...(spacesSidebar ? { spaces: workspaceSpaces } : {})}
                     {...(changeTiersStore === undefined ? {} : { changeTiers: changeTiersStore })}
                     {...(artifactsAvailable && active.session.artifacts
                         ? {
@@ -5254,7 +4463,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                 windowFullScreen={windowState.fullScreen}
                 windowTrafficLights={windowState.trafficLights}
                 connectionRail={windowState.connectionRail}
-                sidebar={spacesSidebar ?? sidebar}
+                sidebar={sidebar}
                 // One band holds the sidebar toggle, search, and the tabs; the
                 // surface header is gone.
                 navigationChrome="integrated"
@@ -5267,22 +4476,14 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                           },
                       }
                     : {})}
-                {...(spacesSidebar && stemCellsEnabled
+                {...(taskCreateTarget !== undefined
                     ? {
                           sidebarCollapsedAction: {
-                              label: "Create (⌘N or ⌘T)",
-                              onClick: () => makeStuff(),
+                              label: "New task (⌘N)",
+                              onClick: () => props.onTaskCreateOpen?.(taskCreateTarget),
                           },
-                          sidebarOwnsCreate: true,
                       }
-                    : taskCreateTarget !== undefined
-                      ? {
-                            sidebarCollapsedAction: {
-                                label: "New task (⌘N)",
-                                onClick: () => props.onTaskCreateOpen?.(taskCreateTarget),
-                            },
-                        }
-                      : {})}
+                    : {})}
             >
                 {routeContent()}
             </AppShell>
@@ -5309,14 +4510,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                 the reader is, as the Tasks heading's + makes one. Bound only
                 while the machine on screen can make one, so an older Happy
                 Agent leaves the chord to do nothing at all. */}
-            {spacesSidebar && stemCellsEnabled ? (
-                <WindowShortcuts
-                    actions={[
-                        { run: () => makeStuff(), shortcut: APP_SHORTCUTS.taskCreate },
-                        { run: () => makeStuff(), shortcut: APP_SHORTCUTS.sessionCreate },
-                    ]}
-                />
-            ) : taskCreateTarget !== undefined ? (
+            {taskCreateTarget !== undefined ? (
                 <WindowShortcuts
                     actions={[
                         {
@@ -5345,34 +4539,6 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                     {...(activeAvailability?.refusal === undefined
                         ? {}
                         : { unavailable: activeAvailability.refusal })}
-                />
-            ) : null}
-            {/* Stories' viewer and editor fill the window over whatever it shows. */}
-            {stories && active ? (
-                <HappyAgentStoriesScreens
-                    agentOf={(agentId) => {
-                        const identity = happyAgentSpacesAgentIdentity(
-                            agentId,
-                            spaces,
-                            spacesPlaces,
-                        );
-                        return identity
-                            ? {
-                                  name: identity.label,
-                                  ...(identity.mark ? { mark: identity.mark } : {}),
-                              }
-                            : undefined;
-                    }}
-                    {...(artifactsAvailable && active.session?.artifacts
-                        ? { artifacts: active.session.artifacts.inline() }
-                        : {})}
-                    {...(props.artifactPage ? { artifactPage: props.artifactPage } : {})}
-                    hub={stories}
-                    onLinkOpen={props.onExternalLinkOpen ?? openExternalLink}
-                    onSourceOpen={(agentId) => {
-                        const groupId = chatGroupFind(active.projects ?? NO_PROJECTS, agentId);
-                        if (groupId !== undefined) props.onChatSelect(active.id, groupId, agentId);
-                    }}
                 />
             ) : null}
             {/* Making a Surface is the sidebar's, so it belongs to the window
@@ -5436,7 +4602,7 @@ interface HappyAgentPaletteSubject {
     /** The window's own fold of its left side, when it keeps one. */
     sidebar?: { readonly hidden: boolean };
     /** What the sidebar on screen lists at its top level. */
-    sidebarMode: CommandPaletteContext["sidebarMode"];
+    sidebarListing: CommandPaletteContext["sidebarListing"];
 }
 
 /** The window acts the palette can commit to. */
@@ -5637,32 +4803,8 @@ function paletteContext(
         ...(subject.sidebar ? { sidebar: subject.sidebar } : {}),
         ...(facts.panel ? { panel: facts.panel } : {}),
         ...(facts.taskDirectory ? { taskDirectory: facts.taskDirectory } : {}),
-        sidebarMode: subject.sidebarMode,
+        sidebarListing: subject.sidebarListing,
         visits: facts.visits,
-    };
-}
-
-/**
- * A spaces row's mark as the palette draws it: its clay icon or stem cell as
- * drawn, and otherwise the same rounded tile the row's own Avatar is — its
- * picture, else its glyph, else its initial.
- */
-function paletteMarkGlyph(
-    mark: Pick<SidebarItem, "icon" | "imageMark" | "imageUrl" | "stemCell" | "happyMark">,
-    title: string,
-): CommandPaletteGlyph {
-    if (mark.happyMark) return { kind: "mark", happyMark: true };
-    if (mark.imageMark || mark.stemCell)
-        return {
-            kind: "mark",
-            ...(mark.imageMark ? { imageMark: mark.imageMark } : {}),
-            ...(mark.stemCell ? { stemCell: mark.stemCell } : {}),
-        };
-    return {
-        kind: "avatar",
-        initials: title.slice(0, 1).toUpperCase(),
-        ...(mark.imageUrl ? { imageUrl: mark.imageUrl } : {}),
-        ...(mark.icon ? { icon: mark.icon } : {}),
     };
 }
 
@@ -5681,7 +4823,7 @@ function HappyAgentQuickActions(
     const items = commandPaletteQuickActionRows(paletteContext(props, props.facts))
         .slice(0, COMMAND_PALETTE_PREVIEW_LIMIT)
         .flatMap((row): QuickActionsCardItem[] =>
-            row.glyph.kind === "avatar" || row.glyph.kind === "mark"
+            row.glyph.kind === "avatar"
                 ? []
                 : [
                       {
@@ -5857,23 +4999,17 @@ function paletteResultsRow(
             ? { icon: row.glyph.name }
             : row.glyph.kind === "emphasis"
               ? { emphasis: row.glyph.emphasis }
-              : row.glyph.kind === "mark"
-                ? {
-                      ...(row.glyph.happyMark ? { happyMark: true as const } : {}),
-                      ...(row.glyph.imageMark ? { imageMark: row.glyph.imageMark } : {}),
-                      ...(row.glyph.stemCell ? { stemCell: row.glyph.stemCell } : {}),
-                  }
-                : {
-                      // The rounded tile the sidebar gives the same row.
-                      avatar: {
-                          initials: row.glyph.initials,
-                          type: "agent" as const,
-                          ...(row.glyph.imageUrl === undefined
-                              ? {}
-                              : { imageUrl: row.glyph.imageUrl }),
-                          ...(row.glyph.icon === undefined ? {} : { icon: row.glyph.icon }),
-                      },
-                  }),
+              : {
+                    // The rounded tile the sidebar gives the same row.
+                    avatar: {
+                        initials: row.glyph.initials,
+                        type: "agent" as const,
+                        ...(row.glyph.imageUrl === undefined
+                            ? {}
+                            : { imageUrl: row.glyph.imageUrl }),
+                        ...(row.glyph.icon === undefined ? {} : { icon: row.glyph.icon }),
+                    },
+                }),
         ...(row.shortcut ? { shortcut: row.shortcut } : {}),
     };
 }
@@ -7033,19 +6169,8 @@ function HappyAgentArtifactsPanelSurface(props: {
 }
 
 interface HappyAgentWorkspaceSurfaceProps {
-    /**
-     * First run is about to open Happy's chat here, so the pane stays empty
-     * rather than saying no project is open.
-     */
-    happyOpening?: boolean;
     /** The Surfaces the transcript's references can name, and where one opens. */
     referenceSurfaces?: MessageReferenceSurfaces;
-    /** Draws a sidebar proposal in Prioritizing's chat; absent without Spaces. */
-    sidebarProposal?: (artifactId: string, fit: InlinePageFit) => ReactNode;
-    /** Draws a story an agent drafted, in its chat; absent while Stories are off. */
-    storyRender?: (artifactId: string, fit: InlinePageFit) => ReactNode;
-    /** Presses of the inline actions agents write into chats; absent, blocks only show. */
-    chatActions?: AppChatActions;
     /** The machine's artifacts, present only once it has said it keeps them. */
     artifacts?: HappyAgentArtifacts;
     /** Shows an HTML artifact opened beside the conversation as a site of its own. */
@@ -7101,34 +6226,6 @@ interface HappyAgentWorkspaceSurfaceProps {
     onExternalLinkOpen(url: string): void;
     /** Which of the two places a plain click on a link goes, marked in its menu. */
     linkOpenDefault: LinkOpenPlacement;
-    /** What the spaces sidebar adds to the chats it opens. */
-    spaces?: HappyAgentWorkspaceSpaces;
-}
-
-/** What the spaces sidebar adds to a workspace it shows. */
-interface HappyAgentWorkspaceSpaces {
-    /** The identity a chat's tab wears: its space's name and icon, or its stem cell. */
-    chatMark(
-        sessionId: string,
-    ):
-        | (Pick<TabItem, "icon" | "imageMark" | "imageUrl" | "stemCell" | "happyMark"> &
-              Partial<Pick<TabItem, "label">>)
-        | undefined;
-    /** Which space a chat's hand-folded floaty is remembered for. */
-    floatyKey(sessionId: string): string | undefined;
-    /**
-     * The block that opens a chat's transcript, such as new work's stem cell
-     * and the line under it; `settled` once the chat has begun.
-     */
-    chatHeader(sessionId: string, settled: boolean): ConversationLeadingHeader | undefined;
-    /** Bookkeeping a conversation reads as one-line summaries, such as Happy's sidebar batches. */
-    chatNotes(sessionId: string): ReadonlyMap<string, ConversationNote> | undefined;
-    /**
-     * Closes new work nobody has named yet, as its row's Close new work does:
-     * the reader goes back to where they were before it and its row goes.
-     * Says whether it was new work.
-     */
-    newWorkClose(sessionId: string): boolean;
 }
 
 /**
@@ -7419,11 +6516,7 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                                   tab.id === props.voiceFocusSessionId
                                       ? { ...tab, voiceFocus: true }
                                       : tab,
-                              )
-                              .map((tab) => {
-                                  const mark = props.spaces?.chatMark(tab.id);
-                                  return mark ? { ...tab, ...mark } : tab;
-                              }),
+                              ),
                           // The strip holds only chats and files.
                           ...groupFileTabs.map(fileTabItem),
                       ]
@@ -7505,13 +6598,7 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
     const floatyOutputs = workFloatyOutputs(floatyCatalog.artifacts, props.chatId);
     // The floaty opens on its own wherever there is work to show, and stays
     // folded where the reader folded it by hand until they open it again.
-    // With the spaces sidebar, a fold is remembered for the space, not the chat.
-    const floatyChatId =
-        conversation.type === "ready" ? conversation.value.conversationId : undefined;
-    const floatyKey =
-        floatyChatId === undefined
-            ? undefined
-            : (props.spaces?.floatyKey(floatyChatId) ?? floatyChatId);
+    const floatyKey = conversation.type === "ready" ? conversation.value.conversationId : undefined;
     const floatyShown =
         floatyKey !== undefined &&
         panel.floatyOpened.has(floatyKey) &&
@@ -7690,10 +6777,6 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
             props.workspace.get().conversation,
             tabId as HappyAgentSessionId,
         );
-        // New work holding nothing closes, row and all: there is nothing in it
-        // to archive. Only leaving it by going elsewhere keeps it for Create.
-        if (content !== undefined && content !== "started" && props.spaces?.newWorkClose(tabId))
-            return;
         const archive = conversationArchiveTargetFind(tabId);
         if (!archive) {
             groupTabClose(tabId);
@@ -8046,15 +7129,12 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
             />
         ) : (
             <HappyAgentConversationBody
-                {...(props.chatActions ? { chatActions: props.chatActions } : {})}
                 composerNotice={workspaceComposerNotice}
                 modelUsageWatch={modelUsageWatch}
                 {...(props.artifacts ? { artifacts: props.artifacts } : {})}
                 inlineEngines={{
                     ...(props.artifactPage ? { artifactPage: props.artifactPage } : {}),
                     ...(props.browserContent ? { browserContent: props.browserContent } : {}),
-                    ...(props.sidebarProposal ? { proposalRender: props.sidebarProposal } : {}),
-                    ...(props.storyRender ? { storyRender: props.storyRender } : {}),
                     browserConnectionId: props.browserConnectionId,
                 }}
                 referenceEntities={messageReferenceEntities(workspace.list)}
@@ -8076,16 +7156,6 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                               </Banner>
                           ),
                       })}
-                {...(props.spaces && props.chatId
-                    ? { notes: props.spaces.chatNotes(props.chatId) }
-                    : {})}
-                {...((spaces, chatId) =>
-                    spaces && chatId
-                        ? {
-                              leadingHeader: (settled: boolean) =>
-                                  spaces.chatHeader(chatId, settled),
-                          }
-                        : {})(props.spaces, props.chatId)}
                 emptyContent={
                     openBot?.systemKey === "chief_of_staff" &&
                     conversation.type === "ready" &&
@@ -8420,8 +7490,7 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                                           shortcut: APP_SHORTCUTS.panelToggleAlternate,
                                       },
                                   ]),
-                            // The spaces sidebar gives Command-T to Make Stuff.
-                            ...(sessionCreateAvailable && !props.spaces
+                            ...(sessionCreateAvailable
                                 ? [
                                       {
                                           run: () => groupConversationCreate(openGroup, "shortcut"),
@@ -8503,9 +7572,7 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                                         icon="plus"
                                         iconOnly
                                         onClick={() => groupConversationCreate(openGroup)}
-                                        {...(props.spaces
-                                            ? {}
-                                            : { shortcut: APP_SHORTCUTS.sessionCreate })}
+                                        shortcut={APP_SHORTCUTS.sessionCreate}
                                         size="small"
                                         variant="ghost"
                                     />
@@ -8851,7 +7918,7 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                         of the machine being out of touch, and this screen has
                         nothing to add to it: what it offers already goes quiet
                         on `availability`, below. */}
-                    {props.happyOpening ? null : refusedCreate ? (
+                    {refusedCreate ? (
                         // This address was a workspace being made until Happy Agent
                         // refused it. Saying "no project open" here would leave
                         // the reader to work out for themselves that the row they
@@ -9596,14 +8663,8 @@ function HappyAgentConversationBody(props: {
     inlineEngines?: {
         readonly artifactPage?: HtmlPreviewRenderer;
         readonly browserContent?: BrowserContentRenderer;
-        /** Draws a sidebar proposal the transcript shows. */
-        readonly proposalRender?: (artifactId: string, fit: InlinePageFit) => ReactNode;
-        /** Draws a story the transcript shows. */
-        readonly storyRender?: (artifactId: string, fit: InlinePageFit) => ReactNode;
         readonly browserConnectionId: string | null;
     };
-    /** Presses of the inline actions agents write into chats; absent, blocks only show. */
-    chatActions?: AppChatActions;
     /** The agents, workspaces, and projects the transcript's references can name. */
     referenceEntities: MessageReferenceEntities;
     /** Opens a group a reference names, on one of its conversations or where it was left. */
@@ -9613,10 +8674,6 @@ function HappyAgentConversationBody(props: {
     modelUsageWatch?: ComposerModelUsageWatch;
     conversation: HappyAgentWorkspaceSnapshot["conversation"];
     emptyContent?: ReactNode;
-    /** The block that opens the transcript; `settled` once the conversation has begun. */
-    leadingHeader?: (settled: boolean) => ConversationLeadingHeader | undefined;
-    /** Messages that are bookkeeping, by message ID, each read as one summary row. */
-    notes?: ReadonlyMap<string, ConversationNote> | undefined;
     focusOnType: boolean;
     groupId: string;
     groupName: string;
@@ -9673,15 +8730,12 @@ function HappyAgentConversationBody(props: {
                 activitySelected={props.activitySelected}
                 {...(props.artifacts ? { artifacts: props.artifacts } : {})}
                 {...(props.inlineEngines ? { inlineEngines: props.inlineEngines } : {})}
-                {...(props.chatActions ? { chatActions: props.chatActions } : {})}
                 referenceEntities={props.referenceEntities}
                 onReferenceGroupOpen={props.onReferenceGroupOpen}
                 {...(props.referenceSurfaces ? { referenceSurfaces: props.referenceSurfaces } : {})}
                 modelUsageWatch={props.modelUsageWatch}
                 conversation={conversation.value}
                 emptyContent={props.emptyContent}
-                {...(props.leadingHeader ? { leadingHeader: props.leadingHeader } : {})}
-                notes={props.notes}
                 focusOnType={props.focusOnType}
                 groupId={props.groupId}
                 groupName={props.groupName}
@@ -10064,14 +9118,8 @@ function HappyAgentConversationSurface(props: {
     inlineEngines?: {
         readonly artifactPage?: HtmlPreviewRenderer;
         readonly browserContent?: BrowserContentRenderer;
-        /** Draws a sidebar proposal the transcript shows. */
-        readonly proposalRender?: (artifactId: string, fit: InlinePageFit) => ReactNode;
-        /** Draws a story the transcript shows. */
-        readonly storyRender?: (artifactId: string, fit: InlinePageFit) => ReactNode;
         readonly browserConnectionId: string | null;
     };
-    /** Presses of the inline actions agents write into chats; absent, blocks only show. */
-    chatActions?: AppChatActions;
     /** The agents, workspaces, and projects the transcript's references can name. */
     referenceEntities: MessageReferenceEntities;
     /** Opens a group a reference names, on one of its conversations or where it was left. */
@@ -10081,9 +9129,6 @@ function HappyAgentConversationSurface(props: {
     modelUsageWatch?: ComposerModelUsageWatch;
     conversation: HappyAgentConversationSnapshot;
     emptyContent?: ReactNode;
-    /** The block that opens the transcript; `settled` once the conversation has begun. */
-    leadingHeader?: (settled: boolean) => ConversationLeadingHeader | undefined;
-    notes?: ReadonlyMap<string, ConversationNote> | undefined;
     focusOnType: boolean;
     groupId: string;
     groupName: string;
@@ -10244,15 +9289,7 @@ function HappyAgentConversationSurface(props: {
               }
             : {}),
     });
-    /* The header opens the transcript, so it is drawn only above its first
-       entry: while older history is still to load, it waits for it. */
-    const leadingHeader =
-        conversation.entries.length === 0 || conversation.transcriptComplete
-            ? props.leadingHeader?.(conversation.entries.length > 0)
-            : undefined;
     const inlineEngines = props.inlineEngines;
-    // A chat that cannot be written into cannot be answered either.
-    const chatActions = props.readOnly ? undefined : props.chatActions;
     const inlinePages = inlineEngines
         ? conversationInlinePagesCreate({
               artifacts: inlineArtifacts,
@@ -10263,10 +9300,6 @@ function HappyAgentConversationSurface(props: {
               ...(inlineEngines.browserContent
                   ? { browserContent: inlineEngines.browserContent }
                   : {}),
-              ...(inlineEngines.proposalRender
-                  ? { proposalRender: inlineEngines.proposalRender }
-                  : {}),
-              ...(inlineEngines.storyRender ? { storyRender: inlineEngines.storyRender } : {}),
               browserConnectionId: inlineEngines.browserConnectionId,
               workspaceId: props.groupId,
               agentId: conversation.conversationId,
@@ -10281,16 +9314,7 @@ function HappyAgentConversationSurface(props: {
             references={references}
             {...(inlinePages ? { inlinePages } : {})}
             emptyContent={props.emptyContent}
-            {...(leadingHeader ? { leadingHeader } : {})}
             agentAuthor={agentAuthor}
-            {...(chatActions
-                ? {
-                      actionChoices: chatActions.pending,
-                      onChatAction: (invocation: ChatActionInvocation) =>
-                          chatActions.press(conversation.conversationId, invocation),
-                      ...(chatActions.figures ? { chatActionFigures: chatActions.figures } : {}),
-                  }
-                : {})}
             activityControl={
                 activityTotal > 0 ? (
                     <HappyAgentActivityControl
@@ -10331,9 +9355,8 @@ function HappyAgentConversationSurface(props: {
                     composerPlaceholder={
                         props.readOnly
                             ? (props.readOnlyReason ?? composerPlaceholder(props.groupName))
-                            : // The agent's own invitation, or the window's; the tab
-                              // already names the chat.
-                              (conversation.composerPlaceholder ?? composerPlaceholder(undefined))
+                            : // The tab already names the chat.
+                              composerPlaceholder(undefined)
                     }
                     composerControls={
                         <>{modelControl ? <ComposerModelControl {...modelControl} /> : null}</>
@@ -10426,11 +9449,7 @@ function HappyAgentConversationSurface(props: {
                 />
             }
             conversationId={conversation.conversationId}
-            entries={
-                props.notes === undefined
-                    ? conversation.entries
-                    : conversationNotesFold(conversation.entries, props.notes)
-            }
+            entries={conversation.entries}
             errorAssistance={conversation.errorAssistance}
             errorAssistanceUnavailable={props.unavailable}
             onErrorAssistanceRequest={(entryId) => {
@@ -10576,7 +9595,6 @@ function HappyAgentConversationSurface(props: {
             activityTreatment="focused"
             motion="calm-typed"
             running={conversation.running}
-            runningQuiet={conversation.turnScripted}
             delegatedAgents={activeActivity.agents}
             delegatedElapsedMs={happyAgentDelegatedElapsedMs(conversation, props.now)}
             elapsedMs={happyAgentTurnElapsedMs(conversation, props.now)}

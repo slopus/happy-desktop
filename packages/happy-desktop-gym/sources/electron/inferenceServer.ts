@@ -14,19 +14,6 @@ import type {
 
 /** Opens a turn the inference server streams slowly enough to be stopped mid-way. */
 export const GYM_STOP_SHIMMER_PROMPT = "Take your time. gym-stop-shimmer";
-/** How Happy's first conversation starts the task the person accepted. */
-export const GYM_ONBOARDING_START_PROMPT = "Let's start on ";
-/** A short, plausible first reply for onboarding recordings; a fixture, never a model. */
-const GYM_ONBOARDING_START_REPLY = [
-    "I'll start by reading where the onboarding work stands.",
-    "",
-    "- `master-plans/06-onboarding.md` describes first run as Happy's own chat in the real window.",
-    "- The setup screens it replaces are `SetupPage` and `WelcomeScreen`.",
-    "",
-    "Next I'll compare the two and list what's left. I'll check in before changing anything.",
-].join("\n");
-/** Opens a turn that hands a slow turn to a subtask of its own. */
-export const GYM_STOP_SHIMMER_PARENT_PROMPT = "Delegate it. gym-stop-shimmer-parent";
 
 export function gymLiveToolMutationLineCount(profile: GymProfile): number {
     if (profile === "smoke") return 96;
@@ -40,24 +27,16 @@ export function gymFixtureLargeChangedLines(profile: GymProfile): number {
     return 1_800;
 }
 
-/**
- * A gym scenario's own model, in place of the deterministic replies: it
- * answers every request the scenario's daemon makes.
- */
-export type GymInferenceScript = (request: GymInferenceRequest) => GymInferenceResponse;
-
 export function gymInferenceServerCreate(
     manifest: GymManifest,
     logPath: string,
-    script?: GymInferenceScript,
 ): GymInferenceServer {
-    return new DeterministicInferenceServer(manifest, logPath, script);
+    return new DeterministicInferenceServer(manifest, logPath);
 }
 
 class DeterministicInferenceServer implements GymInferenceServer {
     readonly #manifest: GymManifest;
     readonly #logPath: string;
-    readonly #script: GymInferenceScript | undefined;
     readonly #token = randomBytes(24).toString("hex");
     readonly #liveToolRequestedSessionIds = new Set<string>();
     readonly #liveToolCompletedSessionIds = new Set<string>();
@@ -67,10 +46,9 @@ class DeterministicInferenceServer implements GymInferenceServer {
     #callIndex = 0;
     #logInitialized = false;
 
-    constructor(manifest: GymManifest, logPath: string, script?: GymInferenceScript) {
+    constructor(manifest: GymManifest, logPath: string) {
         this.#manifest = manifest;
         this.#logPath = logPath;
-        this.#script = script;
     }
 
     get url(): string {
@@ -167,7 +145,7 @@ class DeterministicInferenceServer implements GymInferenceServer {
                 })}\n`,
                 "utf8",
             );
-            const reply = this.#script?.(payload) ?? this.#reply(payload);
+            const reply = this.#reply(payload);
             response.writeHead(200, { "content-type": "application/json" });
             response.end(JSON.stringify(reply));
         } catch (error) {
@@ -220,40 +198,9 @@ class DeterministicInferenceServer implements GymInferenceServer {
         const latestUserText = contextLatestUserText(request.context);
         const scriptKey = responseScriptKey(request, latestUserText);
         const latestPrompt = contextLatestPromptText(request.context);
-        if (latestPrompt.startsWith(GYM_STOP_SHIMMER_PARENT_PROMPT)) {
-            // Hands the slow turn to a subtask once, then answers at once, so
-            // only the subtask is still working when it is stopped.
-            if (this.#toolCallEmittedScriptKeys.has(scriptKey))
-                return { content: [{ type: "text", text: "The subtask is on it." }] };
-            this.#toolCallEmittedScriptKeys.add(scriptKey);
-            return {
-                content: [
-                    {
-                        type: "toolCall",
-                        name: "create_subtask",
-                        arguments: {
-                            title: "Slow subtask",
-                            text: `${GYM_STOP_SHIMMER_PROMPT}-subtask`,
-                            model: request.modelId,
-                            provider: request.providerId,
-                            effort: "medium",
-                        },
-                    },
-                ],
-            };
-        }
-        if (latestPrompt.startsWith(GYM_ONBOARDING_START_PROMPT))
-            return {
-                content: [{ type: "text", text: GYM_ONBOARDING_START_REPLY }],
-                textDeltaChunkSize: 6,
-                textDeltaDelayMs: 30,
-                completionDelayMs: 0,
-            };
         if (latestPrompt.startsWith(GYM_STOP_SHIMMER_PROMPT)) {
             // A turn slow enough to still be streaming when the person presses
             // Stop: about a minute of small deltas, which the abort cuts short.
-            // Only a turn this prompt opens: Prioritizing quotes it in its
-            // notices and must answer as quickly as ever.
             return {
                 content: [
                     { type: "text", text: `script=${scriptKey} ${"still going ".repeat(400)}` },

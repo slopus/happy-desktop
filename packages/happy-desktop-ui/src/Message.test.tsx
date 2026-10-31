@@ -1031,7 +1031,7 @@ it("makes the avatar and author name a profile affordance without shifting geome
     expect(groupedRoot.element.querySelector('[data-happy-desktop-ui="avatar"]')).toBeNull();
     await view.screenshot("Message.identity.test");
 });
-it("uses Happy's own mark as Happy's compact inline agent avatar", async () => {
+it("uses the Happy logo as Happy’s compact inline agent avatar", async () => {
     const view = createRenderer().render(
         () =>
             stage(
@@ -1041,13 +1041,12 @@ it("uses Happy's own mark as Happy's compact inline agent avatar", async () => {
         { width: 560, height: 80 },
     );
     await view.ready();
-    const mark = view.$('[data-testid="happy-agent"] [data-happy-desktop-ui="happy-cell"]');
-    expect(mark.bounds()).toMatchObject({ width: 16, height: 16 });
-    expect(
-        view.container.querySelector(
-            '[data-testid="happy-agent"] [data-happy-desktop-ui="avatar"]',
-        ),
-    ).toBeNull();
+    const avatar = view.$('[data-testid="happy-agent"] [data-happy-desktop-ui="avatar"]');
+    expect(avatar.bounds()).toEqual({ x: 14, y: 20, width: 12, height: 12 });
+    expect(avatar.element.getAttribute("data-size")).toBe("xs");
+    expect(avatar.computedStyle("background-color")).toBe("rgba(0, 0, 0, 0)");
+    const image = view.$('[data-testid="happy-agent"] [data-happy-desktop-ui="avatar-image"]');
+    expect((image.element as HTMLImageElement).src).toBe(happyLogoBlackUrl);
     /* Agent rows carry no meta margin-left, so the author name starts at the
        row's own 30px agent padding-left (see message.css's
        `:not([data-agent]):not([data-own]) .happy-message__meta` comment). */

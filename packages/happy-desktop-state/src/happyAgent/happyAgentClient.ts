@@ -63,11 +63,6 @@ import {
     type HappyAgentSurfaceSettingsStore,
 } from "./happyAgentSurfaceSettingsStore.js";
 import {
-    happyAgentStemCellsSettingsStoreCreate,
-    type HappyAgentStemCellsHintPersistence,
-    type HappyAgentStemCellsSettingsStore,
-} from "./happyAgentStemCellsSettingsStore.js";
-import {
     happyAgentWorkspaceMemoryStoreCreate,
     type HappyAgentWorkspaceMemoryPersistence,
     type HappyAgentWorkspaceMemoryStore,
@@ -102,10 +97,6 @@ import {
 } from "./happyAgentProfileStore.js";
 import type { HappyAgentProfilePhotoCodec } from "./happyAgentProfilePhoto.js";
 import {
-    happyAgentDefaultModelStoreCreate,
-    type HappyAgentDefaultModelStore,
-} from "./happyAgentDefaultModelStore.js";
-import {
     happyAgentProvidersStoreCreate,
     type HappyAgentProvidersStore,
 } from "./happyAgentProvidersStore.js";
@@ -130,17 +121,6 @@ import { happyAgentTeamsStoreCreate, type HappyAgentTeamsStore } from "./happyAg
 import { happyAgentArtifactsCreate, type HappyAgentArtifacts } from "../artifacts/artifacts.js";
 import { happyAgentSurfaceChatGroupsCreate } from "../surfaces/surfaceChatGroups.js";
 import { happyAgentSurfacesCreate, type HappyAgentSurfaces } from "../surfaces/surfaces.js";
-import {
-    happyAgentSpacesStoreCreate,
-    type HappyAgentSpacesRead,
-    type HappyAgentSpacesStore,
-} from "../spaces/spacesStore.js";
-import {
-    happyAgentSidebarProposalsStoreCreate,
-    type HappyAgentSidebarProposalsStore,
-} from "../spaces/sidebarProposalsStore.js";
-import { happyAgentStoriesCreate, type HappyAgentStories } from "../stories/stories.js";
-import type { HappyAgentStoriesHintPersistence } from "../stories/storiesSettingsStore.js";
 import {
     happyAgentDeviceBridgesStoreCreate,
     type HappyAgentDeviceBridgesStore,
@@ -215,12 +195,6 @@ export interface HappyAgentWorkspaceClient {
      */
     providers(): HappyAgentProvidersStore;
     /**
-     * The model new conversations start on, as a chat's default-model figure
-     * reads and changes it. Materialized on first access and shared; every
-     * change the daemon confirms replaces the catalog `models` holds.
-     */
-    defaultModel(): HappyAgentDefaultModelStore;
-    /**
      * The voice controller and prompt this machine's calls start with, as the
      * Voice settings read and change them. Materialized on first access and
      * shared, so every settings window edits the same prompt draft.
@@ -230,10 +204,6 @@ export interface HappyAgentWorkspaceClient {
     taskSettings(): HappyAgentTaskSettingsStore;
     /** The authenticated person's Surface autojoin preference, materialized on first access. */
     surfaceSettings(): HappyAgentSurfaceSettingsStore;
-    /** The authenticated person's Stem Cells preference, materialized on first access. */
-    stemCellsSettings(): HappyAgentStemCellsSettingsStore;
-    /** Stories: the experiment's setting, the row, stickers and the editor; materialized on first access. */
-    stories(): HappyAgentStories;
     /**
      * This Happy Agent's own machine-wide instructions, as one editable document.
      * Materialized on first access and shared, so the settings window and
@@ -256,17 +226,6 @@ export interface HappyAgentWorkspaceClient {
      * Surfaces says so through the catalog's availability.
      */
     surfaces(): HappyAgentSurfaces;
-    /**
-     * The reader's spaces sidebar: Happy, the manager's flat sections, and
-     * the batches it applied. Materialized on first access; a daemon from
-     * before spaces says so through its availability.
-     */
-    spaces(): HappyAgentSpacesStore;
-    /**
-     * The sidebar proposals Prioritizing's chat shows inline, each followed
-     * while a chat asks for it. Materialized on first access.
-     */
-    sidebarProposals(): HappyAgentSidebarProposalsStore;
     /**
      * The document a presented-file preview shows, read into memory for the
      * host's viewer. Materialized on first access and shared, since one
@@ -460,15 +419,10 @@ export interface HappyAgentWorkspaceClientDeps {
         listener: (rejection: MutationRejectedDelta) => void,
     ) => () => void;
     readonly sessionListOutput?: (event: HappyAgentSessionListOutput) => void;
-    /** Told how long each authoritative read of the spaces sidebar took. */
-    readonly spacesReadObserve?: (read: HappyAgentSpacesRead) => void;
     readonly chatOutput?: (sessionId: HappyAgentSessionId, event: HappyAgentChatOutput) => void;
     readonly modelPreferencePersistence?: HappyAgentModelPreferencePersistence;
     /** Where this Happy Agent's tab and read memory is kept; omitted keeps it in memory. */
     readonly workspaceMemoryPersistence?: HappyAgentWorkspaceMemoryPersistence;
-    /** Where this connection's last Stem Cells answer is kept; omitted keeps none. */
-    readonly stemCellsHintPersistence?: HappyAgentStemCellsHintPersistence;
-    readonly storiesHintPersistence?: HappyAgentStoriesHintPersistence;
     /**
      * Builds the driver behind a terminal: the app-layer machinery that owns the
      * terminal protocol client and the VT emulator. Omitting it leaves terminals
@@ -604,19 +558,14 @@ export function happyAgentWorkspaceClientCreate(
     let teamsStore: HappyAgentTeamsStore | undefined;
     let profileStore: HappyAgentProfileStore | undefined;
     let providersStore: HappyAgentProvidersStore | undefined;
-    let defaultModelStore: HappyAgentDefaultModelStore | undefined;
     let voiceSettingsStore: HappyAgentVoiceSettingsStore | undefined;
     let taskSettingsStore: HappyAgentTaskSettingsStore | undefined;
     let surfaceSettingsStore: HappyAgentSurfaceSettingsStore | undefined;
-    let stemCellsSettingsStore: HappyAgentStemCellsSettingsStore | undefined;
-    let stories: HappyAgentStories | undefined;
     let instructionsStore: HappyAgentInstructionsStore | undefined;
     let securityPolicyStore: HappyAgentSecurityPolicyStore | undefined;
     let secretsStore: HappyAgentSecretsStore | undefined;
     let artifacts: HappyAgentArtifacts | undefined;
     let surfaces: HappyAgentSurfaces | undefined;
-    let spaces: HappyAgentSpacesStore | undefined;
-    let sidebarProposals: HappyAgentSidebarProposalsStore | undefined;
     let toolMediaDocument: HappyAgentToolMediaDocumentStore | undefined;
     const deviceBridgeStores = new Map<HappyAgentGroupId, HappyAgentDeviceBridgesStore>();
     let deviceBridgeSupport: HappyAgentDeviceBridgeSupportStore | undefined;
@@ -832,29 +781,6 @@ export function happyAgentWorkspaceClientCreate(
             });
             return surfaces;
         },
-        spaces() {
-            if (disposed) throw new Error("The Happy Agent client is disposed.");
-            spaces ??= happyAgentSpacesStoreCreate({
-                client: deps.client,
-                sync: deps.connection.sync,
-                stemCellTaskBegin: (identity, created) =>
-                    deps.connection.beginStemCellTask(identity, created),
-                proposalSeenMemory: {
-                    read: () => memory.sidebarProposalSeenRead(),
-                    write: (seen) => memory.sidebarProposalSeenWrite(seen),
-                },
-                ...(deps.spacesReadObserve ? { readObserve: deps.spacesReadObserve } : {}),
-            });
-            return spaces;
-        },
-        sidebarProposals() {
-            if (disposed) throw new Error("The Happy Agent client is disposed.");
-            sidebarProposals ??= happyAgentSidebarProposalsStoreCreate({
-                client: deps.client,
-                sync: deps.connection.sync,
-            });
-            return sidebarProposals;
-        },
         toolMediaDocument() {
             if (disposed) throw new Error("The Happy Agent client is disposed.");
             toolMediaDocument ??= happyAgentToolMediaDocumentStoreCreate({
@@ -961,14 +887,6 @@ export function happyAgentWorkspaceClientCreate(
             });
             return providersStore;
         },
-        defaultModel() {
-            if (disposed) throw new Error("The Happy Agent client is disposed.");
-            defaultModelStore ??= happyAgentDefaultModelStoreCreate({
-                client: deps.client,
-                models,
-            });
-            return defaultModelStore;
-        },
         taskSettings() {
             if (disposed) throw new Error("The Happy Agent client is disposed.");
             taskSettingsStore ??= happyAgentTaskSettingsStoreCreate({
@@ -984,25 +902,6 @@ export function happyAgentWorkspaceClientCreate(
                 sync: deps.connection.sync,
             });
             return surfaceSettingsStore;
-        },
-        stemCellsSettings() {
-            if (disposed) throw new Error("The Happy Agent client is disposed.");
-            stemCellsSettingsStore ??= happyAgentStemCellsSettingsStoreCreate(
-                { client: deps.client, sync: deps.connection.sync },
-                deps.stemCellsHintPersistence,
-            );
-            return stemCellsSettingsStore;
-        },
-        stories() {
-            if (disposed) throw new Error("The Happy Agent client is disposed.");
-            stories ??= happyAgentStoriesCreate({
-                client: deps.client,
-                sync: deps.connection.sync,
-                ...(deps.storiesHintPersistence
-                    ? { hintPersistence: deps.storiesHintPersistence }
-                    : {}),
-            });
-            return stories;
         },
         voiceSettings() {
             if (disposed) throw new Error("The Happy Agent client is disposed.");
@@ -1053,7 +952,6 @@ export function happyAgentWorkspaceClientCreate(
                         agentIdentities: (agentIdentities ??= happyAgentAgentIdentitySourceCreate({
                             client: deps.client,
                             list: workspace.sessionList(),
-                            spaces: () => spaces,
                         })),
                         output: deps.chatOutput
                             ? (event) => deps.chatOutput?.(sessionId, event)
@@ -1163,18 +1061,12 @@ export function happyAgentWorkspaceClientCreate(
             profileStore = undefined;
             providersStore?.[Symbol.dispose]();
             providersStore = undefined;
-            defaultModelStore?.[Symbol.dispose]();
-            defaultModelStore = undefined;
             voiceSettingsStore?.[Symbol.dispose]();
             voiceSettingsStore = undefined;
             taskSettingsStore?.[Symbol.dispose]();
             taskSettingsStore = undefined;
             surfaceSettingsStore?.[Symbol.dispose]();
             surfaceSettingsStore = undefined;
-            stemCellsSettingsStore?.[Symbol.dispose]();
-            stemCellsSettingsStore = undefined;
-            stories?.[Symbol.dispose]();
-            stories = undefined;
             instructionsStore?.[Symbol.dispose]();
             instructionsStore = undefined;
             securityPolicyStore?.[Symbol.dispose]();
@@ -1189,9 +1081,6 @@ export function happyAgentWorkspaceClientCreate(
             deviceBridgeSupport = undefined;
             artifacts = undefined;
             surfaces?.[Symbol.dispose]();
-            spaces?.[Symbol.dispose]();
-            sidebarProposals?.[Symbol.dispose]();
-            sidebarProposals = undefined;
             surfaces = undefined;
             deps.catalogSource[Symbol.dispose]();
             for (const binding of chats.values()) {

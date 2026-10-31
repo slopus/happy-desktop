@@ -108,23 +108,6 @@ function waitingForModelProject(
     );
 }
 
-/**
- * Whether the running turn is Happy Agent writing its own messages, with no
- * model behind them: there is no model work for a working line to report.
- */
-function turnScriptedProject(
-    session: SessionState | undefined,
-    elements: readonly ChatElement[] | undefined,
-    runStatus: HappyAgentChatSnapshot["runStatus"],
-): boolean {
-    const runId = session?.activeTurn?.runId;
-    if (runStatus !== "running" || runId === undefined || elements === undefined) return false;
-    return elements.some(
-        (element) =>
-            element.runId === runId && element.kind === "agent_text" && element.scripted === true,
-    );
-}
-
 function workingPhaseProject(
     session: SessionState | undefined,
     waitingForModel: boolean,
@@ -659,11 +642,6 @@ export interface HappyAgentChatSnapshot {
     readonly workingPhase: HappyAgentWorkingPhase;
     readonly workingLabel?: string;
     readonly workingWait?: HappyAgentWorkingWait;
-    /**
-     * The running turn writes Happy Agent's own messages, no model's, so no
-     * working line reports it.
-     */
-    readonly turnScripted: boolean;
     /** The automatic recovery the turn is running, which the working line reports. */
     readonly retrying?: ConversationRetrying;
     readonly activeTurnId?: string;
@@ -685,11 +663,6 @@ export interface HappyAgentChatSnapshot {
     readonly backgroundProcesses: readonly HappyAgentBackgroundProcess[];
     readonly detachedBackgroundProcessIds: ReadonlySet<number>;
     readonly modelLocked: boolean;
-    /**
-     * What the composer invites, in the agent's own words, such as "Or just
-     * tell me in your own words…"; absent for the window's own prompt.
-     */
-    readonly composerPlaceholder?: string;
     readonly showReasoning: boolean;
     readonly expandedTurnIds: ReadonlySet<string>;
     readonly expandedMessageIds: ReadonlySet<string>;
@@ -908,7 +881,6 @@ export function happyAgentChatStoreCreate(
         runStatus: "idle",
         subagentsRunning: false,
         workingPhase: "working",
-        turnScripted: false,
         transcriptComplete: true,
         loadingMore: false,
         pendingUserInputs: [],
@@ -1203,7 +1175,6 @@ export function happyAgentChatStoreCreate(
             runStatus,
             subagentsRunning: connected?.subagentsRunning ?? false,
             workingPhase: workingPhaseProject(connected, waitingForModel),
-            turnScripted: turnScriptedProject(connected, transcriptElements, runStatus),
             ...(workingLabel === undefined ? {} : { workingLabel }),
             ...(workingWait === undefined ? {} : { workingWait }),
             ...(retrying === undefined ? {} : { retrying }),
@@ -1227,9 +1198,6 @@ export function happyAgentChatStoreCreate(
             backgroundProcesses,
             detachedBackgroundProcessIds,
             modelLocked: connected?.modelLocked ?? false,
-            ...(connected?.composerPlaceholder === undefined
-                ? {}
-                : { composerPlaceholder: connected.composerPlaceholder }),
             showReasoning,
             expandedTurnIds,
             expandedMessageIds,

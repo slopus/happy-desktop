@@ -61,8 +61,7 @@ export interface DesktopMobileSetupProps {
     readonly pairingOptions: DesktopMobilePairingOptions;
 }
 
-/** Where each phone downloads Happy. */
-export const HAPPY_MOBILE_STORE_URLS = {
+const STORE_URLS = {
     // The short form of the App Store link: fewer bytes keep the code at a
     // lower version, so it still decodes at the smallest window.
     ios: "https://apps.apple.com/app/id6748571505",
@@ -138,7 +137,7 @@ export function MobileStoreDownload(props: {
                 </Button>
             </div>
             <QRCode
-                data={HAPPY_MOBILE_STORE_URLS[props.platform]}
+                data={STORE_URLS[props.platform]}
                 data-testid="happy-mobile-store-qr"
                 label="QR code to download Happy mobile app"
                 mark={props.platform === "ios" ? "app-store" : "google-play"}

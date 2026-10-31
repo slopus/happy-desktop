@@ -7,7 +7,6 @@ import type {
     HappyAgentChangeTiersStore,
     ExperimentsStore,
     ProjectsVisibilityStore,
-    StemCellAnimationStore,
     GptLiveStore,
     HappyAgentInstructionsSnapshot,
     HappyAgentDebugLogSnapshot,
@@ -35,11 +34,8 @@ import {
     happyAgentServiceName,
     happyAgentThinkingLabel,
     experimentsStoreNoop,
-    happyAgentStemCellsSettingsStoreNoop,
-    happyAgentStoriesSettingsStoreNoop,
     projectsVisibilityStoreNoop,
     projectsVisibilityConnection,
-    stemCellAnimationStoreNoop,
     gptLiveStoreNoop,
     happyAgentCloudStoreNoop,
     happyAgentAvailabilityProject,
@@ -68,8 +64,6 @@ import {
     HappyAgentGeneralSettings,
     HappyAgentExperimentalSettings,
     HappyAgentConnectionSettingsSection,
-    HappyAgentStemCellsSettings,
-    HappyAgentStoriesSettings,
     HappyAgentDebugLogPanel,
     HappyAgentDebugSettings,
     HappyAgentFileTierSettings,
@@ -352,9 +346,6 @@ const CATEGORY_DESCRIPTIONS: Record<string, string> = {
     usage: "What each provider account has spent",
 };
 
-/** The row in Experimental that is a window preference rather than an experiment. */
-const STEM_CELL_ANIMATION_SETTING = "stemCellAnimation";
-
 /** Stands in where the host cannot hold the machine awake, keeping hook order fixed. */
 const keepAwakeStoreNone = keepAwakeStoreCreate({ mode: "off" });
 
@@ -385,8 +376,6 @@ export interface AppHappyAgentSettingsViewProps {
      * host that remembers no such choice, which offers no control for it.
      */
     projectsVisibility?: ProjectsVisibilityStore;
-    /** Whether new work's stem cell grows into its icon. Absent in a host that remembers no such choice. */
-    stemCellAnimation?: StemCellAnimationStore;
     /** Whether this window sends product analytics events. Absent where it sends none. */
     usageAnalytics?: UsageAnalyticsStore;
     gptLive?: GptLiveStore;
@@ -437,12 +426,6 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
         experimentsStore.subscribe,
         experimentsStore.get,
         experimentsStore.get,
-    );
-    const stemCellAnimationStore = props.stemCellAnimation ?? stemCellAnimationStoreNoop;
-    const stemCellAnimation = useSyncExternalStore(
-        stemCellAnimationStore.subscribe,
-        stemCellAnimationStore.get,
-        stemCellAnimationStore.get,
     );
     const projectsVisibilityStore = props.projectsVisibility ?? projectsVisibilityStoreNoop;
     const projectsVisibility = useSyncExternalStore(
@@ -737,50 +720,23 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
             sidebarWidth={props.sidebarVisibility?.get().width}
         >
             {section === "experimental" ? (
-                <>
-                    <HappyAgentExperimentalSettings
-                        features={[
-                            // Voice calls is switched on the Voice page, the one
-                            // place that names what it turns on.
-                            ...EXPERIMENTAL_FEATURES.filter(
-                                (feature) => feature.id !== "voice",
-                            ).map((feature) => ({
+                <HappyAgentExperimentalSettings
+                    features={[
+                        // Voice calls is switched on the Voice page, the one
+                        // place that names what it turns on.
+                        ...EXPERIMENTAL_FEATURES.filter((feature) => feature.id !== "voice").map(
+                            (feature) => ({
                                 ...feature,
                                 enabled: experiments[feature.id],
-                            })),
-                            ...(props.stemCellAnimation
-                                ? [
-                                      {
-                                          id: STEM_CELL_ANIMATION_SETTING,
-                                          label: "Animate new work’s icon",
-                                          enabled: stemCellAnimation.stemCellAnimationEnabled,
-                                      },
-                                  ]
-                                : []),
-                        ]}
-                        onFeatureChange={(id, enabled) => {
-                            if (id === STEM_CELL_ANIMATION_SETTING) {
-                                stemCellAnimationStore.stemCellAnimationUpdate(enabled);
-                                return;
-                            }
-                            const feature = EXPERIMENTAL_FEATURES.find(
-                                (feature) => feature.id === id,
-                            );
-                            if (feature)
-                                experimentsStore.featureUpdate(feature.id, enabled, "experiments");
-                        }}
-                    />
-                    {directory.happyAgents.map((entry) => (
-                        <HappyAgentConnectionSettingsSection
-                            connectionLabel={entry.label}
-                            key={entry.id}
-                            {...entryUnavailable(entry)}
-                        >
-                            <AppHappyAgentStemCellsSettings entry={entry} />
-                            <AppHappyAgentStoriesSettings entry={entry} />
-                        </HappyAgentConnectionSettingsSection>
-                    ))}
-                </>
+                            }),
+                        ),
+                    ]}
+                    onFeatureChange={(id, enabled) => {
+                        const feature = EXPERIMENTAL_FEATURES.find((feature) => feature.id === id);
+                        if (feature)
+                            experimentsStore.featureUpdate(feature.id, enabled, "experiments");
+                    }}
+                />
             ) : section === "voice" ? (
                 props.gptLive ? (
                     <>
@@ -1486,76 +1442,6 @@ function entryUnavailable(entry: AppHappyAgentEntry): { readonly unavailable?: s
     return availability.online === false
         ? { unavailable: availability.refusal ?? availability.message }
         : {};
-}
-
-/** Settings is window-wide, but each connection edits only its authenticated person's choice. */
-function AppHappyAgentStemCellsSettings(props: { readonly entry: AppHappyAgentEntry }) {
-    const { entry } = props;
-    const store = entry.session?.stemCellsSettings?.() ?? happyAgentStemCellsSettingsStoreNoop;
-    const snapshot = useSyncExternalStore(store.subscribe, store.get, store.get);
-    const availability = entry.session
-        ? happyAgentAvailabilityProject(entry.session.connection.get(), true, {
-              status: entry.status,
-              ...(entry.message === undefined ? {} : { message: entry.message }),
-          })
-        : undefined;
-    const unavailable =
-        availability?.online === false
-            ? (availability.refusal ?? availability.message)
-            : !entry.session
-              ? "This connection is unavailable."
-              : snapshot.status === "ready" && !snapshot.online
-                ? "Reconnecting to this connection’s user settings."
-                : undefined;
-    return (
-        <HappyAgentStemCellsSettings
-            connectionLabel={entry.label}
-            status={snapshot.status}
-            enabled={snapshot.status === "ready" && snapshot.stemCellsEnabled}
-            saving={snapshot.status === "ready" && snapshot.saving}
-            error={snapshot.status !== "unsupported" ? snapshot.error?.message : undefined}
-            saveError={snapshot.status === "ready" ? snapshot.saveError?.message : undefined}
-            unavailable={unavailable}
-            onEnabledChange={(enabled) => {
-                if (availability?.online) store.stemCellsUpdate(enabled);
-            }}
-        />
-    );
-}
-
-/** Stories, like Stem Cells, are each connection's authenticated person's own choice. */
-function AppHappyAgentStoriesSettings(props: { readonly entry: AppHappyAgentEntry }) {
-    const { entry } = props;
-    const store = entry.session?.stories?.().settings() ?? happyAgentStoriesSettingsStoreNoop;
-    const snapshot = useSyncExternalStore(store.subscribe, store.get, store.get);
-    const availability = entry.session
-        ? happyAgentAvailabilityProject(entry.session.connection.get(), true, {
-              status: entry.status,
-              ...(entry.message === undefined ? {} : { message: entry.message }),
-          })
-        : undefined;
-    const unavailable =
-        availability?.online === false
-            ? (availability.refusal ?? availability.message)
-            : !entry.session
-              ? "This connection is unavailable."
-              : snapshot.status === "ready" && !snapshot.online
-                ? "Reconnecting to this connection’s user settings."
-                : undefined;
-    return (
-        <HappyAgentStoriesSettings
-            connectionLabel={entry.label}
-            status={snapshot.status}
-            enabled={snapshot.status === "ready" && snapshot.storiesEnabled}
-            saving={snapshot.status === "ready" && snapshot.saving}
-            error={snapshot.status !== "unsupported" ? snapshot.error?.message : undefined}
-            saveError={snapshot.status === "ready" ? snapshot.saveError?.message : undefined}
-            unavailable={unavailable}
-            onEnabledChange={(enabled) => {
-                if (availability?.online) store.storiesUpdate(enabled);
-            }}
-        />
-    );
 }
 
 /** Each connection owns one preference store and one coarse subscription while this page is open. */

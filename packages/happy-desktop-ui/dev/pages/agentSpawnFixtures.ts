@@ -74,9 +74,9 @@ export const agentSpawnRows: readonly ConversationToolCall[] = [
 
 const sol = { modelId: "openai/gpt-6.1-sol", providerId: "codex", name: "GPT-6.1 Sol" };
 
-/** A spawn whose agent the window knows: its sidebar row's name and clay icon, working. */
-export const agentSpawnNamedWorking: ConversationToolCall = {
-    toolCallId: "spawn-named-working",
+/** A spawn whose agent the window knows: its task's title and the tasks glyph. */
+export const agentSpawnNamedTask: ConversationToolCall = {
+    toolCallId: "spawn-named-task",
     toolName: "create_agent",
     arguments: { title: "Organize Ada's work from the places above, most important first." },
     status: "success",
@@ -86,26 +86,14 @@ export const agentSpawnNamedWorking: ConversationToolCall = {
         type: "agentSpawn",
         model: sol,
         agentId: "fcs8eh6n4j3pz2t9yd7w5cxa",
-        agent: { name: "Focus", face: { kind: "library", slug: "goals" }, working: true },
+        agent: { name: "Organize Ada's work", face: { kind: "task" } },
     },
     display: "Created collaborator fcs8eh6n4j3pz2t9yd7w5cxa and sent it the task.",
 };
 
-/** The same agent once it has stopped working. */
-export const agentSpawnNamedIdle: ConversationToolCall = {
-    ...agentSpawnNamedWorking,
-    toolCallId: "spawn-named-idle",
-    presentation: {
-        type: "agentSpawn",
-        model: sol,
-        agentId: "fcs8eh6n4j3pz2t9yd7w5cxa",
-        agent: { name: "Focus", face: { kind: "library", slug: "goals" }, working: false },
-    },
-};
-
 /** An agent with no sidebar row: its title and the mark from its initials. */
 export const agentSpawnNamedInitials: ConversationToolCall = {
-    ...agentSpawnNamedWorking,
+    ...agentSpawnNamedTask,
     toolCallId: "spawn-named-initials",
     summary: "Read the release logs",
     presentation: {
@@ -117,7 +105,6 @@ export const agentSpawnNamedInitials: ConversationToolCall = {
 };
 
 export const agentSpawnNamedRows: readonly ConversationToolCall[] = [
-    agentSpawnNamedWorking,
-    agentSpawnNamedIdle,
+    agentSpawnNamedTask,
     agentSpawnNamedInitials,
 ];

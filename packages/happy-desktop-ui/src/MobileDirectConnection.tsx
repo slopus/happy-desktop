@@ -146,8 +146,6 @@ export interface MobileDirectPairingPanelProps {
     readonly codeSize?: number;
     /** False where the code's countdown is drawn beside it rather than under it. */
     readonly codeCountdown?: boolean;
-    /** Draws the code flat where it sits, as a chat does, with no paper shape or shadow. */
-    readonly codePlain?: boolean;
     /** `compact` fits the emoji step under a setup page's title line. */
     readonly density?: "regular" | "compact";
     readonly "data-testid"?: string;
@@ -276,7 +274,6 @@ function DirectPairingBody(props: MobileDirectPairingPanelProps & { readonly blo
             return (
                 <PairingCode
                     countdown={props.codeCountdown}
-                    {...(props.codePlain ? { plain: true } : {})}
                     data={pairing.qr}
                     expiresAt={pairing.expiresAt}
                     label="QR code to connect a phone directly"

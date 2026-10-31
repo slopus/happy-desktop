@@ -1,7 +1,5 @@
 import {
-    chatActionSegments,
     conversationTextLayoutParse,
-    type ChatActionBlock,
     conversationTextSegments,
     type ConversationEntry,
     type ConversationMediaItem,
@@ -36,38 +34,15 @@ import { mediaVideoFramesSignature } from "./mediaVideoFrames";
  * measurement every agent-written tree uses. An HTML block still open at the
  * end of a streaming reply is held back until it closes, so it never flashes
  * as raw text; once the reply settles it is inert HTML like any other.
- *
- * Action blocks (`chatActionBlocks` in happy-desktop-state: buttons, a
- * checklist, steps, a status line) are cut out the same way, first, and drawn
- * by `ChatActionBlock` where they stood. They need no earlier picture, so any
- * agent reply may hold one. A block that breaks their grammar stays text.
  */
 
-/** One layout in a reply: a tree over pictures it named, or an action block. */
-export type MessageInlineLayout = MessageMediaLayout | MessageActionLayout;
-
-export type MessageMediaLayout = {
-    readonly kind: "media";
+/** One layout in a reply: its tree, and the picture each item node names. */
+export type MessageInlineLayout = {
     readonly key: string;
     readonly root: readonly ConversationMediaLayoutNode[];
     /** The picture each item node shows, by the node's index. */
     readonly members: readonly ConversationMediaRunMember[];
 };
-
-export type MessageActionLayout = {
-    readonly kind: "actions";
-    readonly key: string;
-    readonly block: ChatActionBlock;
-    /** The block's place among its reply's action blocks: with the reply's id, what a choice is kept under. */
-    readonly index: number;
-};
-
-/** The pictures a reply's layouts place, whatever else they hold. */
-export function messageLayoutMembers(
-    layout: MessageInlineLayout,
-): readonly ConversationMediaRunMember[] {
-    return layout.kind === "media" ? layout.members : [];
-}
 
 /** A reply's layouts, and its text with each one replaced by its placeholder. */
 export type MessageInlineLayouts = {
@@ -123,12 +98,13 @@ export function conversationInlineLayouts(
             continue;
         }
         if (entry.kind !== "message" || entry.message.sender?.kind !== "agent") continue;
+        if (shown.size === 0) continue;
         const layouts = messageInlineLayouts(entry, shown, framesAt);
         if (layouts === undefined) continue;
         messages ??= new Map();
         messages.set(entry.message.id, layouts);
         for (const layout of layouts.layouts.values())
-            for (const member of messageLayoutMembers(layout)) {
+            for (const member of layout.members) {
                 hidden ??= new Map();
                 let indexes = hidden.get(member.entryId);
                 if (!indexes) {
@@ -161,50 +137,6 @@ function memberOf(
 /* A reply's text is cut once per entry, however often the transcript updates. */
 const segmentsOf = new WeakMap<ConversationEntry, readonly ConversationTextSegment[]>();
 
-type ActionCut = {
-    /** The reply's text with each action block replaced by its placeholder. */
-    readonly text: string;
-    readonly layouts: ReadonlyMap<string, MessageActionLayout>;
-    /** Whether anything was cut or held back. */
-    readonly changed: boolean;
-};
-const actionsOf = new WeakMap<ConversationEntry, ActionCut>();
-
-/** The reply's action blocks, cut out of its text once per entry. */
-function actionCut(entry: Extract<ConversationEntry, { kind: "message" }>): ActionCut {
-    const held = actionsOf.get(entry);
-    if (held) return held;
-    const message = entry.message;
-    const streaming = message.generationStatus === "streaming";
-    const pieces: string[] = [];
-    const layouts = new Map<string, MessageActionLayout>();
-    let changed = false;
-    let index = 0;
-    for (const [position, segment] of chatActionSegments(message.text).entries()) {
-        if (segment.type === "markdown") {
-            pieces.push(segment.text);
-            continue;
-        }
-        if (!segment.complete) {
-            if (streaming) changed = true;
-            else pieces.push(segment.html);
-            continue;
-        }
-        if (!segment.block) {
-            pieces.push(segment.html);
-            continue;
-        }
-        changed = true;
-        const key = `a${String(position)}-${hash(segment.html)}`;
-        layouts.set(key, { kind: "actions", key, block: segment.block, index });
-        index += 1;
-        pieces.push(`\n\n<!--happy-layout:${key}-->\n\n`);
-    }
-    const cut = { text: changed ? pieces.join("") : message.text, layouts, changed };
-    actionsOf.set(entry, cut);
-    return cut;
-}
-
 /* An entry is immutable; its layouts change only when what its sources
    resolve to does, so an unchanged resolution keeps its value. */
 const resolved = new WeakMap<ConversationEntry, MessageInlineLayouts>();
@@ -218,18 +150,15 @@ function messageInlineLayouts(
     /* No tag, no layout: almost every reply leaves here. */
     if (!message.text.includes("<")) return undefined;
     const streaming = message.generationStatus === "streaming";
-    const actions = actionCut(entry);
     const pieces: string[] = [];
-    const layouts = new Map<string, MessageInlineLayout>(actions.layouts);
-    let changed = actions.changed;
-    /* With no picture shown yet there is nothing a media block could name. */
-    let segments: readonly ConversationTextSegment[] | undefined =
-        shown.size === 0 ? [{ type: "markdown", text: actions.text }] : segmentsOf.get(entry);
+    const layouts = new Map<string, MessageInlineLayout>();
+    let changed = false;
+    let segments = segmentsOf.get(entry);
     if (segments === undefined) {
-        segments = conversationTextSegments(actions.text);
+        segments = conversationTextSegments(message.text);
         segmentsOf.set(entry, segments);
     }
-    if (!changed && !segments.some((segment) => segment.type === "layout")) return undefined;
+    if (!segments.some((segment) => segment.type === "layout")) return undefined;
     for (const [position, segment] of segments.entries()) {
         if (segment.type === "markdown") {
             pieces.push(segment.text);
@@ -260,7 +189,7 @@ function messageInlineLayouts(
                 framesAt,
             )}`,
         )}`;
-        layouts.set(key, { kind: "media", key, ...layout });
+        layouts.set(key, { key, ...layout });
         /* Its own block, at the left margin, whatever surrounds it. */
         pieces.push(`\n\n<!--happy-layout:${key}-->\n\n`);
     }
@@ -277,7 +206,7 @@ function messageInlineLayouts(
 type BlockParse = {
     /** Each source the parser asked about, and the picture it named then. */
     readonly asked: ReadonlyMap<string, ConversationMediaRunMember | undefined>;
-    readonly layout: Omit<MessageMediaLayout, "key" | "kind"> | undefined;
+    readonly layout: Omit<MessageInlineLayout, "key"> | undefined;
 };
 
 /* A block's parse depends on its HTML and on what each source it asked about
@@ -286,10 +215,7 @@ type BlockParse = {
 const BLOCK_PARSES = 128;
 const blockParses = new Map<string, BlockParse>();
 
-function blockLayout(
-    html: string,
-    shown: Shown,
-): Omit<MessageMediaLayout, "key" | "kind"> | undefined {
+function blockLayout(html: string, shown: Shown): Omit<MessageInlineLayout, "key"> | undefined {
     const held = blockParses.get(html);
     if (held && [...held.asked].every(([source, member]) => shown.get(source) === member)) {
         blockParses.delete(html);

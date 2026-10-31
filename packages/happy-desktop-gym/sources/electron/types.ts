@@ -20,15 +20,9 @@ export type GymWorkloadName =
     | "memory-idle"
     | "window-edge-resize"
     | "archive-reconcile"
-    | "sidebar-drag"
     | "stop-shimmer"
-    | "nested-row-menus"
-    | "section-create"
     | "mobile-direct-experiment"
     | "jump-shimmer"
-    | "new-work-reuse"
-    | "row-removal"
-    | "sidebar-read-ahead"
     | "window-zoom"
     | "all";
 

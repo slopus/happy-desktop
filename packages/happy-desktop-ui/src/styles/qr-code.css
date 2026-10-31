@@ -13,12 +13,6 @@
     container-type: size;
 }
 
-/* Flat where it sits: the code alone, with no paper shape or shadow. */
-.happy-qr-code[data-appearance="plain"] {
-    border-radius: 0;
-    box-shadow: none;
-}
-
 .happy-qr-code__symbol {
     display: block;
     width: 100%;

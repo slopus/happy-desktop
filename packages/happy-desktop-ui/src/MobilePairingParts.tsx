@@ -28,13 +28,10 @@ export function PairingCode(props: {
     readonly testId: string;
     /** False where the countdown is drawn beside the code instead of under it. */
     readonly countdown?: boolean;
-    /** Draws the code flat, with no paper shape or shadow. */
-    readonly plain?: boolean;
 }) {
     return (
         <Box className="happy-mobile-pairing__code" data-happy-desktop-ui="mobile-pairing-code">
             <QRCode
-                {...(props.plain ? { appearance: "plain" as const } : {})}
                 data={props.data}
                 data-testid={`${props.testId}-qr`}
                 label={props.label}

@@ -33,9 +33,7 @@ const labelOffsets: Record<Engine, Record<ButtonSize, string>> = {
  * those extremes and the raster step is 0.5px, so no correction can bring
  * them all under 0.4. They get the 0.75px contract ceiling instead.
  */
-/** The variants this file measures; `outline` has no rendering contract here yet. */
-type TestedVariant = Exclude<ButtonVariant, "outline">;
-const labelTolerances: Record<TestedVariant, number> = {
+const labelTolerances: Record<ButtonVariant, number> = {
     primary: 0.75,
     secondary: 0.75,
     ghost: 0.4,
@@ -50,7 +48,7 @@ const sizeStyles = {
 } as const;
 
 const variantStyles: Record<
-    TestedVariant,
+    ButtonVariant,
     { background: string; borderColor: string; color: string }
 > = {
     primary: {
@@ -81,7 +79,7 @@ const variantStyles: Record<
 };
 
 /* Realistic Relay labels: ascender-only, descender-heavy, and mixed ink. */
-const variantLabels: Record<TestedVariant, string> = {
+const variantLabels: Record<ButtonVariant, string> = {
     primary: "Approve & merge",
     secondary: "Request changes",
     ghost: "Dismiss",

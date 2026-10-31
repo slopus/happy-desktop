@@ -7,7 +7,6 @@ export * from "./inferenceServer.js";
 export * from "./launch.js";
 export * from "./manifest.js";
 export * from "./paths.js";
-export * from "./sidebarDragChaos.js";
 export * from "./happyAgentRuntime.js";
 export * from "./types.js";
 export * from "./windowServer.js";

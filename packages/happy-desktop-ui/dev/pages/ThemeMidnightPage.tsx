@@ -9,7 +9,6 @@ import { ConversationView } from "../../src/ConversationView";
 import { ThemeScope } from "../../src/ThemeScope";
 import { ComponentPage, FullScreenSpecimen } from "../kit";
 import { conversationEntries } from "./happyAgentChatFixtures";
-import { StoryWindow, type StoryFrame } from "./WindowRedesignPage";
 
 /** The component plan this page documents. The selector and the page header read the same value. */
 export const componentNumber = "P-025";
@@ -54,13 +53,6 @@ const COMPOSER: ComposerSnapshot = {
     text: "",
 };
 
-const frames: readonly Omit<StoryFrame, "theme">[] = [
-    { id: "01-morning", label: "Morning · sidebar and home", scene: "morning" },
-    { id: "02-working", label: "Work · transcript and floaty", scene: "working", floaty: true },
-    { id: "03-release", label: "Crew coordinate", scene: "release", floaty: true },
-    { id: "04-search", label: "Search · command palette", scene: "search" },
-];
-
 function TranscriptWindow(props: { readonly theme: (typeof themes)[number] }) {
     return (
         <ThemeScope customTheme={customTheme} mode={props.theme}>
@@ -102,29 +94,15 @@ export function ThemeMidnightPage() {
             contract="Props only"
             number={componentNumber}
             title="Midnight theme"
-            summary="The same product windows in the dark, midnight, and a sample custom appearance, side by side, for choosing the deeper palette."
+            summary="The same conversation in the dark, midnight, and a sample custom appearance, side by side, for choosing the deeper palette."
         >
-            {frames.flatMap((frame) =>
-                themes.map((theme) => (
-                    <FullScreenSpecimen
-                        key={`${frame.id}-${theme}`}
-                        number={frame.id.split("-")[0]!}
-                        label={`${frame.label} · ${theme}`}
-                        detail={`${String(windowSize.width)} × ${String(windowSize.height)}`}
-                        screen={`${frame.id}-${theme}-${String(windowSize.width)}x${String(windowSize.height)}`}
-                        window={windowSize}
-                    >
-                        <StoryWindow {...frame} customTheme={customTheme} theme={theme} />
-                    </FullScreenSpecimen>
-                )),
-            )}
             {themes.map((theme) => (
                 <FullScreenSpecimen
                     key={`transcript-${theme}`}
-                    number="05"
+                    number="01"
                     label={`Conversation · ${theme}`}
                     detail={`${String(windowSize.width)} × ${String(windowSize.height)}`}
-                    screen={`05-conversation-${theme}-${String(windowSize.width)}x${String(windowSize.height)}`}
+                    screen={`01-conversation-${theme}-${String(windowSize.width)}x${String(windowSize.height)}`}
                     window={windowSize}
                 >
                     <TranscriptWindow theme={theme} />

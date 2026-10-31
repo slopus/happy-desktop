@@ -97,16 +97,6 @@
     --warning-critical: #ff3b30;
     --warning: #8e8e93;
     --success: #34c759;
-    --stem-cell-membrane: #f5c9dd;
-    --stem-cell-core: #d4467f;
-    /* The light a clay cell is lit by: a matte dome and rim light up and to
-       the left, a shade along the lower rim, and a soft contact shadow,
-       matched to the clay icons. */
-    --cell-clay-sheen: rgb(255 255 255 / 0.26);
-    --cell-clay-light: rgb(255 255 255 / 0.45);
-    --cell-clay-grain: rgb(18 26 34 / 0.022);
-    --cell-clay-shade: rgb(150 30 85 / 0.2);
-    --cell-clay-shadow: rgb(20 24 30 / 0.14);
     --surface: #ffffff;
     --surface-ripple: rgb(0 0 0 / 0.08);
     --surface-pressed: #f0f0f2;
@@ -176,15 +166,6 @@
     --box-warning-background: #fff8f0;
     --box-warning-border: #ff9500;
     --box-warning-text: #ff9500;
-    /* Attention: an example, or something proposed or worth noticing that is
-       not the person's yet. Drawn as dashed yellow hairlines, one meaning
-       everywhere. */
-    /* An outline button's hairline: firmer than a divider, which disappears on white. */
-    --happy-button-outline: color-mix(in srgb, var(--text) 22%, transparent);
-    --happy-attention: var(--review-accent);
-    --happy-attention-wash: color-mix(in srgb, var(--box-warning-background) 65%, var(--surface));
-    --happy-attention-badge: var(--box-warning-border);
-    --happy-attention-on: var(--button-primary-background);
     --box-error-background: #fff0f0;
     --box-error-border: #ff3b30;
     --box-error-text: #ff3b30;
@@ -354,8 +335,6 @@
        a strip's +, a row's own control) wears exactly this. */
     --happy-hover-radius: var(--happy-radius-sm);
     --happy-hover-fill: var(--surface-ripple);
-    /* A stem-cell sidebar row's hover: quieter than its selection. */
-    --happy-sidebar-story-hover: rgb(0 0 0 / 0.03);
     --happy-chat-measure: 880px;
     /* How far a frame in a transcript — a card's border, a code block's
        background — stands out from the text column on the left and on the
@@ -378,26 +357,6 @@
        where a long name and its path sprawl away from the column beneath them. */
     --happy-chat-heading-measure: 1120px;
     --happy-z-overlay: 1000;
-    /* Stories are watched on black in every appearance, as photos are: the
-       viewer and the editor are a dark room, and their ink is white. A story's
-       own marks of the reader's choice (a chosen reaction) are Happy teal. */
-    --story-backdrop: #000000;
-    --story-stage: #111111;
-    --story-ink: #ffffff;
-    --story-ink-secondary: rgb(255 255 255 / 0.72);
-    --story-ink-faint: rgb(255 255 255 / 0.32);
-    --story-control: rgb(255 255 255 / 0.14);
-    --story-control-hover: rgb(255 255 255 / 0.24);
-    --story-scrim: rgb(0 0 0 / 0.56);
-    --story-sheet: #1c1c1e;
-    --story-danger: var(--status-error);
-    --story-ring-unseen: var(--text-link);
-    /* The stories row is drawn to the iOS row's colours, which are Telegram's:
-       an unseen ring runs green to blue from top to bottom in every appearance. */
-    --story-ring-unseen-top: #34c76f;
-    --story-ring-unseen-bottom: #3da1fd;
-    --story-ring-seen: #d8d8e1;
-    --story-avatar-fill: #b8bbc4;
     /* Window chrome: what the window reports about itself, which has to be
        legible over whatever the window is showing — including a modal. */
     --happy-z-window-chrome: 1100;
@@ -420,13 +379,6 @@
         --warning-critical: #ff453a;
         --warning: #8e8e93;
         --success: #32d74b;
-        --stem-cell-membrane: #c98aae;
-        --stem-cell-core: #a82a5e;
-        --cell-clay-sheen: rgb(255 255 255 / 0.24);
-        --cell-clay-light: rgb(255 255 255 / 0.26);
-        --cell-clay-grain: rgb(0 0 0 / 0.03);
-        --cell-clay-shade: rgb(80 10 45 / 0.32);
-        --cell-clay-shadow: rgb(0 0 0 / 0.36);
         --surface: #212121;
         --surface-ripple: rgb(255 255 255 / 0.08);
         --surface-pressed: #2c2c2e;
@@ -478,14 +430,6 @@
         --box-warning-background: rgb(255 159 10 / 0.15);
         --box-warning-border: #ff9f0a;
         --box-warning-text: #ffab00;
-        --happy-attention: var(--review-accent);
-        --happy-attention-wash: color-mix(
-            in srgb,
-            var(--box-warning-background) 65%,
-            var(--surface)
-        );
-        --happy-attention-badge: var(--box-warning-border);
-        --happy-attention-on: var(--button-primary-background);
         --box-error-background: rgb(255 69 58 / 0.15);
         --box-error-border: #ff453a;
         --box-error-text: #ff6b6b;
@@ -624,11 +568,6 @@
             var(--text-secondary)
         );
         /* Declared again here, so they resolve against the dark palette. */
-        --story-danger: var(--status-error);
-        --story-ring-unseen: var(--text-link);
-        --story-ring-seen: #48484a;
-        --story-avatar-fill: #5a5a5f;
-        --happy-sidebar-story-hover: rgb(255 255 255 / 0.04);
     }
 }
 
@@ -640,7 +579,6 @@
     /* Declared again so it resolves against this scope's own ripple: inherited
        from a light :root it would stay the light theme's black wash. */
     --happy-hover-fill: var(--surface-ripple);
-    --happy-sidebar-story-hover: rgb(255 255 255 / 0.04);
     --happy-brand-logo-source: url("./assets/brand/logo-white.png");
     --happy-wordmark-source: url("./assets/brand/happy-engineering-stacked-dark.svg");
     --happy-todo-backdrop-source: url("./assets/backdrops/todo-ginkgo-dark.jpg");
@@ -652,13 +590,6 @@
     --warning-critical: #ff453a;
     --warning: #8e8e93;
     --success: #32d74b;
-    --stem-cell-membrane: #c98aae;
-    --stem-cell-core: #a82a5e;
-    --cell-clay-sheen: rgb(255 255 255 / 0.24);
-    --cell-clay-light: rgb(255 255 255 / 0.26);
-    --cell-clay-grain: rgb(0 0 0 / 0.03);
-    --cell-clay-shade: rgb(80 10 45 / 0.32);
-    --cell-clay-shadow: rgb(0 0 0 / 0.36);
     --surface: #212121;
     --surface-ripple: rgb(255 255 255 / 0.08);
     --surface-pressed: #2c2c2e;
@@ -710,10 +641,6 @@
     --box-warning-background: rgb(255 159 10 / 0.15);
     --box-warning-border: #ff9f0a;
     --box-warning-text: #ffab00;
-    --happy-attention: var(--review-accent);
-    --happy-attention-wash: color-mix(in srgb, var(--box-warning-background) 65%, var(--surface));
-    --happy-attention-badge: var(--box-warning-border);
-    --happy-attention-on: var(--button-primary-background);
     --box-error-background: rgb(255 69 58 / 0.15);
     --box-error-border: #ff453a;
     --box-error-text: #ff6b6b;
@@ -845,10 +772,6 @@
     --happy-sidebar-archive-wash-strong: color-mix(in srgb, var(--status-error) 13%, transparent);
     --happy-sidebar-archive-ink: color-mix(in srgb, var(--status-error) 55%, var(--text-secondary));
     /* Declared again here, so they resolve against the dark palette. */
-    --story-danger: var(--status-error);
-    --story-ring-unseen: var(--text-link);
-    --story-ring-seen: #48484a;
-    --story-avatar-fill: #5a5a5f;
 }
 
 /* Midnight: the dark palette taken down to a neutral near-black. Surfaces step

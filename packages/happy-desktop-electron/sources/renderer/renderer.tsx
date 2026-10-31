@@ -22,7 +22,6 @@ import {
     type AppHappyAgentProfilerStore,
     type HappyAgentRouter,
 } from "happy-desktop-app";
-import { desktopHappyOnboardingHostCreate } from "./desktopHappyOnboardingHost";
 import {
     HAPPY_AGENT_DEFAULT_THINKING_LEVEL,
     appearanceStoreCreate,
@@ -34,7 +33,6 @@ import {
     commandPaletteStoreCreate,
     experimentsStoreCreate,
     projectsVisibilityStoreOwnedCreate,
-    stemCellAnimationStoreCreate,
     statusBarStoreCreate,
     gptLiveStoreCreate,
     gptLiveExperimentsConnect,
@@ -56,7 +54,6 @@ import {
     type CommandPaletteStore,
     type ExperimentsStore,
     type ProjectsVisibilityStore,
-    type StemCellAnimationStore,
     type StatusBarStore,
     type UsageAnalyticsStore,
     type GptLiveStore,
@@ -70,9 +67,6 @@ import {
     type HappyAgentWindowStore,
     type HappyAgentModelPreferencePersistence,
     type HappyAgentSessionId,
-    happyOnboardingStoreCreate,
-    happyOnboardingStoreNoop,
-    type HappyOnboardingStore,
 } from "happy-desktop-state";
 import {
     CodeHighlightWorkers,
@@ -152,7 +146,6 @@ import {
     desktopProjectsVisibilityPersistence,
     desktopProjectsVisibilityLegacyConsume,
 } from "./desktopProjectsVisibility";
-import { desktopStemCellAnimationPersistence } from "./desktopStemCellAnimation";
 import { desktopStatusBarPersistence } from "./desktopStatusBar";
 import { desktopGptLivePersistence } from "./desktopGptLive";
 import { desktopGptLiveRuntimeCreate } from "./desktopGptLiveRuntime";
@@ -160,7 +153,6 @@ import { desktopWelcomePersistence } from "./desktopWelcome";
 import { desktopNavigationOrderPersistence } from "./desktopNavigationOrder";
 import { desktopSidebarCollapsePersistence } from "./desktopSidebarCollapse";
 import { DesktopBootGate, desktopBootSkip } from "./DesktopBootGate";
-import { desktopPreviewBuild } from "./desktopPreviewBuild";
 import { desktopAnalyticsCreate } from "./desktopAnalytics";
 import { mobilePairingObserveCreate } from "./desktopMobilePairingAnalytics";
 import { desktopAgentUpdateStoreCreate } from "./desktopAgentUpdateStore";
@@ -382,8 +374,6 @@ function HappyAgentBoundary(props: {
     agentUpdate?: AppHappyAgentUpdateStore;
     /** What is new in the local agent's offered version; supplied with `daemon`. */
     agentReleaseNotes?: AppHappyAgentReleaseNotesStore;
-    /** First run in Happy's chat; supplied with `daemon`, to the local surface only. */
-    happyOnboarding?: HappyOnboardingStore;
     debug?: AppHappyAgentDebugStore;
     performance?: LivePerformanceStore;
     profiler?: AppHappyAgentProfilerStore;
@@ -397,7 +387,6 @@ function HappyAgentBoundary(props: {
     mediaWindow?: MediaWindowOpener;
     experiments: ExperimentsStore;
     projectsVisibility: ProjectsVisibilityStore;
-    stemCellAnimation: StemCellAnimationStore;
     statusBar: StatusBarStore;
     keepAwake: KeepAwakeStore;
     platform: "desktop" | "web";
@@ -430,7 +419,6 @@ function HappyAgentBoundary(props: {
                 ...(props.daemon ? { daemon: props.daemon } : {}),
                 ...(props.agentUpdate ? { agentUpdate: props.agentUpdate } : {}),
                 ...(props.agentReleaseNotes ? { agentReleaseNotes: props.agentReleaseNotes } : {}),
-                ...(props.happyOnboarding ? { happyOnboarding: props.happyOnboarding } : {}),
                 debug: props.debug,
                 ...(props.performance ? { performance: props.performance } : {}),
                 profiler: props.profiler,
@@ -454,7 +442,6 @@ function HappyAgentBoundary(props: {
                     : {}),
                 experiments: props.experiments,
                 projectsVisibility: props.projectsVisibility,
-                stemCellAnimation: props.stemCellAnimation,
                 statusBar: props.statusBar,
                 gptLive: props.gptLive,
                 usageAnalytics: props.usageAnalytics,
@@ -493,12 +480,6 @@ function DesktopOnboardingGate(props: {
     experiments: ExperimentsStore;
     platform: "desktop" | "web";
     store: LocalOnboardingStore;
-    /**
-     * Happy's first conversation carried setup in this window: what is left
-     * of setup runs underneath it, and only a state that needs the person's
-     * own hands takes the window.
-     */
-    conversationCarried?: boolean;
 }) {
     const snapshot = useSyncExternalStore(props.store.subscribe, props.store.get, props.store.get);
     const appearance = useSyncExternalStore(
@@ -548,12 +529,6 @@ function DesktopOnboardingGate(props: {
     const reached = localOnboardingReachedStage(snapshot);
     // The interface is the final onboarding step. Keep the sidebar (+) usable
     // while Happy's unsent draft is being prepared in the background.
-    if (props.conversationCarried && view && !SETUP_BLOCKING.has(view.kind))
-        return (
-            <SetupHandoff onRetry={() => props.store.chiefOfStaffSetup()}>
-                {props.children}
-            </SetupHandoff>
-        );
     if (!view || view.kind === "finishing")
         return (
             <SetupHandoff
@@ -592,66 +567,6 @@ function DesktopOnboardingGate(props: {
     );
 }
 
-/** Which machine Happy tells the person it is setting up. */
-function desktopPlatform(): "mac" | "windows" | "linux" {
-    const platform =
-        (navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData
-            ?.platform ?? navigator.platform;
-    if (/win/i.test(platform)) return "windows";
-    if (/mac/i.test(platform)) return "mac";
-    return "linux";
-}
-
-/** First run happened in Happy's chat; setup finishing later drafts nothing for it. */
-let chatOnboardingDone = false;
-
-/** One of the person's own experiment settings on this machine's Happy Agent, as first run reads it. */
-interface FirstRunSetting {
-    /** Undefined until the daemon has answered. */
-    read(): { on: boolean; online: boolean; saving: boolean } | undefined;
-    subscribe(listener: () => void): () => void;
-    enable(): void;
-}
-
-/**
- * First run relies on experiments the person's own settings govern: each is
- * turned on once, as soon as this machine's Happy Agent can answer, and left
- * to the person after that.
- */
-function settingFirstRunEnable(
-    setting: () => FirstRunSetting | undefined,
-    sessionsSubscribe: (listener: () => void) => () => void,
-): () => void {
-    let settings: FirstRunSetting | undefined;
-    let settingsStop: (() => void) | undefined;
-    let asked = false;
-    const settingsCheck = () => {
-        const current = settings?.read();
-        if (!current) return;
-        if (!current.on && !asked && current.online && !current.saving) {
-            asked = true;
-            settings?.enable();
-            return;
-        }
-        if (current.on || (asked && !current.saving)) stop();
-    };
-    const sessionCheck = () => {
-        if (settings) return;
-        settings = setting();
-        if (!settings) return;
-        settingsStop = settings.subscribe(settingsCheck);
-        settingsCheck();
-    };
-    const sessionsStop = sessionsSubscribe(sessionCheck);
-    const stop = () => {
-        sessionsStop();
-        settingsStop?.();
-        settingsStop = undefined;
-    };
-    sessionCheck();
-    return stop;
-}
-
 /**
  * What Happy says for itself before it has been set up, in the order it says it.
  *
@@ -666,10 +581,10 @@ function settingFirstRunEnable(
  * close the deck with who controls the product.
  */
 
+/** True while the runtime is working on, or running, this machine's own Happy Agent. */
 /** Counts setup's pairing codes down. It ticks only while one is on screen. */
 const onboardingClock = happyAgentClockStoreCreate();
 
-/** True while the runtime is working on, or running, this machine's own Happy Agent. */
 function desktopLocalPhase(snapshot: DesktopRuntimeSnapshot): boolean {
     if (snapshot.phase === "choosing") return false;
     if (snapshot.phase === "ready") return snapshot.mode === "local";
@@ -687,8 +602,6 @@ interface DesktopRendererProps {
     performance?: LivePerformanceStore;
     profiler: AppHappyAgentProfilerStore;
     onboarding: LocalOnboardingStore;
-    /** First run in Happy's chat, while this machine has not had it. */
-    happyOnboarding?: HappyOnboardingStore;
     browserContent?: BrowserContentRenderer;
     htmlPreview?: HtmlPreviewRenderer;
     artifactPage?: HtmlPreviewRenderer;
@@ -696,7 +609,6 @@ interface DesktopRendererProps {
     bridge: HappyDesktopBridge;
     experiments: ExperimentsStore;
     projectsVisibility: ProjectsVisibilityStore;
-    stemCellAnimation: StemCellAnimationStore;
     statusBar: StatusBarStore;
     gptLive: GptLiveStore;
     usageAnalytics: UsageAnalyticsStore;
@@ -746,14 +658,11 @@ function DesktopRenderer(props: DesktopRendererProps) {
         props.appearance.get,
         props.appearance.get,
     );
-    const conversationCarried = useHappyOnboardingCarried(props.happyOnboarding);
     // A first launch opens on the welcome itself. It needs nothing from the
     // machine, so it is not held behind the boot cover while the main process
     // works out what this machine still owes. Entering setup acknowledges it and
-    // enables the renderer-owned automatic download and launch. A preview's
-    // first run is Happy's chat instead, which acknowledges it when it is over;
-    // a Happy Agent that does not run that chat gets the welcome after all.
-    if (!welcome.welcomeAcknowledged && !conversationCarried)
+    // enables the renderer-owned automatic download and launch.
+    if (!welcome.welcomeAcknowledged)
         return (
             <WelcomeScreen
                 appearance={appearance.mode}
@@ -780,13 +689,6 @@ function DesktopRenderer(props: DesktopRendererProps) {
         </DesktopBootGate>
     );
 }
-
-/** Setup states the conversation cannot carry: each needs something only the person can do. */
-const SETUP_BLOCKING: ReadonlySet<string> = new Set([
-    "node-missing",
-    "connect-failed",
-    "data-newer",
-]);
 
 function DesktopScreens(props: DesktopRendererProps) {
     const directory = useSyncExternalStore(
@@ -908,7 +810,6 @@ function DesktopScreens(props: DesktopRendererProps) {
                                     connectionOnboarding
                                     experiments={props.experiments}
                                     projectsVisibility={props.projectsVisibility}
-                                    stemCellAnimation={props.stemCellAnimation}
                                     statusBar={props.statusBar}
                                     gptLive={props.gptLive}
                                     usageAnalytics={props.usageAnalytics}
@@ -936,20 +837,8 @@ function DesktopScreens(props: DesktopRendererProps) {
     );
 }
 
-/**
- * Whether Happy's first conversation carries first run in this window: a
- * preview's, unless this machine's Happy Agent does not run it, when the
- * window's own welcome and setup take its place.
- */
-function useHappyOnboardingCarried(happyOnboarding: HappyOnboardingStore | undefined): boolean {
-    const store = happyOnboarding ?? happyOnboardingStoreNoop;
-    const onboarding = useSyncExternalStore(store.subscribe, store.get, store.get);
-    return happyOnboarding !== undefined && onboarding.status !== "unsupported";
-}
-
 function DesktopLocalScreens(props: DesktopRendererProps) {
     const snapshot = useSyncExternalStore(props.store.subscribe, props.store.get, props.store.get);
-    const conversationCarried = useHappyOnboardingCarried(props.happyOnboarding);
     const hostedUpdate = useSyncExternalStore(
         props.localWebUpdate.subscribe,
         props.localWebUpdate.get,
@@ -981,7 +870,6 @@ function DesktopLocalScreens(props: DesktopRendererProps) {
                 experiments={props.experiments}
                 platform={props.platform}
                 store={props.onboarding}
-                conversationCarried={conversationCarried}
             >
                 {content}
             </DesktopOnboardingGate>
@@ -1145,7 +1033,6 @@ function DesktopRuntimeContent(
                       agentReleaseNotes: props.agentReleaseNotes,
                       agentUpdate: props.agentUpdate,
                       daemon: props.daemon,
-                      ...(props.happyOnboarding ? { happyOnboarding: props.happyOnboarding } : {}),
                   }
                 : {})}
             debug={props.debug}
@@ -1157,7 +1044,6 @@ function DesktopRuntimeContent(
             mediaWindow={props.mediaWindow}
             experiments={props.experiments}
             projectsVisibility={props.projectsVisibility}
-            stemCellAnimation={props.stemCellAnimation}
             statusBar={props.statusBar}
             keepAwake={props.keepAwake}
             gptLive={props.gptLive}
@@ -1438,10 +1324,6 @@ if (mediaPreviewBridge) {
                     consume: desktopProjectsVisibilityLegacyConsume,
                 },
             });
-        // Whether new work's stem cell grows into its icon: the window's own choice.
-        const stemCellAnimation = stemCellAnimationStoreCreate(
-            desktopStemCellAnimationPersistence(),
-        );
         // Which optional controls the status bar shows: the window's own choice.
         const statusBar = statusBarStoreCreate(desktopStatusBarPersistence());
         // Active-title motion is also this window's own choice. The store keeps
@@ -1518,7 +1400,6 @@ if (mediaPreviewBridge) {
                     groupId,
                 ),
             activity: (happyAgentId, activity) => analytics.activity(happyAgentId, activity),
-            signInPageOpen: desktopExternalLinkOpen(desktopBridge),
             // Reported through `analytics`, which is made once the directory exists.
             mobilePairingObserve: (happyAgentId) =>
                 mobilePairingObserveCreate(experiments, (event, properties) =>
@@ -1643,9 +1524,6 @@ if (mediaPreviewBridge) {
                 subscribe: happyAgents.subscribe,
             },
             chiefOfStaffPrepare: async () => {
-                // Happy's first conversation already happened and said where to
-                // go next, so nothing is drafted for the person.
-                if (chatOnboardingDone) return () => undefined;
                 const session = happyAgents
                     .get()
                     .happyAgents.find((entry) => entry.id === LOCAL_HAPPY_AGENT_ID)?.session;
@@ -1685,135 +1563,6 @@ if (mediaPreviewBridge) {
                 subscribe: happyAgents.subscribe,
             },
         });
-        const localSession = () =>
-            happyAgents.get().happyAgents.find((entry) => entry.id === LOCAL_HAPPY_AGENT_ID)
-                ?.session;
-        /* Once first run is over, or this Happy Agent does not run it, the window is ordinary. */
-        function happyOnboardingFinish(): void {
-            chatOnboardingDone = true;
-            // The rest of setup follows on its own: the phone was
-            // offered in the conversation, and the assistants it
-            // found were already talked through.
-            onboardingStore.happyMobileSkip();
-            // Once each time setup arrives there: continuing
-            // publishes again before the stage moves on.
-            let assistantsContinued = false;
-            const assistantsSkip = () => {
-                if (onboardingStore.get().onboarding?.stage !== "assistantsFound") {
-                    assistantsContinued = false;
-                    return;
-                }
-                if (assistantsContinued) return;
-                assistantsContinued = true;
-                onboardingStore.assistantsContinue();
-            };
-            appDisposers.push(onboardingStore.subscribe(assistantsSkip));
-            assistantsSkip();
-            welcome.welcomeAcknowledge();
-            onboardingStore.chiefOfStaffSetup();
-        }
-        /*
-         * A preview's first run is Happy's chat, open in the window the person
-         * will keep using. A stable build keeps the welcome and setup.
-         */
-        const happyOnboarding =
-            !desktopPreviewBuild || welcome.get().welcomeAcknowledged
-                ? undefined
-                : happyOnboardingStoreCreate(
-                      desktopHappyOnboardingHostCreate({
-                          runtime: runtimeStore,
-                          localConnected: {
-                              get: () =>
-                                  happyAgents
-                                      .get()
-                                      .happyAgents.find(
-                                          (entry) => entry.id === LOCAL_HAPPY_AGENT_ID,
-                                      )?.status === "connected",
-                              subscribe: happyAgents.subscribe,
-                          },
-                          sync: () => localSession()?.sync,
-                          linkOpen: desktopExternalLinkOpen(desktopBridge),
-                          daemonRestart: () => desktopBridge.daemonRestart(),
-                          async happyOpen(agentId) {
-                              const router =
-                                  connectionUis.get(LOCAL_HAPPY_AGENT_ID)?.router ??
-                                  happyAgentRouter;
-                              await localSession()
-                                  ?.workspace.sessionLocationRead(agentId as HappyAgentSessionId)
-                                  .then((location) => {
-                                      if (location)
-                                          happyAgentRouterConversationOpen(
-                                              router,
-                                              LOCAL_HAPPY_AGENT_ID,
-                                              location,
-                                          );
-                                  })
-                                  .catch((error: unknown) =>
-                                      console.error("Could not open Happy's chat.", error),
-                                  );
-                          },
-                          finish: happyOnboardingFinish,
-                      }),
-                  );
-        if (happyOnboarding) {
-            appDisposers.push(() => happyOnboarding.dispose());
-            // A Happy Agent without onboarding of its own falls back to the
-            // welcome and setup. Once the person has entered them, an update
-            // that brings onboarding must not start it over the setup they chose.
-            const fallbackFollow = () => {
-                if (
-                    welcome.get().welcomeAcknowledged &&
-                    happyOnboarding.get().status === "unsupported"
-                )
-                    happyOnboarding.dispose();
-            };
-            appDisposers.push(welcome.subscribe(fallbackFollow));
-            // Setting the machine up starts with the conversation, not after it.
-            onboardingStore.agentSetupBegin();
-            // Spaces, stem cells and Focus run on Stem Cells; the stories
-            // Happy offers run on Stories.
-            appDisposers.push(
-                settingFirstRunEnable(() => {
-                    const store = localSession()?.stemCellsSettings();
-                    return store
-                        ? {
-                              read: () => {
-                                  const current = store.get();
-                                  return current.status === "ready"
-                                      ? {
-                                            on: current.stemCellsEnabled,
-                                            online: current.online,
-                                            saving: current.saving,
-                                        }
-                                      : undefined;
-                              },
-                              subscribe: store.subscribe,
-                              enable: () => store.stemCellsUpdate(true),
-                          }
-                        : undefined;
-                }, happyAgents.subscribe),
-                settingFirstRunEnable(() => {
-                    const store = localSession()?.stories().settings();
-                    return store
-                        ? {
-                              read: () => {
-                                  const current = store.get();
-                                  return current.status === "ready"
-                                      ? {
-                                            on: current.storiesEnabled,
-                                            online: current.online,
-                                            saving: current.saving,
-                                        }
-                                      : undefined;
-                              },
-                              subscribe: store.subscribe,
-                              enable: () => store.storiesUpdate(true),
-                          }
-                        : undefined;
-                }, happyAgents.subscribe),
-            );
-            happyOnboarding.begin();
-        }
         const uisReconcile = (): void => {
             const entries = happyAgents.get().happyAgents;
             for (const entry of entries) {
@@ -1920,7 +1669,6 @@ if (mediaPreviewBridge) {
                         {...(livePerformance ? { performance: livePerformance } : {})}
                         profiler={profiler}
                         onboarding={analytics.onboardingObserve(onboardingStore, welcome)}
-                        {...(happyOnboarding ? { happyOnboarding } : {})}
                         browserContent={browserLocal ? undefined : desktopBrowserContentRender}
                         htmlPreview={browserLocal ? undefined : desktopHtmlPreviewRender}
                         artifactPage={browserLocal ? undefined : desktopArtifactPageRender}
@@ -1930,7 +1678,6 @@ if (mediaPreviewBridge) {
                         }
                         experiments={experiments}
                         projectsVisibility={projectsVisibility}
-                        stemCellAnimation={stemCellAnimation}
                         statusBar={statusBar}
                         gptLive={gptLive}
                         usageAnalytics={analytics.preference}

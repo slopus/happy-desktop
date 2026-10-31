@@ -6,8 +6,7 @@ import { createRenderer } from "./testing";
 
 /*
  * The fold is foundational: a row that folds always shows it as its last
- * column, on one edge for every row. A change mark stands left of it, and
- * neither the mark nor the note its hover brings moves it. A heading's title
+ * column, on one edge for every row. A heading's title
  * runs its full width until a hover control shows, which is laid over its end.
  */
 
@@ -15,7 +14,6 @@ const ITEMS: SidebarItem[] = [
     { collapsed: false, icon: "doc", id: "plain", kind: "view", label: "Plain parent" },
     { depth: 1, icon: "doc", id: "plain-child", kind: "view", label: "Child" },
     {
-        change: { kind: "archive", label: "Archiving" },
         collapsed: false,
         icon: "doc",
         id: "marked",
@@ -24,7 +22,6 @@ const ITEMS: SidebarItem[] = [
     },
     { depth: 1, icon: "doc", id: "marked-child", kind: "view", label: "Child" },
     {
-        change: { from: "plain", kind: "arrive", label: "Moving here from Desktop" },
         collapsed: true,
         icon: "doc",
         id: "arrived",
@@ -50,11 +47,9 @@ const render = async () => {
                 foldControlPlacement="trailing"
                 foldControlReveal="hover"
                 onItemAction={() => {}}
-                onItemChangeAccept={() => {}}
-                onItemChangeReject={() => {}}
                 onItemCollapseToggle={() => {}}
                 onItemSelect={() => {}}
-                sections={[{ id: "spaces", items: ITEMS }]}
+                sections={[{ id: "work", items: ITEMS }]}
                 style={{ width: 280 }}
             />
         ),
@@ -75,33 +70,12 @@ const box = (element: Element) => {
     return { left: rect.left, right: rect.right, top: rect.top };
 };
 
-it("keeps every fold on one column, shown, with or without a mark, and while a mark's note shows", async () => {
+it("keeps every fold on one column, shown, folded or unfolded", async () => {
     const root = await render();
     const ids = ["plain", "marked", "arrived"];
     const rest = ids.map((id) => box(fold(root, id)));
     expect(new Set(rest.map((edge) => Math.round(edge.left))).size).toBe(1);
     for (const id of ids) expect(getComputedStyle(fold(root, id)).opacity).toBe("1");
-    // Marks stand left of the fold.
-    for (const id of ["marked", "arrived"]) {
-        const mark = row(root, id).querySelector(".happy-sidebar__item-change-mark")!;
-        expect(box(mark).right).toBeLessThanOrEqual(box(fold(root, id)).left);
-    }
-
-    for (const id of ["marked", "arrived"]) {
-        const mark = row(root, id).querySelector<HTMLElement>(".happy-sidebar__item-change-mark")!;
-        await userEvent.hover(mark);
-        const note = row(root, id).querySelector<HTMLElement>(
-            '[data-happy-desktop-ui="sidebar-item-change-note"]',
-        )!;
-        await expect.poll(() => getComputedStyle(note).opacity).toBe("1");
-        expect(ids.map((each) => box(fold(root, each)))).toEqual(rest);
-        // The note stands above its row, ending left of the mark, with a ✕.
-        expect(box(note).top).toBeLessThan(box(row(root, id)).top);
-        expect(note.getBoundingClientRect().right).toBeLessThanOrEqual(box(mark).left);
-        expect(
-            note.querySelector('[data-happy-desktop-ui="sidebar-item-change-reject"]'),
-        ).not.toBeNull();
-    }
 });
 
 it("runs a heading's title under its + only while the + shows, without moving the fold", async () => {

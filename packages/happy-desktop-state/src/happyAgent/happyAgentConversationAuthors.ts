@@ -96,7 +96,6 @@ export function happyAgentConversationSummaryProject(
         updatedAt: session.lastMessageAt ?? session.updatedAt,
         ...(session.lastActivityAt === undefined ? {} : { lastActivityAt: session.lastActivityAt }),
         ...(session.unreadReason === undefined ? {} : { unread: true }),
-        ...(session.drafted ? { drafted: true } : {}),
         ...(session.statusLine === undefined ? {} : { statusLine: session.statusLine }),
         ...(session.draftPreview === undefined ? {} : { draftPreview: session.draftPreview }),
         participants: [happyAgentOwnerAuthor, agentAuthor],

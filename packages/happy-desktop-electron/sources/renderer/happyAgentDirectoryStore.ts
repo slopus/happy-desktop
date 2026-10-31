@@ -147,8 +147,6 @@ export interface HappyAgentDirectoryDeps {
     readonly activity?: (happyAgentId: string, activity: HappyAgentActivity) => void;
     /** Observes one Happy Agent's phone pairings while a pairing page shows them. */
     readonly mobilePairingObserve?: (happyAgentId: string) => HappyAgentMobilePairingObserve;
-    /** Opens a vendor's sign-in page that this computer's own Happy Agent is waiting on. */
-    readonly signInPageOpen?: (url: string) => void;
     /** A top-level session on one Happy Agent finished a turn. */
     readonly sessionFinished?: (
         happyAgentId: string,
@@ -431,9 +429,6 @@ export function happyAgentDirectoryStoreCreate(
                 activity: (activity) => deps.activity?.(happyAgent.entry.id, activity),
                 ...(deps.mobilePairingObserve
                     ? { mobilePairingObserve: deps.mobilePairingObserve(happyAgent.entry.id) }
-                    : {}),
-                ...(deps.signInPageOpen && happyAgent.entry.id === LOCAL_HAPPY_AGENT_ID
-                    ? { signInPageOpen: deps.signInPageOpen }
                     : {}),
                 sessionFinished: (sessionId, stillCurrent) =>
                     deps.sessionFinished?.(happyAgent.entry.id, sessionId, stillCurrent),

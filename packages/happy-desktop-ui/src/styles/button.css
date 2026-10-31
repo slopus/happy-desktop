@@ -88,41 +88,6 @@
     background-image: linear-gradient(var(--surface-ripple), var(--surface-ripple));
 }
 
-/* An outline button is only its hairline and its words, for the many small
-   actions laid on a surface — inline choices in a chat reply above all — where
-   a solid face on every one would be too heavy. It sits on whatever is under
-   it. `data-emphasis` marks the one truly primary action of a group: the same
-   outline, drawn in ink instead of a hairline. `data-chosen` is the answer
-   given: the selected fill, no outline, and the rest of the group locks. Neither
-   changes the button's size. */
-.happy-button[data-variant="outline"] {
-    border-color: var(--happy-button-outline);
-    background-color: transparent;
-    color: var(--text);
-    font-weight: 500;
-}
-
-.happy-button[data-variant="outline"][data-emphasis] {
-    border-color: var(--text);
-    background-color: var(--surface-high);
-}
-
-/* The primary action's words stay heavy after the group is answered, so no
-   label changes width when its outline goes. */
-.happy-button[data-variant="outline"][data-strong] {
-    font-weight: 700;
-}
-
-.happy-button[data-variant="outline"]:hover:not(:disabled) {
-    background-color: var(--happy-hover-fill);
-}
-
-.happy-button[data-variant="outline"][data-chosen] {
-    border-color: transparent;
-    background-color: var(--surface-selected);
-    cursor: default;
-}
-
 /* A ghost button has no face of its own until it is hovered, and then it takes
    the one hover shape every control shares (theme.css). */
 .happy-button[data-variant="ghost"] {
