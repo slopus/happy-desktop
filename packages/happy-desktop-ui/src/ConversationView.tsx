@@ -118,6 +118,8 @@ export type ConversationRich = {
     /** The story a message answers, as its quote draws it; absent draws no quotes. */
     readonly storyQuote?: (artifactId: string) => StoryQuoteView | undefined;
     readonly onStoryQuoteOpen: (artifactId: string, messageId: string) => void;
+    /** The reader jumped to the unread teammates: forget them, so the chat opens clean next time. */
+    readonly onUnreadClear: () => void;
     /** A person's face as the sidebar and stories draw it: their photo, or their coloured initial. */
     readonly faceOf: (userId: string) => StoryMark;
     /** Who wrote while the chat was unread (user ids, newest first), and since when. */
@@ -984,7 +986,7 @@ export function ConversationView(props: ConversationViewProps) {
         return <StoryQuote onOpen={open} quote={view} />;
     };
     // The unread rows the jump buttons count; the faces button jumps to its writers' first.
-    const { unread, faceOf } = props.rich ?? {};
+    const { unread, faceOf, onUnreadClear } = props.rich ?? {};
     const unreadRows: number[] = [];
     const facesRows: number[] = [];
     const faces = (faceOf && unread?.from.map((userId) => faceOf(userId))) ?? [];
@@ -996,6 +998,7 @@ export function ConversationView(props: ConversationViewProps) {
         unreadRows.push(index);
         if (unread.from.includes(sender.userId ?? "")) facesRows.push(index);
     }
+    const corner = onUnreadClear && { faces, facesRows, unreadRows, onUnreadClear };
     const rowContext = (index: number, width: number): ConversationRowContext => {
         const entry = listEntries[index];
         const inlinePage = inlinePageOf(entry);
@@ -1239,7 +1242,7 @@ export function ConversationView(props: ConversationViewProps) {
                               }
                             : {})}
                         jumpToEnd
-                        {...(props.rich ? { jumpCorner: { faces, facesRows, unreadRows } } : {})}
+                        {...(corner ? { jumpCorner: corner } : {})}
                         /* Shimmers exactly while the status line spins: not on
                            a question or a wait, and on through delegation. */
                         jumpToEndWorking={

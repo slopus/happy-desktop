@@ -106,6 +106,7 @@ const CHAT = [
 const RICH = {
     storyQuote: () => ({ kind: "live", ...VIEWER }) as const,
     onStoryQuoteOpen: noop,
+    onUnreadClear: noop,
     faceOf: (id: string) => (id === "Steve" ? person(id, "steve.jpg") : person(id)),
     unread: { since: 10, from: ["Steve", "Jordan"] },
 };

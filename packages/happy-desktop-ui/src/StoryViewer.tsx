@@ -398,7 +398,8 @@ export function StoryViewer(props: StoryViewerProps) {
                                             data-full=""
                                             key={reply.id}
                                             ref={(row) => {
-                                                if (!row?.dataset.focus || focused.current) return;
+                                                if (!row || !("focus" in row.dataset)) return;
+                                                if (focused.current) return;
                                                 focused.current = true;
                                                 row.scrollIntoView({ block: "center" });
                                             }}

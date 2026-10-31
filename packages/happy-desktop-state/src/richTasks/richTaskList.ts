@@ -80,7 +80,7 @@ export type RichTaskListInput = {
 /** How many sub-rows a card shows before "+k more". */
 const SHOWN_CHILDREN = 3;
 
-const descendants = (agent: RichTaskAgent): readonly RichTaskAgent[] =>
+export const descendants = (agent: RichTaskAgent): readonly RichTaskAgent[] =>
     (agent.subtasks ?? []).flatMap((subtask) => [subtask, ...descendants(subtask)]);
 
 const childAt = (child: RichTaskSubWork): number =>

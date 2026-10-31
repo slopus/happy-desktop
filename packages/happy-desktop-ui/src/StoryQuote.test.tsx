@@ -2,6 +2,7 @@ import "./styles.css";
 import type { ConversationMessageEntry } from "happy-desktop-state";
 import { expect, it } from "vitest";
 import { ConversationView, type ConversationRich } from "./ConversationView";
+import { StoryViewer } from "./StoryViewer";
 import { createRenderer } from "./testing";
 
 /* Rich chats: the story quote above a reply, and the jump buttons bottom right. */
@@ -62,6 +63,7 @@ const RICH: ConversationRich = {
         poster: { name: "Onboarding redesign", mark: { kind: "icon", label: "UX" } },
     }),
     onStoryQuoteOpen: () => undefined,
+    onUnreadClear: () => undefined,
     faceOf: (label) => ({ kind: "person", label }),
     unread: { since: 10, from: ["Steve", "Jordan"] },
 };
@@ -118,4 +120,43 @@ it("quotes the story a reply answers, and the faces button jumps to the first un
     for (const name of ["story-quote", "message__author-note", "message-list__faces"])
         expect(q(`.happy-${name}`)).toBeNull();
     expect(q(".happy-message-list")!.hasAttribute("data-corner")).toBe(false);
+});
+
+it("opens a quoted story with its reply scrolled into the drawer's view", async () => {
+    const view = createRenderer({ width: 420, height: 720 });
+    const mark = { kind: "person", label: "Steve" } as const;
+    const items = Array.from({ length: 40 }, (_, n) => `r${String(n)}`).map((id) => ({
+        id,
+        name: "Steve",
+        mark,
+        text: id,
+        time: "4m",
+    }));
+    view.render(() => (
+        <StoryViewer
+            action={{ phase: "idle" }}
+            caption={null}
+            frame={{ kind: "image", url: "data:,", path: "frame.png" }}
+            onClose={() => undefined}
+            onReplySend={() => undefined}
+            onStep={() => undefined}
+            poster={{ name: "Onboarding redesign", mark }}
+            replies={{ status: "ready", items }}
+            reply={{ phase: "idle" }}
+            replyFocus="r20"
+            replyTarget="Agent"
+            segment={{ index: 0, total: 1 }}
+            time="2h"
+        />
+    ));
+    await view.ready();
+    const list = view.container.querySelector(".happy-story-viewer__drawer-list")!;
+    const [row, box] = [list.querySelector("[data-focus]")!, list].map((e) =>
+        e.getBoundingClientRect(),
+    );
+    expect([row!.top >= box!.top, row!.bottom <= box!.bottom, list.scrollTop > 0]).toEqual([
+        true,
+        true,
+        true,
+    ]);
 });

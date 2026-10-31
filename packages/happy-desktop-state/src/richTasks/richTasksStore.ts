@@ -7,7 +7,12 @@ import {
     happyAgentUserSettingsCreate,
     type HappyAgentUserSettingsSource,
 } from "../happyAgent/happyAgentUserSettings.js";
-import { richTaskList, type RichTaskChildRef, type RichTaskListEntry } from "./richTaskList.js";
+import {
+    descendants,
+    richTaskList,
+    type RichTaskChildRef,
+    type RichTaskListEntry,
+} from "./richTaskList.js";
 
 /**
  * What the Tasks area draws. Rich only while the daemon reports
@@ -33,8 +38,10 @@ export interface HappyAgentRichTasksStore {
     /** Takes one child out from under a task's card, for every member. */
     childHide(taskId: string, ref: RichTaskChildRef): void;
     taskMove(taskId: string, anchor: RichTaskMoveAnchor): void;
-    /** Its unread naming who wrote, or the last such the reader cleared on opening the chat. */
+    /** Its unread, or the last one the reader cleared by opening the chat, until `unreadClear`. */
     unreadOf(agentId: string): AgentUnread | null;
+    /** Forgets the cleared unread once the reader jumped to it: a chat opened again starts clean. */
+    unreadClear(agentId: string): void;
     [Symbol.dispose](): void;
 }
 
@@ -54,6 +61,7 @@ export const happyAgentRichTasksStoreNone: HappyAgentRichTasksStore = {
     childHide: nothing,
     taskMove: nothing,
     unreadOf: () => null,
+    unreadClear: nothing,
     [Symbol.dispose]: nothing,
 };
 
@@ -183,22 +191,22 @@ export function happyAgentRichTasksStoreCreate(deps: {
                     connection.richTasks.artifactRead(ref.id);
     };
 
-    // Each agent's unread that names who wrote, and the last of them the reader read.
-    let unreadNamed = new Map<string, AgentUnread>();
+    // Each agent's unread, and the last one the reader read; a newer read replaces it.
+    let unreadHeld = new Map<string, AgentUnread>();
     let unreadRead: { readonly agentId: string; readonly unread: AgentUnread } | null = null;
+    // Every task's and bot's agent with their subtasks, as the sidebar walks them.
     const agents = () => {
         const { tasks, bots } = connection.richTasks.get();
-        return [...tasks, ...bots].map((owner) => owner.agent);
+        return [...tasks, ...bots].flatMap(({ agent }) => [agent, ...descendants(agent)]);
     };
 
     const notify = (): void => {
         if (disposed) return;
-        const named = new Map<string, AgentUnread>();
+        const held = new Map<string, AgentUnread>();
         for (const { id, unread } of agents())
-            if (unread?.from?.length) named.set(id, unread);
-            else if (!unread && unreadNamed.has(id))
-                unreadRead = { agentId: id, unread: unreadNamed.get(id)! };
-        unreadNamed = named;
+            if (unread) held.set(id, unread);
+            else if (unreadHeld.has(id)) unreadRead = { agentId: id, unread: unreadHeld.get(id)! };
+        unreadHeld = held;
         settingsFollow();
         artifactsRead();
         for (const listener of listeners) listener();
@@ -254,8 +262,12 @@ export function happyAgentRichTasksStoreCreate(deps: {
         },
         unreadOf(agentId) {
             const { unread } = agents().find((agent) => agent.id === agentId) ?? {};
-            if (unread?.from?.length) return unread;
-            return unreadRead?.agentId === agentId ? unreadRead.unread : null;
+            return unread ?? (unreadRead?.agentId === agentId ? unreadRead.unread : null);
+        },
+        // The open chat already hid what it jumped to; nothing drawn changes, so no notice.
+        unreadClear(agentId) {
+            if (unreadRead?.agentId === agentId) unreadRead = null;
+            unreadHeld.delete(agentId);
         },
         [Symbol.dispose]() {
             if (disposed) return;

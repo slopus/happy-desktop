@@ -105,7 +105,9 @@ export function appStoryChatRich(chat: AppStoryChat, agentId: string): Conversat
         ...(stories.get().mode === "on" ? { storyQuote: quote } : {}),
         onStoryQuoteOpen: stories.quoteOpen,
         faceOf: (userId) => personOf(userId, directory).mark,
-        unread: unread && from.length > 0 ? { since: unread.since, from } : null,
+        onUnreadClear: () => chat.richTasks.unreadClear(agentId),
+        // Agent replies count toward the chevron too; only the faces need teammates.
+        unread: unread ? { since: unread.since, from } : null,
     };
 }
 

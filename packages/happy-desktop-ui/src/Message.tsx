@@ -897,6 +897,7 @@ export type MessageListProps = {
         readonly facesRows: readonly number[];
         /** Every unread row: the chevron counts those below the screen. */
         readonly unreadRows: readonly number[];
+        readonly onUnreadClear: () => void;
     };
     /** Bottom clearance represented inside the virtualizer's coordinate space. */
     paddingEnd?: number;
@@ -3606,6 +3607,7 @@ export function MessageList(props: MessageListProps) {
                                         className="happy-message-list__faces"
                                         onClick={() => {
                                             setFacesJumped(first);
+                                            corner.onUnreadClear();
                                             rowJump(first);
                                         }}
                                         type="button"
