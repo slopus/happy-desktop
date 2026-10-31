@@ -196,10 +196,7 @@ export interface FakeHappyAgentDaemon {
      * sections in its bootstrap; `undefined`, the default, is one without.
      */
     taskSectionsSet(sections: readonly TaskSection[] | undefined): void;
-    /**
-     * A protocol-34 daemon reporting `capabilities.storyArtifacts`, serving
-     * these stories; `undefined`, the default, is one without.
-     */
+    /** A daemon with `capabilities.storyArtifacts`, serving these stories; `undefined` has none. */
     storiesSet(stories: readonly Story[] | undefined): void;
     /** An artifact only `getArtifact` answers for; the bootstrap never lists it. */
     artifactSeed(artifact: {
@@ -367,6 +364,29 @@ export function fakeRun(overrides: Partial<HistoryRun> & { id: string }): Histor
         status: "completed",
         usage: {},
         ...overrides,
+    };
+}
+
+/** A live story an agent posted, unseen and unanswered. */
+export function fakeStory(artifactId: string, agentId: string, more: Partial<Story> = {}): Story {
+    return {
+        artifactId,
+        artifactVersion: 1,
+        poster: { kind: "agent", agentId, taskId: null, botId: null },
+        replyAgentId: agentId,
+        audience: "team",
+        caption: null,
+        media: { path: "frame.png" },
+        round: null,
+        repostOf: null,
+        postedAt: 1,
+        expiresAt: 2,
+        state: "live",
+        endedAt: null,
+        takenDownBy: null,
+        seenBy: [],
+        replies: 0,
+        ...more,
     };
 }
 
@@ -1031,23 +1051,24 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
         },
         async markStorySeen(artifactId: string, ...rest: unknown[]) {
             await record("markStorySeen", [artifactId, ...rest]);
-            const held = stories?.get(artifactId);
-            if (held === undefined)
-                throw new HappyAgentApiError(404, "Not found.", "not_found", null);
-            const userId = profile.userId ?? null;
-            if (held.seenBy.some((entry) => entry.userId === userId)) return { story: held };
-            const story = { ...held, seenBy: [...held.seenBy, { userId, seenAt: 1 }] };
-            stories?.set(artifactId, story);
+            const held = stories!.get(artifactId)!;
+            const seenBy = [...held.seenBy, { userId: profile.userId ?? null, seenAt: 1 }];
+            const story = { ...held, seenBy };
+            stories!.set(artifactId, story);
             emit("story.changed", { story });
             return { story };
         },
         async listStoryReplies(artifactId: string, ...rest: unknown[]) {
             await record("listStoryReplies", [artifactId, ...rest]);
-            return {
-                agentId: stories?.get(artifactId)?.replyAgentId ?? "",
-                messages: [],
-                hasMore: false,
-            };
+            return { agentId: "", messages: [], hasMore: false };
+        },
+        async uploadArtifactFile(file: { readonly data: ArrayBuffer }, ...rest: unknown[]) {
+            await record("uploadArtifactFile", [file, ...rest]);
+            return { upload: { id: "upload-1", size: 0, sha256: "", createdAt: 1, expiresAt: 2 } };
+        },
+        async repostStory(artifactId: string, ...rest: unknown[]) {
+            await record("repostStory", [artifactId, ...rest]);
+            return { story: stories!.get(artifactId)! };
         },
         async setTaskChild(taskId: string, ...rest: unknown[]) {
             await record("setTaskChild", [taskId, ...rest]);
@@ -1624,10 +1645,7 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
             taskSections = sections;
         },
         storiesSet(next) {
-            stories =
-                next === undefined
-                    ? undefined
-                    : new Map(next.map((story) => [story.artifactId, story]));
+            stories = next && new Map(next.map((story) => [story.artifactId, story]));
         },
         artifactSeed(artifact) {
             artifacts.set(artifact.id, { ...artifact });

@@ -3,6 +3,7 @@ export {
     fakeAgentMessage,
     fakeHappyAgentDaemonCreate,
     fakeRun,
+    fakeStory,
     fakeUserMessage,
     type FakeDaemonCall,
     type FakeHappyAgentDaemon,

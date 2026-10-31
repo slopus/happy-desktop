@@ -139,6 +139,8 @@ export function RichTaskCard(props: RichTaskCardProps) {
     const card = props.card;
     const moreInCorner = !card.expanded && card.subRows.length === 0 && card.more > 0;
     const corner = moreInCorner || card.faces.length > 0 || card.signal !== null;
+    // A disc with stories behind it opens them.
+    const Disc = card.story ? "button" : "span";
     return (
         <div
             className="happy-rich-task-card"
@@ -158,27 +160,24 @@ export function RichTaskCard(props: RichTaskCardProps) {
                 onPointerUp={props.onDragPointer}
                 type="button"
             />
-            {card.story ? (
-                <button
-                    aria-label={`${card.title}: open story`}
-                    className="happy-rich-task-card__disc"
-                    data-happy-desktop-ui="rich-task-disc"
-                    data-story=""
-                    onClick={() => props.onStoryOpen?.(card.id)}
-                    type="button"
-                >
-                    <StoryRing segments={card.story} size={50} />
-                    <ClayIcon label={card.title} size={34} slug={card.iconSlug} />
-                </button>
-            ) : (
-                <span
-                    className="happy-rich-task-card__disc"
-                    data-happy-desktop-ui="rich-task-disc"
-                    data-ring={card.ring ? "" : undefined}
-                >
-                    <ClayIcon label={card.title} size={card.ring ? 34 : 40} slug={card.iconSlug} />
-                </span>
-            )}
+            <Disc
+                className="happy-rich-task-card__disc"
+                data-happy-desktop-ui="rich-task-disc"
+                data-ring={card.ring && !card.story ? "" : undefined}
+                {...(card.story
+                    ? {
+                          "aria-label": `${card.title}: open story`,
+                          onClick: () => props.onStoryOpen?.(card.id),
+                      }
+                    : {})}
+            >
+                {card.story ? <StoryRing segments={card.story} size={50} /> : null}
+                <ClayIcon
+                    label={card.title}
+                    size={card.ring || card.story ? 34 : 40}
+                    slug={card.iconSlug}
+                />
+            </Disc>
             <span className="happy-rich-task-card__body">
                 <span className="happy-rich-task-card__head">
                     <span

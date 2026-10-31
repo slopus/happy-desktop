@@ -40,6 +40,7 @@ import { gitSnapshotStateUpdate, type GitSnapshotState } from "./gitSnapshotStat
 import { CHECKING_SERVER_COMPATIBILITY, serverCompatibility } from "./compatibility.js";
 import { MessageRefusedError, projectRegistrationError } from "./errors.js";
 import { deepEqual } from "../happyAgent/happyAgentSupport.js";
+import { UserError } from "../types.js";
 import { happyAgentDraftAppended } from "../happyAgent/happyAgentChatDraftAppend.js";
 import type { HappyAgentDebugLogInput } from "../happyAgent/happyAgentDebugLogStore.js";
 import { cuid2Create } from "../utils/cuid2Create.js";
@@ -3810,6 +3811,10 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
     ): Promise<SendMessageResponse | undefined> => {
         let retryMs = INITIAL_SEND_RETRY_MS;
         for (let attempt = 1; ; attempt += 1) {
+            // A story reply is sent only while the daemon still serves stories; one
+            // that lost them fails the send rather than delivering it without its story.
+            if (request.replyTo && sync.source.health()?.capabilities?.storyArtifacts !== true)
+                throw new UserError("Stories are no longer available on this Happy Agent.");
             try {
                 return await Promise.race([
                     client.sendMessage(sessionId, request, { signal: deadlineSignal() }),

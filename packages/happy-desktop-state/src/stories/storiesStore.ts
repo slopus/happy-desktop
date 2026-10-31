@@ -4,30 +4,21 @@ import { happyAgentUserError } from "../happyAgent/happyAgentSupport.js";
 import type { HappyAgentRichTasksStore } from "../richTasks/richTasksStore.js";
 import { cuid2Create } from "../utils/cuid2Create.js";
 
-/** One poster's ring: one segment per live story. */
+/** One poster's ring: one segment per live story, oldest first. */
 export interface HappyAgentStoryRing {
-    /** `user:<userId>` for a person's reposts, `agent:<agentId>` for an agent's stories. */
+    /** `agent:<agentId>`, or `user:<userId>` for a person's reposts. */
     readonly id: string;
     readonly poster: Story["poster"];
-    /** The reader's own reposts, drawn first as "My story". */
+    /** The reader's own reposts: "My story". */
     readonly self: boolean;
-    /** Oldest first, the order the segments and the viewer walk them in. */
     readonly stories: readonly Story[];
-    /** How many of them the reader has not opened. */
     readonly unseen: number;
 }
 
-/** What the open story's one frame shows, once its file is known. */
+/** The open story's one frame: a picture or video, or why it cannot be shown. */
 export type HappyAgentStoryFrame =
     | { readonly kind: "loading" }
-    | {
-          readonly kind: "image" | "video";
-          readonly url: string;
-          /** A repost's round video, laid over the frame. */
-          readonly roundUrl: string | null;
-      }
-    /** A page or document of another artifact, opened in the artifact viewer. */
-    | { readonly kind: "artifact"; readonly artifactId: string; readonly roundUrl: string | null }
+    | { readonly kind: "image" | "video"; readonly url: string }
     | { readonly kind: "failed"; readonly message: string };
 
 export type HappyAgentStoryReplies =
@@ -41,23 +32,21 @@ export type HappyAgentStoryPhase =
     | { readonly phase: "failed"; readonly message: string };
 
 export interface HappyAgentStoryOpen {
-    readonly ringId: string;
     readonly story: Story;
+    /** Its place among its poster's live stories. */
+    readonly segment: { readonly index: number; readonly total: number };
     readonly frame: HappyAgentStoryFrame;
+    /** A repost's round video, laid over the frame. */
+    readonly roundUrl: string | null;
     /** Newest first, read back from the conversation they went to. */
     readonly replies: HappyAgentStoryReplies;
     readonly reply: HappyAgentStoryPhase;
     readonly action: HappyAgentStoryPhase;
-    /** The reader's own repost, or a story posted under a task they own or for them alone. */
     readonly takeDownOffered: boolean;
-    /** Anyone else's story may be reposted to the team. */
     readonly repostOffered: boolean;
 }
 
-/**
- * Stories are drawn only from a daemon with `capabilities.storyArtifacts`
- * while the Tasks area is rich; otherwise nothing is asked and nothing drawn.
- */
+/** Off unless the daemon has `capabilities.storyArtifacts` and the Tasks area is rich. */
 export type HappyAgentStoriesSnapshot =
     | { readonly mode: "off" }
     | {
@@ -70,92 +59,76 @@ export type HappyAgentStoriesSnapshot =
 export interface HappyAgentStoriesStore {
     get(): HappyAgentStoriesSnapshot;
     subscribe(listener: () => void): () => void;
-    /** Opens a ring at its first unseen story, or its first. */
+    /** Opens a ring at its first unseen story; the walk keeps this order until it closes. */
     ringOpen(ringId: string): void;
-    /** The next or previous story, across rings; past the last it closes. */
+    /** The next or previous story of the walk; past the end it closes. */
     storyStep(delta: 1 | -1): void;
     viewerClose(): void;
     /** Sends the text to the story's reply agent, as the reader's message answering it. */
     replySend(text: string): void;
     storyTakeDown(): void;
-    /** Reposts the open story to the team, with the reader's caption or the original's. */
-    storyRepost(caption: string | null): void;
+    /** Reposts the open story to the team, with a caption and a recorded round video, if any. */
+    storyRepost(caption: string | null, round: Blob | null): void;
     [Symbol.dispose](): void;
 }
 
 export interface HappyAgentStoriesDeps {
-    readonly client: Pick<
-        HappyAgentClient,
-        | "listStories"
-        | "markStorySeen"
-        | "listStoryReplies"
-        | "takeDownStory"
-        | "repostStory"
-        | "getArtifactVersion"
-        | "artifactFileUrl"
-    >;
+    readonly client: HappyAgentClient;
     readonly connection: Pick<HappyAgentConnection, "sync" | "richTasks" | "sendMessageConfirmed">;
     readonly richTasks: Pick<HappyAgentRichTasksStore, "get" | "subscribe">;
     readonly now?: () => number;
 }
 
+type Phase = HappyAgentStoryPhase;
 const OFF: HappyAgentStoriesSnapshot = { mode: "off" };
-const IDLE: HappyAgentStoryPhase = { phase: "idle" };
+const IDLE: Phase = { phase: "idle" };
+const STORY = { type: "story" } as const;
+const noop = () => undefined;
 
 /** A store that never draws a story, for a window with no Happy Agent. */
 export const happyAgentStoriesStoreNone: HappyAgentStoriesStore = {
     get: () => OFF,
-    subscribe: () => () => undefined,
-    ringOpen: () => undefined,
-    storyStep: () => undefined,
-    viewerClose: () => undefined,
-    replySend: () => undefined,
-    storyTakeDown: () => undefined,
-    storyRepost: () => undefined,
-    [Symbol.dispose]: () => undefined,
+    subscribe: () => noop,
+    ringOpen: noop,
+    storyStep: noop,
+    viewerClose: noop,
+    replySend: noop,
+    storyTakeDown: noop,
+    storyRepost: noop,
+    [Symbol.dispose]: noop,
 };
 
 const ringIdOf = (poster: Story["poster"]): string =>
     poster.kind === "user" ? `user:${String(poster.userId)}` : `agent:${poster.agentId}`;
 
-const failedOf = (error: unknown): HappyAgentStoryPhase => ({
-    phase: "failed",
-    message: happyAgentUserError(error).message,
-});
-
 /**
  * The stories of one connection: the live feed, reconciled from
- * `story.changed`, and the one story open in the viewer with its frame,
- * replies, and what the reader did to it. Opens nothing until subscribed
- * while both gates are open.
+ * `story.changed`, and the one story open in the viewer. Opens nothing until
+ * subscribed while both gates are open.
  */
 export function happyAgentStoriesStoreCreate(deps: HappyAgentStoriesDeps): HappyAgentStoriesStore {
+    const { client, connection } = deps;
     const mutationId = cuid2Create(deps.now ?? Date.now);
     const listeners = new Set<() => void>();
     let stories = new Map<string, Story>();
     let readCursor: string | undefined;
-    let open:
-        | {
-              readonly ringId: string;
-              readonly artifactId: string;
-              readonly reply: HappyAgentStoryPhase;
-              readonly action: HappyAgentStoryPhase;
-          }
-        | undefined;
+    /** The walk is frozen when the viewer opens, so a story going grey never reorders it. */
+    let view: { walk: readonly string[]; at: number; reply: Phase; action: Phase } | undefined;
     const frames = new Map<string, HappyAgentStoryFrame>();
     const replies = new Map<string, { count: number; replies: HappyAgentStoryReplies }>();
     const seenAsked = new Set<string>();
     let following: AbortController | undefined;
     let releaseRich: (() => void) | undefined;
     let disposed = false;
-    let snapshot: HappyAgentStoriesSnapshot = OFF;
-    let stale = true;
+    let snapshot: HappyAgentStoriesSnapshot | undefined;
 
     const capable = (): boolean =>
-        deps.connection.sync.health()?.capabilities?.storyArtifacts === true &&
+        connection.sync.health()?.capabilities?.storyArtifacts === true &&
         deps.richTasks.get().mode === "rich";
-    const viewer = (): string | null => deps.connection.richTasks.get().viewerUserId;
+    const viewer = (): string | null => connection.richTasks.get().viewerUserId;
     const seen = (story: Story): boolean => story.seenBy.some((entry) => entry.userId === viewer());
+    const mine = (poster: Story["poster"]) => poster.kind === "user" && poster.userId === viewer();
+    const openId = () => (view ? view.walk[view.at] : undefined);
 
     const rings = (): HappyAgentStoryRing[] => {
         const byPoster = new Map<string, Story[]>();
@@ -163,18 +136,14 @@ export function happyAgentStoriesStoreCreate(deps: HappyAgentStoriesDeps): Happy
             const id = ringIdOf(story.poster);
             byPoster.set(id, [...(byPoster.get(id) ?? []), story]);
         }
-        const me = viewer();
         return [...byPoster]
-            .map(([id, held]): HappyAgentStoryRing => {
-                const poster = held[0]!.poster;
-                return {
-                    id,
-                    poster,
-                    self: poster.kind === "user" && poster.userId === me,
-                    stories: held,
-                    unseen: held.filter((story) => !seen(story)).length,
-                };
-            })
+            .map(([id, held]) => ({
+                id,
+                poster: held[0]!.poster,
+                self: mine(held[0]!.poster),
+                stories: held,
+                unseen: held.filter((story) => !seen(story)).length,
+            }))
             .sort(
                 (a, b) =>
                     Number(b.self) - Number(a.self) ||
@@ -183,57 +152,51 @@ export function happyAgentStoriesStoreCreate(deps: HappyAgentStoriesDeps): Happy
             );
     };
 
-    const ownerOf = (story: Story): boolean => {
+    /*
+     * API.md, take-down: "The person the story belongs to may take it down — the
+     * owner of the posting task, the reposter, or, for a bot's story, the person it
+     * was posted for — and so may the team owner; anyone else receives 403
+     * forbidden. In standalone mode the installation's one person may." The wire
+     * does not say who the team owner is, so that clause cannot be offered here.
+     * A bot's "owner" story is visible only to the person it was posted for.
+     */
+    const takeDownAllowed = ({ poster, audience }: Story): boolean => {
         const me = viewer();
-        if (story.poster.kind === "user") return story.poster.userId === me;
-        const { taskId } = story.poster;
-        return (
-            story.audience === "owner" ||
-            deps.connection.richTasks
-                .get()
-                .tasks.some((task) => task.id === taskId && task.ownerUserId === me)
-        );
+        if (me === null) return true;
+        if (poster.kind === "user") return poster.userId === me;
+        const tasks = connection.richTasks.get().tasks;
+        if (poster.taskId !== null)
+            return tasks.some((task) => task.id === poster.taskId && task.ownerUserId === me);
+        return poster.botId !== null && audience === "owner";
     };
 
     const compute = (): HappyAgentStoriesSnapshot => {
         const all = rings();
-        const story = open ? stories.get(open.artifactId) : undefined;
-        if (open && !story) open = undefined;
-        return {
-            mode: "on",
-            rings: all,
-            open:
-                open && story
-                    ? {
-                          ringId: open.ringId,
-                          story,
-                          frame: frames.get(story.artifactId) ?? { kind: "loading" },
-                          replies: replies.get(story.artifactId)?.replies ?? {
-                              status: "loading",
-                          },
-                          reply: open.reply,
-                          action: open.action,
-                          takeDownOffered: ownerOf(story),
-                          repostOffered: !(
-                              story.poster.kind === "user" && story.poster.userId === viewer()
-                          ),
-                      }
-                    : null,
+        const story = view && stories.get(view.walk[view.at]!);
+        const ring = story && all.find((each) => each.id === ringIdOf(story.poster));
+        if (!view || !story || !ring) return { mode: "on", rings: all, open: null };
+        const { artifactId, artifactVersion, round } = story;
+        const open: HappyAgentStoryOpen = {
+            story,
+            segment: { index: ring.stories.indexOf(story), total: ring.stories.length },
+            frame: frames.get(artifactId) ?? { kind: "loading" },
+            roundUrl: round
+                ? client.artifactFileUrl(artifactId, artifactVersion, round.path, STORY)
+                : null,
+            replies: replies.get(artifactId)?.replies ?? { status: "loading" },
+            reply: view.reply,
+            action: view.action,
+            takeDownOffered: takeDownAllowed(story),
+            repostOffered: !mine(story.poster),
         };
+        return { mode: "on", rings: all, open };
     };
 
-    const get = (): HappyAgentStoriesSnapshot => {
-        if (!capable()) return OFF;
-        if (stale) {
-            snapshot = compute();
-            stale = false;
-        }
-        return snapshot;
-    };
+    const get = (): HappyAgentStoriesSnapshot => (capable() ? (snapshot ??= compute()) : OFF);
 
     const notify = (): void => {
         if (disposed) return;
-        stale = true;
+        snapshot = undefined;
         follow();
         for (const listener of listeners) listener();
     };
@@ -245,31 +208,22 @@ export function happyAgentStoriesStoreCreate(deps: HappyAgentStoriesDeps): Happy
         else next.delete(story.artifactId);
         stories = next;
         const held = replies.get(story.artifactId);
-        if (held && held.count !== story.replies && open?.artifactId === story.artifactId)
+        if (held && held.count !== story.replies && openId() === story.artifactId)
             repliesRead(story);
     };
 
     const read = async (signal: AbortSignal): Promise<void> => {
-        try {
-            const response = await deps.client.listStories({ scope: "feed", signal });
-            if (signal.aborted) return;
-            readCursor = response.cursor;
-            stories = new Map(
-                response.stories
-                    .filter((story) => story.state === "live")
-                    .map((story) => [story.artifactId, story]),
-            );
-            notify();
-        } catch {
-            // The feed stays as it was until the next reconcile reads it again.
-        }
+        const response = await client.listStories({ scope: "feed", signal }).catch(noop);
+        // A failed read keeps the feed as it was until the next reconcile reads it again.
+        if (!response || signal.aborted) return;
+        readCursor = response.cursor;
+        stories = new Map();
+        for (const story of response.stories) adopt(story);
+        notify();
     };
 
     const followLoop = async (signal: AbortSignal): Promise<void> => {
-        for await (const input of deps.connection.sync.follow({
-            signal,
-            events: ["story.changed"],
-        })) {
+        for await (const input of connection.sync.follow({ signal, events: ["story.changed"] })) {
             if (input.kind === "bootstrap" || input.kind === "reconcile") await read(signal);
             else if (
                 input.kind === "update" &&
@@ -292,72 +246,48 @@ export function happyAgentStoriesStoreCreate(deps: HappyAgentStoriesDeps): Happy
             following = undefined;
             stories = new Map();
             readCursor = undefined;
-            open = undefined;
+            view = undefined;
         } else if (wanted && !following) {
             following = new AbortController();
-            void followLoop(following.signal).catch(() => undefined);
+            void followLoop(following.signal).catch(noop);
         }
     };
 
     const repliesRead = (story: Story): void => {
         const signal = following?.signal;
-        if (!signal) return;
         const id = story.artifactId;
-        const held = replies.get(id);
-        replies.set(id, {
-            count: story.replies,
-            replies: held?.replies.status === "ready" ? held.replies : { status: "loading" },
-        });
-        void deps.client.listStoryReplies(id, {}, { signal }).then(
-            ({ messages }) => {
-                replies.set(id, { count: story.replies, replies: { status: "ready", messages } });
-                notify();
-            },
-            (error: unknown) => {
-                if (signal.aborted) return;
-                const message = happyAgentUserError(error).message;
-                replies.set(id, { count: story.replies, replies: { status: "failed", message } });
-                notify();
-            },
+        if (!signal) return;
+        const set = (next: HappyAgentStoryReplies) =>
+            replies.set(id, { count: story.replies, replies: next });
+        const land = (next: HappyAgentStoryReplies) => !signal.aborted && set(next) && notify();
+        set(replies.get(id)?.replies ?? { status: "loading" });
+        client.listStoryReplies(id, {}, { signal }).then(
+            ({ messages }) => land({ status: "ready", messages }),
+            (error: unknown) =>
+                land({ status: "failed", message: happyAgentUserError(error).message }),
         );
     };
 
-    const frameRead = async (story: Story): Promise<HappyAgentStoryFrame> => {
-        const media = story.media;
+    const frameRead = async ({ media, artifactId, artifactVersion }: Story) => {
         const own = !("artifactId" in media);
-        const id = own ? story.artifactId : media.artifactId;
-        const version = own ? story.artifactVersion : media.version;
-        const options = own ? { type: "story" as const } : {};
-        const manifest = (await deps.client.getArtifactVersion(id, version, options)).version;
+        const id = own ? artifactId : media.artifactId;
+        const version = own ? artifactVersion : media.version;
+        const options = own ? STORY : {};
+        const manifest = (await client.getArtifactVersion(id, version, options)).version;
         const path = media.path ?? manifest.entry.path;
-        const mimeType = (manifest.files.find((file) => file.path === path) ?? manifest.entry)
-            .mimeType;
-        const roundUrl = story.round
-            ? deps.client.artifactFileUrl(
-                  story.artifactId,
-                  story.artifactVersion,
-                  story.round.path,
-                  {
-                      type: "story",
-                  },
-              )
-            : null;
-        const kind = mimeType.startsWith("image/")
-            ? "image"
-            : mimeType.startsWith("video/")
-              ? "video"
-              : undefined;
-        if (kind)
-            return { kind, url: deps.client.artifactFileUrl(id, version, path, options), roundUrl };
-        return own
-            ? { kind: "failed", message: "This story's frame cannot be shown here." }
-            : { kind: "artifact", artifactId: id, roundUrl };
+        const type = (manifest.files.find((file) => file.path === path) ?? manifest.entry).mimeType;
+        const kind = type.split("/")[0];
+        if (kind === "image" || kind === "video")
+            return { kind, url: client.artifactFileUrl(id, version, path, options) } as const;
+        return { kind: "failed", message: "This story's frame cannot be shown here." } as const;
     };
 
-    /** Shows one story: its frame and replies are read once, and it is marked seen. */
-    const show = (ringId: string, story: Story): void => {
-        open = { ringId, artifactId: story.artifactId, reply: IDLE, action: IDLE };
+    /** Shows one story of the walk: its frame and replies are read once, and it is marked seen. */
+    const show = (walk: readonly string[], at: number): void => {
+        const story = stories.get(walk[at]!);
+        if (!story) return;
         const id = story.artifactId;
+        view = { walk, at, reply: IDLE, action: IDLE };
         if (!frames.has(id)) {
             frames.set(id, { kind: "loading" });
             void frameRead(story)
@@ -373,7 +303,7 @@ export function happyAgentStoriesStoreCreate(deps: HappyAgentStoriesDeps): Happy
         if (!replies.has(id)) repliesRead(story);
         if (!seen(story) && !seenAsked.has(id)) {
             seenAsked.add(id);
-            void deps.client.markStorySeen(id, { mutationId: mutationId() }).then(
+            client.markStorySeen(id, { mutationId: mutationId() }).then(
                 (response) => {
                     adopt(response.story);
                     notify();
@@ -384,21 +314,51 @@ export function happyAgentStoriesStoreCreate(deps: HappyAgentStoriesDeps): Happy
         notify();
     };
 
-    const current = (): HappyAgentStoryOpen | null => {
-        const now = get();
-        return now.mode === "on" ? now.open : null;
+    const step = (delta: 1 | -1): void => {
+        if (!view) return;
+        // A story that ended since the walk began is passed over.
+        let at = view.at + delta;
+        while (view.walk[at] !== undefined && !stories.has(view.walk[at]!)) at += delta;
+        if (view.walk[at] !== undefined) return show(view.walk, at);
+        view = undefined;
+        notify();
     };
 
-    const phaseSet = (artifactId: string, key: "reply" | "action", phase: HappyAgentStoryPhase) => {
-        if (open?.artifactId !== artifactId) return;
-        open = { ...open, [key]: phase };
+    type Key = "reply" | "action";
+    const phaseSet = (story: Story, key: Key, phase: Phase) => {
+        if (!view || openId() !== story.artifactId) return;
+        view = { ...view, [key]: phase };
         notify();
+    };
+    const failed = (story: Story, key: Key) => (error: unknown) =>
+        phaseSet(story, key, { phase: "failed", message: happyAgentUserError(error).message });
+    /** Starts `key` on the open story when it is offered and not already under way. */
+    const start = (key: Key, offered: (open: HappyAgentStoryOpen) => boolean): Story | null => {
+        const now = get();
+        const open = now.mode === "on" ? now.open : null;
+        if (!open || !offered(open) || open[key].phase === "sending") return null;
+        phaseSet(open.story, key, { phase: "sending" });
+        return open.story;
+    };
+
+    const repost = async (story: Story, caption: string | null, round: Blob | null) => {
+        // The recorder names its container; the path's extension is how the daemon types the file.
+        const path = round?.type.startsWith("video/mp4") ? "round.mp4" : "round.webm";
+        const upload =
+            round && (await client.uploadArtifactFile({ data: await round.arrayBuffer() }));
+        return client.repostStory(story.artifactId, {
+            id: mutationId(),
+            audience: "team",
+            mutationId: mutationId(),
+            ...(caption?.trim() ? { caption } : {}),
+            ...(upload ? { round: { uploadId: upload.upload.id, path } } : {}),
+        });
     };
 
     return {
         get,
         subscribe(listener) {
-            if (disposed) return () => undefined;
+            if (disposed) return noop;
             listeners.add(listener);
             releaseRich ??= deps.richTasks.subscribe(notify);
             follow();
@@ -412,77 +372,47 @@ export function happyAgentStoriesStoreCreate(deps: HappyAgentStoriesDeps): Happy
         },
         ringOpen(ringId) {
             const now = get();
-            const ring =
-                now.mode === "on" ? now.rings.find((each) => each.id === ringId) : undefined;
+            if (now.mode !== "on") return;
+            const walk = now.rings.flatMap((ring) => ring.stories.map((each) => each.artifactId));
+            const ring = now.rings.find((each) => each.id === ringId);
             const story = ring?.stories.find((each) => !seen(each)) ?? ring?.stories[0];
-            if (ring && story) show(ring.id, story);
+            if (story) show(walk, walk.indexOf(story.artifactId));
         },
-        storyStep(delta) {
-            const now = get();
-            if (now.mode !== "on" || !now.open) return;
-            const walk = now.rings.flatMap((ring) =>
-                ring.stories.map((story) => ({ ring: ring.id, story })),
-            );
-            const at = walk.findIndex(
-                (each) => each.story.artifactId === now.open?.story.artifactId,
-            );
-            const next = walk[at + delta];
-            if (next) show(next.ring, next.story);
-            else {
-                open = undefined;
-                notify();
-            }
-        },
+        storyStep: step,
         viewerClose() {
-            open = undefined;
+            view = undefined;
             notify();
         },
         replySend(text) {
-            const story = current()?.story;
-            if (!story || text.trim() === "") return;
-            phaseSet(story.artifactId, "reply", { phase: "sending" });
-            deps.connection
-                .sendMessageConfirmed(story.replyAgentId, {
-                    text,
-                    replyTo: { kind: "story", artifactId: story.artifactId },
-                })
-                .then(
-                    () => phaseSet(story.artifactId, "reply", { phase: "sent" }),
-                    (error: unknown) => phaseSet(story.artifactId, "reply", failedOf(error)),
-                );
+            // One reply at a time; the connection retries it under one message ID.
+            const story = text.trim() === "" ? null : start("reply", () => true);
+            if (!story) return;
+            const replyTo = { kind: "story", artifactId: story.artifactId } as const;
+            connection
+                .sendMessageConfirmed(story.replyAgentId, { text, replyTo })
+                .then(() => phaseSet(story, "reply", { phase: "sent" }), failed(story, "reply"));
         },
         storyTakeDown() {
-            const shown = current();
-            if (!shown?.takeDownOffered) return;
-            const id = shown.story.artifactId;
-            phaseSet(id, "action", { phase: "sending" });
-            deps.client.takeDownStory(id, { mutationId: mutationId() }).then(
+            const story = start("action", (open) => open.takeDownOffered);
+            if (!story) return;
+            client.takeDownStory(story.artifactId, { mutationId: mutationId() }).then(
                 (response) => {
                     adopt(response.story);
-                    notify();
+                    step(1);
                 },
-                (error: unknown) => phaseSet(id, "action", failedOf(error)),
+                failed(story, "action"),
             );
         },
-        storyRepost(caption) {
-            const shown = current();
-            if (!shown?.repostOffered) return;
-            const id = shown.story.artifactId;
-            phaseSet(id, "action", { phase: "sending" });
-            deps.client
-                .repostStory(id, {
-                    id: mutationId(),
-                    audience: "team",
-                    mutationId: mutationId(),
-                    ...(caption === null || caption.trim() === "" ? {} : { caption }),
-                })
-                .then(
-                    (response) => {
-                        adopt(response.story);
-                        phaseSet(id, "action", { phase: "sent" });
-                    },
-                    (error: unknown) => phaseSet(id, "action", failedOf(error)),
-                );
+        storyRepost(caption, round) {
+            const story = start("action", (open) => open.repostOffered);
+            if (!story) return;
+            repost(story, caption, round).then(
+                (response) => {
+                    adopt(response.story);
+                    phaseSet(story, "action", { phase: "sent" });
+                },
+                failed(story, "action"),
+            );
         },
         [Symbol.dispose]() {
             if (disposed) return;

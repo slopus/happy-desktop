@@ -142,7 +142,7 @@ export {
     type RichTaskSubRowModel,
     type RichTaskSubRowProps,
 } from "./RichTaskList";
-export { StoriesRow, type StoriesRowItem, type StoriesRowProps } from "./StoriesRow";
+export { StoriesRow, type StoriesRowItem } from "./StoriesRow";
 export { StoryMarkView, StoryRing, type StoryMark, type StoryRingSegments } from "./StoryRing";
 export {
     StoryViewer,

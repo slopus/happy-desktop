@@ -1,11 +1,11 @@
 import { useSyncExternalStore } from "react";
 import type {
-    HappyAgentArtifactPeopleStore,
     HappyAgentBot,
     HappyAgentClockStore,
     HappyAgentStoriesStore,
     HappyAgentStoryOpen,
     HappyAgentStoryRing,
+    HappyAgentSurfaceCatalogSnapshot,
     HappyAgentTask,
     RichTaskListEntry,
     happyAgentProtocol,
@@ -16,59 +16,61 @@ import {
     StoriesRow,
     StoryViewer,
     type StoryMark,
-    type StoryViewerReply,
 } from "happy-desktop-ui";
 
-/** What the window already knows to name and picture whoever posted a story. */
+/** What the window already knows to name and picture whoever posted or replied. */
 export interface AppStoryDirectory {
     readonly tasks: readonly HappyAgentTask[];
     /** The rich list's tasks, which carry their clay icons. */
     readonly entries: readonly RichTaskListEntry[];
     readonly bots: readonly HappyAgentBot[];
-    readonly names: ReadonlyMap<string, string>;
-    readonly people?: HappyAgentArtifactPeopleStore;
+    /** The reader and the teammates the Surfaces catalog knows, with their photos. */
+    readonly catalog: HappyAgentSurfaceCatalogSnapshot;
 }
 
 type Poster = { readonly name: string; readonly mark: StoryMark };
+const posterNamed = (name: string, imageUrl: string | undefined): Poster => ({
+    name,
+    mark: { kind: "person", label: name, ...(imageUrl ? { imageUrl } : {}) },
+});
 
-function personOf(userId: string | null, directory: AppStoryDirectory): Poster {
-    const owner = directory.tasks.find((task) => task.owner?.userId === userId)?.owner;
-    const name = owner?.name ?? (userId === null ? undefined : directory.names.get(userId));
-    if (userId !== null && name === undefined) directory.people?.userNameRequest(userId);
-    const label = name ?? (userId === null ? "Me" : "Someone");
-    return {
-        name: label,
-        mark: { kind: "person", label, ...(owner?.avatar ? { imageUrl: owner.avatar.url } : {}) },
-    };
+/** A person by their photo where the window holds one, else their initial. */
+function personOf(userId: string | null, { catalog, tasks }: AppStoryDirectory): Poster {
+    const person = userId === null ? catalog.profile : catalog.users.get(userId);
+    const owner = tasks.find((task) => task.owner?.userId === userId)?.owner;
+    return posterNamed(
+        person?.name ?? owner?.name ?? "Someone",
+        person?.photo?.url ?? owner?.avatar?.url,
+    );
 }
 
 /** A bot by its picture, a task by its clay icon, a person by their photo. */
-export function appStoryPoster(
-    poster: happyAgentProtocol.StoryPoster,
-    directory: AppStoryDirectory,
-): Poster {
+function posterOf(poster: happyAgentProtocol.StoryPoster, directory: AppStoryDirectory): Poster {
     if (poster.kind === "user") return personOf(poster.userId, directory);
     const bot = directory.bots.find(
         (each) => each.id === poster.botId || each.conversation.id === poster.agentId,
     );
-    if (bot)
-        return {
-            name: bot.name,
-            mark: bot.avatar
-                ? { kind: "person", label: bot.name, imageUrl: bot.avatar.url }
-                : { kind: "icon", slug: null, label: bot.name },
-        };
-    const wire = directory.entries.find(
-        (entry) =>
-            entry.kind === "task" &&
-            (entry.task.id === poster.taskId || entry.task.agent.id === poster.agentId),
+    if (bot) return posterNamed(bot.name, bot.avatar?.url);
+    const entry = directory.entries.find(
+        (each) =>
+            each.kind === "task" &&
+            (each.task.id === poster.taskId || each.task.agent.id === poster.agentId),
     );
-    const task = directory.tasks.find(
-        (each) => each.id === poster.taskId || each.conversation.id === poster.agentId,
-    );
-    const name = (wire?.kind === "task" ? wire.task.name : undefined) || task?.name || "Agent";
-    const slug = wire?.kind === "task" ? (wire.task.icon?.slug ?? null) : null;
-    return { name, mark: { kind: "icon", slug, label: name } };
+    const task = entry?.kind === "task" ? entry.task : undefined;
+    const name =
+        task?.name ||
+        directory.tasks.find((each) => each.conversation.id === poster.agentId)?.name ||
+        "Agent";
+    return { name, mark: { kind: "icon", slug: task?.icon?.slug ?? null, label: name } };
+}
+
+/** Each task's ring, by task id: the card's disc wears it and opens it. */
+export function appStoryTaskRings(rings: readonly HappyAgentStoryRing[]) {
+    const byTask = new Map<string, { id: string; total: number; unseen: number }>();
+    for (const { id, poster, stories, unseen } of rings)
+        if (poster.kind === "agent" && poster.taskId !== null)
+            byTask.set(poster.taskId, { id, total: stories.length, unseen });
+    return byTask;
 }
 
 /** The stories header: "My story" first, with a plus while the reader has none up. */
@@ -77,101 +79,68 @@ export function AppHappyAgentStoriesRow(props: {
     readonly directory: AppStoryDirectory;
     readonly store: HappyAgentStoriesStore;
 }) {
-    const segments = (ring: HappyAgentStoryRing) => ({
-        total: ring.stories.length,
-        unseen: ring.self ? 0 : ring.unseen,
-    });
-    const items = props.rings.map((ring) => ({
-        id: ring.id,
-        self: ring.self,
-        segments: segments(ring),
-        ...appStoryPoster(ring.poster, props.directory),
+    const { rings, directory } = props;
+    const items = rings.map(({ id, self, poster, stories, unseen }) => ({
+        id,
+        self,
+        segments: { total: stories.length, unseen: self ? 0 : unseen },
+        ...posterOf(poster, directory),
     }));
-    if (!items.some((item) => item.self))
-        items.unshift({
-            id: "self",
-            self: true,
-            segments: { total: 0, unseen: 0 },
-            ...personOf(null, props.directory),
-        });
+    if (!items.some((item) => item.self)) {
+        const me = personOf(directory.catalog.viewer?.userId ?? null, directory);
+        items.unshift({ id: "self", self: true, segments: { total: 0, unseen: 0 }, ...me });
+    }
     return <StoriesRow items={items} onOpen={props.store.ringOpen} />;
-}
-
-function repliesOf(
-    open: HappyAgentStoryOpen,
-    directory: AppStoryDirectory,
-    now: number,
-): StoryViewerReply[] {
-    if (open.replies.status !== "ready") return [];
-    return open.replies.messages.map((message) => {
-        const person = personOf(message.metadata.userId ?? null, directory);
-        return {
-            id: message.id,
-            name: person.name,
-            mark: person.mark,
-            text: message.content
-                .flatMap((block) => (block.type === "text" ? [block.text] : []))
-                .join(" "),
-            time: localAgoTime(message.createdAt, now),
-        };
-    });
 }
 
 /** The open story, over the window, until it is closed or walked past the last. */
 export function AppHappyAgentStoryViewer(props: {
     readonly open: HappyAgentStoryOpen;
-    readonly rings: readonly HappyAgentStoryRing[];
     readonly directory: AppStoryDirectory;
     readonly store: HappyAgentStoriesStore;
     readonly clock: HappyAgentClockStore;
-    readonly onArtifactOpen: (artifactId: string) => void;
 }) {
     // The minute the clock is in, so the times redraw once a minute.
     const minute = () => Math.floor(props.clock.get() / 60_000) * 60_000;
     const now = useSyncExternalStore(props.clock.subscribe, minute, minute);
-    const { open, store } = props;
-    const ring = props.rings.find((each) => each.id === open.ringId);
-    const poster = appStoryPoster(open.story.poster, props.directory);
-    const target = appStoryPoster(
-        { kind: "agent", agentId: open.story.replyAgentId, taskId: null, botId: null },
-        props.directory,
-    );
-    const frame = open.frame;
+    const { open, store, directory } = props;
+    const { frame, replies, story } = open;
+    const reply = (message: happyAgentProtocol.UserMessage) => ({
+        id: message.id,
+        ...personOf(message.metadata.userId ?? null, directory),
+        text: message.content
+            .flatMap((block) => (block.type === "text" ? [block.text] : []))
+            .join(" "),
+        time: localAgoTime(message.createdAt, now),
+    });
+    const replyAgent = {
+        kind: "agent",
+        agentId: story.replyAgentId,
+        taskId: null,
+        botId: null,
+    } as const;
     return (
         <ModalOverlay onDismiss={store.viewerClose} placement="center">
             <StoryViewer
                 action={open.action}
-                caption={open.story.caption}
-                frame={frame.kind === "artifact" ? { kind: "artifact" } : frame}
+                caption={story.caption}
+                frame={frame}
                 onClose={store.viewerClose}
-                {...(frame.kind === "artifact"
-                    ? { onFrameOpen: () => props.onArtifactOpen(frame.artifactId) }
-                    : {})}
                 onReplySend={store.replySend}
                 {...(open.repostOffered ? { onRepost: store.storyRepost } : {})}
                 onStep={store.storyStep}
                 {...(open.takeDownOffered ? { onTakeDown: store.storyTakeDown } : {})}
-                poster={poster}
+                poster={posterOf(story.poster, directory)}
                 replies={
-                    open.replies.status === "ready"
-                        ? { status: "ready", items: repliesOf(open, props.directory, now) }
-                        : open.replies
+                    replies.status === "ready"
+                        ? { status: "ready", items: replies.messages.map(reply) }
+                        : replies
                 }
                 reply={open.reply}
-                replyTarget={target.name}
-                roundUrl={
-                    frame.kind === "loading" || frame.kind === "failed" ? null : frame.roundUrl
-                }
-                segments={{
-                    total: ring?.stories.length ?? 1,
-                    current: Math.max(
-                        0,
-                        ring?.stories.findIndex(
-                            (story) => story.artifactId === open.story.artifactId,
-                        ) ?? 0,
-                    ),
-                }}
-                time={localAgoTime(open.story.postedAt, now)}
+                replyTarget={posterOf(replyAgent, directory).name}
+                roundUrl={open.roundUrl}
+                segment={open.segment}
+                time={localAgoTime(story.postedAt, now)}
             />
         </ModalOverlay>
     );

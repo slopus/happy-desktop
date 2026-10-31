@@ -21,6 +21,7 @@ import { AppHappyAgentRichTasks, richTaskSubRowParse } from "./components/AppHap
 import {
     AppHappyAgentStoriesRow,
     AppHappyAgentStoryViewer,
+    appStoryTaskRings,
     type AppStoryDirectory,
 } from "./components/AppHappyAgentStories";
 import { conversationInlinePagesCreate, inlineArtifactsStoreNoop } from "./conversationInlinePages";
@@ -3202,10 +3203,6 @@ const ARTIFACTS_SIDEBAR_ITEM: SidebarItem = {
  * reader has disconnected from, keeps the sidebar and states itself in the
  * content area instead of taking the window away.
  */
-const STORY_NAMES: ReadonlyMap<string, string> = new Map();
-const STORY_NAMES_SUBSCRIBE = () => () => undefined;
-const STORY_NAMES_GET = () => STORY_NAMES;
-
 export function AppHappyAgentView(props: AppHappyAgentViewProps) {
     const directory = useSyncExternalStore(
         props.happyAgents.subscribe,
@@ -3421,39 +3418,14 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
         storiesStore.get,
         storiesStore.get,
     );
-    const storyPeople = active?.session?.artifacts?.people();
-    const storyNames = useSyncExternalStore(
-        storyPeople?.subscribe ?? STORY_NAMES_SUBSCRIBE,
-        storyPeople?.get ?? STORY_NAMES_GET,
-        storyPeople?.get ?? STORY_NAMES_GET,
-    );
     const storyDirectory: AppStoryDirectory = {
         tasks: active?.tasks ?? [],
         entries: richTasks.mode === "rich" ? richTasks.entries : [],
         bots: active?.bots ?? [],
-        names: storyNames,
-        ...(storyPeople ? { people: storyPeople } : {}),
+        catalog: surfaceCatalog,
     };
     const storyRings = stories.mode === "on" ? stories.rings : [];
-    // A task's card wears its agent's ring; the reader's own reposts are not a task's.
-    const taskStories = new Map(
-        storyRings.flatMap((ring) =>
-            ring.poster.kind === "agent" && ring.poster.taskId !== null
-                ? [
-                      [
-                          ring.poster.taskId,
-                          { total: ring.stories.length, unseen: ring.unseen },
-                      ] as const,
-                  ]
-                : [],
-        ),
-    );
-    const taskStoryOpen = (taskId: string): void => {
-        const ring = storyRings.find(
-            (each) => each.poster.kind === "agent" && each.poster.taskId === taskId,
-        );
-        if (ring) storiesStore.ringOpen(ring.id);
-    };
+    const taskRings = appStoryTaskRings(storyRings);
     /** Opens what a card or sub-row points at, where the classic row would open it. */
     const richTaskOpen = (happyAgent: AppHappyAgentEntry, id: string): void => {
         const row = richTaskSubRowParse(id);
@@ -3489,8 +3461,10 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                           entries={richTasks.entries}
                           {...(props.groupId === undefined ? {} : { groupId: props.groupId })}
                           onSelect={(id) => richTaskOpen(active, id)}
-                          onStoryOpen={taskStoryOpen}
-                          stories={taskStories}
+                          onStoryOpen={(taskId) =>
+                              storiesStore.ringOpen(taskRings.get(taskId)?.id ?? "")
+                          }
+                          stories={taskRings}
                           {...(active.session.artifacts
                               ? { people: active.session.artifacts.people() }
                               : {})}
@@ -3675,17 +3649,15 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
             // A search replaces everything below the field, pinned rows too.
             actions={searching ? [] : pinned}
             {...(sidebarSearchRow ? { searchRow: sidebarSearchRow } : {})}
-            {...(storyRings.length > 0
-                ? {
-                      topAccessory: (
-                          <AppHappyAgentStoriesRow
-                              directory={storyDirectory}
-                              rings={storyRings}
-                              store={storiesStore}
-                          />
-                      ),
-                  }
-                : {})}
+            topAccessory={
+                storyRings.length > 0 ? (
+                    <AppHappyAgentStoriesRow
+                        directory={storyDirectory}
+                        rings={storyRings}
+                        store={storiesStore}
+                    />
+                ) : null
+            }
             // A todo list is made from the sidebar's own heading, beside the
             // control that hides it. A Happy Agent without Surfaces offers none.
             {...(surfaceCatalog.availability === "available"
@@ -4703,9 +4675,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                 <AppHappyAgentStoryViewer
                     clock={active.session.clock}
                     directory={storyDirectory}
-                    onArtifactOpen={(artifactId) => props.onArtifactOpen?.(active.id, artifactId)}
                     open={stories.open}
-                    rings={storyRings}
                     store={storiesStore}
                 />
             ) : null}

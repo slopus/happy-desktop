@@ -1,15 +1,11 @@
-import { useState, type KeyboardEvent } from "react";
-import { Icon } from "./Icon";
+import type { HappyAgentStoryFrame, HappyAgentStoryPhase } from "happy-desktop-state";
+import { useState } from "react";
+import { Button } from "./Button";
+import { ConfirmPopover } from "./ConfirmPopover";
 import { StoryMarkView, type StoryMark } from "./StoryRing";
-import { Ionicon } from "./vectorIcons/VectorIcon";
 
 /** The story's one frame, as far as it is known. */
-export type StoryViewerFrame =
-    | { readonly kind: "loading" }
-    | { readonly kind: "image" | "video"; readonly url: string }
-    /** A page or document, opened in the artifact viewer. */
-    | { readonly kind: "artifact" }
-    | { readonly kind: "failed"; readonly message: string };
+export type StoryViewerFrame = HappyAgentStoryFrame;
 
 export type StoryViewerReply = {
     readonly id: string;
@@ -21,13 +17,11 @@ export type StoryViewerReply = {
 };
 
 /** A reply, take-down or repost: idle, on its way, done, or refused with the reason. */
-export type StoryViewerPhase =
-    | { readonly phase: "idle" | "sending" | "sent" }
-    | { readonly phase: "failed"; readonly message: string };
+export type StoryViewerPhase = HappyAgentStoryPhase;
 
 export type StoryViewerProps = {
     /** One segment per live story of this poster, and which one is open. */
-    readonly segments: { readonly total: number; readonly current: number };
+    readonly segment: { readonly index: number; readonly total: number };
     readonly poster: { readonly name: string; readonly mark: StoryMark };
     /** When it was posted, already worded ("2h"). */
     readonly time: string;
@@ -47,108 +41,156 @@ export type StoryViewerProps = {
     readonly onReplySend: (text: string) => void;
     /** Offered only to the person the story belongs to. */
     readonly onTakeDown?: () => void;
-    /** Offered on anyone else's story; the caption may be empty. */
-    readonly onRepost?: (caption: string) => void;
-    readonly onFrameOpen?: () => void;
+    /** Offered on anyone else's story, with an optional caption and recorded round video. */
+    readonly onRepost?: (caption: string, round: Blob | null) => void;
     readonly onStep: (delta: 1 | -1) => void;
     readonly onClose: () => void;
 };
 
+/** A round video reaction is at most this long. */
+const ROUND_MAX_MS = 15_000;
+
+/** The live preview's ref: it shows the camera, and stops it once the preview leaves the page. */
+type Preview = (node: HTMLVideoElement | null) => () => void;
+type Round =
+    | { readonly phase: "idle" | "unavailable" }
+    | {
+          readonly phase: "recording";
+          readonly stop: (keep: boolean) => void;
+          readonly preview: Preview;
+      }
+    | { readonly phase: "done"; readonly blob: Blob; readonly url: string };
+
+/** The front camera with its microphone, or without one, or nothing when there is no camera. */
+async function camera(): Promise<MediaStream | null> {
+    const devices = navigator.mediaDevices as MediaDevices | undefined;
+    if (!devices || typeof MediaRecorder === "undefined") return null;
+    return devices
+        .getUserMedia({ video: true, audio: true })
+        .catch(() => devices.getUserMedia({ video: true }))
+        .catch(() => null);
+}
+
 /**
  * StoryViewer — one story, one frame: the segments bar, the poster, the frame,
- * its caption, the replies already sent, and a solid reply bar under the
- * frame, readable whatever the frame is. Pressing the frame's left third goes
- * back, anywhere else on it goes forward; the arrow keys do the same.
+ * its caption, the replies already sent, and a solid reply bar under the frame,
+ * readable whatever the frame is. A repost may carry a round video reaction,
+ * recorded here over the frame. The frame's left third steps back, the rest
+ * forward.
  */
 export function StoryViewer(props: StoryViewerProps) {
     const [text, setText] = useState("");
     const [bar, setBar] = useState<"reply" | "repost" | "takeDown">("reply");
+    const [round, setRound] = useState<Round>({ phase: "idle" });
     // A sent reply empties the field; worked out while rendering, from the phase it last saw.
     const [phaseSeen, setPhaseSeen] = useState(props.reply.phase);
     if (phaseSeen !== props.reply.phase) {
         setPhaseSeen(props.reply.phase);
         if (props.reply.phase === "sent") setText("");
     }
-    const status = props.action.phase === "failed" ? props.action.message : null;
+    /** Drops a recording without keeping it; the preview leaving the page stops the camera. */
+    const roundClear = (next: typeof bar = bar) => {
+        if (round.phase === "recording") round.stop(false);
+        if (round.phase === "done") URL.revokeObjectURL(round.url);
+        setRound({ phase: "idle" });
+        setBar(next);
+    };
+    const record = async () => {
+        roundClear();
+        const stream = await camera();
+        if (!stream) return setRound({ phase: "unavailable" });
+        const recorder = new MediaRecorder(stream);
+        const chunks: Blob[] = [];
+        recorder.ondataavailable = (event) => chunks.push(event.data);
+        recorder.onstop = () => {
+            const blob = new Blob(chunks, { type: recorder.mimeType });
+            setRound({ phase: "done", blob, url: URL.createObjectURL(blob) });
+        };
+        recorder.start();
+        setTimeout(() => recorder.state === "recording" && recorder.stop(), ROUND_MAX_MS);
+        const preview: Preview = (node) => {
+            if (node) node.srcObject = stream;
+            return () => stream.getTracks().forEach((track) => track.stop());
+        };
+        const stop = (keep: boolean) => {
+            if (!keep) recorder.onstop = null;
+            recorder.stop();
+        };
+        setRound({ phase: "recording", stop, preview });
+    };
     const submit = () => {
-        if (bar !== "repost") {
-            if (text.trim() !== "") props.onReplySend(text);
-            return;
+        if (bar === "reply") {
+            if (text.trim() !== "" && props.reply.phase !== "sending") props.onReplySend(text);
+        } else if (round.phase !== "recording") {
+            props.onRepost?.(text, round.phase === "done" ? round.blob : null);
+            setBar("reply");
+            setText("");
         }
-        props.onRepost?.(text);
-        setBar("reply");
-        setText("");
     };
-    const keys = (event: KeyboardEvent) => {
-        if (event.target instanceof HTMLInputElement) return;
-        if (event.key === "ArrowLeft") props.onStep(-1);
-        else if (event.key === "ArrowRight") props.onStep(1);
-    };
-    const frame = props.frame;
+    const { frame, replies } = props;
+    const live = round.phase === "recording" ? round.preview : null;
+    const roundUrl = round.phase === "done" ? round.url : props.roundUrl;
+    const status = props.action.phase === "failed" ? props.action.message : null;
     return (
         <div
             aria-label={`${props.poster.name}'s story`}
             className="happy-story-viewer"
             data-happy-desktop-ui="story-viewer"
-            onKeyDown={keys}
             role="dialog"
         >
             <div className="happy-story-viewer__segments" role="presentation">
-                {Array.from({ length: props.segments.total }, (_, index) => (
-                    <span
-                        className="happy-story-viewer__segment"
-                        data-on={index <= props.segments.current ? "" : undefined}
-                        key={index}
-                    />
+                {Array.from({ length: props.segment.total }, (_, index) => (
+                    <span data-on={index <= props.segment.index ? "" : undefined} key={index} />
                 ))}
             </div>
             <div className="happy-story-viewer__head">
                 <StoryMarkView mark={props.poster.mark} size={28} />
-                <span className="happy-story-viewer__name">{props.poster.name}</span>
-                <span className="happy-story-viewer__time">{props.time}</span>
-                <span className="happy-story-viewer__spacer" />
+                <b>{props.poster.name}</b>
+                <span className="happy-story-viewer__muted">{props.time}</span>
                 {props.onRepost ? (
-                    <button
+                    <Button
                         aria-label="Repost"
                         aria-pressed={bar === "repost"}
-                        className="happy-story-viewer__icon"
-                        onClick={() => setBar(bar === "repost" ? "reply" : "repost")}
+                        icon="repeat"
+                        iconOnly
+                        onClick={() => roundClear(bar === "repost" ? "reply" : "repost")}
+                        size="small"
                         title="Repost to your team"
-                        type="button"
-                    >
-                        <Ionicon name="repeat-outline" size={18} />
-                    </button>
+                        variant="ghost"
+                    />
                 ) : null}
                 {props.onTakeDown ? (
-                    <button
+                    <Button
                         aria-label="Take down"
-                        className="happy-story-viewer__icon"
+                        icon="trash"
+                        iconOnly
                         onClick={() => setBar("takeDown")}
-                        title="Take down"
-                        type="button"
-                    >
-                        <Ionicon name="trash-outline" size={17} />
-                    </button>
+                        size="small"
+                        variant="ghost"
+                    />
                 ) : null}
-                <button
+                <Button
                     aria-label="Close"
-                    className="happy-story-viewer__icon"
+                    icon="close"
+                    iconOnly
                     onClick={props.onClose}
-                    type="button"
-                >
-                    <Icon name="close" size={18} />
-                </button>
+                    size="small"
+                    variant="ghost"
+                />
             </div>
-            <div
-                className="happy-story-viewer__frame"
-                data-happy-desktop-ui="story-viewer-frame"
-                data-kind={frame.kind}
-            >
-                {/* The left third goes back, the rest goes forward. */}
+            <div className="happy-story-viewer__frame" data-happy-desktop-ui="story-viewer-frame">
+                {frame.kind === "image" ? (
+                    <img alt={props.caption ?? ""} draggable={false} src={frame.url} />
+                ) : frame.kind === "video" ? (
+                    <video autoPlay loop muted playsInline src={frame.url} />
+                ) : (
+                    <span className="happy-story-viewer__muted">
+                        {frame.kind === "failed" ? frame.message : null}
+                    </span>
+                )}
                 <button
                     aria-label="Previous story"
                     className="happy-story-viewer__step"
-                    data-side="previous"
                     onClick={() => props.onStep(-1)}
                     type="button"
                 />
@@ -159,31 +201,17 @@ export function StoryViewer(props: StoryViewerProps) {
                     onClick={() => props.onStep(1)}
                     type="button"
                 />
-                {frame.kind === "image" ? (
-                    <img alt={props.caption ?? ""} draggable={false} src={frame.url} />
-                ) : frame.kind === "video" ? (
-                    <video autoPlay loop muted playsInline src={frame.url} />
-                ) : frame.kind === "artifact" ? (
-                    <button
-                        className="happy-story-viewer__open"
-                        onClick={props.onFrameOpen}
-                        type="button"
-                    >
-                        Open
-                    </button>
-                ) : (
-                    <span className="happy-story-viewer__note">
-                        {frame.kind === "failed" ? frame.message : null}
-                    </span>
-                )}
-                {props.roundUrl ? (
+                {live || roundUrl ? (
                     <video
                         autoPlay
                         className="happy-story-viewer__round"
+                        data-happy-desktop-ui="story-viewer-round"
+                        data-live={live ? "" : undefined}
+                        key={live ? "live" : roundUrl}
                         loop
                         muted
                         playsInline
-                        src={props.roundUrl}
+                        {...(live ? { ref: live } : { src: roundUrl ?? "" })}
                     />
                 ) : null}
             </div>
@@ -194,25 +222,21 @@ export function StoryViewer(props: StoryViewerProps) {
             >
                 <div className="happy-story-viewer__replies-list">
                     <span className="happy-story-viewer__replies-head">
-                        {props.replies.status === "ready"
-                            ? `${String(props.replies.items.length)} ${props.replies.items.length === 1 ? "reply" : "replies"} · sent to ${props.replyTarget}`
-                            : props.replies.status === "failed"
-                              ? props.replies.message
+                        {replies.status === "ready"
+                            ? `${String(replies.items.length)} ${replies.items.length === 1 ? "reply" : "replies"} · sent to ${props.replyTarget}`
+                            : replies.status === "failed"
+                              ? replies.message
                               : `Replies go to ${props.replyTarget}`}
                     </span>
-                    {props.replies.status === "ready"
-                        ? props.replies.items.map((reply) => (
-                              <div className="happy-story-viewer__reply" key={reply.id}>
-                                  <StoryMarkView mark={reply.mark} size={22} />
-                                  <span className="happy-story-viewer__reply-text">
-                                      <b>{reply.name}</b> {reply.text}
-                                      <span className="happy-story-viewer__reply-time">
-                                          {reply.time}
-                                      </span>
-                                  </span>
-                              </div>
-                          ))
-                        : null}
+                    {(replies.status === "ready" ? replies.items : []).map((reply) => (
+                        <div className="happy-story-viewer__reply" key={reply.id}>
+                            <StoryMarkView mark={reply.mark} size={22} />
+                            <span>
+                                <b>{reply.name}</b> {reply.text}
+                                <span className="happy-story-viewer__muted"> {reply.time}</span>
+                            </span>
+                        </div>
+                    ))}
                 </div>
             </div>
             {status || props.action.phase === "sent" ? (
@@ -220,25 +244,59 @@ export function StoryViewer(props: StoryViewerProps) {
                     {status ?? "Reposted to your team"}
                 </span>
             ) : null}
-            {bar === "takeDown" ? (
-                <div className="happy-story-viewer__confirm">
-                    <span>Take this story down for everyone?</span>
-                    <button onClick={() => setBar("reply")} type="button">
-                        Cancel
-                    </button>
-                    <button
-                        data-danger=""
-                        disabled={props.action.phase === "sending"}
-                        onClick={props.onTakeDown}
-                        type="button"
-                    >
-                        Take down
-                    </button>
+            {bar === "takeDown" && props.onTakeDown ? (
+                <ConfirmPopover
+                    confirmLabel="Take down"
+                    onCancel={() => setBar("reply")}
+                    onConfirm={props.onTakeDown}
+                    title="Take this story down for everyone?"
+                    style={{ margin: "6px 10px 0" }}
+                    tone="danger"
+                />
+            ) : null}
+            {bar === "repost" ? (
+                <div
+                    className="happy-story-viewer__actions"
+                    data-happy-desktop-ui="story-viewer-record"
+                >
+                    <span>
+                        {round.phase === "unavailable"
+                            ? "No camera is available for a round video."
+                            : round.phase === "recording"
+                              ? "Recording, up to 15 seconds…"
+                              : "Add a round video reaction, or repost as it is."}
+                    </span>
+                    {round.phase === "recording" ? (
+                        <Button
+                            icon="stop"
+                            onClick={() => round.stop(true)}
+                            size="small"
+                            variant="danger"
+                        >
+                            Stop
+                        </Button>
+                    ) : (
+                        <Button
+                            disabled={round.phase === "unavailable"}
+                            onClick={() => void record()}
+                            size="small"
+                            variant="secondary"
+                        >
+                            {round.phase === "done"
+                                ? "Retake"
+                                : round.phase === "unavailable"
+                                  ? "No camera"
+                                  : "Record"}
+                        </Button>
+                    )}
+                    <Button disabled={round.phase === "recording"} onClick={submit} size="small">
+                        Repost
+                    </Button>
                 </div>
-            ) : (
+            ) : null}
+            {bar === "takeDown" ? null : (
                 <form
                     className="happy-story-viewer__bar"
-                    data-happy-desktop-ui="story-viewer-bar"
                     onSubmit={(event) => {
                         event.preventDefault();
                         submit();
@@ -250,21 +308,20 @@ export function StoryViewer(props: StoryViewerProps) {
                         data-happy-desktop-ui="story-viewer-input"
                         onChange={(event) => setText(event.currentTarget.value)}
                         onKeyDown={(event) => {
-                            if (event.key === "Escape" && bar === "repost") {
-                                event.stopPropagation();
-                                setBar("reply");
-                            }
+                            if (event.key !== "Escape" || bar !== "repost") return;
+                            event.stopPropagation();
+                            roundClear("reply");
                         }}
                         placeholder={
                             bar === "repost"
-                                ? "Add a caption, or press Enter to repost"
+                                ? "Add a caption"
                                 : props.reply.phase === "failed"
                                   ? props.reply.message
                                   : props.reply.phase === "sent"
                                     ? `Sent to ${props.replyTarget}`
                                     : "Tell the agent what to change…"
                         }
-                        readOnly={props.reply.phase === "sending"}
+                        readOnly={props.reply.phase === "sending" && bar === "reply"}
                         value={text}
                     />
                 </form>
