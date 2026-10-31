@@ -352,6 +352,11 @@ export type SidebarSection = {
     /** Renders only the labeled action row, useful as a hierarchy heading. */
     headingOnly?: boolean;
     items: SidebarItem[];
+    /**
+     * Drawn under the heading in place of rows, by a section whose list is not
+     * made of sidebar rows, such as the rich task list. Its `items` stay empty.
+     */
+    content?: ReactNode;
     label?: string;
     /** A controlled fold for a whole work section. */
     collapsed?: boolean;
@@ -4754,6 +4759,9 @@ export function Sidebar(props: SidebarProps) {
                                         })}
                                     </div>
                                 ) : null}
+                                {!section.headingOnly && !section.collapsed
+                                    ? section.content
+                                    : null}
                                 {!section.headingOnly &&
                                 !section.collapsed &&
                                 section.tail &&
@@ -4767,7 +4775,9 @@ export function Sidebar(props: SidebarProps) {
                                 ) : null}
                                 {!section.headingOnly &&
                                 !section.collapsed &&
-                                (section.items.length === 0 ? section.empty : undefined)
+                                (section.items.length === 0 && section.content === undefined
+                                    ? section.empty
+                                    : undefined)
                                     ? ((empty) => (
                                           <div
                                               className="happy-sidebar__empty"
@@ -4795,7 +4805,12 @@ export function Sidebar(props: SidebarProps) {
                                                   </Button>
                                               )}
                                           </div>
-                                      ))((section.items.length === 0 ? section.empty : undefined)!)
+                                      ))(
+                                          (section.items.length === 0 &&
+                                          section.content === undefined
+                                              ? section.empty
+                                              : undefined)!,
+                                      )
                                     : null}
                             </section>
                         );

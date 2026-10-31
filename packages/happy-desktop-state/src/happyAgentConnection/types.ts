@@ -15,7 +15,13 @@ import type {
     Project,
     SlashCommand,
     Task,
+    TaskChildRef,
+    TaskChildVisibility,
+    TaskMembership,
+    TaskSection,
+    Workspace,
 } from "@slopus/happy-agent-client";
+import type { RichTaskArtifact } from "../richTasks/richTaskList.js";
 import type { ConversationMediaLayout } from "../conversation/conversationEntry.js";
 import type { HappyAgentDebugLogInput } from "../happyAgent/happyAgentDebugLogStore.js";
 import type {
@@ -847,7 +853,26 @@ export type MutationAction =
     | "leave_task"
     | "reorder_task"
     | "archive_task"
-    | "unarchive_task";
+    | "unarchive_task"
+    | "replace_task_sections"
+    | "set_task_child";
+
+/**
+ * The reader's task list as this connection holds it from the wire, for the
+ * rich task list. A daemon without `capabilities.taskSections` sends no
+ * sections or artifacts, so both stay empty.
+ */
+export interface HappyAgentRichTasksInput {
+    readonly tasks: readonly Task[];
+    readonly memberships: readonly TaskMembership[];
+    readonly sections: readonly TaskSection[];
+    /** What each task's agents made, from the bootstrap's `taskArtifacts` and `artifact.*` events. */
+    readonly artifacts: readonly RichTaskArtifact[];
+    readonly workspaces: readonly Workspace[];
+    readonly bots: readonly Bot[];
+    /** The reader; `null` for the standalone person. */
+    readonly viewerUserId: string | null;
+}
 
 export interface MutationRejectedDelta {
     action: string;
@@ -1183,6 +1208,15 @@ export interface HappyAgentConnection {
     leaveTask(taskId: string): MutationId;
     /** Moves one joined task after `afterId` in the caller's list, or first when null. */
     reorderTask(taskId: string, afterId: string | null): MutationId;
+    /** The reader's task list as held, and its changes; reading it sends nothing. */
+    readonly richTasks: {
+        get(): HappyAgentRichTasksInput;
+        subscribe(listener: () => void): () => void;
+    };
+    /** Replaces the caller's sections, each keeping its place. Only with `capabilities.taskSections`. */
+    replaceTaskSections(sections: readonly TaskSection[]): MutationId;
+    /** Sets one child choice under a task, for every member. Only with `capabilities.taskSections`. */
+    setTaskChild(taskId: string, ref: TaskChildRef, visibility: TaskChildVisibility): MutationId;
     /** Archives a task for everyone; only a caller the task reports `canArchive` for may. */
     archiveTask(taskId: string): MutationId;
     unarchiveTask(taskId: string): MutationId;

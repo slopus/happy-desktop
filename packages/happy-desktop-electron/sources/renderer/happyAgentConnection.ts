@@ -122,6 +122,7 @@ export interface HappyAgentSession {
     readonly providers: HappyAgentProvidersStore;
     readonly voiceSettings: HappyAgentVoiceSettingsStore;
     readonly taskSettings: () => import("happy-desktop-state").HappyAgentTaskSettingsStore;
+    readonly richTasks: () => import("happy-desktop-state").HappyAgentRichTasksStore;
     readonly surfaceSettings: () => import("happy-desktop-state").HappyAgentSurfaceSettingsStore;
     readonly workspace: HappyAgentWorkspaceStore;
     readonly instructions: HappyAgentInstructionsStore;
@@ -586,6 +587,7 @@ export function happyAgentConnectionOpen(input: {
                     providers: client.providers(),
                     voiceSettings: client.voiceSettings(),
                     taskSettings: () => client.taskSettings(),
+                    richTasks: () => client.richTasks(),
                     surfaceSettings: () => client.surfaceSettings(),
                     workspace: preparedWorkspace,
                     instructions: client.instructions(),

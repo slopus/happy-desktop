@@ -4,6 +4,9 @@ settings:
   autoInstallPeers: false
   excludeLinksFromLockfile: false
 
+overrides:
+  '@slopus/happy-agent-client@0.0.136': file:../../happy-agent/rich-tasks/.context/client/slopus-happy-agent-client-0.0.137-rc.2.tgz
+
 patchedDependencies:
   react-dom@19.2.7:
     hash: 14e2cfa7d72d4064e573a384fedfcdcc7589b6d08ab00ac90e41ef11f9496979
@@ -257,8 +260,8 @@ importers:
   packages/happy-desktop-gym:
     dependencies:
       '@slopus/happy-agent-client':
-        specifier: 0.0.136
-        version: 0.0.136
+        specifier: file:../../../../happy-agent/rich-tasks/.context/client/slopus-happy-agent-client-0.0.137-rc.2.tgz
+        version: file:../../happy-agent/rich-tasks/.context/client/slopus-happy-agent-client-0.0.137-rc.2.tgz
       happy-desktop-state:
         specifier: workspace:*
         version: link:../happy-desktop-state
@@ -297,8 +300,8 @@ importers:
         specifier: ^0.34.49
         version: 0.34.52
       '@slopus/happy-agent-client':
-        specifier: 0.0.136
-        version: 0.0.136
+        specifier: file:../../../../happy-agent/rich-tasks/.context/client/slopus-happy-agent-client-0.0.137-rc.2.tgz
+        version: file:../../happy-agent/rich-tasks/.context/client/slopus-happy-agent-client-0.0.137-rc.2.tgz
       picomatch:
         specifier: 4.0.5
         version: 4.0.5
@@ -2123,8 +2126,9 @@ packages:
     resolution: {integrity: sha512-ynH73G7jf6pIwm6nbqtsXAfaiJkuce5fS4+FMifpJVaTjpl2RTUqTeJwCkIpfBhEnObvQCaannLjWJOIY4D7cg==}
     engines: {node: '>=20'}
 
-  '@slopus/happy-agent-client@0.0.136':
-    resolution: {integrity: sha512-akS5zda+r82LZsXXWDHCtN0l07EKFOVNjQTez8tL/8yYg2B8BMlD+Z+LrMddnOYU8JrLF2XZU/KF50rj9bLD1Q==}
+  '@slopus/happy-agent-client@file:../../happy-agent/rich-tasks/.context/client/slopus-happy-agent-client-0.0.137-rc.2.tgz':
+    resolution: {integrity: sha512-uaGxAlOVjlK6bHWftU+1mIqllwEYT3Fmn9Xc4aGSup3HBsbN8poMMfJu1m43PXtrWy58fXlQleS3Z0eDFBgbxw==, tarball: file:../../happy-agent/rich-tasks/.context/client/slopus-happy-agent-client-0.0.137-rc.2.tgz}
+    version: 0.0.137-rc.2
     engines: {node: '>=20'}
 
   '@standard-schema/spec@1.1.0':
@@ -7475,7 +7479,7 @@ snapshots:
       '@sinclair/typebox': 0.34.52
       parse5: 8.0.1
 
-  '@slopus/happy-agent-client@0.0.136':
+  '@slopus/happy-agent-client@file:../../happy-agent/rich-tasks/.context/client/slopus-happy-agent-client-0.0.137-rc.2.tgz':
     dependencies:
       '@sinclair/typebox': 0.34.52
       parse5: 8.0.1

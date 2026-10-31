@@ -1,6 +1,7 @@
-import { useLayoutEffect, useRef, type ReactNode } from "react";
+import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Avatar, type ToneName } from "./Avatar";
 import { ClayIcon } from "./ClayIcon";
+import { ContextMenu } from "./ContextMenu";
 import { SIDEBAR_SETTLE } from "./Sidebar";
 import { Spinner } from "./Spinner";
 import { Ionicon, type IoniconName } from "./vectorIcons/VectorIcon";
@@ -70,6 +71,8 @@ export type RichTaskListProps = {
     readonly onSelect: (id: string) => void;
     readonly onSectionCollapseToggle: (sectionId: string) => void;
     readonly onMoreToggle: (taskId: string) => void;
+    /** Offers "Hide" on a sub-row's context menu; left out, sub-rows have no menu. */
+    readonly onSubRowHide?: (id: string) => void;
 };
 
 /** 1.2k, as the sidebar abbreviates line totals. */
@@ -208,6 +211,7 @@ export type RichTaskSubRowProps = {
     readonly selected: boolean;
     readonly workingFrame?: number;
     readonly onSelect: (id: string) => void;
+    readonly onMenuOpen?: (id: string, x: number, y: number) => void;
 };
 
 /** One piece of a task's sub-work under its card: mark, name, line totals, signal. */
@@ -222,6 +226,11 @@ export function RichTaskSubRow(props: RichTaskSubRowProps) {
             data-row-key={row.id}
             data-selected={props.selected ? "" : undefined}
             onClick={() => props.onSelect(row.id)}
+            onContextMenu={(event) => {
+                if (!props.onMenuOpen) return;
+                event.preventDefault();
+                props.onMenuOpen(row.id, event.clientX, event.clientY);
+            }}
             type="button"
         >
             <span className="happy-rich-task-row__lead">
@@ -352,6 +361,8 @@ function rowsGlide(root: HTMLElement, previous: RowLayout | undefined): RowLayou
 export function RichTaskList(props: RichTaskListProps) {
     const root = useRef<HTMLDivElement>(null);
     const layout = useRef<RowLayout | undefined>(undefined);
+    const [menu, setMenu] = useState<{ id: string; x: number; y: number } | null>(null);
+    const onSubRowHide = props.onSubRowHide;
     // eslint-disable-next-line happy-react/no-layout-effect -- a reorder glide must measure the rows laid out by the render it follows, before paint, which no declarative or event-driven boundary exposes
     useLayoutEffect(() => {
         if (root.current) layout.current = rowsGlide(root.current, layout.current);
@@ -385,6 +396,12 @@ export function RichTaskList(props: RichTaskListProps) {
             ...card.subRows.map((subRow) => (
                 <RichTaskSubRow
                     key={subRow.id}
+                    {...(onSubRowHide
+                        ? {
+                              onMenuOpen: (id: string, x: number, y: number) =>
+                                  setMenu({ id, x, y }),
+                          }
+                        : {})}
                     onSelect={props.onSelect}
                     row={subRow}
                     selected={props.selectedId === subRow.id}
@@ -415,6 +432,18 @@ export function RichTaskList(props: RichTaskListProps) {
             ref={root}
         >
             {rows}
+            {menu && onSubRowHide ? (
+                <ContextMenu
+                    items={[{ kind: "item", id: "hide", label: "Hide", icon: "eye-off" }]}
+                    onClose={() => setMenu(null)}
+                    onSelect={() => {
+                        setMenu(null);
+                        onSubRowHide(menu.id);
+                    }}
+                    x={menu.x}
+                    y={menu.y}
+                />
+            ) : null}
         </div>
     );
 }

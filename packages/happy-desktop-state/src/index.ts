@@ -254,3 +254,4 @@ export * from "./happyAgent/happyAgentWorkspaceMemory.js";
 export * from "./happyAgent/happyAgentWorkspaceStore.js";
 export * from "./happyAgent/happyAgentViewPreferences.js";
 export * from "./richTasks/richTaskList.js";
+export * from "./richTasks/richTasksStore.js";

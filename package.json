@@ -55,5 +55,10 @@
         "node": ">=24.0.0",
         "pnpm": ">=10.28.1"
     },
-    "packageManager": "pnpm@10.28.1"
+    "packageManager": "pnpm@10.28.1",
+    "pnpm": {
+        "overrides": {
+            "@slopus/happy-agent-client@0.0.136": "file:../../happy-agent/rich-tasks/.context/client/slopus-happy-agent-client-0.0.137-rc.2.tgz"
+        }
+    }
 }

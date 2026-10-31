@@ -7,6 +7,7 @@ import {
     gptLiveStoreNoop,
     happyAgentBotSubtasks,
     happyAgentClockStoreCreate,
+    happyAgentRichTasksStoreNone,
     happyAgentSidebarTree,
     happyAgentTabsOrdered,
     happyAgentTodoHeading,
@@ -15,6 +16,7 @@ import {
     type HappyAgentSidebarProject,
 } from "happy-desktop-state";
 import { AppGptLivePhone } from "./gptLive/AppGptLivePhone";
+import { AppHappyAgentRichTasks, richTaskSubRowParse } from "./components/AppHappyAgentRichTasks";
 import { conversationInlinePagesCreate, inlineArtifactsStoreNoop } from "./conversationInlinePages";
 import {
     ARTIFACT_READING,
@@ -610,6 +612,8 @@ export interface AppHappyAgentSession {
     readonly voiceSettings?: HappyAgentVoiceSettingsStore;
     /** This connection's authenticated person's task membership preference. */
     readonly taskSettings?: () => import("happy-desktop-state").HappyAgentTaskSettingsStore;
+    /** The Tasks area: classic, or the rich list behind its capability and setting. */
+    readonly richTasks?: () => import("happy-desktop-state").HappyAgentRichTasksStore;
     /** This connection's authenticated person's Surface membership preference. */
     readonly surfaceSettings?: () => import("happy-desktop-state").HappyAgentSurfaceSettingsStore;
     /** This Happy Agent's machine-wide instructions, as the settings window edits them. */
@@ -3388,6 +3392,48 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
         surfaceSupportStore.get,
         surfaceSupportStore.get,
     );
+    // The addressed machine's Tasks area is the rich list while its daemon has
+    // the capability and the reader's `tasks.rich` is on; otherwise, and on
+    // every other machine, it is the classic list.
+    const richTasksStore = active?.session?.richTasks?.() ?? happyAgentRichTasksStoreNone;
+    const richTasks = useSyncExternalStore(
+        richTasksStore.subscribe,
+        richTasksStore.get,
+        richTasksStore.get,
+    );
+    /** Opens what a card or sub-row points at, where the classic row would open it. */
+    const richTaskOpen = (happyAgent: AppHappyAgentEntry, id: string): void => {
+        const row = richTaskSubRowParse(id);
+        if (row?.ref.kind === "artifact") {
+            props.onArtifactOpen?.(happyAgent.id, row.ref.id);
+            return;
+        }
+        const rowId = row
+            ? row.ref.id
+            : happyAgent.tasks?.find((task) => task.id === id)?.workspaceId;
+        const destination = rowId === undefined ? undefined : rowDestination(happyAgent, rowId);
+        if (destination) props.onChatSelect(happyAgent.id, destination.groupId, destination.chatId);
+    };
+    const tasksArea = (section: SidebarSection): SidebarSection =>
+        richTasks.mode !== "rich" ||
+        active?.session === undefined ||
+        section.id !== happyAgentTasksSectionId(active.id)
+            ? section
+            : {
+                  ...section,
+                  items: [],
+                  content: (
+                      <AppHappyAgentRichTasks
+                          {...(props.chatId === undefined ? {} : { chatId: props.chatId })}
+                          clock={active.session.clock}
+                          entries={richTasks.entries}
+                          {...(props.groupId === undefined ? {} : { groupId: props.groupId })}
+                          onSelect={(id) => richTaskOpen(active, id)}
+                          store={richTasksStore}
+                          tasks={active.tasks ?? []}
+                      />
+                  ),
+              };
     /**
      * Opens what an artifact, bot, or task Surface points at, where it always
      * opens: the artifact viewer, or the bot's or task's own chat. Answers
@@ -4104,7 +4150,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                               sidebarCollapse.collapsed,
                               voiceFocus,
                               directory,
-                          ),
+                          ).map(tasksArea),
                       ]
             }
         />

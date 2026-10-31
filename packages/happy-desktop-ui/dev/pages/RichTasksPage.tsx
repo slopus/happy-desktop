@@ -9,6 +9,7 @@ import {
     type RichTaskWorkspace,
 } from "happy-desktop-state";
 import { localAgoTime } from "../../src/localTime";
+import { Sidebar } from "../../src/Sidebar";
 import {
     RichTaskList,
     type RichTaskFace,
@@ -251,18 +252,18 @@ function subRow(taskId: string, child: RichTaskSubWork): RichTaskSubRowModel {
             ...base,
             id: `${taskId}/agent:${child.agent.id}`,
             mark: { kind: "glyph", icon: "hardware-chip-outline" },
-            label: child.agent.title,
+            label: child.agent.title ?? "",
             detail: child.agent.pendingQuestionId
                 ? QUESTIONS[child.agent.pendingQuestionId]
                 : undefined,
             working: child.agent.status === "working",
         };
     if (child.kind === "workspace") {
-        const { addedLines: added, deletedLines: removed } = child.workspace;
+        const { addedLines: added = 0, deletedLines: removed = 0 } = child.workspace;
         return {
             ...base,
             id: `${taskId}/workspace:${child.workspace.id}`,
-            mark: { kind: "image", src: PROJECTS[child.workspace.projectId]! },
+            mark: { kind: "image", src: PROJECTS[child.workspace.projectId ?? ""]! },
             label: child.workspace.name,
             changes: added || removed ? { added, removed } : "merged",
         };
@@ -289,7 +290,7 @@ function rows(entries: readonly RichTaskListEntry[]): readonly RichTaskListRow[]
             card: {
                 id: value.id,
                 title: value.name,
-                time: localAgoTime(value.agent.lastActivityAt, NOW),
+                time: localAgoTime(value.agent.lastActivityAt ?? NOW, NOW),
                 status: value.agent.statusLine?.text ?? null,
                 iconSlug: value.icon?.slug ?? null,
                 ring: value.id === "onboarding",
@@ -313,6 +314,8 @@ function Fixture(props: {
     readonly mode: "light" | "dark";
     readonly selection: "inset" | "full";
     readonly expanded?: readonly string[];
+    /** Drawn as the Tasks section of a sidebar, the way the app draws it in rich mode. */
+    readonly inSidebar?: boolean;
 }) {
     const [selectedId, setSelectedId] = useState<string | null>("onboarding/agent:install");
     const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set(props.expanded));
@@ -327,27 +330,54 @@ function Fixture(props: {
         viewerUserId: "kirill",
         expandedTaskIds: expanded,
     });
+    const list = (
+        <RichTaskList
+            onMoreToggle={(id) => setExpanded((current) => toggled(current, id))}
+            onSectionCollapseToggle={(id) =>
+                setSections((current) =>
+                    current.map((section) =>
+                        section.id === id ? { ...section, collapsed: !section.collapsed } : section,
+                    ),
+                )
+            }
+            onSelect={setSelectedId}
+            rows={rows(entries)}
+            selectedId={selectedId}
+            selection={props.selection}
+            workingFrame={0}
+        />
+    );
     return (
         <ThemeScope mode={props.mode}>
-            <div className="rich-tasks-frame" style={frame}>
-                <RichTaskList
-                    onMoreToggle={(id) => setExpanded((current) => toggled(current, id))}
-                    onSectionCollapseToggle={(id) =>
-                        setSections((current) =>
-                            current.map((section) =>
-                                section.id === id
-                                    ? { ...section, collapsed: !section.collapsed }
-                                    : section,
-                            ),
-                        )
-                    }
-                    onSelect={setSelectedId}
-                    rows={rows(entries)}
-                    selectedId={selectedId}
-                    selection={props.selection}
-                    workingFrame={0}
-                />
-            </div>
+            {props.inSidebar ? (
+                <div style={{ display: "flex", width: 304, height: 900 }}>
+                    <Sidebar
+                        activeItemId=""
+                        onItemSelect={() => undefined}
+                        sections={[
+                            {
+                                id: "bots",
+                                label: "Bots",
+                                items: [
+                                    {
+                                        id: "chief",
+                                        kind: "project",
+                                        label: "Chief of Staff",
+                                        initials: "CS",
+                                    },
+                                ],
+                            },
+                            { id: "tasks", label: "Tasks", items: [], content: list },
+                        ]}
+                        style={{ width: "100%" }}
+                        title="Happy"
+                    />
+                </div>
+            ) : (
+                <div className="rich-tasks-frame" style={frame}>
+                    {list}
+                </div>
+            )}
         </ThemeScope>
     );
 }
@@ -391,6 +421,14 @@ export function RichTasksPage() {
                     stage="surface"
                 >
                     <Fixture expanded={["onboarding"]} mode="dark" selection="full" />
+                </Specimen>
+                <Specimen
+                    detail="the Tasks section's content, as the app draws it in rich mode"
+                    label="In the sidebar"
+                    number="04"
+                    stage="app"
+                >
+                    <Fixture inSidebar mode="dark" selection="inset" />
                 </Specimen>
             </div>
         </ComponentPage>

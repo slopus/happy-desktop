@@ -26,6 +26,7 @@ import {
     type SlashCommand,
     type Task,
     type TaskMembership,
+    type TaskSection,
     type UsageBreakdown,
     type Workspace,
 } from "@slopus/happy-agent-client";
@@ -73,10 +74,12 @@ import type {
     HappyAgentConnection,
     HappyAgentDrain,
     HappyAgentGroupsSubscriptionOptions,
+    HappyAgentRichTasksInput,
     HappyAgentSessionSubscriptionOptions,
     ServerCompatibility,
     TaskOwner,
 } from "./types.js";
+import type { RichTaskArtifact } from "../richTasks/richTaskList.js";
 import { sidebarReadAheadOrder, type SidebarReadAheadRows } from "./types.js";
 
 const INITIAL_RECONNECT_MS = 250;
@@ -434,6 +437,10 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         readonly tasks: readonly Task[];
         /** The caller's own memberships; order is by `orderKey`, not array position. */
         readonly taskMemberships: readonly TaskMembership[];
+        /** The caller's sections; a daemon without `capabilities.taskSections` sends none. */
+        readonly taskSections: readonly TaskSection[];
+        /** What the tasks' agents made, for sub-rows; empty on the same daemons. */
+        readonly taskArtifacts: readonly RichTaskArtifact[];
         readonly connection: GroupsState["connection"];
         /** The published group projection, rebuilt by `publishGroups`. */
         readonly groups: ReturnType<typeof projectGroups>;
@@ -449,8 +456,10 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         connection: "connecting",
         groups: [],
         projects: [],
+        taskArtifacts: [],
         taskGroups: [],
         taskMemberships: [],
+        taskSections: [],
         tasks: [],
         workspaces: [],
     }));
@@ -1775,6 +1784,15 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                 // The same for tasks: absent together on a daemon that predates them.
                 taskMemberships: bootstrap.taskMemberships ?? [],
                 tasks: bootstrap.tasks ?? [],
+                // And these two on a daemon without `capabilities.taskSections`.
+                taskSections: bootstrap.taskSections ?? [],
+                taskArtifacts: (bootstrap.taskArtifacts ?? []).map((entry) => ({
+                    id: entry.artifactId,
+                    type: entry.type,
+                    title: entry.title,
+                    source: { agentId: entry.agentId },
+                    updatedAt: entry.updatedAt,
+                })),
                 workspaces: owners.workspaces,
             });
             taskOwnersEnsure(bootstrap.tasks ?? []);
@@ -2093,6 +2111,25 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         publishGroups();
     };
 
+    /** The rich task list's input, one object for as long as nothing in it changes. */
+    let richTasks: HappyAgentRichTasksInput | undefined;
+    const richTasksGet = (): HappyAgentRichTasksInput => {
+        const state = groupsStore.getState();
+        const next: HappyAgentRichTasksInput = {
+            tasks: state.tasks,
+            memberships: state.taskMemberships,
+            sections: state.taskSections,
+            artifacts: state.taskArtifacts,
+            workspaces: state.workspaces,
+            bots: state.bots,
+            viewerUserId: currentUserId ?? null,
+        };
+        const keys = Object.keys(next) as (keyof HappyAgentRichTasksInput)[];
+        if (richTasks === undefined || keys.some((key) => richTasks![key] !== next[key]))
+            richTasks = next;
+        return richTasks;
+    };
+
     const taskMembershipAdopt = (membership: TaskMembership): void => {
         groupsStore.setState((state) => ({
             taskMemberships: taskMembershipsReplace(state.taskMemberships, membership),
@@ -2292,12 +2329,50 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
             }
             case "task.joined":
             case "task.reordered":
+            case "task.membership.updated":
                 taskMembershipAdopt(event.payload.membership);
                 if (taskOf(event.payload.membership.taskId) === undefined)
                     taskRefetch(event.payload.membership.taskId);
                 return;
             case "task.left":
                 taskMembershipRemove(event.payload.membership.taskId);
+                return;
+            // Protocol 34: each is a complete replacement, kept for the rich task list.
+            case "task.sections.updated":
+                groupsStore.setState({ taskSections: event.payload.sections });
+                return;
+            case "artifact.created": {
+                const { artifact } = event.payload;
+                const agentId = artifact.source?.agentId ?? null;
+                if (agentId === null || artifact.type === "story") return;
+                const { id, type, title, updatedAt } = artifact;
+                const entry = { id, type, title, source: { agentId }, updatedAt };
+                groupsStore.setState((state) => ({
+                    taskArtifacts: [entry, ...state.taskArtifacts.filter((a) => a.id !== entry.id)],
+                }));
+                return;
+            }
+            case "artifact.updated": {
+                const { artifactId, changes } = event.payload;
+                groupsStore.setState((state) => ({
+                    taskArtifacts: state.taskArtifacts.map((entry) =>
+                        entry.id === artifactId
+                            ? {
+                                  ...entry,
+                                  title: changes.title ?? entry.title,
+                                  updatedAt: changes.updatedAt ?? entry.updatedAt,
+                              }
+                            : entry,
+                    ),
+                }));
+                return;
+            }
+            case "artifact.deleted":
+                groupsStore.setState((state) => ({
+                    taskArtifacts: state.taskArtifacts.filter(
+                        (entry) => entry.id !== event.payload.artifactId,
+                    ),
+                }));
                 return;
             case "workspace.updated": {
                 const current = workspaceOf(event.payload.workspaceId);
@@ -5351,6 +5426,52 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                 `task:${taskId}`,
             );
         },
+        richTasks: {
+            get: richTasksGet,
+            subscribe: (listener) => groupsStore.subscribe(() => listener()),
+        },
+        replaceTaskSections(sections) {
+            const mutationId = nextId();
+            return mutation(
+                "replace_task_sections",
+                mutationId,
+                () =>
+                    client.replaceTaskSections(
+                        {
+                            // Without `after`, every section keeps its place.
+                            sections: sections.map(({ id, name, collapsed }) => ({
+                                id,
+                                name,
+                                collapsed,
+                            })),
+                            mutationId,
+                        },
+                        { signal: deadlineSignal() },
+                    ),
+                (response) => groupsStore.setState({ taskSections: response.sections }),
+                undefined,
+                undefined,
+                "task-sections",
+            );
+        },
+        setTaskChild(taskId, ref, visibility) {
+            const mutationId = nextId();
+            return mutation(
+                "set_task_child",
+                mutationId,
+                () =>
+                    client.setTaskChild(
+                        taskId,
+                        ref,
+                        { visibility, mutationId },
+                        { signal: deadlineSignal() },
+                    ),
+                taskResponseAdopt,
+                undefined,
+                undefined,
+                `task:${taskId}`,
+            );
+        },
         archiveTask(taskId) {
             return taskArchivalSet(taskId, true);
         },
@@ -5759,6 +5880,14 @@ function messageBlockSame(previous: MessageBlock, next: MessageBlock): boolean {
                 previous.beforeMessageId === next.beforeMessageId &&
                 deepEqual(previous.before, next.before) &&
                 deepEqual(previous.after, next.after)
+            );
+        // Reads never ask for action blocks (`includeActions`), so one only
+        // arrives from a newer daemon; it is the same press when it names the same block.
+        case "action":
+            return (
+                next.type === "action" &&
+                previous.messageId === next.messageId &&
+                previous.blockIndex === next.blockIndex
             );
     }
 }

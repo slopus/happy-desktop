@@ -32,6 +32,7 @@ import {
     type StoredUserSetting,
     type Task,
     type TaskMembership,
+    type TaskSection,
     type User,
     type UserMessage,
     type Workspace,
@@ -189,6 +190,11 @@ export interface FakeHappyAgentDaemon {
     userSettingsSupportedSet(supported: boolean): void;
     /** Every held user setting, clears included, in ascending key order. */
     userSettingsGet(): readonly StoredUserSetting[];
+    /**
+     * A protocol-34 daemon reporting `capabilities.taskSections`, with these
+     * sections in its bootstrap; `undefined`, the default, is one without.
+     */
+    taskSectionsSet(sections: readonly TaskSection[] | undefined): void;
 
     /** The effective configuration `getConfig` and the desktop bootstrap serve. */
     configGet(): DaemonConfig;
@@ -410,6 +416,7 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
     /** Every event this process journaled; a replacement starts with none. */
     let journal: HappyAgentEvent[] = [];
     let desktopLiveControl: boolean | undefined;
+    let taskSections: readonly TaskSection[] | undefined;
     const liveSessions = new Map<string, LiveSession>();
     const liveUrls = new HappyAgentClient({ endpoint: "http://fake-happy-agent.test/" });
     let protocol = HAPPY_AGENT_PROTOCOL_VERSION;
@@ -675,7 +682,14 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
         ready: healthReady,
         status: healthReady ? ("ready" as const) : ("starting" as const),
         version: { daemon: daemonVersion, protocol },
-        ...(desktopLiveControl === undefined ? {} : { capabilities: { desktopLiveControl } }),
+        ...(desktopLiveControl === undefined && taskSections === undefined
+            ? {}
+            : {
+                  capabilities: {
+                      ...(desktopLiveControl === undefined ? {} : { desktopLiveControl }),
+                      ...(taskSections === undefined ? {} : { taskSections: true }),
+                  },
+              }),
     });
 
     const client = {
@@ -822,6 +836,7 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
                 tasks: [...tasks.values()],
                 taskMemberships: [...memberships.values()],
                 ...(userSettingsSupported ? { userSettings: userSettingsOrdered() } : {}),
+                ...(taskSections === undefined ? {} : { taskSections }),
             };
         },
         async getUserSettings(...args: unknown[]) {
@@ -961,6 +976,24 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
             };
             memberships.set(taskId, membership);
             emit("task.reordered", { membership });
+            return taskResponse(taskId);
+        },
+        async replaceTaskSections(request: {
+            readonly sections: readonly Omit<TaskSection, "orderKey">[];
+        }) {
+            await record("replaceTaskSections", [request]);
+            const held = new Map((taskSections ?? []).map((section) => [section.id, section]));
+            taskSections = request.sections.map(({ id, name, collapsed }) => ({
+                id,
+                name,
+                collapsed,
+                orderKey: held.get(id)?.orderKey ?? "0",
+            }));
+            emit("task.sections.updated", { sections: [...taskSections] });
+            return { sections: [...taskSections] };
+        },
+        async setTaskChild(taskId: string, ...rest: unknown[]) {
+            await record("setTaskChild", [taskId, ...rest]);
             return taskResponse(taskId);
         },
         async archiveTask(taskId: string, options: { readonly ifMatch: string }) {
@@ -1530,6 +1563,9 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
             userSettingsSupported = supported;
         },
         userSettingsGet: userSettingsOrdered,
+        taskSectionsSet(sections) {
+            taskSections = sections;
+        },
         configGet: () => config,
         configSet(next) {
             config = next;

@@ -2,76 +2,55 @@
  * The rich task list: which tasks the reader sees, under which section, and
  * which of each task's sub-work stands under its card.
  *
- * The input shapes mirror protocol 34 (API.md, "Rich tasks"): `TaskIcon`,
- * `TaskChildRef`, `TaskChild` (a child choice), `TaskMembership.hidden`,
- * `TaskSection`, and the agent's `unread.from`, plus the worktree line totals
- * the client already holds. They stay local until the client package is
- * pinned; then its types replace them one for one.
+ * The inputs are the client package's protocol-34 types (API.md, "Rich
+ * tasks"), narrowed to the fields the list reads, so a task, membership or
+ * workspace as the wire carries it is one, and so is a small fixture.
  */
+import type {
+    Agent,
+    Task,
+    TaskChild,
+    TaskChildRef,
+    TaskIcon,
+    TaskMembership,
+    TaskSection,
+    Workspace,
+} from "@slopus/happy-agent-client";
 
-export type RichTaskChildRef = {
-    readonly kind: "workspace" | "agent" | "artifact";
-    readonly id: string;
+export type RichTaskChildRef = TaskChildRef;
+
+/** A slug from the icon library; the type set may grow. */
+export type RichTaskIcon = TaskIcon;
+
+/** One choice about a (task, child) pair, shared by every member. No choice is the default. */
+export type RichTaskChildChoice = TaskChild;
+
+/** An agent as the list reads it; `unread.from` names who wrote since the reader last read it. */
+export type RichTaskAgent = Pick<
+    Agent,
+    "id" | "title" | "status" | "pendingQuestionId" | "unread"
+> & {
+    readonly lastActivityAt?: number;
+    readonly statusLine?: { readonly text: string } | null;
+    readonly subtasks?: readonly RichTaskAgent[];
 };
 
-/** `TaskIcon`: a slug from the icon library; the type set may grow. */
-export type RichTaskIcon = { readonly type: "library"; readonly slug: string };
-
-/** `TaskChild`: one choice about a (task, child) pair, shared by every member. No choice is the default. */
-export type RichTaskChildChoice = {
-    readonly ref: RichTaskChildRef;
-    readonly visibility: "shown" | "hidden";
-    readonly by: { readonly agentId: string | null; readonly userId: string | null };
-    readonly updatedAt: number;
-};
-
-export type RichTaskAgent = {
-    readonly id: string;
-    readonly title: string;
-    readonly status: "idle" | "working" | "error";
-    readonly pendingQuestionId: string | null;
-    readonly lastActivityAt: number;
-    readonly statusLine: { readonly text: string } | null;
-    /** `from`: the people whose messages arrived since the reader last read it, newest first. */
-    readonly unread: {
-        readonly reason: string;
-        readonly since: number;
-        readonly from?: readonly string[];
-    } | null;
-    readonly subtasks: readonly RichTaskAgent[];
-};
-
-export type RichTask = {
-    readonly id: string;
-    readonly name: string;
+export type RichTask = Pick<Task, "id" | "name" | "icon" | "children"> & {
     readonly agent: RichTaskAgent;
-    readonly icon?: RichTaskIcon | null;
-    readonly children?: readonly RichTaskChildChoice[];
 };
 
-export type RichTaskMembership = {
-    readonly taskId: string;
-    readonly orderKey: string;
-    readonly hidden?: boolean;
-};
+export type RichTaskMembership = Pick<TaskMembership, "taskId" | "orderKey" | "hidden">;
 
 /** A header in the memberships' order-key space: it heads every task keyed after it. */
-export type RichTaskSection = {
-    readonly id: string;
-    readonly name: string;
-    readonly orderKey: string;
-    readonly collapsed: boolean;
-};
+export type RichTaskSection = TaskSection;
 
-export type RichTaskWorkspace = {
-    readonly id: string;
-    readonly name: string;
-    readonly projectId: string;
-    readonly creatorAgentId: string | null;
-    readonly subtaskAgentId?: string | null;
-    readonly updatedAt: number;
-    readonly addedLines: number;
-    readonly deletedLines: number;
+/** A workspace, with the line totals over main when the client holds them. */
+export type RichTaskWorkspace = Pick<
+    Workspace,
+    "id" | "name" | "projectId" | "creatorAgentId" | "subtaskAgentId" | "updatedAt"
+> & {
+    readonly addedLines?: number;
+    readonly deletedLines?: number;
 };
 
 export type RichTaskArtifact = {
@@ -126,7 +105,7 @@ export type RichTaskListInput = {
 export const RICH_TASK_SHOWN_CHILDREN = 3;
 
 function descendants(agent: RichTaskAgent): readonly RichTaskAgent[] {
-    return agent.subtasks.flatMap((subtask) => [subtask, ...descendants(subtask)]);
+    return (agent.subtasks ?? []).flatMap((subtask) => [subtask, ...descendants(subtask)]);
 }
 
 function childKey(ref: RichTaskChildRef): string {
@@ -134,7 +113,7 @@ function childKey(ref: RichTaskChildRef): string {
 }
 
 function childAt(child: RichTaskSubWork): number {
-    if (child.kind === "agent") return child.agent.lastActivityAt;
+    if (child.kind === "agent") return child.agent.lastActivityAt ?? 0;
     if (child.kind === "workspace") return child.workspace.updatedAt;
     return child.artifact.updatedAt;
 }
@@ -188,7 +167,7 @@ export function richTaskChildren(
         consider(
             { kind: "agent", id: agent.id },
             subtaskIds.has(agent.id) &&
-                (agent.status === "working" || agent.pendingQuestionId !== null),
+                (agent.status !== "idle" || agent.pendingQuestionId !== null),
             (hidden) => ({ kind: "agent", agent, hidden }),
         );
     for (const workspace of workspaces)
