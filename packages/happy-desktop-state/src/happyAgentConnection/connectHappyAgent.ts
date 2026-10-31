@@ -2112,6 +2112,13 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         publishGroups();
     };
 
+    /**
+     * Asked by a section or child-choice request when its queued turn comes, not
+     * when it is made: a daemon that lost `capabilities.taskSections` is sent nothing.
+     */
+    const taskSectionsCapable = (): boolean =>
+        sync.source.health()?.capabilities?.taskSections === true;
+
     /** Artifacts read for a shown child since the last bootstrap, which replaces them all. */
     const richArtifactsAsked = new Set<string>();
     /** The rich task list's input, one object for as long as nothing in it changes. */
@@ -5434,9 +5441,8 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
             return mutation(
                 "reorder_task",
                 mutationId,
-                // Asked again when its turn comes: a daemon that lost the capability is sent nothing.
                 async () =>
-                    sync.source.health()?.capabilities?.taskSections === true
+                    taskSectionsCapable()
                         ? client.reorderTask(
                               taskId,
                               { afterSectionId, mutationId },
@@ -5487,20 +5493,24 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
             return mutation(
                 "replace_task_sections",
                 mutationId,
-                () =>
-                    client.replaceTaskSections(
-                        {
-                            // Without `after`, every section keeps its place.
-                            sections: sections.map(({ id, name, collapsed }) => ({
-                                id,
-                                name,
-                                collapsed,
-                            })),
-                            mutationId,
-                        },
-                        { signal: deadlineSignal() },
-                    ),
-                (response) => groupsStore.setState({ taskSections: response.sections }),
+                async () =>
+                    taskSectionsCapable()
+                        ? client.replaceTaskSections(
+                              {
+                                  // Without `after`, every section keeps its place.
+                                  sections: sections.map(({ id, name, collapsed }) => ({
+                                      id,
+                                      name,
+                                      collapsed,
+                                  })),
+                                  mutationId,
+                              },
+                              { signal: deadlineSignal() },
+                          )
+                        : null,
+                (response) => {
+                    if (response) groupsStore.setState({ taskSections: response.sections });
+                },
                 undefined,
                 undefined,
                 "task-sections",
@@ -5511,14 +5521,18 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
             return mutation(
                 "set_task_child",
                 mutationId,
-                () =>
-                    client.setTaskChild(
-                        taskId,
-                        ref,
-                        { visibility, mutationId },
-                        { signal: deadlineSignal() },
-                    ),
-                taskResponseAdopt,
+                async () =>
+                    taskSectionsCapable()
+                        ? client.setTaskChild(
+                              taskId,
+                              ref,
+                              { visibility, mutationId },
+                              { signal: deadlineSignal() },
+                          )
+                        : null,
+                (response) => {
+                    if (response) taskResponseAdopt(response);
+                },
                 undefined,
                 undefined,
                 `task:${taskId}`,
