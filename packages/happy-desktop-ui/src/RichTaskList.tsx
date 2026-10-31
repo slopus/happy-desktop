@@ -146,6 +146,7 @@ export function RichTaskCard(props: RichTaskCardProps) {
                 className="happy-rich-task-card__hit"
                 onClick={() => props.onSelect(card.id)}
                 onPointerCancel={props.onDragPointer}
+                onLostPointerCapture={props.onDragPointer}
                 onPointerDown={props.onDragPointer}
                 onPointerMove={props.onDragPointer}
                 onPointerUp={props.onDragPointer}
@@ -394,7 +395,7 @@ type RichTaskCarry = {
     /** The card's rows: the card, its sub-rows and its "+k more", carried as one. */
     readonly nodes: readonly HTMLElement[];
     readonly slots: readonly RichTaskSlot[];
-    /** The cards' order when it began; any other order means the list moved under it. */
+    /** The cards' and headers' order when it began; any other means the list moved under it. */
     readonly order: string;
     deltaY: number;
     moved: boolean;
@@ -403,8 +404,12 @@ type RichTaskCarry = {
     settling?: ReturnType<typeof setTimeout>;
 };
 
-const cardOrder = (root: HTMLElement): string =>
-    [...root.querySelectorAll<HTMLElement>(":scope > [data-row-key^='task:']")]
+const unitOrder = (root: HTMLElement): string =>
+    [
+        ...root.querySelectorAll<HTMLElement>(
+            ":scope > [data-row-key^='task:'], :scope > [data-row-key^='section:']",
+        ),
+    ]
         .map((node) => node.dataset.rowKey)
         .join(" ");
 
@@ -453,7 +458,7 @@ function carryOf(
         startY,
         nodes: units[at]!,
         slots,
-        order: cardOrder(root),
+        order: unitOrder(root),
         deltaY: 0,
         moved: false,
     };
@@ -470,6 +475,18 @@ function carryFollow(carry: RichTaskCarry, y: number): boolean {
     }
     carry.target = sidebarDropSlotNearest(carry.slots, carry.top + carry.deltaY);
     return true;
+}
+
+/** Whether the pointer is more than a card's height outside the list, where nothing lands. */
+function carryOutside(carry: RichTaskCarry, list: HTMLElement, x: number, y: number): boolean {
+    const box = list.getBoundingClientRect();
+    const reach = carry.nodes[0]!.offsetHeight;
+    return (
+        y < box.top - reach ||
+        y > box.bottom + reach ||
+        x < box.left - reach ||
+        x > box.right + reach
+    );
 }
 
 /** Puts a carried card's rows down where they stand, gliding them home when it went nowhere. */
@@ -505,12 +522,20 @@ export function RichTaskList(props: RichTaskListProps) {
     useLayoutEffect(() => {
         if (!root.current) return;
         // A card put down glides from where the hand left it once its new order renders.
-        if (carry.current && cardOrder(root.current) !== carry.current.order) {
+        if (carry.current && unitOrder(root.current) !== carry.current.order) {
             carryRelease(carry.current, false);
             carry.current = undefined;
         }
         layout.current = rowsGlide(root.current, layout.current);
     });
+    // eslint-disable-next-line happy-react/no-layout-effect -- a card still carried or settling when the list goes holds a timer that must not outlive it
+    useLayoutEffect(
+        () => () => {
+            if (carry.current) carryRelease(carry.current, false);
+            carry.current = undefined;
+        },
+        [],
+    );
     const select = (id: string) => {
         if (clickSwallow.current) clickSwallow.current = false;
         else props.onSelect(id);
@@ -531,14 +556,19 @@ export function RichTaskList(props: RichTaskListProps) {
         }
         if (!held || held.pointerId !== event.pointerId || held.settling !== undefined) return;
         if (event.type === "pointermove") {
-            if (carryFollow(held, y)) setLine(held.target?.anchor ? held.target.y : null);
+            if (!carryFollow(held, y)) return;
+            if (carryOutside(held, list, event.clientX, event.clientY)) held.target = undefined;
+            setLine(held.target?.anchor ? held.target.y : null);
             return;
         }
         setLine(null);
         // The release's click, if the browser fires one, comes before any timer.
         clickSwallow.current = held.moved;
         setTimeout(() => (clickSwallow.current = false));
-        const anchor = event.type === "pointerup" ? held.target?.anchor : undefined;
+        const anchor =
+            event.type === "pointerup" && !carryOutside(held, list, event.clientX, event.clientY)
+                ? held.target?.anchor
+                : undefined;
         if (!held.moved || !anchor) {
             carryRelease(held, true);
             carry.current = undefined;

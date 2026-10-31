@@ -400,4 +400,26 @@ it("drops a card after a task, first under a header or first of all, and settles
     await settled();
     drag("a", "section:later");
     expect(moves.at(-1)).toEqual(["a", { afterId: "b" }]);
+    rowsSet("now c b a later");
+    await settled();
+
+    // Across a header only: the cards keep their order, and the card still settles at once.
+    drag("c", "section:now");
+    expect(moves.at(-1)).toEqual(["c", { afterId: null }]);
+    const across = top("task:c");
+    rowsSet("c now b a later");
+    expect(node("task:c").style.transform).toBe("");
+    expect(top("task:c")).toBeCloseTo(across, 0);
+    await settled();
+
+    // Let go far below the list: nothing is sent and the card glides home.
+    const home = top("task:b");
+    const hit = node("task:b").querySelector("button")!;
+    pointer(hit, "pointerdown", home + 10);
+    pointer(hit, "pointermove", home + 400);
+    pointer(hit, "pointerup", home + 400);
+    expect(moves).toHaveLength(4);
+    expect(node("task:b").style.transform).toBe("");
+    await settled();
+    expect(top("task:b")).toBeCloseTo(home, 0);
 });

@@ -5434,13 +5434,18 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
             return mutation(
                 "reorder_task",
                 mutationId,
-                () =>
-                    client.reorderTask(
-                        taskId,
-                        { afterSectionId, mutationId },
-                        { signal: deadlineSignal() },
-                    ),
-                taskResponseAdopt,
+                // Asked again when its turn comes: a daemon that lost the capability is sent nothing.
+                async () =>
+                    sync.source.health()?.capabilities?.taskSections === true
+                        ? client.reorderTask(
+                              taskId,
+                              { afterSectionId, mutationId },
+                              { signal: deadlineSignal() },
+                          )
+                        : null,
+                (response) => {
+                    if (response) taskResponseAdopt(response);
+                },
                 undefined,
                 undefined,
                 `task:${taskId}`,
