@@ -83,7 +83,7 @@ const VIEWER: StoryViewerProps = {
     onClose: noop,
 };
 
-/* A chat parked on older rows: Steve's and Jordan's replies and the agent's answer are unread. */
+/* Read up to Steve: his reply and Jordan's are on screen, the agent's long answer below it. */
 const said = (id: string, name: string, kind: "human" | "agent", text: string, at: number) => ({
     kind: "message" as const,
     source: "server" as const,
@@ -91,22 +91,22 @@ const said = (id: string, name: string, kind: "human" | "agent", text: string, a
     message: {
         // oxlint-disable-next-line unicorn/no-useless-spread -- one line for the fixed fields
         ...{ id, sequence: id, changePts: id, chatId: "c", text, attachments: [], reactions: [] },
-        sender: { id: name, displayName: name, username: name, kind },
+        sender: { id: name, userId: name, displayName: name, username: name, kind },
         createdAt: new Date(at).toISOString(),
         ...(name === "Steve" ? { replyTo: { kind: "story", artifactId: "s1" } as const } : {}),
     },
 });
 const CHAT = [
-    ...[1, 2, 3].map((n) => said(`m${n}`, "Agent", "agent", "Checked the empty state.", n)),
-    said("steve", "Steve", "human", "looks good, ship it? one nit: “Use selected”", 10),
+    said("m1", "Agent", "agent", "Posted the onboarding recording as a story.", 1),
+    said("steve", "Steve", "human", "looks good, ship it? one nit: “Use selected” is too far", 10),
     said("jordan", "Jordan", "human", "🔥 can we get this into the notes video?", 11),
-    said("agent", "Agent", "agent", "Moved “Use selected” under the table.", 12),
+    said("agent", "Agent", "agent", "Moved “Use selected” under the table.\n\n".repeat(6), 12),
 ];
-const FACES = [person("Steve", "steve.jpg"), person("Jordan")];
 const RICH = {
     storyQuote: () => ({ kind: "live", ...VIEWER }) as const,
     onStoryQuoteOpen: noop,
-    unread: { since: 10, from: FACES.map((mark) => ({ userId: mark.label, mark })) },
+    faceOf: (id: string) => (id === "Steve" ? person(id, "steve.jpg") : person(id)),
+    unread: { since: 10, from: ["Steve", "Jordan"] },
 };
 
 export function StoriesPage() {
@@ -156,12 +156,12 @@ export function StoriesPage() {
                     />
                 </div>
             </Specimen>
-            <Specimen detail="420×520 · quote, jump buttons" label="Chat" number="03">
+            <Specimen detail="420×640 · quote, jump buttons" label="Chat" number="03">
                 <ConversationView
                     entries={CHAT}
                     rich={RICH}
                     scrollPosition={{ scrollTop: 0, following: false }}
-                    style={{ width: 420, height: 520 }}
+                    style={{ width: 420, height: 640 }}
                     viewerId="Kirill"
                 />
             </Specimen>

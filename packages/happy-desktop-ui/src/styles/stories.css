@@ -513,6 +513,7 @@
 }
 
 .happy-story-quote {
+    --quote-scrim: color-mix(in srgb, var(--story-scrim) 64%, transparent);
     width: 180px;
     height: 320px;
     margin-bottom: 6px;
@@ -523,6 +524,12 @@
     text-align: start;
 }
 
+/* The viewer's scrims at the quote's scale, held dark enough behind its words. */
+.happy-story-quote .happy-story-viewer__top {
+    height: 72px;
+    background: linear-gradient(var(--quote-scrim), var(--quote-scrim) 50px, transparent 72px);
+}
+
 .happy-story-quote .happy-story-viewer__head {
     font: inherit;
 }
@@ -531,8 +538,5 @@
     position: absolute;
     inset: auto 0 0;
     padding: 32px 8px 9px;
-    background: linear-gradient(
-        transparent,
-        color-mix(in srgb, var(--story-scrim) 60%, transparent)
-    );
+    background: linear-gradient(transparent, var(--quote-scrim) 32px);
 }

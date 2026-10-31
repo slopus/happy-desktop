@@ -47,6 +47,7 @@ import {
 import { type HappyAgentUserInputAnswerMap } from "./HappyAgentUserInputPrompt";
 import { FileAttachment, type FileAttachmentKind } from "./FileAttachment";
 import { SYSTEM_NOTIFICATION_LABEL } from "./systemNotification";
+import type { StoryMark } from "./StoryRing";
 
 /** A failure card's live state and actions, supplied by the conversation that owns it. */
 export type ConversationEntryFailureProps = ConversationFailureActions & {
@@ -89,6 +90,8 @@ export type ConversationEntryViewProps = {
     contextNote?: string;
     /** The quote of the story this message answers, above its text. */
     storyQuote?: ReactNode;
+    /** A rich chat's faces by user id, drawn over the transcript's own: a photo or coloured initial. */
+    faceOf?: ((userId: string) => StoryMark) | undefined;
     /** Consecutive entry from the same author: no avatar/author row. */
     grouped?: boolean;
     /** Answers a pending question request entry. */
@@ -558,6 +561,7 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
 
     const message = entry.message;
     const author = message.sender;
+    const face = author?.userId ? props.faceOf?.(author.userId) : undefined;
     const own = author !== undefined && author.id === props.viewerId;
     const images = imagesOf(message.attachments);
     const linked = message.attachments.filter(
@@ -592,6 +596,7 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
             agent={author?.kind === "agent"}
             author={author?.displayName ?? "Unknown"}
             {...(author ? authorAvatar(author) : {})}
+            {...(face?.kind === "person" ? { imageUrl: face.imageUrl, tone: face.tone } : {})}
             body={props.messageLayouts?.text ?? message.text}
             bodyFormat={messageBodyFormat(author)}
             {...(compact

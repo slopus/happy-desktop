@@ -99,12 +99,11 @@ export function appStoryChatRich(chat: AppStoryChat, agentId: string): Conversat
         return { kind: "live", frame, segment, poster, caption: story.caption };
     };
     const unread = chat.richTasks.unreadOf(agentId);
-    const from = (unread?.from ?? [])
-        .filter((id) => id !== directory.catalog.viewer?.userId)
-        .map((userId) => ({ userId, mark: personOf(userId, directory).mark }));
+    const from = (unread?.from ?? []).filter((id) => id !== directory.catalog.viewer?.userId);
     return {
         ...(stories.get().mode === "on" ? { storyQuote: quote } : {}),
         onStoryQuoteOpen: stories.quoteOpen,
+        faceOf: (userId) => personOf(userId, directory).mark,
         unread: unread && from.length > 0 ? { since: unread.since, from } : null,
     };
 }

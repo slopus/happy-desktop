@@ -118,11 +118,10 @@ export type ConversationRich = {
     /** The story a message answers, as its quote draws it; absent draws no quotes. */
     readonly storyQuote?: (artifactId: string) => StoryQuoteView | undefined;
     readonly onStoryQuoteOpen: (artifactId: string, messageId: string) => void;
-    /** Who wrote while the chat was unread, newest first, and since when. */
-    readonly unread: {
-        readonly since: number;
-        readonly from: readonly { readonly userId: string; readonly mark: StoryMark }[];
-    } | null;
+    /** A person's face as the sidebar and stories draw it: their photo, or their coloured initial. */
+    readonly faceOf: (userId: string) => StoryMark;
+    /** Who wrote while the chat was unread (user ids, newest first), and since when. */
+    readonly unread: { readonly since: number; readonly from: readonly string[] } | null;
 };
 
 export type ConversationViewProps = {
@@ -985,17 +984,17 @@ export function ConversationView(props: ConversationViewProps) {
         return <StoryQuote onOpen={open} quote={view} />;
     };
     // The unread rows the jump buttons count; the faces button jumps to its writers' first.
-    const unread = props.rich?.unread;
+    const { unread, faceOf } = props.rich ?? {};
     const unreadRows: number[] = [];
     const facesRows: number[] = [];
-    const faces = unread?.from.map((face) => face.mark) ?? [];
+    const faces = (faceOf && unread?.from.map((userId) => faceOf(userId))) ?? [];
     for (const [index, entry] of listEntries.entries()) {
         const sender = entry.kind === "message" ? entry.message.sender : undefined;
         if (!unread || entry.kind !== "message" || !sender || sender.id === props.viewerId)
             continue;
         if (Date.parse(entry.message.createdAt) < unread.since) continue;
         unreadRows.push(index);
-        if (unread.from.some((face) => face.userId === sender.id)) facesRows.push(index);
+        if (unread.from.includes(sender.userId ?? "")) facesRows.push(index);
     }
     const rowContext = (index: number, width: number): ConversationRowContext => {
         const entry = listEntries[index];
@@ -1281,6 +1280,7 @@ export function ConversationView(props: ConversationViewProps) {
                                         ? { contextNote: entry.contextNote }
                                         : {})}
                                     storyQuote={quoteOf(entry)}
+                                    faceOf={faceOf}
                                     activityAuthor={
                                         props.agentAuthor &&
                                         (conversationAgentRowStartsGroup(source, index) ||

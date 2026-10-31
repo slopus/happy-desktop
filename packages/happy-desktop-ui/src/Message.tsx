@@ -2848,12 +2848,9 @@ export function MessageList(props: MessageListProps) {
         const button = jump.current;
         const badge = jumpBadge.current;
         if (!button) return;
-        if (badge) {
-            const last = virtualizer.range ? entryIndex(virtualizer.range.endIndex) : Infinity;
-            const below = props.jumpCorner?.unreadRows.filter((row) => row > last).length ?? 0;
-            badge.hidden = below === 0;
-            badge.textContent = String(below);
-        }
+        const last = virtualizer.range ? entryIndex(virtualizer.range.endIndex) : Infinity;
+        const below = props.jumpCorner?.unreadRows.filter((row) => row > last).length ?? 0;
+        if (badge) Object.assign(badge, { hidden: below === 0, textContent: String(below) });
         const height = viewportGeometry.current.height || element.clientHeight;
         /* The modeled end, as following reads it: no layout is forced to know it. */
         const total = virtualized
