@@ -1,5 +1,5 @@
 import { useId, useLayoutEffect, useState, useSyncExternalStore, type KeyboardEvent } from "react";
-import { happyLogoBlackUrl, happyLogoWhiteUrl } from "./assets";
+import { happyLogoBlackUrl } from "./assets";
 import { LottieScene, type LottieSceneName } from "./LottieScene";
 import { reducedMotionGet, reducedMotionSubscribe } from "./lottie/dotLottieRuntime";
 
@@ -18,7 +18,7 @@ export interface WelcomeSlide {
 
 /**
  * Which surface the deck is drawn on. `sky` is the brand-scene presentation for
- * a deck over one of the sky paintings: white words, white position control.
+ * a deck over the native grain gradient: appearance-matched words and controls.
  */
 export type WelcomeDeckTint = "surface" | "sky";
 
@@ -157,7 +157,7 @@ export function WelcomeDeck(props: WelcomeDeckProps) {
             data-tint={props.tint === "sky" ? "sky" : undefined}
         >
             <div className="happy-welcome-deck__stage" data-happy-desktop-ui="welcome-stage">
-                {active ? welcomeArt(active, props.tint === "sky") : null}
+                {active ? welcomeArt(active) : null}
             </div>
 
             <div className="happy-welcome-deck__panels" data-happy-desktop-ui="welcome-panels">
@@ -246,19 +246,15 @@ export function WelcomeDeck(props: WelcomeDeckProps) {
  * is what makes coming back to a slide show the animation again instead of a
  * held final frame.
  */
-function welcomeArt(slide: WelcomeSlide, whiteLogo: boolean) {
+function welcomeArt(slide: WelcomeSlide) {
     if (slide.art.kind === "logo")
         return (
             <img
                 alt=""
                 aria-hidden="true"
-                className={
-                    whiteLogo
-                        ? "happy-welcome-deck__mark"
-                        : "happy-brand-logo happy-welcome-deck__mark"
-                }
+                className="happy-brand-logo happy-welcome-deck__mark"
                 data-happy-desktop-ui="welcome-mark"
-                src={whiteLogo ? happyLogoWhiteUrl : happyLogoBlackUrl}
+                src={happyLogoBlackUrl}
             />
         );
     return (

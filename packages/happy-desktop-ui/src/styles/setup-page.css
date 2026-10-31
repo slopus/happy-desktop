@@ -216,14 +216,24 @@
     }
 }
 
-/* First-run pages use the same photographic treatment as the welcome deck:
-   white words and one white primary action in either appearance. Text inputs
-   retain their themed surfaces; commands become glass, below. */
+/* The native backdrop pairs white ink with dark blue/violet, and dark ink
+   with pale lavender. Inputs retain their own themed surfaces. */
+.happy-setup-page[data-backdrop="sky"] .happy-setup-page__status[data-tone],
+.happy-setup-page[data-backdrop="sky"] .happy-setup-page__status .happy-spinner {
+    color: var(--onboarding-foreground);
+}
+
 .happy-setup-page[data-backdrop="sky"] .happy-setup-page__title,
 .happy-setup-page[data-backdrop="sky"] .happy-setup-page__copy,
-.happy-setup-page[data-backdrop="sky"] .happy-setup-page__progress-line,
-.happy-setup-page[data-backdrop="sky"] .happy-setup-page__progress-label,
-.happy-setup-page[data-backdrop="sky"] .happy-setup-page__progress-detail,
+.happy-setup-page[data-backdrop="sky"]
+    .happy-setup-page__progress[data-tone]
+    .happy-setup-page__progress-line,
+.happy-setup-page[data-backdrop="sky"]
+    .happy-setup-page__progress[data-tone]
+    .happy-setup-page__progress-label,
+.happy-setup-page[data-backdrop="sky"]
+    .happy-setup-page__progress[data-tone]
+    .happy-setup-page__progress-detail,
 .happy-setup-page[data-backdrop="sky"] .happy-setup-assistants__mark,
 .happy-setup-page[data-backdrop="sky"] .happy-setup-assistants__name,
 .happy-setup-page[data-backdrop="sky"] .happy-setup-assistants__detail,
@@ -232,47 +242,43 @@
 .happy-setup-page[data-backdrop="sky"] .happy-copy-button[data-captioned],
 .happy-setup-page[data-backdrop="sky"] .happy-local-onboarding__facts,
 .happy-setup-page[data-backdrop="sky"] .happy-text-field__label {
-    color: var(--button-primary-tint);
+    color: var(--onboarding-foreground);
 }
 
-/* Outranks the column's own status inks, which would otherwise put a themed
-   (and in the light appearance, black) line on the photograph. */
+/* Status details use the same native-palette ink as the surrounding copy. */
 .happy-setup-page[data-backdrop="sky"]
     .happy-setup-assistants__item[data-status]
     .happy-setup-assistants__detail {
-    color: var(--button-primary-tint);
+    color: var(--onboarding-foreground);
 }
 
-/* A command on the photograph is a pane of frosted glass with white ink rather
-   than a black terminal slab cut out of the sky. The prompt and the monospace
-   line still say "type this"; the surface no longer shouts it. */
+/* Commands retain their glass treatment over the native background. */
 .happy-setup-page[data-backdrop="sky"] .happy-setup-command {
-    border-color: color-mix(in srgb, white 28%, transparent);
-    background: color-mix(in srgb, white 14%, transparent);
+    border-color: color-mix(in srgb, var(--onboarding-foreground) 28%, transparent);
+    background: color-mix(in srgb, var(--onboarding-foreground) 14%, transparent);
     -webkit-backdrop-filter: blur(12px);
     backdrop-filter: blur(12px);
-    color: white;
+    color: var(--onboarding-foreground);
 }
 
 .happy-setup-page[data-backdrop="sky"] .happy-setup-command__prompt {
-    color: color-mix(in srgb, white 64%, transparent);
+    color: color-mix(in srgb, var(--onboarding-foreground) 64%, transparent);
 }
 
 .happy-setup-page[data-backdrop="sky"] .happy-setup-command__copy {
-    color: color-mix(in srgb, white 78%, transparent);
+    color: color-mix(in srgb, var(--onboarding-foreground) 78%, transparent);
 }
 
 .happy-setup-page[data-backdrop="sky"] .happy-setup-command__copy:hover,
 .happy-setup-page[data-backdrop="sky"] .happy-setup-command__copy:focus-visible {
-    color: white;
-    background: color-mix(in srgb, white 14%, transparent);
+    color: var(--onboarding-foreground);
+    background: color-mix(in srgb, var(--onboarding-foreground) 14%, transparent);
 }
 
-/* Quiet controls on the photograph take the same white ink, and the same
-   translucent hover the ghost buttons beside them use. */
+/* Quiet controls share the backdrop ink and translucent hover. */
 .happy-setup-page[data-backdrop="sky"] .happy-copy-button[data-captioned]:hover {
-    color: white;
-    background: color-mix(in srgb, white 12%, transparent);
+    color: var(--onboarding-foreground);
+    background: color-mix(in srgb, var(--onboarding-foreground) 12%, transparent);
 }
 
 /* What the machine turned out to hold, reported rather than acted on. */
@@ -286,15 +292,19 @@
     line-height: 16px;
 }
 
-.happy-setup-page[data-backdrop="sky"] .happy-setup-page__progress-track {
-    background: color-mix(in srgb, var(--button-primary-tint) 28%, transparent);
+.happy-setup-page[data-backdrop="sky"]
+    .happy-setup-page__progress[data-tone]
+    .happy-setup-page__progress-track {
+    background: color-mix(in srgb, var(--onboarding-foreground) 28%, transparent);
 }
 
-.happy-setup-page[data-backdrop="sky"] .happy-setup-page__progress-fill,
+.happy-setup-page[data-backdrop="sky"]
+    .happy-setup-page__progress[data-tone]
+    .happy-setup-page__progress-fill,
 .happy-setup-page[data-backdrop="sky"]
     .happy-setup-page__progress[data-state="waiting"]
     .happy-setup-page__progress-track::after {
-    background: var(--button-primary-tint);
+    background: var(--onboarding-foreground);
 }
 
 /* The same progress mark can sit directly on a dark photographic surface
@@ -316,21 +326,21 @@
 }
 
 .happy-setup-page[data-backdrop="sky"] .happy-button[data-variant="primary"] {
-    background: var(--button-primary-tint);
-    color: var(--button-primary-background);
+    background: var(--onboarding-foreground);
+    color: var(--onboarding-action-label);
 }
 
 .happy-setup-page[data-backdrop="sky"] .happy-button[data-variant="ghost"] {
-    color: color-mix(in srgb, white 78%, transparent);
+    color: color-mix(in srgb, var(--onboarding-foreground) 78%, transparent);
 }
 
 .happy-setup-page[data-backdrop="sky"] .happy-button[data-variant="ghost"]:hover:not(:disabled) {
-    background: color-mix(in srgb, white 12%, transparent);
-    color: white;
+    background: color-mix(in srgb, var(--onboarding-foreground) 12%, transparent);
+    color: var(--onboarding-foreground);
 }
 
 .happy-setup-page[data-backdrop="sky"] .happy-button[data-variant="primary"]:hover:not(:disabled) {
-    background: color-mix(in srgb, var(--button-primary-background) 8%, var(--button-primary-tint));
+    background: color-mix(in srgb, var(--onboarding-action-label) 8%, var(--onboarding-foreground));
 }
 
 /* Fixed square whether the art arrives or not: the scene renders nothing until

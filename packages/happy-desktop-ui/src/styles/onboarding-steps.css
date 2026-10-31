@@ -4,7 +4,7 @@
     gap: 8px;
     width: 100%;
     max-width: 560px;
-    color: var(--button-primary-tint);
+    color: var(--onboarding-foreground);
     font-family: var(--happy-font-ui);
 }
 

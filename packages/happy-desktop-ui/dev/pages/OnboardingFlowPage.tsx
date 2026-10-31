@@ -111,6 +111,20 @@ const screens: readonly {
         ),
     },
     {
+        appearance: "light",
+        id: "welcome-light",
+        label: "Welcome deck · native light palette",
+        render: () => (
+            <WelcomeScreen
+                appearance="light"
+                backdrop={{ kind: "sky" }}
+                onAction={noop}
+                onAppearanceChange={noop}
+                slides={pitch}
+            />
+        ),
+    },
+    {
         id: "setup-downloading",
         label: "Setup · downloading Happy Agent",
         render: () =>

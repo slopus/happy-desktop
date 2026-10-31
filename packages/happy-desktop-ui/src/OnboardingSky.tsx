@@ -1,6 +1,14 @@
-import { welcomeSkyDarkUrl, welcomeSkyUrl } from "./assets";
-import { useContext } from "react";
+import { useContext, useLayoutEffect, useRef, useSyncExternalStore } from "react";
 import { ThemeAppearanceContext, type ThemeMode } from "./ThemeScope";
+import { reducedMotionGet, reducedMotionSubscribe } from "./lottie/dotLottieRuntime";
+import { onboardingGrainRenderer } from "./onboardingGrainRenderer";
+
+const systemDarkGet = () => window.matchMedia("(prefers-color-scheme: dark)").matches;
+const systemDarkSubscribe = (listener: () => void) => {
+    const query = window.matchMedia("(prefers-color-scheme: dark)");
+    query.addEventListener("change", listener);
+    return () => query.removeEventListener("change", listener);
+};
 
 interface OnboardingSkyProps {
     readonly appearance: ThemeMode;
@@ -8,19 +16,33 @@ interface OnboardingSkyProps {
 }
 
 /**
- * The paired sky paintings behind first-run onboarding.
- *
- * The picture and its contrast veil are one decorative object: every screen
- * that carries this scenery gets the same crop and the same appearance-aware
- * treatment, while the words in front of it remain the screen's own concern.
+ * The native iOS/Android Grain Gradient behind first-run onboarding.
+ * Its palette, corner shape, procedural grain and animation speed match native.
+ * The CSS corner glows remain underneath if WebGL is unavailable or lost.
  */
 export function OnboardingSky(props: OnboardingSkyProps) {
     const scopeAppearance = useContext(ThemeAppearanceContext);
-    const appearance =
+    const requestedAppearance =
         scopeAppearance ??
         (props.appearance === "midnight" || props.appearance === "custom"
             ? "dark"
             : props.appearance);
+    const systemDark = useSyncExternalStore(systemDarkSubscribe, systemDarkGet, () => false);
+    const appearance =
+        requestedAppearance === "system" ? (systemDark ? "dark" : "light") : requestedAppearance;
+    const reducedMotion = useSyncExternalStore(
+        reducedMotionSubscribe,
+        reducedMotionGet,
+        () => true,
+    );
+    const canvas = useRef<HTMLCanvasElement>(null);
+    // Appearance changes update the palette without rewinding the native motion.
+    const clock = useRef({ seconds: 0 });
+    // eslint-disable-next-line happy-react/no-layout-effect -- The committed canvas owns a WebGL program, observers and animation clock, all released together.
+    useLayoutEffect(() => {
+        if (canvas.current === null) return;
+        return onboardingGrainRenderer(canvas.current, !reducedMotion, clock.current);
+    }, [appearance, reducedMotion]);
     return (
         <div
             aria-hidden="true"
@@ -28,18 +50,11 @@ export function OnboardingSky(props: OnboardingSkyProps) {
             data-appearance={appearance}
             data-happy-desktop-ui="onboarding-sky"
         >
-            <picture>
-                {appearance === "system" ? (
-                    <source media="(prefers-color-scheme: dark)" srcSet={welcomeSkyDarkUrl} />
-                ) : null}
-                <img
-                    alt=""
-                    className="happy-onboarding-sky__image"
-                    draggable={false}
-                    src={appearance === "dark" ? welcomeSkyDarkUrl : welcomeSkyUrl}
-                />
-            </picture>
-            <span className="happy-onboarding-sky__scrim" />
+            <canvas
+                ref={canvas}
+                className="happy-onboarding-sky__canvas"
+                data-motion={reducedMotion ? "still" : "full"}
+            />
         </div>
     );
 }

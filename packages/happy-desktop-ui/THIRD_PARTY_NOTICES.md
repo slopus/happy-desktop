@@ -1,5 +1,26 @@
 # Third-party notices
 
+## Paper Shaders
+
+Powered by Paper Shaders: https://shaders.paper.design
+
+`src/onboardingGrainShader.ts` ports Paper's Grain Gradient (Apache-2.0) through
+Happy's native Android `ui/start/GrainGradient.kt` and iOS
+`HappyUI/Start/GrainGradientView.swift` at `slopus/happy` commit `0d226074d`.
+Upstream: https://github.com/paper-design/shaders, `grain-gradient.ts`,
+`shader-utils.ts`, and `vertex-shader.ts`.
+
+The native ports fix the corners shape and default speed, softness, intensity,
+and noise; replace the noise texture with a procedural hash; and approximate
+`fwidth` with forward differences. This desktop port retains that math, changes
+AGSL/Metal types to GLSL ES 1.00, and uses WebGL's upward fragment coordinates.
+The light/dark palettes are copied from the native start screens. The renderer
+adds browser visibility, resize, reduced-motion, and context-loss handling.
+
+License: [Apache-2.0](licenses/Paper-Shaders-Apache-2.0.txt).
+
+## Dither Kit
+
 `src/dither/` contains an adapted subset of [Dither Kit](https://github.com/Boring-Software-Inc/dither-kit), by Boring Software Inc., pinned at commit `1e7faee9aa252e499651e6736ed65f7a07d9a6bd`.
 
 The source repository declares **MIT** in its `package.json` at that commit, but includes no LICENSE file. Each ported source file records “MIT per its package.json.” The original files are under `registry/dither-kit/`: `chart-context.tsx`, `cartesian-root.tsx`, `cartesian-canvas.tsx`, `dither-paint.ts`, `scales.ts`, `palette.ts`, `area-chart.tsx`, `area.tsx`, `tooltip.tsx`, and `sparkline.tsx`.

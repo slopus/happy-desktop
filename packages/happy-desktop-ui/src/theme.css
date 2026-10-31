@@ -841,6 +841,51 @@
     --terminal-selection: #333338;
 }
 
+/* Native StartSpec / StartViewController artwork palette, not application
+   surface aliases. Kept verbatim so the WebGL and native backgrounds match. */
+:root,
+.happy-theme-light,
+[data-backdrop="sky"][data-appearance="light"],
+.happy-onboarding-sky[data-appearance="light"] {
+    --happy-brand-logo-source: url("./assets/brand/logo-black.png");
+    --onboarding-grain-back: #f4f2ff;
+    --onboarding-grain-0: #818cf8;
+    --onboarding-grain-1: #c4b5fd;
+    --onboarding-grain-2: #93c5fd;
+    --onboarding-grain-3: #a78bfa;
+    --onboarding-foreground: #14112e;
+    --onboarding-action-label: #ffffff;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root,
+    [data-backdrop="sky"][data-appearance="system"] {
+        --happy-brand-logo-source: url("./assets/brand/logo-white.png");
+        --onboarding-grain-back: #06050f;
+        --onboarding-grain-0: #4338ca;
+        --onboarding-grain-1: #7c3aed;
+        --onboarding-grain-2: #1d4ed8;
+        --onboarding-grain-3: #2a00ff;
+        --onboarding-foreground: #ffffff;
+        --onboarding-action-label: #14112e;
+    }
+}
+
+.happy-theme-dark,
+.happy-theme-midnight,
+[data-backdrop="sky"][data-appearance="dark"],
+[data-backdrop="sky"][data-appearance="midnight"],
+.happy-onboarding-sky[data-appearance="dark"] {
+    --happy-brand-logo-source: url("./assets/brand/logo-white.png");
+    --onboarding-grain-back: #06050f;
+    --onboarding-grain-0: #4338ca;
+    --onboarding-grain-1: #7c3aed;
+    --onboarding-grain-2: #1d4ed8;
+    --onboarding-grain-3: #2a00ff;
+    --onboarding-foreground: #ffffff;
+    --onboarding-action-label: #14112e;
+}
+
 /* ThemeScope intentionally has no layout box. */
 .happy-theme-scope {
     display: contents;

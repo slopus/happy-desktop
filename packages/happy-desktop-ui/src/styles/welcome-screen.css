@@ -116,16 +116,14 @@
     min-width: 240px;
 }
 
-/* The sky is one photographic treatment in either appearance: white mark,
-   white words, and a white way forward. The inverse label keeps the action
-   readable without introducing a theme-specific colour. */
+/* The native palette supplies contrasting ink and an inverse action label. */
 .happy-welcome-screen[data-backdrop="sky"] .happy-welcome-screen__action {
-    background: var(--button-primary-tint);
-    color: var(--button-primary-background);
+    background: var(--onboarding-foreground);
+    color: var(--onboarding-action-label);
 }
 
 .happy-welcome-screen[data-backdrop="sky"] .happy-welcome-screen__action:hover:not(:disabled) {
-    background: color-mix(in srgb, var(--button-primary-background) 8%, var(--button-primary-tint));
+    background: color-mix(in srgb, var(--onboarding-action-label) 8%, var(--onboarding-foreground));
 }
 
 /* ---- Appearance switcher ---------------------------------------------- */
@@ -149,11 +147,7 @@
 }
 
 /*
- * The corner the switcher sits in is the one place the scrim deliberately does
- * not reach, and in this picture it is bright cloud — which a light glyph in the
- * dark appearance would disappear into. The control gets its own disc of surface
- * rather than the ellipse being widened to cover it: one 28px circle keeps its
- * contrast without washing out the whole corner behind it.
+ * A small surface disc keeps the switcher readable over the moving gradient.
  */
 .happy-welcome-screen[data-backdrop="sky"] .happy-welcome-screen__appearance {
     background: color-mix(in srgb, var(--surface) 72%, transparent);

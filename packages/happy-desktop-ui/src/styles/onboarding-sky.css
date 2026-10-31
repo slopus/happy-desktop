@@ -1,65 +1,37 @@
-/*
- * The shared first-run scenery. It is always decoration, always full-bleed,
- * and always beneath a positioned content layer owned by the screen using it.
- */
-
-.happy-onboarding-sky,
-.happy-onboarding-sky__image,
-.happy-onboarding-sky__scrim {
-    box-sizing: border-box;
-}
-
+/* Shared native scenery stays outside layout and underneath every control. */
 .happy-onboarding-sky {
     position: absolute;
     z-index: 0;
     inset: 0;
     overflow: hidden;
     pointer-events: none;
+    /* Native's still fallback: four corner glows over the same base palette. */
+    background:
+        radial-gradient(
+            circle at 100% 35%,
+            color-mix(in srgb, var(--onboarding-grain-3) 70%, transparent),
+            transparent 75%
+        ),
+        radial-gradient(
+            circle at 0% 60%,
+            color-mix(in srgb, var(--onboarding-grain-2) 70%, transparent),
+            transparent 75%
+        ),
+        radial-gradient(
+            circle at 100% 0%,
+            color-mix(in srgb, var(--onboarding-grain-1) 70%, transparent),
+            transparent 75%
+        ),
+        radial-gradient(
+            circle at 0% 100%,
+            color-mix(in srgb, var(--onboarding-grain-0) 70%, transparent),
+            transparent 75%
+        ),
+        var(--onboarding-grain-back);
 }
 
-/* Keep the horizon and bright cloud bank below the centred copy at every
-   supported window shape. */
-.happy-onboarding-sky__image {
-    position: absolute;
-    inset: 0;
+.happy-onboarding-sky__canvas {
+    display: block;
     width: 100%;
     height: 100%;
-    object-fit: cover;
-    object-position: 50% 40%;
-}
-
-/* Both paintings carry white copy. The light sky needs a restrained dark veil
-   while the dark painting needs the stronger surface-coloured centre. */
-.happy-onboarding-sky__scrim {
-    position: absolute;
-    inset: 0;
-    background: radial-gradient(
-        ellipse 76% 64% at 50% 46%,
-        color-mix(in srgb, var(--button-primary-background) 32%, transparent) 0%,
-        color-mix(in srgb, var(--button-primary-background) 16%, transparent) 46%,
-        color-mix(in srgb, var(--button-primary-background) 4%, transparent) 78%,
-        transparent 100%
-    );
-}
-
-.happy-onboarding-sky[data-appearance="dark"] .happy-onboarding-sky__scrim {
-    background: radial-gradient(
-        ellipse 76% 64% at 50% 46%,
-        color-mix(in srgb, var(--surface) 86%, transparent) 0%,
-        color-mix(in srgb, var(--surface) 62%, transparent) 46%,
-        color-mix(in srgb, var(--surface) 18%, transparent) 78%,
-        transparent 100%
-    );
-}
-
-@media (prefers-color-scheme: dark) {
-    .happy-onboarding-sky[data-appearance="system"] .happy-onboarding-sky__scrim {
-        background: radial-gradient(
-            ellipse 76% 64% at 50% 46%,
-            color-mix(in srgb, var(--surface) 86%, transparent) 0%,
-            color-mix(in srgb, var(--surface) 62%, transparent) 46%,
-            color-mix(in srgb, var(--surface) 18%, transparent) 78%,
-            transparent 100%
-        );
-    }
 }

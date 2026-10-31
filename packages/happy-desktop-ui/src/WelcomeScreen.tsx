@@ -22,7 +22,7 @@ export type WelcomeScreenBackdrop =
           /** `still` is the deterministic Blueprint and reduced-motion presentation. */
           readonly motion?: NightSkyShaderMotion;
       }
-    /** Paired light/dark paintings, selected by appearance and scrimmed behind the words. */
+    /** Native iOS/Android grain gradient, with the matching light/dark palette. */
     | { readonly kind: "sky" };
 
 export interface WelcomeScreenProps {
@@ -77,7 +77,7 @@ const APPEARANCE_CYCLE: Record<
  * at the minimum window height.
  *
  * The optional backdrop is also outside that flow: either one full-window
- * decorative WebGL canvas or the appearance-matched still sky, below every
+ * decorative WebGL canvas or the appearance-matched grain gradient, below every
  * control. Both are quietest behind the central copy, so the chosen light or
  * dark appearance remains authoritative.
  *
@@ -122,11 +122,7 @@ export function WelcomeScreen(props: WelcomeScreenProps) {
                     motion={local.backdrop.motion}
                 />
             ) : null}
-            {/* Scenery, so it is never announced and never named: the words in
-                front of it are what this screen says. The scrim above it is a
-                sibling rather than a filter on the picture, because it is tinted
-                with the surface token and has to follow the appearance the
-                window is on. */}
+            {/* Decorative native scenery stays beneath the unchanged deck. */}
             {local.backdrop?.kind === "sky" ? (
                 <OnboardingSky
                     appearance={local.appearance}

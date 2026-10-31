@@ -12,8 +12,8 @@
  * which is what stops the dots, and whatever the host puts under them, from
  * walking up and down under the pointer.
  *
- * `data-tint="sky"` is the brand-scene presentation: white words and a white
- * position control, for a deck sitting on one of the sky paintings rather than
+ * `data-tint="sky"` is the native-scene presentation: palette-matched words and
+ * position control, for a deck sitting on the grain gradient rather than
  * on a themed surface. Every dimension is on the 4px grid.
  */
 
@@ -149,12 +149,10 @@
     text-align: center;
 }
 
-/* Both supplied sky paintings are brand scenes rather than ordinary themed
-   surfaces. Their copy and logo stay white in either appearance; only the
-   selected painting and its contrast scrim change. */
+/* The native palette carries light ink in dark mode and dark ink in light mode. */
 .happy-welcome-deck[data-tint="sky"] .happy-welcome-deck__title,
 .happy-welcome-deck[data-tint="sky"] .happy-welcome-deck__copy {
-    color: var(--button-primary-tint);
+    color: var(--onboarding-foreground);
 }
 
 /* ---- Dots ------------------------------------------------------------- */
@@ -211,7 +209,7 @@
     background: var(--text);
 }
 
-/* On a photographic sky, position reads as one quiet white control instead of
+/* On the native gradient, position reads as one quiet ink control instead of
    a row of theme-coloured beads. Every tab keeps the same 28px hit box while
    the selected mark stretches inside it, so advancing never moves its siblings. */
 .happy-welcome-deck[data-tint="sky"] .happy-welcome-deck__dot {
@@ -219,27 +217,27 @@
 }
 
 .happy-welcome-deck[data-tint="sky"] .happy-welcome-deck__dot:focus-visible {
-    outline-color: var(--button-primary-tint);
+    outline-color: var(--onboarding-foreground);
 }
 
 .happy-welcome-deck[data-tint="sky"] .happy-welcome-deck__dot-mark {
     width: 6px;
     height: 6px;
-    background: color-mix(in srgb, var(--button-primary-tint) 44%, transparent);
+    background: color-mix(in srgb, var(--onboarding-foreground) 44%, transparent);
     transition:
         width 200ms ease,
         background-color 200ms ease;
 }
 
 .happy-welcome-deck[data-tint="sky"] .happy-welcome-deck__dot:hover .happy-welcome-deck__dot-mark {
-    background: color-mix(in srgb, var(--button-primary-tint) 72%, transparent);
+    background: color-mix(in srgb, var(--onboarding-foreground) 72%, transparent);
 }
 
 .happy-welcome-deck[data-tint="sky"]
     .happy-welcome-deck__dot[data-active]
     .happy-welcome-deck__dot-mark {
     width: 20px;
-    background: var(--button-primary-tint);
+    background: var(--onboarding-foreground);
 }
 
 /*
