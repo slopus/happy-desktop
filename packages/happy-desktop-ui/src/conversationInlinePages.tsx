@@ -122,7 +122,7 @@ export function conversationInlinePage(
     embeds = false,
 ): ConversationInlinePage | undefined {
     if (embeds && entry.kind === "message" && entry.message.sender?.kind === "agent")
-        return conversationMessageEmbed(entry, rowKey, pages, local);
+        return conversationMessageEmbed(entry, rowKey, pages, leads, local);
     if (entry.kind !== "agentActivity" || entry.activity.kind !== "tool") return undefined;
     const presentation = entry.activity.tool.presentation;
     if (presentation?.type === "artifact") {
@@ -275,12 +275,14 @@ export const MESSAGE_EMBED_MAX_HEIGHT = 640;
  * live artifact the message names, laid into the message across its column at
  * the page's own height, up to `MESSAGE_EMBED_MAX_HEIGHT`. It is drawn by the
  * same live engine, in the same profile of the artifact's own, as a call's
- * artifact, and its title opens the artifact. Any other link stays a link.
+ * artifact, and its title opens the artifact. Any other link stays a link, and
+ * so does one to an artifact a call in this conversation already shows.
  */
 function conversationMessageEmbed(
     entry: ConversationEntry,
     rowKey: string,
     pages: ConversationInlinePages,
+    leads: ReadonlyMap<HappyAgentArtifactId, string>,
     local: ConversationInlinePageLocal,
 ): ConversationInlinePage | undefined {
     const liveRender = pages.liveRender;
@@ -288,6 +290,7 @@ function conversationMessageEmbed(
     for (const reference of conversationEntryReferences(entry)) {
         if (reference.kind !== "artifact") continue;
         const artifactId = reference.id as HappyAgentArtifactId;
+        if (leads.has(artifactId)) continue;
         const held = pages.artifacts.get(artifactId);
         if (held === undefined) pages.artifactsRequest([artifactId]);
         if (held?.type !== "ready" || held.status !== "active" || !held.live) continue;
