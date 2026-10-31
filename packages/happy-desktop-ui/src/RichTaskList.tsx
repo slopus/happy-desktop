@@ -418,10 +418,6 @@ export function RichTaskList(props: RichTaskListProps) {
                                         onClick={() => props.onMoreToggle(card.id)}
                                         type="button"
                                     >
-                                        {/* Status-sized, so the label stands on the status baseline. */}
-                                        <span className="happy-rich-task-more-button__strut">
-                                            {"\u200b"}
-                                        </span>
                                         <span className="happy-rich-task-more-button__label">{`+${card.more} more`}</span>
                                     </button>
                                 ) : null}

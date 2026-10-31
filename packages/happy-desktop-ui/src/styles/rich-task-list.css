@@ -14,9 +14,6 @@
 .happy-rich-tasks {
     --happy-rich-task-edge: 10.822px;
     --happy-rich-task-chip: 14px;
-    /* The status baseline in its 16px line; Gecko and WebKit set their own below. */
-    --happy-rich-task-status-baseline: 12px;
-    --happy-rich-task-title-y: 0px;
 
     position: relative;
     display: flex;
@@ -140,19 +137,35 @@
     pointer-events: none;
 }
 
+/* Each row's text stands on the foot of an empty anchor of exact height beside
+   it, so however an engine rounds a baseline inside its line box, the text
+   stays put: the title's cap top (0.7em) and the last status baseline lie one
+   edge inside the highlight. */
 .happy-rich-task-card__body {
-    display: flex;
+    /* eslint-disable-next-line happy-layout/use-flex-layout -- Baselines are shared only along a row; the head and the status each share theirs with an anchor in a second, zero-width column. */
+    display: grid;
     flex: 1;
-    flex-direction: column;
+    grid-template: calc(var(--happy-rich-task-edge) + 10.85px) 1fr / minmax(0, 1fr) 0;
+    align-items: baseline;
     align-self: stretch;
     min-width: 0;
-    padding-top: 5.678px;
     pointer-events: none;
 }
 
+.happy-rich-task-card__body::before,
+.happy-rich-task-card__body::after {
+    content: "";
+    grid-area: 1 / 2;
+    height: calc(var(--happy-rich-task-edge) + 10.85px);
+}
+
+/* Line one's baseline: the 64px body less the title's row, the last line and an edge. */
+.happy-rich-task-card__body::after {
+    grid-area: 2 / 2;
+    height: calc(64px - 16px - 10.85px - 2 * var(--happy-rich-task-edge));
+}
+
 .happy-rich-task-card__head {
-    position: relative;
-    top: var(--happy-rich-task-title-y);
     display: flex;
     align-items: baseline;
     gap: 8px;
@@ -176,10 +189,8 @@
     line-height: 24px;
 }
 
-/* Two lines, clipped; the last baseline 53.17px down the highlight in every engine. */
+/* Two lines, clipped. */
 .happy-rich-task-card__status {
-    position: relative;
-    top: calc(11.5px - var(--happy-rich-task-status-baseline));
     display: block;
     height: 32px;
     padding-right: 5px;
@@ -187,6 +198,11 @@
     font-size: 14px;
     line-height: 16px;
     overflow-wrap: anywhere;
+}
+
+/* A status with no words still has a first line, so its baseline meets the anchor. */
+.happy-rich-task-card__status::before {
+    content: "\200b";
 }
 
 /* A zero-width float holding line one, so the corner floats on line two. */
@@ -197,23 +213,27 @@
     height: 16px;
 }
 
-/* On line two, ending on the edge. Twice the baseline less half the x-height
-   tall, so its centred items sit on the last line's x-height. */
+/* On line two, ending on the edge, with a line box like the status's own: its
+   items stand `middle`, on that line's x-height, and "+k more" on its baseline. */
 .happy-rich-task-card__corner {
     /* eslint-disable-next-line happy-layout/use-flex-layout -- The corner rides in the status's second line so that line's words wrap around it. */
     float: right;
     clear: right;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    height: calc(2 * var(--happy-rich-task-status-baseline) - 7px);
     margin: 0 calc(var(--happy-rich-task-edge) - 12px) 0 6px;
+    white-space: nowrap;
+}
+
+.happy-rich-task-card__corner > * {
+    vertical-align: middle;
+}
+
+.happy-rich-task-card__corner > * + * {
+    margin-left: 6px;
 }
 
 /* Each face tucks 30% under the next; the padding gives the last one back. */
 .happy-rich-task-card__faces {
-    display: flex;
-    flex: none;
+    display: inline-flex;
     padding-right: calc(var(--happy-rich-task-chip) * 0.3);
 }
 
@@ -237,7 +257,7 @@
 }
 
 .happy-rich-task__dot {
-    flex: none;
+    display: inline-flex;
     width: var(--happy-rich-task-chip);
     height: var(--happy-rich-task-chip);
     border-radius: 50%;
@@ -246,7 +266,7 @@
 
 /* The braille cell's 8px box holds 6px of ink; the slot is the ink, ending on the edge. */
 .happy-rich-task__working {
-    display: flex;
+    display: inline-flex;
     flex: none;
     justify-content: center;
     width: 6px;
@@ -263,24 +283,17 @@
     font-weight: 600;
 }
 
-/* A text button on the status baseline: a status-sized strut sets it. */
+/* A text button on the corner's baseline, so on the status baseline. */
 .happy-rich-task-more-button {
     position: relative;
     z-index: 1;
-    display: flex;
-    align-items: baseline;
-    align-self: flex-start;
+    display: inline-flex;
     height: 16px;
     padding: 0;
     line-height: 16px;
     white-space: nowrap;
+    vertical-align: baseline;
     pointer-events: auto;
-}
-
-.happy-rich-task-more-button__strut {
-    width: 0;
-    font-size: 14px;
-    font-weight: 400;
 }
 
 .happy-rich-task-more-button:hover .happy-rich-task-more-button__label,
@@ -364,22 +377,6 @@
     height: 24px;
     padding: 0 0 0 67px;
     line-height: 24px;
-}
-
-/* Engine scopes: only Gecko parses -moz-appearance, only WebKit
-   -webkit-named-image. Gecko stands the 14/16px status baseline 1px lower
-   than Chromium, WebKit 57/64px lower and the 15.5/20px title 23/64px lower. */
-@supports (-moz-appearance: none) {
-    .happy-rich-tasks {
-        --happy-rich-task-status-baseline: 13px;
-    }
-}
-
-@supports (background: -webkit-named-image(i)) {
-    .happy-rich-tasks {
-        --happy-rich-task-status-baseline: 12.890625px;
-        --happy-rich-task-title-y: -0.359375px;
-    }
 }
 
 /* ---- Carrying a card ---------------------------------------------------- */
