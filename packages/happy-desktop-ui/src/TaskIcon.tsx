@@ -1,7 +1,8 @@
+import { useState } from "react";
 import { Avatar } from "./Avatar";
 
 export type TaskIconProps = {
-    /** The icon's picture once it is read; without one, the letter tile. */
+    /** Where the icon's picture is served; without one, the letter tile. */
     src: string | undefined;
     /** Edge in CSS pixels: 40 on a card, 34 inside a story ring. */
     size: number;
@@ -11,11 +12,12 @@ export type TaskIconProps = {
 
 /**
  * A task's icon, the picture it wears in the list. It is task art, not a UI
- * glyph — interface icons stay `Icon`. Until the picture is read, or when
- * there is none, the task wears its letter tile, never a broken image.
+ * glyph — interface icons stay `Icon`. Without a picture, or when it cannot be
+ * loaded, the task wears its letter tile, never a broken image.
  */
 export function TaskIcon(props: TaskIconProps) {
-    if (props.src === undefined)
+    const [failed, setFailed] = useState<string>();
+    if (props.src === undefined || failed === props.src)
         return (
             <Avatar
                 className="happy-task-icon-fallback"
@@ -32,6 +34,7 @@ export function TaskIcon(props: TaskIconProps) {
             data-happy-desktop-ui="task-icon"
             draggable={false}
             height={props.size}
+            onError={() => setFailed(props.src)}
             src={props.src}
             width={props.size}
         />

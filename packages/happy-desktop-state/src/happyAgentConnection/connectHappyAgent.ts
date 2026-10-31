@@ -82,7 +82,6 @@ import type {
     TaskOwner,
 } from "./types.js";
 import type { RichTaskArtifact } from "../richTasks/richTaskList.js";
-import { happyAgentTaskIconsCreate } from "../taskIcons/taskIcons.js";
 import { sidebarReadAheadOrder, type SidebarReadAheadRows } from "./types.js";
 
 const INITIAL_RECONNECT_MS = 250;
@@ -5503,12 +5502,8 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                     .catch(() => undefined);
             },
         },
-        taskIcons: happyAgentTaskIconsCreate({
-            endpoint,
-            token: options.token,
-            fetch: options.fetch ?? ((input, init) => globalThis.fetch(input, init)),
-            signal: rootController.signal,
-        }),
+        taskIconUrl: (slug, hash) =>
+            `${endpoint.replace(/\/$/, "")}/v0/task-icons/${encodeURIComponent(slug)}?v=${hash}`,
         replaceTaskSections: (sections) =>
             taskSectionsMutation(
                 "replace_task_sections",

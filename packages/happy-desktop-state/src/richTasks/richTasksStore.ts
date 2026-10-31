@@ -6,12 +6,7 @@ import {
     happyAgentUserSettingsCreate,
     type HappyAgentUserSettingsSource,
 } from "../happyAgent/happyAgentUserSettings.js";
-import {
-    richTaskList,
-    type RichTask,
-    type RichTaskChildRef,
-    type RichTaskListEntry,
-} from "./richTaskList.js";
+import { richTaskList, type RichTaskChildRef, type RichTaskListEntry } from "./richTaskList.js";
 
 /**
  * What the Tasks area draws. Rich only while the daemon reports
@@ -70,7 +65,7 @@ export function happyAgentRichTasksStoreCreate(deps: {
         HappyAgentConnection,
         | "sync"
         | "richTasks"
-        | "taskIcons"
+        | "taskIconUrl"
         | "replaceTaskSections"
         | "setTaskChild"
         | "reorderTask"
@@ -106,7 +101,6 @@ export function happyAgentRichTasksStoreCreate(deps: {
               readonly input: HappyAgentRichTasksInput;
               readonly sections: boolean;
               readonly expanded: ReadonlySet<string>;
-              readonly icons: ReadonlyMap<string, string | null>;
               readonly snapshot: HappyAgentRichTasksSnapshot;
           }
         | undefined;
@@ -117,17 +111,13 @@ export function happyAgentRichTasksStoreCreate(deps: {
         const chosen = capable() ? settings.choicesRead(CONNECTION) : OFF;
         if (!chosen.rich) return CLASSIC;
         const input = connection.richTasks.get();
-        const icons = connection.taskIcons.get();
         if (
             last?.input === input &&
             last.sections === chosen.sections &&
-            last.expanded === expanded &&
-            last.icons === icons
+            last.expanded === expanded
         )
             return last.snapshot;
         const tasks = input.tasks.filter((task) => task.status === "active");
-        const iconSrcOf = (task: RichTask) =>
-            task.icon?.hash === undefined ? undefined : (icons.get(task.icon.hash) ?? undefined);
         const snapshot: HappyAgentRichTasksSnapshot = {
             mode: "rich",
             entries: richTaskList({
@@ -139,12 +129,20 @@ export function happyAgentRichTasksStoreCreate(deps: {
                 artifacts: input.artifacts,
                 viewerUserId: input.viewerUserId,
                 expandedTaskIds: expanded,
-            }).map((entry) => {
-                const iconSrc = entry.kind === "task" ? iconSrcOf(entry.task) : undefined;
-                return iconSrc ? { ...entry, iconSrc } : entry;
-            }),
+                // Only drawn cards get a picture; one without a hash keeps its letter tile.
+            }).map((entry) =>
+                entry.kind === "task" && entry.task.icon?.hash !== undefined
+                    ? {
+                          ...entry,
+                          iconSrc: connection.taskIconUrl(
+                              entry.task.icon.slug,
+                              entry.task.icon.hash,
+                          ),
+                      }
+                    : entry,
+            ),
         };
-        last = { input, sections: chosen.sections, expanded, icons, snapshot };
+        last = { input, sections: chosen.sections, expanded, snapshot };
         return snapshot;
     };
     const rich = (): boolean => get().mode === "rich";
@@ -181,23 +179,10 @@ export function happyAgentRichTasksStoreCreate(deps: {
                     connection.richTasks.artifactRead(ref.id);
     };
 
-    // A card's icon is read when the card is drawn; one without a hash keeps its letter tile.
-    const iconsRead = (): void => {
-        const snapshot = get();
-        if (listeners.size === 0 || snapshot.mode !== "rich") return;
-        for (const entry of snapshot.entries)
-            if (entry.kind === "task" && entry.task.icon?.hash !== undefined)
-                connection.taskIcons.iconRequest({
-                    slug: entry.task.icon.slug,
-                    hash: entry.task.icon.hash,
-                });
-    };
-
     const notify = (): void => {
         if (disposed) return;
         settingsFollow();
         artifactsRead();
-        iconsRead();
         for (const listener of listeners) listener();
     };
 
@@ -212,14 +197,9 @@ export function happyAgentRichTasksStoreCreate(deps: {
             if (disposed) return nothing;
             listeners.add(listener);
             if (release.length === 0)
-                release = [
-                    connection.richTasks.subscribe(notify),
-                    connection.taskIcons.subscribe(notify),
-                    settings.subscribe(notify),
-                ];
+                release = [connection.richTasks.subscribe(notify), settings.subscribe(notify)];
             settingsFollow();
             artifactsRead();
-            iconsRead();
             return () => {
                 listeners.delete(listener);
                 if (listeners.size > 0) return;
