@@ -129,6 +129,11 @@
     --shadow-floating: rgb(0 0 0 / 0.45);
     --shadow-elevated: rgb(0 0 0 / 0.5);
     --shadow-activity-card: rgb(0 0 0 / 0.08);
+    /* The command palette's lift: a contact line under its hairline, then two
+       wide, faint layers that fade into the page with no visible edge. A dark
+       page swallows a faint shadow, so the dark appearances cast a deeper one. */
+    --command-palette-shadow:
+        0 1px 2px rgb(0 0 0 / 0.06), 0 8px 24px rgb(0 0 0 / 0.08), 0 24px 64px rgb(0 0 0 / 0.12);
     --overlay-backdrop: rgb(15 15 15 / 0.75);
     --overlay-panel: rgb(0 0 0 / 0.48);
     --groupped-background: #f5f5f5;
@@ -396,6 +401,8 @@
         --shadow-floating: rgb(0 0 0 / 0.45);
         --shadow-elevated: rgb(0 0 0 / 0.5);
         --shadow-activity-card: rgb(0 0 0 / 0.5);
+        --command-palette-shadow:
+            0 1px 2px rgb(0 0 0 / 0.32), 0 8px 24px rgb(0 0 0 / 0.32), 0 24px 64px rgb(0 0 0 / 0.44);
         --overlay-backdrop: rgb(15 15 15 / 0.75);
         --overlay-panel: rgb(0 0 0 / 0.48);
         --groupped-background: #1e1e1e;
@@ -607,6 +614,8 @@
     --shadow-floating: rgb(0 0 0 / 0.45);
     --shadow-elevated: rgb(0 0 0 / 0.5);
     --shadow-activity-card: rgb(0 0 0 / 0.5);
+    --command-palette-shadow:
+        0 1px 2px rgb(0 0 0 / 0.32), 0 8px 24px rgb(0 0 0 / 0.32), 0 24px 64px rgb(0 0 0 / 0.44);
     --overlay-backdrop: rgb(15 15 15 / 0.75);
     --overlay-panel: rgb(0 0 0 / 0.48);
     --groupped-background: #1e1e1e;

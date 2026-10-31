@@ -95,6 +95,7 @@ export function ModalOverlay(props: ModalOverlayProps) {
             if (unclaimed && invoker && invoker.isConnected && invoker !== document.body)
                 invoker.focus();
         };
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- focus moves in on open and back on close only; the backdrop is read once for that lifetime, and re-running on a change would steal focus mid-dialog
     }, []);
     const clear = local.backdrop === "clear";
     const dismissOutside = useEffectEvent((event: PointerEvent) => {

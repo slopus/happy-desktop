@@ -31,13 +31,7 @@
     background: var(--surface-high);
     border: 1px solid var(--modal-border);
     border-radius: var(--happy-radius-shell);
-    /* A contact line under the hairline, then two wide, faint layers that fade
-       into the page with no visible edge. A dark page swallows a faint shadow,
-       so the dark appearances cast a deeper one to keep the card distinct. */
-    box-shadow:
-        0 1px 2px light-dark(rgb(0 0 0 / 0.06), rgb(0 0 0 / 0.32)),
-        0 8px 24px light-dark(rgb(0 0 0 / 0.08), rgb(0 0 0 / 0.32)),
-        0 24px 64px light-dark(rgb(0 0 0 / 0.12), rgb(0 0 0 / 0.44));
+    box-shadow: var(--command-palette-shadow);
     color: var(--text);
     font-family: var(--happy-font-ui);
     font-synthesis: none;
