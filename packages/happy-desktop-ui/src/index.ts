@@ -119,6 +119,14 @@ export {
 } from "./Avatar";
 export { type ImageMark } from "./imageMark";
 export {
+    ClayIcon,
+    clayIconImage,
+    clayIconSlugIs,
+    clayIconSlugs,
+    type ClayIconProps,
+    type ClayIconSlug,
+} from "./ClayIcon";
+export {
     BotFace,
     botFaceCredit,
     botFaceDataUri,
