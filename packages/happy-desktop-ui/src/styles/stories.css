@@ -101,17 +101,105 @@
 
 /* ---- Viewer ----------------------------------------------------------- */
 
+/* Always dark; the 9:16 canvas never resizes, replies ride over its bottom. */
 .happy-story-viewer {
+    position: relative;
     display: flex;
-    flex-direction: column;
-    width: 300px;
-    max-height: calc(100vh - 48px);
-    overflow: hidden;
-    border: 1px solid var(--divider);
-    border-radius: 16px;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    box-sizing: border-box;
+    width: 620px;
+    max-width: calc(100vw - 48px);
+    height: min(700px, calc(100vh - 48px));
+    padding: 16px 0;
+    border-radius: 12px;
     background: var(--surface-high);
+    box-shadow: 0 0 0 1px var(--modal-border);
     color: var(--text);
     font: 13px / 17px var(--happy-font-ui);
+}
+
+.happy-story-viewer__step {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--text) 12%, transparent);
+    color: color-mix(in srgb, var(--text) 85%, transparent);
+}
+
+.happy-story-viewer__close {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+}
+
+.happy-story-viewer__frame {
+    position: relative;
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    aspect-ratio: 9 / 16;
+    overflow: hidden;
+    isolation: isolate;
+    border-radius: 12px;
+    background: var(--surface-highest);
+}
+
+.happy-story-viewer__media {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.happy-story-viewer__muted {
+    color: var(--text-secondary);
+    font-size: 12px;
+}
+
+/* A round video, 0.30 of the canvas wide; the reader's own preview mirrored. */
+.happy-story-viewer__round {
+    position: absolute;
+    top: 86px;
+    left: 12px;
+    width: 30%;
+    aspect-ratio: 1;
+    border-radius: 50%;
+    object-fit: cover;
+    box-shadow:
+        0 0 0 2px var(--text),
+        0 2px 10px color-mix(in srgb, var(--story-scrim) 30%, transparent);
+    pointer-events: none;
+}
+
+.happy-story-viewer__round[data-live] {
+    transform: scaleX(-1);
+}
+
+.happy-story-viewer__top {
+    position: absolute;
+    inset: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    height: 136px;
+    background: linear-gradient(
+        color-mix(in srgb, var(--story-scrim) 60%, transparent),
+        color-mix(in srgb, var(--story-scrim) 52%, transparent) 52px,
+        color-mix(in srgb, var(--story-scrim) 22%, transparent) 96px,
+        transparent 136px
+    );
+    text-shadow: 0 1px 2px color-mix(in srgb, var(--story-scrim) 35%, transparent);
+    pointer-events: none;
 }
 
 .happy-story-viewer__segments,
@@ -125,14 +213,14 @@
 
 .happy-story-viewer__segments {
     gap: 3px;
-    padding: 8px 10px 0;
+    margin: 8px 8px 0;
 }
 
 .happy-story-viewer__segments > span {
     flex: 1;
     height: 2px;
     border-radius: 1px;
-    background: color-mix(in srgb, var(--text) 22%, transparent);
+    background: color-mix(in srgb, var(--text) 38%, transparent);
 }
 
 .happy-story-viewer__segments > [data-on] {
@@ -140,112 +228,91 @@
 }
 
 .happy-story-viewer__head {
-    padding: 8px 6px 8px 10px;
-}
-
-.happy-story-viewer__muted,
-.happy-story-viewer__status {
-    color: var(--text-secondary);
-    font-size: 12px;
+    height: 32px;
+    margin-top: 8px;
+    padding: 0 6px 0 12px;
+    font: 600 14px / 18px var(--happy-font-ui);
 }
 
 .happy-story-viewer__head > .happy-story-viewer__muted {
     flex: 1;
+    color: color-mix(in srgb, var(--text) 72%, transparent);
+    font: 400 13px / 18px var(--happy-font-ui);
+}
+
+.happy-story-viewer__head > button {
+    pointer-events: auto;
+}
+
+.happy-story-viewer .happy-button[data-variant="ghost"] {
+    color: var(--text);
 }
 
 .happy-story-viewer__head > [aria-pressed="true"] {
     background: var(--surface-ripple);
 }
 
-.happy-story-viewer__frame {
-    position: relative;
+/* The bottom stack, on a scrim from 72 above the caption over a fading blur. */
+.happy-story-viewer__stack {
+    position: absolute;
+    z-index: 1;
+    right: 12px;
+    bottom: 64px;
+    left: 12px;
     display: flex;
-    flex: 0 1 auto;
-    align-items: center;
-    justify-content: center;
-    min-height: 120px;
-    background: var(--surface-highest);
+    flex-direction: column;
+    isolation: isolate;
+    text-shadow: 0 1px 2px color-mix(in srgb, var(--story-scrim) 40%, transparent);
 }
 
-.happy-story-viewer__frame > img,
-.happy-story-viewer__frame > video:not(.happy-story-viewer__round) {
-    width: 100%;
-    max-height: 56vh;
-    object-fit: contain;
-}
-
-.happy-story-viewer__step {
+.happy-story-viewer__stack::before,
+.happy-story-viewer__stack::after {
     position: absolute;
-    inset: 0 67% 0 0;
-    border: 0;
-    background: none;
-}
-
-.happy-story-viewer__step[data-side="next"] {
-    inset: 0 0 0 33%;
-}
-
-/* A round video: a circle with a thin rim, the reader's own preview mirrored. */
-.happy-story-viewer__round {
-    position: absolute;
-    left: 10px;
-    bottom: 10px;
-    width: 96px;
-    height: 96px;
-    border: 2px solid var(--surface);
-    border-radius: 50%;
-    object-fit: cover;
-    box-shadow: 0 2px 8px var(--shadow-subtle);
+    z-index: -1;
+    inset: -72px -12px -64px;
+    content: "";
     pointer-events: none;
 }
 
-.happy-story-viewer__round[data-live] {
-    transform: scaleX(-1);
+.happy-story-viewer__stack::before {
+    backdrop-filter: blur(16px);
+    mask-image: linear-gradient(transparent, var(--story-scrim) 56px);
+}
+
+.happy-story-viewer__stack::after {
+    background: linear-gradient(
+        transparent,
+        color-mix(in srgb, var(--story-scrim) 16%, transparent) 24px,
+        color-mix(in srgb, var(--story-scrim) 40%, transparent) 48px,
+        color-mix(in srgb, var(--story-scrim) 60%, transparent) 72px,
+        color-mix(in srgb, var(--story-scrim) 72%, transparent)
+    );
 }
 
 .happy-story-viewer__caption {
-    flex: none;
+    display: -webkit-box;
     margin: 0;
-    padding: 8px 12px 10px;
+    overflow: hidden;
+    font-size: 14px;
+    line-height: 19px;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
 }
 
-.happy-story-viewer__replies {
-    display: flex;
-    flex: 0 1 auto;
-    min-height: 0;
-    overflow-y: auto;
-    border-top: 1px solid var(--divider);
+/* 85%, not 78%: without a caption 78% reads 4.2:1 over a white frame. */
+.happy-story-viewer__status,
+.happy-story-viewer__all {
+    color: color-mix(in srgb, var(--text) 85%, transparent);
 }
 
-.happy-story-viewer__replies-list {
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-    padding: 6px 0 4px;
-    font-size: 12.5px;
-    line-height: 16px;
-}
-
-.happy-story-viewer__replies-head {
-    padding: 2px 12px 4px;
-    color: var(--text-secondary);
-    font-size: 11px;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-}
-
-.happy-story-viewer__reply {
-    display: flex;
-    gap: 8px;
-    padding: 5px 12px;
-}
-
-.happy-story-viewer__status {
-    padding: 4px 12px 0;
+.happy-story-viewer__status,
+.happy-story-viewer__actions,
+.happy-story-viewer__peek,
+.happy-story-viewer__stack > .happy-confirm-popover {
+    margin-top: 10px;
 }
 
 .happy-story-viewer__actions {
-    margin: 6px 10px 0;
     font-size: 12.5px;
 }
 
@@ -253,32 +320,191 @@
     flex: 1;
 }
 
-/* The reply bar is the theme's own surface with a hairline, never see-through,
-   so it reads the same whatever the frame above it shows. */
-.happy-story-viewer__bar {
+.happy-story-viewer__stack > .happy-confirm-popover {
+    text-shadow: none;
+}
+
+.happy-story-viewer__peek {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+}
+
+.happy-story-viewer__all {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    height: 20px;
+    margin-bottom: 2px;
+    font: 600 13px / 20px var(--happy-font-ui);
+}
+
+.happy-story-viewer__peek-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 28px;
+    font-size: 13.5px;
+    line-height: 18px;
+}
+
+.happy-story-viewer__peek-row > span:last-child {
+    min-width: 0;
+    overflow: hidden;
+    color: color-mix(in srgb, var(--text) 92%, transparent);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-story-viewer__peek-row b {
+    margin-right: 6px;
+    color: var(--text);
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.happy-story-viewer__dim {
+    position: absolute;
+    z-index: 2;
+    inset: 0;
+    background: color-mix(in srgb, var(--story-scrim) 50%, transparent);
+}
+
+.happy-story-viewer__drawer {
+    position: absolute;
+    z-index: 2;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+    height: 66%;
+    padding-bottom: 64px;
+    border-radius: 14px 14px 0 0;
+    background: var(--surface);
+    box-shadow: 0 -8px 24px var(--shadow-floating);
+}
+
+.happy-story-viewer__grabber {
+    position: absolute;
+    top: 6px;
+    left: calc(50% - 18px);
+    width: 36px;
+    height: 5px;
+    border-radius: 2.5px;
+    background: color-mix(in srgb, var(--text) 28%, transparent);
+}
+
+.happy-story-viewer__drawer-head {
     display: flex;
     flex: none;
-    margin: 6px 10px 15px;
+    align-items: center;
+    box-sizing: border-box;
+    height: 50px;
+    padding: 8px 8px 0 16px;
+    border-bottom: 1px solid var(--divider);
+    color: var(--text-secondary);
+    font: 600 11.5px / 16px var(--happy-font-ui);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.happy-story-viewer__drawer-head > span {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-story-viewer__drawer-head > button {
+    width: 32px;
+    height: 32px;
+}
+
+.happy-story-viewer__drawer-list {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+    overflow-y: auto;
+    border-bottom: 1px solid var(--divider);
+}
+
+.happy-story-viewer__drawer-list > div {
+    display: flex;
+    flex: 1 0 auto;
+    flex-direction: column;
+    justify-content: flex-end;
+    padding: 6px 0;
+}
+
+.happy-story-viewer__peek-row[data-full] {
+    align-items: flex-start;
+    gap: 10px;
+    height: auto;
+    padding: 8px 16px;
+    font-size: 14px;
+    line-height: 19px;
+}
+
+.happy-story-viewer__peek-row[data-full] > span:last-child {
+    display: flex;
+    flex-direction: column;
+    overflow-wrap: anywhere;
+    white-space: normal;
+}
+
+.happy-story-viewer__peek-row[data-full] b {
+    font-size: 13.5px;
+    line-height: 18px;
+}
+
+.happy-story-viewer__peek-row small {
+    margin-left: 6px;
+    color: color-mix(in srgb, var(--text) 50%, transparent);
+    font-size: 12.5px;
+    font-weight: 400;
+}
+
+/* The reply bar: dark glass at the canvas's foot, the drawer's input too. */
+.happy-story-viewer__bar {
+    position: absolute;
+    z-index: 3;
+    right: 12px;
+    bottom: 12px;
+    left: 12px;
+    display: flex;
 }
 
 .happy-story-viewer__input {
     flex: 1;
     min-width: 0;
-    height: 32px;
-    padding: 0 12px;
-    border: 1px solid var(--divider);
-    border-radius: 16px;
+    height: 40px;
+    padding: 0 16px;
+    border: 0;
+    border-radius: 20px;
     outline: none;
-    background: var(--surface);
+    background: color-mix(in srgb, var(--surface-high) 55%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 20%, transparent);
+    backdrop-filter: blur(20px);
     color: var(--text);
-    font: 12.5px / 16px var(--happy-font-ui);
+    font: 14px / 20px var(--happy-font-ui);
 }
 
 .happy-story-viewer__input::placeholder {
-    color: var(--text-secondary);
+    color: color-mix(in srgb, var(--text) 70%, transparent);
     opacity: 1;
 }
 
-.happy-story-viewer__input:focus {
-    border-color: var(--text-link);
+.happy-story-viewer__bar > .happy-story-viewer__input:focus {
+    box-shadow: inset 0 0 0 1px var(--text-link);
 }

@@ -11,18 +11,25 @@ import { StoryViewer, type StoryViewerProps } from "./StoryViewer";
 import { ThemeScope } from "./ThemeScope";
 import { createRenderer } from "./testing";
 
-/* Ring segments, the reply bar's contrast over any frame, and a round video's repost. */
+/* Ring segments, the replies' contrast over any frame, their drawer, and a round video's repost. */
 
 const noop = () => undefined;
 const frame = (fill: string) =>
     `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="360" height="240"><rect width="360" height="240" fill="${fill}"/></svg>`)}`;
+const REPLIES = ["Maya", "Alex", "Priya"].map((name) => ({
+    id: name,
+    name,
+    mark: { kind: "person", label: name } as const,
+    text: `Can we try it, ${name} asks`,
+    time: "4m",
+}));
 const VIEWER: StoryViewerProps = {
     segment: { index: 0, total: 2 },
     poster: { name: "Onboarding redesign", mark: { kind: "icon", slug: "ux", label: "UX" } },
     time: "2h",
-    frame: { kind: "image", url: frame("#ffffff") },
+    frame: { kind: "image", url: frame("rgb(255, 255, 255)") },
     caption: "Onboarding for the Projects sidebar",
-    replies: { status: "ready", items: [] },
+    replies: { status: "ready", items: REPLIES },
     replyTarget: "Onboarding redesign",
     reply: { phase: "idle" },
     action: { phase: "idle" },
@@ -41,13 +48,28 @@ function rgba(value: string): number[] {
 }
 
 const linear = (c: number) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
-function contrast(foreground: string, background: string): number {
-    const luminance = (value: string) => {
-        const [r, g, b] = rgba(value).map((channel) => linear(channel / 255));
-        return 0.2126 * r! + 0.7152 * g! + 0.0722 * b!;
-    };
-    const [light, dark] = [luminance(foreground), luminance(background)].sort((a, b) => b - a);
+/** WCAG contrast of two opaque sRGB colours. */
+function contrast(foreground: number[], background: number[]): number {
+    const luminance = ([r, g, b]: number[]) =>
+        0.2126 * linear(r! / 255) + 0.7152 * linear(g! / 255) + 0.0722 * linear(b! / 255);
+    const [light, dark] = [luminance(foreground), luminance(background)].sort((x, y) => y - x);
     return (light! + 0.05) / (dark! + 0.05);
+}
+/** A translucent colour laid over an opaque one. */
+const over = (top: string, under: number[]) => {
+    const [r, g, b, a] = rgba(top);
+    return [r!, g!, b!].map((channel, index) => channel * a! + under[index]! * (1 - a!));
+};
+/** How dark the black scrim is `y` px below its top, interpolated between its gradient's stops. */
+function scrimAlpha(scrim: CSSStyleDeclaration, height: number, y: number): number {
+    const pattern = /((?:rgba?|color)\([^)]*\)|transparent)(?: ([\d.]+)px)?/gu;
+    const stops = [...scrim.backgroundImage.matchAll(pattern)].map((match, index, all) => ({
+        alpha: match[1] === "transparent" ? 0 : rgba(match[1]!)[3]!,
+        at: index === all.length - 1 ? height : +(match[2] ?? 0),
+    }));
+    const next = stops.findIndex((stop) => stop.at >= y);
+    const [a, b] = [stops[Math.max(next - 1, 0)]!, stops[next]!];
+    return a.alpha + (b.alpha - a.alpha) * (b.at === a.at ? 1 : (y - a.at) / (b.at - a.at));
 }
 
 it("draws one segment per live story and greys the seen ones", async () => {
@@ -82,11 +104,11 @@ it("draws one segment per live story and greys the seen ones", async () => {
     expect(new Set(offsets).size).toBe(3);
 });
 
-it("keeps the reply bar opaque and readable over a white frame and a dark one", async () => {
+it("keeps the caption, the peek and the reply bar readable over a white frame and a dark one", async () => {
     const cases = (["light", "dark"] as const).flatMap((mode) =>
-        ["#ffffff", "#111111"].map((fill) => ({ mode, fill })),
+        ["rgb(255, 255, 255)", "rgb(17, 17, 17)"].map((fill) => ({ mode, fill })),
     );
-    const view = createRenderer({ width: 400, height: 1300 });
+    const view = createRenderer({ width: 640, height: 2900 });
     view.render(() => (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {cases.map(({ mode, fill }) => (
@@ -97,23 +119,48 @@ it("keeps the reply bar opaque and readable over a white frame and a dark one", 
         </div>
     ));
     await view.ready();
-    const viewers = [...view.container.querySelectorAll('[data-happy-desktop-ui="story-viewer"]')];
-    const colors = viewers.map((viewer) => {
+    const viewers = view.container.querySelectorAll('[data-happy-desktop-ui="story-viewer"]');
+    viewers.forEach((viewer, index) => {
+        // The frame, then the scrim as dark as it is where each text starts, then the text.
+        const stack = viewer.querySelector('[data-happy-desktop-ui="story-viewer-stack"]')!;
+        const scrim = getComputedStyle(stack, "::after");
+        const top = stack.getBoundingClientRect().top + parseFloat(scrim.top);
+        const height = stack.getBoundingClientRect().bottom - parseFloat(scrim.bottom) - top;
+        const under = (element: Element) => {
+            const alpha = scrimAlpha(scrim, height, element.getBoundingClientRect().top - top);
+            return over(`rgba(0, 0, 0, ${String(alpha)})`, rgba(cases[index]!.fill));
+        };
+        const read = (color: string, background: number[]) =>
+            expect(contrast(over(color, background), background)).toBeGreaterThanOrEqual(4.5);
+        for (const part of ["caption", "all", "peek-row b", "peek-row > span:last-child"]) {
+            const text = viewer.querySelector(`.happy-story-viewer__${part}`)!;
+            read(getComputedStyle(text).color, under(text));
+        }
         const input = viewer.querySelector('[data-happy-desktop-ui="story-viewer-input"]')!;
-        const shown = viewer.querySelector('[data-happy-desktop-ui="story-viewer-frame"]')!;
-        const box = getComputedStyle(input);
-        // Solid, with a hairline, never laid over the frame, and readable.
-        expect(rgba(box.backgroundColor)[3]).toBe(1);
-        expect(box.borderTopStyle).toBe("solid");
-        expect(input.getBoundingClientRect().top).toBeGreaterThanOrEqual(
-            shown.getBoundingClientRect().bottom,
-        );
-        for (const text of [box.color, getComputedStyle(input, "::placeholder").color])
-            expect(contrast(text, box.backgroundColor)).toBeGreaterThanOrEqual(4.5);
-        return box.backgroundColor;
+        const bar = over(getComputedStyle(input).backgroundColor, under(input));
+        read(getComputedStyle(input).color, bar);
+        read(getComputedStyle(input, "::placeholder").color, bar);
     });
-    // The appearance decides the bar, not the frame.
-    expect([new Set(colors).size, colors[0], colors[2]]).toEqual([2, colors[1], colors[3]]);
+});
+
+it("opens every reply in a drawer over the frame, which stays put, with focus in the input", async () => {
+    const view = createRenderer({ width: 640, height: 720 });
+    view.render(() => <StoryViewer {...VIEWER} />);
+    await view.ready();
+    const part = (name: string) =>
+        view.container.querySelector<HTMLElement>(`[data-happy-desktop-ui="story-viewer-${name}"]`);
+    const frameRect = () => JSON.stringify(part("frame")!.getBoundingClientRect());
+    const closed = frameRect();
+    expect(part("peek")!.querySelectorAll(".happy-story-viewer__peek-row")).toHaveLength(2);
+    part("peek")!.click();
+    await vi.waitFor(() => expect(part("drawer")).not.toBeNull());
+    expect(frameRect()).toBe(closed);
+    const rows = part("drawer")!.querySelectorAll("[data-full]");
+    expect([...rows].map((row) => row.lastElementChild!.textContent)).toEqual(
+        REPLIES.map((reply) => `${reply.name}${reply.time}${reply.text}`),
+    );
+    expect(document.activeElement).toBe(part("input"));
+    expect(part("drawer")!.offsetHeight).toBeCloseTo(part("frame")!.offsetHeight * 0.66, 0);
 });
 
 it("records a round video from the camera, uploads it, and reposts the story with it", async () => {

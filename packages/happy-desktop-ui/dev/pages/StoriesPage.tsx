@@ -31,28 +31,34 @@ const card = (title: string, iconSlug: string, status: string, unseen: number) =
     kind: "task" as const,
     card: { ...CARD, id: title, title, time: "4m", status, iconSlug, story: { total: 2, unseen } },
 });
-const reply = (name: string, image: string | undefined, text: string) => ({
+const reply = (name: string, time: string, text: string, image?: string) => ({
     id: name,
     name,
     mark: person(name, image),
-    time: "4m",
+    time,
     text,
 });
+const REPLIES = [
+    reply("Maya", "1h", "Can the empty state show one example project?"),
+    reply("Alex", "48m", "Love that it drafts the first task 👏"),
+    reply("Priya", "30m", "Step 2 copy is a bit long, can we cut it in half?"),
+    reply(
+        "Steve",
+        "12m",
+        "looks good, ship it? one nit: “Use selected” is too far from the table",
+        "steve.jpg",
+    ),
+    reply("Jordan", "4m", "🔥 can we get this into the release notes video?"),
+];
 
 const VIEWER: StoryViewerProps = {
     segment: { index: 0, total: 2 },
     poster: { name: "Onboarding redesign", mark: UX },
     time: "2h",
-    frame: { kind: "image", url: asset("story-frame.jpg") },
+    frame: { kind: "image", url: asset("story-page.jpg") },
     caption:
-        "Onboarding for the Projects sidebar: Happy adds your projects and drafts a first task",
-    replies: {
-        status: "ready",
-        items: [
-            reply("Steve", "steve.jpg", "looks good, ship it? “Use selected” is too far away"),
-            reply("Jordan", undefined, "🔥 can we get this into the release notes video?"),
-        ],
-    },
+        "Onboarding for the Projects sidebar: Happy adds your projects and drafts one first task",
+    replies: { status: "ready", items: REPLIES.slice(3) },
     replyTarget: "Onboarding redesign",
     reply: { phase: "idle" },
     action: { phase: "idle" },
@@ -66,7 +72,7 @@ export function StoriesPage() {
     return (
         <ComponentPage
             number={componentNumber}
-            summary="Stories in rich mode: the header over the sidebar's list (My story first, one ring segment per live story, greyed once seen), the ring on a card's disc, and the viewer with its solid reply bar and round video repost."
+            summary="Stories in rich mode: the header over the sidebar's list (My story first, one ring segment per live story, greyed once seen), the ring on a card's disc, and the viewer with its replies over the frame, their drawer, and round video repost."
             title="Stories"
         >
             <Specimen
@@ -93,18 +99,19 @@ export function StoriesPage() {
                 </div>
             </Specimen>
             <Specimen
-                detail="Reposter's view · owner's view of a 3-story ring, reply sent"
+                detail="620×700 · reposter's view, 2 replies · owner's view, 5 replies (open the peek for the drawer)"
                 label="Viewer"
                 number="02"
             >
-                <div style={{ display: "flex", gap: 24, alignItems: "flex-start" }}>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 24 }}>
                     <StoryViewer {...VIEWER} />
                     <StoryViewer
                         {...VIEWER}
                         onRepost={undefined}
                         onTakeDown={noop}
-                        reply={{ phase: "sent" }}
-                        segment={{ index: 1, total: 3 }}
+                        caption="Wall from today’s design review: every screen of the new onboarding, pinned up"
+                        frame={{ kind: "image", url: asset("story-wall.jpg") }}
+                        replies={{ status: "ready", items: REPLIES }}
                     />
                 </div>
             </Specimen>
