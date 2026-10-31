@@ -40,12 +40,19 @@ const posterNamed = (name: string, imageUrl: string | undefined, tone?: ToneName
     mark: { kind: "person", label: name, tone, ...(imageUrl ? { imageUrl } : {}) },
 });
 
-/** A person by their photo where the window holds one, else their coloured initial. */
-function personOf(userId: string | null, { catalog, tasks }: AppStoryDirectory): Poster {
+/**
+ * A person by their photo where the window holds one, else their coloured initial.
+ * `served` is the name the server sent, for a teammate the window does not know.
+ */
+function personOf(
+    userId: string | null,
+    { catalog, tasks }: AppStoryDirectory,
+    served?: string,
+): Poster {
     const person = userId === null ? catalog.profile : catalog.users.get(userId);
     const owner = tasks.find((task) => task.owner?.userId === userId)?.owner;
     return posterNamed(
-        person?.name ?? owner?.name ?? "Someone",
+        person?.name ?? owner?.name ?? served ?? "Someone",
         person?.photo?.url ?? owner?.avatar?.url,
         avatarToneOf(userId ?? catalog.viewer?.userId ?? ""),
     );
@@ -53,7 +60,7 @@ function personOf(userId: string | null, { catalog, tasks }: AppStoryDirectory):
 
 /** A bot by its picture, a task by its icon, a person by their photo. */
 function posterOf(poster: happyAgentProtocol.StoryPoster, directory: AppStoryDirectory): Poster {
-    if (poster.kind === "user") return personOf(poster.userId, directory);
+    if (poster.kind === "user") return personOf(poster.userId, directory, poster.name);
     const bot = directory.bots.find(
         (each) => each.id === poster.botId || each.conversation.id === poster.agentId,
     );
