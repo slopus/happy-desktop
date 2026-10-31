@@ -708,6 +708,7 @@ function happyAgentConnectGroupProject(
                         text: element.text,
                         createdAt: element.createdAt,
                         author: profileAuthor(element.profile, element.identity),
+                        ...(element.replyTo ? { replyTo: element.replyTo } : {}),
                         attachments: userMessageAttachments(element, input).map(
                             (attachment, index) => ({
                                 kind: "inlineImage" as const,
@@ -1283,6 +1284,7 @@ function messageProject(input: {
     readonly createdAt: number;
     readonly author: ConversationAuthor;
     readonly attachments?: ConversationMessageProjection["attachments"];
+    readonly replyTo?: ConversationMessageProjection["replyTo"];
     readonly generationStatus?: ConversationMessageProjection["generationStatus"];
 }): ConversationMessageProjection {
     return {
@@ -1297,6 +1299,7 @@ function messageProject(input: {
         reactions: [],
         createdAt: new Date(input.createdAt).toISOString(),
         ...(input.generationStatus ? { generationStatus: input.generationStatus } : {}),
+        ...(input.replyTo ? { replyTo: input.replyTo } : {}),
     };
 }
 

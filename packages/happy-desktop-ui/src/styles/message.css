@@ -255,6 +255,11 @@
     white-space: nowrap;
 }
 
+.happy-message__author-note {
+    color: var(--text-secondary);
+    font-size: 14px;
+}
+
 /* The dangling mark is tight to its hit target; the gutter supplies all
  * surrounding air, keeping the avatar clear of the name and bubble. */
 .happy-message__avatar-dangling {
@@ -1192,20 +1197,21 @@
 }
 
 .happy-message-list__jump[hidden] {
-    display: none;
+    display: var(--jump-hidden, none);
+    visibility: hidden;
 }
 
 .happy-message-list__jump .happy-button[data-icon-only][data-size="small"] {
-    width: 32px;
-    height: 32px;
+    width: var(--jump-size, 32px);
+    height: var(--jump-size, 32px);
     border-radius: 50%;
     box-shadow: 0 2px 8px var(--shadow-color);
 }
 
 .happy-message-list__jump .happy-button__icon .happy-icon {
-    width: 16px !important;
-    height: 16px !important;
-    font-size: 16px !important;
+    width: var(--jump-icon, 16px) !important;
+    height: var(--jump-icon, 16px) !important;
+    font-size: var(--jump-icon, 16px) !important;
 }
 
 /* While the agent works the arrow is painted by the shared shimmer (C-254).
@@ -1214,6 +1220,50 @@
    line box around it. */
 .happy-message-list__jump .happy-button__icon .happy-shimmer-text {
     display: flex;
+}
+
+/* Rich chats: Telegram's 40px buttons bottom right; a hidden chevron keeps the faces. */
+.happy-message-list[data-corner] > .happy-message-list__jump {
+    --jump-hidden: flex;
+    --jump-size: 40px;
+    --jump-icon: 20px;
+    right: 12px;
+    bottom: 10px;
+    left: auto;
+    transform: none;
+}
+
+.happy-message-list__faces {
+    all: unset;
+    position: absolute;
+    right: 0;
+    bottom: 58px;
+    display: flex;
+    visibility: visible;
+}
+
+.happy-message-list__faces > :first-child {
+    box-shadow: 0 0 0 2px var(--surface);
+}
+
+.happy-message-list__faces > :nth-child(2) {
+    position: absolute;
+    z-index: -1;
+    left: -9px;
+}
+
+/* A count rides each button's top edge, a third of it over the button. */
+.happy-message-list__badge {
+    position: absolute;
+    top: -12px;
+    left: 50%;
+    min-width: 18px;
+    padding: 0 5px;
+    border-radius: 9px;
+    background: var(--text-link);
+    color: white;
+    font: 600 12px / 18px var(--happy-font-ui);
+    transform: translateX(-50%);
 }
 
 .happy-message-list__viewport {

@@ -89,6 +89,8 @@ export interface ConversationMessageProjection {
     readonly reactions: readonly ConversationReaction[];
     readonly attachments: readonly ConversationAttachment[];
     readonly createdAt: string;
+    /** The story a person's message answers, drawn as a quote above it. */
+    readonly replyTo?: { readonly kind: "story"; readonly artifactId: string };
 }
 
 /**

@@ -21,7 +21,9 @@ import { AppHappyAgentRichTasks, richTaskSubRowParse } from "./components/AppHap
 import {
     AppHappyAgentStoriesRow,
     AppHappyAgentStoryViewer,
+    appStoryChatRich,
     appStoryTaskRings,
+    type AppStoryChat,
     type AppStoryDirectory,
 } from "./components/AppHappyAgentStories";
 import { conversationInlinePagesCreate, inlineArtifactsStoreNoop } from "./conversationInlinePages";
@@ -3420,6 +3422,10 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
         bots: active?.bots ?? [],
         catalog: surfaceCatalog,
     };
+    const storyChat =
+        richTasks.mode === "rich"
+            ? { stories: storiesStore, richTasks: richTasksStore, directory: storyDirectory }
+            : undefined;
     const storyRings = stories.mode === "on" ? stories.rings : [];
     const taskRings = appStoryTaskRings(storyRings);
     /** Opens what a card or sub-row points at, where the classic row would open it. */
@@ -4452,6 +4458,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
             return (
                 <HappyAgentWorkspaceSurface
                     {...(referenceSurfaces ? { referenceSurfaces } : {})}
+                    storyChat={storyChat}
                     availability={
                         activeAvailability ??
                         happyAgentAvailabilityProject(active.session.connection.get(), true, {
@@ -6272,6 +6279,8 @@ function HappyAgentArtifactsPanelSurface(props: {
 interface HappyAgentWorkspaceSurfaceProps {
     /** The Surfaces the transcript's references can name, and where one opens. */
     referenceSurfaces?: MessageReferenceSurfaces;
+    /** Story quotes and unread teammates, while the Tasks area is rich. */
+    storyChat?: AppStoryChat | undefined;
     /** The machine's artifacts, present only once it has said it keeps them. */
     artifacts?: HappyAgentArtifacts;
     /** Shows an HTML artifact opened beside the conversation as a site of its own. */
@@ -7233,6 +7242,7 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
             <HappyAgentConversationBody
                 composerNotice={workspaceComposerNotice}
                 modelUsageWatch={modelUsageWatch}
+                storyChat={props.storyChat}
                 {...(props.artifacts ? { artifacts: props.artifacts } : {})}
                 inlineEngines={{
                     ...(props.artifactPage ? { artifactPage: props.artifactPage } : {}),
@@ -8768,6 +8778,7 @@ function HappyAgentGroupComposer(props: {
 /** The open conversation's materialization states, inside the directory's tabs. */
 function HappyAgentConversationBody(props: {
     activitySelected: boolean;
+    storyChat?: AppStoryChat | undefined;
     /** The machine's artifacts, which the transcript's references name. */
     artifacts?: HappyAgentArtifacts;
     /**
@@ -8844,6 +8855,7 @@ function HappyAgentConversationBody(props: {
         return (
             <HappyAgentConversationSurface
                 activitySelected={props.activitySelected}
+                storyChat={props.storyChat}
                 {...(props.artifacts ? { artifacts: props.artifacts } : {})}
                 {...(props.inlineEngines ? { inlineEngines: props.inlineEngines } : {})}
                 referenceEntities={props.referenceEntities}
@@ -9228,6 +9240,7 @@ function happyAgentDelegatedElapsedMs(
 
 function HappyAgentConversationSurface(props: {
     activitySelected: boolean;
+    storyChat?: AppStoryChat | undefined;
     /** The machine's artifacts, which the transcript's references name. */
     artifacts?: HappyAgentArtifacts;
     /**
@@ -9436,6 +9449,9 @@ function HappyAgentConversationSurface(props: {
     return (
         <ConversationView
             references={references}
+            {...(props.storyChat
+                ? { rich: appStoryChatRich(props.storyChat, conversation.conversationId) }
+                : {})}
             {...(inlinePages ? { inlinePages } : {})}
             emptyContent={props.emptyContent}
             agentAuthor={agentAuthor}

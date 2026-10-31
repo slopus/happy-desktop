@@ -161,6 +161,8 @@ export type ConversationRowContext = {
     readonly mediaPlaced?: ReadonlySet<number>;
     /** The layouts this reply draws, and its text with each one's placeholder. */
     readonly messageLayouts?: MessageInlineLayouts;
+    /** A story quote, 9:16, stands above this message. */
+    readonly storyQuote?: boolean;
 };
 export type ConversationFailureRowContext = {
     /** The conversation has not moved past this failure, so its actions are offered. */
@@ -371,6 +373,8 @@ const TRACE_META_SEPARATOR = 2;
 const MEDIA_MARGIN = 8;
 const MEDIA_MARGIN_BARE = 4;
 /** Linked attachment cards: 64px cards, 4px gaps, and the message slot's top inset. */
+/** `.happy-story-quote`: 320 tall and 6 below. */
+const STORY_QUOTE_HEIGHT = 326;
 const ATTACHMENT_CARD_HEIGHT = 64;
 const ATTACHMENT_CARD_GAP = 4;
 /** Collapsed `.happy-agent-activity-row` heights, by activity kind. */
@@ -1395,6 +1399,7 @@ export function conversationRowHeight(
         messageReferencesSignature(conversationEntryReferences(entry), context.references),
         context.messageLayouts?.signature ?? "",
         messageLayoutsFramesSignature(context.messageLayouts),
+        context.storyQuote ? "quote" : "",
     ].join(":");
     return rowHeightCached(cache, entry, cacheKey, () => {
         let height = messageRowHeight(
@@ -1435,6 +1440,7 @@ export function conversationRowHeight(
                 cards * ATTACHMENT_CARD_HEIGHT +
                 (cards - 1) * ATTACHMENT_CARD_GAP;
         if (!own && !grouped && entry.contextNote) height += 21;
+        if (context.storyQuote) height += STORY_QUOTE_HEIGHT;
         return height;
     });
 }

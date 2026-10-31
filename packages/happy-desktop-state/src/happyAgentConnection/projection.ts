@@ -1166,6 +1166,7 @@ function messageElementsProject(
                           profile: reader.userProfiles?.get(message.metadata.userId),
                       }),
                 ...(senderAgent === undefined ? {} : { senderAgent }),
+                ...(message.replyTo ? { replyTo: message.replyTo } : {}),
                 delivery:
                     message.status === "pending" && message.delivery === "steer"
                         ? "pending_steering"

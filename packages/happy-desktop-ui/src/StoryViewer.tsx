@@ -47,6 +47,8 @@ export type StoryViewerProps = {
     readonly onRepost?: (caption: string, round: Blob | null) => void;
     readonly onStep: (delta: 1 | -1) => void;
     readonly onClose: () => void;
+    /** Opens with the drawer on this reply, scrolled to and marked: the one a chat quote opened. */
+    readonly replyFocus?: string | null;
 };
 
 /** A round video reaction is at most this long. */
@@ -84,7 +86,8 @@ export function StoryViewer(props: StoryViewerProps) {
     const [text, setText] = useState("");
     const [bar, setBar] = useState<"reply" | "repost" | "takeDown">("reply");
     const [round, setRound] = useState<Round>({ phase: "idle" });
-    const [drawer, setDrawer] = useState(false);
+    const [drawer, setDrawer] = useState(Boolean(props.replyFocus));
+    const focused = useRef(false);
     const canvas = useRef<HTMLDivElement>(null);
     const input = useRef<HTMLInputElement>(null);
     /** The drawer pauses the frame behind it and keeps the reader in the input. */
@@ -374,8 +377,16 @@ export function StoryViewer(props: StoryViewerProps) {
                                     {items.map((reply) => (
                                         <span
                                             className="happy-story-viewer__peek-row"
+                                            data-focus={
+                                                reply.id === props.replyFocus ? "" : undefined
+                                            }
                                             data-full=""
                                             key={reply.id}
+                                            ref={(row) => {
+                                                if (!row?.dataset.focus || focused.current) return;
+                                                focused.current = true;
+                                                row.scrollIntoView({ block: "center" });
+                                            }}
                                         >
                                             <StoryMarkView mark={reply.mark} size={32} />
                                             <span>

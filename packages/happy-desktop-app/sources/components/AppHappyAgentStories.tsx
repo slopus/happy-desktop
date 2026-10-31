@@ -2,6 +2,7 @@ import { useSyncExternalStore } from "react";
 import type {
     HappyAgentBot,
     HappyAgentClockStore,
+    HappyAgentRichTasksStore,
     HappyAgentStoriesStore,
     HappyAgentStoryOpen,
     HappyAgentStoryRing,
@@ -16,7 +17,9 @@ import {
     ModalOverlay,
     StoriesRow,
     StoryViewer,
+    type ConversationRich,
     type StoryMark,
+    type StoryQuoteView,
     type ToneName,
 } from "happy-desktop-ui";
 
@@ -74,6 +77,36 @@ export function appStoryTaskRings(rings: readonly HappyAgentStoryRing[]) {
         if (poster.kind === "agent" && poster.taskId !== null)
             byTask.set(poster.taskId, { id, total: stories.length, unseen });
     return byTask;
+}
+
+/** What a rich chat reads its story quotes and unread teammates from. */
+export interface AppStoryChat {
+    readonly stories: HappyAgentStoriesStore;
+    readonly richTasks: HappyAgentRichTasksStore;
+    readonly directory: AppStoryDirectory;
+}
+
+/** One agent's rich chat: quotes while stories are on, and who wrote while it was unread. */
+export function appStoryChatRich(chat: AppStoryChat, agentId: string): ConversationRich {
+    const { stories, directory } = chat;
+    // An ended story, or one whose frame cannot be read, draws no quote.
+    const quote = (artifactId: string): StoryQuoteView | undefined => {
+        const held = stories.quoteOf(artifactId);
+        if (held.kind !== "live") return held.kind === "loading" ? { kind: "loading" } : undefined;
+        if (held.frame.kind === "failed") return undefined;
+        const { story, frame, segment } = held;
+        const poster = posterOf(story.poster, directory);
+        return { kind: "live", frame, segment, poster, caption: story.caption };
+    };
+    const unread = chat.richTasks.unreadOf(agentId);
+    const from = (unread?.from ?? [])
+        .filter((id) => id !== directory.catalog.viewer?.userId)
+        .map((userId) => ({ userId, mark: personOf(userId, directory).mark }));
+    return {
+        ...(stories.get().mode === "on" ? { storyQuote: quote } : {}),
+        onStoryQuoteOpen: stories.quoteOpen,
+        unread: unread && from.length > 0 ? { since: unread.since, from } : null,
+    };
 }
 
 /** The stories header: "My story" first, with a plus while the reader has none up. */
@@ -141,6 +174,7 @@ export function AppHappyAgentStoryViewer(props: {
                         : replies
                 }
                 reply={open.reply}
+                replyFocus={open.replyFocus}
                 replyTarget={posterOf(replyAgent, directory).name}
                 roundUrl={open.roundUrl}
                 segment={open.segment}

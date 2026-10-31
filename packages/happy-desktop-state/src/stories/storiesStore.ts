@@ -44,7 +44,14 @@ export interface HappyAgentStoryOpen {
     readonly action: HappyAgentStoryPhase;
     readonly takeDownOffered: boolean;
     readonly repostOffered: boolean;
+    /** The reply the drawer opens on, when the story was opened from that reply's quote. */
+    readonly replyFocus: string | null;
 }
+
+/** The story a message answers, as its quote draws it: live, not read yet, or no longer up. */
+export type HappyAgentStoryQuote =
+    | { readonly kind: "loading" | "ended" }
+    | ({ readonly kind: "live" } & Pick<HappyAgentStoryOpen, "story" | "segment" | "frame">);
 
 /** Off unless the daemon has `capabilities.storyArtifacts` and the Tasks area is rich. */
 export type HappyAgentStoriesSnapshot =
@@ -69,6 +76,10 @@ export interface HappyAgentStoriesStore {
     storyTakeDown(): void;
     /** Reposts the open story to the team, with a caption and a recorded round video, if any. */
     storyRepost(caption: string | null, round: Blob | null): void;
+    /** The story a message answers; its frame is read the first time it is asked for. */
+    quoteOf(artifactId: string): HappyAgentStoryQuote;
+    /** Opens a quoted story with its replies drawer open on the reply that quoted it. */
+    quoteOpen(artifactId: string, messageId: string): void;
     [Symbol.dispose](): void;
 }
 
@@ -95,6 +106,8 @@ export const happyAgentStoriesStoreNone: HappyAgentStoriesStore = {
     replySend: noop,
     storyTakeDown: noop,
     storyRepost: noop,
+    quoteOf: () => ({ kind: "ended" }),
+    quoteOpen: noop,
     [Symbol.dispose]: noop,
 };
 
@@ -114,6 +127,7 @@ export function happyAgentStoriesStoreCreate(deps: HappyAgentStoriesDeps): Happy
     let readCursor: string | undefined;
     /** The walk is frozen when the viewer opens, so a story going grey never reorders it. */
     let view: { walk: readonly string[]; at: number; reply: Phase; action: Phase } | undefined;
+    let replyFocus: string | null = null;
     const frames = new Map<string, HappyAgentStoryFrame>();
     const replies = new Map<string, { count: number; replies: HappyAgentStoryReplies }>();
     const seenAsked = new Set<string>();
@@ -188,6 +202,7 @@ export function happyAgentStoriesStoreCreate(deps: HappyAgentStoriesDeps): Happy
             action: view.action,
             takeDownOffered: takeDownAllowed(story),
             repostOffered: !mine(story.poster),
+            replyFocus,
         };
         return { mode: "on", rings: all, open };
     };
@@ -214,11 +229,11 @@ export function happyAgentStoriesStoreCreate(deps: HappyAgentStoriesDeps): Happy
 
     const read = async (signal: AbortSignal): Promise<void> => {
         const response = await client.listStories({ scope: "feed", signal }).catch(noop);
-        // A failed read keeps the feed as it was until the next reconcile reads it again.
-        if (!response || signal.aborted) return;
-        readCursor = response.cursor;
-        stories = new Map();
-        for (const story of response.stories) adopt(story);
+        if (signal.aborted) return;
+        // A failed read keeps the feed as it was until the next reconcile; quotes stop waiting.
+        readCursor = response?.cursor ?? readCursor ?? "";
+        if (response) stories = new Map();
+        for (const story of response?.stories ?? []) adopt(story);
         notify();
     };
 
@@ -282,12 +297,9 @@ export function happyAgentStoriesStoreCreate(deps: HappyAgentStoriesDeps): Happy
         return { kind: "failed", message: "This story's frame cannot be shown here." } as const;
     };
 
-    /** Shows one story of the walk: its frame and replies are read once, and it is marked seen. */
-    const show = (walk: readonly string[], at: number): void => {
-        const story = stories.get(walk[at]!);
-        if (!story) return;
+    /** The story's frame, read once. */
+    const frameOf = (story: Story): HappyAgentStoryFrame => {
         const id = story.artifactId;
-        view = { walk, at, reply: IDLE, action: IDLE };
         if (!frames.has(id)) {
             frames.set(id, { kind: "loading" });
             void frameRead(story)
@@ -300,6 +312,17 @@ export function happyAgentStoriesStoreCreate(deps: HappyAgentStoriesDeps): Happy
                     notify();
                 });
         }
+        return frames.get(id)!;
+    };
+
+    /** Shows one story of the walk: its frame and replies are read once, and it is marked seen. */
+    const show = (walk: readonly string[], at: number, focus: string | null = null) => {
+        const story = stories.get(walk[at]!);
+        if (!story) return;
+        const id = story.artifactId;
+        view = { walk, at, reply: IDLE, action: IDLE };
+        replyFocus = focus;
+        frameOf(story);
         if (!replies.has(id)) repliesRead(story);
         if (!seen(story) && !seenAsked.has(id)) {
             seenAsked.add(id);
@@ -377,6 +400,23 @@ export function happyAgentStoriesStoreCreate(deps: HappyAgentStoriesDeps): Happy
             const ring = now.rings.find((each) => each.id === ringId);
             const story = ring?.stories.find((each) => !seen(each)) ?? ring?.stories[0];
             if (story) show(walk, walk.indexOf(story.artifactId));
+        },
+        quoteOf(artifactId) {
+            const now = get();
+            const story = stories.get(artifactId);
+            const ring =
+                story && now.mode === "on"
+                    ? now.rings.find((each) => each.id === ringIdOf(story.poster))
+                    : undefined;
+            if (!story || !ring) return { kind: readCursor === undefined ? "loading" : "ended" };
+            const segment = { index: ring.stories.indexOf(story), total: ring.stories.length };
+            return { kind: "live", story, segment, frame: frameOf(story) };
+        },
+        quoteOpen(artifactId, messageId) {
+            const now = get();
+            if (now.mode !== "on") return;
+            const walk = now.rings.flatMap((ring) => ring.stories.map((each) => each.artifactId));
+            if (walk.includes(artifactId)) show(walk, walk.indexOf(artifactId), messageId);
         },
         storyStep: step,
         viewerClose() {

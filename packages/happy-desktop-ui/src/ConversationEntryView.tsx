@@ -87,6 +87,8 @@ export type ConversationEntryViewProps = {
      * since only it knows what the message is and what became of it.
      */
     contextNote?: string;
+    /** The quote of the story this message answers, above its text. */
+    storyQuote?: ReactNode;
     /** Consecutive entry from the same author: no avatar/author row. */
     grouped?: boolean;
     /** Answers a pending question request entry. */
@@ -606,6 +608,9 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
                 : {})}
             className={props.className}
             {...(props.contextNote === undefined ? {} : { contextNote: props.contextNote })}
+            {...(props.storyQuote
+                ? { quote: props.storyQuote, authorNote: "replied to the story" }
+                : {})}
             data-testid={props["data-testid"]}
             deliveryState={entry.delivery}
             emptyText={

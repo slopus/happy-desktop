@@ -1,3 +1,4 @@
+import type { AgentUnread } from "@slopus/happy-agent-client";
 import type {
     HappyAgentConnection,
     HappyAgentRichTasksInput,
@@ -32,6 +33,8 @@ export interface HappyAgentRichTasksStore {
     /** Takes one child out from under a task's card, for every member. */
     childHide(taskId: string, ref: RichTaskChildRef): void;
     taskMove(taskId: string, anchor: RichTaskMoveAnchor): void;
+    /** Its unread naming who wrote, or the last such the reader cleared on opening the chat. */
+    unreadOf(agentId: string): AgentUnread | null;
     [Symbol.dispose](): void;
 }
 
@@ -50,6 +53,7 @@ export const happyAgentRichTasksStoreNone: HappyAgentRichTasksStore = {
     sectionCollapseToggle: nothing,
     childHide: nothing,
     taskMove: nothing,
+    unreadOf: () => null,
     [Symbol.dispose]: nothing,
 };
 
@@ -179,8 +183,22 @@ export function happyAgentRichTasksStoreCreate(deps: {
                     connection.richTasks.artifactRead(ref.id);
     };
 
+    // Each agent's unread that names who wrote, and the last of them the reader read.
+    let unreadNamed = new Map<string, AgentUnread>();
+    let unreadRead: { readonly agentId: string; readonly unread: AgentUnread } | null = null;
+    const agents = () => {
+        const { tasks, bots } = connection.richTasks.get();
+        return [...tasks, ...bots].map((owner) => owner.agent);
+    };
+
     const notify = (): void => {
         if (disposed) return;
+        const named = new Map<string, AgentUnread>();
+        for (const { id, unread } of agents())
+            if (unread?.from?.length) named.set(id, unread);
+            else if (!unread && unreadNamed.has(id))
+                unreadRead = { agentId: id, unread: unreadNamed.get(id)! };
+        unreadNamed = named;
         settingsFollow();
         artifactsRead();
         for (const listener of listeners) listener();
@@ -233,6 +251,11 @@ export function happyAgentRichTasksStoreCreate(deps: {
             if ("afterSectionId" in anchor)
                 connection.reorderTaskAfterSection(taskId, anchor.afterSectionId);
             else connection.reorderTask(taskId, anchor.afterId);
+        },
+        unreadOf(agentId) {
+            const { unread } = agents().find((agent) => agent.id === agentId) ?? {};
+            if (unread?.from?.length) return unread;
+            return unreadRead?.agentId === agentId ? unreadRead.unread : null;
         },
         [Symbol.dispose]() {
             if (disposed) return;

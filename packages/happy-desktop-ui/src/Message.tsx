@@ -25,6 +25,7 @@ import { AutomatedTag } from "./AutomatedTag";
 import { ReactionChip } from "./Badge";
 import { Button } from "./Button";
 import { Icon, type IconName } from "./Icon";
+import { StoryMarkView, type StoryMark } from "./StoryRing";
 import {
     MESSAGE_MEDIA_LIMITS,
     MESSAGE_MEDIA_MAX,
@@ -170,6 +171,10 @@ export type MessageProps = Omit<HTMLAttributes<HTMLDivElement>, "style"> & {
     /** Compact optional action placed in the author metadata before the time. */
     metaAccessory?: ReactNode;
     author: string;
+    /** Muted words after the author's name, such as "replied to the story". */
+    authorNote?: string;
+    /** What the message answers, drawn above its text: a story's quote. */
+    quote?: ReactNode;
     body: string | MessageSegment[];
     /** Format of a string body. Human messages use plain text. */
     bodyFormat?: MessageBodyFormat;
@@ -370,6 +375,8 @@ export function Message(props: MessageProps) {
         "audienceLabel",
         "automated",
         "author",
+        "authorNote",
+        "quote",
         "body",
         "bodyFormat",
         "bodyFold",
@@ -679,6 +686,9 @@ export function Message(props: MessageProps) {
                     <span data-happy-desktop-ui="message-author-label">{local.author}</span>
                 </span>
             )}
+            {local.authorNote ? (
+                <span className="happy-message__author-note">{local.authorNote}</span>
+            ) : null}
             {local.automated && showIncomingIdentity() ? (
                 <>
                     <span
@@ -742,6 +752,7 @@ export function Message(props: MessageProps) {
                         {local.contextNote}
                     </span>
                 ) : null}
+                {local.quote}
                 {ownBubbleLine ? (
                     <div
                         className="happy-message__bubble-line"
@@ -878,6 +889,15 @@ export type MessageListProps = {
      * lists show the plain arrow.
      */
     jumpToEndWorking?: boolean;
+    /** Rich chats: 40px jump buttons bottom right, a chevron and teammates' faces, with counts. */
+    jumpCorner?: {
+        /** Newest writer first: the first fills the button, the next peeks behind. */
+        readonly faces: readonly StoryMark[];
+        /** Their unread rows, oldest first: the faces button jumps to the first. */
+        readonly facesRows: readonly number[];
+        /** Every unread row: the chevron counts those below the screen. */
+        readonly unreadRows: readonly number[];
+    };
     /** Bottom clearance represented inside the virtualizer's coordinate space. */
     paddingEnd?: number;
     /**
@@ -2821,9 +2841,19 @@ export function MessageList(props: MessageListProps) {
        Shown and hidden on the element itself: a commit here, between a scroll
        and the event reporting it, would hold the reader's old place. */
     const jump = useRef<HTMLDivElement>(null);
+    const jumpBadge = useRef<HTMLSpanElement>(null);
+    /** The row the faces button last jumped to: it stays away until someone new writes. */
+    const [facesJumped, setFacesJumped] = useState<number>();
     const endAwayUpdate = (element: HTMLElement) => {
         const button = jump.current;
+        const badge = jumpBadge.current;
         if (!button) return;
+        if (badge) {
+            const last = virtualizer.range ? entryIndex(virtualizer.range.endIndex) : Infinity;
+            const below = props.jumpCorner?.unreadRows.filter((row) => row > last).length ?? 0;
+            badge.hidden = below === 0;
+            badge.textContent = String(below);
+        }
         const height = viewportGeometry.current.height || element.clientHeight;
         /* The modeled end, as following reads it: no layout is forced to know it. */
         const total = virtualized
@@ -2847,6 +2877,19 @@ export function MessageList(props: MessageListProps) {
         readerAnchor.current = undefined;
         sparseInsetRelease();
         scrollBottomFollow(element);
+        endAwayUpdate(element);
+    };
+    /** Holds the reader at row `index`, its top just under the viewport's. */
+    const rowJump = (index: number) => {
+        const element = list.current;
+        const at = virtualIndex(index);
+        if (!element || !virtualized) return;
+        const height = viewportGeometry.current.height || element.clientHeight;
+        escapedFromFollow.current = true;
+        following.current = false;
+        pendingAnchor.current = undefined;
+        const anchor = { type: "item", index: at, key: itemKeyAt(at), itemOffset: 0 } as const;
+        modelAnchorRestore({ ...anchor, viewportInset: height - 16 }, height);
         endAwayUpdate(element);
     };
     const visibleRowsReported = useRef<{ first: number; last: number; rows: number } | undefined>(
@@ -3540,11 +3583,18 @@ export function MessageList(props: MessageListProps) {
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps -- current capture refs read the latest modeled rows while this effect owns one scrollport-listener lifetime
     }, [virtualized, virtualizer]);
+    const corner = props.jumpCorner?.faces.length ? props.jumpCorner : undefined;
+    const first = corner?.facesRows[0];
+    // A rich chat's way back is the app's chevron at Telegram's size, with its count.
+    const arrow = props.jumpCorner
+        ? (["chevron-down", 20] as const)
+        : (["arrow-down", 16] as const);
     return (
         <MessageListDisclosureAnchorProvider value={disclosureAnchor}>
             <MessageListRowWidthContext.Provider value={rowSizeModel.width}>
                 <ScrollArea
                     className={["happy-message-list", props.className].filter(Boolean).join(" ")}
+                    data-corner={props.jumpCorner ? "" : undefined}
                     data-happy-desktop-ui="message-list"
                     data-header={headerLeads ? "" : undefined}
                     style={props.style}
@@ -3553,6 +3603,24 @@ export function MessageList(props: MessageListProps) {
                     overlay={
                         props.jumpToEnd ? (
                             <div className="happy-message-list__jump" hidden ref={jump}>
+                                {corner && first !== undefined && first !== facesJumped ? (
+                                    <button
+                                        aria-label="Jump to unread from teammates"
+                                        className="happy-message-list__faces"
+                                        onClick={() => {
+                                            setFacesJumped(first);
+                                            rowJump(first);
+                                        }}
+                                        type="button"
+                                    >
+                                        {corner.faces.slice(0, 2).map((mark, index) => (
+                                            <StoryMarkView key={index} mark={mark} size={40} />
+                                        ))}
+                                        <span className="happy-message-list__badge">
+                                            {corner.facesRows.length}
+                                        </span>
+                                    </button>
+                                ) : null}
                                 <Button
                                     aria-label="Jump to latest"
                                     iconOnly
@@ -3562,12 +3630,19 @@ export function MessageList(props: MessageListProps) {
                                 >
                                     {props.jumpToEndWorking ? (
                                         <ShimmerText sweep="sheen" tone="inherit">
-                                            <Icon name="arrow-down" size={16} />
+                                            <Icon name={arrow[0]} size={arrow[1]} />
                                         </ShimmerText>
                                     ) : (
-                                        <Icon name="arrow-down" size={16} />
+                                        <Icon name={arrow[0]} size={arrow[1]} />
                                     )}
                                 </Button>
+                                {props.jumpCorner ? (
+                                    <span
+                                        className="happy-message-list__badge"
+                                        hidden
+                                        ref={jumpBadge}
+                                    />
+                                ) : null}
                             </div>
                         ) : undefined
                     }

@@ -24,6 +24,8 @@ import {
     type AgentWorkingPhase,
 } from "./AgentWorkingStatus";
 import { ChannelHeader } from "./ChannelHeader";
+import { StoryQuote, type StoryQuoteView } from "./StoryQuote";
+import type { StoryMark } from "./StoryRing";
 import {
     authorAvatar,
     ConversationEntryView,
@@ -110,6 +112,17 @@ export type ConversationLeadingHeader = {
      * takes the place of what the block offered there.
      */
     readonly lift: (width: number) => number;
+};
+
+export type ConversationRich = {
+    /** The story a message answers, as its quote draws it; absent draws no quotes. */
+    readonly storyQuote?: (artifactId: string) => StoryQuoteView | undefined;
+    readonly onStoryQuoteOpen: (artifactId: string, messageId: string) => void;
+    /** Who wrote while the chat was unread, newest first, and since when. */
+    readonly unread: {
+        readonly since: number;
+        readonly from: readonly { readonly userId: string; readonly mark: StoryMark }[];
+    } | null;
 };
 
 export type ConversationViewProps = {
@@ -330,6 +343,8 @@ export type ConversationViewProps = {
     requestSelections?: ReadonlyMap<string, Readonly<Record<string, readonly string[]>>>;
     /** Reports each tick to the owner that keeps the selections. */
     onRequestSelectionChange?: (requestId: string, answers: HappyAgentUserInputAnswerMap) => void;
+    /** Rich chats: story quotes, and the jump buttons bottom right. */
+    rich?: ConversationRich;
     className?: string;
     "data-testid"?: string;
     style?: CSSProperties;
@@ -961,10 +976,32 @@ export function ConversationView(props: ConversationViewProps) {
             {props.activityControl}
         </div>
     ) : null;
+    /** The quote above a message answering a story, while the owner draws quotes. */
+    const quoteOf = (entry: ConversationEntry | undefined) => {
+        const replyTo = entry?.kind === "message" ? entry.message.replyTo : undefined;
+        const view = replyTo && props.rich?.storyQuote?.(replyTo.artifactId);
+        if (!replyTo || !view || entry?.kind !== "message") return undefined;
+        const open = () => props.rich?.onStoryQuoteOpen(replyTo.artifactId, entry.message.id);
+        return <StoryQuote onOpen={open} quote={view} />;
+    };
+    // The unread rows the jump buttons count; the faces button jumps to its writers' first.
+    const unread = props.rich?.unread;
+    const unreadRows: number[] = [];
+    const facesRows: number[] = [];
+    const faces = unread?.from.map((face) => face.mark) ?? [];
+    for (const [index, entry] of listEntries.entries()) {
+        const sender = entry.kind === "message" ? entry.message.sender : undefined;
+        if (!unread || entry.kind !== "message" || !sender || sender.id === props.viewerId)
+            continue;
+        if (Date.parse(entry.message.createdAt) < unread.since) continue;
+        unreadRows.push(index);
+        if (unread.from.some((face) => face.userId === sender.id)) facesRows.push(index);
+    }
     const rowContext = (index: number, width: number): ConversationRowContext => {
         const entry = listEntries[index];
         const inlinePage = inlinePageOf(entry);
         return {
+            ...(quoteOf(entry) ? { storyQuote: true } : {}),
             activityTreatment: props.activityTreatment,
             errorAssistance: errorAssistanceFor(entry),
             ...((failure) => (failure ? { failure: failureRowContext(failure) } : {}))(
@@ -1131,11 +1168,11 @@ export function ConversationView(props: ConversationViewProps) {
                         estimateRows={conversationMediaRunRows(listEntries, mediaRuns, (entry) => {
                             if (entry.kind === "message") {
                                 const fold =
-                                    entry.message.sender?.kind === "human"
+                                    (entry.message.sender?.kind === "human"
                                         ? messageExpanded(entry)
                                             ? "message-open"
                                             : "message-closed"
-                                        : "";
+                                        : "") + (quoteOf(entry) ? "quote" : "");
                                 const layouts = inlineLayouts.messages.get(entry.message.id);
                                 if (layouts === undefined) return fold;
                                 let frames = "";
@@ -1203,6 +1240,7 @@ export function ConversationView(props: ConversationViewProps) {
                               }
                             : {})}
                         jumpToEnd
+                        {...(props.rich ? { jumpCorner: { faces, facesRows, unreadRows } } : {})}
                         /* Shimmers exactly while the status line spins: not on
                            a question or a wait, and on through delegation. */
                         jumpToEndWorking={
@@ -1242,6 +1280,7 @@ export function ConversationView(props: ConversationViewProps) {
                                     {...(entry.kind === "message" && entry.contextNote !== undefined
                                         ? { contextNote: entry.contextNote }
                                         : {})}
+                                    storyQuote={quoteOf(entry)}
                                     activityAuthor={
                                         props.agentAuthor &&
                                         (conversationAgentRowStartsGroup(source, index) ||

@@ -159,6 +159,8 @@ export interface UserMessageElement extends BaseChatElement {
     delivery: "pending_steering" | "sent";
     text: string;
     attachments?: readonly { data: string; mediaType: string }[];
+    /** The story this message answers. */
+    replyTo?: MessageReplyTo;
     source?: "notification";
     /**
      * The agent that put this message in the user slot, when one did, and where

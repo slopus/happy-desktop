@@ -507,3 +507,32 @@
 .happy-story-viewer__bar > .happy-story-viewer__input:focus {
     box-shadow: inset 0 0 0 1px var(--text-link);
 }
+
+.happy-story-viewer__peek-row[data-focus] {
+    background: color-mix(in srgb, var(--text-link) 22%, transparent);
+}
+
+.happy-story-quote {
+    width: 180px;
+    height: 320px;
+    margin-bottom: 6px;
+    padding: 0;
+    border: 0;
+    color: var(--text);
+    font: 12px / 15px var(--happy-font-ui);
+    text-align: start;
+}
+
+.happy-story-quote .happy-story-viewer__head {
+    font: inherit;
+}
+
+.happy-story-quote__caption {
+    position: absolute;
+    inset: auto 0 0;
+    padding: 32px 8px 9px;
+    background: linear-gradient(
+        transparent,
+        color-mix(in srgb, var(--story-scrim) 60%, transparent)
+    );
+}

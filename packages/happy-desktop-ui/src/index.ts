@@ -131,6 +131,7 @@ export {
 } from "./RichTaskList";
 export { StoriesRow, type StoriesRowItem } from "./StoriesRow";
 export { StoryMarkView, StoryRing, type StoryMark, type StoryRingSegments } from "./StoryRing";
+export { StoryQuote, type StoryQuoteView } from "./StoryQuote";
 export {
     StoryViewer,
     type StoryViewerFrame,
@@ -450,6 +451,7 @@ export { fileEntriesSort, fileNameCompare, filePathCompare } from "./fileTreeSor
 export {
     ConversationStatus,
     ConversationView,
+    type ConversationRich,
     type ConversationViewProps,
     type ConversationLeadingHeader,
 } from "./ConversationView";
