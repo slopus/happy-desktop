@@ -1,14 +1,14 @@
 import "./styles.css";
 import { useState } from "react";
 import { flushSync } from "react-dom";
-import { richTaskList, type RichTask, type RichTaskAgent } from "happy-desktop-state";
-import { expect, it } from "vitest";
 import {
-    RichTaskList,
-    type RichTaskCardModel,
-    type RichTaskListRow,
+    richTaskList,
+    type RichTask,
+    type RichTaskAgent,
     type RichTaskMoveAnchor,
-} from "./RichTaskList";
+} from "happy-desktop-state";
+import { expect, it } from "vitest";
+import { RichTaskList, type RichTaskCardModel, type RichTaskListRow } from "./RichTaskList";
 import { createRenderer } from "./testing";
 
 /*
@@ -292,8 +292,6 @@ it("puts a shown child under a task even when another task made it", () => {
                 projectId: "p",
                 creatorAgentId: "b-agent",
                 updatedAt: 2,
-                addedLines: 0,
-                deletedLines: 0,
             },
         ],
         artifacts: [],

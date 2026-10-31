@@ -94,7 +94,6 @@ export interface HappyAgentStoriesDeps {
     readonly client: HappyAgentClient;
     readonly connection: Pick<HappyAgentConnection, "sync" | "richTasks" | "sendMessageConfirmed">;
     readonly richTasks: Pick<HappyAgentRichTasksStore, "get" | "subscribe">;
-    readonly now?: () => number;
 }
 
 type Phase = HappyAgentStoryPhase;
@@ -129,7 +128,7 @@ const ringIdOf = (poster: Story["poster"]): string =>
  */
 export function happyAgentStoriesStoreCreate(deps: HappyAgentStoriesDeps): HappyAgentStoriesStore {
     const { client, connection } = deps;
-    const mutationId = cuid2Create(deps.now ?? Date.now);
+    const mutationId = cuid2Create(Date.now);
     const listeners = new Set<() => void>();
     let stories = new Map<string, Story>();
     let readCursor: string | undefined;

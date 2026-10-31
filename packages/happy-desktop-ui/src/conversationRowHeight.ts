@@ -372,9 +372,9 @@ const TRACE_META_SEPARATOR = 2;
 /** `.happy-message__media` — its top margin under a body, and without one. */
 const MEDIA_MARGIN = 8;
 const MEDIA_MARGIN_BARE = 4;
-/** Linked attachment cards: 64px cards, 4px gaps, and the message slot's top inset. */
 /** `.happy-story-quote`: 320 tall and 6 below. */
 const STORY_QUOTE_HEIGHT = 326;
+/** Linked attachment cards: 64px cards, 4px gaps, and the message slot's top inset. */
 const ATTACHMENT_CARD_HEIGHT = 64;
 const ATTACHMENT_CARD_GAP = 4;
 /** Collapsed `.happy-agent-activity-row` heights, by activity kind. */

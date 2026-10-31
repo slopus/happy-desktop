@@ -6,9 +6,6 @@ import { Icon } from "./Icon";
 import { Ionicon } from "./vectorIcons/VectorIcon";
 import { StoryMarkView, type StoryMark } from "./StoryRing";
 
-/** The story's one frame, as far as it is known. */
-export type StoryViewerFrame = HappyAgentStoryFrame;
-
 export type StoryViewerReply = {
     readonly id: string;
     readonly name: string;
@@ -18,16 +15,13 @@ export type StoryViewerReply = {
     readonly time: string;
 };
 
-/** A reply, take-down or repost: idle, on its way, done, or refused with the reason. */
-export type StoryViewerPhase = HappyAgentStoryPhase;
-
 export type StoryViewerProps = {
     /** One segment per live story of this poster, and which one is open. */
     readonly segment: { readonly index: number; readonly total: number };
     readonly poster: { readonly name: string; readonly mark: StoryMark };
     /** When it was posted, already worded ("2h"). */
     readonly time: string;
-    readonly frame: StoryViewerFrame;
+    readonly frame: HappyAgentStoryFrame;
     /** A repost's round video, laid over the frame's corner. */
     readonly roundUrl?: string | null;
     readonly caption: string | null;
@@ -38,9 +32,9 @@ export type StoryViewerProps = {
         | { readonly status: "failed"; readonly message: string };
     /** Where replies land: the agent's name. */
     readonly replyTarget: string;
-    readonly reply: StoryViewerPhase;
+    readonly reply: HappyAgentStoryPhase;
     /** The take-down or repost the reader started. */
-    readonly action: StoryViewerPhase;
+    readonly action: HappyAgentStoryPhase;
     readonly onReplySend: (text: string) => void;
     /** Offered only to the person the story belongs to. */
     readonly onTakeDown?: () => void;
@@ -76,6 +70,17 @@ async function camera(): Promise<MediaStream | null> {
         .getUserMedia({ video: true, audio: true })
         .catch(() => devices.getUserMedia({ video: true }))
         .catch(() => null);
+}
+
+/** One bar per live story of the poster, lit up to the open one. */
+export function StorySegments(props: { readonly segment: StoryViewerProps["segment"] }) {
+    return (
+        <span className="happy-story-viewer__segments" role="presentation">
+            {Array.from({ length: props.segment.total }, (_, index) => (
+                <span data-on={index <= props.segment.index ? "" : undefined} key={index} />
+            ))}
+        </span>
+    );
 }
 
 /**
@@ -223,14 +228,7 @@ export function StoryViewer(props: StoryViewerProps) {
                     />
                 ) : null}
                 <div className="happy-story-viewer__top">
-                    <div className="happy-story-viewer__segments" role="presentation">
-                        {Array.from({ length: props.segment.total }, (_, index) => (
-                            <span
-                                data-on={index <= props.segment.index ? "" : undefined}
-                                key={index}
-                            />
-                        ))}
-                    </div>
+                    <StorySegments segment={props.segment} />
                     <div className="happy-story-viewer__head">
                         <StoryMarkView mark={props.poster.mark} size={32} />
                         <b>{props.poster.name}</b>

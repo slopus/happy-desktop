@@ -30,11 +30,10 @@ export type RichTask = Pick<Task, "id" | "name" | "icon" | "children"> & {
     readonly agent: RichTaskAgent;
 };
 
-/** A workspace, with the line totals over main when the client holds them. */
 export type RichTaskWorkspace = Pick<
     Workspace,
     "id" | "name" | "projectId" | "creatorAgentId" | "subtaskAgentId" | "updatedAt"
-> & { readonly addedLines?: number; readonly deletedLines?: number };
+>;
 
 export type RichTaskArtifact = Pick<Artifact, "id" | "type" | "title" | "updatedAt"> & {
     readonly source: { readonly agentId: string | null };

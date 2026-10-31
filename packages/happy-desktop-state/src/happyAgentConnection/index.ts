@@ -8,7 +8,6 @@ export {
     conversationMenuParse,
     conversationTextHasMenu,
     conversationTextLayoutParse,
-    conversationTextPlain,
     conversationTextSegments,
     type ConversationMenu,
     type ConversationTextLayout,

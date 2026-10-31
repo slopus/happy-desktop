@@ -1,3 +1,4 @@
+import type { RichTaskMoveAnchor } from "happy-desktop-state";
 import {
     useLayoutEffect,
     useRef,
@@ -73,11 +74,6 @@ export type RichTaskListRow =
           readonly collapsed: boolean;
       }
     | { readonly kind: "task"; readonly card: RichTaskCardModel };
-
-/** Where a dropped card lands: after a card (`null`: first of all), or first under a header. */
-export type RichTaskMoveAnchor =
-    | { readonly afterId: string | null }
-    | { readonly afterSectionId: string };
 
 export type RichTaskListProps = {
     readonly rows: readonly RichTaskListRow[];

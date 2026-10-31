@@ -119,26 +119,16 @@ export {
     type ToneName,
 } from "./Avatar";
 export { type ImageMark } from "./imageMark";
-export { TaskIcon, type TaskIconProps } from "./TaskIcon";
 export {
     RichTaskList,
-    type RichTaskCardModel,
     type RichTaskFace,
-    type RichTaskListProps,
     type RichTaskListRow,
-    type RichTaskMoveAnchor,
     type RichTaskSubRowModel,
 } from "./RichTaskList";
-export { StoriesRow, type StoriesRowItem } from "./StoriesRow";
-export { StoryMarkView, StoryRing, type StoryMark, type StoryRingSegments } from "./StoryRing";
-export { StoryQuote, type StoryQuoteView } from "./StoryQuote";
-export {
-    StoryViewer,
-    type StoryViewerFrame,
-    type StoryViewerPhase,
-    type StoryViewerProps,
-    type StoryViewerReply,
-} from "./StoryViewer";
+export { StoriesRow } from "./StoriesRow";
+export { type StoryMark, type StoryRingSegments } from "./StoryRing";
+export { type StoryQuoteView } from "./StoryQuote";
+export { StoryViewer } from "./StoryViewer";
 export {
     BotFace,
     botFaceCredit,
