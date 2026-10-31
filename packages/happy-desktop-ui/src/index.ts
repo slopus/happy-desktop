@@ -127,6 +127,21 @@ export {
     type ClayIconSlug,
 } from "./ClayIcon";
 export {
+    RichTaskCard,
+    RichTaskList,
+    RichTaskSectionHeader,
+    RichTaskSubRow,
+    type RichTaskCardModel,
+    type RichTaskCardProps,
+    type RichTaskFace,
+    type RichTaskListProps,
+    type RichTaskListRow,
+    type RichTaskMark,
+    type RichTaskSectionHeaderProps,
+    type RichTaskSubRowModel,
+    type RichTaskSubRowProps,
+} from "./RichTaskList";
+export {
     BotFace,
     botFaceCredit,
     botFaceDataUri,
