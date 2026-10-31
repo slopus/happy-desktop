@@ -1,6 +1,0 @@
-diff --git a/packages/happy-desktop-app/sources/AppHappyAgentView.tsx b/packages/happy-desktop-app/sources/AppHappyAgentView.tsx
---- a/packages/happy-desktop-app/sources/AppHappyAgentView.tsx
-+++ b/packages/happy-desktop-app/sources/AppHappyAgentView.tsx
-@@ -4965,1 +4965,1 @@
--                windowControls={desktop}
-+                windowControls

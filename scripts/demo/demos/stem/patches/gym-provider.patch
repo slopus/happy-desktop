@@ -1,6 +1,0 @@
-diff --git a/packages/happy-desktop-state/src/happyAgent/happyAgentMenusStore.ts b/packages/happy-desktop-state/src/happyAgent/happyAgentMenusStore.ts
---- a/packages/happy-desktop-state/src/happyAgent/happyAgentMenusStore.ts
-+++ b/packages/happy-desktop-state/src/happyAgent/happyAgentMenusStore.ts
-@@ -71,1 +71,1 @@
--    for (const provider of catalog.providers) {
-+    for (const provider of catalog.providers.filter((entry) => entry.id !== "gym")) {

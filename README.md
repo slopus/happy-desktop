@@ -1,12 +1,14 @@
 <div align="center">
 
-<h1>Happy Engineering</h1>
+<h1>Any Model. Your Subscription.<br><em>Happy Harness.</em></h1>
 
-<p>The fun way of making things :D</p>
+<p>Orchestrate Claude, Codex, Grok, Gemini, and more in one app</p>
+
+<p>Free and open source</p>
 
 </div>
 
-https://github.com/user-attachments/assets/deeeeaf5-e550-49bc-829f-1186898f441a
+https://github.com/user-attachments/assets/b3580704-f9e0-441e-80be-3f83f6a08ab5
 
 <p align="center">
 <a href="https://happy.engineering/#download"><picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/slopus/happy-desktop/main/.github/download-desktop-dark.svg"><img width="212" height="39" alt="Download Desktop for macOS, Windows, and Linux" src="https://raw.githubusercontent.com/slopus/happy-desktop/main/.github/download-desktop-light.svg" /></picture></a>
