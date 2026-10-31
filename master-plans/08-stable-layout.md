@@ -40,29 +40,17 @@ The sidebar follows the chat surface's stability rules
 `messageListDisclosureAnchor` for disclosures). These are invariants:
 
 - The top of the sidebar never moves when a section folds or unfolds,
-  including the bottom-most one while scrolled to the bottom. It also never
-  moves when proposal marks or rows appear, when a change is accepted or
-  rejected, or when something floating over the foot appears or disappears.
+  including the bottom-most one while scrolled to the bottom, or when a row
+  near the end leaves.
 - Shrinking content leaves held space behind. That space is let go only as
   the person scrolls away from it.
-- A permanent spacer under the last row is as tall as the tallest thing
-  floating over the foot of the rows (the update card), so every row can be
-  scrolled clear of it. Floating things never scroll and never take up layout
-  space.
 - Unfolding the bottom-most section shows its rows on screen.
 - Foundational elements — a row's fold, icon and the start of its title — never
-  shift and never change order. Transient things (change marks, their notes,
-  hover controls, the +) take the space left, left of the fold, and overlay the
-  title with a fade rather than push anything.
-- A pinned separator holds the block above it (top) or below it (bottom)
-  still; its rule runs edge to edge. The rows between keep at least half the
-  column; a pin that would leave less does not hold and its rule keeps the
-  plain width, the bottom one first. Pinning, unpinning
-  or giving way never moves a row that keeps scrolling. The floor belongs to
-  the scrolling rows, above a bottom block, and the floating bar sits over
-  them, above that block.
-- `Sidebar.floor.test.tsx`, `Sidebar.ribbon.test.tsx` and
-  `Sidebar.pins.test.tsx` enforce these in all three engines.
+  shift and never change order. Transient things (hover controls, the +) take
+  the space left, left of the fold, and overlay the title with a fade rather
+  than push anything.
+- `Sidebar.floor.test.tsx` and `Sidebar.ribbon.test.tsx` enforce these in all
+  three engines.
 
 ## How we know it is done
 

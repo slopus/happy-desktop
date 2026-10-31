@@ -30,11 +30,7 @@ A good chat with an AI follows a few principles:
   exactly that amount of space for them. So when we queue them up, if there's
   not enough space, we would add that spacer." Taking up the queue then moves
   nothing, and the live status never sits under the composer. A reader
-  scrolled up into history stays put. New work's
-  first send lands on the lift line: its empty chat rests the intro so that the
-  mark and its line sit above the lift line and the create options begin on it,
-  and the first message takes the options' place there while the mark and its
-  line stay where they are.
+  scrolled up into history stays put.
 - **Returning to a chat is invisible.** A chat opened again is where it was
   left: following the bottom if the reader was following it, holding the same
   row if they had scrolled up, with whatever arrived meanwhile already in
