@@ -70,7 +70,7 @@ const VIEWER: StoryViewerProps = {
     segment: { index: 0, total: 2 },
     poster: { name: "Onboarding redesign", mark: UX },
     time: "2h",
-    frame: { kind: "image", url: asset("story-page.jpg") },
+    frame: { kind: "image", url: asset("story-page.jpg"), path: "story-page.jpg" },
     caption:
         "Onboarding for the Projects sidebar: Happy adds your projects and drafts one first task",
     replies: { status: "ready", items: REPLIES.slice(3) },
@@ -79,6 +79,7 @@ const VIEWER: StoryViewerProps = {
     action: { phase: "idle" },
     onReplySend: noop,
     onRepost: noop,
+    onDownload: noop,
     onStep: noop,
     onClose: noop,
 };
@@ -151,7 +152,11 @@ export function StoriesPage() {
                         onRepost={undefined}
                         onTakeDown={noop}
                         caption="Wall from today’s design review: every screen of the new onboarding, pinned up"
-                        frame={{ kind: "image", url: asset("story-wall.jpg") }}
+                        frame={{
+                            kind: "image",
+                            url: asset("story-wall.jpg"),
+                            path: "story-wall.jpg",
+                        }}
                         replies={{ status: "ready", items: REPLIES }}
                     />
                 </div>

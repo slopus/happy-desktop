@@ -81,6 +81,11 @@ export interface HappyAgentBot {
     readonly username: string;
     /** Daemon-provided built-in bot identity; null or absent for ordinary bots. */
     readonly systemKey?: string | null;
+    /**
+     * The reader hid it from their Bots section, or Focus did for them; per
+     * person. Absent from a daemon without hiding, where every bot is shown.
+     */
+    readonly hidden?: boolean;
     /** Fractional index the host sorts the bot catalog by. */
     readonly orderKey: string;
     readonly path: string;

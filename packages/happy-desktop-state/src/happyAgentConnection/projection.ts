@@ -582,12 +582,21 @@ export function projectBots(
         .sort(orderCompare)
         .map((bot) => {
             const workspace = workspaceById.get(bot.workspaceId);
+            const session = projectAgent(
+                bot.agent,
+                workspace,
+                endpoint,
+                config,
+                drafts.get(bot.agent.id),
+                modes.get(bot.agent.id),
+            );
             return {
                 id: bot.id,
                 workspaceId: bot.workspaceId,
                 name: bot.name,
                 username: bot.username,
                 ...(bot.systemKey === undefined ? {} : { systemKey: bot.systemKey }),
+                ...(bot.hidden === undefined ? {} : { hidden: bot.hidden }),
                 orderKey: bot.orderKey,
                 path: computePath(bot.compute),
                 ...(bot.avatar === null
@@ -598,14 +607,14 @@ export function projectBots(
                               thumbhash: bot.avatar.thumbhash,
                           },
                       }),
-                session: projectAgent(
-                    bot.agent,
-                    workspace,
-                    endpoint,
-                    config,
-                    drafts.get(bot.agent.id),
-                    modes.get(bot.agent.id),
-                ),
+                // What the bot marked unread for the reader is its conversation's dot too.
+                session:
+                    !bot.unread || session.unread !== undefined
+                        ? session
+                        : {
+                              ...session,
+                              unread: { reason: "turn_finished", since: bot.unread.since },
+                          },
                 unread: unreadOf([bot.agent]),
                 subtasks: subtasksProject(bot.agent, bot),
             };

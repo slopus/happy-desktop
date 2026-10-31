@@ -7,6 +7,7 @@ import {
 } from "@slopus/happy-agent-client";
 import { connectHappyAgent } from "./connectHappyAgent.js";
 import type {
+    BotGroup,
     HappyAgentConnection,
     MutationRejectedDelta,
     SessionState,
@@ -935,4 +936,42 @@ it("holds a pre-bootstrap draft save past the 300ms debounce window while loadin
     });
 
     connection.close();
+});
+
+it("brings a hidden bot back with its dot on a same-version bot.updated", async () => {
+    const daemon = fakeHappyAgentDaemonCreate();
+    const { agent } = daemon.taskSeed({ id: "task_growth", joinedKey: "a1" });
+    const { connection, watch } = harnessOpen(daemon);
+    let bots: readonly BotGroup[] = [];
+    connection.connectGroups({ onChange: (_projects, _state, next) => void (bots = next) });
+    await vi.waitFor(() => expect(watch.tasks).toHaveLength(1));
+    // The reader's own fields ride on the bot; the version is the bot's, not theirs.
+    const bot = {
+        agent,
+        archivedAt: null,
+        avatar: null,
+        compute: { path: "/tmp/growth", type: "host" },
+        createdAt: 1,
+        hidden: true,
+        id: "bot_growth",
+        name: "Social Growth",
+        orderKey: "a0",
+        status: "active",
+        updatedAt: 1,
+        username: "growth",
+        version: "v1",
+        workspaceId: agent.workspaceId,
+    } as const;
+    daemon.eventEmit("bot.created", { bot });
+    await vi.waitFor(() => expect(bots[0]?.hidden).toBe(true));
+    expect(bots[0]?.session.unread).toBeUndefined();
+    // A loop-in: the version stays, and hidden and unread change together.
+    daemon.eventEmit("bot.updated", {
+        botId: bot.id,
+        previousVersion: "v1",
+        version: "v1",
+        changes: { hidden: false, unread: { reason: "looped_in", since: 5 } },
+    });
+    await vi.waitFor(() => expect(bots[0]?.hidden).toBe(false));
+    expect(bots[0]?.session.unread).toEqual({ reason: "turn_finished", since: 5 });
 });

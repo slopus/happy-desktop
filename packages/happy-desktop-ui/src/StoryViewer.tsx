@@ -3,6 +3,7 @@ import { useRef, useState } from "react";
 import { Button } from "./Button";
 import { ConfirmPopover } from "./ConfirmPopover";
 import { Icon } from "./Icon";
+import { Ionicon } from "./vectorIcons/VectorIcon";
 import { StoryMarkView, type StoryMark } from "./StoryRing";
 
 /** The story's one frame, as far as it is known. */
@@ -45,6 +46,8 @@ export type StoryViewerProps = {
     readonly onTakeDown?: () => void;
     /** Offered on anyone else's story, with an optional caption and recorded round video. */
     readonly onRepost?: (caption: string, round: Blob | null) => void;
+    /** Saves the story's original picture or video. */
+    readonly onDownload?: () => void;
     readonly onStep: (delta: 1 | -1) => void;
     readonly onClose: () => void;
     /** Opens with the drawer on this reply, scrolled to and marked: the one a chat quote opened. */
@@ -232,6 +235,18 @@ export function StoryViewer(props: StoryViewerProps) {
                         <StoryMarkView mark={props.poster.mark} size={32} />
                         <b>{props.poster.name}</b>
                         <span className="happy-story-viewer__muted">{props.time}</span>
+                        {props.onDownload ? (
+                            <Button
+                                aria-label="Download"
+                                iconOnly
+                                onClick={props.onDownload}
+                                size="small"
+                                title="Download"
+                                variant="ghost"
+                            >
+                                <Ionicon name="download-outline" size={16} />
+                            </Button>
+                        ) : null}
                         {props.onRepost ? (
                             <Button
                                 aria-label="Repost"

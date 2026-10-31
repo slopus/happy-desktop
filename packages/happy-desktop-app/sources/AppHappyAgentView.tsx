@@ -2292,13 +2292,16 @@ function happyAgentSections(
                     const botAttention = happyAgentBotAttention(attention, happyAgent.id, bot.id);
                     if (botAttention === "hidden") return [];
                     const muted = botAttention === "muted";
+                    // Hidden for this reader on the host, it folds shut where it
+                    // stands, and opens there again when the host shows it.
+                    const away = bot.hidden === undefined ? {} : { away: bot.hidden };
                     return [
-                        botSidebarItem(bot, titleShimmerEnabled, muted),
+                        { ...botSidebarItem(bot, titleShimmerEnabled, muted), ...away },
                         ...botSubtaskSidebarItems(
                             bot.subtasks,
                             happyAgent.projects,
                             titleShimmerEnabled,
-                        ).map((item) => (muted ? { ...item, muted: true } : item)),
+                        ).map((item) => ({ ...item, ...(muted ? { muted: true } : {}), ...away })),
                     ];
                 }),
                 // The host lists a new bot last, so a bot still being made
@@ -9425,6 +9428,7 @@ function HappyAgentConversationSurface(props: {
                       workspace.panel.artifactViewOpen(artifactId, version),
               }
             : {}),
+        ...(props.storyChat ? { onStoryOpen: props.storyChat.stories.storyOpen } : {}),
     });
     const inlineEngines = props.inlineEngines;
     const inlinePages = inlineEngines

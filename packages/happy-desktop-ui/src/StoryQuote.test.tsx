@@ -52,7 +52,11 @@ const contrast = (text: HTMLElement, scrim: HTMLElement) => {
 const RICH: ConversationRich = {
     storyQuote: () => ({
         kind: "live",
-        frame: { kind: "image", url: `data:image/svg+xml,${encodeURIComponent(WHITE)}` },
+        frame: {
+            kind: "image",
+            url: `data:image/svg+xml,${encodeURIComponent(WHITE)}`,
+            path: "frame.svg",
+        },
         caption: "Onboarding",
         segment: { index: 0, total: 2 },
         poster: { name: "Onboarding redesign", mark: { kind: "icon", label: "UX" } },

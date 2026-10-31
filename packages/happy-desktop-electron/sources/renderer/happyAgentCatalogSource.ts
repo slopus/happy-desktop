@@ -186,6 +186,7 @@ function catalogProject(
         name: bot.name,
         username: bot.username,
         ...(bot.systemKey === undefined ? {} : { systemKey: bot.systemKey }),
+        ...(bot.hidden === undefined ? {} : { hidden: bot.hidden }),
         orderKey: bot.orderKey,
         path: bot.path,
         displayPath: bot.path,

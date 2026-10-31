@@ -12,6 +12,7 @@ import { Icon } from "./Icon";
 import type { InlinePageProps } from "./InlinePage";
 import type { InlinePageFit, InlinePageGeometry } from "./inlinePageFit";
 import type { MessageReferences } from "./messageReferences";
+import { conversationEntryReferences } from "./conversationRowHeight";
 import { ArtifactInlineContent } from "./pages/artifacts/ArtifactInlineContent";
 import { ArtifactTypeGlyph } from "./pages/artifacts/artifactPresentation";
 
@@ -118,6 +119,8 @@ export function conversationInlinePage(
     leads: ReadonlyMap<HappyAgentArtifactId, string>,
     local: ConversationInlinePageLocal,
 ): ConversationInlinePage | undefined {
+    if (entry.kind === "message" && entry.message.sender?.kind === "agent")
+        return conversationMessageEmbed(entry, rowKey, pages, local);
     if (entry.kind !== "agentActivity" || entry.activity.kind !== "tool") return undefined;
     const presentation = entry.activity.tool.presentation;
     if (presentation?.type === "artifact") {
@@ -256,6 +259,58 @@ export function conversationInlinePage(
                 onOpenSide: () => pages.pageOpen(url),
                 onHeightChange: (next) => local.heightSet(rowKey, next),
                 "data-testid": "conversation-inline-page",
+            },
+        };
+    }
+    return undefined;
+}
+
+/** The tallest a page a message links is laid into it; a taller one scrolls inside its frame. */
+export const MESSAGE_EMBED_MAX_HEIGHT = 640;
+
+/**
+ * A live page an agent's message links, such as a post it quotes: the first
+ * live artifact the message names, laid into the message across its column at
+ * the page's own height, up to `MESSAGE_EMBED_MAX_HEIGHT`. It is drawn by the
+ * same live engine, in the same profile of the artifact's own, as a call's
+ * artifact, and its title opens the artifact. Any other link stays a link.
+ */
+function conversationMessageEmbed(
+    entry: ConversationEntry,
+    rowKey: string,
+    pages: ConversationInlinePages,
+    local: ConversationInlinePageLocal,
+): ConversationInlinePage | undefined {
+    const liveRender = pages.liveRender;
+    if (liveRender === undefined) return undefined;
+    for (const reference of conversationEntryReferences(entry)) {
+        if (reference.kind !== "artifact") continue;
+        const artifactId = reference.id as HappyAgentArtifactId;
+        const held = pages.artifacts.get(artifactId);
+        if (held === undefined) pages.artifactsRequest([artifactId]);
+        if (held?.type !== "ready" || held.status !== "active" || !held.live) continue;
+        const live = held.live;
+        const height = local.height(rowKey);
+        const geometry: InlinePageGeometry = {
+            placement: "inline",
+            collapsed: local.collapsed(rowKey) ?? false,
+            ...(height === undefined ? {} : { height }),
+        };
+        return {
+            geometry,
+            props: {
+                title: held.title || "Untitled artifact",
+                glyph: <Icon name="globe" size={16} />,
+                geometry,
+                page: {
+                    key: `${artifactId}:${live.networkId}:${live.url}`,
+                    render: (fit: InlinePageFit) => liveRender(artifactId, live, fit),
+                },
+                onCollapsedChange: (next: boolean) => local.collapsedSet(rowKey, next),
+                onOpenSide: () => pages.artifactOpen(artifactId),
+                onHeightChange: (next) =>
+                    local.heightSet(rowKey, Math.min(MESSAGE_EMBED_MAX_HEIGHT, next)),
+                "data-testid": "conversation-message-embed",
             },
         };
     }

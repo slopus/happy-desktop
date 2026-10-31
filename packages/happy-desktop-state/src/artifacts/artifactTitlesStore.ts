@@ -13,6 +13,8 @@ export type HappyAgentArtifactTitle =
           readonly type: "ready";
           readonly title: string;
           readonly status: "active" | "deleted";
+          /** A story's own artifact, which opens in the story viewer. */
+          readonly story?: true;
       }
     /** No artifact has this id on this Happy Agent, or this reader cannot see it. */
     | { readonly type: "missing" };
@@ -87,7 +89,8 @@ export function happyAgentArtifactTitlesStoreCreate(
             (held.type === "missing" ||
                 (title.type === "ready" &&
                     held.title === title.title &&
-                    held.status === title.status))
+                    held.status === title.status &&
+                    held.story === title.story))
         )
             return;
         const next = new Map(snapshot);
@@ -101,7 +104,14 @@ export function happyAgentArtifactTitlesStoreCreate(
             signal,
             async () => {
                 try {
-                    return (await deps.client.getArtifact(artifactId, { signal })).artifact;
+                    // A story's artifact answers only a read that names stories.
+                    const story = deps.sync.health()?.capabilities?.storyArtifacts === true;
+                    return (
+                        await deps.client.getArtifact(artifactId, {
+                            signal,
+                            ...(story ? { type: "story" as const } : {}),
+                        })
+                    ).artifact;
                 } catch (error) {
                     if (notFound(error)) return undefined;
                     throw error;
@@ -119,6 +129,7 @@ export function happyAgentArtifactTitlesStoreCreate(
                               type: "ready",
                               title: artifact.title,
                               status: artifact.status,
+                              ...(artifact.type === "story" ? { story: true as const } : {}),
                           },
                 );
             })
@@ -172,7 +183,7 @@ export function happyAgentArtifactTitlesStoreCreate(
                 artifactSet(
                     event.artifactId,
                     event.type === "updated"
-                        ? { type: "ready", title: event.changes.title, status: held.status }
+                        ? { ...held, title: event.changes.title }
                         : { ...held, status: "deleted" },
                 );
             }

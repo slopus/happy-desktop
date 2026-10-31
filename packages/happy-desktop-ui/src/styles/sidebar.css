@@ -892,9 +892,28 @@
     transition: box-shadow 120ms ease;
 }
 
+/* A row that can leave in place, as a bot hidden for this reader, folds shut
+   where it stands on the settle glide and opens there again: the rows under it
+   close up or make room over a moment rather than jumping. Shut, it takes back
+   the gap above it too, so a list of shut rows is as tall as an empty one. */
+.happy-sidebar__item[data-away] {
+    overflow: hidden;
+    transition-duration: 160ms;
+    transition-property: height, margin-top, opacity, visibility;
+    transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.happy-sidebar__item[data-away="true"] {
+    height: 0;
+    margin-top: -2px;
+    opacity: 0;
+    visibility: hidden;
+}
+
 @media (prefers-reduced-motion: reduce) {
     .happy-sidebar__section[data-reordering] .happy-sidebar__item,
     .happy-sidebar__actions[data-reordering] .happy-sidebar__item,
+    .happy-sidebar__item[data-away],
     .happy-sidebar__tree-drag-surface {
         transition: none;
     }

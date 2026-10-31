@@ -223,6 +223,8 @@ export function messageReferencesCreate(input: {
     readonly subagents?: readonly SubagentSummary[];
     /** Opens one artifact: its latest version, or the one a reference pinned. */
     readonly onArtifactOpen?: (artifactId: HappyAgentArtifactId, version?: number) => void;
+    /** Opens a story in the story viewer: an artifact link that read as a story's. */
+    readonly onStoryOpen?: (artifactId: HappyAgentArtifactId) => void;
     /** Opens a group on one of its conversations, or where it was left. */
     readonly onGroupOpen?: (groupId: HappyAgentGroupId, agentId?: string) => void;
     /** The Surfaces a reference can name; absent, every one stays inert. */
@@ -268,7 +270,11 @@ export function messageReferencesCreate(input: {
                 return;
             }
             if (reference.kind === "artifact") {
-                input.onArtifactOpen?.(reference.id as HappyAgentArtifactId, reference.version);
+                const artifactId = reference.id as HappyAgentArtifactId;
+                const title = input.titles.get(artifactId);
+                if (title?.type === "ready" && title.story && input.onStoryOpen)
+                    input.onStoryOpen(artifactId);
+                else input.onArtifactOpen?.(artifactId, reference.version);
                 return;
             }
             const entity = entityOf(reference, input.entities);

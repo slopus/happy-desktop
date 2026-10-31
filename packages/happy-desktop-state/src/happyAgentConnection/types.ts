@@ -715,6 +715,8 @@ export interface BotGroup {
     username: string;
     /** Daemon-provided built-in bot identity; null or absent for ordinary bots. */
     systemKey?: string | null;
+    /** The reader hid it, or Focus did for them; absent from a daemon without hiding. */
+    hidden?: boolean;
     orderKey: string;
     path: string;
     /** Present when the bot has a picture; the bytes are fetched separately. */

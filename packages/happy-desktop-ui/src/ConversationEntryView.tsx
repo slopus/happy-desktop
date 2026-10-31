@@ -25,7 +25,7 @@ import {
 import type { ConversationMediaRun } from "./conversationMediaRuns";
 import type { MessageInlineLayouts } from "./conversationInlineLayouts";
 import { ConversationMedia } from "./ConversationMedia";
-import type { InlinePageProps } from "./InlinePage";
+import { InlinePage, type InlinePageProps } from "./InlinePage";
 import { ConversationComputeEvent } from "./ConversationComputeEvent";
 import { ConversationErrorCard } from "./ConversationErrorCard";
 import {
@@ -672,6 +672,7 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
                     variant="chat"
                 />
             ))}
+            {props.inlinePage ? <InlinePage {...props.inlinePage} /> : null}
         </Message>
     );
 }

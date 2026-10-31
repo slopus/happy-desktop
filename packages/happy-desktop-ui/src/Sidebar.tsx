@@ -196,6 +196,12 @@ export type SidebarItem = {
      */
     muted?: boolean;
     /**
+     * For a row that can leave the list and come back, such as a bot hidden
+     * for this reader: `true` folds it shut where it stands, on the settle
+     * glide, and `false` opens it there again. Absent, the row only ever stays.
+     */
+    away?: boolean;
+    /**
      * The row is what a voice call is pointing at right now. It is its own
      * mark — a ring and a microphone after the name — and never borrows the
      * selected or unread treatment: the reader is told where voice is about to
@@ -694,10 +700,9 @@ function shortcutRowsOf(
     const rows = sections.flatMap((section) =>
         section.headingOnly || section.collapsed
             ? []
-            : sectionRows(section, activeItemId).map((row) => ({
-                  item: row.item,
-                  sectionId: section.id,
-              })),
+            : sectionRows(section, activeItemId).flatMap((row) =>
+                  row.item.away === true ? [] : [{ item: row.item, sectionId: section.id }],
+              ),
     );
     if (targets === undefined) return rows.slice(0, 9);
     const rowsByKey = new Map(rows.map((row) => [rowKey(row.sectionId, row.item.id), row]));
@@ -1975,6 +1980,8 @@ function SidebarRow({
             title={props.tooltip}
             data-unread={unread() ? "" : undefined}
             data-muted={item().muted ? "" : undefined}
+            data-away={item().away === undefined ? undefined : String(item().away)}
+            aria-hidden={item().away === true ? true : undefined}
             data-voice-focus={item().voiceFocus ? "" : undefined}
             data-dragging={props.dragging ? "" : undefined}
             data-grabbed={props.grabbed ? "" : undefined}

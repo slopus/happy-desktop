@@ -275,7 +275,7 @@ const NO_REFERENCES: readonly HappyReference[] = [];
 /* The references each entry's laid-out body names. An entry is immutable, so
    its parse lives exactly as long as the entry does. */
 const entryReferences = new WeakMap<ConversationEntry, readonly HappyReference[]>();
-function conversationEntryReferences(entry: ConversationEntry): readonly HappyReference[] {
+export function conversationEntryReferences(entry: ConversationEntry): readonly HappyReference[] {
     const text =
         entry.kind === "message"
             ? entry.message.text
@@ -1400,6 +1400,7 @@ export function conversationRowHeight(
         context.messageLayouts?.signature ?? "",
         messageLayoutsFramesSignature(context.messageLayouts),
         context.storyQuote ? "quote" : "",
+        inlinePageSignature(context.inlinePage),
     ].join(":");
     return rowHeightCached(cache, entry, cacheKey, () => {
         let height = messageRowHeight(
@@ -1439,6 +1440,11 @@ export function conversationRowHeight(
                 (hasBody ? MEDIA_MARGIN : MEDIA_MARGIN_BARE) +
                 cards * ATTACHMENT_CARD_HEIGHT +
                 (cards - 1) * ATTACHMENT_CARD_GAP;
+        // A page the message links sits after its cards, in the same column.
+        if (context.inlinePage)
+            height +=
+                (cards > 0 ? ATTACHMENT_CARD_GAP : hasBody ? MEDIA_MARGIN : MEDIA_MARGIN_BARE) +
+                inlinePageHeight(context.inlinePage);
         if (!own && !grouped && entry.contextNote) height += 21;
         if (context.storyQuote) height += STORY_QUOTE_HEIGHT;
         return height;

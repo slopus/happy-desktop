@@ -5,7 +5,7 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
-  '@slopus/happy-agent-client@0.0.136': file:../../happy-agent/rich-tasks/.context/client/slopus-happy-agent-client-0.0.137-rc.4.tgz
+  '@slopus/happy-agent-client@0.0.136': file:../../happy-agent/rich-tasks/.context/client/slopus-happy-agent-client-0.0.137-rc.5.tgz
 
 patchedDependencies:
   react-dom@19.2.7:
@@ -260,8 +260,8 @@ importers:
   packages/happy-desktop-gym:
     dependencies:
       '@slopus/happy-agent-client':
-        specifier: file:../../../../happy-agent/rich-tasks/.context/client/slopus-happy-agent-client-0.0.137-rc.4.tgz
-        version: file:../../happy-agent/rich-tasks/.context/client/slopus-happy-agent-client-0.0.137-rc.4.tgz
+        specifier: file:../../../../happy-agent/rich-tasks/.context/client/slopus-happy-agent-client-0.0.137-rc.5.tgz
+        version: file:../../happy-agent/rich-tasks/.context/client/slopus-happy-agent-client-0.0.137-rc.5.tgz
       happy-desktop-state:
         specifier: workspace:*
         version: link:../happy-desktop-state
@@ -300,8 +300,8 @@ importers:
         specifier: ^0.34.49
         version: 0.34.52
       '@slopus/happy-agent-client':
-        specifier: file:../../../../happy-agent/rich-tasks/.context/client/slopus-happy-agent-client-0.0.137-rc.4.tgz
-        version: file:../../happy-agent/rich-tasks/.context/client/slopus-happy-agent-client-0.0.137-rc.4.tgz
+        specifier: file:../../../../happy-agent/rich-tasks/.context/client/slopus-happy-agent-client-0.0.137-rc.5.tgz
+        version: file:../../happy-agent/rich-tasks/.context/client/slopus-happy-agent-client-0.0.137-rc.5.tgz
       picomatch:
         specifier: 4.0.5
         version: 4.0.5
@@ -2126,9 +2126,9 @@ packages:
     resolution: {integrity: sha512-ynH73G7jf6pIwm6nbqtsXAfaiJkuce5fS4+FMifpJVaTjpl2RTUqTeJwCkIpfBhEnObvQCaannLjWJOIY4D7cg==}
     engines: {node: '>=20'}
 
-  '@slopus/happy-agent-client@file:../../happy-agent/rich-tasks/.context/client/slopus-happy-agent-client-0.0.137-rc.4.tgz':
-    resolution: {integrity: sha512-/mtQzreoAlCsi2Pb5O4N5xmHFDVfzW1D51QLXtb809BdS+rFVswgbEQUApdVxRhe6twYogxPnkck4zeR61kjlg==, tarball: file:../../happy-agent/rich-tasks/.context/client/slopus-happy-agent-client-0.0.137-rc.4.tgz}
-    version: 0.0.137-rc.4
+  '@slopus/happy-agent-client@file:../../happy-agent/rich-tasks/.context/client/slopus-happy-agent-client-0.0.137-rc.5.tgz':
+    resolution: {integrity: sha512-y6tNyVO6RzjWTzK9R7FQUGrsZpt9v6mo+Qw+9Qmh3asTgLQ2Ca4G3Hcq0haYozq6PbW7Zg6mLaMpF2ivupGfSg==, tarball: file:../../happy-agent/rich-tasks/.context/client/slopus-happy-agent-client-0.0.137-rc.5.tgz}
+    version: 0.0.137-rc.5
     engines: {node: '>=20'}
 
   '@standard-schema/spec@1.1.0':
@@ -7479,7 +7479,7 @@ snapshots:
       '@sinclair/typebox': 0.34.52
       parse5: 8.0.1
 
-  '@slopus/happy-agent-client@file:../../happy-agent/rich-tasks/.context/client/slopus-happy-agent-client-0.0.137-rc.4.tgz':
+  '@slopus/happy-agent-client@file:../../happy-agent/rich-tasks/.context/client/slopus-happy-agent-client-0.0.137-rc.5.tgz':
     dependencies:
       '@sinclair/typebox': 0.34.52
       parse5: 8.0.1

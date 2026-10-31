@@ -18,7 +18,12 @@ export interface HappyAgentStoryRing {
 /** The open story's one frame: a picture or video, or why it cannot be shown. */
 export type HappyAgentStoryFrame =
     | { readonly kind: "loading" }
-    | { readonly kind: "image" | "video"; readonly url: string }
+    | {
+          readonly kind: "image" | "video";
+          readonly url: string;
+          /** The original file's path in its artifact, which a download is named after. */
+          readonly path: string;
+      }
     | { readonly kind: "failed"; readonly message: string };
 
 export type HappyAgentStoryReplies =
@@ -80,6 +85,8 @@ export interface HappyAgentStoriesStore {
     quoteOf(artifactId: string): HappyAgentStoryQuote;
     /** Opens a quoted story with its replies drawer open on the reply that quoted it. */
     quoteOpen(artifactId: string, messageId: string): void;
+    /** Opens the story a link names, in whatever state it is, read first when not in the feed. */
+    storyOpen(artifactId: string): void;
     [Symbol.dispose](): void;
 }
 
@@ -108,6 +115,7 @@ export const happyAgentStoriesStoreNone: HappyAgentStoriesStore = {
     storyRepost: noop,
     quoteOf: () => ({ kind: "ended" }),
     quoteOpen: noop,
+    storyOpen: noop,
     [Symbol.dispose]: noop,
 };
 
@@ -128,6 +136,10 @@ export function happyAgentStoriesStoreCreate(deps: HappyAgentStoriesDeps): Happy
     /** The walk is frozen when the viewer opens, so a story going grey never reorders it. */
     let view: { walk: readonly string[]; at: number; reply: Phase; action: Phase } | undefined;
     let replyFocus: string | null = null;
+    /** A linked story outside the feed, read for the viewer alone. */
+    let linked: Story | undefined;
+    const storyOf = (id: string | undefined) =>
+        (id && stories.get(id)) || (linked?.artifactId === id ? linked : undefined);
     const frames = new Map<string, HappyAgentStoryFrame>();
     const replies = new Map<string, { count: number; replies: HappyAgentStoryReplies }>();
     const seenAsked = new Set<string>();
@@ -186,13 +198,15 @@ export function happyAgentStoriesStoreCreate(deps: HappyAgentStoriesDeps): Happy
 
     const compute = (): HappyAgentStoriesSnapshot => {
         const all = rings();
-        const story = view && stories.get(view.walk[view.at]!);
+        const story = view && storyOf(view.walk[view.at]);
         const ring = story && all.find((each) => each.id === ringIdOf(story.poster));
-        if (!view || !story || !ring) return { mode: "on", rings: all, open: null };
+        if (!view || !story) return { mode: "on", rings: all, open: null };
         const { artifactId, artifactVersion, round } = story;
         const open: HappyAgentStoryOpen = {
             story,
-            segment: { index: ring.stories.indexOf(story), total: ring.stories.length },
+            segment: ring
+                ? { index: ring.stories.indexOf(story), total: ring.stories.length }
+                : { index: 0, total: 1 },
             frame: frames.get(artifactId) ?? { kind: "loading" },
             roundUrl: round
                 ? client.artifactFileUrl(artifactId, artifactVersion, round.path, STORY)
@@ -293,7 +307,7 @@ export function happyAgentStoriesStoreCreate(deps: HappyAgentStoriesDeps): Happy
         const type = (manifest.files.find((file) => file.path === path) ?? manifest.entry).mimeType;
         const kind = type.split("/")[0];
         if (kind === "image" || kind === "video")
-            return { kind, url: client.artifactFileUrl(id, version, path, options) } as const;
+            return { kind, url: client.artifactFileUrl(id, version, path, options), path } as const;
         return { kind: "failed", message: "This story's frame cannot be shown here." } as const;
     };
 
@@ -317,7 +331,7 @@ export function happyAgentStoriesStoreCreate(deps: HappyAgentStoriesDeps): Happy
 
     /** Shows one story of the walk: its frame and replies are read once, and it is marked seen. */
     const show = (walk: readonly string[], at: number, focus: string | null = null) => {
-        const story = stories.get(walk[at]!);
+        const story = storyOf(walk[at]);
         if (!story) return;
         const id = story.artifactId;
         view = { walk, at, reply: IDLE, action: IDLE };
@@ -341,7 +355,7 @@ export function happyAgentStoriesStoreCreate(deps: HappyAgentStoriesDeps): Happy
         if (!view) return;
         // A story that ended since the walk began is passed over.
         let at = view.at + delta;
-        while (view.walk[at] !== undefined && !stories.has(view.walk[at]!)) at += delta;
+        while (view.walk[at] !== undefined && !storyOf(view.walk[at])) at += delta;
         if (view.walk[at] !== undefined) return show(view.walk, at);
         view = undefined;
         notify();
@@ -417,6 +431,16 @@ export function happyAgentStoriesStoreCreate(deps: HappyAgentStoriesDeps): Happy
             if (now.mode !== "on") return;
             const walk = now.rings.flatMap((ring) => ring.stories.map((each) => each.artifactId));
             if (walk.includes(artifactId)) show(walk, walk.indexOf(artifactId), messageId);
+        },
+        storyOpen(artifactId) {
+            const now = get();
+            if (now.mode !== "on") return;
+            const walk = now.rings.flatMap((ring) => ring.stories.map((each) => each.artifactId));
+            if (walk.includes(artifactId)) return show(walk, walk.indexOf(artifactId));
+            client.getStory(artifactId).then(({ story }) => {
+                linked = story;
+                show([artifactId], 0);
+            }, noop);
         },
         storyStep: step,
         viewerClose() {

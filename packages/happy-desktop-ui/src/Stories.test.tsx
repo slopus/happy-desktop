@@ -27,7 +27,7 @@ const VIEWER: StoryViewerProps = {
     segment: { index: 0, total: 2 },
     poster: { name: "Onboarding redesign", mark: { kind: "icon", label: "UX" } },
     time: "2h",
-    frame: { kind: "image", url: frame("rgb(255, 255, 255)") },
+    frame: { kind: "image", url: frame("rgb(255, 255, 255)"), path: "frame.svg" },
     caption: "Onboarding for the Projects sidebar",
     replies: { status: "ready", items: REPLIES },
     replyTarget: "Onboarding redesign",
@@ -113,7 +113,10 @@ it("keeps the caption, the peek and the reply bar readable over a white frame an
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {cases.map(({ mode, fill }) => (
                 <ThemeScope key={`${mode}${fill}`} mode={mode}>
-                    <StoryViewer {...VIEWER} frame={{ kind: "image", url: frame(fill) }} />
+                    <StoryViewer
+                        {...VIEWER}
+                        frame={{ kind: "image", url: frame(fill), path: "frame.svg" }}
+                    />
                 </ThemeScope>
             ))}
         </div>

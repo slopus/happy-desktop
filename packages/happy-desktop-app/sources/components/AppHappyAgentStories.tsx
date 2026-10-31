@@ -22,6 +22,7 @@ import {
     type StoryQuoteView,
     type ToneName,
 } from "happy-desktop-ui";
+import { fileDownload } from "../fileDownload";
 
 /** What the window already knows to name and picture whoever posted or replied. */
 export interface AppStoryDirectory {
@@ -161,6 +162,15 @@ export function AppHappyAgentStoryViewer(props: {
                 caption={story.caption}
                 frame={frame}
                 onClose={store.viewerClose}
+                {...(frame.kind === "image" || frame.kind === "video"
+                    ? {
+                          // The original file, read through the story's own route.
+                          onDownload: () =>
+                              void fileDownload(frame.path, { type: "url", url: frame.url }).catch(
+                                  () => undefined,
+                              ),
+                      }
+                    : {})}
                 onReplySend={store.replySend}
                 {...(open.repostOffered ? { onRepost: store.storyRepost } : {})}
                 onStep={store.storyStep}
