@@ -62,6 +62,14 @@ type Round =
       }
     | { readonly phase: "done"; readonly blob: Blob; readonly url: string };
 
+/** Containers a round is recorded in, best first: iPhones cannot play WebM, so H.264 MP4 leads. */
+const ROUND_TYPES = ["video/mp4;codecs=avc1,mp4a.40.2", "video/mp4;codecs=avc1", "video/mp4"];
+
+/** The first MP4 type the recorder supports, or undefined for its own default (WebM). */
+export function roundMimeType(isSupported: (type: string) => boolean): string | undefined {
+    return ROUND_TYPES.find(isSupported);
+}
+
 /** The front camera with its microphone, or without one, or nothing when there is no camera. */
 async function camera(): Promise<MediaStream | null> {
     const devices = navigator.mediaDevices as MediaDevices | undefined;
@@ -123,7 +131,8 @@ export function StoryViewer(props: StoryViewerProps) {
         roundClear();
         const stream = await camera();
         if (!stream) return setRound({ phase: "unavailable" });
-        const recorder = new MediaRecorder(stream);
+        const mimeType = roundMimeType((type) => MediaRecorder.isTypeSupported(type));
+        const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : {});
         const chunks: Blob[] = [];
         recorder.ondataavailable = (event) => chunks.push(event.data);
         recorder.onstop = () => {

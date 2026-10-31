@@ -7,7 +7,7 @@ import {
 import { fakeHappyAgentDaemonCreate, fakeStory } from "happy-desktop-state/testing";
 import { expect, it, vi } from "vitest";
 import { StoriesRow } from "./StoriesRow";
-import { StoryViewer, type StoryViewerProps } from "./StoryViewer";
+import { roundMimeType, StoryViewer, type StoryViewerProps } from "./StoryViewer";
 import { ThemeScope } from "./ThemeScope";
 import { createRenderer } from "./testing";
 
@@ -212,4 +212,11 @@ it("records a round video from the camera, uploads it, and reposts the story wit
     expect((upload!.args[0] as { data: ArrayBuffer }).data.byteLength).toBeGreaterThan(0);
     const path = expect.stringMatching(/^round\.(webm|mp4)$/u);
     expect(repost!.args).toMatchObject(["story_1", { round: { uploadId: "upload-1", path } }]);
+});
+
+it("records a round as H.264 MP4 when the recorder can, and in its default WebM otherwise", () => {
+    const mp4 = (type: string) => type.startsWith("video/mp4");
+    expect(roundMimeType(mp4)).toBe("video/mp4;codecs=avc1,mp4a.40.2");
+    expect(roundMimeType((type) => type === "video/mp4")).toBe("video/mp4");
+    expect(roundMimeType(() => false)).toBeUndefined();
 });
