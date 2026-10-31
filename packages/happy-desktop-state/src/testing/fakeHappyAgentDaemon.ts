@@ -169,6 +169,7 @@ export interface FakeHappyAgentDaemon {
         ready?: boolean;
         protocol?: number;
         desktopLiveControl?: boolean;
+        chatActions?: boolean;
     }): void;
     /** Replace what `getOnboarding` and the desktop bootstrap report. */
     onboardingSet(state: {
@@ -448,6 +449,7 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
     /** Every event this process journaled; a replacement starts with none. */
     let journal: HappyAgentEvent[] = [];
     let desktopLiveControl: boolean | undefined;
+    let chatActions: boolean | undefined;
     let taskSections: readonly TaskSection[] | undefined;
     let stories: Map<string, Story> | undefined;
     const artifacts = new Map<string, { id: string; title: string; agentId: string | null }>();
@@ -716,13 +718,17 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
         ready: healthReady,
         status: healthReady ? ("ready" as const) : ("starting" as const),
         version: { daemon: daemonVersion, protocol },
-        ...(desktopLiveControl === undefined && taskSections === undefined && stories === undefined
+        ...(desktopLiveControl === undefined &&
+        chatActions === undefined &&
+        taskSections === undefined &&
+        stories === undefined
             ? {}
             : {
                   capabilities: {
                       ...(desktopLiveControl === undefined ? {} : { desktopLiveControl }),
                       ...(taskSections === undefined ? {} : { taskSections: true }),
                       ...(stories === undefined ? {} : { storyArtifacts: true }),
+                      ...(chatActions === undefined ? {} : { chatActions }),
                   },
               }),
     });
@@ -1630,6 +1636,7 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
             if (options.daemon !== undefined) daemonVersion = options.daemon;
             if (options.desktopLiveControl !== undefined)
                 desktopLiveControl = options.desktopLiveControl;
+            if (options.chatActions !== undefined) chatActions = options.chatActions;
         },
         liveSessionSet(session) {
             liveSessions.set(session.id, session);

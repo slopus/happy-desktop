@@ -18,6 +18,7 @@ import {
     type ConversationFileDiff,
     type ConversationJson,
     type ConversationMediaItem,
+    type ConversationMessageActions,
     type ConversationMessageEntry,
     type ConversationReaction,
     type ConversationRequest,
@@ -139,7 +140,8 @@ export function entryEquivalent(left: ConversationEntry, right: ConversationEntr
             traceEqual(left.message.agentTrace, right.message.agentTrace) &&
             left.message.sender === right.message.sender &&
             reactionsEqual(left.message.reactions, right.message.reactions) &&
-            attachmentsEqual(left.message.attachments, right.message.attachments)
+            attachmentsEqual(left.message.attachments, right.message.attachments) &&
+            actionsEqual(left.message.actions, right.message.actions)
         );
     }
     // Non-message entries are rebuilt from their producer's durable snapshot, so
@@ -498,6 +500,18 @@ function questionEqual(
                 option.label === right.options[index]?.label &&
                 option.description === right.options[index]?.description,
         )
+    );
+}
+
+/** A menu's numbering and its choices; few and small, so compared by value. */
+function actionsEqual(
+    left: ConversationMessageActions | undefined,
+    right: ConversationMessageActions | undefined,
+): boolean {
+    if (left === right) return true;
+    return (
+        left?.blockStart === right?.blockStart &&
+        JSON.stringify(left?.choices) === JSON.stringify(right?.choices)
     );
 }
 

@@ -80,3 +80,35 @@ it("walks the arrows past a row that is away", async () => {
     row("a").dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
     expect(document.activeElement).toBe(row("c"));
 });
+
+it("hands the focus of a row going away to the nearest row shown, and the arrows go on", async () => {
+    let hide: () => void = () => undefined;
+    function Rows() {
+        const [away, setAway] = useState(false);
+        hide = () => flushSync(() => setAway(true));
+        const items = ["a", "b", "c", "d"].map((id) => ({
+            id,
+            kind: "project" as const,
+            label: id,
+            ...(id === "b" ? { away } : {}),
+        }));
+        return (
+            <Sidebar
+                activeItemId=""
+                keyboardNavigation
+                onItemSelect={() => undefined}
+                sections={[{ id: "bots", label: "Bots", items }]}
+            />
+        );
+    }
+    const view = createRenderer({ width: 280, height: 400 });
+    view.render(() => <Rows />);
+    await view.ready();
+    const row = (id: string) =>
+        view.container.querySelector<HTMLElement>(`[data-item-id="${id}"]`)!;
+    row("b").focus();
+    hide();
+    expect(document.activeElement).toBe(row("c"));
+    row("c").dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+    expect(document.activeElement).toBe(row("d"));
+});

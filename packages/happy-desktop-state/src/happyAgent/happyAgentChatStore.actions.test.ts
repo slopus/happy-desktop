@@ -12,9 +12,11 @@ const closes: (() => void)[] = [];
 afterEach(() => closes.splice(0).forEach((close) => close()));
 const MENU = `<menu><button data-action="reply">Go</button><button data-action="reply" data-text="Wait a bit">Wait</button></menu>`;
 const text = (value: string) => ({ type: "text", text: value }) as never;
+const m1 = { id: "m1", content: [text(`One:\n\n${MENU}`), text(`Two:\n\n${MENU}\n\n${MENU}`)] };
 
 it("numbers menus across text blocks, reads choices, presses under one id, and answers questions", async () => {
     const daemon = fake.fakeHappyAgentDaemonCreate();
+    daemon.healthSet({ chatActions: true });
     daemon.agentSeed(daemon.projectSeed({ id: "p" }).id, { id: "a", pendingQuestionId: "q1" });
     const metadata = { senderAgentId: "agent_far" };
     const inbound = fake.fakeUserMessage({ id: "m0", status: "accepted", metadata });
@@ -24,11 +26,7 @@ it("numbers menus across text blocks, reads choices, presses under one id, and a
             id: "run-1",
             messages: [
                 { ...inbound, content: [text(`Pick:\n\n${MENU}`)] },
-                fake.fakeAgentMessage({
-                    id: "m1",
-                    content: [text(`One:\n\n${MENU}`), text(`Two:\n\n${MENU}\n\n${MENU}`)],
-                    actionChoices: choice,
-                }),
+                fake.fakeAgentMessage({ ...m1, actionChoices: choice }),
             ],
         }),
     ]);
@@ -62,6 +60,14 @@ it("numbers menus across text blocks, reads choices, presses under one id, and a
         );
     await vi.waitFor(() => expect(actions().map((each) => each.blockStart)).toEqual([0, 1]));
     expect(actions()[1]!.choices).toEqual(choice);
+    // A choice made elsewhere arrives as an update to the message alone.
+    const chosen = { ...choice, "0": { kind: "button", index: 0 } } as const;
+    daemon.eventEmit("message.updated", {
+        agentId: "a",
+        runId: "run-1",
+        message: fake.fakeAgentMessage({ ...m1, actionChoices: chosen }),
+    });
+    await vi.waitFor(() => expect(actions()[0]!.choices).toEqual(chosen));
     // Another agent's message, drawn as a one-line activity, carries no menu.
     expect(entries().find((entry) => entry.kind === "agentActivity")).toMatchObject({
         activity: { text: "Pick:" },

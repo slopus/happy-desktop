@@ -3849,6 +3849,8 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                 sync.source.health()?.capabilities?.storyArtifacts !== true
             )
                 throw new UserError("Stories are no longer available on this Happy Agent.");
+            if (!("text" in request) && sync.source.health()?.capabilities?.chatActions !== true)
+                throw new UserError("Menus can no longer be pressed on this Happy Agent.");
             try {
                 return await Promise.race([
                     client.sendMessage(sessionId, request, { signal: deadlineSignal() }),

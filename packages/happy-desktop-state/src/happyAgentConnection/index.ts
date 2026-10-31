@@ -6,6 +6,7 @@ export { chatElementRequest, projectNumericIdentity } from "./projection.js";
 export { mediaLayoutProject } from "./mediaLayoutProject.js";
 export {
     conversationMenuParse,
+    conversationTextHasMenu,
     conversationTextLayoutParse,
     conversationTextPlain,
     conversationTextSegments,

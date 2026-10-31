@@ -1508,6 +1508,21 @@ const SidebarListRow = memo(function SidebarListRow({
     );
 });
 
+/** A row going away hands its focus to the nearest row still shown, after it or else before it. */
+function focusNearestShown(away: HTMLElement): void {
+    const rows = [
+        ...(away
+            .closest('[data-happy-desktop-ui="sidebar"]')
+            ?.querySelectorAll<HTMLElement>(
+                '[data-happy-desktop-ui="sidebar-item"]:not([data-kind="separator"], [data-kind="widget"])',
+            ) ?? []),
+    ];
+    const at = rows.indexOf(away);
+    const shown = (row: HTMLElement) => row.getAttribute("data-away") !== "true";
+    const next = rows.slice(at + 1).find(shown) ?? rows.slice(0, at).reverse().find(shown);
+    next?.focus({ preventScroll: true });
+}
+
 function SidebarRow({
     nodeRef,
     ...props
@@ -2030,6 +2045,8 @@ function SidebarRow({
                     renameRestoreFocus.current = false;
                     node.focus({ preventScroll: true });
                 }
+                if (node && item().away === true && node.contains(document.activeElement))
+                    focusNearestShown(node);
             }}
             style={{
                 ...(depth() > 0

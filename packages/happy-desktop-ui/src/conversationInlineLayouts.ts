@@ -1,5 +1,6 @@
 import {
     conversationMenuParse,
+    conversationTextHasMenu,
     conversationTextLayoutParse,
     conversationTextSegments,
     type ConversationEntry,
@@ -104,7 +105,7 @@ export function conversationInlineLayouts(
             continue;
         }
         if (entry.kind !== "message" || entry.message.sender?.kind !== "agent") continue;
-        if (shown.size === 0 && !entry.message.text.includes("<menu")) continue;
+        if (shown.size === 0 && !conversationTextHasMenu(entry.message.text)) continue;
         const layouts = messageInlineLayouts(entry, shown, framesAt);
         if (layouts === undefined) continue;
         messages ??= new Map();

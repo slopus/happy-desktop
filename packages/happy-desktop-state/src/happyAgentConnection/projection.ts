@@ -21,6 +21,7 @@ import type {
     Workspace,
 } from "@slopus/happy-agent-client";
 import { chatActionBlocksOf } from "@slopus/happy-agent-client";
+import { conversationTextHasMenu } from "./conversationTextLayouts.js";
 import { happyAgentServiceTierFromWire } from "../happyAgentServiceTier.js";
 import { deepEqual } from "../happyAgent/happyAgentSupport.js";
 import { happyAgentConversationActivityProject } from "../happyAgent/happyAgentConversationAuthors.js";
@@ -1227,7 +1228,8 @@ function messageElementsProject(
         if (block.type === "text") {
             if (message.role === "agent") {
                 const blockStart = menus;
-                if (block.text.includes("<menu")) menus += chatActionBlocksOf(block.text).length;
+                if (conversationTextHasMenu(block.text))
+                    menus += chatActionBlocksOf(block.text).length;
                 elements.push({
                     ...base,
                     id,

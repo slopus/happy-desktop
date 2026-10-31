@@ -39,10 +39,15 @@ export function conversationTextSegments(text: string): readonly ConversationTex
     }
 }
 
+/** Whether text may hold a `<menu>`: a cheap check before the client's parser, as loose as it. */
+export function conversationTextHasMenu(text: string): boolean {
+    return /<menu/iu.test(text);
+}
+
 /** Agent text for a surface that draws no menus: previews, copies, voice. */
 export function conversationTextPlain(text: string): string {
     try {
-        return text.includes("<menu") ? stripChatActionBlocks(text) : text;
+        return conversationTextHasMenu(text) ? stripChatActionBlocks(text) : text;
     } catch {
         return text;
     }
