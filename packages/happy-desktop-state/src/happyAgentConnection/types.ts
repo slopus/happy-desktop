@@ -1208,6 +1208,8 @@ export interface HappyAgentConnection {
     leaveTask(taskId: string): MutationId;
     /** Moves one joined task after `afterId` in the caller's list, or first when null. */
     reorderTask(taskId: string, afterId: string | null): MutationId;
+    /** Moves one joined task first under a section. Only with `capabilities.taskSections`. */
+    reorderTaskAfterSection(taskId: string, sectionId: string): MutationId;
     /** The reader's task list as held, and its changes; reading it sends nothing. */
     readonly richTasks: {
         get(): HappyAgentRichTasksInput;

@@ -3,7 +3,12 @@ import { useState } from "react";
 import { flushSync } from "react-dom";
 import { richTaskList, type RichTask, type RichTaskAgent } from "happy-desktop-state";
 import { expect, it } from "vitest";
-import { RichTaskList, type RichTaskCardModel, type RichTaskListRow } from "./RichTaskList";
+import {
+    RichTaskList,
+    type RichTaskCardModel,
+    type RichTaskListRow,
+    type RichTaskMoveAnchor,
+} from "./RichTaskList";
 import { createRenderer } from "./testing";
 
 /*
@@ -309,4 +314,90 @@ it("puts a shown child under a task even when another task made it", () => {
     expect(children("a")).toEqual(["workspace:b-ws", "agent:b-helper"]);
     // B made the workspace; its idle subtask is not derived, so only the workspace shows there.
     expect(children("b")).toEqual(["workspace:b-ws"]);
+});
+
+it("drops a card after a task, first under a header or first of all, and settles without a jump", async () => {
+    const header = (id: string): RichTaskListRow => ({
+        kind: "section",
+        id,
+        name: id,
+        collapsed: false,
+    });
+    const rows: Record<string, RichTaskListRow> = {
+        now: header("now"),
+        later: header("later"),
+        a: card("a", {}),
+        b: card("b", {}),
+        c: card("c", {}),
+    };
+    const moves: [string, RichTaskMoveAnchor][] = [];
+    let rowsSet: (keys: string) => void = () => {};
+    const Fixture = () => {
+        const [keys, setKeys] = useState("now a b later c");
+        rowsSet = (next) => flushSync(() => setKeys(next));
+        return (
+            <RichTaskList
+                onMoreToggle={() => {}}
+                onSectionCollapseToggle={() => {}}
+                onSelect={() => {}}
+                onTaskMove={(id, anchor) => moves.push([id, anchor])}
+                rows={keys.split(" ").map((key) => rows[key]!)}
+                selectedId={null}
+                workingFrame={0}
+            />
+        );
+    };
+    const view = createRenderer({ width: 304, height: 640 });
+    view.render(() => <Fixture />);
+    await view.ready();
+    const node = (key: string) =>
+        view.container.querySelector<HTMLElement>(`[data-row-key="${key}"]`)!;
+    const top = (key: string) => node(key).getBoundingClientRect().top;
+    const keys = ["section:now", "task:a", "task:b", "section:later", "task:c"];
+    const nodes = keys.map(node);
+    const pointer = (target: Element, type: string, y: number) =>
+        target.dispatchEvent(
+            new PointerEvent(type, {
+                bubbles: true,
+                button: 0,
+                clientX: 40,
+                clientY: y,
+                pointerId: 1,
+            }),
+        );
+    /** Carries a card until its top stands 3px under another row's top, and lets go. */
+    const drag = (id: string, onto: string) => {
+        const hit = node(`task:${id}`).querySelector("button")!;
+        const y = top(`task:${id}`) + 10;
+        const to = y + top(onto) - top(`task:${id}`) + 3;
+        pointer(hit, "pointerdown", y);
+        pointer(hit, "pointermove", y + 6);
+        pointer(hit, "pointermove", to);
+        pointer(hit, "pointerup", to);
+    };
+    const settled = () =>
+        Promise.all(nodes.flatMap((row) => row.getAnimations().map((glide) => glide.finished)));
+
+    drag("c", "task:a");
+    expect(moves.at(-1)).toEqual(["c", { afterSectionId: "now" }]);
+    // Until the new order renders the card stays where it was let go, then glides from there.
+    const dropped = top("task:c");
+    const before = top("task:a");
+    expect(dropped).toBeCloseTo(before + 3, 0);
+    rowsSet("now c a b later");
+    expect(top("task:c")).toBeCloseTo(dropped, 0);
+    expect(top("task:a")).toBeCloseTo(before, 0);
+    expect(node("task:c").style.transform).toBe("");
+    await settled();
+    const rest = keys.map(top);
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    expect(keys.map(top)).toEqual(rest);
+    expect(keys.every((key, index) => node(key) === nodes[index])).toBe(true);
+
+    drag("a", "section:now");
+    expect(moves.at(-1)).toEqual(["a", { afterId: null }]);
+    rowsSet("a now c b later");
+    await settled();
+    drag("a", "section:later");
+    expect(moves.at(-1)).toEqual(["a", { afterId: "b" }]);
 });

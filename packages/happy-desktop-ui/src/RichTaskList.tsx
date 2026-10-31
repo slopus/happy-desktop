@@ -1,8 +1,19 @@
-import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import {
+    useLayoutEffect,
+    useRef,
+    useState,
+    type PointerEvent as ReactPointerEvent,
+    type ReactNode,
+} from "react";
 import { Avatar, type ToneName } from "./Avatar";
 import { ClayIcon } from "./ClayIcon";
 import { ContextMenu } from "./ContextMenu";
 import { SIDEBAR_SETTLE } from "./Sidebar";
+import {
+    SIDEBAR_DRAG_THRESHOLD,
+    SIDEBAR_SETTLE_WAIT_MS,
+    sidebarDropSlotNearest,
+} from "./sidebarDrag";
 import { Spinner } from "./Spinner";
 import { Ionicon, type IoniconName } from "./vectorIcons/VectorIcon";
 
@@ -75,7 +86,14 @@ export type RichTaskListProps = {
     readonly onMoreToggle: (taskId: string) => void;
     /** Offers "Hide" on a sub-row's context menu; left out, sub-rows have no menu. */
     readonly onSubRowHide?: (id: string) => void;
+    /** Lets cards be dragged; a drop reports where the card now stands. Left out, nothing drags. */
+    readonly onTaskMove?: (taskId: string, anchor: RichTaskMoveAnchor) => void;
 };
+
+/** Where a dropped card lands: after a card (`null`: first of all), or first under a header. */
+export type RichTaskMoveAnchor =
+    | { readonly afterId: string | null }
+    | { readonly afterSectionId: string };
 
 /** 1.2k, as the sidebar abbreviates line totals. */
 function lines(count: number): string {
@@ -102,6 +120,8 @@ export type RichTaskCardProps = {
     readonly workingFrame?: number;
     readonly onSelect: (id: string) => void;
     readonly onMoreToggle: (taskId: string) => void;
+    /** Presses, drags and drops on the card, for a list that lets cards move. */
+    readonly onDragPointer?: (event: ReactPointerEvent<HTMLButtonElement>) => void;
 };
 
 /**
@@ -125,6 +145,10 @@ export function RichTaskCard(props: RichTaskCardProps) {
                 aria-pressed={props.selected}
                 className="happy-rich-task-card__hit"
                 onClick={() => props.onSelect(card.id)}
+                onPointerCancel={props.onDragPointer}
+                onPointerDown={props.onDragPointer}
+                onPointerMove={props.onDragPointer}
+                onPointerUp={props.onDragPointer}
                 type="button"
             />
             <span
@@ -358,6 +382,111 @@ function rowsGlide(root: HTMLElement, previous: RowLayout | undefined): RowLayou
     return { order, tops };
 }
 
+/** A landing place for a carried card, in the list's own coordinates; none is its own place. */
+type RichTaskSlot = { readonly anchor?: RichTaskMoveAnchor; readonly y: number };
+
+type RichTaskCarry = {
+    readonly taskId: string;
+    readonly pointerId: number;
+    /** Where the card's top stood, and where the pointer took hold, from the list's top. */
+    readonly top: number;
+    readonly startY: number;
+    /** The card's rows: the card, its sub-rows and its "+k more", carried as one. */
+    readonly nodes: readonly HTMLElement[];
+    readonly slots: readonly RichTaskSlot[];
+    /** The cards' order when it began; any other order means the list moved under it. */
+    readonly order: string;
+    deltaY: number;
+    moved: boolean;
+    target?: RichTaskSlot;
+    /** Set once dropped, until the new order renders or the wait runs out. */
+    settling?: ReturnType<typeof setTimeout>;
+};
+
+const cardOrder = (root: HTMLElement): string =>
+    [...root.querySelectorAll<HTMLElement>(":scope > [data-row-key^='task:']")]
+        .map((node) => node.dataset.rowKey)
+        .join(" ");
+
+/**
+ * The list as laid out now, in units (a header, or a card with its rows), and
+ * every place the card can land among them: each gap between units, said by
+ * what it follows. A gap just under a folded header is not offered, since the
+ * card would vanish into it.
+ */
+function carryOf(
+    root: HTMLElement,
+    taskId: string,
+    pointerId: number,
+    startY: number,
+): RichTaskCarry | undefined {
+    const origin = root.getBoundingClientRect().top;
+    const units: HTMLElement[][] = [];
+    for (const node of root.children) {
+        if (!(node instanceof HTMLElement) || node.dataset.rowKey === undefined) continue;
+        const key = node.dataset.rowKey;
+        if (key.startsWith("task:") || key.startsWith("section:") || units.length === 0)
+            units.push([node]);
+        else units[units.length - 1]!.push(node);
+    }
+    const at = units.findIndex((unit) => unit[0]!.dataset.rowKey === `task:${taskId}`);
+    if (at < 0) return undefined;
+    const top = (unit: readonly HTMLElement[]) => unit[0]!.getBoundingClientRect().top - origin;
+    const bottom = units.length === 0 ? 0 : units.at(-1)!.at(-1)!.getBoundingClientRect().bottom;
+    const slots: RichTaskSlot[] = [{ y: top(units[at]!) }];
+    for (let gap = 0; gap <= units.length; gap += 1) {
+        if (gap === at || gap === at + 1) continue;
+        const before = units[gap - 1]?.[0];
+        const key = before?.dataset.rowKey ?? "";
+        if (before?.dataset.collapsed !== undefined) continue;
+        slots.push({
+            anchor: key.startsWith("section:")
+                ? { afterSectionId: key.slice(8) }
+                : { afterId: key.startsWith("task:") ? key.slice(5) : null },
+            y: gap < units.length ? top(units[gap]!) : bottom - origin,
+        });
+    }
+    return {
+        taskId,
+        pointerId,
+        top: slots[0]!.y,
+        startY,
+        nodes: units[at]!,
+        slots,
+        order: cardOrder(root),
+        deltaY: 0,
+        moved: false,
+    };
+}
+
+/** Carries the card's rows with the pointer once past the threshold; false while they sit. */
+function carryFollow(carry: RichTaskCarry, y: number): boolean {
+    carry.deltaY = y - carry.startY;
+    if (!carry.moved && Math.abs(carry.deltaY) < SIDEBAR_DRAG_THRESHOLD) return false;
+    carry.moved = true;
+    for (const node of carry.nodes) {
+        node.style.transform = `translateY(${carry.deltaY}px)`;
+        node.dataset.carried = "";
+    }
+    carry.target = sidebarDropSlotNearest(carry.slots, carry.top + carry.deltaY);
+    return true;
+}
+
+/** Puts a carried card's rows down where they stand, gliding them home when it went nowhere. */
+function carryRelease(carry: RichTaskCarry, home: boolean): void {
+    clearTimeout(carry.settling);
+    const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    for (const node of carry.nodes) {
+        node.style.removeProperty("transform");
+        delete node.dataset.carried;
+        if (home && carry.deltaY !== 0 && !still)
+            node.animate([{ transform: `translateY(${carry.deltaY}px)` }, { transform: "none" }], {
+                duration: SIDEBAR_SETTLE.durationMs,
+                easing: SIDEBAR_SETTLE.easing,
+            });
+    }
+}
+
 /**
  * The rich task list: section headers, cards, and each card's sub-rows and
  * "+k more", as one flat run of rows keyed by id, so a card or sub-row keeps
@@ -367,11 +496,63 @@ export function RichTaskList(props: RichTaskListProps) {
     const root = useRef<HTMLDivElement>(null);
     const layout = useRef<RowLayout | undefined>(undefined);
     const [menu, setMenu] = useState<{ id: string; x: number; y: number } | null>(null);
+    const [line, setLine] = useState<number | null>(null);
+    const carry = useRef<RichTaskCarry | undefined>(undefined);
+    const clickSwallow = useRef(false);
     const onSubRowHide = props.onSubRowHide;
+    const onTaskMove = props.onTaskMove;
     // eslint-disable-next-line happy-react/no-layout-effect -- a reorder glide must measure the rows laid out by the render it follows, before paint, which no declarative or event-driven boundary exposes
     useLayoutEffect(() => {
-        if (root.current) layout.current = rowsGlide(root.current, layout.current);
+        if (!root.current) return;
+        // A card put down glides from where the hand left it once its new order renders.
+        if (carry.current && cardOrder(root.current) !== carry.current.order) {
+            carryRelease(carry.current, false);
+            carry.current = undefined;
+        }
+        layout.current = rowsGlide(root.current, layout.current);
     });
+    const select = (id: string) => {
+        if (clickSwallow.current) clickSwallow.current = false;
+        else props.onSelect(id);
+    };
+    /** A card is carried with the pointer, its rows held still around it, and dropped on a line. */
+    const cardPointer = (event: ReactPointerEvent<HTMLButtonElement>, taskId: string): void => {
+        const list = root.current;
+        if (!list || !onTaskMove) return;
+        const y = event.clientY - list.getBoundingClientRect().top;
+        const held = carry.current;
+        if (event.type === "pointerdown") {
+            if (event.button !== 0 || held) return;
+            clickSwallow.current = false;
+            carry.current = carryOf(list, taskId, event.pointerId, y);
+            // Scripted pointer events have no browser-owned pointer to capture.
+            if (event.isTrusted) event.currentTarget.setPointerCapture(event.pointerId);
+            return;
+        }
+        if (!held || held.pointerId !== event.pointerId || held.settling !== undefined) return;
+        if (event.type === "pointermove") {
+            if (carryFollow(held, y)) setLine(held.target?.anchor ? held.target.y : null);
+            return;
+        }
+        setLine(null);
+        // The release's click, if the browser fires one, comes before any timer.
+        clickSwallow.current = held.moved;
+        setTimeout(() => (clickSwallow.current = false));
+        const anchor = event.type === "pointerup" ? held.target?.anchor : undefined;
+        if (!held.moved || !anchor) {
+            carryRelease(held, true);
+            carry.current = undefined;
+            return;
+        }
+        // Where the rows are painted now is where the glide to their new places starts.
+        layout.current = rowsGlide(list, layout.current);
+        held.settling = setTimeout(() => {
+            if (carry.current !== held) return;
+            carryRelease(held, true);
+            carry.current = undefined;
+        }, SIDEBAR_SETTLE_WAIT_MS);
+        onTaskMove(taskId, anchor);
+    };
     const rows = props.rows.flatMap((row): ReactNode[] => {
         if (row.kind === "section")
             return [
@@ -394,7 +575,13 @@ export function RichTaskList(props: RichTaskListProps) {
                 card={card}
                 key={`task:${card.id}`}
                 onMoreToggle={props.onMoreToggle}
-                onSelect={props.onSelect}
+                {...(onTaskMove
+                    ? {
+                          onDragPointer: (event: ReactPointerEvent<HTMLButtonElement>) =>
+                              cardPointer(event, card.id),
+                      }
+                    : {})}
+                onSelect={select}
                 selected={props.selectedId === card.id}
                 workingFrame={props.workingFrame}
             />,
@@ -437,6 +624,9 @@ export function RichTaskList(props: RichTaskListProps) {
             ref={root}
         >
             {rows}
+            {line === null ? null : (
+                <span className="happy-rich-tasks__drop-line" style={{ top: line }} />
+            )}
             {menu && onSubRowHide ? (
                 <ContextMenu
                     items={[{ kind: "item", id: "hide", label: "Hide", icon: "eye-off" }]}

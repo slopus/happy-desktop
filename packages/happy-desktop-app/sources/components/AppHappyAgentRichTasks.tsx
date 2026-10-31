@@ -184,6 +184,7 @@ export function AppHappyAgentRichTasks(props: {
             onMoreToggle={props.store.taskExpandToggle}
             onSectionCollapseToggle={props.store.sectionCollapseToggle}
             onSelect={props.onSelect}
+            onTaskMove={props.store.taskMove}
             onSubRowHide={(id) => {
                 const row = richTaskSubRowParse(id);
                 if (row) props.store.childHide(row.taskId, row.ref);

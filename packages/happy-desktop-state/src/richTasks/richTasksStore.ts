@@ -30,14 +30,25 @@ export interface HappyAgentRichTasksStore {
     sectionCollapseToggle(sectionId: string): void;
     /** Takes one child out from under a task's card, for every member. */
     childHide(taskId: string, ref: RichTaskChildRef): void;
+    /** Moves a card after another (`null`: first of all), or first under a section. */
+    taskMove(taskId: string, anchor: RichTaskMoveAnchor): void;
     [Symbol.dispose](): void;
 }
+
+export type RichTaskMoveAnchor =
+    | { readonly afterId: string | null }
+    | { readonly afterSectionId: string };
 
 export interface HappyAgentRichTasksDeps {
     readonly client: HappyAgentUserSettingsSource["client"];
     readonly connection: Pick<
         HappyAgentConnection,
-        "sync" | "richTasks" | "replaceTaskSections" | "setTaskChild"
+        | "sync"
+        | "richTasks"
+        | "replaceTaskSections"
+        | "setTaskChild"
+        | "reorderTask"
+        | "reorderTaskAfterSection"
     >;
 }
 
@@ -54,6 +65,7 @@ export const happyAgentRichTasksStoreNone: HappyAgentRichTasksStore = {
     taskExpandToggle: () => undefined,
     sectionCollapseToggle: () => undefined,
     childHide: () => undefined,
+    taskMove: () => undefined,
     [Symbol.dispose]: () => undefined,
 };
 
@@ -212,6 +224,12 @@ export function happyAgentRichTasksStoreCreate(
         },
         childHide(taskId, ref) {
             if (rich()) deps.connection.setTaskChild(taskId, ref, "hidden");
+        },
+        taskMove(taskId, anchor) {
+            if (!rich()) return;
+            if ("afterSectionId" in anchor)
+                deps.connection.reorderTaskAfterSection(taskId, anchor.afterSectionId);
+            else deps.connection.reorderTask(taskId, anchor.afterId);
         },
         [Symbol.dispose]() {
             if (disposed) return;

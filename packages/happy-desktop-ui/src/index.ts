@@ -136,6 +136,7 @@ export {
     type RichTaskFace,
     type RichTaskListProps,
     type RichTaskListRow,
+    type RichTaskMoveAnchor,
     type RichTaskMark,
     type RichTaskSectionHeaderProps,
     type RichTaskSubRowModel,

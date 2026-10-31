@@ -72,11 +72,12 @@ it("keeps a protocol-31 daemon on the classic list and sends it nothing new", as
     rich.store.sectionCollapseToggle(SECTION.id);
     rich.store.childHide("task_a", { kind: "workspace", id: "ws" });
     rich.store.taskExpandToggle("task_a");
+    rich.store.taskMove("task_b", { afterSectionId: SECTION.id });
     await new Promise((resolve) => setTimeout(resolve, 20));
 
     expect(rich.store.get()).toEqual({ mode: "classic" });
     // The same kinds of request as a window without the store: no settings read,
-    // no sections, no child choice.
+    // no sections, no child choice, no reorder.
     expect(methods(branch)).toEqual(methods(today));
     expect(branch.callCount("getUserSettings")).toBe(0);
 });
@@ -105,6 +106,23 @@ it("draws the rich list from a capable daemon once tasks.rich is true", async ()
         { kind: "workspace", id: "ws_1" },
         expect.objectContaining({ visibility: "hidden" }),
         expect.anything(),
+    ]);
+});
+
+it("moves a card first of all, then first under a section, with exactly one anchor", async () => {
+    const daemon = await daemonSeed({ capable: true, rich: true });
+    await daemon.client.saveUserSetting("tasks.sections", { value: true });
+    const { store } = open(daemon, true);
+    await vi.waitFor(() => expect(taskIds(store)).toEqual(["section:sec_now", "task_a", "task_b"]));
+
+    store.taskMove("task_b", { afterId: null });
+    await vi.waitFor(() => expect(taskIds(store)).toEqual(["task_b", "section:sec_now", "task_a"]));
+    store.taskMove("task_b", { afterSectionId: SECTION.id });
+    await vi.waitFor(() => expect(taskIds(store)).toEqual(["section:sec_now", "task_b", "task_a"]));
+    const sent = daemon.calls.filter((call) => call.method === "reorderTask");
+    expect(sent.map((call) => Object.keys(call.args[1] as object).sort())).toEqual([
+        ["afterId", "mutationId"],
+        ["afterSectionId", "mutationId"],
     ]);
 });
 

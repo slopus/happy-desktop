@@ -5429,6 +5429,23 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                 `task:${taskId}`,
             );
         },
+        reorderTaskAfterSection(taskId, afterSectionId) {
+            const mutationId = nextId();
+            return mutation(
+                "reorder_task",
+                mutationId,
+                () =>
+                    client.reorderTask(
+                        taskId,
+                        { afterSectionId, mutationId },
+                        { signal: deadlineSignal() },
+                    ),
+                taskResponseAdopt,
+                undefined,
+                undefined,
+                `task:${taskId}`,
+            );
+        },
         richTasks: {
             get: richTasksGet,
             subscribe: (listener) => groupsStore.subscribe(() => listener()),

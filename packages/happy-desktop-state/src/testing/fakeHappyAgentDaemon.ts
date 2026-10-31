@@ -962,18 +962,25 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
         },
         async reorderTask(
             taskId: string,
-            request: { readonly afterId: string | null },
+            request: { readonly afterId: string | null } | { readonly afterSectionId: string },
             ...rest: unknown[]
         ) {
             await record("reorderTask", [taskId, request, ...rest]);
             const current = memberships.get(taskId);
             if (current === undefined)
                 throw new HappyAgentApiError(404, "Not a member.", "not_found", null);
-            const others = membershipsOrdered().filter((entry) => entry.taskId !== taskId);
-            const index =
-                request.afterId === null
-                    ? -1
-                    : others.findIndex((entry) => entry.taskId === request.afterId);
+            // Tasks and section headers share one run of order keys.
+            const others = [
+                ...membershipsOrdered()
+                    .filter((entry) => entry.taskId !== taskId)
+                    .map((entry) => ({ id: entry.taskId, orderKey: entry.orderKey })),
+                ...(taskSections ?? []).map((section) => ({
+                    id: section.id,
+                    orderKey: section.orderKey,
+                })),
+            ].sort((left, right) => (left.orderKey < right.orderKey ? -1 : 1));
+            const after = "afterSectionId" in request ? request.afterSectionId : request.afterId;
+            const index = after === null ? -1 : others.findIndex((entry) => entry.id === after);
             const membership: TaskMembership = {
                 ...current,
                 orderKey: generateKeyBetween(

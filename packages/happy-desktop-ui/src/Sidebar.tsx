@@ -36,6 +36,11 @@ import { ScrollArea } from "./Scrollbar";
 import { SidebarSectionContext, SidebarSectionTail } from "./SidebarSectionDetails";
 import { TextField } from "./TextField";
 import { sidebarSectionsReuser } from "./sidebarSectionsReuser";
+import {
+    SIDEBAR_DRAG_THRESHOLD as DRAG_THRESHOLD,
+    SIDEBAR_SETTLE_WAIT_MS as SETTLE_WAIT_MS,
+    sidebarDropSlotNearest as dropSlotNearest,
+} from "./sidebarDrag";
 /** One control on a row: its glyph, what it does, and when it shows. */
 export type SidebarItemAction = {
     icon: IconName;
@@ -722,8 +727,6 @@ function rootCount(rows: readonly { readonly item: SidebarItem }[]): number {
     return rows.filter((row) => (row.item.depth ?? 0) === 0).length;
 }
 
-/** Pointer travel, in px, before a press becomes a drag instead of a selection. */
-const DRAG_THRESHOLD = 4;
 /**
  * How long the pointer rests on a row before it counts as an intent to open it. Long enough that
  * sweeping across the list reports nothing, short against the time a reader takes to click.
@@ -790,13 +793,6 @@ const SETTLE_MS = 160;
 const SETTLE_EASING = "cubic-bezier(0.22, 1, 0.36, 1)";
 /** The settle glide, for other lists that move rows the way this one does. */
 export const SIDEBAR_SETTLE = { durationMs: SETTLE_MS, easing: SETTLE_EASING } as const;
-/**
- * How long a drop holds the geometry it captured while it waits for the render
- * that rearranges the rows. Long enough for a reorder to come back through the
- * store, short enough that a move which never lands lets the row go rather than
- * leaving it lit and replaying it much later from coordinates that have expired.
- */
-const SETTLE_WAIT_MS = 500;
 
 interface SidebarDrag {
     readonly pointerId: number;
@@ -857,17 +853,6 @@ interface SidebarDropSlot {
     readonly afterId: string | null;
     /** In the body content's own coordinates. */
     readonly y: number;
-}
-
-/** The slot nearest the pointer, read in the body content's coordinates. */
-function dropSlotNearest(
-    slots: readonly SidebarDropSlot[],
-    y: number,
-): SidebarDropSlot | undefined {
-    let best: SidebarDropSlot | undefined;
-    for (const slot of slots)
-        if (best === undefined || Math.abs(slot.y - y) < Math.abs(best.y - y)) best = slot;
-    return best;
 }
 
 /**

@@ -22,6 +22,7 @@
     --happy-rich-task-status-baseline: 12px;
     --happy-rich-task-title-y: 0px;
 
+    position: relative;
     display: flex;
     flex-direction: column;
     padding: 0 3px;
@@ -416,4 +417,26 @@
         --happy-rich-task-status-baseline: 12.890625px;
         --happy-rich-task-title-y: -0.359375px;
     }
+}
+
+/* ---- Carrying a card ---------------------------------------------------- */
+
+/* The card under the hand rides over the rows it passes, which hold still. */
+.happy-rich-tasks [data-carried] {
+    z-index: 2;
+    background: var(--groupped-background);
+    box-shadow: 0 4px 12px var(--shadow-subtle);
+}
+
+/* Where the carried card will land, laid over the rows as the sidebar's is. */
+.happy-rich-tasks__drop-line {
+    position: absolute;
+    z-index: 3;
+    right: 10px;
+    left: 10px;
+    height: 2px;
+    margin-top: -1px;
+    border-radius: 1px;
+    background: var(--text-link);
+    pointer-events: none;
 }
