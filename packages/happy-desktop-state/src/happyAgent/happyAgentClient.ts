@@ -59,6 +59,10 @@ import {
     type HappyAgentRichTasksStore,
 } from "../richTasks/richTasksStore.js";
 import {
+    happyAgentStoriesStoreCreate,
+    type HappyAgentStoriesStore,
+} from "../stories/storiesStore.js";
+import {
     happyAgentTaskSettingsStoreCreate,
     type HappyAgentTaskSettingsStore,
 } from "./happyAgentTaskSettingsStore.js";
@@ -208,6 +212,8 @@ export interface HappyAgentWorkspaceClient {
     taskSettings(): HappyAgentTaskSettingsStore;
     /** The Tasks area: classic, or the rich list behind its capability and setting. */
     richTasks(): HappyAgentRichTasksStore;
+    /** Stories, behind `capabilities.storyArtifacts` and the rich Tasks area. */
+    stories(): HappyAgentStoriesStore;
     /** The authenticated person's Surface autojoin preference, materialized on first access. */
     surfaceSettings(): HappyAgentSurfaceSettingsStore;
     /**
@@ -567,6 +573,7 @@ export function happyAgentWorkspaceClientCreate(
     let voiceSettingsStore: HappyAgentVoiceSettingsStore | undefined;
     let taskSettingsStore: HappyAgentTaskSettingsStore | undefined;
     let richTasksStore: HappyAgentRichTasksStore | undefined;
+    let storiesStore: HappyAgentStoriesStore | undefined;
     let surfaceSettingsStore: HappyAgentSurfaceSettingsStore | undefined;
     let instructionsStore: HappyAgentInstructionsStore | undefined;
     let securityPolicyStore: HappyAgentSecurityPolicyStore | undefined;
@@ -910,6 +917,15 @@ export function happyAgentWorkspaceClientCreate(
             });
             return richTasksStore;
         },
+        stories() {
+            if (disposed) throw new Error("The Happy Agent client is disposed.");
+            storiesStore ??= happyAgentStoriesStoreCreate({
+                client: deps.client,
+                connection: deps.connection,
+                richTasks: workspace.richTasks(),
+            });
+            return storiesStore;
+        },
         surfaceSettings() {
             if (disposed) throw new Error("The Happy Agent client is disposed.");
             surfaceSettingsStore ??= happyAgentSurfaceSettingsStoreCreate({
@@ -1080,6 +1096,8 @@ export function happyAgentWorkspaceClientCreate(
             voiceSettingsStore = undefined;
             taskSettingsStore?.[Symbol.dispose]();
             taskSettingsStore = undefined;
+            storiesStore?.[Symbol.dispose]();
+            storiesStore = undefined;
             richTasksStore?.[Symbol.dispose]();
             richTasksStore = undefined;
             surfaceSettingsStore?.[Symbol.dispose]();

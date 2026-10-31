@@ -4741,6 +4741,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                             id: mutationId,
                             text: requestText,
                             ...(richContent.length === 0 ? {} : { content: richContent }),
+                            ...(input.replyTo ? { replyTo: input.replyTo } : {}),
                             delivery,
                             mode,
                         },

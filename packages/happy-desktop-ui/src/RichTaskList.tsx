@@ -15,6 +15,7 @@ import {
     sidebarDropSlotNearest,
 } from "./sidebarDrag";
 import { Spinner } from "./Spinner";
+import { StoryRing, type StoryRingSegments } from "./StoryRing";
 import { Ionicon, type IoniconName } from "./vectorIcons/VectorIcon";
 
 /** A sub-row's 18px mark: a project's picture or a glyph on a quiet tile. */
@@ -55,6 +56,8 @@ export type RichTaskCardModel = {
     readonly iconSlug: string | null;
     /** The story ring around the disc. */
     readonly ring?: boolean;
+    /** The agent's live stories: the ring drawn in segments, and the disc opens them. */
+    readonly story?: StoryRingSegments;
     readonly faces: readonly RichTaskFace[];
     /** What the corner reports: the agent is working, or something is unread. */
     readonly signal: "working" | "unread" | null;
@@ -88,6 +91,8 @@ export type RichTaskListProps = {
     readonly onSubRowHide?: (id: string) => void;
     /** Lets cards be dragged; a drop reports where the card now stands. Left out, nothing drags. */
     readonly onTaskMove?: (taskId: string, anchor: RichTaskMoveAnchor) => void;
+    /** Opens a card's stories from its ringed disc. */
+    readonly onStoryOpen?: (taskId: string) => void;
 };
 
 /** Where a dropped card lands: after a card (`null`: first of all), or first under a header. */
@@ -122,6 +127,7 @@ export type RichTaskCardProps = {
     readonly onMoreToggle: (taskId: string) => void;
     /** Presses, drags and drops on the card, for a list that lets cards move. */
     readonly onDragPointer?: (event: ReactPointerEvent<HTMLButtonElement>) => void;
+    readonly onStoryOpen?: (taskId: string) => void;
 };
 
 /**
@@ -152,13 +158,27 @@ export function RichTaskCard(props: RichTaskCardProps) {
                 onPointerUp={props.onDragPointer}
                 type="button"
             />
-            <span
-                className="happy-rich-task-card__disc"
-                data-happy-desktop-ui="rich-task-disc"
-                data-ring={card.ring ? "" : undefined}
-            >
-                <ClayIcon label={card.title} size={card.ring ? 34 : 40} slug={card.iconSlug} />
-            </span>
+            {card.story ? (
+                <button
+                    aria-label={`${card.title}: open story`}
+                    className="happy-rich-task-card__disc"
+                    data-happy-desktop-ui="rich-task-disc"
+                    data-story=""
+                    onClick={() => props.onStoryOpen?.(card.id)}
+                    type="button"
+                >
+                    <StoryRing segments={card.story} size={50} />
+                    <ClayIcon label={card.title} size={34} slug={card.iconSlug} />
+                </button>
+            ) : (
+                <span
+                    className="happy-rich-task-card__disc"
+                    data-happy-desktop-ui="rich-task-disc"
+                    data-ring={card.ring ? "" : undefined}
+                >
+                    <ClayIcon label={card.title} size={card.ring ? 34 : 40} slug={card.iconSlug} />
+                </span>
+            )}
             <span className="happy-rich-task-card__body">
                 <span className="happy-rich-task-card__head">
                     <span
@@ -605,6 +625,7 @@ export function RichTaskList(props: RichTaskListProps) {
                 card={card}
                 key={`task:${card.id}`}
                 onMoreToggle={props.onMoreToggle}
+                {...(props.onStoryOpen ? { onStoryOpen: props.onStoryOpen } : {})}
                 {...(onTaskMove
                     ? {
                           onDragPointer: (event: ReactPointerEvent<HTMLButtonElement>) =>

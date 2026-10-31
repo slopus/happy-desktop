@@ -486,6 +486,8 @@ export type SidebarProps = Omit<HTMLAttributes<HTMLElement>, "style"> & {
     /** Always-visible compose hint. Its aria value may include equivalent chords. */
     composeShortcut?: KeyboardShortcut;
     composeTooltip?: string;
+    /** Scrolls with the list, above the search row: the stories header in rich mode. */
+    topAccessory?: ReactNode;
     /** A row above the compose row that opens the window's search. */
     searchRow?: { label: string; shortcut?: KeyboardShortcut; onOpen: () => void };
     footer?: ReactNode;
@@ -2480,6 +2482,7 @@ export function Sidebar(props: SidebarProps) {
         "composeShortcut",
         "composeTooltip",
         "searchRow",
+        "topAccessory",
         "footer",
         "foldControlPlacement",
         "foldControlReveal",
@@ -4181,6 +4184,7 @@ export function Sidebar(props: SidebarProps) {
                         if (event.target === event.currentTarget) dragCancel(event);
                     }}
                 >
+                    {local.topAccessory}
                     {local.searchRow ? (
                         <SidebarRow
                             active={false}

@@ -255,3 +255,4 @@ export * from "./happyAgent/happyAgentWorkspaceStore.js";
 export * from "./happyAgent/happyAgentViewPreferences.js";
 export * from "./richTasks/richTaskList.js";
 export * from "./richTasks/richTasksStore.js";
+export * from "./stories/storiesStore.js";

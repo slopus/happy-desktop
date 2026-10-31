@@ -15,6 +15,7 @@ import {
     type RichTaskFace,
     type RichTaskListRow,
     type RichTaskSubRowModel,
+    type StoryRingSegments,
 } from "happy-desktop-ui";
 
 const ARTIFACT_GLYPHS: Readonly<Record<string, IoniconName>> = {
@@ -136,6 +137,9 @@ export function AppHappyAgentRichTasks(props: {
     /** The open conversation and its group, which the selection follows. */
     readonly groupId?: string;
     readonly chatId?: string;
+    /** Each task's live stories, by task id: the ring around its card's disc. */
+    readonly stories?: ReadonlyMap<string, StoryRingSegments>;
+    readonly onStoryOpen?: (taskId: string) => void;
     readonly onSelect: (id: string) => void;
 }) {
     const now = useSyncExternalStore(
@@ -167,6 +171,7 @@ export function AppHappyAgentRichTasks(props: {
                 time: localAgoTime(task.agent.lastActivityAt ?? now, now),
                 status: task.agent.statusLine?.text ?? null,
                 iconSlug: task.icon?.slug ?? null,
+                ...(props.stories?.has(task.id) ? { story: props.stories.get(task.id)! } : {}),
                 faces: entry.faces.map((userId) => faceOf(userId, people, names, props.people)),
                 signal: task.agent.unread
                     ? "unread"
@@ -184,6 +189,7 @@ export function AppHappyAgentRichTasks(props: {
             onMoreToggle={props.store.taskExpandToggle}
             onSectionCollapseToggle={props.store.sectionCollapseToggle}
             onSelect={props.onSelect}
+            {...(props.onStoryOpen ? { onStoryOpen: props.onStoryOpen } : {})}
             onTaskMove={props.store.taskMove}
             onSubRowHide={(id) => {
                 const row = richTaskSubRowParse(id);

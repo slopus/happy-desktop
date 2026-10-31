@@ -12,6 +12,7 @@ import type {
     MessageFailure,
     MessageMode,
     MutationId,
+    MessageReplyTo,
     Project,
     SlashCommand,
     Task,
@@ -934,6 +935,8 @@ export interface SendMessageInput {
         | SendMessageToolCallRequest
     )[];
     text: string;
+    /** The story this message answers, only with `capabilities.storyArtifacts`. */
+    replyTo?: MessageReplyTo;
 }
 
 /**

@@ -33,6 +33,7 @@ import {
     type Task,
     type TaskMembership,
     type TaskSection,
+    type Story,
     type User,
     type UserMessage,
     type Workspace,
@@ -195,6 +196,11 @@ export interface FakeHappyAgentDaemon {
      * sections in its bootstrap; `undefined`, the default, is one without.
      */
     taskSectionsSet(sections: readonly TaskSection[] | undefined): void;
+    /**
+     * A protocol-34 daemon reporting `capabilities.storyArtifacts`, serving
+     * these stories; `undefined`, the default, is one without.
+     */
+    storiesSet(stories: readonly Story[] | undefined): void;
     /** An artifact only `getArtifact` answers for; the bootstrap never lists it. */
     artifactSeed(artifact: {
         readonly id: string;
@@ -423,6 +429,7 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
     let journal: HappyAgentEvent[] = [];
     let desktopLiveControl: boolean | undefined;
     let taskSections: readonly TaskSection[] | undefined;
+    let stories: Map<string, Story> | undefined;
     const artifacts = new Map<string, { id: string; title: string; agentId: string | null }>();
     const liveSessions = new Map<string, LiveSession>();
     const liveUrls = new HappyAgentClient({ endpoint: "http://fake-happy-agent.test/" });
@@ -689,12 +696,13 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
         ready: healthReady,
         status: healthReady ? ("ready" as const) : ("starting" as const),
         version: { daemon: daemonVersion, protocol },
-        ...(desktopLiveControl === undefined && taskSections === undefined
+        ...(desktopLiveControl === undefined && taskSections === undefined && stories === undefined
             ? {}
             : {
                   capabilities: {
                       ...(desktopLiveControl === undefined ? {} : { desktopLiveControl }),
                       ...(taskSections === undefined ? {} : { taskSections: true }),
+                      ...(stories === undefined ? {} : { storyArtifacts: true }),
                   },
               }),
     });
@@ -1015,6 +1023,30 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
             const source = { kind: "workspace", workspaceId: "ws", projectId: null, agentId };
             return {
                 artifact: { id, title, type: "html", status: "active", updatedAt: 1, source },
+            };
+        },
+        async listStories(...args: unknown[]) {
+            await record("listStories", args);
+            return { stories: [...(stories?.values() ?? [])], cursor: latestCursor };
+        },
+        async markStorySeen(artifactId: string, ...rest: unknown[]) {
+            await record("markStorySeen", [artifactId, ...rest]);
+            const held = stories?.get(artifactId);
+            if (held === undefined)
+                throw new HappyAgentApiError(404, "Not found.", "not_found", null);
+            const userId = profile.userId ?? null;
+            if (held.seenBy.some((entry) => entry.userId === userId)) return { story: held };
+            const story = { ...held, seenBy: [...held.seenBy, { userId, seenAt: 1 }] };
+            stories?.set(artifactId, story);
+            emit("story.changed", { story });
+            return { story };
+        },
+        async listStoryReplies(artifactId: string, ...rest: unknown[]) {
+            await record("listStoryReplies", [artifactId, ...rest]);
+            return {
+                agentId: stories?.get(artifactId)?.replyAgentId ?? "",
+                messages: [],
+                hasMore: false,
             };
         },
         async setTaskChild(taskId: string, ...rest: unknown[]) {
@@ -1590,6 +1622,12 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
         userSettingsGet: userSettingsOrdered,
         taskSectionsSet(sections) {
             taskSections = sections;
+        },
+        storiesSet(next) {
+            stories =
+                next === undefined
+                    ? undefined
+                    : new Map(next.map((story) => [story.artifactId, story]));
         },
         artifactSeed(artifact) {
             artifacts.set(artifact.id, { ...artifact });
