@@ -5,6 +5,7 @@ import {
     HappyAgentApiError,
     type Agent,
     type AgentActivityResponse,
+    type Artifact,
     type AgentContextUsage,
     type AgentDraftSnapshot,
     type Bot,
@@ -167,6 +168,14 @@ function drainSame(left: DaemonDrain | undefined, right: DaemonDrain | undefined
             left.targetVersion === right.targetVersion &&
             left.startedAt === right.startedAt)
     );
+}
+
+/** An artifact as the rich task list holds it. */
+function richArtifactOf(
+    artifact: Pick<Artifact, "id" | "type" | "title" | "updatedAt" | "source">,
+): RichTaskArtifact {
+    const { id, type, title, updatedAt } = artifact;
+    return { id, type, title, source: { agentId: artifact.source?.agentId ?? null }, updatedAt };
 }
 
 function errorDetail(error: unknown): string {
@@ -2113,12 +2122,32 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         publishGroups();
     };
 
-    /**
-     * Asked by a section or child-choice request when its queued turn comes, not
-     * when it is made: a daemon that lost `capabilities.taskSections` is sent nothing.
-     */
     const taskSectionsCapable = (): boolean =>
         sync.source.health()?.capabilities?.taskSections === true;
+
+    /**
+     * A section or child-choice request. The capability is asked when its queued
+     * turn comes, not when it is made: a daemon that lost it is sent nothing.
+     */
+    const taskSectionsMutation = <T>(
+        action: MutationAction,
+        queueKey: string,
+        request: (mutationId: string, signal: AbortSignal) => Promise<T>,
+        applied: (response: T) => void,
+    ): string => {
+        const mutationId = nextId();
+        return mutation(
+            action,
+            mutationId,
+            async () => (taskSectionsCapable() ? request(mutationId, deadlineSignal()) : null),
+            (response) => {
+                if (response) applied(response);
+            },
+            undefined,
+            undefined,
+            queueKey,
+        );
+    };
 
     /** Artifacts read for a shown child since the last bootstrap, which replaces them all. */
     const richArtifactsAsked = new Set<string>();
@@ -2354,12 +2383,12 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                 return;
             case "artifact.created": {
                 const { artifact } = event.payload;
-                const agentId = artifact.source?.agentId ?? null;
-                if (agentId === null || artifact.type === "story") return;
-                const { id, type, title, updatedAt } = artifact;
-                const entry = { id, type, title, source: { agentId }, updatedAt };
+                if (artifact.source?.agentId == null || artifact.type === "story") return;
                 groupsStore.setState((state) => ({
-                    taskArtifacts: [entry, ...state.taskArtifacts.filter((a) => a.id !== entry.id)],
+                    taskArtifacts: [
+                        richArtifactOf(artifact),
+                        ...state.taskArtifacts.filter((held) => held.id !== artifact.id),
+                    ],
                 }));
                 return;
             }
@@ -5442,27 +5471,14 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                 `task:${taskId}`,
             );
         },
-        reorderTaskAfterSection(taskId, afterSectionId) {
-            const mutationId = nextId();
-            return mutation(
+        reorderTaskAfterSection: (taskId, afterSectionId) =>
+            taskSectionsMutation(
                 "reorder_task",
-                mutationId,
-                async () =>
-                    taskSectionsCapable()
-                        ? client.reorderTask(
-                              taskId,
-                              { afterSectionId, mutationId },
-                              { signal: deadlineSignal() },
-                          )
-                        : null,
-                (response) => {
-                    if (response) taskResponseAdopt(response);
-                },
-                undefined,
-                undefined,
                 `task:${taskId}`,
-            );
-        },
+                (mutationId, signal) =>
+                    client.reorderTask(taskId, { afterSectionId, mutationId }, { signal }),
+                taskResponseAdopt,
+            ),
         richTasks: {
             get: richTasksGet,
             subscribe: (listener) => groupsStore.subscribe(() => listener()),
@@ -5475,18 +5491,10 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                     })
                     .then(({ artifact }) => {
                         if (closed || artifact.status !== "active") return;
-                        const { id, type, title, updatedAt } = artifact;
-                        const entry = {
-                            id,
-                            type,
-                            title,
-                            source: { agentId: artifact.source?.agentId ?? null },
-                            updatedAt,
-                        };
                         groupsStore.setState((state) => ({
                             taskArtifacts: [
-                                ...state.taskArtifacts.filter((held) => held.id !== id),
-                                entry,
+                                ...state.taskArtifacts.filter((held) => held.id !== artifact.id),
+                                richArtifactOf(artifact),
                             ],
                         }));
                     })
@@ -5494,56 +5502,33 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                     .catch(() => undefined);
             },
         },
-        replaceTaskSections(sections) {
-            const mutationId = nextId();
-            return mutation(
+        replaceTaskSections: (sections) =>
+            taskSectionsMutation(
                 "replace_task_sections",
-                mutationId,
-                async () =>
-                    taskSectionsCapable()
-                        ? client.replaceTaskSections(
-                              {
-                                  // Without `after`, every section keeps its place.
-                                  sections: sections.map(({ id, name, collapsed }) => ({
-                                      id,
-                                      name,
-                                      collapsed,
-                                  })),
-                                  mutationId,
-                              },
-                              { signal: deadlineSignal() },
-                          )
-                        : null,
-                (response) => {
-                    if (response) groupsStore.setState({ taskSections: response.sections });
-                },
-                undefined,
-                undefined,
                 "task-sections",
-            );
-        },
-        setTaskChild(taskId, ref, visibility) {
-            const mutationId = nextId();
-            return mutation(
+                (mutationId, signal) =>
+                    client.replaceTaskSections(
+                        {
+                            // Without `after`, every section keeps its place.
+                            sections: sections.map(({ id, name, collapsed }) => ({
+                                id,
+                                name,
+                                collapsed,
+                            })),
+                            mutationId,
+                        },
+                        { signal },
+                    ),
+                (response) => groupsStore.setState({ taskSections: response.sections }),
+            ),
+        setTaskChild: (taskId, ref, visibility) =>
+            taskSectionsMutation(
                 "set_task_child",
-                mutationId,
-                async () =>
-                    taskSectionsCapable()
-                        ? client.setTaskChild(
-                              taskId,
-                              ref,
-                              { visibility, mutationId },
-                              { signal: deadlineSignal() },
-                          )
-                        : null,
-                (response) => {
-                    if (response) taskResponseAdopt(response);
-                },
-                undefined,
-                undefined,
                 `task:${taskId}`,
-            );
-        },
+                (mutationId, signal) =>
+                    client.setTaskChild(taskId, ref, { visibility, mutationId }, { signal }),
+                taskResponseAdopt,
+            ),
         archiveTask(taskId) {
             return taskArchivalSet(taskId, true);
         },

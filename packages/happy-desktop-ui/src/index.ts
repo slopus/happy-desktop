@@ -127,20 +127,13 @@ export {
     type ClayIconSlug,
 } from "./ClayIcon";
 export {
-    RichTaskCard,
     RichTaskList,
-    RichTaskSectionHeader,
-    RichTaskSubRow,
     type RichTaskCardModel,
-    type RichTaskCardProps,
     type RichTaskFace,
     type RichTaskListProps,
     type RichTaskListRow,
     type RichTaskMoveAnchor,
-    type RichTaskMark,
-    type RichTaskSectionHeaderProps,
     type RichTaskSubRowModel,
-    type RichTaskSubRowProps,
 } from "./RichTaskList";
 export { StoriesRow, type StoriesRowItem } from "./StoriesRow";
 export { StoryMarkView, StoryRing, type StoryMark, type StoryRingSegments } from "./StoryRing";

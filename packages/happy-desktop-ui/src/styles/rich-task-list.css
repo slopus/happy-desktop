@@ -1,11 +1,8 @@
 /*
- * Rich task list — the "Sidebar sub-rows" proposal with corner variant B.
- *
- * One inset, the edge, frames the card's text: the title's cap top, the last
- * status baseline, and the time, the corner and every sub-row's trail are all
- * that far from the card's highlight (10.822px with Figtree at these sizes).
- * The body's top padding moves the text block until the cap top and the last
- * baseline insets are equal; the redline test measures both.
+ * Rich task list: the "Sidebar sub-rows" proposal, corner variant B. One inset,
+ * the edge (10.822px with Figtree at these sizes), stands between the card's
+ * highlight and the title's cap top, the last status baseline, the time, the
+ * corner and every sub-row's trail. The redline test measures them.
  */
 
 .happy-rich-tasks,
@@ -17,8 +14,7 @@
 .happy-rich-tasks {
     --happy-rich-task-edge: 10.822px;
     --happy-rich-task-chip: 14px;
-    /* Where each engine puts the status baseline in its 16px line: Chromium 12px,
-       Gecko and WebKit about a pixel lower (see the engine scopes below). */
+    /* The status baseline in its 16px line; Gecko and WebKit set their own below. */
     --happy-rich-task-status-baseline: 12px;
     --happy-rich-task-title-y: 0px;
 
@@ -50,19 +46,40 @@
     outline-offset: -2px;
 }
 
-/* ---- Section header --------------------------------------------------- */
-
-/* The space above a header is part of its own box: 8px, or 2px once folded.
-   Relative, as every row is, so a reorder can glide it by its offset. */
-.happy-rich-task-section {
+/* Every row is relative, so a reorder can glide it by its offset. */
+.happy-rich-task-section,
+.happy-rich-task-card,
+.happy-rich-task-row,
+.happy-rich-task-more {
     position: relative;
     display: flex;
     flex: none;
     align-items: center;
+}
+
+.happy-rich-task-section__name,
+.happy-rich-task-card__title,
+.happy-rich-task-row__label {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-rich-task-section,
+.happy-rich-task-card__time,
+.happy-rich-task-card__status,
+.happy-rich-task-row__detail,
+.happy-rich-task-row__changes {
+    color: var(--text-secondary);
+}
+
+/* The space above a header is its own: 8px, or 2px once folded. */
+.happy-rich-task-section {
     gap: 8px;
     height: 36px;
     padding: 8px 11px 0;
-    color: var(--text-secondary);
     font-size: 11.5px;
     font-weight: 600;
     letter-spacing: 0.12em;
@@ -75,28 +92,16 @@
     padding-top: 2px;
 }
 
-.happy-rich-task-section__name {
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
 /* ---- Card ------------------------------------------------------------- */
 
 .happy-rich-task-card {
-    position: relative;
-    display: flex;
-    flex: none;
-    align-items: center;
     gap: 10px;
     height: 68px;
     padding: 2px 7px;
 }
 
-/* The highlight is painted 2px inside the row, so two neighbouring highlights
-   keep 4px apart while each row keeps its whole hit box. */
+/* Painted 2px inside the row: neighbouring highlights stand 4px apart, and
+   each row keeps its whole hit box. */
 .happy-rich-task-card::before,
 .happy-rich-task-row::before {
     content: "";
@@ -117,8 +122,7 @@
     background: color-mix(in srgb, var(--text-link) 10%, transparent);
 }
 
-/* The select target covers the whole card under its content, so the corner's
-   own button can sit above it. */
+/* The select target lies under the content, so the corner's button sits above it. */
 .happy-rich-task-card__hit {
     position: absolute;
     inset: 0;
@@ -163,39 +167,30 @@
 }
 
 .happy-rich-task-card__title {
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
     font-size: 15.5px;
     font-weight: 600;
     line-height: 20px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
 }
 
-/* Shares the title's baseline, lifted by the difference in cap height so the
-   two cap tops align; its right edge is the edge. */
+/* On the title's baseline, lifted by the cap-height difference; ends on the edge. */
 .happy-rich-task-card__time {
     position: relative;
     top: -2.105px;
     flex: none;
     margin-right: calc(var(--happy-rich-task-edge) - 7px);
-    color: var(--text-secondary);
     font-size: 12.5px;
     font-variant-numeric: tabular-nums;
     line-height: 24px;
 }
 
-/* Two lines, clipped. Only the second makes room for the corner. */
+/* Two lines, clipped; the last baseline 53.17px down the highlight in every engine. */
 .happy-rich-task-card__status {
     position: relative;
-    /* Puts the last baseline 53.17px down the highlight in every engine. */
     top: calc(11.5px - var(--happy-rich-task-status-baseline));
     display: block;
     height: 32px;
     padding-right: 5px;
     overflow: hidden;
-    color: var(--text-secondary);
     font-size: 14px;
     line-height: 16px;
     overflow-wrap: anywhere;
@@ -209,9 +204,8 @@
     height: 16px;
 }
 
-/* Floats on line two, its right edge on the edge. Twice the baseline less
-   half the x-height (3.5px) tall, with its items centred, puts their centre
-   on the last line's x-height: corner variant B. */
+/* On line two, ending on the edge. Twice the baseline less half the x-height
+   tall, so its centred items sit on the last line's x-height. */
 .happy-rich-task-card__corner {
     /* eslint-disable-next-line happy-layout/use-flex-layout -- The corner rides in the status's second line so that line's words wrap around it. */
     float: right;
@@ -223,14 +217,14 @@
     margin: 0 calc(var(--happy-rich-task-edge) - 12px) 0 6px;
 }
 
+/* Each face tucks 30% under the next; the padding gives the last one back. */
 .happy-rich-task-card__faces {
     display: flex;
     flex: none;
-    /* Each face tucks 30% under the next; the padding gives the last one back. */
     padding-right: calc(var(--happy-rich-task-chip) * 0.3);
 }
 
-/* Each face is ringed in the sidebar's ground, so overlapping faces read apart. */
+/* Ringed in the sidebar's ground, so overlapping faces read apart. */
 .happy-rich-task-card__faces .happy-avatar {
     width: var(--happy-rich-task-chip);
     height: var(--happy-rich-task-chip);
@@ -257,8 +251,7 @@
     background: var(--text-secondary);
 }
 
-/* The braille cell's 8px box carries 1px of air each side of its 6px of ink;
-   the slot is the ink, so the ink ends on the edge. */
+/* The braille cell's 8px box holds 6px of ink; the slot is the ink, ending on the edge. */
 .happy-rich-task__working {
     display: flex;
     flex: none;
@@ -270,8 +263,14 @@
     flex: none;
 }
 
-/* A text button on the status baseline: the strut is status-sized, and the
-   label shares its baseline. */
+.happy-rich-task-more-button,
+.happy-rich-task-more {
+    color: var(--text-link);
+    font-size: 12.5px;
+    font-weight: 600;
+}
+
+/* A text button on the status baseline: a status-sized strut sets it. */
 .happy-rich-task-more-button {
     position: relative;
     z-index: 1;
@@ -280,9 +279,6 @@
     align-self: flex-start;
     height: 16px;
     padding: 0;
-    color: var(--text-link);
-    font-size: 12.5px;
-    font-weight: 600;
     line-height: 16px;
     white-space: nowrap;
     pointer-events: auto;
@@ -299,15 +295,10 @@
     text-decoration: underline;
 }
 
-/* ---- Sub-row ---------------------------------------------------------- */
+/* ---- Sub-row and "+k more" ---------------------------------------------- */
 
-/* The 18px mark ends where the card's disc ends, so mark and disc both stand
-   10px from text that starts where the card's text starts. */
+/* The 18px mark ends where the disc ends, 10px before text aligned with the card's. */
 .happy-rich-task-row {
-    position: relative;
-    display: flex;
-    flex: none;
-    align-items: center;
     gap: 8px;
     height: 30px;
     padding: 0 var(--happy-rich-task-edge) 0 39px;
@@ -328,12 +319,21 @@
     opacity: 0.5;
 }
 
-.happy-rich-task-row__lead {
+.happy-rich-task-row__lead,
+.happy-rich-task-row__trail {
     display: flex;
-    flex: 1;
     align-items: center;
+}
+
+.happy-rich-task-row__lead {
+    flex: 1;
     gap: 10px;
     min-width: 0;
+}
+
+.happy-rich-task-row__trail {
+    flex: none;
+    gap: 6px;
 }
 
 .happy-rich-task-row__mark {
@@ -353,27 +353,7 @@
     color: var(--text-secondary);
 }
 
-.happy-rich-task-row__label {
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.happy-rich-task-row__detail {
-    color: var(--text-secondary);
-}
-
-.happy-rich-task-row__trail {
-    display: flex;
-    flex: none;
-    align-items: center;
-    gap: 6px;
-}
-
 .happy-rich-task-row__changes {
-    color: var(--text-secondary);
     font-size: 12.5px;
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
@@ -387,25 +367,15 @@
     color: var(--git-removed-text);
 }
 
-/* ---- "+k more" under the sub-rows -------------------------------------- */
-
 .happy-rich-task-more {
-    position: relative;
-    display: flex;
-    flex: none;
-    align-items: center;
     height: 24px;
     padding: 0 0 0 67px;
-    color: var(--text-link);
-    font-size: 12.5px;
-    font-weight: 600;
     line-height: 24px;
 }
 
-/* Engine scopes: only Gecko parses -moz-appearance, only WebKit parses
-   -webkit-named-image. The same Figtree at 14/16px stands its baseline 1px
-   (Gecko) and 57/64px (WebKit) lower in the line than Chromium does, and
-   WebKit stands the 15.5/20px title 23/64px lower too. */
+/* Engine scopes: only Gecko parses -moz-appearance, only WebKit
+   -webkit-named-image. Gecko stands the 14/16px status baseline 1px lower
+   than Chromium, WebKit 57/64px lower and the 15.5/20px title 23/64px lower. */
 @supports (-moz-appearance: none) {
     .happy-rich-tasks {
         --happy-rich-task-status-baseline: 13px;

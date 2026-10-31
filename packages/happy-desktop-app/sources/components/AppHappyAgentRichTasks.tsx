@@ -28,9 +28,7 @@ const ARTIFACT_GLYPHS: Readonly<Record<string, IoniconName>> = {
 };
 
 /** A sub-row's id: unique in the list, since one child can stand under two tasks. */
-export function richTaskSubRowId(taskId: string, ref: RichTaskChildRef): string {
-    return `${taskId}/${ref.kind}:${ref.id}`;
-}
+const subRowId = (taskId: string, ref: RichTaskChildRef) => `${taskId}/${ref.kind}:${ref.id}`;
 
 /** The task and child a sub-row id names, or `undefined` for a card's id. */
 export function richTaskSubRowParse(
@@ -38,16 +36,27 @@ export function richTaskSubRowParse(
 ): { readonly taskId: string; readonly ref: RichTaskChildRef } | undefined {
     const match = /^([^/]+)\/(workspace|agent|artifact):(.+)$/u.exec(id);
     if (!match) return undefined;
-    const kind = match[2] as RichTaskChildRef["kind"];
-    return { taskId: match[1]!, ref: { kind, id: match[3]! } };
+    return {
+        taskId: match[1]!,
+        ref: { kind: match[2] as RichTaskChildRef["kind"], id: match[3]! },
+    };
 }
 
+const refOf = (child: RichTaskSubWork): RichTaskChildRef => ({
+    kind: child.kind,
+    id: (child.kind === "agent"
+        ? child.agent
+        : child.kind === "workspace"
+          ? child.workspace
+          : child.artifact
+    ).id,
+});
+
 function subRowOf(taskId: string, child: RichTaskSubWork): RichTaskSubRowModel {
-    const base = { dimmed: child.hidden };
+    const base = { id: subRowId(taskId, refOf(child)), dimmed: child.hidden };
     if (child.kind === "agent")
         return {
             ...base,
-            id: richTaskSubRowId(taskId, { kind: "agent", id: child.agent.id }),
             mark: { kind: "glyph", icon: "hardware-chip-outline" },
             label: child.agent.title ?? "Subtask",
             working: child.agent.status !== "idle",
@@ -55,21 +64,16 @@ function subRowOf(taskId: string, child: RichTaskSubWork): RichTaskSubRowModel {
     if (child.kind === "workspace")
         return {
             ...base,
-            id: richTaskSubRowId(taskId, { kind: "workspace", id: child.workspace.id }),
             mark: { kind: "glyph", icon: "git-branch-outline" },
             label: child.workspace.name,
         };
-    return {
-        ...base,
-        id: richTaskSubRowId(taskId, { kind: "artifact", id: child.artifact.id }),
-        mark: { kind: "glyph", icon: ARTIFACT_GLYPHS[child.artifact.type] ?? "document-outline" },
-        label: child.artifact.title,
-    };
+    const icon = ARTIFACT_GLYPHS[child.artifact.type] ?? "document-outline";
+    return { ...base, mark: { kind: "glyph", icon }, label: child.artifact.title };
 }
 
 /**
- * What the open conversation is in the list: the subtask sub-row or card that
- * is it, else a sub-row for its workspace, else the card of its workspace.
+ * What the open conversation is in the list: the subtask sub-row, else the
+ * card that is it, else a sub-row for its workspace, else its workspace's card.
  */
 function selectedOf(
     entries: readonly RichTaskListEntry[],
@@ -77,50 +81,27 @@ function selectedOf(
     groupId: string | undefined,
     chatId: string | undefined,
 ): string | null {
-    const cards = entries.flatMap((entry) => (entry.kind === "task" ? [entry] : []));
-    const own = (task: HappyAgentTask) => task.conversation.id === chatId;
-    for (const match of [
-        (child: RichTaskSubWork) => child.kind === "agent" && child.agent.id === chatId,
-        (child: RichTaskSubWork) => child.kind === "workspace" && child.workspace.id === groupId,
-    ]) {
-        for (const entry of cards) {
-            const child = entry.children.find(match);
-            if (child) return subRowOf(entry.task.id, child).id;
+    const child = (match: (child: RichTaskSubWork) => boolean) => {
+        for (const entry of entries) {
+            const found = entry.kind === "task" ? entry.children.find(match) : undefined;
+            if (found && entry.kind === "task") return subRowId(entry.task.id, refOf(found));
         }
-        // After the subtasks, before the workspaces: the card whose own conversation is open.
-        const card = tasks.find(own);
-        if (card && chatId !== undefined) return card.id;
-    }
-    return tasks.find((task) => task.workspaceId === groupId)?.id ?? null;
+        return undefined;
+    };
+    return (
+        child((found) => found.kind === "agent" && found.agent.id === chatId) ??
+        (chatId === undefined
+            ? undefined
+            : tasks.find((task) => task.conversation.id === chatId)?.id) ??
+        child((found) => found.kind === "workspace" && found.workspace.id === groupId) ??
+        tasks.find((task) => task.workspaceId === groupId)?.id ??
+        null
+    );
 }
 
 const NO_NAMES: ReadonlyMap<string, string> = new Map();
 const NO_SUBSCRIBE = () => () => undefined;
 const NO_NAMES_GET = () => NO_NAMES;
-
-/**
- * A writer's face: a task owner's photo, else the name the connection knows,
- * else a placeholder while the name is read.
- */
-function faceOf(
-    userId: string,
-    owners: ReadonlyMap<string, RichTaskFace>,
-    names: ReadonlyMap<string, string>,
-    people: HappyAgentArtifactPeopleStore | undefined,
-): RichTaskFace {
-    const owner = owners.get(userId);
-    if (owner) return owner;
-    const name = names.get(userId);
-    if (name === undefined) people?.userNameRequest(userId);
-    return name === undefined
-        ? { id: userId, label: "Someone", initials: "?" }
-        : { id: userId, label: name };
-}
-
-/** The minute the clock is in, so the cards' times redraw once a minute. */
-function minuteOf(clock: HappyAgentClockStore): number {
-    return Math.floor(clock.get() / 60_000) * 60_000;
-}
 
 /**
  * The Tasks area in rich mode: the state projection worded and pictured for
@@ -142,24 +123,30 @@ export function AppHappyAgentRichTasks(props: {
     readonly onStoryOpen?: (taskId: string) => void;
     readonly onSelect: (id: string) => void;
 }) {
-    const now = useSyncExternalStore(
-        props.clock.subscribe,
-        () => minuteOf(props.clock),
-        () => minuteOf(props.clock),
-    );
+    // The minute the clock is in, so the cards' times redraw once a minute.
+    const minute = () => Math.floor(props.clock.get() / 60_000) * 60_000;
+    const now = useSyncExternalStore(props.clock.subscribe, minute, minute);
     const names = useSyncExternalStore(
         props.people?.subscribe ?? NO_SUBSCRIBE,
         props.people?.get ?? NO_NAMES_GET,
         props.people?.get ?? NO_NAMES_GET,
     );
-    const people = new Map<string, RichTaskFace>();
+    const owners = new Map<string, RichTaskFace>();
     for (const { owner } of props.tasks)
         if (owner?.userId !== undefined)
-            people.set(owner.userId, {
+            owners.set(owner.userId, {
                 id: owner.userId,
                 label: owner.name ?? "Someone",
                 ...(owner.avatar ? { imageUrl: owner.avatar.url } : {}),
             });
+    /** A writer's face: a task owner's photo, else the name the connection knows, else a placeholder while it is read. */
+    const faceOf = (userId: string): RichTaskFace => {
+        const name = names.get(userId);
+        if (owners.has(userId)) return owners.get(userId)!;
+        if (name !== undefined) return { id: userId, label: name };
+        props.people?.userNameRequest(userId);
+        return { id: userId, label: "Someone", initials: "?" };
+    };
     const rows = props.entries.map((entry): RichTaskListRow => {
         if (entry.kind === "section") return { kind: "section", ...entry.section };
         const { task } = entry;
@@ -171,8 +158,8 @@ export function AppHappyAgentRichTasks(props: {
                 time: localAgoTime(task.agent.lastActivityAt ?? now, now),
                 status: task.agent.statusLine?.text ?? null,
                 iconSlug: task.icon?.slug ?? null,
-                ...(props.stories?.has(task.id) ? { story: props.stories.get(task.id)! } : {}),
-                faces: entry.faces.map((userId) => faceOf(userId, people, names, props.people)),
+                story: props.stories?.get(task.id),
+                faces: entry.faces.map(faceOf),
                 signal: task.agent.unread
                     ? "unread"
                     : task.agent.status !== "idle"
@@ -189,12 +176,12 @@ export function AppHappyAgentRichTasks(props: {
             onMoreToggle={props.store.taskExpandToggle}
             onSectionCollapseToggle={props.store.sectionCollapseToggle}
             onSelect={props.onSelect}
-            {...(props.onStoryOpen ? { onStoryOpen: props.onStoryOpen } : {})}
-            onTaskMove={props.store.taskMove}
+            onStoryOpen={props.onStoryOpen}
             onSubRowHide={(id) => {
                 const row = richTaskSubRowParse(id);
                 if (row) props.store.childHide(row.taskId, row.ref);
             }}
+            onTaskMove={props.store.taskMove}
             rows={rows}
             selectedId={selectedOf(props.entries, props.tasks, props.groupId, props.chatId)}
         />

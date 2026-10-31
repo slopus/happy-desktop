@@ -15,31 +15,51 @@ import { richTaskList, type RichTaskChildRef, type RichTaskListEntry } from "./r
  */
 export type HappyAgentRichTasksSnapshot =
     | { readonly mode: "classic" }
-    | {
-          readonly mode: "rich";
-          /** In key order; section headers only while `tasks.sections` is on too. */
-          readonly entries: readonly RichTaskListEntry[];
-      };
+    /** Entries in key order; section headers only while `tasks.sections` is on too. */
+    | { readonly mode: "rich"; readonly entries: readonly RichTaskListEntry[] };
+
+/** Where a moved card lands: after a card (`null`: first of all), or first under a section. */
+export type RichTaskMoveAnchor =
+    | { readonly afterId: string | null }
+    | { readonly afterSectionId: string };
 
 export interface HappyAgentRichTasksStore {
     get(): HappyAgentRichTasksSnapshot;
     subscribe(listener: () => void): () => void;
     /** "+k more" or "hide" under a card: the reader's own view, never sent. */
     taskExpandToggle(taskId: string): void;
-    /** Folds or unfolds one of the reader's sections. */
     sectionCollapseToggle(sectionId: string): void;
     /** Takes one child out from under a task's card, for every member. */
     childHide(taskId: string, ref: RichTaskChildRef): void;
-    /** Moves a card after another (`null`: first of all), or first under a section. */
     taskMove(taskId: string, anchor: RichTaskMoveAnchor): void;
     [Symbol.dispose](): void;
 }
 
-export type RichTaskMoveAnchor =
-    | { readonly afterId: string | null }
-    | { readonly afterSectionId: string };
+type Settings = { readonly rich: boolean; readonly sections: boolean };
 
-export interface HappyAgentRichTasksDeps {
+const OFF: Settings = { rich: false, sections: false };
+const CLASSIC: HappyAgentRichTasksSnapshot = { mode: "classic" };
+const CONNECTION = "connection";
+const nothing = () => undefined;
+
+/** A store that only ever draws the classic list, for a window with no Happy Agent. */
+export const happyAgentRichTasksStoreNone: HappyAgentRichTasksStore = {
+    get: () => CLASSIC,
+    subscribe: () => nothing,
+    taskExpandToggle: nothing,
+    sectionCollapseToggle: nothing,
+    childHide: nothing,
+    taskMove: nothing,
+    [Symbol.dispose]: nothing,
+};
+
+/**
+ * The rich task list of one connection, from what the connection already
+ * reconciles. The two settings are read and followed only from a daemon with
+ * the capability, so an older daemon is asked nothing new. Opens nothing until
+ * subscribed.
+ */
+export function happyAgentRichTasksStoreCreate(deps: {
     readonly client: HappyAgentUserSettingsSource["client"];
     readonly connection: Pick<
         HappyAgentConnection,
@@ -50,34 +70,8 @@ export interface HappyAgentRichTasksDeps {
         | "reorderTask"
         | "reorderTaskAfterSection"
     >;
-}
-
-type Settings = { readonly rich: boolean; readonly sections: boolean };
-
-const OFF: Settings = { rich: false, sections: false };
-const CLASSIC: HappyAgentRichTasksSnapshot = { mode: "classic" };
-const CONNECTION = "connection";
-
-/** A store that only ever draws the classic list, for a window with no Happy Agent. */
-export const happyAgentRichTasksStoreNone: HappyAgentRichTasksStore = {
-    get: () => CLASSIC,
-    subscribe: () => () => undefined,
-    taskExpandToggle: () => undefined,
-    sectionCollapseToggle: () => undefined,
-    childHide: () => undefined,
-    taskMove: () => undefined,
-    [Symbol.dispose]: () => undefined,
-};
-
-/**
- * The rich task list of one connection. Tasks, memberships and sections come
- * from what the connection already reconciles; the two settings are read and
- * followed only from a daemon with the capability, so an older daemon is
- * asked nothing it was not asked before. Opens nothing until subscribed.
- */
-export function happyAgentRichTasksStoreCreate(
-    deps: HappyAgentRichTasksDeps,
-): HappyAgentRichTasksStore {
+}): HappyAgentRichTasksStore {
+    const { connection } = deps;
     const settings = happyAgentUserSettingsCreate<Settings>({
         empty: OFF,
         equal: (left, right) => left.rich === right.rich && left.sections === right.sections,
@@ -93,7 +87,7 @@ export function happyAgentRichTasksStoreCreate(
                 ["tasks.sections", chosen.sections || null],
             ]),
         deviceParse: () => OFF,
-        deviceSerialize: () => undefined,
+        deviceSerialize: nothing,
     });
     const listeners = new Set<() => void>();
     let expanded: ReadonlySet<string> = new Set();
@@ -110,14 +104,12 @@ export function happyAgentRichTasksStoreCreate(
           }
         | undefined;
 
-    const capable = (): boolean =>
-        deps.connection.sync.health()?.capabilities?.taskSections === true;
+    const capable = (): boolean => connection.sync.health()?.capabilities?.taskSections === true;
 
     const get = (): HappyAgentRichTasksSnapshot => {
-        if (!capable()) return CLASSIC;
-        const chosen = settings.choicesRead(CONNECTION);
+        const chosen = capable() ? settings.choicesRead(CONNECTION) : OFF;
         if (!chosen.rich) return CLASSIC;
-        const input = deps.connection.richTasks.get();
+        const input = connection.richTasks.get();
         if (
             last?.input === input &&
             last.sections === chosen.sections &&
@@ -129,7 +121,7 @@ export function happyAgentRichTasksStoreCreate(
             mode: "rich",
             entries: richTaskList({
                 tasks,
-                agents: [...tasks.map((task) => task.agent), ...input.bots.map((bot) => bot.agent)],
+                agents: [...tasks, ...input.bots].map((owner) => owner.agent),
                 memberships: input.memberships,
                 sections: chosen.sections ? input.sections : [],
                 workspaces: input.workspaces.filter((workspace) => workspace.status === "active"),
@@ -141,6 +133,7 @@ export function happyAgentRichTasksStoreCreate(
         last = { input, sections: chosen.sections, expanded, snapshot };
         return snapshot;
     };
+    const rich = (): boolean => get().mode === "rich";
 
     // Settings are followed only while someone listens and the daemon has the capability.
     const settingsFollow = (): void => {
@@ -153,7 +146,7 @@ export function happyAgentRichTasksStoreCreate(
             try {
                 settingsStop = settings.connectionFollow(CONNECTION, {
                     client: deps.client,
-                    sync: deps.connection.sync,
+                    sync: connection.sync,
                 });
             } finally {
                 settingsStarting = false;
@@ -164,18 +157,14 @@ export function happyAgentRichTasksStoreCreate(
     // A shown artifact the bootstrap did not list (it lists each task's latest
     // twenty) is read on its own, only while the list is rich.
     const artifactsRead = (): void => {
-        if (listeners.size === 0 || get().mode !== "rich") return;
-        const { tasks, memberships, artifacts } = deps.connection.richTasks.get();
+        if (listeners.size === 0 || !rich()) return;
+        const { tasks, memberships, artifacts } = connection.richTasks.get();
         const joined = new Set(memberships.map((membership) => membership.taskId));
         const held = new Set(artifacts.map((artifact) => artifact.id));
         for (const task of tasks)
-            for (const child of joined.has(task.id) ? (task.children ?? []) : [])
-                if (
-                    child.ref.kind === "artifact" &&
-                    child.visibility === "shown" &&
-                    !held.has(child.ref.id)
-                )
-                    deps.connection.richTasks.artifactRead(child.ref.id);
+            for (const { ref, visibility } of joined.has(task.id) ? (task.children ?? []) : [])
+                if (ref.kind === "artifact" && visibility === "shown" && !held.has(ref.id))
+                    connection.richTasks.artifactRead(ref.id);
     };
 
     const notify = (): void => {
@@ -185,22 +174,24 @@ export function happyAgentRichTasksStoreCreate(
         for (const listener of listeners) listener();
     };
 
-    const rich = (): boolean => get().mode === "rich";
+    const releaseAll = (): void => {
+        for (const stop of release) stop();
+        release = [];
+    };
 
     return {
         get,
         subscribe(listener) {
-            if (disposed) return () => undefined;
+            if (disposed) return nothing;
             listeners.add(listener);
             if (release.length === 0)
-                release = [deps.connection.richTasks.subscribe(notify), settings.subscribe(notify)];
+                release = [connection.richTasks.subscribe(notify), settings.subscribe(notify)];
             settingsFollow();
             artifactsRead();
             return () => {
                 listeners.delete(listener);
                 if (listeners.size > 0) return;
-                for (const stop of release) stop();
-                release = [];
+                releaseAll();
                 settingsFollow();
             };
         },
@@ -212,9 +203,9 @@ export function happyAgentRichTasksStoreCreate(
         },
         sectionCollapseToggle(sectionId) {
             if (!rich()) return;
-            const { sections } = deps.connection.richTasks.get();
+            const { sections } = connection.richTasks.get();
             if (!sections.some((section) => section.id === sectionId)) return;
-            deps.connection.replaceTaskSections(
+            connection.replaceTaskSections(
                 sections.map((section) =>
                     section.id === sectionId
                         ? { ...section, collapsed: !section.collapsed }
@@ -223,20 +214,19 @@ export function happyAgentRichTasksStoreCreate(
             );
         },
         childHide(taskId, ref) {
-            if (rich()) deps.connection.setTaskChild(taskId, ref, "hidden");
+            if (rich()) connection.setTaskChild(taskId, ref, "hidden");
         },
         taskMove(taskId, anchor) {
             if (!rich()) return;
             if ("afterSectionId" in anchor)
-                deps.connection.reorderTaskAfterSection(taskId, anchor.afterSectionId);
-            else deps.connection.reorderTask(taskId, anchor.afterId);
+                connection.reorderTaskAfterSection(taskId, anchor.afterSectionId);
+            else connection.reorderTask(taskId, anchor.afterId);
         },
         [Symbol.dispose]() {
             if (disposed) return;
             disposed = true;
             listeners.clear();
-            for (const stop of release) stop();
-            release = [];
+            releaseAll();
             settingsStop?.();
             settingsStop = undefined;
         },

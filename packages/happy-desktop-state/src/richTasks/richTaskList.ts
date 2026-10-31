@@ -1,29 +1,20 @@
 /*
  * The rich task list: which tasks the reader sees, under which section, and
- * which of each task's sub-work stands under its card.
- *
- * The inputs are the client package's protocol-34 types (API.md, "Rich
- * tasks"), narrowed to the fields the list reads, so a task, membership or
- * workspace as the wire carries it is one, and so is a small fixture.
+ * which of each task's sub-work stands under its card. Inputs are the client's
+ * protocol-34 types narrowed to the fields read, so wire objects and small
+ * fixtures both fit.
  */
 import type {
     Agent,
+    Artifact,
     Task,
-    TaskChild,
     TaskChildRef,
-    TaskIcon,
     TaskMembership,
     TaskSection,
     Workspace,
 } from "@slopus/happy-agent-client";
 
 export type RichTaskChildRef = TaskChildRef;
-
-/** A slug from the icon library; the type set may grow. */
-export type RichTaskIcon = TaskIcon;
-
-/** One choice about a (task, child) pair, shared by every member. No choice is the default. */
-export type RichTaskChildChoice = TaskChild;
 
 /** An agent as the list reads it; `unread.from` names who wrote since the reader last read it. */
 export type RichTaskAgent = Pick<
@@ -39,26 +30,14 @@ export type RichTask = Pick<Task, "id" | "name" | "icon" | "children"> & {
     readonly agent: RichTaskAgent;
 };
 
-export type RichTaskMembership = Pick<TaskMembership, "taskId" | "orderKey" | "hidden">;
-
-/** A header in the memberships' order-key space: it heads every task keyed after it. */
-export type RichTaskSection = TaskSection;
-
 /** A workspace, with the line totals over main when the client holds them. */
 export type RichTaskWorkspace = Pick<
     Workspace,
     "id" | "name" | "projectId" | "creatorAgentId" | "subtaskAgentId" | "updatedAt"
-> & {
-    readonly addedLines?: number;
-    readonly deletedLines?: number;
-};
+> & { readonly addedLines?: number; readonly deletedLines?: number };
 
-export type RichTaskArtifact = {
-    readonly id: string;
-    readonly type: string;
-    readonly title: string;
+export type RichTaskArtifact = Pick<Artifact, "id" | "type" | "title" | "updatedAt"> & {
     readonly source: { readonly agentId: string | null };
-    readonly updatedAt: number;
 };
 
 /** One sub-row; `hidden` ones are drawn only while the card is expanded. */
@@ -68,31 +47,26 @@ export type RichTaskSubWork = { readonly hidden: boolean } & (
     | { readonly kind: "artifact"; readonly artifact: RichTaskArtifact }
 );
 
-export type RichTaskEntry = {
-    readonly kind: "task";
-    readonly task: RichTask;
-    /** The sub-rows drawn under the card, most urgent first. */
-    readonly children: readonly RichTaskSubWork[];
-    /** How many children are not drawn: the "+k more" count. */
-    readonly more: number;
-    readonly expanded: boolean;
-    /** `unread.from` without the reader: the faces beside the dot. */
-    readonly faces: readonly string[];
-};
-
 export type RichTaskListEntry =
-    | { readonly kind: "section"; readonly section: RichTaskSection }
-    | RichTaskEntry;
+    | { readonly kind: "section"; readonly section: TaskSection }
+    | {
+          readonly kind: "task";
+          readonly task: RichTask;
+          /** The sub-rows drawn under the card, most urgent first. */
+          readonly children: readonly RichTaskSubWork[];
+          /** How many children are not drawn: the "+k more" count. */
+          readonly more: number;
+          readonly expanded: boolean;
+          /** `unread.from` without the reader: the faces beside the dot. */
+          readonly faces: readonly string[];
+      };
 
 export type RichTaskListInput = {
     readonly tasks: readonly RichTask[];
-    /**
-     * Every agent the client holds, other tasks' and bots' included: a "shown"
-     * choice may put any of them, or any of their subtasks, under a task.
-     */
+    /** Every agent the client holds: a "shown" choice may put any of them, or their subtasks, under a task. */
     readonly agents: readonly RichTaskAgent[];
-    readonly memberships: readonly RichTaskMembership[];
-    readonly sections: readonly RichTaskSection[];
+    readonly memberships: readonly Pick<TaskMembership, "taskId" | "orderKey" | "hidden">[];
+    readonly sections: readonly TaskSection[];
     readonly workspaces: readonly RichTaskWorkspace[];
     readonly artifacts: readonly RichTaskArtifact[];
     /** The reader, left out of the faces; `null` for the standalone person. */
@@ -102,28 +76,19 @@ export type RichTaskListInput = {
 };
 
 /** How many sub-rows a card shows before "+k more". */
-export const RICH_TASK_SHOWN_CHILDREN = 3;
+const SHOWN_CHILDREN = 3;
 
-function descendants(agent: RichTaskAgent): readonly RichTaskAgent[] {
-    return (agent.subtasks ?? []).flatMap((subtask) => [subtask, ...descendants(subtask)]);
-}
+const descendants = (agent: RichTaskAgent): readonly RichTaskAgent[] =>
+    (agent.subtasks ?? []).flatMap((subtask) => [subtask, ...descendants(subtask)]);
 
-function childKey(ref: RichTaskChildRef): string {
-    return `${ref.kind}:${ref.id}`;
-}
-
-function childAt(child: RichTaskSubWork): number {
-    if (child.kind === "agent") return child.agent.lastActivityAt ?? 0;
-    if (child.kind === "workspace") return child.workspace.updatedAt;
-    return child.artifact.updatedAt;
-}
+const childAt = (child: RichTaskSubWork): number =>
+    child.kind === "agent"
+        ? (child.agent.lastActivityAt ?? 0)
+        : (child.kind === "workspace" ? child.workspace : child.artifact).updatedAt;
 
 /** A subtask waiting on the reader comes first; then the most recently active. */
-function urgencyOrder(left: RichTaskSubWork, right: RichTaskSubWork): number {
-    const asks = (child: RichTaskSubWork) =>
-        child.kind === "agent" && child.agent.pendingQuestionId !== null ? 0 : 1;
-    return asks(left) - asks(right) || childAt(right) - childAt(left);
-}
+const asks = (child: RichTaskSubWork) =>
+    child.kind === "agent" && child.agent.pendingQuestionId !== null ? 0 : 1;
 
 /**
  * A task's sub-work: the workspaces and artifacts its agents made and the
@@ -131,59 +96,50 @@ function urgencyOrder(left: RichTaskSubWork, right: RichTaskSubWork): number {
  * minus what a choice hides. A shown child is looked up in the whole
  * collections, since it may be something the task did not make.
  */
-export function richTaskChildren(
-    task: RichTask,
-    agents: readonly RichTaskAgent[],
-    workspaces: readonly RichTaskWorkspace[],
-    artifacts: readonly RichTaskArtifact[],
-): readonly RichTaskSubWork[] {
+function richTaskChildren(task: RichTask, input: RichTaskListInput): RichTaskSubWork[] {
     const subtasks = descendants(task.agent);
-    const agentIds = new Set([task.agent.id, ...subtasks.map((agent) => agent.id)]);
-    const owned = (id: string | null | undefined) => id != null && agentIds.has(id);
+    const subtaskIds = new Set(subtasks.map((agent) => agent.id));
+    const owned = (id: string | null | undefined) =>
+        id != null && (id === task.agent.id || subtaskIds.has(id));
     const said = new Map(
-        (task.children ?? []).map((edge) => [childKey(edge.ref), edge.visibility]),
+        (task.children ?? []).map((edge) => [`${edge.ref.kind}:${edge.ref.id}`, edge.visibility]),
     );
     const children: RichTaskSubWork[] = [];
     // Shown by an edge, or derived and not hidden by one; derived and hidden waits behind "+k more".
-    const consider = (
-        ref: RichTaskChildRef,
-        derived: boolean,
-        child: (hidden: boolean) => RichTaskSubWork,
-    ) => {
-        const visibility = said.get(childKey(ref));
-        if (visibility === "shown" || (derived && visibility === undefined))
-            children.push(child(false));
-        else if (derived) children.push(child(true));
+    const consider = (ref: TaskChildRef, derived: boolean, child: RichTaskSubWork) => {
+        const visibility = said.get(`${ref.kind}:${ref.id}`);
+        if (visibility === "shown" || (derived && visibility === undefined)) children.push(child);
+        else if (derived) children.push({ ...child, hidden: true });
     };
     const candidates = new Map(
-        [...subtasks, ...agents.flatMap((agent) => [agent, ...descendants(agent)])].map((agent) => [
-            agent.id,
-            agent,
-        ]),
+        [...subtasks, ...input.agents.flatMap((agent) => [agent, ...descendants(agent)])].map(
+            (agent) => [agent.id, agent],
+        ),
     );
     candidates.delete(task.agent.id);
-    const subtaskIds = new Set(subtasks.map((agent) => agent.id));
     for (const agent of candidates.values())
         consider(
             { kind: "agent", id: agent.id },
             subtaskIds.has(agent.id) &&
                 (agent.status !== "idle" || agent.pendingQuestionId !== null),
-            (hidden) => ({ kind: "agent", agent, hidden }),
+            { kind: "agent", agent, hidden: false },
         );
-    for (const workspace of workspaces)
+    for (const workspace of input.workspaces)
         consider(
             { kind: "workspace", id: workspace.id },
             owned(workspace.creatorAgentId) || owned(workspace.subtaskAgentId),
-            (hidden) => ({ kind: "workspace", workspace, hidden }),
+            { kind: "workspace", workspace, hidden: false },
         );
-    for (const artifact of artifacts)
+    for (const artifact of input.artifacts)
         if (artifact.type !== "story")
-            consider(
-                { kind: "artifact", id: artifact.id },
-                owned(artifact.source.agentId),
-                (hidden) => ({ kind: "artifact", artifact, hidden }),
-            );
-    return children.sort(urgencyOrder);
+            consider({ kind: "artifact", id: artifact.id }, owned(artifact.source.agentId), {
+                kind: "artifact",
+                artifact,
+                hidden: false,
+            });
+    return children.sort(
+        (left, right) => asks(left) - asks(right) || childAt(right) - childAt(left),
+    );
 }
 
 /**
@@ -193,10 +149,7 @@ export function richTaskChildren(
  */
 export function richTaskList(input: RichTaskListInput): readonly RichTaskListEntry[] {
     const tasks = new Map(input.tasks.map((task) => [task.id, task]));
-    type Keyed =
-        | { orderKey: string; section: RichTaskSection }
-        | { orderKey: string; task: RichTask };
-    const keyed: Keyed[] = [
+    const keyed: { orderKey: string; section?: TaskSection; task?: RichTask }[] = [
         ...input.sections.map((section) => ({ orderKey: section.orderKey, section })),
         ...input.memberships.flatMap((membership) => {
             const task = tasks.get(membership.taskId);
@@ -209,29 +162,27 @@ export function richTaskList(input: RichTaskListInput): readonly RichTaskListEnt
     );
     const entries: RichTaskListEntry[] = [];
     let collapsed = false;
-    for (const item of keyed) {
-        if ("section" in item) {
-            collapsed = item.section.collapsed;
-            entries.push({ kind: "section", section: item.section });
+    for (const { section, task } of keyed) {
+        if (section) {
+            collapsed = section.collapsed;
+            entries.push({ kind: "section", section });
             continue;
         }
-        if (collapsed) continue;
-        const task = item.task;
-        const children = richTaskChildren(task, input.agents, input.workspaces, input.artifacts);
+        if (collapsed || !task) continue;
+        const children = richTaskChildren(task, input);
         const expanded = input.expandedTaskIds.has(task.id);
         const visible = children.filter((child) => !child.hidden);
         const drawn = expanded
             ? [...visible, ...children.filter((child) => child.hidden)]
-            : visible.slice(0, RICH_TASK_SHOWN_CHILDREN);
+            : visible.slice(0, SHOWN_CHILDREN);
+        const faces = (task.agent.unread?.from ?? []).filter((id) => id !== input.viewerUserId);
         entries.push({
             kind: "task",
             task,
             children: drawn,
             more: children.length - drawn.length,
             expanded,
-            faces: (task.agent.unread?.from ?? []).filter(
-                (userId) => userId !== input.viewerUserId,
-            ),
+            faces,
         });
     }
     return entries;

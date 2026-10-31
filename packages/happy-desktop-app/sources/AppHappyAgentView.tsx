@@ -3454,20 +3454,19 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
             : {
                   ...section,
                   items: [],
+                  empty: undefined,
                   content: (
                       <AppHappyAgentRichTasks
-                          {...(props.chatId === undefined ? {} : { chatId: props.chatId })}
+                          chatId={props.chatId}
                           clock={active.session.clock}
                           entries={richTasks.entries}
-                          {...(props.groupId === undefined ? {} : { groupId: props.groupId })}
+                          groupId={props.groupId}
                           onSelect={(id) => richTaskOpen(active, id)}
                           onStoryOpen={(taskId) =>
                               storiesStore.ringOpen(taskRings.get(taskId)?.id ?? "")
                           }
+                          people={active.session.artifacts?.people()}
                           stories={taskRings}
-                          {...(active.session.artifacts
-                              ? { people: active.session.artifacts.people() }
-                              : {})}
                           store={richTasksStore}
                           tasks={active.tasks ?? []}
                       />

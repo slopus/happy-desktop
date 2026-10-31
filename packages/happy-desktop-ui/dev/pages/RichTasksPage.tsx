@@ -1,229 +1,16 @@
 import { useState } from "react";
 import {
-    richTaskList,
-    type RichTask,
-    type RichTaskAgent,
-    type RichTaskArtifact,
-    type RichTaskSubWork,
-    type RichTaskListEntry,
-    type RichTaskWorkspace,
-} from "happy-desktop-state";
-import { localAgoTime } from "../../src/localTime";
-import { Sidebar } from "../../src/Sidebar";
-import {
     RichTaskList,
-    type RichTaskFace,
+    type RichTaskCardModel,
     type RichTaskListRow,
     type RichTaskSubRowModel,
 } from "../../src/RichTaskList";
 import { ThemeScope } from "../../src/ThemeScope";
-import type { IoniconName } from "../../src/vectorIcons/VectorIcon";
+import { ioniconNames, type IoniconName } from "../../src/vectorIcons/VectorIcon";
 import { ComponentPage, Specimen } from "../kit";
 
 /** The component plan this page documents. The selector and the page header read the same value. */
 export const componentNumber = "C-333";
-
-/* The "Sidebar sub-rows" proposal's list, as the protocol-32 wire would carry it. */
-const NOW = Date.UTC(2026, 9, 31, 12);
-const ago = (minutes: number) => NOW - minutes * 60_000;
-const agent = (
-    id: string,
-    title: string,
-    minutes: number,
-    more: Partial<RichTaskAgent> = {},
-): RichTaskAgent => ({
-    id,
-    title,
-    status: "idle",
-    pendingQuestionId: null,
-    lastActivityAt: ago(minutes),
-    statusLine: null,
-    unread: null,
-    subtasks: [],
-    ...more,
-});
-const task = (
-    id: string,
-    slug: string,
-    minutes: number,
-    status: string,
-    more: Partial<RichTaskAgent> = {},
-): RichTask => ({
-    id,
-    name: "",
-    icon: { type: "library", slug },
-    agent: agent(`${id}-agent`, "", minutes, { statusLine: { text: status }, ...more }),
-});
-const working = { status: "working" } as const;
-const unread = (...from: string[]) => ({ unread: { reason: "message", since: ago(4), from } });
-const named = (value: RichTask, name: string, children?: RichTask["children"]): RichTask => ({
-    ...value,
-    name,
-    agent: { ...value.agent, title: name },
-    children,
-});
-const FOCUS = { agentId: "focus-agent", userId: null };
-const hide = (kind: "workspace" | "agent" | "artifact", ...ids: string[]) =>
-    ids.map((id) => ({
-        ref: { kind, id },
-        visibility: "hidden" as const,
-        by: FOCUS,
-        updatedAt: ago(10),
-    }));
-
-const TASKS: readonly RichTask[] = [
-    named(
-        task("ui-demo", "architecture", 0, "Planning the work split", {
-            ...working,
-            subtasks: [agent("spec-review", "Spec review", 9, working)],
-        }),
-        "Telegram-style UI demo",
-    ),
-    named(
-        task("onboarding", "ux", 4, "Steve and Jordan replied to its story", {
-            ...unread("steve", "kirill", "jordan"),
-            subtasks: [
-                agent("install", "Agent install & sign-in", 2, {
-                    ...working,
-                    pendingQuestionId: "q1",
-                }),
-                agent("design-review", "Design review", 40, working),
-            ],
-        }),
-        "Onboarding redesign",
-        [
-            ...hide("workspace", "chat-onboarding"),
-            ...hide("artifact", "walkthrough"),
-            ...hide("agent", "design-review"),
-        ],
-    ),
-    named(
-        task(
-            "ship-boss",
-            "deploy",
-            60,
-            "Needs your yes on 1ff04853 to fix preview links",
-            unread(),
-        ),
-        "SHIP BOSS",
-        hide("workspace", "sidebar-dino", "onboarding-fallback", "prioritizing-gym"),
-    ),
-    named(
-        task("ios", "swift", 60, "Crash fix on main; next build on your ask"),
-        "iOS Redesign",
-        hide(
-            "workspace",
-            "ios-settings",
-            "ios-perf-gym",
-            "ios-scroll",
-            "ios-stories",
-            "ios-parity",
-            "order-gym",
-        ),
-    ),
-    named(
-        task("sidebar", "cleanup", 17 * 60, "On main; release train cutting previews"),
-        "Side bar desktop",
-        hide("workspace", "story-eval", "agent-stories"),
-    ),
-    named(
-        task("breakage", "crash", 60, "Shipped: Agent 0.4.110-preview.14", {
-            subtasks: [
-                agent("takeover", "Takeover check", 50, working),
-                agent("socket", "Linux socket cleanup", 51, working),
-            ],
-        }),
-        "Onboarding breakage",
-        [...hide("agent", "takeover", "socket"), ...hide("artifact", "before-after")],
-    ),
-    named(
-        task("iphone", "crash", 60, "On main; iPhone build still needed"),
-        "iPhone launch crashes",
-    ),
-    named(
-        task("diff-stats", "code-review", 48, "Needs your OK on the new row layout", unread()),
-        "Task diff stats",
-    ),
-    named(
-        task("icons", "design-system", 20, "Upscaling the icon library", working),
-        "Icon upscaling task",
-    ),
-    named(task("dino", "home", 300, "Dinosaur runs on idle"), "Sidebar dinosaur"),
-];
-
-const workspace = (
-    id: string,
-    name: string,
-    projectId: string,
-    taskId: string,
-    minutes: number,
-    added = 0,
-    deleted = 0,
-): RichTaskWorkspace => ({
-    id,
-    name,
-    projectId,
-    creatorAgentId: `${taskId}-agent`,
-    updatedAt: ago(minutes),
-    addedLines: added,
-    deletedLines: deleted,
-});
-const WORKSPACES: readonly RichTaskWorkspace[] = [
-    workspace("round13", "onboarding-round13", "agent", "onboarding", 5, 2783, 453),
-    workspace(
-        "round13-desktop",
-        "onboarding-round13-desktop",
-        "desktop",
-        "onboarding",
-        6,
-        1552,
-        558,
-    ),
-    workspace("provider-install", "provider-install-signin", "agent", "onboarding", 7, 987, 317),
-    workspace("chat-onboarding", "chat-onboarding", "desktop", "onboarding", 8, 1504, 554),
-    workspace("readonly-status", "readonly-set-status", "agent", "ship-boss", 61, 53, 15),
-    workspace("happy-polish", "new-happy-polish", "desktop", "ship-boss", 62),
-    ...["sidebar-dino", "onboarding-fallback"].map((id, index) =>
-        workspace(id, id, "desktop", "ship-boss", 63 + index),
-    ),
-    workspace("prioritizing-gym", "prioritizing-gym", "agent", "ship-boss", 65),
-    ...["ios-settings", "ios-perf-gym", "ios-scroll", "ios-stories", "ios-parity"].map(
-        (id, index) => workspace(id, id, "ios", "ios", 61 + index),
-    ),
-    workspace("order-gym", "workspace-order-gym", "agent", "ios", 70),
-    workspace("story-eval", "story-eval-recheck", "agent", "sidebar", 1100),
-    workspace("agent-stories", "agent-stories", "agent", "sidebar", 1101),
-    workspace("resume-socket", "iPhone resume socket fix", "ios", "iphone", 61),
-];
-const artifact = (
-    id: string,
-    type: string,
-    title: string,
-    agentId: string,
-    minutes: number,
-): RichTaskArtifact => ({
-    id,
-    type,
-    title,
-    source: { agentId },
-    updatedAt: ago(minutes),
-});
-const ARTIFACTS: readonly RichTaskArtifact[] = [
-    artifact("layout", "html", "Sidebar sub-rows: layout proposal", "ui-demo-agent", 1),
-    artifact("data-model", "document", "data-model.ts", "ui-demo-agent", 3),
-    artifact("walkthrough", "video", "Onboarding walkthrough", "onboarding-agent", 30),
-    artifact("before-after", "image", "before-after.png", "breakage-agent", 52),
-];
-const SECTIONS = [
-    { id: "priorities", name: "Priorities", orderKey: "a", collapsed: false },
-    { id: "small-bugs", name: "Small bugs", orderKey: "g", collapsed: false },
-    { id: "side-quests", name: "Side quests", orderKey: "k", collapsed: true },
-    { id: "later", name: "Later", orderKey: "m", collapsed: true },
-];
-const MEMBERSHIPS = TASKS.map((value, index) => ({
-    taskId: value.id,
-    orderKey: "abcdefhijl"[index]! + "0",
-}));
 
 const asset = (name: string) => new URL(`../assets/rich-tasks/${name}`, import.meta.url).href;
 const PROJECTS: Readonly<Record<string, string>> = {
@@ -231,164 +18,172 @@ const PROJECTS: Readonly<Record<string, string>> = {
     desktop: asset("proj-happy-desktop.webp"),
     ios: asset("proj-happy.webp"),
 };
-const PEOPLE: Readonly<Record<string, RichTaskFace>> = {
-    steve: { id: "steve", label: "Steve", imageUrl: asset("steve.jpg") },
-    jordan: { id: "jordan", label: "Jordan", tone: "mint" },
-};
-const QUESTIONS: Readonly<Record<string, string>> = { q1: "which provider first?" };
-const GLYPHS: Readonly<Record<string, IoniconName>> = {
-    html: "globe-outline",
-    document: "document-text-outline",
-    markdown: "document-text-outline",
-    video: "play-outline",
-    image: "image-outline",
+
+/*
+ * The "Sidebar sub-rows" proposal's list, one row per line, columns split on
+ * " | ". `#` heads a section (`#+` folded). A card is id, title, time, status,
+ * icon slug and signal; its sub-rows follow, indented: id, mark (a project or
+ * an Ionicon), label, then "+added -removed", "merged", or "working" and a
+ * detail. `~` marks a sub-row the task hid, drawn only while its card is open.
+ */
+const TABLE = `
+# priorities | Priorities
+ui-demo | Telegram-style UI demo | now | Planning the work split | architecture | working
+  layout | globe-outline | Sidebar sub-rows: layout proposal
+  data-model | document-text-outline | data-model.ts
+  spec-review | hardware-chip-outline | Spec review | working
+onboarding | Onboarding redesign | 4m | Steve and Jordan replied to its story | ux | unread
+  install | hardware-chip-outline | Agent install & sign-in | working | which provider first?
+  round13 | agent | onboarding-round13 | +2783 -453
+  round13-desktop | desktop | onboarding-round13-desktop | +1552 -558
+  provider-install | agent | provider-install-signin | +987 -317
+~ chat-onboarding | desktop | chat-onboarding | +1504 -554
+~ walkthrough | play-outline | Onboarding walkthrough
+~ design-review | hardware-chip-outline | Design review | working
+ship-boss | SHIP BOSS | 1h | Needs your yes on 1ff04853 to fix preview links | deploy | unread
+  readonly-status | agent | readonly-set-status | +53 -15
+  happy-polish | desktop | new-happy-polish | merged
+~ sidebar-dino | desktop | sidebar-dino | merged
+~ onboarding-fallback | desktop | onboarding-fallback | merged
+~ prioritizing-gym | agent | prioritizing-gym | merged
+ios | iOS Redesign | 1h | Crash fix on main; next build on your ask | swift
+~ ios-settings | ios | ios-settings | merged
+~ ios-perf-gym | ios | ios-perf-gym | merged
+~ ios-scroll | ios | ios-scroll | merged
+~ ios-stories | ios | ios-stories | merged
+~ ios-parity | ios | ios-parity | merged
+~ order-gym | agent | workspace-order-gym | merged
+sidebar | Side bar desktop | 17h | On main; release train cutting previews | cleanup
+~ story-eval | agent | story-eval-recheck | merged
+~ agent-stories | agent | agent-stories | merged
+breakage | Onboarding breakage | 1h | Shipped: Agent 0.4.110-preview.14 | crash
+~ takeover | hardware-chip-outline | Takeover check | working
+~ socket | hardware-chip-outline | Linux socket cleanup | working
+~ before-after | image-outline | before-after.png
+# small-bugs | Small bugs
+iphone | iPhone launch crashes | 1h | On main; iPhone build still needed | crash
+  resume-socket | ios | iPhone resume socket fix | merged
+diff-stats | Task diff stats | 48m | Needs your OK on the new row layout | code-review | unread
+icons | Icon upscaling task | 20m | Upscaling the icon library | design-system | working
+#+ side-quests | Side quests
+dino | Sidebar dinosaur | 5h | Dinosaur runs on idle | home
+#+ later | Later
+`;
+
+const FACES = {
+    onboarding: [
+        { id: "steve", label: "Steve", imageUrl: asset("steve.jpg") },
+        { id: "jordan", label: "Jordan", tone: "mint" },
+    ],
+} as const;
+
+const glyph = (name: string): IoniconName => {
+    if (!(ioniconNames as readonly string[]).includes(name)) throw new Error(`No Ionicon ${name}`);
+    return name as IoniconName;
 };
 
-/* What the app's glue does with the state projection: words, pictures, and ids. */
-function subRow(taskId: string, child: RichTaskSubWork): RichTaskSubRowModel {
-    const base = { dimmed: child.hidden };
-    if (child.kind === "agent")
-        return {
-            ...base,
-            id: `${taskId}/agent:${child.agent.id}`,
-            mark: { kind: "glyph", icon: "hardware-chip-outline" },
-            label: child.agent.title ?? "",
-            detail: child.agent.pendingQuestionId
-                ? QUESTIONS[child.agent.pendingQuestionId]
-                : undefined,
-            working: child.agent.status === "working",
-        };
-    if (child.kind === "workspace") {
-        const { addedLines: added = 0, deletedLines: removed = 0 } = child.workspace;
-        return {
-            ...base,
-            id: `${taskId}/workspace:${child.workspace.id}`,
-            mark: { kind: "image", src: PROJECTS[child.workspace.projectId ?? ""]! },
-            label: child.workspace.name,
-            changes: added || removed ? { added, removed } : "merged",
-        };
+/** A sub-row's last columns: line totals, "merged", or the working spinner and a detail. */
+function trail(value = "", detail?: string): Partial<RichTaskSubRowModel> {
+    const totals = /^\+(\d+) -(\d+)$/u.exec(value);
+    if (totals) return { changes: { added: Number(totals[1]), removed: Number(totals[2]) } };
+    if (value === "merged") return { changes: "merged" };
+    return value === "working" ? { working: true, detail } : {};
+}
+
+type Section = Extract<RichTaskListRow, { kind: "section" }>;
+type Card = RichTaskCardModel & { subRows: RichTaskSubRowModel[] };
+const LIST: (Section | Card)[] = [];
+for (const line of TABLE.trim().split("\n")) {
+    const [head = "", ...rest] = line.split(" | ");
+    const id = head.replace(/^[#+~ ]+/u, "");
+    const card = LIST.at(-1);
+    if (head.startsWith("#"))
+        LIST.push({ kind: "section", id, name: rest[0]!, collapsed: head.startsWith("#+") });
+    else if (/^[~ ] /u.test(head) && card && !("kind" in card)) {
+        const [mark = "", label = "", value, detail] = rest;
+        const src = PROJECTS[mark];
+        card.subRows.push({
+            id: `${card.id}/${id}`,
+            mark: src ? { kind: "image", src } : { kind: "glyph", icon: glyph(mark) },
+            label,
+            ...trail(value, detail),
+            ...(head.startsWith("~") ? { dimmed: true } : {}),
+        });
+    } else {
+        const [title = "", time = "", status = "", iconSlug = "", signal] = rest;
+        LIST.push({
+            id,
+            title,
+            time,
+            status,
+            iconSlug,
+            ring: id in FACES,
+            faces: FACES[id as keyof typeof FACES] ?? [],
+            signal: signal === "working" || signal === "unread" ? signal : null,
+            subRows: [],
+            more: 0,
+            expanded: false,
+        });
     }
-    return {
-        ...base,
-        id: `${taskId}/artifact:${child.artifact.id}`,
-        mark: { kind: "glyph", icon: GLYPHS[child.artifact.type] ?? "document-outline" },
-        label: child.artifact.title,
-    };
 }
 
-function rows(entries: readonly RichTaskListEntry[]): readonly RichTaskListRow[] {
-    return entries.map((entry) => {
-        if (entry.kind === "section") return { kind: "section", ...entry.section };
-        const { task: value } = entry;
-        const signal = value.agent.unread
-            ? "unread"
-            : value.agent.status === "working"
-              ? "working"
-              : null;
-        return {
-            kind: "task",
-            card: {
-                id: value.id,
-                title: value.name,
-                time: localAgoTime(value.agent.lastActivityAt ?? NOW, NOW),
-                status: value.agent.statusLine?.text ?? null,
-                iconSlug: value.icon?.slug ?? null,
-                ring: value.id === "onboarding",
-                faces: entry.faces.flatMap((id) => PEOPLE[id] ?? []),
-                signal,
-                subRows: entry.children.map((child) => subRow(value.id, child)),
-                more: entry.more,
-                expanded: entry.expanded,
-            },
-        };
-    });
-}
-
-function toggled(set: ReadonlySet<string>, id: string): ReadonlySet<string> {
+const toggled = (set: ReadonlySet<string>, id: string): ReadonlySet<string> => {
     const next = new Set(set);
     if (!next.delete(id)) next.add(id);
     return next;
-}
+};
 
+/** The list as the reader sees it: folded sections, and three shown sub-rows per closed card. */
 function Fixture(props: {
     readonly mode: "light" | "dark";
     readonly selection: "inset" | "full";
     readonly expanded?: readonly string[];
-    /** Drawn as the Tasks section of a sidebar, the way the app draws it in rich mode. */
-    readonly inSidebar?: boolean;
 }) {
-    const [selectedId, setSelectedId] = useState<string | null>("onboarding/agent:install");
+    const [selectedId, setSelectedId] = useState<string | null>("onboarding/install");
     const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set(props.expanded));
-    const [sections, setSections] = useState(SECTIONS);
-    const entries = richTaskList({
-        tasks: TASKS,
-        agents: TASKS.map((value) => value.agent),
-        memberships: MEMBERSHIPS,
-        sections,
-        workspaces: WORKSPACES,
-        artifacts: ARTIFACTS,
-        viewerUserId: "kirill",
-        expandedTaskIds: expanded,
-    });
-    const list = (
-        <RichTaskList
-            onMoreToggle={(id) => setExpanded((current) => toggled(current, id))}
-            onSectionCollapseToggle={(id) =>
-                setSections((current) =>
-                    current.map((section) =>
-                        section.id === id ? { ...section, collapsed: !section.collapsed } : section,
-                    ),
-                )
-            }
-            onSelect={setSelectedId}
-            rows={rows(entries)}
-            selectedId={selectedId}
-            selection={props.selection}
-            workingFrame={0}
-        />
+    const [folded, setFolded] = useState<ReadonlySet<string>>(
+        new Set(LIST.flatMap((row) => ("kind" in row && row.collapsed ? [row.id] : []))),
     );
+    const rows: RichTaskListRow[] = [];
+    let hidden = false;
+    for (const row of LIST) {
+        if ("kind" in row) {
+            hidden = folded.has(row.id);
+            rows.push({ ...row, collapsed: hidden });
+        } else if (!hidden) {
+            const open = expanded.has(row.id);
+            const subRows = open
+                ? row.subRows
+                : row.subRows.filter((sub) => !sub.dimmed).slice(0, 3);
+            const more = row.subRows.length - subRows.length;
+            rows.push({ kind: "task", card: { ...row, subRows, more, expanded: open } });
+        }
+    }
     return (
         <ThemeScope mode={props.mode}>
-            {props.inSidebar ? (
-                <div style={{ display: "flex", width: 304, height: 900 }}>
-                    <Sidebar
-                        activeItemId=""
-                        onItemSelect={() => undefined}
-                        sections={[
-                            {
-                                id: "bots",
-                                label: "Bots",
-                                items: [
-                                    {
-                                        id: "chief",
-                                        kind: "project",
-                                        label: "Chief of Staff",
-                                        initials: "CS",
-                                    },
-                                ],
-                            },
-                            { id: "tasks", label: "Tasks", items: [], content: list },
-                        ]}
-                        style={{ width: "100%" }}
-                        title="Happy"
-                    />
-                </div>
-            ) : (
-                <div className="rich-tasks-frame" style={frame}>
-                    {list}
-                </div>
-            )}
+            {/* The proposal's sidebar column: 304px with its hairline, on the sidebar's ground. */}
+            <div
+                className="rich-tasks-frame"
+                style={{
+                    width: 304,
+                    padding: "0 0 10px",
+                    borderRight: "1px solid var(--divider)",
+                    background: "var(--groupped-background)",
+                }}
+            >
+                <RichTaskList
+                    onMoreToggle={(id) => setExpanded((current) => toggled(current, id))}
+                    onSectionCollapseToggle={(id) => setFolded((current) => toggled(current, id))}
+                    onSelect={setSelectedId}
+                    rows={rows}
+                    selectedId={selectedId}
+                    selection={props.selection}
+                    workingFrame={0}
+                />
+            </div>
         </ThemeScope>
     );
 }
-
-/* The proposal's sidebar column: 304px with its hairline, on the sidebar's ground. */
-const frame = {
-    width: 304,
-    padding: "0 0 10px",
-    borderRight: "1px solid var(--divider)",
-    background: "var(--groupped-background)",
-} as const;
 
 export function RichTasksPage() {
     return (
@@ -421,14 +216,6 @@ export function RichTasksPage() {
                     stage="surface"
                 >
                     <Fixture expanded={["onboarding"]} mode="dark" selection="full" />
-                </Specimen>
-                <Specimen
-                    detail="the Tasks section's content, as the app draws it in rich mode"
-                    label="In the sidebar"
-                    number="04"
-                    stage="app"
-                >
-                    <Fixture inSidebar mode="dark" selection="inset" />
                 </Specimen>
             </div>
         </ComponentPage>
