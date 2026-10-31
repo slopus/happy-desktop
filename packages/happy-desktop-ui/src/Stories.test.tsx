@@ -25,7 +25,7 @@ const REPLIES = ["Maya", "Alex", "Priya"].map((name) => ({
 }));
 const VIEWER: StoryViewerProps = {
     segment: { index: 0, total: 2 },
-    poster: { name: "Onboarding redesign", mark: { kind: "icon", slug: "ux", label: "UX" } },
+    poster: { name: "Onboarding redesign", mark: { kind: "icon", label: "UX" } },
     time: "2h",
     frame: { kind: "image", url: frame("rgb(255, 255, 255)") },
     caption: "Onboarding for the Projects sidebar",

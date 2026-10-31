@@ -22,7 +22,7 @@ const PROJECTS: Readonly<Record<string, string>> = {
 /*
  * The "Sidebar sub-rows" proposal's list, one row per line, columns split on
  * " | ". `#` heads a section (`#+` folded). A card is id, title, time, status,
- * icon slug and signal; its sub-rows follow, indented: id, mark (a project or
+ * icon and signal; its sub-rows follow, indented: id, mark (a project or
  * an Ionicon), label, then "+added -removed", "merged", or "working" and a
  * detail. `~` marks a sub-row the task hid, drawn only while its card is open.
  */
@@ -110,14 +110,14 @@ for (const line of TABLE.trim().split("\n")) {
             ...(head.startsWith("~") ? { dimmed: true } : {}),
         });
     } else {
-        const [title = "", time = "", status = "", iconSlug = "", signal] = rest;
+        const [title = "", time = "", status = "", icon = "", signal] = rest;
         LIST.push({
             id,
             title,
             time,
             status,
-            iconSlug,
-            ring: id in FACES,
+            iconSrc: asset(`icon-${icon}.png`),
+            ...(id in FACES ? { story: { total: 2, unseen: 1 } } : {}),
             faces: FACES[id as keyof typeof FACES] ?? [],
             signal: signal === "working" || signal === "unread" ? signal : null,
             subRows: [],

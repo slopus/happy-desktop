@@ -112,20 +112,14 @@ export {
 } from "./AppShell";
 export {
     Avatar,
+    avatarToneOf,
     type AvatarProps,
     type AvatarSize,
     type AvatarType,
     type ToneName,
 } from "./Avatar";
 export { type ImageMark } from "./imageMark";
-export {
-    ClayIcon,
-    clayIconImage,
-    clayIconSlugIs,
-    clayIconSlugs,
-    type ClayIconProps,
-    type ClayIconSlug,
-} from "./ClayIcon";
+export { TaskIcon, type TaskIconProps } from "./TaskIcon";
 export {
     RichTaskList,
     type RichTaskCardModel,

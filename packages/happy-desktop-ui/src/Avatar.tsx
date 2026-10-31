@@ -4,6 +4,15 @@ import { Icon, type IconName } from "./Icon";
 export type AvatarSize = "xs" | "sm" | "md" | "lg";
 export type AvatarType = "human" | "agent";
 export type ToneName = "violet" | "ember" | "mint" | "ocean" | "rose" | "amber" | "slate" | "brand";
+
+const PERSON_TONES = ["violet", "ember", "mint", "ocean", "rose", "amber"] as const;
+
+/** A person's tone, fixed by their id, so their initials wear one colour everywhere. */
+export function avatarToneOf(id: string): ToneName {
+    let hash = 0;
+    for (const character of id) hash = (hash * 31 + character.charCodeAt(0)) >>> 0;
+    return PERSON_TONES[hash % PERSON_TONES.length]!;
+}
 export type AvatarProps = Omit<HTMLAttributes<HTMLSpanElement>, "style"> & {
     /**
      * Marks an entity that is named by a symbol rather than by a person or a

@@ -89,13 +89,12 @@
     white-space: nowrap;
 }
 
-/* A card's disc, when its agent has a live story: the ring outside, the icon in. */
+/* A card's icon, when its agent has a live story: the ring outside, the icon in. */
 .happy-rich-task-card__disc[data-story] {
     position: relative;
     padding: 4px;
     overflow: visible;
     border: 0;
-    background-clip: content-box;
     pointer-events: auto;
 }
 

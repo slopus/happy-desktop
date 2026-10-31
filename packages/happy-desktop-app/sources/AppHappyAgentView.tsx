@@ -204,6 +204,7 @@ import {
     type AgentWaitStatus,
     AppShell,
     APP_SHELL_PANEL_DEFAULT_WIDTH,
+    avatarToneOf,
     type AppShellFocusedPane,
     Banner,
     BrowserPanel,
@@ -2483,9 +2484,6 @@ function surfaceCreateMenu(support: HappyAgentSurfaceSupportSnapshot): MenuItem[
     ).map((offer) => ({ kind: "item", id: offer.kind, icon: offer.icon, label: offer.label }));
 }
 
-/** The tones a person's caret can wear in a shared document. */
-const PERSON_TONES = ["violet", "ember", "mint", "ocean", "rose", "amber"] as const;
-
 /**
  * The reader as everyone else in a shared document sees their caret: their
  * name, and a tone fixed by who they are, so it is the same in every document
@@ -2494,9 +2492,7 @@ const PERSON_TONES = ["violet", "ember", "mint", "ocean", "rose", "amber"] as co
 function documentUserOf(catalog: HappyAgentSurfaceCatalogSnapshot): DocumentEditorUser {
     const userId = catalog.viewer?.userId ?? null;
     const person = userId === null ? catalog.profile : catalog.users.get(userId);
-    let hash = 0;
-    for (const character of userId ?? "") hash = (hash * 31 + character.charCodeAt(0)) >>> 0;
-    return { name: person?.name ?? "Someone", tone: PERSON_TONES[hash % PERSON_TONES.length]! };
+    return { name: person?.name ?? "Someone", tone: avatarToneOf(userId ?? "") };
 }
 
 /** The Surface a row id names, or nothing for any other row. */

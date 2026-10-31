@@ -29,7 +29,6 @@ const card = (id: string, more: Partial<RichTaskCardModel>): RichTaskListRow => 
         title: "Onboarding redesign",
         time: "4m",
         status: "Steve and Jordan replied to its story",
-        iconSlug: "ux",
         faces: [],
         signal: null,
         subRows: [],
@@ -41,7 +40,6 @@ const card = (id: string, more: Partial<RichTaskCardModel>): RichTaskListRow => 
 const ROWS: readonly RichTaskListRow[] = [
     { kind: "section", id: "priorities", name: "Priorities", collapsed: false },
     card("faces", {
-        ring: true,
         signal: "unread",
         faces: [
             { id: "s", label: "Steve" },

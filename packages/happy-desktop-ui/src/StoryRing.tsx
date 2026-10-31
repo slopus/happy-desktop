@@ -1,13 +1,18 @@
-import { Avatar } from "./Avatar";
-import { ClayIcon } from "./ClayIcon";
+import { Avatar, type ToneName } from "./Avatar";
+import { TaskIcon } from "./TaskIcon";
 
 /** How many live stories a ring stands for, and how many of them are new to the reader. */
 export type StoryRingSegments = { readonly total: number; readonly unseen: number };
 
-/** Who posted: a task or bot by its clay icon, or someone by their photo or initial. */
+/** Who posted: a task or bot by its icon, or someone by their photo or coloured initial. */
 export type StoryMark =
-    | { readonly kind: "icon"; readonly slug: string | null; readonly label: string }
-    | { readonly kind: "person"; readonly label: string; readonly imageUrl?: string };
+    | { readonly kind: "icon"; readonly src?: string; readonly label: string }
+    | {
+          readonly kind: "person";
+          readonly label: string;
+          readonly imageUrl?: string;
+          readonly tone?: ToneName;
+      };
 
 const STROKE = { unseen: 2, seen: 1.5 } as const;
 const GAP = 3;
@@ -61,12 +66,12 @@ export function StoryRing(props: { readonly size: number; readonly segments: Sto
     );
 }
 
-/** A poster's mark filling a round box of `size`: a clay icon on a quiet disc, or Avatar. */
+/** A poster's mark filling a round box of `size`: a task icon on a quiet disc, or Avatar. */
 export function StoryMarkView(props: { readonly mark: StoryMark; readonly size: number }) {
     const { mark, size } = props;
     return mark.kind === "icon" ? (
         <span className="happy-story-mark" style={{ width: size, height: size }}>
-            <ClayIcon label={mark.label} size={Math.round(size * 0.76)} slug={mark.slug} />
+            <TaskIcon label={mark.label} size={Math.round(size * 0.76)} src={mark.src} />
         </span>
     ) : (
         <Avatar
@@ -75,6 +80,7 @@ export function StoryMarkView(props: { readonly mark: StoryMark; readonly size: 
             initials={mark.label.slice(0, 1).toUpperCase()}
             size={size <= 24 ? "xs" : "lg"}
             style={{ width: size, height: size }}
+            tone={mark.tone}
         />
     );
 }

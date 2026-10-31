@@ -23,6 +23,7 @@ import type {
     Workspace,
 } from "@slopus/happy-agent-client";
 import type { RichTaskArtifact } from "../richTasks/richTaskList.js";
+import type { HappyAgentTaskIconsStore } from "../taskIcons/taskIcons.js";
 import type { ConversationMediaLayout } from "../conversation/conversationEntry.js";
 import type { HappyAgentDebugLogInput } from "../happyAgent/happyAgentDebugLogStore.js";
 import type {
@@ -1223,6 +1224,8 @@ export interface HappyAgentConnection {
          */
         artifactRead(artifactId: string): void;
     };
+    /** The task icons cards have asked for, each read once per hash. */
+    readonly taskIcons: HappyAgentTaskIconsStore;
     /** Replaces the caller's sections, each keeping its place. Only with `capabilities.taskSections`. */
     replaceTaskSections(sections: readonly TaskSection[]): MutationId;
     /** Sets one child choice under a task, for every member. Only with `capabilities.taskSections`. */

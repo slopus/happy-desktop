@@ -9,6 +9,7 @@ import type {
     RichTaskSubWork,
 } from "happy-desktop-state";
 import {
+    avatarToneOf,
     localAgoTime,
     RichTaskList,
     type IoniconName,
@@ -157,9 +158,9 @@ export function AppHappyAgentRichTasks(props: {
                 title: task.name,
                 time: localAgoTime(task.agent.lastActivityAt ?? now, now),
                 status: task.agent.statusLine?.text ?? null,
-                iconSlug: task.icon?.slug ?? null,
+                iconSrc: entry.iconSrc,
                 story: props.stories?.get(task.id),
-                faces: entry.faces.map(faceOf),
+                faces: entry.faces.map((id) => ({ ...faceOf(id), tone: avatarToneOf(id) })),
                 signal: task.agent.unread
                     ? "unread"
                     : task.agent.status !== "idle"

@@ -7,7 +7,6 @@ import {
 } from "react";
 import { Avatar, type ToneName } from "./Avatar";
 import { Icon } from "./Icon";
-import { ClayIcon } from "./ClayIcon";
 import { ContextMenu } from "./ContextMenu";
 import { SIDEBAR_SETTLE } from "./Sidebar";
 import {
@@ -17,6 +16,7 @@ import {
 } from "./sidebarDrag";
 import { Spinner } from "./Spinner";
 import { StoryRing, type StoryRingSegments } from "./StoryRing";
+import { TaskIcon } from "./TaskIcon";
 import { Ionicon, type IoniconName } from "./vectorIcons/VectorIcon";
 
 /** Someone whose message is waiting in the task's conversation. */
@@ -52,10 +52,9 @@ export type RichTaskCardModel = {
     /** When the task last moved, already worded ("now", "4m", "1h"). */
     readonly time: string;
     readonly status: string | null;
-    readonly iconSlug: string | null;
-    /** The story ring around the disc. */
-    readonly ring?: boolean;
-    /** The agent's live stories: the ring drawn in segments, and the disc opens them. */
+    /** The task icon's picture once read; without one, the card wears its letter tile. */
+    readonly iconSrc?: string;
+    /** The agent's live stories: the ring drawn in segments, and the icon opens them. */
     readonly story?: StoryRingSegments;
     readonly faces: readonly RichTaskFace[];
     /** What the corner reports: the agent is working, or something is unread. */
@@ -358,7 +357,7 @@ export function RichTaskList(props: RichTaskListProps) {
         const drag = onTaskMove
             ? (event: ReactPointerEvent<HTMLButtonElement>) => cardPointer(event, card.id)
             : undefined;
-        // A disc with stories behind it opens them.
+        // An icon with stories behind it opens them.
         const Disc = card.story ? "button" : "span";
         return (
             <div
@@ -384,15 +383,11 @@ export function RichTaskList(props: RichTaskListProps) {
                     aria-label={card.story ? `${card.title}: open story` : undefined}
                     className="happy-rich-task-card__disc"
                     data-happy-desktop-ui="rich-task-disc"
-                    data-ring={card.ring && !card.story ? "" : undefined}
+                    data-story={card.story ? "" : undefined}
                     onClick={card.story ? () => props.onStoryOpen?.(card.id) : undefined}
                 >
                     {card.story ? <StoryRing segments={card.story} size={50} /> : null}
-                    <ClayIcon
-                        label={card.title}
-                        size={card.ring || card.story ? 34 : 40}
-                        slug={card.iconSlug}
-                    />
+                    <TaskIcon label={card.title} size={card.story ? 34 : 40} src={card.iconSrc} />
                 </Disc>
                 <span className="happy-rich-task-card__body">
                     <span className="happy-rich-task-card__head">

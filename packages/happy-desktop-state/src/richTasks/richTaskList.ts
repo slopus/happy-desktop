@@ -52,6 +52,8 @@ export type RichTaskListEntry =
     | {
           readonly kind: "task";
           readonly task: RichTask;
+          /** The task icon's picture once read; absent while it loads, without a hash, or unreadable. */
+          readonly iconSrc?: string;
           /** The sub-rows drawn under the card, most urgent first. */
           readonly children: readonly RichTaskSubWork[];
           /** How many children are not drawn: the "+k more" count. */

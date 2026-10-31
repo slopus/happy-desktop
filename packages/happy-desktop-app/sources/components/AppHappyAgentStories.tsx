@@ -11,17 +11,19 @@ import type {
     happyAgentProtocol,
 } from "happy-desktop-state";
 import {
+    avatarToneOf,
     localAgoTime,
     ModalOverlay,
     StoriesRow,
     StoryViewer,
     type StoryMark,
+    type ToneName,
 } from "happy-desktop-ui";
 
 /** What the window already knows to name and picture whoever posted or replied. */
 export interface AppStoryDirectory {
     readonly tasks: readonly HappyAgentTask[];
-    /** The rich list's tasks, which carry their clay icons. */
+    /** The rich list's tasks, which carry their icons. */
     readonly entries: readonly RichTaskListEntry[];
     readonly bots: readonly HappyAgentBot[];
     /** The reader and the teammates the Surfaces catalog knows, with their photos. */
@@ -29,22 +31,23 @@ export interface AppStoryDirectory {
 }
 
 type Poster = { readonly name: string; readonly mark: StoryMark };
-const posterNamed = (name: string, imageUrl: string | undefined): Poster => ({
+const posterNamed = (name: string, imageUrl: string | undefined, tone?: ToneName): Poster => ({
     name,
-    mark: { kind: "person", label: name, ...(imageUrl ? { imageUrl } : {}) },
+    mark: { kind: "person", label: name, tone, ...(imageUrl ? { imageUrl } : {}) },
 });
 
-/** A person by their photo where the window holds one, else their initial. */
+/** A person by their photo where the window holds one, else their coloured initial. */
 function personOf(userId: string | null, { catalog, tasks }: AppStoryDirectory): Poster {
     const person = userId === null ? catalog.profile : catalog.users.get(userId);
     const owner = tasks.find((task) => task.owner?.userId === userId)?.owner;
     return posterNamed(
         person?.name ?? owner?.name ?? "Someone",
         person?.photo?.url ?? owner?.avatar?.url,
+        avatarToneOf(userId ?? catalog.viewer?.userId ?? ""),
     );
 }
 
-/** A bot by its picture, a task by its clay icon, a person by their photo. */
+/** A bot by its picture, a task by its icon, a person by their photo. */
 function posterOf(poster: happyAgentProtocol.StoryPoster, directory: AppStoryDirectory): Poster {
     if (poster.kind === "user") return personOf(poster.userId, directory);
     const bot = directory.bots.find(
@@ -56,12 +59,12 @@ function posterOf(poster: happyAgentProtocol.StoryPoster, directory: AppStoryDir
             each.kind === "task" &&
             (each.task.id === poster.taskId || each.task.agent.id === poster.agentId),
     );
-    const task = entry?.kind === "task" ? entry.task : undefined;
+    const card = entry?.kind === "task" ? entry : undefined;
     const name =
-        task?.name ||
+        card?.task.name ||
         directory.tasks.find((each) => each.conversation.id === poster.agentId)?.name ||
         "Agent";
-    return { name, mark: { kind: "icon", slug: task?.icon?.slug ?? null, label: name } };
+    return { name, mark: { kind: "icon", src: card?.iconSrc, label: name } };
 }
 
 /** Each task's ring, by task id: the card's disc wears it and opens it. */

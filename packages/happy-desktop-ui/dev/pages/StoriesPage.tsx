@@ -1,3 +1,4 @@
+import { avatarToneOf } from "../../src/Avatar";
 import { RichTaskList } from "../../src/RichTaskList";
 import { StoriesRow, type StoriesRowItem } from "../../src/StoriesRow";
 import { StoryViewer, type StoryViewerProps } from "../../src/StoryViewer";
@@ -10,8 +11,13 @@ export const componentNumber = "C-334";
 const asset = (name: string) => new URL(`../assets/rich-tasks/${name}`, import.meta.url).href;
 const noop = () => undefined;
 const person = (label: string, image?: string) =>
-    ({ kind: "person", label, ...(image ? { imageUrl: asset(image) } : {}) }) as const;
-const UX = { kind: "icon", slug: "ux", label: "Onboarding redesign" } as const;
+    ({
+        kind: "person",
+        label,
+        tone: avatarToneOf(label),
+        ...(image ? { imageUrl: asset(image) } : {}),
+    }) as const;
+const UX = { kind: "icon", src: asset("icon-ux.png"), label: "Onboarding redesign" } as const;
 const ring = (mark: StoriesRowItem["mark"], total: number, unseen: number, self = false) => ({
     id: mark.label,
     name: mark.label,
@@ -27,9 +33,17 @@ const ITEMS: readonly StoriesRowItem[] = [
     ring({ ...UX, label: "Onboarding" }, 4, 2),
 ];
 const CARD = { faces: [], signal: "unread" as const, subRows: [], more: 0, expanded: false };
-const card = (title: string, iconSlug: string, status: string, unseen: number) => ({
+const card = (title: string, icon: string, status: string, unseen: number) => ({
     kind: "task" as const,
-    card: { ...CARD, id: title, title, time: "4m", status, iconSlug, story: { total: 2, unseen } },
+    card: {
+        ...CARD,
+        id: title,
+        title,
+        time: "4m",
+        status,
+        iconSrc: asset(`icon-${icon}.png`),
+        story: { total: 2, unseen },
+    },
 });
 const reply = (name: string, time: string, text: string, image?: string) => ({
     id: name,
