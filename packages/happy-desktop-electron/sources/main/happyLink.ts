@@ -11,6 +11,18 @@ const HAPPY_LINK_LENGTH_MAX = 4096;
  * reads the address with the shared grammar and does nothing for one that is
  * malformed or names no place in the app.
  */
+/**
+ * A `happy://` address the operating system handed the app, from a browser or
+ * another application, or nothing for anything else. Only the scheme Happy
+ * registers is taken; the window reads the address, including which
+ * installation it names, with the shared grammar.
+ */
+export function happyExternalLinkUrl(candidate: string): string | undefined {
+    return candidate.length <= HAPPY_LINK_LENGTH_MAX && /^happy:\/\//iu.test(candidate)
+        ? candidate
+        : undefined;
+}
+
 export function happyLinkUrl(candidate: string): string | undefined {
     return candidate.length <= HAPPY_LINK_LENGTH_MAX && /^happy(?:-file)?:\/\//iu.test(candidate)
         ? candidate

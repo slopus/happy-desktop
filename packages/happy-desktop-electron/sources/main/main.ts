@@ -118,7 +118,8 @@ import { DesktopWindowStateStore } from "./windowState";
 import { desktopBuildIdentityRead } from "./buildIdentity";
 import { DesktopDaemonController } from "./desktopDaemonController";
 import { desktopSmokeReportStart } from "./desktopSmokeReport";
-import { cloudAuthProductionRedirectUri } from "../shared/cloudAuthConfig";
+import { cloudAuthProductionRedirectUri, serverOAuthRedirectUri } from "../shared/cloudAuthConfig";
+import { happyExternalLinkUrl } from "./happyLink";
 
 if (process.platform !== "darwin" && process.platform !== "linux" && process.platform !== "win32") {
     console.error("Happy Place desktop is available only on macOS, Linux, and Windows.");
@@ -474,29 +475,72 @@ function cloudAuthCallbackRead(candidate: string): string | undefined {
     }
 }
 
-// A hidden run must not take the callback protocol from the installed app.
-if (
-    !desktopWindowsHidden &&
-    !(app.isPackaged
-        ? app.setAsDefaultProtocolClient(cloudAuthProtocol)
-        : process.argv[1]
-          ? app.setAsDefaultProtocolClient(cloudAuthProtocol, process.execPath, [process.argv[1]])
-          : app.setAsDefaultProtocolClient(cloudAuthProtocol))
-)
-    console.warn(`Happy could not register the ${cloudAuthProtocol}: callback protocol.`);
+const serverOAuthRedirect = new URL(serverOAuthRedirectUri);
+/** Team server sign-in callbacks the window has not taken yet, oldest first. */
+const serverOAuthCallbacks: string[] = [];
+/**
+ * `happy://` links the system opened Happy with, oldest first, held until the
+ * window takes them: a link can arrive before there is a window at all.
+ */
+const externalHappyLinks: string[] = [];
 
 /**
- * Takes one browser callback in for the window, from whichever way the system
- * delivered it, and brings the window forward. Returns whether it was one.
+ * Only the exact sign-in address is taken. Every other `happy://` link stays
+ * with the in-app link handling, and a running Happy ignores one the system
+ * hands it.
  */
-function cloudAuthCallbackDeliver(candidate: string): boolean {
-    const callback = cloudAuthCallbackRead(candidate);
-    if (!callback) return false;
-    cloudAuthCallbacks.push(callback);
-    if (cloudAuthCallbacks.length > CLOUD_AUTH_CALLBACKS_MAX) cloudAuthCallbacks.shift();
+function serverOAuthCallbackRead(candidate: string): string | undefined {
+    try {
+        const parsed = new URL(candidate);
+        return parsed.protocol === serverOAuthRedirect.protocol &&
+            parsed.hostname === serverOAuthRedirect.hostname &&
+            parsed.pathname === serverOAuthRedirect.pathname
+            ? parsed.href
+            : undefined;
+    } catch {
+        return undefined;
+    }
+}
+
+/** Claims `protocol` for this app, as a packaged app or as this development checkout. */
+function callbackProtocolRegister(protocol: string): void {
+    // A hidden run must not take a callback protocol from the installed app.
+    if (desktopWindowsHidden) return;
+    const registered = app.isPackaged
+        ? app.setAsDefaultProtocolClient(protocol)
+        : process.argv[1]
+          ? app.setAsDefaultProtocolClient(protocol, process.execPath, [process.argv[1]])
+          : app.setAsDefaultProtocolClient(protocol);
+    if (!registered) console.warn(`Happy could not register the ${protocol}: callback protocol.`);
+}
+callbackProtocolRegister(cloudAuthProtocol);
+callbackProtocolRegister(serverOAuthRedirect.protocol.slice(0, -1));
+
+/**
+ * Takes one URL the system opened Happy with, from whichever way it was
+ * delivered, and brings the window forward. A WorkOS callback, a server
+ * sign-in callback, and any other `happy://` link each keep their own queue:
+ * a server's state is not one the WorkOS login recorded, and a link is read
+ * by the window's own grammar, never here. Returns whether it was one of them.
+ */
+function systemUrlDeliver(candidate: string): boolean {
+    const cloud = cloudAuthCallbackRead(candidate);
+    const server = cloud ? undefined : serverOAuthCallbackRead(candidate);
+    const link = cloud || server ? undefined : happyExternalLinkUrl(candidate);
+    const taken = cloud ?? server ?? link;
+    if (!taken) return false;
+    const queue = cloud ? cloudAuthCallbacks : server ? serverOAuthCallbacks : externalHappyLinks;
+    queue.push(taken);
+    if (queue.length > CLOUD_AUTH_CALLBACKS_MAX) queue.shift();
     const window = windowLifecycle.get();
     if (!window || window.isDestroyed() || window.webContents.isDestroyed()) return true;
-    window.webContents.send(desktopIpc.cloudAuthCallbackReceived);
+    window.webContents.send(
+        cloud
+            ? desktopIpc.cloudAuthCallbackReceived
+            : server
+              ? desktopIpc.serverOAuthCallbackReceived
+              : desktopIpc.happyLinkExternalReceived,
+    );
     if (window.isMinimized()) window.restore();
     window.show();
     window.focus();
@@ -504,17 +548,17 @@ function cloudAuthCallbackDeliver(candidate: string): boolean {
 }
 
 /** Windows and Linux hand a protocol URL to the app as a command-line argument. */
-function cloudAuthCallbackFromArguments(argv: readonly string[]): void {
+function systemUrlFromArguments(argv: readonly string[]): void {
     if (process.platform !== "win32" && process.platform !== "linux") return;
-    for (const argument of argv) if (cloudAuthCallbackDeliver(argument)) return;
+    for (const argument of argv) if (systemUrlDeliver(argument)) return;
 }
 
 // macOS delivers the URL as an event, both to a running app and at launch.
 app.on("open-url", (event, candidate) => {
-    if (cloudAuthCallbackDeliver(candidate)) event.preventDefault();
+    if (systemUrlDeliver(candidate)) event.preventDefault();
 });
 // A first launch by the URL itself carries it in this process's arguments.
-cloudAuthCallbackFromArguments(process.argv);
+systemUrlFromArguments(process.argv);
 const unavailableBrowserProxy = "http://127.0.0.1:9";
 let happyAgentRendererSession: HappyAgentRendererSession | undefined;
 /*
@@ -1878,6 +1922,14 @@ void app
             desktopDaemonSenderRequire(event.sender);
             return cloudAuthCallbacks.shift();
         });
+        ipcMain.handle(desktopIpc.serverOAuthCallbackTake, (event) => {
+            desktopDaemonSenderRequire(event.sender);
+            return serverOAuthCallbacks.shift();
+        });
+        ipcMain.handle(desktopIpc.happyLinkExternalTake, (event) => {
+            desktopDaemonSenderRequire(event.sender);
+            return externalHappyLinks.shift();
+        });
         ipcMain.handle(desktopIpc.cloudAuthCallbackPending, (event) => {
             desktopDaemonSenderRequire(event.sender);
             return cloudAuthCallbacks.length > 0;
@@ -2219,7 +2271,7 @@ app.on("second-instance", (_event, argv, _directory, launch) => {
     if (hiddenWindowsLaunchHidden(launch)) return;
     // A URL opened while Happy runs starts a second process, which quits on
     // the instance lock and forwards its arguments here.
-    cloudAuthCallbackFromArguments(argv);
+    systemUrlFromArguments(argv);
     const window = windowLifecycle.get();
     if (!window) return;
     if (window.isMinimized()) window.restore();

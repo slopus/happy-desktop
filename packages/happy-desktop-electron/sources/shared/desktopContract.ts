@@ -893,6 +893,23 @@ export interface HappyDesktopBridge {
     /** Opens only the HTTPS authorization URL returned by Happy Agent. */
     cloudAuthOpen(url: string): Promise<void>;
     /**
+     * Announces that the shell received a team server's sign-in callback,
+     * `happy://oauth/callback`. Absent on shells that do not take it.
+     */
+    serverOAuthCallbackSubscribe?(listener: () => void): () => void;
+    /** Takes the oldest untaken server sign-in callback URL, if one has arrived. */
+    serverOAuthCallbackTake?(): Promise<string | undefined>;
+    /**
+     * Announces that the system opened Happy with a `happy://` link, from a
+     * browser or another application. Absent on shells that do not take them.
+     */
+    happyLinkExternalSubscribe?(listener: () => void): () => void;
+    /**
+     * Takes the oldest untaken external link, as written. The window reads it,
+     * including the installation it names, with the shared grammar.
+     */
+    happyLinkExternalTake?(): Promise<string | undefined>;
+    /**
      * Relays Command keyboard input while an isolated browser or HTML preview
      * guest owns focus. The renderer dispatches it through the same window
      * shortcut path as native host input.
@@ -1058,6 +1075,10 @@ export const desktopIpc = {
     cloudAuthCallbackTake: "happy:cloud-auth:callback-take",
     cloudAuthConfigurationGet: "happy:cloud-auth:configuration-get",
     cloudAuthOpen: "happy:cloud-auth:open",
+    serverOAuthCallbackReceived: "happy:server-oauth:callback-received",
+    serverOAuthCallbackTake: "happy:server-oauth:callback-take",
+    happyLinkExternalReceived: "happy:happy-link:external-received",
+    happyLinkExternalTake: "happy:happy-link:external-take",
     guestKey: "happy:guest:key",
     previewNavigationChanged: "happy:html-preview:navigation-changed",
     /** Main → renderer: the reader asked to go back or forward. */

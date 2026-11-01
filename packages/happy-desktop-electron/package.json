@@ -117,6 +117,12 @@
                 "schemes": [
                     "happy-auth"
                 ]
+            },
+            {
+                "name": "Happy",
+                "schemes": [
+                    "happy"
+                ]
             }
         ],
         "mac": {
