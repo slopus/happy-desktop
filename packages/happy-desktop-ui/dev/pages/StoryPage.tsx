@@ -2,7 +2,8 @@ import { useState } from "react";
 import { Sidebar, type SidebarItem } from "../../src/Sidebar";
 import { StoriesRow } from "../../src/StoriesRow";
 import { StoryViewer, type StoryViewerReply } from "../../src/StoryViewer";
-import { ComponentPage, Specimen } from "../kit";
+import clip from "../../src/assets/animations/chief-of-staff.mp4?url";
+import { ComponentPage, FullScreenSpecimen, Specimen } from "../kit";
 
 /** The component plan this page documents. The selector and the page header read the same value. */
 export const componentNumber = "C-332";
@@ -60,22 +61,44 @@ const REPLIES: StoryViewerReply[] = [
     { id: "3", name: "Ana", face: { initials: "A", tone: "amber" }, text: "Ship it" },
 ];
 
-function ViewerSpecimen(props: { readonly screen: string; readonly repost?: boolean }) {
+function ViewerSpecimen(props: {
+    readonly screen?: string;
+    readonly repost?: boolean;
+    readonly composer?: boolean;
+    readonly replyCount?: number;
+    readonly window?: { width: number; height: number };
+}) {
     const [index, setIndex] = useState(1);
-    const [replies, setReplies] = useState(REPLIES.slice(-2));
+    const all =
+        props.replyCount === undefined
+            ? REPLIES
+            : Array.from({ length: props.replyCount }, (_, index) => ({
+                  ...REPLIES[index % REPLIES.length]!,
+                  id: String(index),
+              }));
+    const [replies, setReplies] = useState(all.slice(-2));
     return (
         <div
             data-screen={props.screen}
-            style={{ contain: "layout", height: 640, position: "relative", width: 900 }}
+            style={{
+                contain: "layout",
+                height: props.window?.height ?? 640,
+                position: "relative",
+                width: props.window?.width ?? 900,
+            }}
         >
             <StoryViewer
                 caption="Onboarding now opens on the welcome screen, with setup one click away."
                 media={{ kind: "image", url: FRAME }}
                 onClose={() => setIndex(1)}
                 onDelete={() => undefined}
-                onRepliesOpen={() => setReplies(REPLIES)}
+                onRepliesOpen={() => setReplies(all)}
                 onReplySend={() => undefined}
                 onRepost={async () => true}
+                {...(props.composer
+                    ? { onPost: async () => true }
+                    : { layers: { text: { text: "Ready to ship 🚀", x: 0.5, y: 0.4 } } })}
+                onChatOpen={() => undefined}
                 onStep={(delta) => setIndex((at) => Math.min(2, Math.max(0, at + delta)))}
                 poster={
                     props.repost
@@ -83,9 +106,18 @@ function ViewerSpecimen(props: { readonly screen: string; readonly repost?: bool
                         : { name: "Desktop onboarding", face: { initials: "KD", type: "agent" } }
                 }
                 replies={replies}
-                replyCount={REPLIES.length}
+                replyCount={all.length}
+                roundUrl={clip}
                 {...(props.repost
-                    ? { repost: { from: "Desktop onboarding", roundUrl: null } }
+                    ? {
+                          repost: {
+                              from: {
+                                  name: "Desktop onboarding",
+                                  face: { initials: "DO", type: "agent" },
+                              },
+                              roundUrl: null,
+                          },
+                      }
                     : {})}
                 segment={{ index, total: 3 }}
                 time="5m"
@@ -100,6 +132,7 @@ export function StoryPage() {
             number={componentNumber}
             summary="A task's or bot's live story: an outline around its existing row tile, and the full-window viewer it opens."
             title="Stories"
+            width={1540}
         >
             <Specimen
                 detail="No story: rows exactly as without stories"
@@ -158,17 +191,109 @@ export function StoryPage() {
                             },
                         ]}
                         onOpen={() => undefined}
+                        create={{
+                            id: "p",
+                            face: { initials: "K", tone: "ocean" },
+                            onPick: () => undefined,
+                        }}
                     />
                 </div>
             </Specimen>
             <Specimen
-                detail="Reposted from chip · the person’s circle"
+                number="12"
+                label="Your Story — no live story"
+                detail="Your avatar has no ring · the accent plus opens the gallery"
+                stage="chrome"
+            >
+                <div data-screen="12-your-story-empty" style={{ width: 260 }}>
+                    <StoriesRow
+                        items={[
+                            {
+                                id: "a",
+                                name: "Desktop onboarding",
+                                face: { initials: "KD", type: "agent" },
+                                state: "unseen",
+                            },
+                            {
+                                id: "b",
+                                name: "Release bot",
+                                face: { initials: "RB", type: "agent" },
+                                state: "seen",
+                            },
+                        ]}
+                        onOpen={() => undefined}
+                        create={{
+                            id: "p",
+                            face: { initials: "K", tone: "ocean" },
+                            onPick: () => undefined,
+                        }}
+                    />
+                </div>
+            </Specimen>
+            {[
+                { width: 1440, height: 900 },
+                { width: 1100, height: 760 },
+            ].map((window) => (
+                <FullScreenSpecimen
+                    key={window.width}
+                    number="06"
+                    label="Story composer"
+                    detail="One composer · Text and Camera · bare Post"
+                    window={window}
+                    screen={`06-composer-${window.width}x${window.height}`}
+                >
+                    <ViewerSpecimen composer window={window} />
+                </FullScreenSpecimen>
+            ))}
+            {[
+                { width: 1440, height: 900 },
+                { width: 1100, height: 760 },
+            ].map((window) => (
+                <FullScreenSpecimen
+                    key={window.width}
+                    number="07"
+                    label="Window viewer"
+                    detail="Full-window story and replies"
+                    window={window}
+                    screen={`07-viewer-${window.width}x${window.height}`}
+                >
+                    <ViewerSpecimen window={window} />
+                </FullScreenSpecimen>
+            ))}
+            <Specimen
+                detail="Original agent attribution · the person’s circle"
                 label="Viewer — repost"
                 number="05"
                 stage="app"
             >
                 <ViewerSpecimen repost screen="05-repost" />
             </Specimen>
+            <FullScreenSpecimen
+                number="08"
+                label="Window repost"
+                detail="Original agent avatar opens its chat"
+                window={{ width: 1440, height: 900 }}
+                screen="08-repost-1440x900"
+            >
+                <ViewerSpecimen repost window={{ width: 1440, height: 900 }} />
+            </FullScreenSpecimen>
+            {[1, 40].flatMap((count) =>
+                [
+                    { width: 1440, height: 900 },
+                    { width: 1100, height: 760 },
+                ].map((window) => (
+                    <FullScreenSpecimen
+                        key={`${count}-${window.width}`}
+                        number={count === 1 ? "09" : "10"}
+                        label={count === 1 ? "One reply" : "Many replies"}
+                        detail="The inline reply list expands above the fixed reply field"
+                        window={window}
+                        screen={`${count === 1 ? "09-one" : "10-many"}-${window.width}x${window.height}`}
+                    >
+                        <ViewerSpecimen replyCount={count} window={window} />
+                    </FullScreenSpecimen>
+                )),
+            )}
         </ComponentPage>
     );
 }

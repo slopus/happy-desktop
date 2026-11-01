@@ -132,6 +132,7 @@ const BOTS: readonly HappyAgentBot[] = [
 function workspace(actions: {
     subtaskArchive: (sessionId: string) => Promise<void>;
     subtaskReorder: (sessionId: string, afterId: string | null) => Promise<void>;
+    botStoriesUpdate?: (botId: string, stories: boolean) => void;
 }): HappyAgentWorkspaceStore {
     const snapshot = {
         list: { bots: BOTS, tasks: [], projects: { type: "ready" as const, value: PROJECTS } },
@@ -161,6 +162,7 @@ function workspace(actions: {
             [Symbol.dispose]: () => undefined,
         } as unknown as HappyAgentPanelStore,
         subscribe: () => () => undefined,
+        sidebarRowsUpdate: () => undefined,
         ...actions,
         [Symbol.dispose]: () => undefined,
     } as unknown as HappyAgentWorkspaceStore;
@@ -168,6 +170,8 @@ function workspace(actions: {
 
 function view(
     options: {
+        stories?: boolean;
+        botStoriesUpdate?: (botId: string, stories: boolean) => void;
         subtaskArchive?: (sessionId: string) => Promise<void>;
         subtaskReorder?: (sessionId: string, afterId: string | null) => Promise<void>;
         subtaskFailures?: ReadonlyMap<
@@ -185,7 +189,10 @@ function view(
     const snapshot: AppHappyAgentDirectorySnapshot = {
         happyAgents: [
             {
-                bots: BOTS,
+                bots:
+                    options.stories === undefined
+                        ? BOTS
+                        : BOTS.map((bot) => ({ ...bot, stories: options.stories })),
                 id: "local",
                 label: "This Mac",
                 projects: PROJECTS,
@@ -209,6 +216,7 @@ function view(
                         [Symbol.dispose]: () => undefined,
                     } as unknown as HappyAgentModelStore,
                     workspace: workspace({
+                        botStoriesUpdate: options.botStoriesUpdate,
                         subtaskArchive,
                         subtaskReorder: options.subtaskReorder ?? (() => Promise.resolve()),
                     }),
@@ -244,6 +252,29 @@ const rowIds = (container: HTMLElement): (string | null)[] =>
     [...container.querySelectorAll('[data-happy-desktop-ui="sidebar-item"]')].map((row) =>
         row.getAttribute("data-item-id"),
     );
+
+it("offers Stories only on capable bots, shows the confirmed check, and toggles through the workspace", () => {
+    for (const stories of [undefined, false, true]) {
+        const botStoriesUpdate = vi.fn();
+        const { container, unmount } = view({ stories, botStoriesUpdate });
+        fireEvent.contextMenu(container.querySelector('[data-item-id="local/ws_debugger"]')!, {
+            clientX: 40,
+            clientY: 40,
+        });
+        const item = document.querySelector<HTMLButtonElement>(
+            '[data-happy-desktop-ui="sidebar-item-menu"] [data-item-id="stories"]',
+        );
+        if (stories === undefined) expect(item).toBeNull();
+        else {
+            expect(item!.getAttribute("role")).toBe("menuitemcheckbox");
+            expect(item!.getAttribute("aria-checked")).toBe(String(stories));
+            expect(item!.querySelector('[data-happy-desktop-ui="icon"]') !== null).toBe(stories);
+            fireEvent.click(item!);
+            expect(botStoriesUpdate).toHaveBeenCalledExactlyOnceWith(BOTS[0]!.id, !stories);
+        }
+        unmount();
+    }
+});
 
 it("searches the canonical project rows without duplicating a bot's worktree", () => {
     const sidebarSearch = happyAgentSidebarSearchStoreCreate();

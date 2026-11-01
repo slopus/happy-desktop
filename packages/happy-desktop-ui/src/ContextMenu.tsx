@@ -51,12 +51,12 @@ export function ContextMenu(props: ContextMenuProps) {
             );
             node.style.left = `${String(left)}px`;
             node.style.top = `${String(top)}px`;
-            node.querySelector<HTMLElement>('[role="menuitem"]:not(:disabled)')?.focus();
+            node.querySelector<HTMLElement>('[role^="menuitem"]:not(:disabled)')?.focus();
         },
         [x, y],
     );
     const menuItems = (node: HTMLElement): HTMLElement[] => [
-        ...node.querySelectorAll<HTMLElement>('[role="menuitem"]:not(:disabled)'),
+        ...node.querySelectorAll<HTMLElement>('[role^="menuitem"]:not(:disabled)'),
     ];
     return (
         <WindowOverlay>

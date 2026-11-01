@@ -83,14 +83,29 @@ function open(stories: Story[], enabled = true) {
             replies: [1, 2, 3].map((n) => replyOf(id, n)),
         })),
         replyToStory: vi.fn(async (_id: string, _text: string) => ({ reply: {} })),
-        repostStory: vi.fn(
-            async (id: string, body: { caption?: string; round?: { data: string } }) => {
-                const of = server.stories.find((each) => each.id === id)!;
-                return {
-                    story: { ...repost("re", "me", of, true), caption: body.caption ?? null },
-                };
+        repostStory: vi.fn(async (id: string, body: { layers?: Story["layers"]; round?: Blob }) => {
+            const of = server.stories.find((each) => each.id === id)!;
+            return {
+                story: { ...repost("re", "me", of, true), layers: body.layers },
+            };
+        }),
+        postStory: vi.fn(async (media: Blob, body: { layers?: Story["layers"]; round?: Blob }) => ({
+            story: {
+                ...story("own", "", Date.now(), true),
+                poster: "person" as const,
+                agentId: null,
+                taskId: null,
+                botId: null,
+                userId: "me",
+                media: {
+                    kind: media.type === "video/mp4" ? ("video" as const) : ("image" as const),
+                    mimeType: media.type,
+                    size: media.size,
+                },
+                layers: body.layers,
+                canDelete: true,
             },
-        ),
+        })),
         deleteStory: vi.fn(async (_id: string) => ({})),
     };
     const sync = happyAgentSyncCreate();
@@ -372,16 +387,18 @@ it("shows the last two replies, every reply once the drawer asks, and sends one"
     await until(() => on(store.get()).failure?.message === "Story ended");
 });
 
-it("reposts with a round video as base64, and adopts the repost", async () => {
+it("reposts with binary video and normalized layer centers, and adopts the repost", async () => {
     const { store, client } = open([story("a", "task1", 1)]);
     await until(() => on(store.get()).row.length === 1);
     store.agentOpen("task1");
     const round = new Blob([new Uint8Array([0, 1, 2, 255])], { type: "video/mp4" });
-    store.storyRepost("so good", round);
+    const layers = { text: { text: "so good 🚀", x: 0.7, y: 0.6 }, round: { x: 0.3, y: 0.4 } };
+    store.storyRepost({ caption: "Separate caption", layers, round });
     await until(() => on(store.get()).row.some((tile) => tile.key === "person:me"));
     expect(client.repostStory).toHaveBeenCalledWith("a", {
-        caption: "so good",
-        round: { data: "AAEC/w==" },
+        caption: "Separate caption",
+        layers,
+        round,
     });
 });
 
@@ -409,14 +426,41 @@ it("refuses an oversized round before sending it, and reports a refused repost",
     await until(() => on(store.get()).row.length === 1);
     store.agentOpen("task1");
     const huge = { size: 16 * 1024 * 1024 + 1 } as Blob;
-    expect(await store.storyRepost("", huge)).toBe(false);
+    expect(await store.storyRepost({ layers: {}, round: huge })).toBe(false);
     expect(client.repostStory).not.toHaveBeenCalled();
     expect(on(store.get()).failure?.message).toContain("16 MB");
     client.repostStory.mockRejectedValueOnce(new Error("Not an H.264 MP4"));
-    expect(await store.storyRepost("", null)).toBe(false);
+    expect(await store.storyRepost({ layers: {}, round: null })).toBe(false);
     expect(on(store.get()).failure?.message).toBe("Not an H.264 MP4");
-    expect(await store.storyRepost("ok", null)).toBe(true);
+    expect(await store.storyRepost({ layers: {}, round: null })).toBe(true);
     expect(on(store.get()).failure).toBeNull();
+});
+
+it("posts gallery photos and MP4s without added layers, retains failures, and rejects unsupported picks", async () => {
+    const { store, client } = open([]);
+    await until(() => client.listStories.mock.calls.length > 0);
+    for (const type of ["image/png", "video/mp4"]) {
+        const file = new File(["media"], "story", { type });
+        store.storyDraftOpen(file);
+        expect(on(store.get()).draft?.kind).toBe(type === "video/mp4" ? "video" : "image");
+        client.postStory.mockRejectedValueOnce(new Error("Try again"));
+        expect(await store.storyPost({ layers: {}, round: null })).toBe(false);
+        expect(on(store.get()).draft).not.toBeNull();
+        expect(await store.storyPost({ caption: "Gallery caption", layers: {}, round: null })).toBe(
+            true,
+        );
+        expect(client.postStory).toHaveBeenLastCalledWith(file, {
+            caption: "Gallery caption",
+            layers: {},
+        });
+        expect(on(store.get()).draft).toBeNull();
+        store.tileOpen("person:me");
+        expect(on(store.get()).open?.story.canDelete).toBe(true);
+        expect(on(store.get()).outlines.size).toBe(0);
+    }
+    store.storyDraftOpen(new File(["bad"], "clip.webm", { type: "video/webm" }));
+    expect(on(store.get()).failure?.message).toContain("image or an MP4");
+    expect(on(store.get()).draft).toBeNull();
 });
 
 it("carries on past a story that leaves while open, and skips emptied posters", async () => {

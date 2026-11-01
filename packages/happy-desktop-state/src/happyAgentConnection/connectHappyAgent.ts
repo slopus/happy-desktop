@@ -606,6 +606,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                     daemonConfig,
                     agentDrafts,
                     agentModes,
+                    sync.source.health()?.capabilities?.storyFeed === true,
                 ),
                 taskGroups: projectTasks(
                     current.tasks,
@@ -5161,6 +5162,29 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         },
         renameGroup(target, name) {
             return renameGroup(target, name);
+        },
+        setBotStories(botId, stories) {
+            const mutationId = nextId();
+            return mutation(
+                "set_bot_stories",
+                mutationId,
+                () => {
+                    const bot = botOf(botId);
+                    if (!bot) throw new Error("The bot is not loaded.");
+                    return client.renameBot(
+                        botId,
+                        { stories, mutationId },
+                        { ifMatch: bot.version, signal: rootController.signal },
+                    );
+                },
+                ({ bot }) => {
+                    groupsStore.setState((state) => ({ bots: replaceResource(state.bots, bot) }));
+                    publishGroups();
+                },
+                undefined,
+                undefined,
+                `bot:${botId}`,
+            );
         },
         createBot(name) {
             // All three identities are named here and handed to the daemon,

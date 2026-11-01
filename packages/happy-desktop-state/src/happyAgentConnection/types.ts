@@ -702,6 +702,8 @@ export interface BotGroup {
     /** The bot's dedicated workspace, which is what its conversation addresses. */
     workspaceId: string;
     name: string;
+    /** Present only with storyFeed and a daemon-provided bot Stories setting. */
+    stories?: boolean;
     /** Immutable local snake_case name, also the bot's folder name. */
     username: string;
     /** Daemon-provided built-in bot identity; null or absent for ordinary bots. */
@@ -838,6 +840,7 @@ export type MutationAction =
     | "set_session_archived"
     | "mark_session_read"
     | "rename_group"
+    | "set_bot_stories"
     | "reorder_group"
     | "reorder_bot"
     | "reorder_session"
@@ -1152,6 +1155,7 @@ export interface HappyAgentConnection {
     answerUserInput(sessionId: string, requestId: string, response: UserInputAnswers): MutationId;
     setSessionArchived(sessionId: string, archived: boolean): MutationId;
     renameGroup(target: GroupTarget, name: string): MutationId;
+    setBotStories(botId: string, stories: boolean): MutationId;
     /**
      * Creates a bot, its dedicated workspace, and its one agent.
      *

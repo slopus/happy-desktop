@@ -257,8 +257,8 @@ importers:
   packages/happy-desktop-gym:
     dependencies:
       '@slopus/happy-agent-client':
-        specifier: file:../../.context/happy-agent-client-stories-6310c028a.tgz
-        version: file:.context/happy-agent-client-stories-6310c028a.tgz
+        specifier: file:../../.context/happy-agent-client-stories-v3-c05e94cec.tgz
+        version: file:.context/happy-agent-client-stories-v3-c05e94cec.tgz
       happy-desktop-state:
         specifier: workspace:*
         version: link:../happy-desktop-state
@@ -297,8 +297,8 @@ importers:
         specifier: ^0.34.49
         version: 0.34.52
       '@slopus/happy-agent-client':
-        specifier: file:../../.context/happy-agent-client-stories-6310c028a.tgz
-        version: file:.context/happy-agent-client-stories-6310c028a.tgz
+        specifier: file:../../.context/happy-agent-client-stories-v3-c05e94cec.tgz
+        version: file:.context/happy-agent-client-stories-v3-c05e94cec.tgz
       picomatch:
         specifier: 4.0.5
         version: 4.0.5
@@ -2123,9 +2123,9 @@ packages:
     resolution: {integrity: sha512-ynH73G7jf6pIwm6nbqtsXAfaiJkuce5fS4+FMifpJVaTjpl2RTUqTeJwCkIpfBhEnObvQCaannLjWJOIY4D7cg==}
     engines: {node: '>=20'}
 
-  '@slopus/happy-agent-client@file:.context/happy-agent-client-stories-6310c028a.tgz':
-    resolution: {integrity: sha512-lPoIm0QlmxDL0kLHWzVopj+sc1f2FOZveDVnxGM8E9lfQhBjA//ydBm/cAfOu1aj0v7Q/BRfrU/7Sw9DmOiapA==, tarball: file:.context/happy-agent-client-stories-6310c028a.tgz}
-    version: 0.0.136
+  '@slopus/happy-agent-client@file:.context/happy-agent-client-stories-v3-c05e94cec.tgz':
+    resolution: {integrity: sha512-clk3Q1iBS9bqvYw6VM7bz3dAu5bqgiqIaR5Mka0FQYaTI9qZBDN4R8noFUVCh4ZjYStGj2Ikdyr/S+XfSlPjHA==, tarball: file:.context/happy-agent-client-stories-v3-c05e94cec.tgz}
+    version: 0.0.138
     engines: {node: '>=20'}
 
   '@standard-schema/spec@1.1.0':
@@ -7476,7 +7476,7 @@ snapshots:
       '@sinclair/typebox': 0.34.52
       parse5: 8.0.1
 
-  '@slopus/happy-agent-client@file:.context/happy-agent-client-stories-6310c028a.tgz':
+  '@slopus/happy-agent-client@file:.context/happy-agent-client-stories-v3-c05e94cec.tgz':
     dependencies:
       '@sinclair/typebox': 0.34.52
       parse5: 8.0.1

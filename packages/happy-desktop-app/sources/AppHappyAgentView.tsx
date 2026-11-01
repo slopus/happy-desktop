@@ -1281,6 +1281,7 @@ const ROW_MENU_LEAVE = "leave";
 const ROW_MENU_MUTE = "mute";
 /** Takes a bot out of the sidebar; the Bots heading lists it to bring it back. */
 const ROW_MENU_HIDE = "hide";
+const ROW_MENU_STORIES = "stories";
 /** The Bots heading's menu of hidden bots: one row per bot, and one for all of them. */
 const BOTS_MENU_SHOW_PREFIX = "show:";
 const BOTS_MENU_SHOW_ALL = "show-all";
@@ -1368,6 +1369,16 @@ function rowMenuItems(
     if (bot)
         return [
             { kind: "item", id: ROW_MENU_RENAME, label: "Rename bot", icon: "edit" },
+            ...(bot.stories === undefined
+                ? []
+                : [
+                      {
+                          kind: "item" as const,
+                          id: ROW_MENU_STORIES,
+                          label: "Stories",
+                          checked: bot.stories,
+                      },
+                  ]),
             { kind: "separator" },
             ...(botAttention
                 ? [...botAttentionMenuItems(botAttention(bot)), { kind: "separator" } as const]
@@ -3431,10 +3442,16 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
         storiesStore?.get ?? storiesNone.get,
     );
     const storyOpen = stories.mode === "on" ? stories.open : null;
+    const storyDraft = stories.mode === "on" ? stories.draft : null;
+    const storyMedia = storyDraft
+        ? { kind: storyDraft.kind, url: storyDraft.mediaUrl }
+        : storyOpen
+          ? { kind: storyOpen.story.media.kind, url: storyOpen.mediaUrl }
+          : null;
     // Who posted a story or replied: an agent by its bot or task, a person by their photo.
     const storyPoster = (who: {
         readonly poster: "agent" | "person";
-        readonly agentId: string;
+        readonly agentId: string | null;
         readonly userId: string | null;
     }): { name: string; face: StoryFace } => {
         if (who.poster === "person") {
@@ -3712,7 +3729,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                     // loading, and "Loading sessions…" under a footer saying the
                     // machine is unreachable is a promise nothing is keeping.
                     <Banner tone="neutral">Loading sessions…</Banner>
-                ) : stories.mode === "on" && storiesStore && stories.row.length > 0 ? (
+                ) : stories.mode === "on" && storiesStore ? (
                     <StoriesRow
                         items={stories.row.map((tile) => ({
                             id: tile.key,
@@ -3720,6 +3737,13 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                             ...storyPoster(tile),
                         }))}
                         onOpen={storiesStore.tileOpen}
+                        create={{
+                            id: `person:${surfaceCatalog.viewer?.userId ?? ""}`,
+                            face: storyPoster({ poster: "person", agentId: null, userId: null })
+                                .face,
+                            onPick: storiesStore.storyDraftOpen,
+                        }}
+                        notice={stories.failure?.message}
                     />
                 ) : undefined
             }
@@ -3885,6 +3909,8 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                 }
                 const bot = happyAgent.bots.find((candidate) => candidate.workspaceId === row.id);
                 if (bot) {
+                    if (actionId === ROW_MENU_STORIES && bot.stories !== undefined)
+                        workspace.botStoriesUpdate(bot.id, !bot.stories);
                     if (actionId === ROW_MENU_ARCHIVE)
                         void workspace.botArchive(bot.id).catch(() => undefined);
                     return;
@@ -4582,37 +4608,61 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
             >
                 {routeContent()}
             </AppShell>
-            {storyOpen && storiesStore ? (
+            {storyMedia && storiesStore ? (
                 <StoryViewer
-                    caption={storyOpen.story.caption}
-                    key={storyOpen.story.id}
-                    media={{ kind: storyOpen.story.media.kind, url: storyOpen.mediaUrl }}
+                    caption={storyOpen?.story.caption ?? null}
+                    key={storyOpen?.story.id ?? "draft"}
+                    media={storyMedia}
+                    layers={storyOpen?.story.layers}
+                    roundUrl={storyOpen?.roundUrl}
+                    {...(storyDraft ? { onPost: storiesStore.storyPost } : {})}
                     notice={stories.mode === "on" ? stories.failure?.message : null}
                     onClose={storiesStore.viewerClose}
-                    {...(storyOpen.story.canDelete ? { onDelete: storiesStore.storyDelete } : {})}
+                    {...(storyOpen?.story.canDelete ? { onDelete: storiesStore.storyDelete } : {})}
                     onRepliesOpen={storiesStore.repliesOpen}
                     onReplySend={storiesStore.replySend}
-                    {...(storyOpen.story.poster === "agent"
+                    {...(storyOpen?.story.poster === "agent"
                         ? { onRepost: storiesStore.storyRepost }
                         : {})}
                     onStep={storiesStore.storyStep}
-                    poster={storyPoster(storyOpen.story)}
-                    replies={storyOpen.replies.map((reply) => ({
+                    {...(storyOpen?.story.agentId && active
+                        ? {
+                              onChatOpen: () => {
+                                  const id = storyOpen.story.agentId!;
+                                  const target =
+                                      active.tasks?.find((task) => task.conversation.id === id) ??
+                                      active.bots.find((bot) => bot.conversation.id === id);
+                                  storiesStore.viewerClose();
+                                  props.onChatSelect(active.id, target?.workspaceId, id);
+                              },
+                          }
+                        : {})}
+                    poster={storyPoster(
+                        storyOpen?.story ?? { poster: "person", agentId: null, userId: null },
+                    )}
+                    replies={(storyOpen?.replies ?? []).map((reply) => ({
                         id: reply.id,
                         text: reply.text,
                         ...storyPoster({ poster: "person", agentId: "", userId: reply.userId }),
                     }))}
-                    replyCount={storyOpen.story.replyCount}
-                    {...(storyOpen.story.repostOf !== null
+                    replyCount={storyOpen?.story.replyCount ?? 0}
+                    {...(storyOpen && storyOpen.story.repostOf !== null
                         ? {
                               repost: {
-                                  from: storyPoster({ ...storyOpen.story, poster: "agent" }).name,
+                                  from: storyPoster({ ...storyOpen.story, poster: "agent" }),
                                   roundUrl: storyOpen.roundUrl,
                               },
                           }
                         : {})}
-                    segment={storyOpen.segment}
-                    time={localAgoTime(storyOpen.story.postedAt, active?.session?.clock.get() ?? 0)}
+                    segment={storyOpen?.segment ?? { index: 0, total: 1 }}
+                    time={
+                        storyOpen
+                            ? localAgoTime(
+                                  storyOpen.story.postedAt,
+                                  active?.session?.clock.get() ?? 0,
+                              )
+                            : "Now"
+                    }
                 />
             ) : null}
             {/* Command-K belongs to the window rather than to a workspace: it is

@@ -185,6 +185,7 @@ function catalogProject(
         subtasks: subtasksProject(bot.subtasks),
         name: bot.name,
         username: bot.username,
+        ...(bot.stories === undefined ? {} : { stories: bot.stories }),
         ...(bot.systemKey === undefined ? {} : { systemKey: bot.systemKey }),
         orderKey: bot.orderKey,
         path: bot.path,

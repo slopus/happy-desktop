@@ -1,4 +1,4 @@
-import type { HappyAgentClient, Story, StoryReply } from "@slopus/happy-agent-client";
+import type { HappyAgentClient, Story, StoryReply, StoryLayers } from "@slopus/happy-agent-client";
 import type { HappyAgentSync } from "../happyAgentConnection/happyAgentSync.js";
 import { happyAgentSyncRead } from "../happyAgentConnection/happyAgentSyncRead.js";
 import type { HappyAgentAutoJoinSettingsStore } from "../happyAgent/happyAgentAutoJoinSettings.js";
@@ -12,7 +12,7 @@ export type HappyAgentStoryTile = {
     /** `agent:<agentId>` or `person:<userId>`; a standalone person has an empty user id. */
     readonly key: string;
     readonly poster: "agent" | "person";
-    readonly agentId: string;
+    readonly agentId: string | null;
     readonly userId: string | null;
     readonly state: "unseen" | "seen";
 };
@@ -38,6 +38,7 @@ export type HappyAgentStoriesSnapshot =
           } | null;
           /** The reader's last reply, repost or delete the daemon refused. */
           readonly failure: UserError | null;
+          readonly draft: { readonly mediaUrl: string; readonly kind: "image" | "video" } | null;
       };
 
 export type HappyAgentStoriesStore = ReturnType<typeof happyAgentStoriesStoreCreate>;
@@ -47,13 +48,11 @@ const noop = () => undefined;
 const keyOf = (story: Story) =>
     story.poster === "person" ? `person:${story.userId ?? ""}` : `agent:${story.agentId}`;
 
-async function base64(blob: Blob): Promise<string> {
-    const bytes = new Uint8Array(await blob.arrayBuffer());
-    let text = "";
-    for (let at = 0; at < bytes.length; at += 0x8000)
-        text += String.fromCharCode(...bytes.subarray(at, at + 0x8000));
-    return btoa(text);
-}
+type Composition = {
+    readonly caption?: string;
+    readonly layers: StoryLayers;
+    readonly round: Blob | null;
+};
 
 /** One connection's live stories, followed only while subscribed with `stories` on. */
 export function happyAgentStoriesStoreCreate(deps: {
@@ -68,6 +67,7 @@ export function happyAgentStoriesStoreCreate(deps: {
         | "listStoryReplies"
         | "replyToStory"
         | "repostStory"
+        | "postStory"
         | "deleteStory"
     >;
     readonly sync: HappyAgentSync;
@@ -88,6 +88,15 @@ export function happyAgentStoriesStoreCreate(deps: {
     let expiry: ReturnType<typeof setTimeout> | undefined;
     let snapshot: HappyAgentStoriesSnapshot | undefined;
     let disposed = false;
+    let draft: {
+        readonly file: File;
+        readonly mediaUrl: string;
+        readonly kind: "image" | "video";
+    } | null = null;
+    const draftDrop = () => {
+        if (draft) URL.revokeObjectURL(draft.mediaUrl);
+        draft = null;
+    };
 
     const enabled = () => {
         const setting = settings.get();
@@ -119,7 +128,7 @@ export function happyAgentStoriesStoreCreate(deps: {
     const compute = (): HappyAgentStoriesSnapshot => {
         const outlines = new Map<string, "unseen" | "seen">();
         for (const { agentId, seen, poster } of stories)
-            if (poster === "agent" && outlines.get(agentId) !== "unseen")
+            if (poster === "agent" && agentId && outlines.get(agentId) !== "unseen")
                 outlines.set(agentId, seen ? "seen" : "unseen");
         const story = opened();
         const held = story ? walk(keyOf(story)) : [];
@@ -130,7 +139,7 @@ export function happyAgentStoriesStoreCreate(deps: {
             segment: { index: held.indexOf(story), total: held.length },
             replies: replies?.id === story.id ? replies.all : story.replies,
         };
-        return { mode: "on", outlines, row: row(), people, open: view ?? null, failure };
+        return { mode: "on", outlines, row: row(), people, open: view ?? null, failure, draft };
     };
     /** Follows while someone is subscribed with the setting on; stopping forgets the feed. */
     const lifetime = () => {
@@ -147,6 +156,7 @@ export function happyAgentStoriesStoreCreate(deps: {
             });
             void followLoop(following.signal).catch(noop);
         } else if (!wanted && following) {
+            draftDrop();
             following.abort();
             following = undefined;
             clearTimeout(expiry);
@@ -316,8 +326,50 @@ export function happyAgentStoriesStoreCreate(deps: {
             show(held[held.indexOf(story) + delta] ?? hop(keyOf(story), delta), open.through);
         },
         viewerClose() {
+            draftDrop();
             open = null;
             notify();
+        },
+        storyDraftOpen(file: File) {
+            if (!enabled()) return;
+            failure = null;
+            if (!(file.type.startsWith("image/") || file.type === "video/mp4"))
+                failure = new UserError("Choose an image or an MP4 video.");
+            else if (file.size > 32 * 1024 * 1024)
+                failure = new UserError("A story can be at most 32 MB.");
+            else {
+                draftDrop();
+                draft = {
+                    file,
+                    mediaUrl: URL.createObjectURL(file),
+                    kind: file.type === "video/mp4" ? "video" : "image",
+                };
+                open = null;
+            }
+            notify();
+        },
+        async storyPost(composition: Composition) {
+            if (!draft || !enabled()) return false;
+            const held = draft;
+            failure = null;
+            try {
+                if (composition.round && composition.round.size > 16 * 1024 * 1024)
+                    throw new UserError("A round video can be at most 16 MB.");
+                const response = await client.postStory(held.file, {
+                    ...(composition.caption ? { caption: composition.caption } : {}),
+                    layers: composition.layers,
+                    ...(composition.round ? { round: composition.round } : {}),
+                });
+                if (!enabled() || draft !== held) return false;
+                draftDrop();
+                adopt(response.story);
+                changed();
+                return true;
+            } catch (error) {
+                failure = happyAgentUserError(error);
+                notify();
+                return false;
+            }
         },
         repliesOpen() {
             if (open) repliesRead(open.story.id);
@@ -326,14 +378,15 @@ export function happyAgentStoriesStoreCreate(deps: {
             void act(async (story) => void (await client.replyToStory(story.id, text)));
         },
         /** Resolves false when it was refused, so the reader can try again. */
-        storyRepost(caption: string, round: Blob | null) {
+        storyRepost({ caption, layers, round }: Composition) {
             return act(async (story) => {
                 // The largest round video the daemon takes.
                 if (round && round.size > 16 * 1024 * 1024)
                     throw new UserError("A round video can be at most 16 MB.");
                 const response = await client.repostStory(story.id, {
                     ...(caption ? { caption } : {}),
-                    ...(round ? { round: { data: await base64(round) } } : {}),
+                    layers,
+                    ...(round ? { round } : {}),
                 });
                 adopt(response.story);
                 changed();

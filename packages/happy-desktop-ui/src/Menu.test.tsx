@@ -9,6 +9,42 @@ import { createRenderer, type VisiblePixelMetrics } from "./testing";
 
 const FIGTREE = "happy Figtree, system-ui, sans-serif";
 
+it("gives checked and unchecked Stories rows checkbox semantics with a real check glyph", async () => {
+    const selected: string[] = [];
+    const view = createRenderer();
+    view.render(
+        () => (
+            <Menu
+                items={[
+                    { kind: "item", id: "on", label: "Stories", checked: true },
+                    { kind: "item", id: "off", label: "Stories", checked: false },
+                ]}
+                onSelect={(id) => selected.push(id)}
+            />
+        ),
+        { width: 260, height: 100 },
+    );
+    await view.ready();
+    for (const id of ["on", "off"]) {
+        const row = view.$(`[data-item-id="${id}"]`);
+        expect(row.element.getAttribute("role")).toBe("menuitemcheckbox");
+        expect(row.element.getAttribute("aria-checked")).toBe(String(id === "on"));
+        expect(row.element.querySelector('[data-happy-desktop-ui="icon"]') !== null).toBe(
+            id === "on",
+        );
+        (row.element as HTMLButtonElement).click();
+    }
+    expect(
+        (await view.$('[data-item-id="on"] [data-happy-desktop-ui="icon"]').visibleMetrics())
+            .pixelCount,
+    ).toBeGreaterThan(0);
+    expect(view.$('[data-item-id="on"] .happy-menu__item-label').bounds().x).toBe(
+        view.$('[data-item-id="off"] .happy-menu__item-label').bounds().x,
+    );
+    expect(selected).toEqual(["on", "off"]);
+    view.destroy();
+});
+
 /*
  * The leading glyph fills its 16px slot. The icon font paints the glyph
  * box-centered, so Menu only owns the slot box and the fact that the glyph

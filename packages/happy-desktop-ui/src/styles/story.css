@@ -7,7 +7,7 @@
 }
 
 .happy-sidebar__item-leading:has(> .happy-sidebar__item-story) > .happy-avatar,
-.happy-stories-row__item > .happy-avatar {
+.happy-stories-row__item[data-story] > .happy-avatar {
     outline: 1.5px solid var(--radio-active);
     outline-offset: 1.5px;
 }
@@ -22,6 +22,9 @@
     display: flex;
     gap: 8px;
     padding: 8px 12px;
+}
+.happy-stories-scroll {
+    display: flex;
     overflow-x: auto;
     scrollbar-width: none;
 }
@@ -46,31 +49,74 @@
     text-overflow: ellipsis;
     white-space: nowrap;
 }
+.happy-stories-row__self {
+    position: relative;
+}
+.happy-stories-row__add {
+    position: absolute;
+    top: 26px;
+    right: 1px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border: 2px solid var(--groupped-background);
+    border-radius: 50%;
+    background: var(--radio-active);
+    color: var(--button-primary-tint);
+}
 
 .happy-story-viewer {
     position: fixed;
     z-index: var(--happy-z-overlay);
     inset: 0;
     display: flex;
+    align-items: center;
     justify-content: center;
-    padding: 24px;
-    background: var(--surface-high);
+    gap: 24px;
+    box-sizing: border-box;
+    padding: 12px;
+    background: var(--story-backdrop);
     color: var(--text);
     font: 14px / 19px var(--happy-font-ui);
     outline: none;
+    isolation: isolate;
+    overflow: hidden;
 }
 
 /* The frame never moves: everything over it is laid on top. */
 .happy-story-viewer__frame {
     position: relative;
+    flex: none;
+    height: 100%;
     aspect-ratio: 9 / 16;
     overflow: hidden;
     border-radius: 12px;
     background: var(--surface);
+    box-shadow: 0 16px 48px var(--shadow-floating);
+}
+.happy-story-viewer__zoom,
+.happy-story-viewer__viewport {
+    position: absolute;
+    inset: 0;
+}
+.happy-story-viewer__viewport {
+    overflow: hidden;
+    z-index: 0;
+}
+.happy-story-viewer__shade {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    padding: 0;
+    border: 0;
+    background: rgb(0 0 0 / 65%);
 }
 
 .happy-story-viewer__media,
-.happy-story-viewer__half {
+.happy-story-viewer__backdrop {
     position: absolute;
     top: 0;
     left: 0;
@@ -78,20 +124,62 @@
     height: 100%;
     object-fit: cover;
 }
-
-.happy-story-viewer__half {
-    width: 50%;
-    border: 0;
-    background: none;
+.happy-story-viewer__backdrop {
+    z-index: -1;
+    filter: blur(40px) brightness(0.45);
+    transform: scale(1.2);
+    pointer-events: none;
 }
 
-.happy-story-viewer__half[data-next] {
-    left: 50%;
+.happy-story-viewer__nav,
+.happy-story-viewer__tool,
+.happy-story-viewer__post,
+.happy-story-viewer__stop {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    width: 44px;
+    height: 44px;
+    border: 0;
+    border-radius: 50%;
+    background: var(--story-control);
+    backdrop-filter: blur(16px);
+    color: var(--text);
+}
+.happy-story-viewer__nav:disabled {
+    visibility: hidden;
+}
+.happy-story-viewer__tool {
+    padding: 0;
+    font: 600 20px / 24px var(--happy-font-ui);
+}
+.happy-story-viewer__post {
+    background: var(--text-link);
+}
+.happy-story-viewer__record {
+    align-items: flex-end;
+}
+.happy-story-viewer__caption {
+    flex: 1;
+    min-width: 0;
+    min-height: 44px;
+    max-height: 84px;
+    box-sizing: border-box;
+    padding: 11px 12px;
+    border: 0;
+    border-radius: 22px;
+    background: var(--story-control);
+    color: var(--text);
+    font: 14px / 20px var(--happy-font-ui);
+    resize: none;
+}
+.happy-story-viewer__stop {
+    background: var(--warning-critical);
 }
 
 .happy-story-viewer__top,
-.happy-story-viewer__bottom,
-.happy-story-viewer__drawer {
+.happy-story-viewer__bottom {
     position: absolute;
     right: 0;
     left: 0;
@@ -99,19 +187,58 @@
     flex-direction: column;
     gap: 10px;
     padding: 12px;
+    transition: opacity 120ms;
+}
+
+.happy-story-viewer__frame[data-held] :is(.happy-story-viewer__top, .happy-story-viewer__bottom) {
+    opacity: 0;
 }
 
 .happy-story-viewer__top {
     top: 0;
+    z-index: 2;
     pointer-events: none;
-    background: linear-gradient(rgb(0 0 0 / 55%), transparent);
+    background: var(--surface);
+}
+.happy-story-viewer__frame[data-composing] .happy-story-viewer__top {
+    display: none;
+}
+.happy-story-viewer__frame[data-composing] ~ .happy-story-viewer__close {
+    left: 16px;
+    right: auto;
 }
 
 .happy-story-viewer__bottom {
     bottom: 0;
     pointer-events: none;
     padding-top: 48px;
-    background: linear-gradient(transparent, rgb(0 0 0 / 65%));
+    background: linear-gradient(transparent, var(--story-shade-bottom));
+    max-height: calc(100% - 88px);
+}
+.happy-story-viewer__frame[data-replies] .happy-story-viewer__bottom {
+    padding-top: 0;
+}
+.happy-story-viewer__bottom > form {
+    flex: none;
+}
+.happy-story-viewer__actions {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+.happy-story-viewer__actions > button,
+.happy-story-viewer__actions > button.happy-button[data-variant][data-size],
+.happy-story-viewer__actions > .happy-menu-button > button.happy-button[data-variant][data-size] {
+    width: 32px;
+    height: 32px;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    backdrop-filter: none;
+    box-shadow: none;
+    color: white;
+    filter: drop-shadow(0 1px 2px rgb(0 0 0 / 60%));
 }
 
 .happy-story-viewer__top button,
@@ -125,10 +252,9 @@
 
 .happy-story-viewer__segments,
 .happy-story-viewer__head,
-.happy-story-viewer__chip,
+.happy-story-viewer__attribution,
 .happy-story-viewer__record,
-.happy-story-viewer__peek > span,
-.happy-story-viewer__drawer > div > span {
+.happy-story-viewer__peek > span {
     display: flex;
     align-items: center;
     gap: 8px;
@@ -148,27 +274,38 @@
 .happy-story-viewer__segments > [data-on] {
     opacity: 1;
 }
+.happy-story-viewer__segments > span:has(> .happy-story-viewer__progress) {
+    background: color-mix(in srgb, var(--text) 35%, transparent);
+}
+.happy-story-viewer__progress {
+    display: block;
+    height: 100%;
+    background: var(--text);
+    transform-origin: left;
+    animation: happy-story-progress 5s linear forwards;
+}
+@keyframes happy-story-progress {
+    from {
+        transform: scaleX(0);
+    }
+}
 
-.happy-story-viewer__head > span,
-.happy-story-viewer__peek > u {
+.happy-story-viewer__head > span:not(.happy-avatar),
+.happy-story-viewer__peek > button {
     margin-right: auto;
     color: var(--text-secondary);
     text-decoration: none;
 }
 
 .happy-story-viewer__round {
-    position: absolute;
-    top: 92px;
-    left: 12px;
-    width: 96px;
-    height: 96px;
+    width: 100%;
+    height: 100%;
     border-radius: 50%;
     object-fit: cover;
     box-shadow: 0 0 0 2px var(--text);
 }
 
-.happy-story-viewer__peek,
-.happy-story-viewer__drawer > div {
+.happy-story-viewer__peek {
     display: flex;
     flex-direction: column;
     gap: 8px;
@@ -179,6 +316,19 @@
     font: inherit;
     text-align: left;
     overflow-y: auto;
+    min-height: 0;
+    overscroll-behavior: contain;
+}
+.happy-story-viewer__peek > span {
+    flex: none;
+}
+.happy-story-viewer__peek > button {
+    align-self: flex-start;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--text-secondary);
+    font: inherit;
 }
 
 .happy-story-viewer__bottom input {
@@ -187,32 +337,78 @@
     height: 36px;
     padding: 0 14px;
     border: 1px solid color-mix(in srgb, var(--text) 35%, transparent);
-    border-radius: 12px;
-    background: rgb(0 0 0 / 25%);
+    border-radius: var(--happy-radius-pill);
+    background: var(--story-shade-field);
+    backdrop-filter: blur(16px);
     color: inherit;
     font: inherit;
 }
 
-.happy-story-viewer__drawer {
-    bottom: 0;
-    max-height: 70%;
-    background: var(--surface);
+.happy-story-viewer__bottom {
+    z-index: 3;
 }
-
-/* The drawer's head is its handle: dragged or swiped down, it closes. */
-.happy-story-viewer__drawer > header {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 6px;
-    color: var(--text-secondary);
+.happy-story-viewer__sticker,
+.happy-story-viewer__text {
+    /* Layers overlay the base media at normalized center coordinates. */
+    position: absolute;
+    transform: translate(-50%, -50%);
     touch-action: none;
 }
-
-.happy-story-viewer__grabber {
-    width: 36px;
-    height: 4px;
-    background: var(--text-secondary);
+.happy-story-viewer__sticker {
+    width: 96px;
+    height: 96px;
+}
+.happy-story-viewer__text {
+    max-width: 90%;
+    font: 600 24px / 30px var(--happy-font-ui);
+}
+.happy-story-viewer__text button,
+.happy-story-viewer__text input {
+    border: 0;
+    padding: 6px 12px;
+    border-radius: 8px;
+    background: var(--story-text-fill);
+    text-shadow: 0 2px 8px var(--shadow-floating);
+    color: var(--text);
+    font: inherit;
+    text-align: center;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+.happy-story-viewer__text input {
+    width: 240px;
+    max-width: 100%;
+}
+.happy-story-viewer__round-record {
+    position: absolute;
+    inset: 0;
+    border: 0;
+    border-radius: 50%;
+    background: none;
+}
+.happy-story-viewer__remove {
+    position: absolute;
+    z-index: 1;
+    top: -8px;
+    right: -8px;
+    display: flex;
+    padding: 4px;
+    border: 0;
+    border-radius: 50%;
+    background: var(--surface);
+    color: var(--text);
+}
+.happy-story-viewer__attribution {
+    align-self: flex-start;
+    border: 0;
+    border-radius: var(--happy-radius-pill);
+    padding: 4px 10px;
+    background: var(--story-control);
+    color: var(--text);
+    font: inherit;
+}
+.happy-story-viewer__attribution:disabled {
+    opacity: 1;
 }
 
 .happy-story-viewer__close {

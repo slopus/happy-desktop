@@ -2079,6 +2079,7 @@ export interface HappyAgentWorkspaceStore {
      */
     taskRename(taskId: HappyAgentTaskId, name: string): Promise<boolean>;
     botRename(botId: string, name: string): Promise<boolean>;
+    botStoriesUpdate(botId: string, stories: boolean): void;
     projectRename(projectId: HappyAgentProjectId, name: string): Promise<void>;
     worktreeRename(
         projectId: HappyAgentProjectId,
@@ -8312,6 +8313,7 @@ export function happyAgentWorkspaceStoreCreate(
         },
         taskRename: (taskId, name) => list.taskRename(taskId, name),
         botRename: (botId, name) => list.botRename(botId, name),
+        botStoriesUpdate: (botId, stories) => list.botStoriesUpdate(botId, stories),
         projectRename: (projectId, name) => list.projectRename(projectId, name),
         worktreeRename: (projectId, worktreeId, name) =>
             list.worktreeRename(projectId, worktreeId, name),

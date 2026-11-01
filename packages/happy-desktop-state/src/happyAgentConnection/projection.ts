@@ -573,6 +573,7 @@ export function projectBots(
     config: DaemonConfig,
     drafts: ReadonlyMap<string, AgentDraftSnapshot> = new Map(),
     modes: ReadonlyMap<string, MessageMode | null> = new Map(),
+    storiesSupported = false,
 ): readonly BotGroup[] {
     const workspaceById = new Map(workspaces.map((workspace) => [workspace.id, workspace]));
     const subtasksProject = (agent: Agent, bot: Bot): readonly BotSubtaskGroup[] =>
@@ -586,6 +587,7 @@ export function projectBots(
                 id: bot.id,
                 workspaceId: bot.workspaceId,
                 name: bot.name,
+                ...(storiesSupported && bot.stories !== undefined ? { stories: bot.stories } : {}),
                 username: bot.username,
                 ...(bot.systemKey === undefined ? {} : { systemKey: bot.systemKey }),
                 orderKey: bot.orderKey,

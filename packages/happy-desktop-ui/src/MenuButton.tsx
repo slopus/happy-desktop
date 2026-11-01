@@ -82,7 +82,11 @@ export function MenuButton(props: MenuButtonProps) {
     };
     const menuItems = (): HTMLElement[] =>
         popover.current
-            ? [...popover.current.querySelectorAll<HTMLElement>('[role="menuitem"]:not(:disabled)')]
+            ? [
+                  ...popover.current.querySelectorAll<HTMLElement>(
+                      '[role^="menuitem"]:not(:disabled)',
+                  ),
+              ]
             : [];
     // The popover's commit is the exact lifetime boundary at which its box and
     // its first menu item exist, so placement and focus do not depend on
@@ -115,7 +119,7 @@ export function MenuButton(props: MenuButtonProps) {
                     node.style.top = `${String(top)}px`;
                 }
             }
-            node.querySelector<HTMLElement>('[role="menuitem"]:not(:disabled)')?.focus();
+            node.querySelector<HTMLElement>('[role^="menuitem"]:not(:disabled)')?.focus();
         },
         [above, alignEnd, overlay, trigger],
     );

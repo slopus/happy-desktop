@@ -136,6 +136,12 @@
         0 1px 2px rgb(0 0 0 / 0.06), 0 8px 24px rgb(0 0 0 / 0.08), 0 24px 64px rgb(0 0 0 / 0.12);
     --overlay-backdrop: rgb(15 15 15 / 0.75);
     --overlay-panel: rgb(0 0 0 / 0.48);
+    --story-shade-top: rgb(0 0 0 / 55%);
+    --story-shade-bottom: rgb(0 0 0 / 65%);
+    --story-shade-field: rgb(0 0 0 / 25%);
+    --story-backdrop: rgb(0 0 0 / 92%);
+    --story-control: rgb(255 255 255 / 12%);
+    --story-text-fill: rgb(0 0 0 / 35%);
     --groupped-background: #f5f5f5;
     --groupped-chevron: #49454f;
     --groupped-section-title: #49454f;

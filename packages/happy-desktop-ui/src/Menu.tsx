@@ -15,6 +15,7 @@ export type MenuItem =
           iconUrl?: string;
           danger?: boolean;
           disabled?: boolean;
+          checked?: boolean;
           shortcut?: string;
       }
     | {
@@ -46,7 +47,9 @@ export type MenuProps = {
 export function Menu(props: MenuProps) {
     const { className, items, label, onSelect, style, width, ...rest } = props;
     const hasIcons = items.some(
-        (item) => item.kind === "item" && (item.icon !== undefined || item.iconUrl !== undefined),
+        (item) =>
+            item.kind === "item" &&
+            (item.icon !== undefined || item.iconUrl !== undefined || item.checked !== undefined),
     );
     return (
         <div
@@ -93,6 +96,7 @@ export function Menu(props: MenuProps) {
                         return (
                             <button
                                 aria-disabled={item.disabled ? "true" : undefined}
+                                aria-checked={item.checked}
                                 className="happy-menu__item"
                                 data-danger={item.danger ? "" : undefined}
                                 data-item-id={item.id}
@@ -102,7 +106,7 @@ export function Menu(props: MenuProps) {
                                 onClick={() => {
                                     if (!item.disabled) onSelect?.(item.id);
                                 }}
-                                role="menuitem"
+                                role={item.checked === undefined ? "menuitem" : "menuitemcheckbox"}
                                 type="button"
                             >
                                 {hasIcons ? (
@@ -110,7 +114,9 @@ export function Menu(props: MenuProps) {
                                         className="happy-menu__item-icon"
                                         data-happy-desktop-ui="menu-item-icon"
                                     >
-                                        {item.iconUrl ? (
+                                        {item.checked ? (
+                                            <Icon name="check" size={16} />
+                                        ) : item.iconUrl ? (
                                             <img
                                                 alt=""
                                                 className="happy-menu__item-image"

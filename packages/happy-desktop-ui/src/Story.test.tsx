@@ -2,11 +2,12 @@ import "./styles.css";
 import { useState } from "react";
 import { flushSync } from "react-dom";
 import { afterEach, expect, it, vi } from "vitest";
-import { userEvent } from "vitest/browser";
+import { page, userEvent } from "vitest/browser";
 import { Sidebar, type SidebarItem } from "./Sidebar";
 import { StoriesRow } from "./StoriesRow";
 import { roundMimeType, StoryViewer, type StoryViewerProps } from "./StoryViewer";
 import { createRenderer } from "./testing";
+import clip from "./assets/animations/chief-of-staff.mp4?url";
 
 const PIXEL =
     "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
@@ -216,6 +217,30 @@ it("takes focus only when it mounts", async () => {
     view.destroy();
 });
 
+it("fills the window with a full-height centered frame, outside chevrons and backdrop dismissal", async () => {
+    const log: string[] = [];
+    const view = viewer(log);
+    await view.ready();
+    const root = view.$('[data-happy-desktop-ui="story-viewer"]').element;
+    const box = root.getBoundingClientRect();
+    const frame = view
+        .$('[data-happy-desktop-ui="story-viewer-frame"]')
+        .element.getBoundingClientRect();
+    expect(frame.height).toBeCloseTo(box.height - 24);
+    expect(frame.y - box.y).toBeCloseTo(12);
+    expect(frame.x + frame.width / 2).toBeCloseTo(box.x + box.width / 2);
+    expect(
+        view.$('[aria-label="Previous story"]').element.getBoundingClientRect().right,
+    ).toBeLessThan(frame.left);
+    expect(
+        view.$('[aria-label="Next story"]').element.getBoundingClientRect().left,
+    ).toBeGreaterThan(frame.right);
+    expect(getComputedStyle(root).backgroundColor).toBe("rgba(0, 0, 0, 0.92)");
+    root.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(log).toEqual(["close"]);
+    view.destroy();
+});
+
 it("steps on past a video that cannot play, and mutes and unmutes it", async () => {
     const log: string[] = [];
     const view = viewer(log, {
@@ -231,7 +256,7 @@ it("steps on past a video that cannot play, and mutes and unmutes it", async () 
     view.destroy();
 });
 
-it("sends a reply, peeks at the last two without moving the frame, and drags the drawer shut", async () => {
+it("sends a reply and expands the inline preview without moving the frame or input", async () => {
     const log: string[] = [];
     const frameBox = async (overrides: Partial<StoryViewerProps>) => {
         const view = viewer(log, overrides);
@@ -247,7 +272,7 @@ it("sends a reply, peeks at the last two without moving the frame, and drags the
     const { view, box } = await frameBox({ replies: replies.slice(-2), replyCount: 3 });
     expect(box).toEqual(bare.box);
 
-    const peek = view.$('[data-happy-desktop-ui="story-viewer-peek"]').element;
+    const peek = view.$(".happy-story-viewer__peek").element;
     expect(peek.textContent).toContain("second");
     expect(peek.textContent).toContain("third");
     expect(peek.textContent).not.toContain("first");
@@ -260,55 +285,37 @@ it("sends a reply, peeks at the last two without moving the frame, and drags the
     expect(log).toEqual(["reply Make it blue"]);
     expect(input.value).toBe("");
 
-    await userEvent.click(peek);
+    await userEvent.click(view.$('[data-happy-desktop-ui="story-viewer-peek"]').element);
     expect(log.at(-1)).toBe("replies");
-    const drawer = view.$('[data-happy-desktop-ui="story-viewer-drawer"]').element;
-    const head = drawer.querySelector("header")!;
-    const start = head.getBoundingClientRect();
-    const at = { x: start.x + start.width / 2, y: start.y + 8 };
-    const pointer = (type: string, y: number) =>
-        head.dispatchEvent(
-            new PointerEvent(type, { bubbles: true, clientX: at.x, clientY: y, pointerId: 1 }),
-        );
-    // A short drag springs back; a long one closes it.
-    const drag = async (dy: number) => {
-        for (const [type, y] of [
-            ["pointerdown", 0],
-            ["pointermove", dy],
-            ["pointerup", dy],
-        ] as const) {
-            pointer(type, at.y + y);
-            await new Promise(requestAnimationFrame);
-        }
-    };
-    await drag(30);
-    await expect
-        .poll(() => document.querySelector('[data-happy-desktop-ui="story-viewer-drawer"]'))
-        .not.toBeNull();
-    await drag(120);
-    await expect
-        .poll(() => document.querySelector('[data-happy-desktop-ui="story-viewer-drawer"]'))
-        .toBeNull();
+    expect(view.$('[aria-label="Replies"]').element).toBe(peek);
+    expect(view.$('[aria-label="Reply"]').element).toBe(input);
+    await userEvent.click(view.$('[aria-label="Collapse replies"]').element);
+    expect(view.$(".happy-story-viewer__peek").element).toBe(peek);
+    expect(peek.textContent).toContain("View all 3 replies");
     view.destroy();
 });
 
-it("offers repost and delete from ⋯, and shows a repost's chip", async () => {
+it("offers repost and delete from ⋯, and opens the original agent from its attribution", async () => {
     const log: string[] = [];
     const view = viewer(log, {
         onDelete: () => log.push("delete"),
-        onRepost: async (caption, round) => {
-            log.push(`repost ${caption} ${String(round)}`);
+        onRepost: async ({ layers, round }) => {
+            log.push(`repost ${layers.text?.text ?? ""} ${String(round)}`);
             return true;
         },
-        repost: { from: "Release bot", roundUrl: null },
+        repost: {
+            from: { name: "Release bot", face: { initials: "RB", type: "agent" } },
+            roundUrl: null,
+        },
+        onChatOpen: () => log.push("chat"),
     });
     await view.ready();
-    expect(document.body.textContent).toContain("Reposted from Release bot");
+    await userEvent.click(named("button", "Release bot"));
+    expect(log.splice(0)).toEqual(["chat"]);
     await userEvent.click(view.$('[aria-label="More"]').element);
     await userEvent.click(named('[role="menuitem"]', "Repost"));
-    await userEvent.type(view.$('[aria-label="Repost caption"]').element, "Look");
-    await userEvent.click(named("button", "Repost"));
-    expect(log).toEqual(["repost Look null"]);
+    await userEvent.click(named("button", "Post"));
+    expect(log).toEqual(["repost  null"]);
     await userEvent.click(view.$('[aria-label="More"]').element);
     await userEvent.click(named('[role="menuitem"]', "Delete"));
     await userEvent.click(named("button", "Delete"));
@@ -319,12 +326,14 @@ it("offers repost and delete from ⋯, and shows a repost's chip", async () => {
 /** A camera whose tracks say when they stop, and a recorder that takes only what `mp4` allows. */
 function camera(mp4: boolean) {
     const canvas = document.createElement("canvas");
-    const stream = canvas.captureStream();
+    const streams: MediaStream[] = [];
     const recorders: { state: string }[] = [];
     let grant: () => void = () => undefined;
     const granted = new Promise<void>((resolve) => (grant = resolve));
     const getUserMedia = vi.fn(async () => {
         await granted;
+        const stream = canvas.captureStream();
+        streams.push(stream);
         return stream;
     });
     vi.stubGlobal(
@@ -357,7 +366,8 @@ function camera(mp4: boolean) {
         configurable: true,
         value: { getUserMedia },
     });
-    const live = () => stream.getTracks().some((track) => track.readyState === "live");
+    const live = () =>
+        streams.some((stream) => stream.getTracks().some((track) => track.readyState === "live"));
     return { getUserMedia, grant, live, recorders };
 }
 
@@ -366,7 +376,9 @@ afterEach(() => vi.unstubAllGlobals());
 const named = (role: string, text: string) =>
     [...document.querySelectorAll<HTMLElement>(role)]
         .reverse()
-        .find((each) => each.textContent?.includes(text))!;
+        .find(
+            (each) => each.getAttribute("aria-label") === text || each.textContent?.includes(text),
+        )!;
 
 async function repostOpen(log: string[], overrides: Partial<StoryViewerProps> = {}) {
     const view = viewer(log, {
@@ -384,19 +396,20 @@ it("lets the camera go when the viewer closes mid-recording, or when cancelled b
     const cam = camera(true);
     cam.grant();
     const view = await repostOpen([]);
-    await userEvent.click(named("button", "Record"));
+    await userEvent.click(named("button", "Camera"));
+    await expect.poll(() => cam.live()).toBe(true);
+    await userEvent.click(named("button", "Start recording"));
     await expect.poll(() => cam.recorders[0]?.state).toBe("recording");
     expect(cam.live()).toBe(true);
     view.destroy();
     expect(cam.live()).toBe(false);
     expect(cam.recorders[0]!.state).toBe("inactive");
 
-    // The camera answers only after the reader chose Delete instead: nothing records.
+    // The camera answers only after the reader cancelled: nothing records.
     const late = camera(true);
     const again = await repostOpen([]);
-    await userEvent.click(named("button", "Record"));
-    await userEvent.click(again.$('[aria-label="More"]').element);
-    await userEvent.click(named('[role="menuitem"]', "Delete"));
+    await userEvent.click(named("button", "Camera"));
+    await userEvent.keyboard("{Escape}");
     late.grant();
     await expect.poll(() => late.live()).toBe(false);
     expect(late.recorders).toHaveLength(0);
@@ -407,19 +420,20 @@ it("offers no recording without H.264 MP4, and keeps a refused repost to try aga
     const cam = camera(false);
     const log: string[] = [];
     const view = await repostOpen(log, {
-        onRepost: async (caption) => {
-            log.push(`repost ${caption}`);
+        onRepost: async ({ layers }) => {
+            log.push(`repost ${layers.text?.text ?? ""}`);
             return false;
         },
     });
-    await userEvent.click(named("button", "Record"));
+    await userEvent.click(named("button", "Camera"));
     expect(document.body.textContent).toContain("No camera is available.");
     expect(cam.getUserMedia).not.toHaveBeenCalled();
-    const caption = view.$('[aria-label="Repost caption"]').element as HTMLInputElement;
+    await userEvent.click(named("button", "Text"));
+    const caption = view.$('[aria-label="Story text"]').element as HTMLInputElement;
     await userEvent.type(caption, "Look");
-    await userEvent.click(named("button", "Repost"));
+    await userEvent.click(named("button", "Post"));
     expect(log).toEqual(["repost Look"]);
-    expect(caption.value).toBe("Look");
+    expect(view.$('[data-happy-desktop-ui="story-text-layer"]').element.textContent).toBe("Look");
     view.destroy();
 });
 
@@ -428,6 +442,551 @@ it("records the round as MP4 when the recorder can", () => {
         "video/mp4;codecs=avc1,mp4a.40.2",
     );
     expect(roundMimeType(() => false)).toBeUndefined();
+});
+
+async function dragLayer(node: HTMLElement, dx: number, dy: number) {
+    const box = node.getBoundingClientRect();
+    for (const [type, x, y] of [
+        ["pointerdown", 0, 0],
+        ["pointermove", dx, dy],
+        ["pointerup", dx, dy],
+    ] as const) {
+        node.dispatchEvent(
+            new PointerEvent(type, {
+                bubbles: true,
+                pointerId: 1,
+                clientX: box.x + box.width / 2 + x,
+                clientY: box.y + box.height / 2 + y,
+            }),
+        );
+        await new Promise(requestAnimationFrame);
+    }
+}
+
+it("AC22 posts a bare repost, and carries dragged emoji text to the same normalized viewer position", async () => {
+    const post = vi.fn(
+        async (_draft: Parameters<NonNullable<StoryViewerProps["onRepost"]>>[0]) => true,
+    );
+    const view = await repostOpen([], { onRepost: post });
+    await userEvent.click(named("button", "Post"));
+    expect(post).toHaveBeenLastCalledWith({ layers: {}, round: null });
+    await userEvent.click(view.$('[aria-label="More"]').element);
+    await userEvent.click(named('[role="menuitem"]', "Repost"));
+    await userEvent.click(named("button", "Text"));
+    const input = view.$('[aria-label="Story text"]').element as HTMLInputElement;
+    await page.getByRole("textbox", { name: "Story text" }).fill("Ready 🚀");
+    input.blur();
+    await new Promise(requestAnimationFrame);
+    const frame = view
+        .$('[data-happy-desktop-ui="story-viewer-frame"]')
+        .element.getBoundingClientRect();
+    await dragLayer(
+        view.$('[data-happy-desktop-ui="story-text-layer"]').element as HTMLElement,
+        frame.width * 0.2,
+        frame.height * 0.1,
+    );
+    await userEvent.click(named("button", "Post"));
+    const sent = post.mock.calls.at(-1)![0];
+    expect(sent.layers.text!.text).toBe("Ready 🚀");
+    expect(sent.layers.text!.x).toBeCloseTo(0.7);
+    expect(sent.layers.text!.y).toBeCloseTo(0.6);
+    view.destroy();
+    const other = viewer([], { layers: sent.layers });
+    await other.ready();
+    const otherFrame = other
+        .$('[data-happy-desktop-ui="story-viewer-frame"]')
+        .element.getBoundingClientRect();
+    const layer = other
+        .$('[data-happy-desktop-ui="story-text-layer"]')
+        .element.getBoundingClientRect();
+    expect((layer.x + layer.width / 2 - otherFrame.x) / otherFrame.width).toBeCloseTo(0.7);
+    expect((layer.y + layer.height / 2 - otherFrame.y) / otherFrame.height).toBeCloseTo(0.6);
+    other.destroy();
+});
+
+it("AC23 previews without recording, restarts the base, replaces a take, and releases preview and recorder tracks", async () => {
+    const cam = camera(true);
+    cam.grant();
+    const post = vi.fn(
+        async (_draft: Parameters<NonNullable<StoryViewerProps["onRepost"]>>[0]) => true,
+    );
+    const view = await repostOpen([], { media: { kind: "video", url: clip }, onRepost: post });
+    await userEvent.click(named("button", "Camera"));
+    await expect.poll(() => cam.live()).toBe(true);
+    expect(cam.recorders).toHaveLength(0);
+    const base = view.$(".happy-story-viewer__media").element as HTMLVideoElement;
+    await expect.poll(() => base.readyState).toBeGreaterThanOrEqual(2);
+    expect(base.paused).toBe(true);
+    const box = view
+        .$('[data-happy-desktop-ui="story-viewer-frame"]')
+        .element.getBoundingClientRect();
+    const liveVideo = view.$(".happy-story-viewer__round").element as HTMLVideoElement;
+    const playing = vi.spyOn(liveVideo, "play");
+    const source = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, "srcObject")!;
+    const attached = vi.fn(source.set!.bind(liveVideo));
+    Object.defineProperty(liveVideo, "srcObject", {
+        configurable: true,
+        get: () => source.get!.call(liveVideo),
+        set: attached,
+    });
+    await dragLayer(
+        view.$(".happy-story-viewer__sticker").element as HTMLElement,
+        box.width * 0.2,
+        box.height * 0.2,
+    );
+    expect(playing).not.toHaveBeenCalled();
+    expect(attached).not.toHaveBeenCalled();
+    base.currentTime = 1;
+    await userEvent.click(named("button", "Start recording"));
+    expect(base.currentTime).toBeLessThan(1);
+    expect(base.paused).toBe(false);
+    expect(cam.recorders[0]?.state).toBe("recording");
+    expect(document.activeElement?.tagName).not.toBe("INPUT");
+    const controls = [
+        ...document.querySelectorAll<HTMLButtonElement>(
+            '[data-happy-desktop-ui="story-viewer"] button:not([disabled]):not([hidden])',
+        ),
+    ].filter((node) => node.getBoundingClientRect().width > 0);
+    expect(controls.map((node) => node.getAttribute("aria-label"))).toEqual(["Stop"]);
+    await userEvent.click(view.$('[aria-label="Stop"]').element);
+    expect(cam.live()).toBe(false);
+    expect(base.paused).toBe(false);
+    await userEvent.click(named("button", "Re-record"));
+    await expect.poll(() => cam.recorders).toHaveLength(2);
+    expect(cam.recorders[1]?.state).toBe("recording");
+    await userEvent.click(view.$('[aria-label="Stop"]').element);
+    await userEvent.click(named("button", "Post"));
+    expect(post.mock.calls[0]![0].round).toBeInstanceOf(Blob);
+    expect(post.mock.calls[0]![0].layers.round?.x).toBeCloseTo(0.4);
+    expect(post.mock.calls[0]![0].layers.round?.y).toBeCloseTo(0.4);
+    await userEvent.click(named("button", "More"));
+    await userEvent.click(named('[role="menuitem"]', "Repost"));
+    await userEvent.click(named("button", "Camera"));
+    await expect.poll(() => cam.live()).toBe(true);
+    const resetPosition = view.$(".happy-story-viewer__sticker").element as HTMLElement;
+    expect([resetPosition.style.left, resetPosition.style.top]).toEqual(["20%", "20%"]);
+    await userEvent.click(view.$('[aria-label="Remove camera"]').element);
+    expect(cam.live()).toBe(false);
+    view.destroy();
+});
+
+it("AC25 pauses beneath inline replies, preserves the input and frame, and focuses the overlay", async () => {
+    const chat = vi.fn();
+    const view = viewer([], {
+        media: { kind: "video", url: clip },
+        replies: [reply("a", "Hello")],
+        replyCount: 1,
+        onChatOpen: chat,
+    });
+    await view.ready();
+    const base = view.$(".happy-story-viewer__media").element as HTMLVideoElement;
+    base.loop = true;
+    await expect.poll(() => base.paused).toBe(false);
+    const input = view.$('[aria-label="Reply"]').element;
+    const frame = view.$('[data-happy-desktop-ui="story-viewer-frame"]').element;
+    const before = frame.getBoundingClientRect().toJSON();
+    await userEvent.click(view.$('[data-happy-desktop-ui="story-viewer-peek"]').element);
+    expect(base.paused).toBe(true);
+    expect(view.$('[aria-label="Reply"]').element).toBe(input);
+    expect(frame.getBoundingClientRect().toJSON()).toEqual(before);
+    const overlay = view.$('[aria-label="Replies"]').element;
+    expect(getComputedStyle(view.$(".happy-story-viewer__shade").element).backgroundColor).toBe(
+        "rgba(0, 0, 0, 0.65)",
+    );
+    expect(getComputedStyle(input).borderRadius).toBe("999px");
+    expect(document.activeElement).toBe(overlay);
+    expect(overlay.textContent).toContain("Hello");
+    expect(overlay.textContent).not.toContain("Open chat");
+    expect(chat).not.toHaveBeenCalled();
+    overlay.dispatchEvent(new WheelEvent("wheel", { bubbles: true, deltaY: -100 }));
+    await expect.poll(() => base.paused).toBe(false);
+    view.destroy();
+    const person = viewer([], { replies: [reply("a", "Hello")], replyCount: 1 });
+    await person.ready();
+    await userEvent.click(person.$('[data-happy-desktop-ui="story-viewer-peek"]').element);
+    expect(document.body.textContent).not.toContain("Open chat");
+    person.destroy();
+});
+
+it("pauses media and image progress during a hold, fades chrome, resumes on release or leave, and consumes the release click", async () => {
+    for (const kind of ["image", "video"] as const) {
+        const log: string[] = [];
+        const view = viewer(log, {
+            media: { kind, url: kind === "video" ? clip : PIXEL },
+            roundUrl: clip,
+            onRepost: async () => true,
+        });
+        await view.ready();
+        const frame = view.$(".happy-story-viewer__frame").element;
+        const media = view.$(".happy-story-viewer__media").element;
+        const videos = [...frame.querySelectorAll("video")];
+        const actions = view.$(".happy-story-viewer__actions").element;
+        for (const button of actions.querySelectorAll("button")) {
+            await userEvent.hover(button);
+            const style = getComputedStyle(button);
+            expect(style.color).toBe("rgb(255, 255, 255)");
+            expect(style.backgroundColor).toBe("rgba(0, 0, 0, 0)");
+            expect(style.backdropFilter).toBe("none");
+            expect(button.getBoundingClientRect().width).toBe(32);
+        }
+        for (const video of videos) {
+            video.loop = true;
+            await expect.poll(() => video.paused).toBe(false);
+        }
+        const pointer = (type: string, options: PointerEventInit = {}) =>
+            flushSync(() =>
+                media.dispatchEvent(
+                    new PointerEvent(type, { bubbles: true, button: 0, ...options }),
+                ),
+            );
+        const progress = frame.querySelector<HTMLElement>(".happy-story-viewer__progress");
+        await userEvent.hover(media);
+        pointer("pointerdown");
+        expect(frame.hasAttribute("data-held")).toBe(false);
+        await expect.poll(() => frame.hasAttribute("data-held")).toBe(true);
+        for (const video of videos) expect(video.paused).toBe(true);
+        if (progress) expect(progress.style.animationPlayState).toBe("paused");
+        await expect
+            .poll(() => getComputedStyle(view.$(".happy-story-viewer__top").element).opacity)
+            .toBe("0");
+        expect(getComputedStyle(view.$(".happy-story-viewer__bottom").element).opacity).toBe("0");
+        pointer("pointerup");
+        for (const video of videos) await expect.poll(() => video.paused).toBe(false);
+        if (progress) expect(progress.style.animationPlayState).toBe("running");
+        const click = new MouseEvent("click", { bubbles: true, cancelable: true });
+        media.dispatchEvent(click);
+        expect(click.defaultPrevented).toBe(true);
+        expect(log).toEqual([]);
+        pointer("pointerdown");
+        await expect.poll(() => frame.hasAttribute("data-held")).toBe(true);
+        await userEvent.hover(view.$('[aria-label="Next story"]').element);
+        expect(frame.hasAttribute("data-held")).toBe(false);
+        for (const video of videos) await expect.poll(() => video.paused).toBe(false);
+        await userEvent.click(view.$('[aria-label="Unmute"]').element);
+        expect(view.$('[aria-label="Mute"]').element).toBeDefined();
+        view.destroy();
+    }
+});
+
+it("expands few or many replies above the fixed input, scrolls below the top controls, and collapses at the top", async () => {
+    const heights: number[] = [];
+    for (const count of [1, 80]) {
+        const view = viewer([], {
+            replies: Array.from({ length: count }, (_, index) =>
+                reply(String(index), "Reply text"),
+            ),
+            replyCount: count,
+        });
+        await view.ready();
+        const input = view.$('[aria-label="Reply"]').element;
+        const before = input.getBoundingClientRect().toJSON();
+        await userEvent.click(view.$('[data-happy-desktop-ui="story-viewer-peek"]').element);
+        const list = view.$('[aria-label="Replies"]').element,
+            frame = view.$('[data-happy-desktop-ui="story-viewer-frame"]').element;
+        const box = list.getBoundingClientRect();
+        expect(getComputedStyle(list).backgroundColor).toBe("rgba(0, 0, 0, 0)");
+        expect(getComputedStyle(list).backdropFilter).toBe("none");
+        expect(getComputedStyle(view.$(".happy-story-viewer__shade").element).backgroundColor).toBe(
+            "rgba(0, 0, 0, 0.65)",
+        );
+        heights.push(box.height);
+        expect(box.bottom).toBeCloseTo(input.getBoundingClientRect().top - 10);
+        expect(box.top).toBeGreaterThan(
+            view.$(".happy-story-viewer__top").element.getBoundingClientRect().bottom,
+        );
+        if (count > 1)
+            expect(box.height).toBeGreaterThan(frame.getBoundingClientRect().height * 0.7);
+        expect(list.scrollHeight > list.clientHeight).toBe(count > 1);
+        if (count > 1) {
+            list.scrollTop = 100;
+            list.dispatchEvent(new WheelEvent("wheel", { bubbles: true, deltaY: -10 }));
+            expect(list.getAttribute("aria-label")).toBe("Replies");
+            list.scrollTop = 0;
+        }
+        list.dispatchEvent(
+            new PointerEvent("pointerdown", { bubbles: true, clientY: 100, button: 0 }),
+        );
+        list.dispatchEvent(
+            new PointerEvent("pointermove", { bubbles: true, clientY: 140, buttons: 1 }),
+        );
+        await expect.poll(() => list.getAttribute("aria-label")).toBeNull();
+        expect(input.getBoundingClientRect().toJSON()).toEqual(before);
+        view.destroy();
+    }
+    expect(heights[0]).toBeLessThan(heights[1]! / 2);
+});
+
+it("zooms around the cursor with its layers, prevents navigation, and leaves video playing", async () => {
+    const log: string[] = [];
+    const view = viewer(log, {
+        media: { kind: "video", url: clip },
+        layers: { text: { text: "A layer", x: 0.5, y: 0.5 } },
+    });
+    await view.ready();
+    const video = view.$(".happy-story-viewer__media").element as HTMLVideoElement;
+    video.loop = true;
+    await expect.poll(() => video.paused).toBe(false);
+    const frame = view.$('[data-happy-desktop-ui="story-viewer-frame"]').element,
+        zoom = view.$(".happy-story-viewer__zoom").element as HTMLElement;
+    const box = frame.getBoundingClientRect();
+    const wheel = () => {
+        const event = new WheelEvent("wheel", {
+            bubbles: true,
+            cancelable: true,
+            ctrlKey: true,
+            deltaY: -400,
+            clientX: box.x + box.width * 0.4,
+            clientY: box.y + box.height * 0.3,
+        });
+        frame.dispatchEvent(event);
+        expect(event.defaultPrevented).toBe(true);
+    };
+    flushSync(wheel);
+    expect(zoom.style.transform).toBe("scale(3)");
+    const viewport = view.$(".happy-story-viewer__viewport").element;
+    expect(viewport.contains(zoom)).toBe(true);
+    expect(getComputedStyle(viewport).overflow).toBe("hidden");
+    expect(
+        Number(getComputedStyle(view.$(".happy-story-viewer__top").element).zIndex),
+    ).toBeGreaterThan(Number(getComputedStyle(viewport).zIndex));
+    const origin = zoom.style.transformOrigin.split(" ").map(parseFloat);
+    expect(origin[0]).toBeCloseTo(40, 0);
+    expect(origin[1]).toBeCloseTo(30, 0);
+    expect(zoom.contains(view.$('[data-happy-desktop-ui="story-text-layer"]').element)).toBe(true);
+    view.$('[aria-label="Next story"]').element.dispatchEvent(
+        new MouseEvent("click", { bubbles: true }),
+    );
+    view.$('[aria-label="Previous story"]').element.dispatchEvent(
+        new MouseEvent("click", { bubbles: true }),
+    );
+    expect(log).toEqual([]);
+    const started = video.currentTime;
+    await expect.poll(() => video.currentTime).not.toBe(started);
+    expect(video.paused).toBe(false);
+    expect(view.$(".happy-story-viewer__media").element).toBe(video);
+    await expect.poll(() => zoom.style.transform).toBe("scale(1)");
+    flushSync(wheel);
+    frame.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+    await expect.poll(() => zoom.style.transform).toBe("scale(1)");
+    view.destroy();
+});
+
+it("advances images after five seconds of visible play, pauses replies and hidden windows, and keeps time while zoomed", async () => {
+    const log: string[] = [];
+    const view = viewer(log, { replies: [reply("a", "Hello")], replyCount: 1 });
+    await view.ready();
+    const progress = view.$(".happy-story-viewer__progress").element;
+    const animation = progress.getAnimations()[0]!;
+    expect(animation.effect!.getTiming().duration).toBe(5000);
+    await expect.poll(() => Number(animation.currentTime)).toBeGreaterThan(0);
+    const frame = view.$('[data-happy-desktop-ui="story-viewer-frame"]').element;
+    frame.dispatchEvent(
+        new WheelEvent("wheel", { bubbles: true, cancelable: true, ctrlKey: true, deltaY: -200 }),
+    );
+    expect(getComputedStyle(progress).animationPlayState).toBe("running");
+    await userEvent.click(view.$('[data-happy-desktop-ui="story-viewer-peek"]').element);
+    await expect.poll(() => animation.playState).toBe("paused");
+    await userEvent.click(view.$('[aria-label="Collapse replies"]').element);
+    await expect.poll(() => animation.playState).toBe("running");
+    const hidden = vi.spyOn(document, "hidden", "get").mockReturnValue(true);
+    document.dispatchEvent(new Event("visibilitychange"));
+    await expect.poll(() => animation.playState).toBe("paused");
+    hidden.mockRestore();
+    document.dispatchEvent(new Event("visibilitychange"));
+    await expect.poll(() => animation.playState).toBe("running");
+    animation.currentTime = 4990;
+    await expect.poll(() => log).toContain("step 1");
+    view.destroy();
+});
+
+it("guards an in-flight post, trims text, keeps caption separate, and resets the next composition", async () => {
+    let finish!: (accepted: boolean) => void;
+    const post = vi.fn(() => new Promise<boolean>((resolve) => (finish = resolve)));
+    const view = await repostOpen([], { onRepost: post });
+    const controls = [...document.querySelector(".happy-story-viewer__record")!.children].map(
+        (node) => node.getBoundingClientRect(),
+    );
+    const gaps = controls.slice(1).map((box, index) => box.left - controls[index]!.right);
+    expect(gaps).toEqual([8, 8, 8]);
+    expect(getComputedStyle(named("textarea", "Caption")).flexGrow).toBe("1");
+    await userEvent.click(named("button", "Text"));
+    await page.getByRole("textbox", { name: "Story text" }).fill("  Layer  ");
+    await page.getByRole("textbox", { name: "Caption", exact: true }).fill("Caption");
+    await userEvent.keyboard("{Shift>}{Enter}{/Shift}second");
+    expect((named("textarea", "Caption") as HTMLTextAreaElement).value).toBe("Caption\nsecond");
+    await userEvent.keyboard("{Enter}");
+    expect(post).toHaveBeenCalledOnce();
+    const button = named("button", "Post") as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
+    button.click();
+    await userEvent.keyboard("{Enter}");
+    expect(post).toHaveBeenCalledOnce();
+    expect(post.mock.calls[0]).toEqual([
+        {
+            caption: "Caption\nsecond",
+            layers: { text: { text: "Layer", x: 0.5, y: 0.5 } },
+            round: null,
+        },
+    ]);
+    finish(true);
+    await expect.poll(() => document.querySelector('[aria-label="Caption"]')).toBeNull();
+    await userEvent.click(named("button", "More"));
+    await userEvent.click(named('[role="menuitem"]', "Repost"));
+    expect(document.querySelector('[data-happy-desktop-ui="story-text-layer"]')).toBeNull();
+    expect((named("textarea", "Caption") as HTMLTextAreaElement).value).toBe("");
+    await userEvent.click(named("button", "Text"));
+    await page.getByRole("textbox", { name: "Story text" }).fill("   ");
+    await userEvent.click(named("button", "Post"));
+    expect(post.mock.calls[1]).toEqual([{ layers: {}, round: null }]);
+    finish(true);
+    view.destroy();
+});
+
+it("layers Escape through editing, composition and replies, and cancels a pending camera", async () => {
+    const cam = camera(true),
+        log: string[] = [];
+    const view = await repostOpen(log, { replies: [reply("a", "Hello")], replyCount: 1 });
+    await userEvent.click(named("button", "Text"));
+    await page.getByRole("textbox", { name: "Story text" }).fill("Keep this");
+    await userEvent.keyboard("{Escape}");
+    expect(document.querySelector('[aria-label="Story text"]')).toBeNull();
+    expect(named("button", "Post")).toBeDefined();
+    expect(log).toEqual([]);
+    await userEvent.click(named("button", "Camera"));
+    expect(named("button", "Camera").querySelector('[data-glyph="close"]')).not.toBeNull();
+    await userEvent.click(named("button", "Camera"));
+    cam.grant();
+    await expect.poll(cam.live).toBe(false);
+    await userEvent.keyboard("{Escape}");
+    expect(log).toEqual([]);
+    await userEvent.click(view.$('[data-happy-desktop-ui="story-viewer-peek"]').element);
+    expect(document.activeElement).toBe(view.$('[aria-label="Replies"]').element);
+    await userEvent.keyboard("{Escape}");
+    expect(document.querySelector('[aria-label="Replies"]')).toBeNull();
+    expect(log).toEqual(["replies"]);
+    await userEvent.keyboard("{Escape}");
+    expect(log).toEqual(["replies", "close"]);
+    view.destroy();
+});
+
+it("offers mute controls for a round video over an image story", async () => {
+    const view = viewer([], {
+        repost: {
+            from: { name: "Task A", face: { initials: "TA" } },
+            roundUrl: "data:video/mp4;base64,AAAA",
+        },
+    });
+    await view.ready();
+    const round = view.$('[data-happy-desktop-ui="story-viewer-round"]')
+        .element as HTMLVideoElement;
+    expect(round.muted).toBe(true);
+    await userEvent.click(view.$('[aria-label="Unmute"]').element);
+    expect(round.muted).toBe(false);
+    await userEvent.click(view.$('[aria-label="Mute"]').element);
+    expect(round.muted).toBe(true);
+    view.destroy();
+});
+
+it("AC24 puts Your Story first and hands gallery images and MP4s to the shared composer", async () => {
+    const create = vi.fn();
+    const view = createRenderer();
+    view.render(
+        () => (
+            <StoriesRow
+                items={[]}
+                onOpen={() => undefined}
+                create={{ id: "me", face: { initials: "K" }, onPick: create }}
+            />
+        ),
+        {
+            width: 300,
+            height: 100,
+        },
+    );
+    await view.ready();
+    const first = view.$(".happy-stories-row").element.firstElementChild!;
+    expect(first.textContent).toContain("Your Story");
+    const input = view.$('input[type="file"]').element as HTMLInputElement;
+    expect(input.accept).toBe("image/*,video/mp4");
+    for (const type of ["image/png", "video/mp4"]) {
+        const files = new DataTransfer();
+        const file = new File(["media"], "story", { type });
+        files.items.add(file);
+        input.files = files.files;
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+        expect(create).toHaveBeenLastCalledWith(file);
+    }
+    view.destroy();
+    const post = vi.fn(async () => true);
+    const composer = viewer([], { onPost: post });
+    await composer.ready();
+    expect(getComputedStyle(composer.$(".happy-story-viewer__top").element).display).toBe("none");
+    expect(composer.$('[aria-label="Close"]').element.getBoundingClientRect().left).toBe(16);
+    expect(named("button", "Text")).toBeDefined();
+    expect(named("button", "Camera")).toBeDefined();
+    await userEvent.click(named("button", "Post"));
+    expect(post).toHaveBeenCalledWith({ layers: {}, round: null });
+    composer.destroy();
+});
+
+it("uses your circular avatar with a separate add badge, then opens your live stories without moving the tile", async () => {
+    const open = vi.fn(),
+        pick = vi.fn();
+    let phaseSet!: (phase: "unseen" | "seen" | null) => void;
+    function Row() {
+        const [phase, setPhase] = useState<"unseen" | "seen" | null>(null);
+        phaseSet = setPhase;
+        return (
+            <StoriesRow
+                items={
+                    phase
+                        ? [{ id: "me", name: "Kirill", face: { initials: "K" }, state: phase }]
+                        : []
+                }
+                create={{ id: "me", face: { initials: "K", imageUrl: PIXEL }, onPick: pick }}
+                onOpen={open}
+            />
+        );
+    }
+    const view = createRenderer();
+    view.render(() => <Row />, { width: 300, height: 100 });
+    await view.ready();
+    const main = view.$(".happy-stories-row__self .happy-stories-row__item").element;
+    const avatar = main.querySelector<HTMLElement>(".happy-avatar")!,
+        before = main.getBoundingClientRect().toJSON();
+    expect(avatar.querySelector("img")!.src).toBe(PIXEL);
+    expect(getComputedStyle(avatar).borderRadius).toBe("999px");
+    expect(getComputedStyle(avatar).outlineStyle).toBe("none");
+    const badge = view.$('[aria-label="Add a story"]').element;
+    const avatarBox = avatar.getBoundingClientRect(),
+        badgeBox = badge.getBoundingClientRect();
+    expect(badgeBox.right).toBeGreaterThan(avatarBox.right);
+    expect(badgeBox.bottom).toBeGreaterThan(avatarBox.bottom);
+    expect(getComputedStyle(badge).borderWidth).toBe("2px");
+    const picker = vi
+        .spyOn(view.$('input[type="file"]').element as HTMLInputElement, "click")
+        .mockImplementation(() => undefined);
+    await userEvent.click(main);
+    expect(picker).toHaveBeenCalledOnce();
+    flushSync(() => phaseSet("unseen"));
+    expect(view.$(".happy-stories-row__self .happy-stories-row__item").element).toBe(main);
+    expect(main.getBoundingClientRect().toJSON()).toEqual(before);
+    expect(
+        view.$(".happy-stories-row").element.querySelectorAll(".happy-stories-row__item"),
+    ).toHaveLength(1);
+    expect(main.querySelector("span:last-child")!.textContent).toBe("Your Story");
+    expect(getComputedStyle(avatar).outlineStyle).toBe("solid");
+    const unseen = getComputedStyle(avatar).outlineColor;
+    await userEvent.click(main);
+    expect(open).toHaveBeenCalledWith("me");
+    await userEvent.click(badge);
+    expect(open).toHaveBeenCalledOnce();
+    expect(picker).toHaveBeenCalledTimes(2);
+    flushSync(() => phaseSet("seen"));
+    expect(getComputedStyle(avatar).outlineColor).not.toBe(unseen);
+    expect(main.getBoundingClientRect().toJSON()).toEqual(before);
+    picker.mockRestore();
+    view.destroy();
 });
 
 it("lays agents out as rounded tiles and people as circles, ringed accent or grey", async () => {
