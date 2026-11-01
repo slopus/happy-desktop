@@ -3,7 +3,8 @@ import {
     happyAgentConnectionsStoreCreate,
     happyAgentNodeStoreCreate,
     happyAgentUserError,
-    serverSignInRequired,
+    serverAuthenticationOutcome,
+    serverAuthFailure,
     type HappyAgentConnectionItem,
     type HappyAgentConnectionsPersistence,
     type HappyAgentConnectionsStore,
@@ -207,6 +208,8 @@ interface LocalHappyAgent {
     connection?: HappyAgentConnectionHandle;
     /** The sign-in this window is running for this remote, if any. */
     signInAbort?: AbortController;
+    /** True while `GET /v0/authentication` decides what Happy's own 401 meant. */
+    authenticationChecking?: boolean;
     attentionUnfollow?: () => void;
     connectionUnsubscribe?: () => void;
     workspaceUnsubscribe?: () => void;
@@ -381,6 +384,18 @@ export function happyAgentDirectoryStoreCreate(
         for (const listener of listeners) listener();
     };
 
+    /** Marks a remote whose sign-in ended; the sidebar then offers a new one. */
+    const signInRequire = (remote: LocalHappyAgent): void => {
+        if (remote.entry.signIn || remote.entry.session) return;
+        remote.entry = {
+            ...remote.entry,
+            status: "error",
+            message: "Your sign-in to this server ended.",
+            signIn: { phase: "required" },
+        };
+        publish();
+    };
+
     const signIn = (remote: LocalHappyAgent, source: ServerSource): void => {
         if (!remote.entry.signIn || remote.entry.signIn.phase === "browser") return;
         const controller = new AbortController();
@@ -517,16 +532,35 @@ export function happyAgentDirectoryStoreCreate(
                     if (happyAgent.connection?.get() || happyAgent.entry.session) return;
                     // Only a remote is signed in to; the local daemon's
                     // capability is the shell's and never expires this way.
-                    if (happyAgent.entry.remoteId !== undefined && serverSignInRequired(error)) {
-                        if (happyAgent.entry.signIn) return;
-                        happyAgent.entry = {
-                            ...happyAgent.entry,
-                            status: "error",
-                            message: "Your sign-in to this server ended.",
-                            signIn: { phase: "required" },
-                        };
-                        publish();
+                    const authFailure =
+                        happyAgent.entry.remoteId === undefined
+                            ? undefined
+                            : serverAuthFailure(error);
+                    if (authFailure === "signInRequired") {
+                        signInRequire(happyAgent);
                         return;
+                    }
+                    // Happy's own 401 is also how a member who has not finished
+                    // onboarding is refused, so discovery decides. Onboarding
+                    // and a transient refusal are left to the connection's own
+                    // profile step and retry.
+                    if (
+                        authFailure === "authenticationCheck" &&
+                        !happyAgent.authenticationChecking
+                    ) {
+                        happyAgent.authenticationChecking = true;
+                        void client.getAuthentication().then(
+                            (response) => {
+                                happyAgent.authenticationChecking = false;
+                                if (serverAuthenticationOutcome(response) === "signInRequired")
+                                    signInRequire(happyAgent);
+                            },
+                            (checkError: unknown) => {
+                                happyAgent.authenticationChecking = false;
+                                if (serverAuthFailure(checkError) === "signInRequired")
+                                    signInRequire(happyAgent);
+                            },
+                        );
                     }
                     const message = error instanceof Error ? error.message : String(error);
                     if (happyAgent.entry.status === "error" && happyAgent.entry.message === message)

@@ -63,15 +63,24 @@ server reads `GET /v0/authentication`, then signs in with the authorization code
 flow and PKCE in the system browser. Tailcat, Happy Cloud and WorkOS are not
 involved.
 
-The browser redirects back to a loopback address on this computer. The path is
-fixed and the port is chosen per sign-in, as RFC 8252 allows:
+The browser returns to Happy through one redirect URI, the same on every
+platform and flavor:
 
 ```
-http://127.0.0.1:{any port}/oauth/callback
+happy://oauth/callback
 ```
 
-Register that redirect URI with your identity provider, allowing any port.
+Register exactly that string with your identity provider. Happy sends it as
+`redirect_uri` in both the authorization and the token request.
 
-A server that answers any `3xx`, any `401`, or a `403` that is not Happy's own JSON
-error is treated as a sign-in that has ended. Its sidebar section then says
-"Sign in required" and offers "Sign in again".
+> **Desktop status:** the desktop app registers only `happy-auth:` with the OS
+> today. Taking `happy://oauth/callback` needs a change to the Electron host
+> process, which is waiting for confirmation.
+
+A redirect, or a `401` or `403` that is not Happy's own JSON error, comes from
+the load balancer and means the sign-in has ended. A `401` from Happy itself can
+also mean the person has not finished onboarding, so Happy asks
+`GET /v0/authentication` first. If that says the person is signed in with no
+profile yet, Happy goes to onboarding instead of a new sign-in. When the
+sign-in has ended, the server's sidebar section says "Sign in required" and
+offers "Sign in again".

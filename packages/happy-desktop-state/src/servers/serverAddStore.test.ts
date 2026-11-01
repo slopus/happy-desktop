@@ -3,7 +3,11 @@ import { expect, it, vi } from "vitest";
 import { managedSettingsStoreCreate } from "../managedSettings/managedSettingsStore.js";
 import { UserError } from "../types.js";
 import { serverAddStoreCreate } from "./serverAddStore.js";
-import { serverSignInRequired, type ServerSource } from "./serverSource.js";
+import {
+    serverAuthenticationOutcome,
+    serverAuthFailure,
+    type ServerSource,
+} from "./serverSource.js";
 import { serverUrlParse } from "./serverUrl.js";
 
 function deferred<T>() {
@@ -150,21 +154,33 @@ it("refuses every server when the policy allows none", () => {
     expect(store.get().error?.code).toBe("server_not_allowed");
 });
 
-it("asks for a new sign-in on 401, redirects, and a 403 that is not Happy's", () => {
-    expect(serverSignInRequired(new HappyAgentApiError(401, "x", "unauthorized", null))).toBe(true);
-    expect(serverSignInRequired(new HappyAgentApiError(302, "x", null, null))).toBe(true);
-    expect(serverSignInRequired(new HappyAgentApiError(403, "x", null, null))).toBe(true);
+it("sends an edge's refusal straight to sign-in and checks Happy's own 401 first", () => {
+    // Happy's JSON carries a code; an edge's page does not.
+    expect(serverAuthFailure(new HappyAgentApiError(401, "x", null, null))).toBe("signInRequired");
+    expect(serverAuthFailure(new HappyAgentApiError(302, "x", null, null))).toBe("signInRequired");
+    expect(serverAuthFailure(new HappyAgentApiError(403, "x", null, null))).toBe("signInRequired");
+    expect(serverAuthFailure(new HappyAgentApiError(401, "x", "unauthorized", null))).toBe(
+        "authenticationCheck",
+    );
     // Happy's own refusal is about permission, which signing in again would not change.
-    expect(serverSignInRequired(new HappyAgentApiError(403, "x", "forbidden", null))).toBe(false);
-    expect(serverSignInRequired(new HappyAgentApiError(500, "x", null, null))).toBe(false);
+    expect(serverAuthFailure(new HappyAgentApiError(403, "x", "forbidden", null))).toBeUndefined();
+    expect(serverAuthFailure(new HappyAgentApiError(500, "x", null, null))).toBeUndefined();
     expect(
-        serverSignInRequired(
+        serverAuthFailure(
             new UserError(
                 "Catalog failed",
                 undefined,
                 new HappyAgentApiError(401, "x", null, null),
             ),
         ),
-    ).toBe(true);
-    expect(serverSignInRequired(new TypeError("Failed to fetch"))).toBe(false);
+    ).toBe("signInRequired");
+    expect(serverAuthFailure(new TypeError("Failed to fetch"))).toBeUndefined();
+});
+
+it("reads the discovery check after Happy's 401 as onboarding, a retry, or a new sign-in", () => {
+    expect(serverAuthenticationOutcome({ authenticated: true, userId: null })).toBe("onboarding");
+    expect(serverAuthenticationOutcome({ authenticated: true, userId: "u1" })).toBe("retry");
+    expect(serverAuthenticationOutcome({ authenticated: false, userId: null })).toBe(
+        "signInRequired",
+    );
 });
