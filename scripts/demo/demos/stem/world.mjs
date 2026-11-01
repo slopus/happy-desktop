@@ -53,6 +53,11 @@ export const prompt = "Add an animated waveform to the voice agent.";
 export const sessionTitle = "Voice waveform";
 /** The clay icon Focus gives the row; `waveform` needs a daemon whose slug list has it. */
 export const icon = process.env.STEM_DEMO_ICON ?? "new-feature";
+/**
+ * What the daemon starts new work on: the model picked on camera. A stem cell
+ * the daemon makes itself, like the one Create makes at the end, opens on it.
+ */
+export const defaults = { providerId: "claude", modelId: "anthropic/opus-5-5", effort: "medium" };
 /** The model picked on camera, and the mode later messages keep. */
 export const opusMode = {
     ...core.seedMode,

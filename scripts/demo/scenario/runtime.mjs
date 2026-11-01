@@ -268,7 +268,16 @@ function processBaseEnvironment(p) {
     };
 }
 
-async function daemonStart(p, gateway, mobileServerUrl, models, nativeCodex, nativeEffort, team) {
+async function daemonStart(
+    p,
+    gateway,
+    mobileServerUrl,
+    models,
+    nativeCodex,
+    nativeEffort,
+    team,
+    defaults,
+) {
     const executable = await happyAgentExecutableResolve();
     const command = join(p.bin, "happy-agent");
     await unlink(command).catch(() => undefined);
@@ -290,7 +299,7 @@ async function daemonStart(p, gateway, mobileServerUrl, models, nativeCodex, nat
     // daemon before starting this lifetime so the token and gateway URL match.
     await execFile(command, ["stop"], { cwd: p.root, env, timeout: 15_000 }).catch(() => undefined);
     await unlink(p.socketPath).catch(() => undefined);
-    await runtimeConfigurationWrite(p, models, gateway === undefined, nativeEffort);
+    await runtimeConfigurationWrite(p, models, gateway === undefined, nativeEffort, defaults);
     if (team) {
         if (!gateway) throw new Error("A team world runs on screenplay inference.");
         const started = await teamDaemonStart(p, command, env, team);
@@ -346,7 +355,7 @@ async function daemonStart(p, gateway, mobileServerUrl, models, nativeCodex, nat
  * identity — its inference still routes to the gym gateway, which backs every
  * provider while the URL is set.
  */
-async function runtimeConfigurationWrite(p, models, native = false, nativeEffort) {
+async function runtimeConfigurationWrite(p, models, native = false, nativeEffort, defaults) {
     await mkdir(join(p.happyHome, "agent"), { recursive: true });
     if (native) {
         if (!nativeEffort) throw new Error("Native filming requires an explicit reasoning effort.");
@@ -382,8 +391,20 @@ async function runtimeConfigurationWrite(p, models, native = false, nativeEffort
         [
             "[providers.gym]",
             'type = "codex"',
-            "auto_enable = true",
+            // A world that names what new work starts on turns the gym's own
+            // model off, so the daemon's default is that real model: the gym
+            // still serves its inference through the gateway.
+            ...(defaults ? ["enabled = false"] : ["auto_enable = true"]),
             "",
+            ...(defaults
+                ? [
+                      "[defaults]",
+                      `provider = ${JSON.stringify(defaults.providerId)}`,
+                      `model = ${JSON.stringify(defaults.modelId)}`,
+                      `effort = ${JSON.stringify(defaults.effort)}`,
+                      "",
+                  ]
+                : []),
             "[providers.codex]",
             'type = "codex"',
             ...(models?.codex ? [`include_models = ${JSON.stringify(models.codex)}`] : []),
@@ -689,6 +710,7 @@ export async function gymOpen(options = {}) {
         options.nativeCodex,
         definition.effort,
         definition.team,
+        definition.defaults,
     );
     let client = await clientCreate(p, daemon.token);
     await healthWait(client, 30_000);
@@ -810,7 +832,13 @@ export async function gymOpen(options = {}) {
             await execFile(daemon.command, ["stop"], { cwd: p.root, env, timeout: 120_000 });
             const stopMs = Date.now() - stopStartedAt;
             await unlink(p.socketPath).catch(() => undefined);
-            await runtimeConfigurationWrite(p, definition.models, native, definition.effort);
+            await runtimeConfigurationWrite(
+                p,
+                definition.models,
+                native,
+                definition.effort,
+                definition.defaults,
+            );
             const startStartedAt = Date.now();
             await execFile(daemon.command, ["start"], { cwd: p.root, env, timeout: 30_000 });
             const token = await tokenWait(p.tokenPath, 30_000);
