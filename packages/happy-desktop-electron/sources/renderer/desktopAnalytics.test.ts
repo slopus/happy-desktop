@@ -828,7 +828,7 @@ it("sends unknown apps for a shell too old to look for them", () => {
     analytics.dispose();
 });
 
-it("lets a managed analytics setting decide over the person's switch, and sends nothing while it loads", () => {
+it("lets a managed setting turn analytics off but never on, and sends nothing while it loads", () => {
     expect(desktopAnalyticsAllowed(true, { status: "absent" })).toBe(true);
     expect(desktopAnalyticsAllowed(false, { status: "absent" })).toBe(false);
     expect(desktopAnalyticsAllowed(true, { status: "loading" })).toBe(false);
@@ -836,7 +836,11 @@ it("lets a managed analytics setting decide over the person's switch, and sends 
     expect(
         desktopAnalyticsAllowed(true, { status: "ready", settings: { analyticsEnabled: false } }),
     ).toBe(false);
+    // A policy cannot turn on what the person turned off.
     expect(
         desktopAnalyticsAllowed(false, { status: "ready", settings: { analyticsEnabled: true } }),
+    ).toBe(false);
+    expect(
+        desktopAnalyticsAllowed(true, { status: "ready", settings: { analyticsEnabled: true } }),
     ).toBe(true);
 });

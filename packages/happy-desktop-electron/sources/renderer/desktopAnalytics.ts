@@ -18,7 +18,6 @@ import {
     happyAgentBotSubtasks,
     happyAgentTaskDepths,
     managedAnalyticsAllowed,
-    managedSettingsOf,
     managedSettingsStoreAbsent,
     usageAnalyticsStoreCreate,
     type ExperimentsOutput,
@@ -288,16 +287,15 @@ function commandKindOf(
 }
 
 /**
- * Whether an event may be sent: the organization's `analyticsEnabled` when it
- * set one, otherwise the person's own switch, and nothing while the policy is
- * still being read.
+ * Whether an event may be sent: only while the person's own switch is on and
+ * the organization has not turned analytics off, and nothing while the policy
+ * is still being read. No policy turns analytics on.
  */
 export function desktopAnalyticsAllowed(
     userEnabled: boolean,
     managed: ManagedSettingsSnapshot,
 ): boolean {
-    if (!managedAnalyticsAllowed(managed)) return false;
-    return managedSettingsOf(managed).analyticsEnabled ?? userEnabled;
+    return userEnabled && managedAnalyticsAllowed(managed);
 }
 
 /**
@@ -311,8 +309,8 @@ export function desktopAnalyticsCreate(options: {
     /** What the shell says about this machine; absent from older shells. */
     readonly system?: DesktopSystem;
     /**
-     * The organization's fixed settings. A set `analyticsEnabled` decides alone,
-     * and nothing is sent while the policy is still being read.
+     * The organization's fixed settings. `analyticsEnabled: false` keeps
+     * analytics off, and nothing is sent while the policy is still being read.
      */
     readonly managedSettings?: ManagedSettingsStore;
     /** Replaces the PostHog client, for tests. */

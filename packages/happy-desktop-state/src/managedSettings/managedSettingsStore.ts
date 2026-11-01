@@ -12,6 +12,10 @@ export interface ManagedSettings {
     readonly serverUrl?: string;
     /** Whether a person may add servers beyond `serverUrl`. */
     readonly allowAdditionalServers?: boolean;
+    /**
+     * `false` turns product analytics off and locks it. `true` changes nothing:
+     * an organization can keep analytics off, never force it on.
+     */
     readonly analyticsEnabled?: boolean;
     /** The Happy relay that links phones through Happy's hosted service. */
     readonly hostedRelayEnabled?: boolean;
@@ -104,8 +108,9 @@ export function managedSettingsOf(snapshot: ManagedSettingsSnapshot): ManagedSet
 }
 
 /**
- * Whether analytics may send right now. While a source is still loading
- * nothing is sent, so a policy that forbids analytics is never raced.
+ * Whether the policy lets analytics send right now; the person's own switch
+ * still has to be on. While a source is still loading nothing is sent, so a
+ * policy that forbids analytics is never raced.
  */
 export function managedAnalyticsAllowed(snapshot: ManagedSettingsSnapshot): boolean {
     if (snapshot.status === "loading") return false;

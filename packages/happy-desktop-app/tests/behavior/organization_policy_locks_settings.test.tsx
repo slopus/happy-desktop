@@ -16,8 +16,8 @@ import type { AppHappyAgentDirectorySnapshot } from "../../sources/AppHappyAgent
 vi.mock("../../../happy-desktop-ui/src/Spinner", () => ({ Spinner: () => null }));
 
 /*
- * An organization's managed settings lock what they name: the analytics switch
- * shows the organization's value and cannot be changed, Mobile access goes
+ * An organization's managed settings lock what they name: analytics can be
+ * turned off and locked, never forced on, Mobile access goes
  * when no way of pairing a phone is left, and the server form adds only the
  * organization's server. Servers is offered only by a host that can add one.
  */
@@ -81,7 +81,7 @@ function categoryLabels(container: HTMLElement): string[] {
     );
 }
 
-it("locks analytics to the organization's value and keeps the person's switch untouched", () => {
+it("locks analytics off when the organization turns it off, keeping the person's own choice", () => {
     const { view, usageAnalytics, dispose } = settingsRender({
         section: "general",
         managed: { analyticsEnabled: false },
@@ -92,6 +92,18 @@ it("locks analytics to the organization's value and keeps the person's switch un
     expect(view.getByText(/Your organization turned product analytics off/u)).toBeTruthy();
     fireEvent.click(control);
     expect(usageAnalytics.get().usageAnalyticsEnabled).toBe(true);
+    dispose();
+});
+
+it("never turns analytics on: a policy of true leaves the person's switch working", () => {
+    const { view, usageAnalytics, dispose } = settingsRender({
+        section: "general",
+        managed: { analyticsEnabled: true },
+    });
+    const control = view.getByRole("switch", { name: "Share product analytics" });
+    expect((control as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(control);
+    expect(usageAnalytics.get().usageAnalyticsEnabled).toBe(false);
     dispose();
 });
 

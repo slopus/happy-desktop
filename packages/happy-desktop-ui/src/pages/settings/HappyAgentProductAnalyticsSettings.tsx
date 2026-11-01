@@ -35,7 +35,7 @@ const PRODUCT_ANALYTICS_DISCLOSURE: readonly DataDisclosureGroup[] = [
 
 export interface HappyAgentProductAnalyticsSettingsProps {
     readonly enabled: boolean;
-    /** The organization fixed this setting; the switch shows its value and cannot change it. */
+    /** The organization turned analytics off; the switch shows off and cannot change. */
     readonly managed?: boolean;
     readonly onChange: (enabled: boolean) => void;
 }
@@ -74,10 +74,7 @@ const POSTHOG_IP_NOTICE =
     "Our analytics provider, PostHog, receives your IP address with each event and may keep it; we turn off its location lookup and don't use your IP.";
 
 function productAnalyticsDescription(props: HappyAgentProductAnalyticsSettingsProps): string {
-    if (!props.managed)
-        return `Helps us see where setup gets stuck and which features people use. Events are tied to a random ID for this installation, not to you. ${POSTHOG_IP_NOTICE}`;
-    // What PostHog receives still has to be said while the organization keeps it on.
-    return props.enabled
-        ? `Your organization turned product analytics on for this computer. ${POSTHOG_IP_NOTICE}`
-        : "Your organization turned product analytics off for this computer. Nothing is sent.";
+    return props.managed
+        ? "Your organization turned product analytics off for this computer. Nothing is sent."
+        : `Helps us see where setup gets stuck and which features people use. Events are tied to a random ID for this installation, not to you. ${POSTHOG_IP_NOTICE}`;
 }

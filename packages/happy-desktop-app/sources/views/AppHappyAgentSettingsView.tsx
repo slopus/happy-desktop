@@ -372,17 +372,16 @@ const serverAddStoreAbsent: ServerAddStore = {
 };
 
 /**
- * The analytics switch as shown: the organization's value, locked, when it set
- * one; otherwise the person's own choice.
+ * The analytics switch as shown: off and locked when the organization turned
+ * analytics off; otherwise the person's own choice. No policy turns it on.
  */
 function usageAnalyticsShown(
     enabled: boolean,
     managed: ManagedSettingsSnapshot,
 ): { readonly usageAnalyticsEnabled: boolean; readonly usageAnalyticsManaged: boolean } {
-    const fixed = managedSettingsOf(managed).analyticsEnabled;
-    return fixed === undefined
-        ? { usageAnalyticsEnabled: enabled, usageAnalyticsManaged: false }
-        : { usageAnalyticsEnabled: fixed, usageAnalyticsManaged: true };
+    return managedSettingsOf(managed).analyticsEnabled === false
+        ? { usageAnalyticsEnabled: false, usageAnalyticsManaged: true }
+        : { usageAnalyticsEnabled: enabled, usageAnalyticsManaged: false };
 }
 
 /** The organization named the one server the form adds. */
