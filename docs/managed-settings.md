@@ -63,17 +63,19 @@ server reads `GET /v0/authentication`, then signs in with the authorization code
 flow and PKCE in the system browser. Tailcat, Happy Cloud and WorkOS are not
 involved.
 
-The browser redirects back to a loopback address on this computer. The path is
-fixed and the port is chosen for each sign-in, as RFC 8252 allows:
+The browser returns to Happy through one redirect URI, the same on every
+platform and flavor:
 
 ```
-http://127.0.0.1:{any port}/oauth/callback
+happy://oauth/callback
 ```
 
-Register that redirect URI with your identity provider, allowing any port.
-Happy sends it as `redirect_uri` in both the authorization and the token
-request. The host Happy Agent, which holds the sign-in, listens on that address
-for the length of one sign-in. The desktop app registers no URL scheme for it.
+Register exactly that string with your identity provider. Happy sends it as
+`redirect_uri` in both the authorization and the token request.
+
+> **Desktop status:** the desktop app registers only `happy-auth:` with the OS
+> today. Taking `happy://oauth/callback` needs a change to the Electron host
+> process, which is waiting for confirmation.
 
 A redirect, or a `401` or `403` that is not Happy's own JSON error, comes from
 the load balancer and means the sign-in has ended. A `401` from Happy itself can
