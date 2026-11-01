@@ -49,6 +49,8 @@ export interface ServerSource {
  *   sign-in or a member who has not finished onboarding, which the daemon
  *   reports the same way, so `GET /v0/authentication` with the same bearer
  *   decides; see `serverAuthenticationOutcome`.
+ * - `signInRequired` also: the host Happy Agent's `403 remote_sign_in_required`,
+ *   its word for a remote server whose sign-in it holds having ended.
  * - `undefined`: the failure is not about signing in.
  *
  * Happy's JSON carries a string `code`, which the client reads into
@@ -64,6 +66,10 @@ export function serverAuthFailure(error: unknown): ServerAuthFailure | undefined
         if (current.status >= 300 && current.status < 400 && current.status !== 304)
             return "signInRequired";
         if (current.status === 401) return happyJson ? "authenticationCheck" : "signInRequired";
+        // The host Happy Agent's proxy says a remote's sign-in ended in Happy's
+        // own JSON, so the window never takes it for its own daemon's.
+        if (current.status === 403 && current.code === "remote_sign_in_required")
+            return "signInRequired";
         if (current.status === 403 && !happyJson) return "signInRequired";
         return undefined;
     }

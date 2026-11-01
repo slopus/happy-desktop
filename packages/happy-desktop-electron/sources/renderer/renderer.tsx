@@ -46,10 +46,14 @@ import {
     happyAgentAttentionStoreOwnedCreate,
     happyAgentClockStoreCreate,
     happyLinkInboxStoreCreate,
+    serverAddStoreCreate,
+    serverSourceDaemonCreate,
+    HappyAgentClient,
     happyAgentMobileConnectorStoreNoop,
     type AppearanceStore,
     type HappyAgentClockStore,
     type HappyLinkInboxStore,
+    type ServerAddStore,
     type HappyAgentAttentionStore,
     type HappyAgentCompletionSound,
     type CommandPaletteStore,
@@ -394,6 +398,7 @@ function HappyAgentBoundary(props: {
     platform: "desktop" | "web";
     gptLive: GptLiveStore;
     usageAnalytics: UsageAnalyticsStore;
+    servers?: ServerAddStore;
     router: HappyAgentRouter;
     navigationOrder: HappyAgentNavigationOrderStore;
     sidebarCollapse: HappyAgentSidebarCollapseStore;
@@ -446,6 +451,7 @@ function HappyAgentBoundary(props: {
                 statusBar: props.statusBar,
                 gptLive: props.gptLive,
                 usageAnalytics: props.usageAnalytics,
+                ...(props.servers ? { servers: props.servers } : {}),
                 keepAwake: props.keepAwake,
                 navigationOrder: props.navigationOrder,
                 sidebarCollapse: props.sidebarCollapse,
@@ -612,6 +618,8 @@ interface DesktopRendererProps {
     statusBar: StatusBarStore;
     gptLive: GptLiveStore;
     usageAnalytics: UsageAnalyticsStore;
+    /** Adds team servers through the host Happy Agent; absent on a shell that cannot. */
+    servers?: ServerAddStore;
     keepAwake: KeepAwakeStore;
     navigationOrder: HappyAgentNavigationOrderStore;
     sidebarCollapse: HappyAgentSidebarCollapseStore;
@@ -812,6 +820,7 @@ function DesktopScreens(props: DesktopRendererProps) {
                                     statusBar={props.statusBar}
                                     gptLive={props.gptLive}
                                     usageAnalytics={props.usageAnalytics}
+                                    {...(props.servers ? { servers: props.servers } : {})}
                                     keepAwake={props.keepAwake}
                                     htmlPreview={props.htmlPreview}
                                     artifactPage={props.artifactPage}
@@ -1046,6 +1055,7 @@ function DesktopRuntimeContent(
             keepAwake={props.keepAwake}
             gptLive={props.gptLive}
             usageAnalytics={props.usageAnalytics}
+            {...(props.servers ? { servers: props.servers } : {})}
             navigationOrder={props.navigationOrder}
             sidebarCollapse={props.sidebarCollapse}
             sidebarVisibility={props.sidebarVisibility}
@@ -1108,17 +1118,34 @@ function DesktopCloudSignInNotice(props: { store: DesktopCloudSignInNoticeStore 
     );
 }
 /** Why a Happy link from outside was not opened, centered over everything else. */
-function DesktopHappyLinkNotice(props: { store: HappyLinkInboxStore }): ReactNode {
+function DesktopHappyLinkNotice(props: {
+    store: HappyLinkInboxStore;
+    /** Opens Settings › Servers; absent where this window cannot add a server. */
+    onServersOpen?: () => void;
+}): ReactNode {
     const { notice } = useSyncExternalStore(
         props.store.subscribe,
         props.store.get,
         props.store.get,
     );
-    // Servers is offered once this window can add a server; until then the
-    // notice has only OK.
     if (!notice) return null;
-    return <HappyLinkNoticeDialog onClose={props.store.noticeDismiss} view={notice} />;
+    const serversOpen = props.onServersOpen;
+    return (
+        <HappyLinkNoticeDialog
+            onClose={props.store.noticeDismiss}
+            view={notice}
+            {...(serversOpen
+                ? {
+                      onServersOpen: () => {
+                          props.store.noticeDismiss();
+                          serversOpen();
+                      },
+                  }
+                : {})}
+        />
+    );
 }
+
 /* The traffic lights do not zoom with the page, so the safe area reserved for
    them is divided by the page's zoom. That zoom outlives a reload (a renderer
    update, ⌘R, another window of this origin) while the View menu reports only
@@ -1373,8 +1400,41 @@ if (mediaPreviewBridge) {
         // told to resolve its address again whenever the set of connected Happy Agents
         // changes, so a machine that connects after the URL already named it opens
         // the addressed conversation without the reader navigating twice.
+        // Team servers are added and signed in to through the host Happy Agent,
+        // which holds every token; the shell only opens the browser and hands
+        // back the callback. A shell that cannot take the callback offers none.
+        const serverSource = desktopBridge.serverOAuthCallbackTake
+            ? serverSourceDaemonCreate({
+                  client() {
+                      const value = runtimeStore.get();
+                      return value?.phase === "ready" && value.activeTarget.mode === "local"
+                          ? new HappyAgentClient({
+                                endpoint: value.activeTarget.happyAgentHttpUrl,
+                                token: "happy-local-capability",
+                            })
+                          : undefined;
+                  },
+                  browserOpen: (url) => desktopBridge.cloudAuthOpen(url),
+              })
+            : undefined;
+        if (serverSource) {
+            appDisposers.push(() => serverSource[Symbol.dispose]());
+            const callbacksTake = async (): Promise<void> => {
+                const take = desktopBridge.serverOAuthCallbackTake;
+                if (!take) return;
+                for (let url = await take(); url !== undefined; url = await take())
+                    serverSource.callbackReceive(url);
+            };
+            const callbacksReceived = desktopBridge.serverOAuthCallbackSubscribe?.(() => {
+                void callbacksTake().catch(() => undefined);
+            });
+            if (callbacksReceived) appDisposers.push(callbacksReceived);
+        }
+        const servers = serverSource ? serverAddStoreCreate({ source: serverSource }) : undefined;
+        if (servers) appDisposers.push(() => servers[Symbol.dispose]());
         const happyAgents = happyAgentDirectoryStoreCreate(desktopBridge, runtimeStore, {
             cloudHostFor: auth.hostFor,
+            ...(serverSource ? { servers: serverSource } : {}),
             attentionFollow(id, source) {
                 preferencesFor(id);
                 const attentionStop = attentionFollow(id, source);
@@ -1691,7 +1751,20 @@ if (mediaPreviewBridge) {
             <DesktopAppearance appearance={appearance}>
                 <DesktopZoomIndicator />
                 <DesktopCloudSignInNotice store={notices} />
-                <DesktopHappyLinkNotice store={happyLinkInbox} />
+                <DesktopHappyLinkNotice
+                    store={happyLinkInbox}
+                    {...(servers
+                        ? {
+                              onServersOpen: () => {
+                                  const history = connectionUis.get(
+                                      happyAgents.get().activeHappyAgentId ?? LOCAL_HAPPY_AGENT_ID,
+                                  )?.router.history;
+                                  if (history && history.location.pathname !== "/settings/servers")
+                                      history.push("/settings/servers");
+                              },
+                          }
+                        : {})}
+                />
                 <CodeHighlightWorkers>
                     <DesktopRenderer
                         browserPasswordsAvailable={browserPasswordsAvailable}
@@ -1715,6 +1788,7 @@ if (mediaPreviewBridge) {
                         statusBar={statusBar}
                         gptLive={gptLive}
                         usageAnalytics={analytics.preference}
+                        {...(servers ? { servers } : {})}
                         keepAwake={keepAwake}
                         navigationOrder={navigationOrder}
                         sidebarCollapse={sidebarCollapse}

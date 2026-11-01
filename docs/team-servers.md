@@ -8,8 +8,9 @@ the connection, the sign-in and its tokens. The desktop app shows what the
 daemon reports. Tailcat, the hosted relay and phone pairing are configured on
 the agent; the desktop only hides what the agent reports as unavailable.
 
-> **Status:** the Servers screen and the sign-in-again state are built. They are
-> not yet connected to the daemon's team-server routes.
+> **Status:** the desktop side is built against the Happy Agent API's server
+> connections by URL (client 0.0.140). It needs a host Happy Agent that serves
+> those routes.
 
 ## Adding a server
 
@@ -43,6 +44,10 @@ A redirect other than `304`, or a `401` or `403` that is not Happy's own JSON
 error, comes from the load balancer and means the sign-in has ended. A `401`
 from Happy itself can also mean the person has not finished onboarding, so
 Happy asks `GET /v0/authentication` first. If that says the person is signed in
-with no profile yet, Happy goes to onboarding instead of a new sign-in. When the
-sign-in has ended, the server's sidebar section says "Sign in required" and
+with no profile yet, Happy goes to onboarding instead of a new sign-in. The host
+Happy Agent, which holds the sign-in, also says so itself: its connection status
+turns `needs_sign_in`, and its proxy answers `403 remote_sign_in_required`. When
+the sign-in has ended, the server's sidebar section says "Sign in required" and
 offers "Sign in again".
+
+A first add that is cancelled, or whose sign-in fails, removes the server again.

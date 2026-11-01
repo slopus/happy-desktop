@@ -29,6 +29,8 @@ export * from "./happyLinks/happyLinkInboxStore.js";
 export * from "./servers/serverUrl.js";
 export * from "./servers/serverSource.js";
 export * from "./servers/serverAddStore.js";
+export * from "./servers/serverSourceDaemon.js";
+export * from "./servers/serverStatusesStore.js";
 export * from "./gptLive/gptLiveStore.js";
 export * from "./gptLive/gptLiveRuntime.js";
 export * from "./gptLive/gptLiveRuntimeCreate.js";
