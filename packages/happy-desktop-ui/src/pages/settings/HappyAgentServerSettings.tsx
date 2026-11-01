@@ -21,13 +21,6 @@ export interface HappyAgentServerSettingsProps {
     readonly urlError?: string;
     /** Why the last attempt failed. */
     readonly error?: string;
-    /**
-     * The organization fixed the server: the field shows its address and cannot
-     * be edited, and adding it is still the person's act.
-     */
-    readonly locked?: boolean;
-    /** The organization allows adding no server at all; the form is left out. */
-    readonly refused?: boolean;
     /** Why the host cannot add servers right now. */
     readonly unavailable?: string;
     onUrlChange(value: string): void;
@@ -53,55 +46,45 @@ export function HappyAgentServerSettings(props: HappyAgentServerSettingsProps) {
                     {props.unavailable}
                 </Banner>
             ) : null}
-            {props.refused ? (
-                <Banner tone="neutral" title="Managed by your organization">
-                    Your organization doesn&rsquo;t allow adding servers.
-                </Banner>
-            ) : (
-                <FormRow
-                    control={
-                        <Box className="happy-agent-server-settings__field">
-                            <TextField
-                                aria-label="Server address"
-                                autoComplete="url"
-                                className="happy-agent-server-settings__input"
-                                data-testid="happy-agent-server-settings-url"
-                                disabled={props.locked === true || running || blocked}
-                                fullWidth
-                                id="happy-agent-server-settings-url"
-                                onSubmit={props.onAdd}
-                                onValueChange={props.onUrlChange}
-                                placeholder="https://happy.example.com"
+            <FormRow
+                control={
+                    <Box className="happy-agent-server-settings__field">
+                        <TextField
+                            aria-label="Server address"
+                            autoComplete="url"
+                            className="happy-agent-server-settings__input"
+                            data-testid="happy-agent-server-settings-url"
+                            disabled={running || blocked}
+                            fullWidth
+                            id="happy-agent-server-settings-url"
+                            onSubmit={props.onAdd}
+                            onValueChange={props.onUrlChange}
+                            placeholder="https://happy.example.com"
+                            size="small"
+                            value={props.url}
+                            {...(props.urlError === undefined ? {} : { error: props.urlError })}
+                        />
+                        {running ? (
+                            <Button onClick={props.onCancel} size="small" variant="secondary">
+                                Cancel
+                            </Button>
+                        ) : (
+                            <Button
+                                disabled={blocked}
+                                onClick={props.onAdd}
                                 size="small"
-                                value={props.url}
-                                {...(props.urlError === undefined ? {} : { error: props.urlError })}
-                            />
-                            {running ? (
-                                <Button onClick={props.onCancel} size="small" variant="secondary">
-                                    Cancel
-                                </Button>
-                            ) : (
-                                <Button
-                                    disabled={blocked}
-                                    onClick={props.onAdd}
-                                    size="small"
-                                    variant="primary"
-                                >
-                                    Add server
-                                </Button>
-                            )}
-                        </Box>
-                    }
-                    description={
-                        props.locked
-                            ? "Your organization set this server."
-                            : "The https:// address your team gave you"
-                    }
-                    htmlFor="happy-agent-server-settings-url"
-                    label="Server address"
-                    layout="stacked"
-                />
-            )}
+                                variant="primary"
+                            >
+                                Add server
+                            </Button>
+                        )}
+                    </Box>
+                }
+                description="The https:// address your team gave you"
+                htmlFor="happy-agent-server-settings-url"
+                label="Server address"
+                layout="stacked"
+            />
             {props.phase.kind === "editing" ? null : (
                 <Box
                     className="happy-agent-settings__pending"

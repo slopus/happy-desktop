@@ -42,20 +42,6 @@ const cases: readonly (HappyAgentServerSettingsProps & { readonly label: string 
         ...handlers,
     },
     {
-        label: "Set by the organization",
-        url: "https://happy.corp.example",
-        phase: { kind: "editing" },
-        locked: true,
-        ...handlers,
-    },
-    {
-        label: "Adding refused",
-        url: "",
-        phase: { kind: "editing" },
-        refused: true,
-        ...handlers,
-    },
-    {
         label: "Offline",
         url: "",
         phase: { kind: "editing" },
@@ -69,7 +55,7 @@ export function HappyAgentServerSettingsPage() {
         <ComponentPage
             number={componentNumber}
             title="Server settings"
-            summary="Adding a team server by its HTTPS address, signed in through the browser. Managed settings can preset the address or refuse adding one."
+            summary="Adding a team server by its HTTPS address, signed in through the browser."
         >
             {cases.map(({ label, ...props }, index) => (
                 <Specimen

@@ -99,8 +99,6 @@ export interface AppMobilePairingProps {
      */
     readonly method: MobilePairingMethod;
     onMethodSelect(method: MobilePairingMethod): void;
-    /** `method` is the only one the organization allows; no Relay | Direct control. */
-    readonly methodFixed?: boolean;
     readonly relay: MobileRelayPairingState;
     readonly relayStarting?: boolean;
     onRelayRetry?(): void;
@@ -191,7 +189,6 @@ function AppMobilePairingOptions(
             now={now}
             method={props.method}
             onMethodSelect={props.onMethodSelect}
-            methodFixed={props.methodFixed === true}
             relay={props.relay}
             {...(props.relayStarting === undefined ? {} : { relayStarting: props.relayStarting })}
             {...(props.onRelayRetry ? { onRelayRetry: guarded(props.onRelayRetry) } : {})}

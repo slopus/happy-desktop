@@ -1,10 +1,5 @@
 import { happyAgentUserError } from "../happyAgent/happyAgentSupport.js";
-import {
-    managedServers,
-    managedSettingsStoreAbsent,
-    type ManagedSettingsStore,
-} from "../managedSettings/managedSettingsStore.js";
-import { UserError } from "../types.js";
+import type { UserError } from "../types.js";
 import { serverUrlParse, type ServerUrlProblem } from "./serverUrl.js";
 import type { ServerSource } from "./serverSource.js";
 
@@ -44,8 +39,6 @@ export interface ServerAddStore {
 
 export interface ServerAddStoreDeps {
     readonly source: ServerSource;
-    /** The organization's policy; a host without one leaves every choice to the person. */
-    readonly managed?: ManagedSettingsStore;
     readonly onOutput?: (output: ServerAddOutput) => void;
 }
 
@@ -54,13 +47,9 @@ const ADDING: ServerAddPhase = { kind: "adding" };
 
 /**
  * The add-a-server form. The constructor opens nothing; submitting asks the
- * source, and the attempt's progress and failure are this store's state. The
- * organization's policy is enforced at submit as well as shown by the form: an
- * address other than the preset is refused when additional servers are not
- * allowed, whatever the field says.
+ * source, and the attempt's progress and failure are this store's state.
  */
 export function serverAddStoreCreate(deps: ServerAddStoreDeps): ServerAddStore {
-    const managed = deps.managed ?? managedSettingsStoreAbsent;
     const listeners = new Set<() => void>();
     let snapshot: ServerAddSnapshot = { url: "", phase: EDITING };
     let attempt: AbortController | undefined;
@@ -89,32 +78,11 @@ export function serverAddStoreCreate(deps: ServerAddStoreDeps): ServerAddStore {
         },
         serverAddSubmit() {
             if (snapshot.phase.kind !== "editing") return;
-            const policy = managedServers(managed.get());
-            // A locked form adds the organization's server, never the text.
-            const text =
-                policy.preset !== undefined && !policy.additionalAllowed
-                    ? policy.preset
-                    : snapshot.url;
-            const parsed = serverUrlParse(text);
+            const parsed = serverUrlParse(snapshot.url);
             if (!parsed.ok) {
                 const { error: _error, ...rest } = snapshot;
                 set({ ...rest, urlProblem: parsed.problem });
                 return;
-            }
-            if (!policy.additionalAllowed) {
-                const preset =
-                    policy.preset === undefined ? undefined : serverUrlParse(policy.preset);
-                if (!preset?.ok || preset.url !== parsed.url) {
-                    const { urlProblem: _problem, ...rest } = snapshot;
-                    set({
-                        ...rest,
-                        error: new UserError(
-                            "Your organization doesn't allow adding other servers.",
-                            "server_not_allowed",
-                        ),
-                    });
-                    return;
-                }
             }
             const controller = new AbortController();
             attempt = controller;

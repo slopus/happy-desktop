@@ -10,7 +10,6 @@ import {
     type HappyAgentConnectionsStore,
     type HappyAgentNodeIdentity,
     type HappyAgentNodeStore,
-    type ManagedSettingsStore,
     type ServerSource,
 } from "happy-desktop-state";
 import type {
@@ -141,8 +140,6 @@ export interface HappyAgentDirectoryStore {
 
 export interface HappyAgentDirectoryDeps {
     readonly cloudHostFor: (id: string) => HappyAgentCloudHost;
-    /** The organization's fixed settings, read when a connection's onboarding starts. */
-    readonly managedSettings?: ManagedSettingsStore;
     /**
      * Where a remote whose sign-in ended is signed in again. Absent on a host
      * that cannot, which leaves such a remote pointing at Settings.
@@ -491,7 +488,6 @@ export function happyAgentDirectoryStoreCreate(
             happyAgentId: happyAgent.entry.id,
             client,
             hostServicesUrl,
-            ...(deps.managedSettings ? { managedSettings: deps.managedSettings } : {}),
             // A Happy Agent on another machine is what this computer's devices
             // and ports can reach; the local one already has them.
             deviceBridges: happyAgent.entry.remoteId !== undefined,

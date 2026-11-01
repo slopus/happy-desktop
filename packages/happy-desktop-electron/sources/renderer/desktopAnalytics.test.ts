@@ -14,12 +14,7 @@ import {
     type AnalyticsTrackOptions,
 } from "happy-desktop-analytics";
 import type { HappyAgentActivity, WelcomeStore } from "happy-desktop-state";
-import {
-    desktopAnalyticsAllowed,
-    desktopAnalyticsCreate,
-    setupDownloadFailureOf,
-    setupFailureOf,
-} from "./desktopAnalytics";
+import { desktopAnalyticsCreate, setupDownloadFailureOf, setupFailureOf } from "./desktopAnalytics";
 
 type CaptureResult = NonNullable<Parameters<typeof analyticsBeforeSend>[0]>;
 
@@ -826,21 +821,4 @@ it("sends unknown apps for a shell too old to look for them", () => {
     ]);
     unsubscribe();
     analytics.dispose();
-});
-
-it("lets a managed setting turn analytics off but never on, and sends nothing while it loads", () => {
-    expect(desktopAnalyticsAllowed(true, { status: "absent" })).toBe(true);
-    expect(desktopAnalyticsAllowed(false, { status: "absent" })).toBe(false);
-    expect(desktopAnalyticsAllowed(true, { status: "loading" })).toBe(false);
-    expect(desktopAnalyticsAllowed(true, { status: "ready", settings: {} })).toBe(true);
-    expect(
-        desktopAnalyticsAllowed(true, { status: "ready", settings: { analyticsEnabled: false } }),
-    ).toBe(false);
-    // A policy cannot turn on what the person turned off.
-    expect(
-        desktopAnalyticsAllowed(false, { status: "ready", settings: { analyticsEnabled: true } }),
-    ).toBe(false);
-    expect(
-        desktopAnalyticsAllowed(true, { status: "ready", settings: { analyticsEnabled: true } }),
-    ).toBe(true);
 });

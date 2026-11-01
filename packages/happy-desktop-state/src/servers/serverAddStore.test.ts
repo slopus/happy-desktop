@@ -1,6 +1,5 @@
 import { HappyAgentApiError } from "@slopus/happy-agent-client";
 import { expect, it, vi } from "vitest";
-import { managedSettingsStoreCreate } from "../managedSettings/managedSettingsStore.js";
 import { UserError } from "../types.js";
 import { serverAddStoreCreate } from "./serverAddStore.js";
 import {
@@ -126,32 +125,6 @@ it("cancels a running attempt and ignores whatever it settles with afterwards", 
     await pending.promise;
     expect(onOutput).not.toHaveBeenCalled();
     expect(store.get().url).toBe("https://team.example.com");
-});
-
-it("adds only the organization's server when additional servers are not allowed", () => {
-    const { source, calls } = sourceCreate();
-    const managed = managedSettingsStoreCreate();
-    managed.writer.managedSettingsAdopt({
-        serverUrl: "https://happy.corp.example/",
-        allowAdditionalServers: false,
-    });
-    const store = serverAddStoreCreate({ source, managed: managed.store });
-
-    // The field's text is not what a locked form adds.
-    store.urlUpdate("https://elsewhere.example");
-    store.serverAddSubmit();
-    expect(calls.map((call) => call.url)).toEqual(["https://happy.corp.example"]);
-});
-
-it("refuses every server when the policy allows none", () => {
-    const { source, calls } = sourceCreate();
-    const managed = managedSettingsStoreCreate();
-    managed.writer.managedSettingsAdopt({ allowAdditionalServers: false });
-    const store = serverAddStoreCreate({ source, managed: managed.store });
-    store.urlUpdate("https://team.example.com");
-    store.serverAddSubmit();
-    expect(calls).toHaveLength(0);
-    expect(store.get().error?.code).toBe("server_not_allowed");
 });
 
 it("sends an edge's refusal straight to sign-in and checks Happy's own 401 first", () => {
