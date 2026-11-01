@@ -165,6 +165,7 @@ it("sends an edge's refusal straight to sign-in and checks Happy's own 401 first
     // Happy's own refusal is about permission, which signing in again would not change.
     expect(serverAuthFailure(new HappyAgentApiError(403, "x", "forbidden", null))).toBeUndefined();
     expect(serverAuthFailure(new HappyAgentApiError(500, "x", null, null))).toBeUndefined();
+    expect(serverAuthFailure(new HappyAgentApiError(304, "x", null, null))).toBeUndefined();
     expect(
         serverAuthFailure(
             new UserError(

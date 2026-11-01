@@ -42,9 +42,9 @@ export interface ServerSource {
  * contract.
  *
  * - `signInRequired`: the request never reached Happy, or Happy's sign-in is
- *   gone. That is any redirect, a `401` or `403` that is not Happy's own JSON
- *   (a load balancer enforcing SSO answers with its own page), or nothing
- *   else to go on.
+ *   gone. That is any redirect other than `304 Not Modified`, or a `401` or
+ *   `403` that is not Happy's own JSON: a load balancer enforcing SSO answers
+ *   with its own page.
  * - `authenticationCheck`: Happy itself answered `401`. That can be an expired
  *   sign-in or a member who has not finished onboarding, which the daemon
  *   reports the same way, so `GET /v0/authentication` with the same bearer
@@ -60,7 +60,9 @@ export function serverAuthFailure(error: unknown): ServerAuthFailure | undefined
     for (let current = error; current instanceof Error; current = current.cause) {
         if (!(current instanceof HappyAgentApiError)) continue;
         const happyJson = current.code !== null;
-        if (current.status >= 300 && current.status < 400) return "signInRequired";
+        // 304 answers a conditional read; it is not a redirect.
+        if (current.status >= 300 && current.status < 400 && current.status !== 304)
+            return "signInRequired";
         if (current.status === 401) return happyJson ? "authenticationCheck" : "signInRequired";
         if (current.status === 403 && !happyJson) return "signInRequired";
         return undefined;
