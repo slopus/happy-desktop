@@ -147,6 +147,7 @@ import {
     happyAgentArtifactChatContext,
     happyAgentSurfaceCatalogStoreNoop,
     happyAgentSurfaceSupportStoreNone,
+    type HappyAgentStoriesSnapshot,
     calendarTimeZones,
     happyAgentSurfaceReferenceFind,
     happyAgentSurfaceChatSupported,
@@ -283,6 +284,10 @@ import {
     type QuickActionsCardItem,
     SegmentedControl,
     Sidebar,
+    StoriesRow,
+    StoryViewer,
+    type StoryFace,
+    localAgoTime,
     SidebarFooter,
     SidebarAgentUpdate,
     SidebarUpdateAction,
@@ -612,6 +617,9 @@ export interface AppHappyAgentSession {
     readonly taskSettings?: () => import("happy-desktop-state").HappyAgentTaskSettingsStore;
     /** This connection's authenticated person's Surface membership preference. */
     readonly surfaceSettings?: () => import("happy-desktop-state").HappyAgentSurfaceSettingsStore;
+    /** This connection's person's `stories` setting, and the stories it shows them. */
+    readonly storiesSettings?: () => import("happy-desktop-state").HappyAgentAutoJoinSettingsStore;
+    readonly stories?: () => import("happy-desktop-state").HappyAgentStoriesStore;
     /** This Happy Agent's machine-wide instructions, as the settings window edits them. */
     readonly instructions?: HappyAgentInstructionsStore;
     /** This Happy Agent's machine-wide permission-review policy. */
@@ -1023,6 +1031,11 @@ function taskFace(task: HappyAgentTask): Pick<SidebarItem, "icon" | "imageUrl" |
               : {}),
     };
 }
+
+/** A bot's or task's story outline, by its Happy Agent and agent ids. */
+type StoryOutline = (happyAgentId: string, agentId: string) => Pick<SidebarItem, "story">;
+const STORIES_OFF: HappyAgentStoriesSnapshot = { mode: "off" };
+const storiesNone = { get: () => STORIES_OFF, subscribe: () => () => {} };
 
 /** Up to two initials from a person's name, for an owner with no photo. */
 function ownerInitials(name: string): string {
@@ -2256,6 +2269,7 @@ function voiceFocusInProjects(
 
 function happyAgentSections(
     directory: AppHappyAgentDirectorySnapshot,
+    storyOutline: StoryOutline,
     titleShimmerEnabled: boolean,
     projectsVisibility: ProjectsVisibilitySnapshot,
     attention: HappyAgentAttentionSnapshot,
@@ -2277,7 +2291,10 @@ function happyAgentSections(
                     if (botAttention === "hidden") return [];
                     const muted = botAttention === "muted";
                     return [
-                        botSidebarItem(bot, titleShimmerEnabled, muted),
+                        {
+                            ...botSidebarItem(bot, titleShimmerEnabled, muted),
+                            ...storyOutline(happyAgent.id, bot.conversation.id),
+                        },
                         ...botSubtaskSidebarItems(
                             bot.subtasks,
                             happyAgent.projects,
@@ -2321,7 +2338,14 @@ function happyAgentSections(
         // A Happy Agent from before tasks has no task list to show, so it
         // offers no heading that could only ever stand empty.
         ...(happyAgentTasksSupported(happyAgent)
-            ? [happyAgentTasksSection(happyAgent, titleShimmerEnabled, shortcutHappyAgentId)]
+            ? [
+                  happyAgentTasksSection(
+                      happyAgent,
+                      storyOutline,
+                      titleShimmerEnabled,
+                      shortcutHappyAgentId,
+                  ),
+              ]
             : []),
         // The reader's own choice in settings for this connection: the
         // section goes entirely, heading and all, rather than folding.
@@ -2340,6 +2364,7 @@ function happyAgentSections(
  */
 function happyAgentTasksSection(
     happyAgent: AppHappyAgentEntry,
+    storyOutline: StoryOutline,
     titleShimmerEnabled: boolean,
     shortcutHappyAgentId?: string,
 ): SidebarSection {
@@ -2353,7 +2378,10 @@ function happyAgentTasksSection(
         label: "Tasks",
         items: happyAgentSidebarTree(happyAgent)
             .tasks.flatMap((task) => [
-                taskSidebarItem(task, titleShimmerEnabled),
+                {
+                    ...taskSidebarItem(task, titleShimmerEnabled),
+                    ...storyOutline(happyAgent.id, task.conversation.id),
+                },
                 ...botSubtaskSidebarItems(task.subtasks, happyAgent.projects, titleShimmerEnabled),
             ])
             .map((item) => ({
@@ -2806,6 +2834,7 @@ function happyAgentSearchSections(
     titleShimmerEnabled: boolean,
     projectsVisibility: ProjectsVisibilitySnapshot,
     attention: HappyAgentAttentionSnapshot,
+    storyOutline: StoryOutline,
 ): SidebarSection[] {
     const needle = query.trim().toLocaleLowerCase();
     const matches = (text: string): boolean => text.toLocaleLowerCase().includes(needle);
@@ -2867,17 +2896,23 @@ function happyAgentSearchSections(
                     happyAgentBotAttention(attention, happyAgent.id, bot.id) !== "hidden",
             )
             .map((bot) =>
-                rowOf(
-                    botSidebarItem(
+                rowOf({
+                    ...botSidebarItem(
                         bot,
                         titleShimmerEnabled,
                         happyAgentBotAttention(attention, happyAgent.id, bot.id) === "muted",
                     ),
-                ),
+                    ...storyOutline(happyAgent.id, bot.conversation.id),
+                }),
             );
         const tasks = (happyAgent.tasks ?? [])
             .filter((task) => matches(task.name))
-            .map((task) => rowOf(taskSidebarItem(task, titleShimmerEnabled)));
+            .map((task) =>
+                rowOf({
+                    ...taskSidebarItem(task, titleShimmerEnabled),
+                    ...storyOutline(happyAgent.id, task.conversation.id),
+                }),
+            );
         const projects = projectsVisibilityConnection(projectsVisibility, happyAgent.id)
             .projectsHidden
             ? []
@@ -3388,6 +3423,44 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
         surfaceSupportStore.get,
         surfaceSupportStore.get,
     );
+    // The addressed Happy Agent's live stories: outlines on its bot and task rows, and the viewer.
+    const storiesStore = active?.session?.stories?.();
+    const stories = useSyncExternalStore(
+        storiesStore?.subscribe ?? storiesNone.subscribe,
+        storiesStore?.get ?? storiesNone.get,
+        storiesStore?.get ?? storiesNone.get,
+    );
+    const storyOpen = stories.mode === "on" ? stories.open : null;
+    // Who posted a story or replied: an agent by its bot or task, a person by their photo.
+    const storyPoster = (who: {
+        readonly poster: "agent" | "person";
+        readonly agentId: string;
+        readonly userId: string | null;
+    }): { name: string; face: StoryFace } => {
+        if (who.poster === "person") {
+            const person =
+                who.userId === null
+                    ? surfaceCatalog.profile
+                    : stories.mode === "on"
+                      ? stories.people.get(who.userId)
+                      : undefined;
+            const name = person?.name ?? "Someone";
+            const photo = person?.photo ? { imageUrl: person.photo.url } : {};
+            return { name, face: { initials: ownerInitials(name), type: "human", ...photo } };
+        }
+        const bot = active?.bots.find((each) => each.conversation.id === who.agentId);
+        const task = active?.tasks?.find((each) => each.conversation.id === who.agentId);
+        const name = bot?.name ?? task?.name ?? "Agent";
+        const face = task && !bot ? taskFace(task) : {};
+        const photo = bot?.avatar ? { imageUrl: bot.avatar.url } : {};
+        return { name, face: { initials: ownerInitials(name), ...face, ...photo, type: "agent" } };
+    };
+    // Only the addressed Happy Agent's rows, whose stories these are, wear outlines.
+    const storyOutline: StoryOutline = (happyAgentId, agentId) => {
+        const story =
+            stories.mode === "on" && happyAgentId === active?.id && stories.outlines.get(agentId);
+        return story ? { story } : {};
+    };
     /**
      * Opens what an artifact, bot, or task Surface points at, where it always
      * opens: the artifact viewer, or the bot's or task's own chat. Answers
@@ -3639,6 +3712,15 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                     // loading, and "Loading sessions…" under a footer saying the
                     // machine is unreachable is a promise nothing is keeping.
                     <Banner tone="neutral">Loading sessions…</Banner>
+                ) : stories.mode === "on" && storiesStore && stories.row.length > 0 ? (
+                    <StoriesRow
+                        items={stories.row.map((tile) => ({
+                            id: tile.key,
+                            state: tile.state,
+                            ...storyPoster(tile),
+                        }))}
+                        onOpen={storiesStore.tileOpen}
+                    />
                 ) : undefined
             }
             itemMenuItems={(item) => {
@@ -3938,6 +4020,14 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                         : workspace.worktreeCreate(owner.project.id)
                 ).catch(() => undefined);
             }}
+            onItemStoryOpen={(id) => {
+                const row = happyAgentItemParse(id);
+                const happyAgent = happyAgentOf(row.happyAgentId);
+                const owner = [...(happyAgent?.bots ?? []), ...(happyAgent?.tasks ?? [])].find(
+                    (entry) => entry.workspaceId === row.id,
+                );
+                if (owner) storiesStore?.agentOpen(owner.conversation.id);
+            }}
             // The cog on a project row. Only project rows carry one, and the
             // settings surface is the same one the row's menu opens.
             onItemSecondaryAction={(id) => {
@@ -4068,6 +4158,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                           titleShimmerEnabled,
                           projectsVisibility,
                           attention,
+                          storyOutline,
                       )
                     : [
                           happyAgentTopSection(
@@ -4080,6 +4171,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                           ...sectionsVoiceFocused(
                               happyAgentSections(
                                   directory,
+                                  storyOutline,
                                   titleShimmerEnabled,
                                   projectsVisibility,
                                   attention,
@@ -4490,6 +4582,39 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
             >
                 {routeContent()}
             </AppShell>
+            {storyOpen && storiesStore ? (
+                <StoryViewer
+                    caption={storyOpen.story.caption}
+                    key={storyOpen.story.id}
+                    media={{ kind: storyOpen.story.media.kind, url: storyOpen.mediaUrl }}
+                    notice={stories.mode === "on" ? stories.failure?.message : null}
+                    onClose={storiesStore.viewerClose}
+                    {...(storyOpen.story.canDelete ? { onDelete: storiesStore.storyDelete } : {})}
+                    onRepliesOpen={storiesStore.repliesOpen}
+                    onReplySend={storiesStore.replySend}
+                    {...(storyOpen.story.poster === "agent"
+                        ? { onRepost: storiesStore.storyRepost }
+                        : {})}
+                    onStep={storiesStore.storyStep}
+                    poster={storyPoster(storyOpen.story)}
+                    replies={storyOpen.replies.map((reply) => ({
+                        id: reply.id,
+                        text: reply.text,
+                        ...storyPoster({ poster: "person", agentId: "", userId: reply.userId }),
+                    }))}
+                    replyCount={storyOpen.story.replyCount}
+                    {...(storyOpen.story.repostOf !== null
+                        ? {
+                              repost: {
+                                  from: storyPoster({ ...storyOpen.story, poster: "agent" }).name,
+                                  roundUrl: storyOpen.roundUrl,
+                              },
+                          }
+                        : {})}
+                    segment={storyOpen.segment}
+                    time={localAgoTime(storyOpen.story.postedAt, active?.session?.clock.get() ?? 0)}
+                />
+            ) : null}
             {/* Command-K belongs to the window rather than to a workspace: it is
                 offered on every route, including the ones no machine is behind.
                 It only opens. The dispatcher stands down while any dialog is

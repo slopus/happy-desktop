@@ -78,6 +78,8 @@ import {
     HappyAgentSecretSettings,
     HappyAgentSettingsShell,
     HappyAgentTaskSettings,
+    HappyAgentAutoJoinSettings,
+    type HappyAgentTaskSettingsProps,
     HappyAgentSurfaceSettings,
     GptLiveSettings,
     HappyAgentStateSettings,
@@ -1015,6 +1017,7 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                     >
                         <AppHappyAgentAutoJoinSettings entry={entry} entity="task" />
                         <AppHappyAgentAutoJoinSettings entry={entry} entity="surface" />
+                        <AppHappyAgentAutoJoinSettings entry={entry} entity="stories" />
                     </HappyAgentConnectionSettingsSection>
                 ))
             ) : section === "account" ? (
@@ -1444,16 +1447,29 @@ function entryUnavailable(entry: AppHappyAgentEntry): { readonly unavailable?: s
         : {};
 }
 
+/** The `stories` switch, left out on a daemon without stories. */
+const HappyAgentStoriesSettings = (props: HappyAgentTaskSettingsProps) =>
+    props.status === "unsupported" ? null : (
+        <HappyAgentAutoJoinSettings
+            {...props}
+            entity="Stories"
+            label="Stories"
+            description="See the stories your agents post, and let them post."
+        />
+    );
+
 /** Each connection owns one preference store and one coarse subscription while this page is open. */
 function AppHappyAgentAutoJoinSettings(props: {
     readonly entry: AppHappyAgentEntry;
-    readonly entity: "task" | "surface";
+    readonly entity: "task" | "surface" | "stories";
 }) {
     const { entry } = props;
     const taskStore = props.entity === "task" ? entry.session?.taskSettings?.() : undefined;
     const surfaceStore =
         props.entity === "surface" ? entry.session?.surfaceSettings?.() : undefined;
-    const store = taskStore ?? surfaceStore;
+    const storiesStore =
+        props.entity === "stories" ? entry.session?.storiesSettings?.() : undefined;
+    const store = taskStore ?? surfaceStore ?? storiesStore;
     const snapshot = useSyncExternalStore(
         store?.subscribe ?? noSubscribe,
         store?.get ?? autoJoinSettingsUnloaded,
@@ -1473,7 +1489,11 @@ function AppHappyAgentAutoJoinSettings(props: {
               : snapshot.status === "ready" && !snapshot.online
                 ? "Reconnecting to this connection’s user settings."
                 : undefined;
-    const Settings = props.entity === "task" ? HappyAgentTaskSettings : HappyAgentSurfaceSettings;
+    const Settings = {
+        task: HappyAgentTaskSettings,
+        surface: HappyAgentSurfaceSettings,
+        stories: HappyAgentStoriesSettings,
+    }[props.entity];
     return (
         <Settings
             connectionLabel={entry.label}
@@ -1491,6 +1511,7 @@ function AppHappyAgentAutoJoinSettings(props: {
                 if (availability?.online) {
                     if (props.entity === "task") taskStore?.taskAutoJoinUpdate(enabled);
                     else surfaceStore?.surfaceAutoJoinUpdate(enabled);
+                    storiesStore?.autoJoinUpdate(enabled);
                 }
             }}
         />

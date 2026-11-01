@@ -1,0 +1,225 @@
+/* A row's live story: the tile's own outline, concentric with its corners; the square over it opens it. */
+.happy-sidebar__item-story {
+    position: absolute;
+    width: 26px;
+    height: 26px;
+    cursor: pointer;
+}
+
+.happy-sidebar__item-leading:has(> .happy-sidebar__item-story) > .happy-avatar,
+.happy-stories-row__item > .happy-avatar {
+    outline: 1.5px solid var(--radio-active);
+    outline-offset: 1.5px;
+}
+
+.happy-sidebar__item-leading:has(> [data-seen]) > .happy-avatar,
+.happy-stories-row__item[data-seen] > .happy-avatar {
+    outline-color: color-mix(in srgb, var(--text-secondary) 50%, transparent);
+}
+
+/* The posters with live stories, across the top of the sidebar. */
+.happy-stories-row {
+    display: flex;
+    gap: 8px;
+    padding: 8px 12px;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+
+.happy-stories-row__item {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    width: 52px;
+    padding: 4px 0 0;
+    border: 0;
+    background: none;
+    color: var(--text-secondary);
+    font: 11px / 14px var(--happy-font-ui);
+}
+
+.happy-stories-row__item > span {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-story-viewer {
+    position: fixed;
+    z-index: var(--happy-z-overlay);
+    inset: 0;
+    display: flex;
+    justify-content: center;
+    padding: 24px;
+    background: var(--surface-high);
+    color: var(--text);
+    font: 14px / 19px var(--happy-font-ui);
+    outline: none;
+}
+
+/* The frame never moves: everything over it is laid on top. */
+.happy-story-viewer__frame {
+    position: relative;
+    aspect-ratio: 9 / 16;
+    overflow: hidden;
+    border-radius: 12px;
+    background: var(--surface);
+}
+
+.happy-story-viewer__media,
+.happy-story-viewer__half {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.happy-story-viewer__half {
+    width: 50%;
+    border: 0;
+    background: none;
+}
+
+.happy-story-viewer__half[data-next] {
+    left: 50%;
+}
+
+.happy-story-viewer__top,
+.happy-story-viewer__bottom,
+.happy-story-viewer__drawer {
+    position: absolute;
+    right: 0;
+    left: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px;
+}
+
+.happy-story-viewer__top {
+    top: 0;
+    pointer-events: none;
+    background: linear-gradient(rgb(0 0 0 / 55%), transparent);
+}
+
+.happy-story-viewer__bottom {
+    bottom: 0;
+    pointer-events: none;
+    padding-top: 48px;
+    background: linear-gradient(transparent, rgb(0 0 0 / 65%));
+}
+
+.happy-story-viewer__top button,
+.happy-story-viewer__bottom > * {
+    pointer-events: auto;
+}
+
+.happy-story-viewer p {
+    margin: 0;
+}
+
+.happy-story-viewer__segments,
+.happy-story-viewer__head,
+.happy-story-viewer__chip,
+.happy-story-viewer__record,
+.happy-story-viewer__peek > span,
+.happy-story-viewer__drawer > div > span {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.happy-story-viewer__segments {
+    gap: 3px;
+}
+
+.happy-story-viewer__segments > span {
+    flex: 1;
+    height: 2px;
+    background: var(--text);
+    opacity: 0.35;
+}
+
+.happy-story-viewer__segments > [data-on] {
+    opacity: 1;
+}
+
+.happy-story-viewer__head > span,
+.happy-story-viewer__peek > u {
+    margin-right: auto;
+    color: var(--text-secondary);
+    text-decoration: none;
+}
+
+.happy-story-viewer__round {
+    position: absolute;
+    top: 92px;
+    left: 12px;
+    width: 96px;
+    height: 96px;
+    border-radius: 50%;
+    object-fit: cover;
+    box-shadow: 0 0 0 2px var(--text);
+}
+
+.happy-story-viewer__peek,
+.happy-story-viewer__drawer > div {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    overflow-y: auto;
+}
+
+.happy-story-viewer__bottom input {
+    box-sizing: border-box;
+    width: 100%;
+    height: 36px;
+    padding: 0 14px;
+    border: 1px solid color-mix(in srgb, var(--text) 35%, transparent);
+    border-radius: 12px;
+    background: rgb(0 0 0 / 25%);
+    color: inherit;
+    font: inherit;
+}
+
+.happy-story-viewer__drawer {
+    bottom: 0;
+    max-height: 70%;
+    background: var(--surface);
+}
+
+/* The drawer's head is its handle: dragged or swiped down, it closes. */
+.happy-story-viewer__drawer > header {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-secondary);
+    touch-action: none;
+}
+
+.happy-story-viewer__grabber {
+    width: 36px;
+    height: 4px;
+    background: var(--text-secondary);
+}
+
+.happy-story-viewer__close {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    border: 0;
+    background: none;
+    color: var(--text);
+}

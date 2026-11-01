@@ -197,6 +197,8 @@ export type SidebarItem = {
      * go without the sidebar claiming they already went there.
      */
     voiceFocus?: boolean;
+    /** A live story, outlined on the mark (accent unseen, grey seen); the mark opens it. */
+    story?: "unseen" | "seen";
 };
 /**
  * Left inset of the row content at depth 0: `--happy-sidebar-row-leading`,
@@ -524,6 +526,8 @@ export type SidebarProps = Omit<HTMLAttributes<HTMLElement>, "style"> & {
     onItemAction?: (id: string) => void;
     /** Invoked when a row's name-side `secondaryAction` control is used. */
     onItemSecondaryAction?: (id: string) => void;
+    /** Invoked when the outline of a row's `story` is clicked. */
+    onItemStoryOpen?: (id: string) => void;
     /**
      * Enables arranging the pinned `actions` and reports the one move a drag or
      * a keyboard move made. Without it the pinned rows are fixed, which is what
@@ -1438,6 +1442,7 @@ interface SidebarRowHandlers {
     readonly renameSubmit: (key: string, name: string) => void;
     readonly secondaryAction: (key: string) => void;
     readonly select: (id: string) => void;
+    readonly storyOpen: (key: string) => void;
 }
 
 /** One section row, rendered again only when its own props change. */
@@ -1449,6 +1454,7 @@ const SidebarListRow = memo(function SidebarListRow({
     canCollapse,
     canRename,
     canSecondaryAction,
+    canStoryOpen,
     ...rest
 }: {
     handlers: SidebarRowHandlers;
@@ -1460,6 +1466,7 @@ const SidebarListRow = memo(function SidebarListRow({
     canCollapse: boolean;
     canRename: boolean;
     canSecondaryAction: boolean;
+    canStoryOpen: boolean;
     active: boolean;
     /** See `SidebarRow.tabStop`. */
     tabStop?: boolean;
@@ -1499,6 +1506,7 @@ const SidebarListRow = memo(function SidebarListRow({
             onPointerMove={rest.reorderable ? handlers.pointerMove : undefined}
             onPointerUp={rest.reorderable ? (event) => handlers.pointerUp(rowId, event) : undefined}
             onCollapseToggle={canCollapse ? () => handlers.collapseToggle(rowId) : undefined}
+            onStoryOpen={canStoryOpen ? () => handlers.storyOpen(rowId) : undefined}
             onAction={canAction ? () => handlers.action(rowId) : undefined}
             onSecondaryAction={
                 canSecondaryAction ? () => handlers.secondaryAction(rowId) : undefined
@@ -1547,6 +1555,8 @@ function SidebarRow({
     onSecondaryAction?: () => void;
     /** Folds or unfolds this row; absent when the row draws no fold control. */
     onCollapseToggle?: () => void;
+    /** Opens the row's live story; absent when it has none. */
+    onStoryOpen?: () => void;
     /**
      * The row holds rows under it that its `collapsed` shows or hides, whether
      * or not it draws a fold control: it says so to assistive technology.
@@ -1801,6 +1811,11 @@ function SidebarRow({
             : controls * SIDEBAR_SLOT_CELL + (controls - 1) * SIDEBAR_CONTROL_GAP;
     };
     const foldInBranch = () => !showsLeadingSlot(item()) && !activityLeading();
+    // A live story owns the mark of an open row, so no chevron is laid over it; a
+    // shut row keeps its chevron there, or what it folded away could not come back.
+    const markFolds = () =>
+        props.onCollapseToggle !== undefined &&
+        (props.foldControlPlacement === "trailing" || !props.onStoryOpen || !!item().collapsed);
     // A trailing fold puts the row in fixed lanes: name and marks, then controls, then the fold.
     const lanes = props.foldControlPlacement === "trailing";
     // The row is already a button, so its pointer disclosure stays a span.
@@ -1964,8 +1979,8 @@ function SidebarRow({
             /* Both are needed and neither implies the other: a row that folds is
                styled as one whether it is open or shut, and a row still says it
                is shut while the pointer is elsewhere. */
-            data-collapsed={props.onCollapseToggle && item().collapsed ? "" : undefined}
-            data-foldable={props.onCollapseToggle ? "" : undefined}
+            data-collapsed={markFolds() && item().collapsed ? "" : undefined}
+            data-foldable={markFolds() ? "" : undefined}
             data-fold-placement={props.foldControlPlacement}
             data-fold-reveal={item().foldReveal}
             data-fold-in-branch={props.onCollapseToggle && foldInBranch() ? "" : undefined}
@@ -2105,7 +2120,23 @@ function SidebarRow({
                     ) : !showsLeadingSlot(item()) ? null : item().kind === "person" ||
                       item().kind === "agent" ||
                       item().kind === "project" ? (
-                        identityMark()
+                        <>
+                            {identityMark()}
+                            {item().story && props.onStoryOpen ? (
+                                /* A pointer target over the mark, as the fold is; the row stays the one button. */
+                                <span
+                                    aria-hidden="true"
+                                    className="happy-sidebar__item-story"
+                                    data-happy-desktop-ui="sidebar-item-story"
+                                    data-seen={item().story === "seen" ? "" : undefined}
+                                    onClick={(event) => {
+                                        event.stopPropagation();
+                                        props.onStoryOpen?.();
+                                    }}
+                                    onPointerDown={(event) => event.stopPropagation()}
+                                />
+                            ) : null}
+                        </>
                     ) : item().emoji !== undefined ? (
                         /* The character the reader chose, in a fixed square the
                            same size as the glyph lane beside it, so a row whose
@@ -2144,7 +2175,9 @@ function SidebarRow({
                         row. A row that is shut keeps it showing: the reader has
                         to be able to find the work they folded away without
                         sweeping the column to see which rows answer. */}
-                    {props.foldControlPlacement !== "trailing" ? foldControl() : null}
+                    {props.foldControlPlacement !== "trailing" && markFolds()
+                        ? foldControl()
+                        : null}
                 </span>
             ) : null}
             <>
@@ -2506,6 +2539,7 @@ export function Sidebar(props: SidebarProps) {
         "onItemIntent",
         "onItemAction",
         "onItemSecondaryAction",
+        "onItemStoryOpen",
         "onItemMenuSelect",
         "onItemCollapseToggle",
         "itemFoldControls",
@@ -3932,6 +3966,8 @@ export function Sidebar(props: SidebarProps) {
         return {
             action: (key) =>
                 void latest().act(key, ({ item }) => latest().local.onItemAction?.(item.id)),
+            storyOpen: (key) =>
+                void latest().act(key, ({ item }) => latest().local.onItemStoryOpen?.(item.id)),
             collapseToggle: (key) => {
                 // A section folds from a click on the whole row, and the click
                 // that ends a drag of one is not that.
@@ -4717,6 +4753,10 @@ export function Sidebar(props: SidebarProps) {
                                                     canSecondaryAction={
                                                         local.onItemSecondaryAction !== undefined &&
                                                         item.secondaryAction !== undefined
+                                                    }
+                                                    canStoryOpen={
+                                                        local.onItemStoryOpen !== undefined &&
+                                                        item.story !== undefined
                                                     }
                                                     active={item.id === local.activeItemId}
                                                     activityPlacement={local.activityPlacement}

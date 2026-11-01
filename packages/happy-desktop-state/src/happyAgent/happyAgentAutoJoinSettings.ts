@@ -16,8 +16,8 @@ export type HappyAgentAutoJoinSettingsSnapshot =
           readonly saveError?: UserError;
       };
 
-/** Private shared lifetime for the two server-owned membership preferences. */
-interface HappyAgentAutoJoinSettingsStore {
+/** Shared lifetime for the server-owned on/off preferences: membership and stories. */
+export interface HappyAgentAutoJoinSettingsStore {
     get(): HappyAgentAutoJoinSettingsSnapshot;
     subscribe(listener: () => void): () => void;
     autoJoinUpdate(enabled: boolean): void;
@@ -33,15 +33,17 @@ export const HAPPY_AGENT_SURFACE_AUTO_JOIN_PROTOCOL_VERSION = 31;
 /** No device fallback: only the server can apply these preferences or join entities. */
 export function happyAgentAutoJoinSettingsCreate(
     source: HappyAgentUserSettingsSource,
-    key: "tasks.autoJoin" | "surfaces.autoJoin",
+    key: "tasks.autoJoin" | "surfaces.autoJoin" | "stories",
 ): HappyAgentAutoJoinSettingsStore {
+    // Membership is on unless saved false; stories are off unless saved true.
+    const optIn = key === "stories";
     const driver = happyAgentUserSettingsCreate<boolean>({
-        empty: true,
+        empty: !optIn,
         equal: (left, right) => left === right,
         keyAccept: (candidate) => candidate === key,
-        decode: (values) => values.get(key) !== false,
-        encode: (enabled) => new Map([[key, enabled ? null : false]]),
-        deviceParse: () => true,
+        decode: (values) => (optIn ? values.get(key) === true : values.get(key) !== false),
+        encode: (enabled) => new Map([[key, enabled === optIn ? enabled : null]]),
+        deviceParse: () => !optIn,
         deviceSerialize: () => undefined,
     });
     const listeners = new Set<() => void>();
@@ -53,16 +55,21 @@ export function happyAgentAutoJoinSettingsCreate(
     let snapshot: HappyAgentAutoJoinSettingsSnapshot = LOADING;
     const get = (): HappyAgentAutoJoinSettingsSnapshot => {
         const current = driver.get();
-        const protocol =
-            key === "surfaces.autoJoin" ? source.sync.health()?.version.protocol : undefined;
+        const health = source.sync.health();
+        const protocol = health?.version.protocol;
         const support =
             key === "tasks.autoJoin"
                 ? "supported"
-                : protocol === undefined
-                  ? "checking"
-                  : protocol >= HAPPY_AGENT_SURFACE_AUTO_JOIN_PROTOCOL_VERSION
-                    ? "supported"
-                    : "unsupported";
+                : key === "stories"
+                  ? // Stories exist only on a daemon that says so; until then they are not offered.
+                    health?.capabilities?.storyFeed
+                      ? "supported"
+                      : "unsupported"
+                  : protocol === undefined
+                    ? "checking"
+                    : protocol >= HAPPY_AGENT_SURFACE_AUTO_JOIN_PROTOCOL_VERSION
+                      ? "supported"
+                      : "unsupported";
         if (previous === current && previousSupport === support) return snapshot;
         previous = current;
         previousSupport = support;
@@ -106,6 +113,9 @@ export function happyAgentAutoJoinSettingsCreate(
                       health: () => source.sync.health(),
                       async *follow(options) {
                           for await (const input of source.sync.follow(options)) {
+                              // A daemon without stories is never asked for their setting.
+                              const storyless = key === "stories" && get().status === "unsupported";
+                              if (storyless && input.kind !== "bootstrap") continue;
                               yield input;
                               // Health is recorded before sync input. Check after the driver
                               // processes it: an upgrade can change support without changing

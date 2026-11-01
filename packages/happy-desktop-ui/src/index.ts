@@ -59,6 +59,13 @@ export {
     type NightSkyShaderProps,
 } from "./NightSkyShader";
 export { SplitColumn, type SplitColumnProps } from "./SplitColumn";
+export { StoriesRow, type StoriesRowItem } from "./StoriesRow";
+export {
+    StoryViewer,
+    type StoryFace,
+    type StoryViewerProps,
+    type StoryViewerReply,
+} from "./StoryViewer";
 export {
     AGENT_WORKING_STATUS_ROW_HEIGHT,
     AgentWorkingStatus,
@@ -910,6 +917,7 @@ export {
     HappyAgentTaskSettings,
     type HappyAgentTaskSettingsProps,
 } from "./pages/settings/HappyAgentTaskSettings";
+export { HappyAgentAutoJoinSettings } from "./pages/settings/HappyAgentAutoJoinSettings";
 export {
     HappyAgentConnectionSettingsSection,
     type HappyAgentConnectionSettingsSectionProps,

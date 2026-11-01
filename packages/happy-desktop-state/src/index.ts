@@ -232,6 +232,8 @@ export * from "./happyAgent/happyAgentSidebarCollapseStore.js";
 export * from "./happyAgent/happyAgentSidebarSearchStore.js";
 export * from "./happyAgent/happyAgentAttentionStore.js";
 export * from "./happyAgent/happyAgentTaskSettingsStore.js";
+export * from "./stories/storiesStore.js";
+export type { HappyAgentAutoJoinSettingsStore } from "./happyAgent/happyAgentAutoJoinSettings.js";
 export * from "./happyAgent/happyAgentSurfaceSettingsStore.js";
 export * from "./happyAgent/happyAgentSidebarTree.js";
 export * from "./happyAgent/happyAgentSidebarVisibilityStore.js";
