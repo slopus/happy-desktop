@@ -3,7 +3,6 @@ import {
     happyAgentConnectionsStoreCreate,
     happyAgentNodeStoreCreate,
     happyAgentUserError,
-    happyInstanceIdOf,
     serverAuthenticationOutcome,
     serverAuthFailure,
     type HappyAgentConnectionItem,
@@ -288,11 +287,20 @@ function connectionRead(
 }
 
 /**
- * The instance the daemon last reported, kept through a reconnect that has not
- * read health again: the same connection reaches the same installation.
+ * The instance this connection's own health reports. Until it has answered, the
+ * one the main daemon's roster last saw for it stands in, and a reconnect that
+ * has not read health again keeps the last: the same connection reaches the
+ * same installation.
  */
-function instanceIdRead(happyAgent: LocalHappyAgent): string | undefined {
-    return happyInstanceIdOf(happyAgent.connection?.sync.health()) ?? happyAgent.entry.instanceId;
+function instanceIdRead(
+    happyAgent: LocalHappyAgent,
+    roster?: HappyAgentConnectionItem,
+): string | undefined {
+    return (
+        happyAgent.connection?.sync.health()?.instanceId ??
+        roster?.instanceId ??
+        happyAgent.entry.instanceId
+    );
 }
 
 function connectionStatusRead(
@@ -776,6 +784,9 @@ export function happyAgentDirectoryStoreCreate(
                                 ...(item.organizationId === undefined
                                     ? {}
                                     : { organizationId: item.organizationId }),
+                                ...(item.instanceId === undefined
+                                    ? {}
+                                    : { instanceId: item.instanceId }),
                                 label: item.name,
                                 bots: [],
                                 botsCreating: [],
@@ -794,18 +805,25 @@ export function happyAgentDirectoryStoreCreate(
                             client.connection(item.remoteId),
                             `${base}/connections/${item.remoteId}`,
                         );
-                    } else if (
-                        remote.entry.label !== item.name ||
-                        remote.entry.organizationId !== item.organizationId
-                    ) {
-                        const { organizationId: _previous, ...entry } = remote.entry;
-                        remote.entry = {
-                            ...entry,
-                            label: item.name,
-                            ...(item.organizationId === undefined
-                                ? {}
-                                : { organizationId: item.organizationId }),
-                        };
+                    } else {
+                        // The roster names a remote's instance before it has
+                        // connected here, so its links are matched at once.
+                        const instanceId = instanceIdRead(remote, item);
+                        if (
+                            remote.entry.label !== item.name ||
+                            remote.entry.organizationId !== item.organizationId ||
+                            remote.entry.instanceId !== instanceId
+                        ) {
+                            const { organizationId: _previous, ...entry } = remote.entry;
+                            remote.entry = {
+                                ...entry,
+                                label: item.name,
+                                ...(item.organizationId === undefined
+                                    ? {}
+                                    : { organizationId: item.organizationId }),
+                                instanceId,
+                            };
+                        }
                     }
                 }
                 publish();

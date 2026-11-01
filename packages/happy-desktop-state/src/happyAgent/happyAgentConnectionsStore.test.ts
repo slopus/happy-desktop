@@ -76,3 +76,35 @@ it("ignores a remembered entry that does not name its own connection", () => {
     stores.push(store);
     expect(store.get().items.map((item) => item.id)).toEqual(["local"]);
 });
+
+it("carries the instance the main daemon saw for each remote, and remembers it", async () => {
+    const TEAM = "k3x9q2m7p0a4b8c1d5e6f7g2";
+    const listed = {
+        connections: [{ ...remote("team", "Team"), instanceId: TEAM }, remote("lab", "Lab")],
+        version: "v2",
+    } as ConnectionListResponse;
+    const client = { listConnections: vi.fn(async () => listed) } as unknown as HappyAgentClient;
+    let kept: readonly HappyAgentConnectionItem[] | undefined;
+    const { source, writer } = happyAgentSyncCreate();
+    const store = happyAgentConnectionsStoreCreate(client, source, {
+        read: () => kept,
+        write: (items) => {
+            kept = items;
+        },
+    });
+    stores.push(store);
+    store.subscribe(() => undefined);
+    const daemon = fakeHappyAgentDaemonCreate();
+    writer.bootstrapReceived(await daemon.client.getDesktopBootstrap());
+    await vi.waitFor(() => expect(store.get().items).toHaveLength(3));
+    expect(store.get().items[1]).toEqual({
+        id: "connection:team",
+        name: "Team",
+        remoteId: "team",
+        instanceId: TEAM,
+    });
+    // A remote the main daemon has not reached yet names none.
+    expect(store.get().items[2]).not.toHaveProperty("instanceId");
+    // The next start matches links to it before it is asked again.
+    expect(kept?.[0]?.instanceId).toBe(TEAM);
+});

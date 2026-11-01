@@ -1,9 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import {
-    happyExternalLinkFormat,
-    happyExternalLinkParse,
-    happyInstanceIdOf,
-} from "./happyInstanceLink.js";
+import { happyExternalLinkFormat, happyExternalLinkParse } from "./happyInstanceLink.js";
 import { happyLinkInboxStoreCreate, type HappyLinkTarget } from "./happyLinkInboxStore.js";
 
 const TEAM = "k3x9q2m7p0a4b8c1d5e6f7g2";
@@ -39,7 +35,7 @@ it("reads only instance links whose remainder is a well-formed internal link", (
         expect(happyExternalLinkParse(url), url).toEqual({ kind: "unsupported" });
 });
 
-it("writes the external form only for internal links, and reads a health's instance", () => {
+it("writes the external form only for Happy links that name no instance yet", () => {
     expect(happyExternalLinkFormat(TEAM, ARTIFACT)).toBe(
         `happy://${TEAM}/artifacts/abc123?version=2`,
     );
@@ -47,9 +43,6 @@ it("writes the external form only for internal links, and reads a health's insta
     expect(happyExternalLinkFormat("bad", ARTIFACT)).toBe(ARTIFACT);
     const external = happyExternalLinkFormat(TEAM, ARTIFACT);
     expect(happyExternalLinkFormat(LOCAL, external)).toBe(external);
-    expect(happyInstanceIdOf({ instanceId: TEAM } as never)).toBe(TEAM);
-    expect(happyInstanceIdOf({ instanceId: "short" } as never)).toBeUndefined();
-    expect(happyInstanceIdOf({} as never)).toBeUndefined();
 });
 
 function inbox(targets: Map<string, HappyLinkTarget>) {
