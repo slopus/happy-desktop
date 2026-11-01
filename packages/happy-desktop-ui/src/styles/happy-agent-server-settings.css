@@ -1,0 +1,16 @@
+/*
+ * Server settings — the address field and the button that adds it, on one line.
+ * The button keeps its own width; the field takes what is left.
+ */
+
+.happy-agent-server-settings__field {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    min-width: 0;
+}
+
+.happy-agent-server-settings__input {
+    flex: 1 1 auto;
+    min-width: 0;
+}

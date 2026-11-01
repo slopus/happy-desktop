@@ -948,6 +948,11 @@ export {
     type HappyAgentProductAnalyticsSettingsProps,
 } from "./pages/settings/HappyAgentProductAnalyticsSettings";
 export {
+    HappyAgentServerSettings,
+    type HappyAgentServerAddPhase,
+    type HappyAgentServerSettingsProps,
+} from "./pages/settings/HappyAgentServerSettings";
+export {
     HappyAgentAccountSettings,
     type HappyAgentAccountSettingsProps,
 } from "./pages/settings/HappyAgentAccountSettings";

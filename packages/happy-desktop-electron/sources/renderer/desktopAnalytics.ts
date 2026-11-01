@@ -17,11 +17,16 @@ import {
 import {
     happyAgentBotSubtasks,
     happyAgentTaskDepths,
+    managedAnalyticsAllowed,
+    managedSettingsOf,
+    managedSettingsStoreAbsent,
     usageAnalyticsStoreCreate,
     type ExperimentsOutput,
     type HappyAgentActionResult,
     type HappyAgentActivity,
     type HappyAgentActivityModel,
+    type ManagedSettingsSnapshot,
+    type ManagedSettingsStore,
     type UsageAnalyticsDocument,
     type UsageAnalyticsPersistence,
     type UsageAnalyticsStore,
@@ -283,6 +288,19 @@ function commandKindOf(
 }
 
 /**
+ * Whether an event may be sent: the organization's `analyticsEnabled` when it
+ * set one, otherwise the person's own switch, and nothing while the policy is
+ * still being read.
+ */
+export function desktopAnalyticsAllowed(
+    userEnabled: boolean,
+    managed: ManagedSettingsSnapshot,
+): boolean {
+    if (!managedAnalyticsAllowed(managed)) return false;
+    return managedSettingsOf(managed).analyticsEnabled ?? userEnabled;
+}
+
+/**
  * The desktop's analytics: one client for the window, the common fields read
  * from the Happy Agent each event happened on, and the observers that turn
  * product state into catalog events. Development windows send nothing.
@@ -292,17 +310,24 @@ export function desktopAnalyticsCreate(options: {
     readonly happyAgents: HappyAgentDirectoryStore;
     /** What the shell says about this machine; absent from older shells. */
     readonly system?: DesktopSystem;
+    /**
+     * The organization's fixed settings. A set `analyticsEnabled` decides alone,
+     * and nothing is sent while the policy is still being read.
+     */
+    readonly managedSettings?: ManagedSettingsStore;
     /** Replaces the PostHog client, for tests. */
     readonly client?: AnalyticsClient;
 }): DesktopAnalytics {
     const preference = usageAnalyticsStoreCreate(usageAnalyticsPersistence());
+    const managed = options.managedSettings ?? managedSettingsStoreAbsent;
     const installation = installId();
     const client: AnalyticsClient =
         options.client ??
         analyticsClientCreate({
             apiKey: options.development ? undefined : (__HAPPY_POSTHOG_API_KEY__ ?? undefined),
             distinctId: installation,
-            enabled: () => preference.get().usageAnalyticsEnabled,
+            enabled: () =>
+                desktopAnalyticsAllowed(preference.get().usageAnalyticsEnabled, managed.get()),
         });
     // Loaded now rather than on the first event, so an event sent as the
     // window closes in its first seconds still has a library to send it.

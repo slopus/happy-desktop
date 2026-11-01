@@ -24,6 +24,8 @@ import type {
     GptLiveStore,
     HappyAgentGroupId,
     UsageAnalyticsStore,
+    ManagedSettingsStore,
+    ServerAddStore,
     KeepAwakeStore,
     StatusBarStore,
     HappyAgentFileTabKind,
@@ -144,6 +146,10 @@ export interface HappyAgentRouterContext {
     readonly projectsVisibility?: ProjectsVisibilityStore;
     /** Whether this window sends product analytics events. Absent where it sends none. */
     readonly usageAnalytics?: UsageAnalyticsStore;
+    /** The organization's fixed settings. Absent where the host reads none. */
+    readonly managedSettings?: ManagedSettingsStore;
+    /** Adds team servers by address. Absent where the host cannot add them. */
+    readonly servers?: ServerAddStore;
     /** Window-owned GPT-Live opt-in; unrelated to coding-provider settings. */
     readonly gptLive?: GptLiveStore;
     /**
@@ -763,6 +769,8 @@ function HappyAgentSettingsRoute() {
                 ? { projectsVisibility: context.projectsVisibility }
                 : {})}
             {...(context.usageAnalytics ? { usageAnalytics: context.usageAnalytics } : {})}
+            {...(context.managedSettings ? { managedSettings: context.managedSettings } : {})}
+            {...(context.servers ? { servers: context.servers } : {})}
             {...(context.gptLive ? { gptLive: context.gptLive } : {})}
             {...(context.keepAwake ? { keepAwake: context.keepAwake } : {})}
             {...(context.statusBar ? { statusBar: context.statusBar } : {})}

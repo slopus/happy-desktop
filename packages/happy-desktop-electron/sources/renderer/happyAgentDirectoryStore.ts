@@ -2,11 +2,15 @@ import {
     HappyAgentClient,
     happyAgentConnectionsStoreCreate,
     happyAgentNodeStoreCreate,
+    happyAgentUserError,
+    serverSignInRequired,
     type HappyAgentConnectionItem,
     type HappyAgentConnectionsPersistence,
     type HappyAgentConnectionsStore,
     type HappyAgentNodeIdentity,
     type HappyAgentNodeStore,
+    type ManagedSettingsStore,
+    type ServerSource,
 } from "happy-desktop-state";
 import type {
     HappyAgentActivity,
@@ -75,6 +79,12 @@ const NO_SUBTASK_FAILURES: HappyAgentSessionListSnapshot["subtaskFailures"] = ne
 const NO_TASKS: HappyAgentSessionListSnapshot["tasks"] = [];
 const NO_TASK_FAILURES: HappyAgentSessionListSnapshot["taskFailures"] = new Map();
 
+/** Where signing in again to one server stands. */
+export type HappyAgentDirectorySignIn =
+    | { readonly phase: "required" }
+    | { readonly phase: "browser"; readonly host: string }
+    | { readonly phase: "failed"; readonly message: string };
+
 export interface HappyAgentDirectoryEntry {
     readonly id: string;
     readonly remoteId?: string;
@@ -107,6 +117,8 @@ export interface HappyAgentDirectoryEntry {
     readonly taskFailures: HappyAgentSessionListSnapshot["taskFailures"];
     readonly session?: HappyAgentSession;
     readonly setup?: HappyAgentConnectionHandle["setup"];
+    /** The server refused this window's sign-in; absent while it holds. */
+    readonly signIn?: HappyAgentDirectorySignIn;
 }
 
 export interface HappyAgentDirectorySnapshot {
@@ -122,10 +134,19 @@ export interface HappyAgentDirectoryStore {
     subscribe(listener: () => void): () => void;
     happyAgentActivate(id: string): void;
     happyAgentReorder(id: string, afterId: string | null): void;
+    /** Signs in again to a remote that wants it; absent without a server source. */
+    happyAgentSignIn?(id: string): void;
 }
 
 export interface HappyAgentDirectoryDeps {
     readonly cloudHostFor: (id: string) => HappyAgentCloudHost;
+    /** The organization's fixed settings, read when a connection's onboarding starts. */
+    readonly managedSettings?: ManagedSettingsStore;
+    /**
+     * Where a remote whose sign-in ended is signed in again. Absent on a host
+     * that cannot, which leaves such a remote pointing at Settings.
+     */
+    readonly servers?: ServerSource;
     readonly conversationOpen: (happyAgentId: string, location: HappyAgentSessionLocation) => void;
     readonly groupOpen: (happyAgentId: string, groupId: string) => void;
     /**
@@ -184,6 +205,8 @@ export interface HappyAgentDirectoryDeps {
 
 interface LocalHappyAgent {
     connection?: HappyAgentConnectionHandle;
+    /** The sign-in this window is running for this remote, if any. */
+    signInAbort?: AbortController;
     attentionUnfollow?: () => void;
     connectionUnsubscribe?: () => void;
     workspaceUnsubscribe?: () => void;
@@ -358,7 +381,47 @@ export function happyAgentDirectoryStoreCreate(
         for (const listener of listeners) listener();
     };
 
+    const signIn = (remote: LocalHappyAgent, source: ServerSource): void => {
+        if (!remote.entry.signIn || remote.entry.signIn.phase === "browser") return;
+        const controller = new AbortController();
+        remote.signInAbort?.abort();
+        remote.signInAbort = controller;
+        const phase = (next: HappyAgentDirectorySignIn): void => {
+            if (remote.signInAbort !== controller || !remote.entry.signIn) return;
+            remote.entry = { ...remote.entry, signIn: next };
+            publish();
+        };
+        source
+            .serverSignIn(
+                remote.entry.id,
+                { signInOpened: (host) => phase({ phase: "browser", host }) },
+                controller.signal,
+            )
+            .then(
+                () => {
+                    if (remote.signInAbort !== controller) return;
+                    remote.signInAbort = undefined;
+                    // The connection's own retry brings the server's work in;
+                    // until it answers the entry says it is connecting.
+                    const { signIn: _signIn, ...entry } = remote.entry;
+                    remote.entry = {
+                        ...entry,
+                        status: "connecting",
+                        message: "Connecting to this Happy Agent.",
+                    };
+                    publish();
+                },
+                (error: unknown) => {
+                    if (remote.signInAbort !== controller) return;
+                    remote.signInAbort = undefined;
+                    phase({ phase: "failed", message: happyAgentUserError(error).message });
+                },
+            );
+    };
+
     const connectionClose = (happyAgent: LocalHappyAgent): void => {
+        happyAgent.signInAbort?.abort();
+        happyAgent.signInAbort = undefined;
         happyAgent.connectionUnsubscribe?.();
         happyAgent.connectionUnsubscribe = undefined;
         happyAgent.workspaceUnsubscribe?.();
@@ -413,6 +476,7 @@ export function happyAgentDirectoryStoreCreate(
             happyAgentId: happyAgent.entry.id,
             client,
             hostServicesUrl,
+            ...(deps.managedSettings ? { managedSettings: deps.managedSettings } : {}),
             // A Happy Agent on another machine is what this computer's devices
             // and ports can reach; the local one already has them.
             deviceBridges: happyAgent.entry.remoteId !== undefined,
@@ -451,6 +515,19 @@ export function happyAgentDirectoryStoreCreate(
                 },
                 unavailable: (error) => {
                     if (happyAgent.connection?.get() || happyAgent.entry.session) return;
+                    // Only a remote is signed in to; the local daemon's
+                    // capability is the shell's and never expires this way.
+                    if (happyAgent.entry.remoteId !== undefined && serverSignInRequired(error)) {
+                        if (happyAgent.entry.signIn) return;
+                        happyAgent.entry = {
+                            ...happyAgent.entry,
+                            status: "error",
+                            message: "Your sign-in to this server ended.",
+                            signIn: { phase: "required" },
+                        };
+                        publish();
+                        return;
+                    }
                     const message = error instanceof Error ? error.message : String(error);
                     if (happyAgent.entry.status === "error" && happyAgent.entry.message === message)
                         return;
@@ -522,8 +599,12 @@ export function happyAgentDirectoryStoreCreate(
                             publish();
                         });
                     }
+                    // A connection that answers again is signed in, however it got there.
+                    happyAgent.signInAbort?.abort();
+                    happyAgent.signInAbort = undefined;
+                    const { signIn: _signIn, ...signedIn } = happyAgent.entry;
                     happyAgent.entry = {
-                        ...happyAgent.entry,
+                        ...signedIn,
                         ...projectsRead(session),
                         ...connectionRead(happyAgent, session.connection.get()),
                         session,
@@ -718,5 +799,13 @@ export function happyAgentDirectoryStoreCreate(
         happyAgentReorder(id, afterId) {
             roster?.connectionReorder(id, afterId);
         },
+        ...(deps.servers
+            ? {
+                  happyAgentSignIn(id: string) {
+                      const remote = remotes.get(id);
+                      if (remote && deps.servers) signIn(remote, deps.servers);
+                  },
+              }
+            : {}),
     };
 }

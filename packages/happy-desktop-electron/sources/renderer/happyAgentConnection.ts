@@ -17,6 +17,7 @@ import {
     type WelcomeStore,
     type HappyAgentOnboardingStore,
     HappyAgentApiError,
+    managedPhonePairing,
     type MutationRejectedDelta,
     type HappyAgentWorkspaceClient,
     type HappyAgentActivity,
@@ -47,6 +48,7 @@ import {
     type HappyAgentWorkspaceMemoryDocument,
     type HappyAgentWorkspaceMemoryPersistence,
     type HappyAgentWorkspaceStore,
+    type ManagedSettingsStore,
     type ServerCompatibility,
     type TerminalColorScheme,
 } from "happy-desktop-state";
@@ -76,6 +78,17 @@ function protocolMismatchOf(
     return {
         message: describeServerCompatibility(compatibility),
     };
+}
+
+/**
+ * Whether the policy leaves any way of pairing a phone open. Read once, as the
+ * onboarding store starts: a policy that arrives later is enforced by Settings
+ * and by the host, and the phone step is optional either way.
+ */
+function managedPhonePairingOffered(managed: ManagedSettingsStore | undefined): boolean {
+    if (!managed) return true;
+    const pairing = managedPhonePairing(managed.get());
+    return pairing.relay || pairing.direct;
 }
 
 const WORKSPACE_MEMORY_PREFIX = "happy.happy-agent.workspace-memory.v1:";
@@ -335,6 +348,11 @@ export function happyAgentConnectionOpen(input: {
     /** The local desktop pairs Happy Mobile through the guided setup. */
     readonly guidedMobileSetup?: boolean;
     /**
+     * The organization's fixed settings. Onboarding leaves the phone step out
+     * when they turn every way of pairing a phone off.
+     */
+    readonly managedSettings?: ManagedSettingsStore;
+    /**
      * Whether product stores wait for the member's profile. A remote Happy
      * Agent may be a team that authorizes nothing else until one exists; the
      * machine's own Happy Agent is solo and never asks for one.
@@ -432,7 +450,9 @@ export function happyAgentConnectionOpen(input: {
     let happyIntegration: HappyAgentIntegrationStore | undefined;
     const onboardingStore = happyAgentOnboardingStoreCreate(directClient, agentConnection.sync, {
         setupActive: input.happyAgentId !== "local" && welcome.get().welcomeAcknowledged,
-        mobileSkipped: desktopHappyMobileOnboardingSkipped(input.happyAgentId),
+        mobileSkipped:
+            desktopHappyMobileOnboardingSkipped(input.happyAgentId) ||
+            !managedPhonePairingOffered(input.managedSettings),
         onMobileSkip: () => desktopHappyMobileOnboardingSkip(input.happyAgentId),
         guidedMobileSetup: input.guidedMobileSetup,
         mobileConnector,

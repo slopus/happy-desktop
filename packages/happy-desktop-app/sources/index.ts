@@ -6,6 +6,7 @@ export {
     type AppHappyAgentDirectoryStore,
     type AppHappyAgentEntry,
     type AppHappyAgentSetup,
+    type AppHappyAgentSignIn,
     type AppHappyAgentSession,
     type AppHappyAgentUpdate,
     type AppHappyAgentViewProps,

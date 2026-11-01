@@ -1,0 +1,170 @@
+import { HappyAgentApiError } from "@slopus/happy-agent-client";
+import { expect, it, vi } from "vitest";
+import { managedSettingsStoreCreate } from "../managedSettings/managedSettingsStore.js";
+import { UserError } from "../types.js";
+import { serverAddStoreCreate } from "./serverAddStore.js";
+import { serverSignInRequired, type ServerSource } from "./serverSource.js";
+import { serverUrlParse } from "./serverUrl.js";
+
+function deferred<T>() {
+    let resolve!: (value: T) => void;
+    let reject!: (error: unknown) => void;
+    const promise = new Promise<T>((onResolve, onReject) => {
+        resolve = onResolve;
+        reject = onReject;
+    });
+    return { promise, resolve, reject };
+}
+
+function sourceCreate() {
+    const pending = deferred<{ readonly connectionId: string }>();
+    const calls: { url: string; opened: (host: string) => void; signal: AbortSignal }[] = [];
+    const source: ServerSource = {
+        serverAdd(url, progress, signal) {
+            calls.push({ url, opened: progress.signInOpened, signal });
+            return pending.promise;
+        },
+        serverSignIn: () => Promise.resolve(),
+    };
+    return { source, calls, pending };
+}
+
+it("reads typed addresses as HTTPS server bases and refuses what is not one", () => {
+    expect(serverUrlParse(" team.example.com/ ")).toEqual({
+        ok: true,
+        url: "https://team.example.com",
+    });
+    expect(serverUrlParse("https://team.example.com/happy/")).toEqual({
+        ok: true,
+        url: "https://team.example.com/happy",
+    });
+    expect(serverUrlParse("http://127.0.0.1:8080")).toEqual({
+        ok: true,
+        url: "http://127.0.0.1:8080",
+    });
+    expect(serverUrlParse("")).toEqual({ ok: false, problem: "empty" });
+    expect(serverUrlParse("http://team.example.com")).toEqual({ ok: false, problem: "insecure" });
+    expect(serverUrlParse("https://me:pw@team.example.com")).toEqual({
+        ok: false,
+        problem: "credentials",
+    });
+    expect(serverUrlParse("https://team.example.com/?token=1")).toEqual({
+        ok: false,
+        problem: "extra",
+    });
+    expect(serverUrlParse("ftp://team.example.com")).toEqual({ ok: false, problem: "invalid" });
+});
+
+it("adds a server through the browser and empties the field once it is signed in", async () => {
+    const { source, calls, pending } = sourceCreate();
+    const onOutput = vi.fn();
+    const store = serverAddStoreCreate({ source, onOutput });
+    const listener = vi.fn();
+    store.subscribe(listener);
+
+    store.urlUpdate("team.example.com");
+    store.serverAddSubmit();
+    expect(store.get().phase).toEqual({ kind: "adding" });
+    expect(calls.map((call) => call.url)).toEqual(["https://team.example.com"]);
+
+    // A second press while the first attempt runs asks nothing more.
+    store.serverAddSubmit();
+    expect(calls).toHaveLength(1);
+
+    calls[0]!.opened("login.example.com");
+    expect(store.get().phase).toEqual({ kind: "signingIn", host: "login.example.com" });
+
+    pending.resolve({ connectionId: "c1" });
+    await pending.promise;
+    expect(store.get()).toEqual({ url: "", phase: { kind: "editing" } });
+    expect(onOutput).toHaveBeenCalledWith({
+        type: "serverAdded",
+        connectionId: "c1",
+        url: "https://team.example.com",
+    });
+});
+
+it("says why an address was not tried, and editing clears it", () => {
+    const { source, calls } = sourceCreate();
+    const store = serverAddStoreCreate({ source });
+    store.urlUpdate("http://team.example.com");
+    store.serverAddSubmit();
+    expect(store.get().urlProblem).toBe("insecure");
+    expect(calls).toHaveLength(0);
+    store.urlUpdate("https://team.example.com");
+    expect(store.get().urlProblem).toBeUndefined();
+});
+
+it("keeps the address and shows the failure when signing in fails", async () => {
+    const { source, pending } = sourceCreate();
+    const store = serverAddStoreCreate({ source });
+    store.urlUpdate("https://team.example.com");
+    store.serverAddSubmit();
+    pending.reject(new UserError("The server refused the sign-in."));
+    await pending.promise.catch(() => undefined);
+    await Promise.resolve();
+    expect(store.get().phase).toEqual({ kind: "editing" });
+    expect(store.get().url).toBe("https://team.example.com");
+    expect(store.get().error?.message).toBe("The server refused the sign-in.");
+});
+
+it("cancels a running attempt and ignores whatever it settles with afterwards", async () => {
+    const { source, calls, pending } = sourceCreate();
+    const onOutput = vi.fn();
+    const store = serverAddStoreCreate({ source, onOutput });
+    store.urlUpdate("https://team.example.com");
+    store.serverAddSubmit();
+    store.serverAddCancel();
+    expect(calls[0]!.signal.aborted).toBe(true);
+    expect(store.get().phase).toEqual({ kind: "editing" });
+
+    pending.resolve({ connectionId: "late" });
+    await pending.promise;
+    expect(onOutput).not.toHaveBeenCalled();
+    expect(store.get().url).toBe("https://team.example.com");
+});
+
+it("adds only the organization's server when additional servers are not allowed", () => {
+    const { source, calls } = sourceCreate();
+    const managed = managedSettingsStoreCreate();
+    managed.writer.managedSettingsAdopt({
+        serverUrl: "https://happy.corp.example/",
+        allowAdditionalServers: false,
+    });
+    const store = serverAddStoreCreate({ source, managed: managed.store });
+
+    // The field's text is not what a locked form adds.
+    store.urlUpdate("https://elsewhere.example");
+    store.serverAddSubmit();
+    expect(calls.map((call) => call.url)).toEqual(["https://happy.corp.example"]);
+});
+
+it("refuses every server when the policy allows none", () => {
+    const { source, calls } = sourceCreate();
+    const managed = managedSettingsStoreCreate();
+    managed.writer.managedSettingsAdopt({ allowAdditionalServers: false });
+    const store = serverAddStoreCreate({ source, managed: managed.store });
+    store.urlUpdate("https://team.example.com");
+    store.serverAddSubmit();
+    expect(calls).toHaveLength(0);
+    expect(store.get().error?.code).toBe("server_not_allowed");
+});
+
+it("asks for a new sign-in on 401, redirects, and a 403 that is not Happy's", () => {
+    expect(serverSignInRequired(new HappyAgentApiError(401, "x", "unauthorized", null))).toBe(true);
+    expect(serverSignInRequired(new HappyAgentApiError(302, "x", null, null))).toBe(true);
+    expect(serverSignInRequired(new HappyAgentApiError(403, "x", null, null))).toBe(true);
+    // Happy's own refusal is about permission, which signing in again would not change.
+    expect(serverSignInRequired(new HappyAgentApiError(403, "x", "forbidden", null))).toBe(false);
+    expect(serverSignInRequired(new HappyAgentApiError(500, "x", null, null))).toBe(false);
+    expect(
+        serverSignInRequired(
+            new UserError(
+                "Catalog failed",
+                undefined,
+                new HappyAgentApiError(401, "x", null, null),
+            ),
+        ),
+    ).toBe(true);
+    expect(serverSignInRequired(new TypeError("Failed to fetch"))).toBe(false);
+});

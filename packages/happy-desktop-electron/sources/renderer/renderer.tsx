@@ -46,6 +46,7 @@ import {
     happyAgentAttentionStoreOwnedCreate,
     happyAgentClockStoreCreate,
     happyAgentMobileConnectorStoreNoop,
+    managedSettingsStoreCreate,
     type AppearanceStore,
     type HappyAgentClockStore,
     type HappyAgentAttentionStore,
@@ -55,6 +56,7 @@ import {
     type ProjectsVisibilityStore,
     type StatusBarStore,
     type UsageAnalyticsStore,
+    type ManagedSettingsStore,
     type GptLiveStore,
     type WelcomeStore,
     type HappyAgentNavigationOrderStore,
@@ -390,6 +392,7 @@ function HappyAgentBoundary(props: {
     platform: "desktop" | "web";
     gptLive: GptLiveStore;
     usageAnalytics: UsageAnalyticsStore;
+    managedSettings: ManagedSettingsStore;
     router: HappyAgentRouter;
     navigationOrder: HappyAgentNavigationOrderStore;
     sidebarCollapse: HappyAgentSidebarCollapseStore;
@@ -442,6 +445,7 @@ function HappyAgentBoundary(props: {
                 statusBar: props.statusBar,
                 gptLive: props.gptLive,
                 usageAnalytics: props.usageAnalytics,
+                managedSettings: props.managedSettings,
                 keepAwake: props.keepAwake,
                 navigationOrder: props.navigationOrder,
                 sidebarCollapse: props.sidebarCollapse,
@@ -608,6 +612,7 @@ interface DesktopRendererProps {
     statusBar: StatusBarStore;
     gptLive: GptLiveStore;
     usageAnalytics: UsageAnalyticsStore;
+    managedSettings: ManagedSettingsStore;
     keepAwake: KeepAwakeStore;
     navigationOrder: HappyAgentNavigationOrderStore;
     sidebarCollapse: HappyAgentSidebarCollapseStore;
@@ -808,6 +813,7 @@ function DesktopScreens(props: DesktopRendererProps) {
                                     statusBar={props.statusBar}
                                     gptLive={props.gptLive}
                                     usageAnalytics={props.usageAnalytics}
+                                    managedSettings={props.managedSettings}
                                     keepAwake={props.keepAwake}
                                     htmlPreview={props.htmlPreview}
                                     artifactPage={props.artifactPage}
@@ -1042,6 +1048,7 @@ function DesktopRuntimeContent(
             keepAwake={props.keepAwake}
             gptLive={props.gptLive}
             usageAnalytics={props.usageAnalytics}
+            managedSettings={props.managedSettings}
             navigationOrder={props.navigationOrder}
             sidebarCollapse={props.sidebarCollapse}
             sidebarVisibility={props.sidebarVisibility}
@@ -1357,8 +1364,14 @@ if (mediaPreviewBridge) {
         // told to resolve its address again whenever the set of connected Happy Agents
         // changes, so a machine that connects after the URL already named it opens
         // the addressed conversation without the reader navigating twice.
+        // The organization's fixed settings. Nothing reads a policy into it yet:
+        // whichever side owns team servers — the host Happy Agent or this
+        // shell — feeds its writer, and until one does every choice stays the
+        // person's.
+        const managedSettings = managedSettingsStoreCreate().store;
         const happyAgents = happyAgentDirectoryStoreCreate(desktopBridge, runtimeStore, {
             cloudHostFor: auth.hostFor,
+            managedSettings,
             attentionFollow(id, source) {
                 preferencesFor(id);
                 const attentionStop = attentionFollow(id, source);
@@ -1431,6 +1444,7 @@ if (mediaPreviewBridge) {
         const analytics = desktopAnalyticsCreate({
             development: browserLocal || desktopBridge.buildIdentity !== undefined,
             happyAgents,
+            managedSettings,
             ...(desktopBridge.system ? { system: desktopBridge.system } : {}),
         });
         appDisposers.push(analytics.dispose);
@@ -1670,6 +1684,7 @@ if (mediaPreviewBridge) {
                         statusBar={statusBar}
                         gptLive={gptLive}
                         usageAnalytics={analytics.preference}
+                        managedSettings={managedSettings}
                         keepAwake={keepAwake}
                         navigationOrder={navigationOrder}
                         sidebarCollapse={sidebarCollapse}

@@ -20,6 +20,9 @@ import type {
     HappyAgentSidebarVisibilityStore,
     HappyAgentWindowStore,
     KeepAwakeStore,
+    ManagedSettingsSnapshot,
+    ManagedSettingsStore,
+    ServerAddStore,
     StatusBarStore,
     TitleShimmerStore,
     UsageAnalyticsStore,
@@ -54,6 +57,11 @@ import {
     happyAgentAttentionConnection,
     happyAgentAttentionStoreNoop,
     keepAwakeStoreCreate,
+    managedPhonePairing,
+    managedServers,
+    managedSettingsOf,
+    managedSettingsStoreAbsent,
+    serverUrlProblemMessage,
     statusBarStoreNoop,
     titleShimmerStoreNoop,
 } from "happy-desktop-state";
@@ -76,6 +84,7 @@ import {
     HappyAgentProfileSettings,
     HappyAgentPasswordSettings,
     HappyAgentSecretSettings,
+    HappyAgentServerSettings,
     HappyAgentSettingsShell,
     HappyAgentTaskSettings,
     HappyAgentAutoJoinSettings,
@@ -111,6 +120,8 @@ export const HAPPY_AGENT_SETTINGS_CATEGORIES: readonly HappyAgentSettingsCategor
     { icon: "files", id: "sharing", label: "Sharing" },
     // Local author identity and the optional WorkOS account share one category.
     { icon: "users", id: "account", label: "Account" },
+    // Team servers this window signs in to; offered only by a host that can add them.
+    { icon: "globe", id: "servers", label: "Servers" },
     // How each project's changes are split into tiers in the Changes listing.
     { icon: "file-diff", id: "file-tiers", label: "File tiers" },
     { icon: "doc", id: "instructions", label: "Instructions" },
@@ -340,6 +351,7 @@ const CATEGORY_DESCRIPTIONS: Record<string, string> = {
     sharing: "Joining other people’s tasks, docs, lists and calendars",
     "mobile-access": "Use Happy on your phone with this computer",
     account: "Your name, photo and Happy account",
+    servers: "Team servers you sign in to",
     "file-tiers": "Which changed files are listed apart",
     instructions: "Agent guidance and permission review for this machine",
     secrets: "Environment variables for agents",
@@ -347,6 +359,43 @@ const CATEGORY_DESCRIPTIONS: Record<string, string> = {
     providers: "Model providers and the models they offer",
     usage: "What each provider account has spent",
 };
+
+/** Stands in where the host cannot add servers, so the view subscribes unconditionally. */
+const serverAddAbsentSnapshot = { url: "", phase: { kind: "editing" } } as const;
+const serverAddStoreAbsent: ServerAddStore = {
+    get: () => serverAddAbsentSnapshot,
+    subscribe: () => () => undefined,
+    urlUpdate: () => undefined,
+    serverAddSubmit: () => undefined,
+    serverAddCancel: () => undefined,
+    [Symbol.dispose]: () => undefined,
+};
+
+/**
+ * The analytics switch as shown: the organization's value, locked, when it set
+ * one; otherwise the person's own choice.
+ */
+function usageAnalyticsShown(
+    enabled: boolean,
+    managed: ManagedSettingsSnapshot,
+): { readonly usageAnalyticsEnabled: boolean; readonly usageAnalyticsManaged: boolean } {
+    const fixed = managedSettingsOf(managed).analyticsEnabled;
+    return fixed === undefined
+        ? { usageAnalyticsEnabled: enabled, usageAnalyticsManaged: false }
+        : { usageAnalyticsEnabled: fixed, usageAnalyticsManaged: true };
+}
+
+/** The organization named the one server the form adds. */
+function serverAddLocked(managed: ManagedSettingsSnapshot): boolean {
+    const policy = managedServers(managed);
+    return policy.preset !== undefined && !policy.additionalAllowed;
+}
+
+/** The organization allows adding no server at all. */
+function serverAddRefused(managed: ManagedSettingsSnapshot): boolean {
+    const policy = managedServers(managed);
+    return policy.preset === undefined && !policy.additionalAllowed;
+}
 
 /** Stands in where the host cannot hold the machine awake, keeping hook order fixed. */
 const keepAwakeStoreNone = keepAwakeStoreCreate({ mode: "off" });
@@ -380,6 +429,10 @@ export interface AppHappyAgentSettingsViewProps {
     projectsVisibility?: ProjectsVisibilityStore;
     /** Whether this window sends product analytics events. Absent where it sends none. */
     usageAnalytics?: UsageAnalyticsStore;
+    /** The organization's fixed settings. Absent where the host reads none. */
+    managedSettings?: ManagedSettingsStore;
+    /** Adds team servers by address. Absent where the host cannot, which leaves Servers out. */
+    servers?: ServerAddStore;
     gptLive?: GptLiveStore;
     /** Absent where the host cannot hold the machine awake. */
     keepAwake?: KeepAwakeStore;
@@ -441,9 +494,29 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
         usageAnalyticsStore.get,
         usageAnalyticsStore.get,
     );
+    const managedStore = props.managedSettings ?? managedSettingsStoreAbsent;
+    const managed = useSyncExternalStore(
+        managedStore.subscribe,
+        managedStore.get,
+        managedStore.get,
+    );
+    const phonePairing = managedPhonePairing(managed);
+    const phonePairingOffered = phonePairing.relay || phonePairing.direct;
+    const serverAddStore = props.servers ?? serverAddStoreAbsent;
+    const serverAdd = useSyncExternalStore(
+        serverAddStore.subscribe,
+        serverAddStore.get,
+        serverAddStore.get,
+    );
     const section = props.section;
     const stateOpen = section === "debug";
-    const categories = HAPPY_AGENT_SETTINGS_CATEGORIES;
+    // A category the host cannot serve, or one the organization turned off, is
+    // left out of the list rather than shown and refused.
+    const categories = HAPPY_AGENT_SETTINGS_CATEGORIES.filter(
+        (category) =>
+            (category.id !== "servers" || props.servers !== undefined) &&
+            (category.id !== "mobile-access" || phonePairingOffered),
+    );
     const titleShimmerStore = props.titleShimmer ?? titleShimmerStoreNoop;
     const titleShimmer = useSyncExternalStore(
         titleShimmerStore.subscribe,
@@ -535,7 +608,12 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
     // category opens. Its pairing code is secret, so Dev Tools never prints it.
     // It is an experiment: until the person turns it on, Mobile Access shows
     // Relay and does not follow the direct connector at all.
-    const mobileDirect = experiments.mobileDirect;
+    // An organization that turns one way of pairing off leaves the other as
+    // the only one, whatever the experiment says.
+    const mobileDirect = phonePairing.relay
+        ? experiments.mobileDirect && phonePairing.direct
+        : phonePairing.direct;
+    const pairingMethodFixed = !(phonePairing.relay && phonePairing.direct);
     const mobileConnectorOwned =
         section === "mobile-access" ? host?.session?.mobileConnector?.() : undefined;
     const mobileConnectorStore =
@@ -544,6 +622,7 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
     // Choosing Direct is turning its experiment on, and Relay turning it off.
     // A page that opened on Relay asks for a direct code as Direct shows.
     const pairingMethodSelect = (method: "relay" | "direct") => {
+        if (pairingMethodFixed) return;
         if (method === "direct") mobileConnectorOwned?.pairingOpen();
         experimentsStore.featureUpdate("mobileDirect", method === "direct", "mobile_access");
     };
@@ -676,7 +755,11 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
     // Linking a phone is a page inside Mobile Access: the same Settings
     // window, with its header leading back to the category.
     const mobileLink =
-        section === "mobile-access" && happyIntegration.setup && mobileSetup && sessionClock
+        section === "mobile-access" &&
+        phonePairingOffered &&
+        happyIntegration.setup &&
+        mobileSetup &&
+        sessionClock
             ? {
                   step: happyIntegration.setup,
                   setup: mobileSetup,
@@ -684,6 +767,7 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                       layout: "settings",
                       method: pairingMethod,
                       onMethodSelect: pairingMethodSelect,
+                      methodFixed: pairingMethodFixed,
                       relay:
                           happyIntegration.setup.kind === "link"
                               ? appMobileRelayFromLink(happyIntegration.setup.phase)
@@ -872,7 +956,32 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                     onContinue={mobileLink.setup.continue}
                     onPlatformSelect={mobileLink.setup.platformSelect}
                 />
-            ) : section === "mobile-access" ? (
+            ) : section === "servers" ? (
+                props.servers ? (
+                    <HappyAgentServerSettings
+                        url={
+                            serverAddLocked(managed)
+                                ? (managedSettingsOf(managed).serverUrl ?? "")
+                                : serverAdd.url
+                        }
+                        phase={serverAdd.phase}
+                        {...(serverAdd.urlProblem === undefined
+                            ? {}
+                            : { urlError: serverUrlProblemMessage(serverAdd.urlProblem) })}
+                        {...(serverAdd.error === undefined
+                            ? {}
+                            : { error: serverAdd.error.message })}
+                        locked={serverAddLocked(managed)}
+                        refused={serverAddRefused(managed)}
+                        // Whether a server can be added is the source's to say:
+                        // it need not go through the local Happy Agent.
+                        onUrlChange={serverAddStore.urlUpdate}
+                        onAdd={serverAddStore.serverAddSubmit}
+                        onCancel={serverAddStore.serverAddCancel}
+                    />
+                ) : null
+            ) : section === "mobile-access" && !phonePairingOffered ? null : section ===
+              "mobile-access" ? (
                 <HappyAgentMobileSettings
                     configured={happyIntegration.configured}
                     updatedAt={happyIntegration.updatedAt}
@@ -909,6 +1018,7 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                                   layout: "settings",
                                   method: pairingMethod,
                                   onMethodSelect: pairingMethodSelect,
+                                  methodFixed: pairingMethodFixed,
                                   relay: appMobileRelayFromIntegration(happyIntegration),
                                   relayStarting: happyIntegration.pairingStarting,
                                   onRelayRetry: happyIntegrationStore.happyIntegrationPair,
@@ -1236,7 +1346,7 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                     error={models.type === "error" ? models.error.message : undefined}
                     {...(props.usageAnalytics
                         ? {
-                              usageAnalyticsEnabled: usageAnalytics.usageAnalyticsEnabled,
+                              ...usageAnalyticsShown(usageAnalytics.usageAnalyticsEnabled, managed),
                               onUsageAnalyticsChange: usageAnalyticsStore.usageAnalyticsUpdate,
                           }
                         : {})}

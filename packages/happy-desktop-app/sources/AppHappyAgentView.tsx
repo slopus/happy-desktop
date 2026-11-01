@@ -555,11 +555,23 @@ export interface AppHappyAgentEntry {
             readonly error: { readonly message: string };
         }
     >;
+    /**
+     * The server stopped accepting this window's sign-in, and where signing in
+     * again has got to. Absent while the sign-in holds.
+     */
+    readonly signIn?: AppHappyAgentSignIn;
     /** The live stores for this Happy Agent, present once its connection is up. */
     readonly session?: AppHappyAgentSession;
     /** Authenticated setup is available before protected product stores load. */
     readonly setup?: AppHappyAgentSetup;
 }
+
+/** Where signing in again to one server stands. */
+export type AppHappyAgentSignIn =
+    | { readonly phase: "required" }
+    /** The browser is open at `host`, where the person is signing in. */
+    | { readonly phase: "browser"; readonly host: string }
+    | { readonly phase: "failed"; readonly message: string };
 
 export interface AppHappyAgentSetup {
     readonly welcome: import("happy-desktop-state").WelcomeStore;
@@ -661,6 +673,11 @@ export interface AppHappyAgentDirectoryStore {
      * to the app to open — land in the workspace on screen.
      */
     happyAgentActivate(id: string): void;
+    /**
+     * Signs in again to a server whose entry says `signIn`. Absent on a host
+     * that cannot, which leaves the sidebar pointing at Settings instead.
+     */
+    happyAgentSignIn?(id: string): void;
 }
 
 /**
@@ -2906,12 +2923,14 @@ function happyAgentProjectsSection(
                                 icon: "plus" as const,
                                 title: "No projects yet",
                             }
-                          : {
-                                description: happyAgentEmptyDescription(happyAgent),
-                                icon: "link" as const,
-                                title: happyAgentStatusLabel(happyAgent),
-                                actionLabel: "Open settings",
-                            },
+                          : happyAgent.signIn
+                            ? happyAgentSignInEmpty(happyAgent.signIn)
+                            : {
+                                  description: happyAgentEmptyDescription(happyAgent),
+                                  icon: "link" as const,
+                                  title: happyAgentStatusLabel(happyAgent),
+                                  actionLabel: "Open settings",
+                              },
               }
             : {}),
     };
@@ -2993,6 +3012,41 @@ function happyAgentEmptyDescription(happyAgent: AppHappyAgentEntry): string {
     if (happyAgent.status === "connecting") return "Connecting to this machine…";
     if (happyAgent.status === "error") return "Its projects will appear once it answers again.";
     return "Connect this machine to see its projects.";
+}
+
+/**
+ * What an empty section says while its server wants a new sign-in. The one act
+ * is signing in, offered again after a failure and withheld while the browser
+ * is already open.
+ */
+function happyAgentSignInEmpty(signIn: AppHappyAgentSignIn): {
+    readonly actionLabel?: string;
+    readonly description: string;
+    readonly icon: "lock";
+    readonly title: string;
+} {
+    switch (signIn.phase) {
+        case "required":
+            return {
+                actionLabel: "Sign in again",
+                description: "Your sign-in to this server ended. Sign in to see its work.",
+                icon: "lock",
+                title: "Sign in required",
+            };
+        case "browser":
+            return {
+                description: `Finish signing in at ${signIn.host} in your browser.`,
+                icon: "lock",
+                title: "Signing in…",
+            };
+        case "failed":
+            return {
+                actionLabel: "Sign in again",
+                description: signIn.message,
+                icon: "lock",
+                title: "Couldn't sign in",
+            };
+    }
 }
 
 function happyAgentStatusLabel(happyAgent: AppHappyAgentEntry): string {
@@ -3584,6 +3638,12 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                     return;
                 }
                 const happyAgent = happyAgentOf(section.happyAgentId);
+                // A server that wants a new sign-in offers exactly that.
+                if (happyAgent?.signIn && props.happyAgents.happyAgentSignIn) {
+                    if (happyAgent.signIn.phase !== "browser")
+                        props.happyAgents.happyAgentSignIn(happyAgent.id);
+                    return;
+                }
                 if (happyAgent?.status !== "connected") {
                     props.onSettingsOpen();
                     return;

@@ -43,6 +43,11 @@ export interface MobilePairingOptionsProps {
      */
     readonly method?: MobilePairingMethod;
     onMethodSelect?(method: MobilePairingMethod): void;
+    /**
+     * `method` is the only one allowed, as when an organization turns the other
+     * off, so the Relay | Direct control is left out.
+     */
+    readonly methodFixed?: boolean;
     readonly now: number;
     /** Why actions cannot currently reach this Happy Agent. */
     readonly unavailable?: string;
@@ -149,7 +154,7 @@ export function MobilePairingOptions(props: MobilePairingOptionsProps) {
                     {props.unavailable}
                 </Banner>
             ) : null}
-            {method === undefined ? null : (
+            {method === undefined || props.methodFixed ? null : (
                 <SegmentedControl
                     aria-label="Pairing method"
                     className="happy-mobile-pairing-options__method"

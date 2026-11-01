@@ -17,7 +17,7 @@ const categories: readonly HappyAgentSettingsCategory[] = [
 
 const noop = () => undefined;
 
-function PrivacyScreen(props: { readonly enabled: boolean }) {
+function PrivacyScreen(props: { readonly enabled: boolean; readonly managed?: boolean }) {
     return (
         <HappyAgentSettingsShell
             activeCategoryId="general"
@@ -27,7 +27,11 @@ function PrivacyScreen(props: { readonly enabled: boolean }) {
             onClose={noop}
             title="General"
         >
-            <HappyAgentProductAnalyticsSettings enabled={props.enabled} onChange={noop} />
+            <HappyAgentProductAnalyticsSettings
+                enabled={props.enabled}
+                managed={props.managed}
+                onChange={noop}
+            />
         </HappyAgentSettingsShell>
     );
 }
@@ -56,6 +60,15 @@ export function ProductAnalyticsSettingsPage() {
                 window={{ width: 720, height: 640 }}
             >
                 <PrivacyScreen enabled={false} />
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="Turned off by the organization's managed settings; the switch is locked"
+                label="Privacy — managed off"
+                number="03"
+                screen="03-managed-off-1100x760"
+                window={{ width: 1100, height: 760 }}
+            >
+                <PrivacyScreen enabled={false} managed />
             </FullScreenSpecimen>
             <div className="specimen-grid">
                 <Specimen
