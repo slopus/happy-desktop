@@ -122,9 +122,23 @@ These are defaults and existing contracts, not permission to make every layout
 fixed-size. The navigation and inspector use the same `30vw` clamp as the
 reference Happy desktop app rather than a fixed desktop-only width. Components
 may accept explicit numeric or percentage dimensions when their purpose requires
-them. Prefer integer CSS-pixel positions and sizes.
-At the required 2× device scale, important edges must land on physical pixel
-boundaries so one-pixel borders do not become blurry.
+them. Prefer integer CSS-pixel positions and sizes where the fluid layout permits,
+but do not confuse an integer in a component's local coordinate system with a
+device-aligned edge. Ancestor offsets, scale or zoom, and device-pixel ratio all
+affect the edge's final device-pixel coverage.
+
+Thin ink — borders, dividers, rules, and tree connectors — declares one intended
+CSS thickness for each visual role and keeps equal roles at equal perceived weight
+and coverage throughout the supported layout. At the required 2× device scale,
+place important edges on physical-pixel boundaries after accounting for their
+complete ancestor offset. One owner paints each shared edge; overlapping borders
+or connector segments must not make one position darker or thicker than another.
+If alignment requires snapping, calculate it in the final coordinate space and
+snap a common root or translation rather than rounding descendants independently.
+Do not blindly round every CSS dimension or redefine every rule as one physical
+pixel: exact, unchanged crispness at every arbitrary noninteger zoom and device
+scale is not possible. The contract is consistent perceived weight at supported
+positions and scales.
 
 Do not make dimensions accidental. If a component promises a size, its border,
 padding, content, and `box-sizing` must resolve to that size. Test fixed,
@@ -191,6 +205,71 @@ display: grid;
 File-wide and block-wide disables are forbidden. The companion
 `happy-layout/require-layout-exception-reason` rule rejects non-local or
 unexplained suppressions.
+
+### Stable resizing, motion, and drag geometry
+
+People may size the desktop window and its sidebars roughly as they want. From
+the Electron minimum through wide desktop windows, the layout must remain usable
+without a mobile breakpoint or a large minimum width that defeats resizing. The
+resizable container owns its allocated width. Every flex ancestor that must yield
+sets the corresponding minimum size to zero, fixed controls do not shrink, and
+the one unbounded label or path takes the remaining measure and ellipsizes or
+wraps according to its content contract. Intrinsic user content and measurements
+made by a child must not feed back into the width of the sidebar or window.
+
+Every moving, resized, or transformed piece of custom UI has a stable paint
+contract. Text, font icons, existing sanctioned SVG artwork, controls, dividers,
+and compound components retain their intended geometry, relative alignment, and
+visual or stroke weight as they move and across supported zoom and display
+scales. A different device-pixel phase may change antialiasing; it must not cause
+an avoidable change of layout, glyph size, or line weight. Existing SVG artwork
+declares its view box, painted bounds, and stroke behavior under supported
+scaling. Do not apply a global non-scaling-stroke rule: some artwork is intended
+to scale as a whole. This does not change the closed icon ownership and exception
+rules in **Icon systems**. Responsive reflow, scaling, and internal animation may
+change geometry deliberately; declare that behavior and carry it coherently
+through the transition rather than freezing it.
+
+Motion measures and moves one piece of geometry. For a drag, capture row boxes,
+connector endpoints, pointer travel, and the carried surface at pickup in one
+coordinate space, normally viewport CSS pixels from `getBoundingClientRect()`.
+Use either one frozen snapshot for the motion or coherent live measurements;
+never mix rounded `offset*` values, stale snapshots, and fractional live
+rectangles. If a resize requires live geometry to be rebased during the motion,
+recapture the complete set together before continuing.
+
+When a compound item is translated, move its parts as one rigid body unless their
+relative motion is intentional. For a carried tree, freeze its row heights, label
+measures, wrapping or ellipsis, connector geometry, and relative offsets for the
+drag. Preserve measured fractional geometry and apply one shared translation to
+the whole item, using a common root where appropriate; only if device alignment
+requires snapping, snap that shared translation rather than each descendant.
+Hover treatments, insertion markers, and drop targets overlay the measured layout
+or reserve their space before pickup, so appearing under the pointer cannot
+resize the snapshot.
+
+The end of motion hands the final moving pose to the resting layout without a
+correction frame. Measure the before and after geometry in the same coordinate
+space and keep the content on the same paint path through settling, so text,
+icons, connectors, and bounds do not change phase merely because a pointer was
+released or a transition ended. A scale transform is not a substitute for
+geometry when settling text or thin lines: it changes glyph rasterization and
+stroke weight. Do not discard a nonzero settle delta merely because it is less
+than one CSS pixel; it can still cross a device-pixel boundary. A real reparent
+may intentionally change indentation or the width available from its new parent;
+apply that change at the drop handoff as one deliberate transition, not as
+incidental reflow while the item crosses targets.
+
+Blueprint review and, when test work is authorized, rendering coverage exercise
+these contracts at fractional ancestor offsets, odd and even sidebar widths,
+narrow and wide supported desktop windows, and supported device scales. Compare
+the geometry at rest, during the drag, on the first post-drop frame, and after
+settling. The internal deltas of a carried subtree stay unchanged until an
+intentional drop relayout, and thin lines retain their declared thickness and
+consistent device-pixel coverage at every supported position. Representative
+moving icons and existing SVG artwork keep their declared boxes, alignment, and
+visual or stroke weight through the same before, moving, handoff, and settled
+states.
 
 ### Spacing between siblings
 
