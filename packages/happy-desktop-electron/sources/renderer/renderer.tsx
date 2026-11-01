@@ -45,9 +45,11 @@ import {
     happyAgentAttentionConnection,
     happyAgentAttentionStoreOwnedCreate,
     happyAgentClockStoreCreate,
+    happyLinkInboxStoreCreate,
     happyAgentMobileConnectorStoreNoop,
     type AppearanceStore,
     type HappyAgentClockStore,
+    type HappyLinkInboxStore,
     type HappyAgentAttentionStore,
     type HappyAgentCompletionSound,
     type CommandPaletteStore,
@@ -76,6 +78,7 @@ import {
     ZoomIndicator,
     ConnectionShell,
     CloudSignInNoticeDialog,
+    HappyLinkNoticeDialog,
     ConnectionSurface,
     happyAgentSurfaceBackdropsPreload,
     type BrowserContentRenderer,
@@ -112,6 +115,7 @@ import {
     happyAgentDirectoryStoreCreate,
     type HappyAgentDirectoryStore,
 } from "./happyAgentDirectoryStore";
+import { happyAgentDirectoryLinkTarget } from "./happyAgentDirectoryLinkTarget";
 import { startupValuesStoreCreate, type StartupValuesStore } from "./startupValuesStore";
 import { browserDevBridgeCreate } from "./browserDevBridge";
 import { localWebBuild } from "./localWebBuild";
@@ -1103,6 +1107,18 @@ function DesktopCloudSignInNotice(props: { store: DesktopCloudSignInNoticeStore 
         />
     );
 }
+/** Why a Happy link from outside was not opened, centered over everything else. */
+function DesktopHappyLinkNotice(props: { store: HappyLinkInboxStore }): ReactNode {
+    const { notice } = useSyncExternalStore(
+        props.store.subscribe,
+        props.store.get,
+        props.store.get,
+    );
+    // Servers is offered once this window can add a server; until then the
+    // notice has only OK.
+    if (!notice) return null;
+    return <HappyLinkNoticeDialog onClose={props.store.noticeDismiss} view={notice} />;
+}
 /* The traffic lights do not zoom with the page, so the safe area reserved for
    them is divided by the page's zoom. That zoom outlives a reload (a renderer
    update, ⌘R, another window of this origin) while the View menu reports only
@@ -1591,6 +1607,34 @@ if (mediaPreviewBridge) {
             for (const ui of connectionUis.values()) ui.dispose();
             connectionUis.clear();
         });
+        // A Happy link from a browser or another app opens only on the connection
+        // whose instance it names. It waits while that one is not live yet and
+        // never falls back to the one on screen.
+        const happyLinkInbox = happyLinkInboxStoreCreate({
+            resolve: (instanceId) => happyAgentDirectoryLinkTarget(happyAgents.get(), instanceId),
+            open(id, url) {
+                happyAgents.happyAgentActivate(id);
+                happyAgentRouterHappyLinkOpen(
+                    connectionUis.get(id)?.router ?? happyAgentRouter,
+                    url,
+                    id,
+                );
+            },
+        });
+        appDisposers.push(() => happyLinkInbox[Symbol.dispose]());
+        appDisposers.push(happyAgents.subscribe(happyLinkInbox.targetsChange));
+        const happyLinksTake = async (): Promise<void> => {
+            const take = desktopBridge.happyLinkExternalTake;
+            if (!take) return;
+            for (let url = await take(); url !== undefined; url = await take())
+                happyLinkInbox.linkReceive(url);
+        };
+        const happyLinksReceived = desktopBridge.happyLinkExternalSubscribe?.(() => {
+            void happyLinksTake().catch(() => undefined);
+        });
+        if (happyLinksReceived) appDisposers.push(happyLinksReceived);
+        // A link that opened Happy waited in the shell for this window.
+        void happyLinksTake().catch(() => undefined);
         let materialized = "";
         appDisposers.push(
             happyAgents.subscribe(() => {
@@ -1647,6 +1691,7 @@ if (mediaPreviewBridge) {
             <DesktopAppearance appearance={appearance}>
                 <DesktopZoomIndicator />
                 <DesktopCloudSignInNotice store={notices} />
+                <DesktopHappyLinkNotice store={happyLinkInbox} />
                 <CodeHighlightWorkers>
                     <DesktopRenderer
                         browserPasswordsAvailable={browserPasswordsAvailable}

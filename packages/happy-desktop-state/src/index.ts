@@ -24,6 +24,8 @@ export * from "./experiments/experimentsStore.js";
 export * from "./projectsVisibility/projectsVisibilityStore.js";
 export * from "./statusBar/statusBarStore.js";
 export * from "./usageAnalytics/usageAnalyticsStore.js";
+export * from "./happyLinks/happyInstanceLink.js";
+export * from "./happyLinks/happyLinkInboxStore.js";
 export * from "./servers/serverUrl.js";
 export * from "./servers/serverSource.js";
 export * from "./servers/serverAddStore.js";

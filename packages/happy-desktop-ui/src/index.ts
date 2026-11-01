@@ -420,7 +420,7 @@ export {
 export { ConversationEntryView, type ConversationEntryViewProps } from "./ConversationEntryView";
 export { DelegatedAgentActivity, type DelegatedAgentActivityProps } from "./DelegatedAgentActivity";
 export { ContextMenu, type ContextMenuProps } from "./ContextMenu";
-export { LinkContextMenu, type LinkContextMenuProps } from "./LinkContextMenu";
+export { LinkContextMenu, LinkCopyContext, type LinkContextMenuProps } from "./LinkContextMenu";
 export { ContextMeter, type ContextMeterProps } from "./ContextMeter";
 export {
     fileTreeBuild,
@@ -623,6 +623,11 @@ export {
     type CloudSignInNoticeTeam,
     type CloudSignInNoticeView,
 } from "./CloudSignInNoticeDialog";
+export {
+    HappyLinkNoticeDialog,
+    type HappyLinkNoticeDialogProps,
+    type HappyLinkNoticeView,
+} from "./HappyLinkNoticeDialog";
 export {
     IMAGE_CROP_MAX_ZOOM,
     imageCropClamp,

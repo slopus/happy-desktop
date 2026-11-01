@@ -911,11 +911,18 @@ export function happyAgentRouterSurfaceOpen(
  * it, a Surface as its sidebar row does, and a file read-only beside the
  * conversation at the lines it named. A malformed link, one naming something
  * the reader's list does not hold, or a service or person does nothing.
+ *
+ * `happyAgentId` names the Happy Agent the link belongs to, as for a link from
+ * outside the app; absent, it is the one on screen.
  */
-export function happyAgentRouterHappyLinkOpen(router: HappyAgentRouter, url: string): void {
+export function happyAgentRouterHappyLinkOpen(
+    router: HappyAgentRouter,
+    url: string,
+    happyAgentId: string | undefined = router.options.context?.happyAgents?.get()
+        .activeHappyAgentId,
+): void {
     const context = router.options.context;
     const directory = context?.happyAgents?.get();
-    const happyAgentId = directory?.activeHappyAgentId;
     const session = directory?.happyAgents.find((entry) => entry.id === happyAgentId)?.session;
     if (context === undefined || happyAgentId === undefined || session === undefined) return;
     const link = parseHappyUrl(url);

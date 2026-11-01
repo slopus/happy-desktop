@@ -3,6 +3,7 @@ import {
     happyAgentConnectionsStoreCreate,
     happyAgentNodeStoreCreate,
     happyAgentUserError,
+    happyInstanceIdOf,
     serverAuthenticationOutcome,
     serverAuthFailure,
     type HappyAgentConnectionItem,
@@ -97,6 +98,11 @@ export interface HappyAgentDirectoryEntry {
     readonly protocolMismatch?: HappyAgentProtocolMismatch;
     readonly message?: string;
     readonly version?: string;
+    /**
+     * The installation this connection reaches, as its own health reports it.
+     * An instance link opens here only when it names exactly this ID.
+     */
+    readonly instanceId?: string;
     /**
      * Why this Happy Agent's daemon stopped admitting work, in its own words,
      * from its drain until a replacement admits work again.
@@ -272,6 +278,24 @@ function projectsMatch(
 }
 
 function connectionRead(
+    happyAgent: LocalHappyAgent,
+    connection: HappyAgentConnectionSnapshot,
+): Pick<HappyAgentDirectoryEntry, "drain" | "instanceId" | "message" | "status" | "version"> {
+    return {
+        ...connectionStatusRead(happyAgent, connection),
+        instanceId: instanceIdRead(happyAgent),
+    };
+}
+
+/**
+ * The instance the daemon last reported, kept through a reconnect that has not
+ * read health again: the same connection reaches the same installation.
+ */
+function instanceIdRead(happyAgent: LocalHappyAgent): string | undefined {
+    return happyInstanceIdOf(happyAgent.connection?.sync.health()) ?? happyAgent.entry.instanceId;
+}
+
+function connectionStatusRead(
     happyAgent: LocalHappyAgent,
     connection: HappyAgentConnectionSnapshot,
 ): Pick<HappyAgentDirectoryEntry, "drain" | "message" | "status" | "version"> {
