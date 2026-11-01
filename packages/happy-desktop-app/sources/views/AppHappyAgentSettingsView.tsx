@@ -96,6 +96,7 @@ import {
 import { HappyAgentVersionProvider } from "../HappyAgentVersionProvider";
 import {
     AppMobileDirectSection,
+    appMobileDirectOff,
     appMobilePairingOptions,
     appMobileRelayFromIntegration,
     appMobileRelayFromLink,
@@ -581,6 +582,14 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
         mobileConnectorStore.get,
         mobileConnectorStore.get,
     );
+    // A way of pairing this Happy Agent reports off is not offered, and Direct
+    // also waits for its experiment. The local desktop pairs through the
+    // guided setup, which goes through the relay, so with the relay off it has
+    // no way left. With none, Connect a phone is left out.
+    const relayOff = happyIntegration.status === "disabled";
+    const directOff = appMobileDirectOff(mobileConnector.connector);
+    const pairingOff =
+        relayOff && (!mobileDirect || directOff || happyIntegrationStore.mobileSetup !== undefined);
     // Subscribing is what starts the read, so the instructions are asked for
     // only while this window is open, and only once however often it is.
     const instructionsStore = host?.session?.instructions;
@@ -945,7 +954,7 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                             happyIntegrationStore.happyIntegrationDisconnectRequest();
                     }}
                     onPairingOptionsOpen={() => {
-                        if (!happyAgentOnline()) return;
+                        if (!happyAgentOnline() || pairingOff) return;
                         // The local desktop walks through getting the app first.
                         if (mobileSetup) mobileSetup.start();
                         else happyIntegrationStore.happyIntegrationPairingOpen();
@@ -968,8 +977,10 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                               }).view,
                           }
                         : {})}
-                    // The direct connection is an experiment: off, its section is left out.
-                    {...(mobileDirect
+                    pairingOff={pairingOff}
+                    // The direct connection is an experiment: off, or reported
+                    // off by the Happy Agent, its section is left out.
+                    {...(mobileDirect && !directOff
                         ? {
                               direct: sessionClock ? (
                                   <AppMobileDirectSection

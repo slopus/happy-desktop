@@ -165,6 +165,14 @@
     line-height: 20px;
 }
 
+/* The one line Mobile Access says when the Happy Agent offers no way to pair. */
+.happy-agent-mobile-settings__off {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 20px;
+}
+
 /* A refused removal: the reason, then its two ways forward beneath it. */
 .happy-agent-mobile-settings__removal {
     display: flex;

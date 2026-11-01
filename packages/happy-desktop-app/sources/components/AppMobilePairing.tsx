@@ -2,6 +2,7 @@ import { useSyncExternalStore } from "react";
 import type {
     HappyAgentClockStore,
     HappyAgentIntegrationSnapshot,
+    HappyAgentMobileConnectorRead,
     HappyAgentMobileConnectorSnapshot,
     HappyAgentMobileConnectorStore,
     HappyMobileLinkPhase,
@@ -16,6 +17,18 @@ import {
     type MobilePairingOptionsLayout,
     type MobileRelayPairingState,
 } from "happy-desktop-ui";
+
+/**
+ * Whether this Happy Agent reports direct pairing off: its connector says
+ * `disabled`, or it predates the connector and answered 404. Only a connector
+ * being followed can say so; one not followed yet is not off.
+ */
+export function appMobileDirectOff(connector: HappyAgentMobileConnectorRead): boolean {
+    return (
+        connector.kind === "unsupported" ||
+        (connector.kind === "ready" && connector.connector.status === "disabled")
+    );
+}
 
 /** The guided setup's link step, as the relay slot shows it. */
 export function appMobileRelayFromLink(phase: HappyMobileLinkPhase): MobileRelayPairingState {
@@ -116,20 +129,27 @@ export interface AppMobilePairingProps {
  * needs to know: whether the emoji step leads and whether a phone paired.
  * With Relay shown the direct connection is not followed.
  * `snapshot` is the caller's one subscription to the direct connector.
+ *
+ * A method the Happy Agent reports off is never offered: the other one shows
+ * alone, without the Relay | Direct control.
  */
 export function appMobilePairingOptions(
     props: AppMobilePairingProps & { readonly snapshot: HappyAgentMobileConnectorSnapshot },
 ): DesktopMobilePairingOptions {
     const { connector } = props.snapshot;
-    if (props.method === "relay")
+    const relayOff = props.relay.kind === "disabled";
+    const directOff = appMobileDirectOff(connector);
+    const method: MobilePairingMethod = relayOff ? "direct" : directOff ? "relay" : props.method;
+    const shown = { ...props, method, methodFixed: relayOff || directOff };
+    if (method === "relay")
         return {
-            view: <AppMobilePairingOptions {...props} />,
+            view: <AppMobilePairingOptions {...shown} />,
             verifying: false,
             completed: false,
             method: "relay",
         };
     return {
-        view: <AppMobilePairingOptions {...props} />,
+        view: <AppMobilePairingOptions {...shown} />,
         method: "direct",
         verifying: mobileDirectPairingEngaged(connector),
         completed:
@@ -176,7 +196,10 @@ export function AppMobileDirectSection(props: {
 
 /** Owns the countdown's clock subscription, so only the codes repaint every second. */
 function AppMobilePairingOptions(
-    props: AppMobilePairingProps & { readonly snapshot: HappyAgentMobileConnectorSnapshot },
+    props: AppMobilePairingProps & {
+        readonly snapshot: HappyAgentMobileConnectorSnapshot;
+        readonly methodFixed: boolean;
+    },
 ) {
     const now = useSyncExternalStore(props.clock.subscribe, props.clock.get, props.clock.get);
     const { snapshot } = props;
@@ -189,6 +212,7 @@ function AppMobilePairingOptions(
             now={now}
             method={props.method}
             onMethodSelect={props.onMethodSelect}
+            methodFixed={props.methodFixed}
             relay={props.relay}
             {...(props.relayStarting === undefined ? {} : { relayStarting: props.relayStarting })}
             {...(props.onRelayRetry ? { onRelayRetry: guarded(props.onRelayRetry) } : {})}

@@ -61,6 +61,11 @@ export interface HappyAgentMobileSettingsProps {
     onManagementConfirm?(): void;
     /** Opens pairing: the relay, or the direct connection while its experiment is on. */
     onPairingOptionsOpen(): void;
+    /**
+     * This Happy Agent reports every way of pairing a phone this window offers
+     * turned off, so Connect a phone is left out.
+     */
+    readonly pairingOff?: boolean;
     /** The open pairing UI (MobilePairingOptions), shown in place of Connect a phone. */
     readonly pairingOptions?: ReactNode;
     /**
@@ -92,23 +97,32 @@ export function HappyAgentMobileSettings(props: HappyAgentMobileSettingsProps) {
                         {props.unavailable}
                     </Banner>
                 ) : null}
-                {props.pairingOptions ?? (
-                    <FormRow
-                        align="start"
-                        control={
-                            <Button
-                                disabled={blocked}
-                                icon="link"
-                                onClick={props.onPairingOptionsOpen}
-                                size="small"
-                                variant="primary"
-                            >
-                                Connect phone
-                            </Button>
-                        }
-                        description="Shows the relay code, or the direct one as an experiment"
-                        label="Connect a phone"
-                    />
+                {props.pairingOff ? (
+                    <p
+                        className="happy-agent-mobile-settings__off"
+                        data-testid="happy-mobile-settings-pairing-off"
+                    >
+                        Phone pairing is turned off on this Happy Agent.
+                    </p>
+                ) : (
+                    (props.pairingOptions ?? (
+                        <FormRow
+                            align="start"
+                            control={
+                                <Button
+                                    disabled={blocked}
+                                    icon="link"
+                                    onClick={props.onPairingOptionsOpen}
+                                    size="small"
+                                    variant="primary"
+                                >
+                                    Connect phone
+                                </Button>
+                            }
+                            description="Shows the relay code, or the direct one as an experiment"
+                            label="Connect a phone"
+                        />
+                    ))
                 )}
                 {props.error ? (
                     <Banner tone="danger" title="Happy Mobile status unavailable">
@@ -286,11 +300,14 @@ function mobileState(props: HappyAgentMobileSettingsProps): MobileState {
 
 /**
  * Whether the relay has anything to say: it is linked, or it is in a state worth
- * knowing about. An unlinked relay that is merely idle is left out.
+ * knowing about. An unlinked relay that is merely idle, or turned off, is left out.
  */
 function relayShown(props: HappyAgentMobileSettingsProps): boolean {
     if (props.configured === true) return true;
-    return props.status !== "loading" && props.status !== "disconnected";
+    // A relay the Happy Agent turned off is not offered, so it is not shown.
+    return (
+        props.status !== "loading" && props.status !== "disconnected" && props.status !== "disabled"
+    );
 }
 
 /** The state line, the Agent's own detail, and when the Agent last saw it change. */

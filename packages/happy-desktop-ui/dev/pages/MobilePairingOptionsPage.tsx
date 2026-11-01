@@ -133,6 +133,28 @@ const states: readonly {
         detail: "Direct selected, tagged Experimental: the direct code in the same place the relay code was",
         variant: { direct: direct.waiting, relay: relayWaiting, method: "direct" },
     },
+    {
+        id: "14",
+        label: "Direct only",
+        detail: "The Happy Agent reports its relay off: no Relay | Direct control, the direct code alone",
+        variant: {
+            direct: direct.waiting,
+            relay: relayWaiting,
+            method: "direct",
+            methodFixed: true,
+        },
+    },
+    {
+        id: "15",
+        label: "Relay only",
+        detail: "The Happy Agent reports direct pairing off: no Relay | Direct control, the relay code alone",
+        variant: {
+            direct: direct.waiting,
+            relay: relayWaiting,
+            method: "relay",
+            methodFixed: true,
+        },
+    },
 ];
 
 export function MobilePairingOptionsPage() {

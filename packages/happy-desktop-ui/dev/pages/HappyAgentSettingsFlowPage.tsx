@@ -334,6 +334,15 @@ export function HappyAgentSettingsFlowPage() {
                     status="disconnected"
                 />
             </Screen>
+            <Screen id="mobile-access" number="15" screen="15-mobile-access-pairing-off">
+                <HappyAgentMobileSettings
+                    configured={false}
+                    onDisconnect={noop}
+                    onPairingOptionsOpen={noop}
+                    pairingOff
+                    status="disabled"
+                />
+            </Screen>
             <Screen id="experimental" number="13" screen="13-experimental">
                 <HappyAgentExperimentalSettings
                     features={[

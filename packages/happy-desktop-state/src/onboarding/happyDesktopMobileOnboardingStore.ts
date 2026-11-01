@@ -88,17 +88,8 @@ export function happyDesktopMobileOnboardingStoreCreate(
                     expiresAt: integration.authorization.expiresAt,
                 },
             };
-        if (integration.status === "failed" || integration.status === "disabled")
-            return {
-                kind: "link",
-                phase: {
-                    kind: "failed",
-                    message:
-                        integration.status === "failed"
-                            ? integration.error.message
-                            : "Happy Mobile is disabled in this Happy Agent installation.",
-                },
-            };
+        if (integration.status === "failed")
+            return { kind: "link", phase: { kind: "failed", message: integration.error.message } };
         return {
             kind: "link",
             phase: pairing
@@ -120,11 +111,19 @@ export function happyDesktopMobileOnboardingStoreCreate(
     };
     const publish = () => {
         if (disposed) return;
+        // A relay this Happy Agent turned off is not offered: the phone step
+        // is over, as it is for a remote Happy Agent's onboarding.
+        const relayOff =
+            integration !== undefined &&
+            !integration.configured &&
+            integration.status === "disabled";
         snapshot = skipped
             ? { status: "skipped" }
             : continued
               ? { status: "configured" }
-              : { status: "desktop", step: step() };
+              : relayOff
+                ? { status: "disabled" }
+                : { status: "desktop", step: step() };
         directSync();
         for (const listener of listeners) listener();
     };
