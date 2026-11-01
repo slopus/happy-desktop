@@ -3,7 +3,7 @@
  *
  * The keys are shared with Happy Agent, iOS, and Android. A key that is present
  * is enforced and its control is locked; an absent key leaves the choice to the
- * person. Where they are read from — the host Happy Agent's policy, or the
+ * person, except phone pairing, which a policy keeps off unless it names it. Where they are read from — the host Happy Agent's policy, or the
  * desktop shell itself — is the source's business: this store only holds the
  * last policy the source delivered, through its private writer.
  */
@@ -21,6 +21,10 @@ export interface ManagedSettings {
     readonly hostedRelayEnabled?: boolean;
     /** Tailcat, which carries direct phone pairing. */
     readonly tailcatEnabled?: boolean;
+    /**
+     * Phone pairing is opt-in under a policy: only `true` allows it, and a
+     * policy that leaves the key out keeps it off. Without a policy it is open.
+     */
     readonly phonePairingEnabled?: boolean;
 }
 
@@ -107,6 +111,20 @@ export function managedSettingsOf(snapshot: ManagedSettingsSnapshot): ManagedSet
     return snapshot.status === "ready" ? snapshot.settings : {};
 }
 
+/** Whether the source reported a policy that names any key; `{}` means unmanaged. */
+export function managedSettingsPresent(snapshot: ManagedSettingsSnapshot): boolean {
+    if (snapshot.status !== "ready") return false;
+    const settings = snapshot.settings;
+    return (
+        settings.serverUrl !== undefined ||
+        settings.allowAdditionalServers !== undefined ||
+        settings.analyticsEnabled !== undefined ||
+        settings.hostedRelayEnabled !== undefined ||
+        settings.tailcatEnabled !== undefined ||
+        settings.phonePairingEnabled !== undefined
+    );
+}
+
 /**
  * Whether the policy lets analytics send right now; the person's own switch
  * still has to be on. While a source is still loading nothing is sent, so a
@@ -125,9 +143,14 @@ export interface ManagedPhonePairing {
     readonly direct: boolean;
 }
 
+/**
+ * A policy opens pairing only by saying `phonePairingEnabled: true`. While a
+ * source is still loading the person's machine counts as unmanaged here: the
+ * host refuses pairing a policy forbids, and onboarding's phone step is optional.
+ */
 export function managedPhonePairing(snapshot: ManagedSettingsSnapshot): ManagedPhonePairing {
     const settings = managedSettingsOf(snapshot);
-    const pairing = settings.phonePairingEnabled !== false;
+    const pairing = managedSettingsPresent(snapshot) ? settings.phonePairingEnabled === true : true;
     return {
         relay: pairing && settings.hostedRelayEnabled !== false,
         direct: pairing && settings.tailcatEnabled !== false,

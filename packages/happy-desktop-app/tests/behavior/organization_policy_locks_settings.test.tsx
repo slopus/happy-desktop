@@ -17,8 +17,9 @@ vi.mock("../../../happy-desktop-ui/src/Spinner", () => ({ Spinner: () => null })
 
 /*
  * An organization's managed settings lock what they name: analytics can be
- * turned off and locked, never forced on, Mobile access goes
- * when no way of pairing a phone is left, and the server form adds only the
+ * turned off and locked, never forced on; under a policy Mobile access is
+ * offered only when the policy turns pairing on and leaves a way to pair open;
+ * and the server form adds only the
  * organization's server. Servers is offered only by a host that can add one.
  */
 
@@ -107,20 +108,26 @@ it("never turns analytics on: a policy of true leaves the person's switch workin
     dispose();
 });
 
-it("leaves Mobile access out once the organization turns every way of pairing off", () => {
-    const open = settingsRender({ section: "general" });
+it("offers Mobile access under a policy only when the policy turns pairing on", () => {
+    const mobileAccessShown = (managed?: ManagedSettings): boolean => {
+        const rendered = settingsRender({ section: "general", ...(managed ? { managed } : {}) });
+        const shown = categoryLabels(rendered.view.container).some((label) =>
+            label.includes("Mobile access"),
+        );
+        rendered.dispose();
+        return shown;
+    };
+    expect(mobileAccessShown()).toBe(true);
+    expect(mobileAccessShown({})).toBe(true);
+    expect(mobileAccessShown({ analyticsEnabled: false })).toBe(false);
+    expect(mobileAccessShown({ phonePairingEnabled: true })).toBe(true);
     expect(
-        categoryLabels(open.view.container).some((label) => label.includes("Mobile access")),
-    ).toBe(true);
-    open.dispose();
-    const closed = settingsRender({
-        section: "general",
-        managed: { hostedRelayEnabled: false, tailcatEnabled: false },
-    });
-    expect(
-        categoryLabels(closed.view.container).some((label) => label.includes("Mobile access")),
+        mobileAccessShown({
+            phonePairingEnabled: true,
+            hostedRelayEnabled: false,
+            tailcatEnabled: false,
+        }),
     ).toBe(false);
-    closed.dispose();
 });
 
 it("offers Servers only where a host can add one, and adds only the organization's server", () => {

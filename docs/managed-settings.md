@@ -18,7 +18,9 @@ reports and enforces the policy in its own screens.
 Happy Agent, iOS, Android, and desktop share these key names. A key that is
 present is enforced and its control is locked, except `analyticsEnabled`, which
 only ever turns analytics off. A key that is absent leaves the choice to the
-person.
+person, except `phonePairingEnabled`: once a file names any key, phone pairing
+is off unless the file sets `phonePairingEnabled: true`. Without a file, or with
+an empty one, nothing changes.
 
 | Key                      | Type    | Effect on desktop                                                                                                                                                                 |
 | ------------------------ | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -27,10 +29,11 @@ person.
 | `analyticsEnabled`       | boolean | `false` turns product analytics off and locks the Privacy switch off. `true` changes nothing: a policy never turns analytics on. No event is sent while the policy is being read. |
 | `hostedRelayEnabled`     | boolean | `false` turns the Happy relay off. Phone pairing offers Direct only, with no Relay or Direct choice.                                                                              |
 | `tailcatEnabled`         | boolean | `false` turns Tailcat off, and with it direct phone pairing. Phone pairing offers Relay only.                                                                                     |
-| `phonePairingEnabled`    | boolean | `false` turns phone pairing off. Settings › Mobile access is left out and onboarding skips the phone step.                                                                        |
+| `phonePairingEnabled`    | boolean | Opt-in. Only `true` allows phone pairing; `false` or leaving it out turns it off. While off, Settings › Mobile access is left out and onboarding skips the phone step.            |
 
-Turning off both `hostedRelayEnabled` and `tailcatEnabled` has the same effect as
-`phonePairingEnabled: false`. The host Happy Agent also enforces the relay and
+With `phonePairingEnabled: true`, turning off both `hostedRelayEnabled` and
+`tailcatEnabled` still leaves no way to pair, so it has the same effect as
+leaving pairing off. The host Happy Agent also enforces the relay and
 Tailcat keys. The desktop hides those features; it is not the only thing
 stopping them.
 

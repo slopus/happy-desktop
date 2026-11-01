@@ -3,6 +3,7 @@ import {
     managedAnalyticsAllowed,
     managedPhonePairing,
     managedServers,
+    managedSettingsPresent,
     managedSettingsStoreCreate,
 } from "./managedSettingsStore.js";
 
@@ -24,13 +25,27 @@ it("sends no analytics while the policy is still being read", () => {
     expect(managedAnalyticsAllowed(store.get())).toBe(false);
 });
 
+it("keeps phone pairing off under a policy unless the policy turns it on", () => {
+    const { store, writer } = managedSettingsStoreCreate();
+    writer.managedSettingsAdopt({});
+    expect(managedSettingsPresent(store.get())).toBe(false);
+    expect(managedPhonePairing(store.get())).toEqual({ relay: true, direct: true });
+    writer.managedSettingsAdopt({ analyticsEnabled: false });
+    expect(managedSettingsPresent(store.get())).toBe(true);
+    expect(managedPhonePairing(store.get())).toEqual({ relay: false, direct: false });
+    writer.managedSettingsAdopt({ phonePairingEnabled: false });
+    expect(managedPhonePairing(store.get())).toEqual({ relay: false, direct: false });
+    writer.managedSettingsAdopt({ phonePairingEnabled: true });
+    expect(managedPhonePairing(store.get())).toEqual({ relay: true, direct: true });
+});
+
 it("closes each way of linking a phone that its key turns off", () => {
     const { store, writer } = managedSettingsStoreCreate();
-    writer.managedSettingsAdopt({ hostedRelayEnabled: false });
+    writer.managedSettingsAdopt({ phonePairingEnabled: true, hostedRelayEnabled: false });
     expect(managedPhonePairing(store.get())).toEqual({ relay: false, direct: true });
-    writer.managedSettingsAdopt({ tailcatEnabled: false });
+    writer.managedSettingsAdopt({ phonePairingEnabled: true, tailcatEnabled: false });
     expect(managedPhonePairing(store.get())).toEqual({ relay: true, direct: false });
-    writer.managedSettingsAdopt({ phonePairingEnabled: false, hostedRelayEnabled: true });
+    writer.managedSettingsAdopt({ hostedRelayEnabled: true, tailcatEnabled: true });
     expect(managedPhonePairing(store.get())).toEqual({ relay: false, direct: false });
 });
 
