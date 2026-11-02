@@ -14,7 +14,7 @@
 
 .happy-sidebar__item-leading:has(> [data-seen]) > .happy-avatar,
 .happy-stories-row__item[data-seen] > .happy-avatar {
-    outline-color: color-mix(in srgb, var(--text-secondary) 50%, transparent);
+    outline-color: var(--text-secondary);
 }
 
 /* The posters with live stories, across the top of the sidebar. */
@@ -35,12 +35,12 @@
     flex-direction: column;
     align-items: center;
     gap: 6px;
-    width: 52px;
+    width: 70px;
     padding: 4px 0 0;
     border: 0;
     background: none;
     color: var(--text-secondary);
-    font: 11px / 14px var(--happy-font-ui);
+    font: 350 10px / 13px var(--happy-font-ui);
 }
 
 .happy-stories-row__item > span {
@@ -84,18 +84,25 @@
     outline: none;
     isolation: isolate;
     overflow: hidden;
+    touch-action: pan-x;
 }
 
 /* The frame never moves: everything over it is laid on top. */
 .happy-story-viewer__frame {
     position: relative;
     flex: none;
-    height: 100%;
+    height: min(100%, calc((100vw - 160px) * 16 / 9));
     aspect-ratio: 9 / 16;
+    /* Layers size against the frame, so a composition looks the same at every window size. */
+    container-type: size;
     overflow: hidden;
     border-radius: 12px;
     background: var(--surface);
     box-shadow: 0 16px 48px var(--shadow-floating);
+}
+.happy-story-viewer__frame :is(input, textarea) {
+    user-select: text;
+    -webkit-user-select: text;
 }
 .happy-story-viewer__zoom,
 .happy-story-viewer__viewport {
@@ -112,7 +119,7 @@
     z-index: 1;
     padding: 0;
     border: 0;
-    background: rgb(0 0 0 / 65%);
+    background: var(--story-reply-overlay);
 }
 
 .happy-story-viewer__media,
@@ -124,10 +131,25 @@
     height: 100%;
     object-fit: cover;
 }
+.happy-story-viewer__media {
+    object-fit: contain;
+}
+.happy-story-viewer__status {
+    /* Loading and failure copy overlays the contained media, never changing the frame. */
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    padding: 12px;
+    border-radius: 8px;
+    background: var(--story-control);
+    color: var(--text);
+    text-align: center;
+    pointer-events: none;
+}
 .happy-story-viewer__backdrop {
-    z-index: -1;
-    filter: blur(40px) brightness(0.45);
-    transform: scale(1.2);
+    /* Stretching the tiny sample is the blur: no filter runs per frame. */
+    z-index: 0;
     pointer-events: none;
 }
 
@@ -155,7 +177,8 @@
     font: 600 20px / 24px var(--happy-font-ui);
 }
 .happy-story-viewer__post {
-    background: var(--text-link);
+    background: var(--text);
+    color: var(--surface);
 }
 .happy-story-viewer__record {
     align-items: flex-end;
@@ -199,6 +222,9 @@
     z-index: 2;
     pointer-events: none;
     background: var(--surface);
+    box-sizing: border-box;
+    max-height: 20%;
+    overflow: hidden;
 }
 .happy-story-viewer__frame[data-composing] .happy-story-viewer__top {
     display: none;
@@ -211,17 +237,19 @@
 .happy-story-viewer__bottom {
     bottom: 0;
     pointer-events: none;
-    padding-top: 72px;
+    padding-top: 16px;
     /* Eased, so a caption and reply field over white media still sit on shade. */
     background: linear-gradient(
         transparent,
         color-mix(in srgb, var(--story-shade-bottom) 75%, transparent) 35%,
         var(--story-shade-bottom)
     );
-    max-height: calc(100% - 88px);
+    box-sizing: border-box;
+    max-height: 30%;
 }
 .happy-story-viewer__frame[data-replies] .happy-story-viewer__bottom {
     padding-top: 0;
+    max-height: calc(100% - 88px);
 }
 .happy-story-viewer__bottom > form {
     flex: none;
@@ -242,8 +270,8 @@
     background: none;
     backdrop-filter: none;
     box-shadow: none;
-    color: white;
-    filter: drop-shadow(0 1px 2px rgb(0 0 0 / 60%));
+    color: var(--text);
+    filter: drop-shadow(0 1px 2px var(--story-ink-shadow));
 }
 
 .happy-story-viewer__top button,
@@ -253,6 +281,9 @@
 
 .happy-story-viewer p {
     margin: 0;
+    min-height: 0;
+    overflow: auto;
+    text-shadow: 0 1px 2px var(--story-backdrop);
 }
 
 .happy-story-viewer__segments,
@@ -364,19 +395,27 @@
     transform: translate(-50%, -50%);
     touch-action: none;
 }
-.happy-story-viewer__sticker {
-    width: 96px;
-    height: 96px;
+.happy-story-viewer__sticker > img,
+.happy-story-viewer__sticker > video {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    -webkit-user-drag: none;
+}
+.happy-story-viewer__sticker[data-shape="round"] > img {
+    border-radius: 50%;
 }
 .happy-story-viewer__text {
     max-width: 90%;
-    font: 600 24px / 30px var(--happy-font-ui);
+    /* 24px on a 390px-wide frame, scaled with the frame and by the sticker's own scale. */
+    font: 600 calc(6.2cqw * var(--happy-story-text-scale, 1)) / 1.25 var(--happy-font-ui);
 }
 .happy-story-viewer__text button,
 .happy-story-viewer__text input {
     border: 0;
-    padding: 6px 12px;
-    border-radius: 8px;
+    padding: 0.25em 0.5em;
+    border-radius: 0.33em;
     background: var(--story-text-fill);
     text-shadow: 0 2px 8px var(--shadow-floating);
     color: var(--text);
@@ -386,15 +425,44 @@
     overflow-wrap: anywhere;
 }
 .happy-story-viewer__text input {
-    width: 240px;
+    width: 10em;
     max-width: 100%;
 }
 .happy-story-viewer__round-record {
+    /* The record affordance deliberately straddles the sticker's bottom edge. */
     position: absolute;
-    inset: 0;
+    bottom: -22px;
+    left: calc(50% - 22px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
     border: 0;
     border-radius: 50%;
-    background: none;
+    background: var(--text);
+    color: var(--surface);
+}
+.happy-story-viewer__round-record.happy-story-viewer__stop {
+    background: var(--warning-critical);
+    color: var(--text);
+}
+.happy-story-viewer__transform {
+    /* A corner handle overlays either sticker, independent of its text flow. */
+    position: absolute;
+    right: -12px;
+    bottom: -12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 1px solid var(--text);
+    border-radius: 50%;
+    background: var(--surface);
+    color: var(--text);
+    touch-action: none;
 }
 .happy-story-viewer__remove {
     position: absolute;

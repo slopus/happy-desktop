@@ -1,4 +1,10 @@
-import type { HappyAgentClient, Story, StoryReply, StoryLayers } from "@slopus/happy-agent-client";
+import type {
+    HappyAgentClient,
+    Story,
+    StoryMediaLayer,
+    StoryMediaLayerInput,
+    StoryReply,
+} from "@slopus/happy-agent-client";
 import type { HappyAgentSync } from "../happyAgentConnection/happyAgentSync.js";
 import { happyAgentSyncRead } from "../happyAgentConnection/happyAgentSyncRead.js";
 import type { HappyAgentAutoJoinSettingsStore } from "../happyAgent/happyAgentAutoJoinSettings.js";
@@ -6,6 +12,7 @@ import { happyAgentUserError } from "../happyAgent/happyAgentSupport.js";
 import { happyAgentSurfacePeopleReaderCreate } from "../surfaces/surfacePeople.js";
 import type { HappyAgentSurfacePerson } from "../surfaces/surfaceTypes.js";
 import { UserError } from "../types.js";
+import type { HappyAgentStoryMediaFrames } from "./storyMediaPreload.js";
 
 /** One poster in the stories row: an agent by its agent id, or a reposting person. */
 export type HappyAgentStoryTile = {
@@ -29,8 +36,10 @@ export type HappyAgentStoriesSnapshot =
           readonly people: ReadonlyMap<string, HappyAgentSurfacePerson>;
           readonly open: {
               readonly story: Story;
-              readonly mediaUrl: string;
-              readonly roundUrl: string | null;
+              readonly media: HappyAgentStoryMedia;
+              /** Above the base media in paint order, each at its own address. */
+              readonly mediaLayers: readonly (StoryMediaLayer &
+                  HappyAgentStoryMedia & { readonly shape: "rect" | "round" })[];
               /** Its place among its poster's live stories, oldest first. */
               readonly segment: { readonly index: number; readonly total: number };
               /** Every reply once read, else the story's last two; oldest first. */
@@ -42,6 +51,13 @@ export type HappyAgentStoriesSnapshot =
       };
 
 export type HappyAgentStoriesStore = ReturnType<typeof happyAgentStoriesStoreCreate>;
+export type HappyAgentStoryMedia = HappyAgentStoryMediaFrames & {
+    readonly kind: "image" | "video";
+    readonly url: string;
+};
+
+/** Stories whose media is fetched at once, ahead of their poster's ring or of playback. */
+const PRELOAD_PARALLEL = 3;
 
 const OFF: HappyAgentStoriesSnapshot = { mode: "off" };
 const noop = () => undefined;
@@ -50,8 +66,10 @@ const keyOf = (story: Story) =>
 
 type Composition = {
     readonly caption?: string;
-    readonly layers: StoryLayers;
-    readonly round: Blob | null;
+    readonly text?: NonNullable<NonNullable<Story["layers"]>["text"]>;
+    readonly mediaLayers: readonly (Omit<StoryMediaLayerInput, "uploadId"> & {
+        readonly blob: Blob;
+    })[];
 };
 
 /** One connection's live stories, followed only while subscribed with `stories` on. */
@@ -63,7 +81,8 @@ export function happyAgentStoriesStoreCreate(deps: {
         | "listStories"
         | "markStorySeen"
         | "storyMediaUrl"
-        | "storyRoundUrl"
+        | "storyLayerUrl"
+        | "uploadStoryMedia"
         | "listStoryReplies"
         | "replyToStory"
         | "repostStory"
@@ -72,6 +91,14 @@ export function happyAgentStoriesStoreCreate(deps: {
     >;
     readonly sync: HappyAgentSync;
     readonly settings: Pick<HappyAgentAutoJoinSettingsStore, "get" | "subscribe">;
+    /**
+     * Settles once these can play at once through the app's shared media cache: an image decoded,
+     * a video buffered to play through, with each video's first frame. Never rejects. A poster's
+     * ring waits for its first story.
+     */
+    readonly preload?: (
+        media: readonly HappyAgentStoryMedia[],
+    ) => Promise<readonly HappyAgentStoryMediaFrames[]>;
 }) {
     const { client, settings } = deps;
     const listeners = new Set<() => void>();
@@ -102,8 +129,49 @@ export function happyAgentStoriesStoreCreate(deps: {
         const setting = settings.get();
         return setting.status === "ready" && setting.autoJoinEnabled;
     };
-    const walk = (key: string) => stories.filter((story) => keyOf(story) === key);
+    const walk = (key: string) =>
+        stories
+            .filter((story) => keyOf(story) === key)
+            .sort(
+                (left, right) => left.postedAt - right.postedAt || left.id.localeCompare(right.id),
+            );
     const opened = () => stories.find((story) => story.id === open?.story.id);
+    const frames = new Map<string, HappyAgentStoryMediaFrames>();
+    const playable = (kind: "image" | "video", url: string) => ({ kind, url, ...frames.get(url) });
+    const mediaOf = (story: Story) => ({
+        media: playable(story.media.kind, client.storyMediaUrl(story.id)),
+        mediaLayers: (story.mediaLayers ?? []).map((layer) => ({
+            ...layer,
+            ...playable(layer.kind, client.storyLayerUrl(story.id, layer.id)),
+            shape: layer.shape ?? "rect",
+        })),
+    });
+    // Stories whose media is ready or asked for, and posters whose ring has appeared and so stays.
+    const ready = new Set<string>();
+    const asked = new Set<string>();
+    const shown = new Set<string>();
+    const queue: Story[] = [];
+    let loading = 0;
+    const pump = () => {
+        for (; loading < PRELOAD_PARALLEL && queue.length > 0; loading++) {
+            const next = queue.shift()!;
+            const { media, mediaLayers } = mediaOf(next);
+            const all = [media, ...mediaLayers];
+            void (deps.preload?.(all) ?? Promise.resolve([])).then((each) => {
+                each.forEach((taken, at) => frames.set(all[at]!.url, taken));
+                loading--;
+                ready.add(next.id);
+                pump();
+                if (following) changed();
+            });
+        }
+    };
+    const preload = (story: Story | undefined) => {
+        if (!story || asked.has(story.id)) return;
+        asked.add(story.id);
+        queue.push(story);
+        pump();
+    };
     const row = (): HappyAgentStoryTile[] => {
         const tiles = new Map<string, HappyAgentStoryTile & { latest: number }>();
         for (const story of stories) {
@@ -118,6 +186,7 @@ export function happyAgentStoriesStoreCreate(deps: {
             });
         }
         return [...tiles.values()]
+            .filter((tile) => shown.has(tile.key))
             .sort(
                 (left, right) =>
                     Number(left.state === "seen") - Number(right.state === "seen") ||
@@ -128,48 +197,46 @@ export function happyAgentStoriesStoreCreate(deps: {
     const compute = (): HappyAgentStoriesSnapshot => {
         const outlines = new Map<string, "unseen" | "seen">();
         for (const { agentId, seen, poster } of stories)
-            if (poster === "agent" && agentId && outlines.get(agentId) !== "unseen")
+            if (
+                poster === "agent" &&
+                agentId &&
+                shown.has(`agent:${agentId}`) &&
+                outlines.get(agentId) !== "unseen"
+            )
                 outlines.set(agentId, seen ? "seen" : "unseen");
         const story = opened();
         const held = story ? walk(keyOf(story)) : [];
         const view = story && {
             story,
-            mediaUrl: client.storyMediaUrl(story.id),
-            roundUrl: story.round ? client.storyRoundUrl(story.id) : null,
+            ...mediaOf(story),
             segment: { index: held.indexOf(story), total: held.length },
             replies: replies?.id === story.id ? replies.all : story.replies,
         };
         return { mode: "on", outlines, row: row(), people, open: view ?? null, failure, draft };
     };
-    /** Follows while someone is subscribed with the setting on; stopping forgets the feed. */
+    /**
+     * Follows from the first subscriber until disposed, like the sidebar's own lists, so switching
+     * away and back reads nothing and redraws at once; it is fed by the startup data and live
+     * events. Turning the setting off forgets the feed, and turning it on reads it.
+     */
     const lifetime = () => {
-        const wanted = !disposed && listeners.size > 0 && enabled();
-        if (wanted && !following) {
-            following = new AbortController();
-            reader = happyAgentSurfacePeopleReaderCreate({
-                client,
-                signal: following.signal,
-                read: (read) => {
-                    people = new Map([...people, ...read]);
-                    notify();
-                },
-            });
-            void followLoop(following.signal).catch(noop);
-        } else if (!wanted && following) {
+        const setting = settings.get();
+        if (setting.status === "ready" && !setting.autoJoinEnabled && fed) {
             draftDrop();
-            following.abort();
-            following = undefined;
-            clearTimeout(expiry);
-            [stories, cursor, open, replies, failure, snapshot] = [
-                [],
-                undefined,
-                null,
-                null,
-                null,
-                undefined,
-            ];
-            people = new Map();
-        }
+            fed = false;
+            [stories, cursor, open, replies, failure] = [[], undefined, null, null, null];
+        } else if (following && enabled() && !fed) void feedRead(following.signal);
+        if (disposed || listeners.size === 0 || following) return;
+        following = new AbortController();
+        reader = happyAgentSurfacePeopleReaderCreate({
+            client,
+            signal: following.signal,
+            read: (read) => {
+                people = new Map([...people, ...read]);
+                notify();
+            },
+        });
+        void followLoop(following.signal).catch(noop);
     };
     const notify = () => {
         snapshot = undefined;
@@ -181,6 +248,12 @@ export function happyAgentStoriesStoreCreate(deps: {
         clearTimeout(expiry);
         const now = Date.now();
         stories = stories.filter((story) => story.expiresAt > now);
+        // A poster's ring appears once its first story can play at once, and then stays.
+        for (const key of new Set(stories.map(keyOf))) {
+            const opening = first(key);
+            if (opening && ready.has(opening.id)) shown.add(key);
+            else preload(opening);
+        }
         // The open story left: on to its poster's next one, or the row's next poster.
         if (open && !opened()) {
             const { story: gone, through } = open;
@@ -216,19 +289,31 @@ export function happyAgentStoriesStoreCreate(deps: {
             changed();
         }, noop);
     };
+    /** Whether `stories` is this reader's feed with the setting on, and a read of it in flight. */
+    let fed = false;
+    let reading: AbortSignal | undefined;
+    const feedRead = async (signal: AbortSignal) => {
+        if (reading === signal) return;
+        reading = signal;
+        const read = await happyAgentSyncRead(signal, () => client.listStories({ signal }), noop);
+        reading = undefined;
+        if (signal.aborted) return;
+        [stories, cursor, fed] = [read.stories.map(merged), read.cursor, true];
+        changed();
+    };
     const followLoop = async (signal: AbortSignal) => {
         for await (const input of deps.sync.follow({
             signal,
             events: ["story.changed", "story.removed"],
         })) {
-            if (input.kind === "bootstrap" || input.kind === "reconcile") {
-                const read = await happyAgentSyncRead(
-                    signal,
-                    () => client.listStories({ signal }),
-                    noop,
-                );
-                if (signal.aborted) return;
-                [stories, cursor] = [read.stories.map(merged), read.cursor];
+            if (input.kind === "bootstrap" && input.bootstrap.storiesEnabled !== undefined) {
+                // The startup data carries the feed, its cursor and the switch: nothing to read.
+                const { stories: feed = [], storiesEnabled, cursor: at } = input.bootstrap;
+                [stories, cursor, fed] = [feed.map(merged), at, storiesEnabled];
+            } else if (input.kind === "bootstrap" || input.kind === "reconcile") {
+                fed = false;
+                if (enabled()) void feedRead(signal);
+                continue;
             } else if (
                 input.kind === "update" &&
                 input.update.kind === "event" &&
@@ -249,6 +334,11 @@ export function happyAgentStoriesStoreCreate(deps: {
     /** Shows a story and marks it seen, greying it at once. */
     const show = (story: Story | undefined, through: readonly string[] | null) => {
         open = story ? { story, through } : null;
+        // Keep the next two stories fetched ahead of playback.
+        const held = story ? walk(keyOf(story)) : [];
+        const at = story ? held.indexOf(story) : -1;
+        preload(held[at + 1] ?? (story && hop(keyOf(story), 1)));
+        preload(held[at + 2]);
         replies = null;
         const signal = following?.signal;
         if (story && !story.seen) {
@@ -271,10 +361,23 @@ export function happyAgentStoriesStoreCreate(deps: {
         const keys = open?.through ?? [];
         for (let at = keys.indexOf(key) + delta; at >= 0 && at < keys.length; at += delta) {
             const held = walk(keys[at]!);
-            if (held.length > 0) return delta > 0 ? first(keys[at]!) : held.at(-1);
+            if (held.length > 0 && (delta < 0 || held.some((story) => !story.seen)))
+                return delta > 0 ? first(keys[at]!) : held.at(-1);
         }
         return undefined;
     };
+    // Every file is streamed once on its own, and the story only references it.
+    const upload = async (file: Blob) => (await client.uploadStoryMedia(file)).upload.id;
+    const composed = async ({ caption, text, mediaLayers }: Composition) => ({
+        ...(caption ? { caption } : {}),
+        ...(text ? { layers: { text } } : {}),
+        mediaLayers: await Promise.all(
+            mediaLayers.map(async ({ blob, ...placement }) => ({
+                ...placement,
+                uploadId: await upload(blob),
+            })),
+        ),
+    });
     /** Runs one of the reader's acts on the open story; false when the daemon refused it. */
     const act = (run: (story: Story) => Promise<void>): Promise<boolean> => {
         const story = opened();
@@ -298,13 +401,7 @@ export function happyAgentStoriesStoreCreate(deps: {
             listeners.add(listener);
             release ??= settings.subscribe(notify);
             lifetime();
-            return () => {
-                listeners.delete(listener);
-                if (listeners.size > 0) return;
-                release?.();
-                release = undefined;
-                lifetime();
-            };
+            return () => void listeners.delete(listener);
         },
         /** Opens an agent's stories at its first unseen one; past either end it closes. */
         agentOpen(agentId: string) {
@@ -353,13 +450,8 @@ export function happyAgentStoriesStoreCreate(deps: {
             const held = draft;
             failure = null;
             try {
-                if (composition.round && composition.round.size > 16 * 1024 * 1024)
-                    throw new UserError("A round video can be at most 16 MB.");
-                const response = await client.postStory(held.file, {
-                    ...(composition.caption ? { caption: composition.caption } : {}),
-                    layers: composition.layers,
-                    ...(composition.round ? { round: composition.round } : {}),
-                });
+                const [media, rest] = await Promise.all([upload(held.file), composed(composition)]);
+                const response = await client.postStory({ media: { uploadId: media }, ...rest });
                 if (!enabled() || draft !== held) return false;
                 draftDrop();
                 adopt(response.story);
@@ -378,16 +470,9 @@ export function happyAgentStoriesStoreCreate(deps: {
             void act(async (story) => void (await client.replyToStory(story.id, text)));
         },
         /** Resolves false when it was refused, so the reader can try again. */
-        storyRepost({ caption, layers, round }: Composition) {
+        storyRepost(composition: Composition) {
             return act(async (story) => {
-                // The largest round video the daemon takes.
-                if (round && round.size > 16 * 1024 * 1024)
-                    throw new UserError("A round video can be at most 16 MB.");
-                const response = await client.repostStory(story.id, {
-                    ...(caption ? { caption } : {}),
-                    layers,
-                    ...(round ? { round } : {}),
-                });
+                const response = await client.repostStory(story.id, await composed(composition));
                 adopt(response.story);
                 changed();
             });
@@ -403,8 +488,9 @@ export function happyAgentStoriesStoreCreate(deps: {
             disposed = true;
             listeners.clear();
             release?.();
-            release = undefined;
-            lifetime();
+            following?.abort();
+            clearTimeout(expiry);
+            draftDrop();
         },
     };
 }

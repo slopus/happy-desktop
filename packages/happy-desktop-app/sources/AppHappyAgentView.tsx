@@ -3337,15 +3337,13 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
     const storyDraft = stories.mode === "on" ? stories.draft : null;
     const storyMedia = storyDraft
         ? { kind: storyDraft.kind, url: storyDraft.mediaUrl }
-        : storyOpen
-          ? { kind: storyOpen.story.media.kind, url: storyOpen.mediaUrl }
-          : null;
+        : (storyOpen?.media ?? null);
     // Who posted a story or replied: an agent by its bot or task, a person by their photo.
     const storyPoster = (who: {
         readonly poster: "agent" | "person";
         readonly agentId: string | null;
         readonly userId: string | null;
-    }): { name: string; face: StoryFace } => {
+    }): { name: string; shortName?: string; face: StoryFace } => {
         if (who.poster === "person") {
             const person =
                 who.userId === null
@@ -3360,9 +3358,14 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
         const bot = active?.bots.find((each) => each.conversation.id === who.agentId);
         const task = active?.tasks?.find((each) => each.conversation.id === who.agentId);
         const name = bot?.name ?? task?.name ?? "Agent";
+        const shortName = bot ? bot.shortName : task?.shortName;
         const face = task && !bot ? taskFace(task) : {};
         const photo = bot?.avatar ? { imageUrl: bot.avatar.url } : {};
-        return { name, face: { initials: ownerInitials(name), ...face, ...photo, type: "agent" } };
+        return {
+            name,
+            ...(shortName ? { shortName } : {}),
+            face: { initials: ownerInitials(name), ...face, ...photo, type: "agent" },
+        };
     };
     // Only the addressed Happy Agent's rows, whose stories these are, wear outlines.
     const storyOutline: StoryOutline = (happyAgentId, agentId) => {
@@ -4491,8 +4494,10 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                         caption={storyOpen?.story.caption ?? null}
                         key={storyOpen?.story.id ?? "draft"}
                         media={storyMedia}
-                        layers={storyOpen?.story.layers}
-                        roundUrl={storyOpen?.roundUrl}
+                        mediaLayers={storyOpen?.mediaLayers ?? []}
+                        {...(storyOpen?.story.layers?.text
+                            ? { text: storyOpen.story.layers.text }
+                            : {})}
                         {...(storyDraft ? { onPost: storiesStore.storyPost } : {})}
                         notice={stories.mode === "on" ? stories.failure?.message : null}
                         onClose={storiesStore.viewerClose}
@@ -4532,7 +4537,6 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                             ? {
                                   repost: {
                                       from: storyPoster({ ...storyOpen.story, poster: "agent" }),
-                                      roundUrl: storyOpen.roundUrl,
                                   },
                               }
                             : {})}

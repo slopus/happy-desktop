@@ -47,6 +47,9 @@ const BARS = `data:image/svg+xml,${encodeURIComponent(
         .join("")}</svg>`,
 )}`;
 
+/** A landscape composition proves that the full image stays visible in the portrait frame. */
+const WIDE = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900"><rect width="1600" height="900" fill="#244570"/><circle cx="1250" cy="240" r="140" fill="#efad6d"/><path d="M0 900V650L400 300 800 700 1100 450 1600 750V900" fill="#607e7d"/><rect x="20" y="20" width="1560" height="860" fill="none" stroke="#fff" stroke-width="20"/></svg>')}`;
+
 const rows = (story: "off" | "on"): SidebarItem[] => [
     {
         id: "onboarding",
@@ -94,6 +97,8 @@ function ViewerSpecimen(props: {
     readonly composer?: boolean;
     readonly replyCount?: number;
     readonly media?: string;
+    readonly cameraSticker?: boolean;
+    readonly many?: boolean;
     readonly window?: { width: number; height: number };
 }) {
     const [index, setIndex] = useState(1);
@@ -125,7 +130,47 @@ function ViewerSpecimen(props: {
                 onRepost={async () => true}
                 {...(props.composer
                     ? { onPost: async () => true }
-                    : { layers: { text: { text: "Ready to ship 🚀", x: 0.5, y: 0.4 } } })}
+                    : {
+                          text: { text: "Ready to ship 🚀", x: 0.5, y: 0.3 },
+                          mediaLayers: props.cameraSticker
+                              ? [
+                                    {
+                                        id: "clip",
+                                        kind: "video",
+                                        url: clip,
+                                        shape: "rect",
+                                        x: 0.3,
+                                        y: 0.62,
+                                        width: 0.36,
+                                        aspect: 1,
+                                        rotation: 8,
+                                    },
+                                    {
+                                        id: "round",
+                                        kind: "video",
+                                        url: clip,
+                                        shape: "round",
+                                        x: 0.66,
+                                        y: 0.5,
+                                        width: 0.5,
+                                        aspect: 1,
+                                        scale: 1.1,
+                                        rotation: -15,
+                                    },
+                                ]
+                              : [
+                                    {
+                                        id: "round",
+                                        kind: "video",
+                                        url: clip,
+                                        shape: "round",
+                                        x: 0.72,
+                                        y: 0.6,
+                                        width: 0.36,
+                                        aspect: 1,
+                                    },
+                                ],
+                      })}
                 onChatOpen={() => undefined}
                 onStep={(delta) => setIndex((at) => Math.min(2, Math.max(0, at + delta)))}
                 poster={
@@ -135,7 +180,6 @@ function ViewerSpecimen(props: {
                 }
                 replies={replies}
                 replyCount={all.length}
-                roundUrl={clip}
                 {...(props.repost
                     ? {
                           repost: {
@@ -143,11 +187,10 @@ function ViewerSpecimen(props: {
                                   name: "Desktop onboarding",
                                   face: { initials: "DO", type: "agent" },
                               },
-                              roundUrl: null,
                           },
                       }
                     : {})}
-                segment={{ index, total: 3 }}
+                segment={{ index: props.many ? 500 : index, total: props.many ? 1000 : 3 }}
                 time="5m"
             />
         </div>
@@ -310,7 +353,7 @@ export function StoryPage() {
                 </div>
             </Specimen>
             {[
-                { width: 1440, height: 900 },
+                { width: 720, height: 640 },
                 { width: 1100, height: 760 },
             ].map((window) => (
                 <FullScreenSpecimen
@@ -325,7 +368,7 @@ export function StoryPage() {
                 </FullScreenSpecimen>
             ))}
             {[
-                { width: 1440, height: 900 },
+                { width: 720, height: 640 },
                 { width: 1100, height: 760 },
             ].map((window) => (
                 <FullScreenSpecimen
@@ -339,6 +382,50 @@ export function StoryPage() {
                     <ViewerSpecimen window={window} />
                 </FullScreenSpecimen>
             ))}
+            {[
+                { width: 1100, height: 760 },
+                { width: 720, height: 640 },
+            ].flatMap((window) =>
+                [
+                    {
+                        name: "landscape",
+                        label: "Contained landscape",
+                        media: WIDE,
+                        cameraSticker: false,
+                        many: false,
+                    },
+                    {
+                        name: "camera-sticker",
+                        label: "Transformed camera sticker",
+                        media: FRAME,
+                        cameraSticker: true,
+                        many: false,
+                    },
+                    {
+                        name: "many-stories",
+                        label: "Many stories",
+                        media: FRAME,
+                        cameraSticker: false,
+                        many: true,
+                    },
+                ].map((fixture) => (
+                    <FullScreenSpecimen
+                        key={`${fixture.name}-${window.width}`}
+                        number="14"
+                        label={fixture.label}
+                        detail="9:16 · top 20% and bottom 30% reserved · full media with ambient fill"
+                        window={window}
+                        screen={`14-${fixture.name}-${window.width}x${window.height}`}
+                    >
+                        <ViewerSpecimen
+                            media={fixture.media}
+                            cameraSticker={fixture.cameraSticker}
+                            many={fixture.many}
+                            window={window}
+                        />
+                    </FullScreenSpecimen>
+                )),
+            )}
             <Specimen
                 detail="Original agent attribution · the person’s circle"
                 label="Viewer — repost"

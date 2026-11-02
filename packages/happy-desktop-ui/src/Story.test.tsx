@@ -212,6 +212,17 @@ it("puts the stories row first in the scrolling list, so it scrolls away with th
     on.destroy();
 });
 
+const ROUND: NonNullable<StoryViewerProps["mediaLayers"]>[number] = {
+    id: "round",
+    kind: "video",
+    url: clip,
+    shape: "round",
+    x: 0.2,
+    y: 0.2,
+    width: 0.3,
+    aspect: 1,
+};
+
 const reply = (id: string, text: string) => ({
     id,
     name: `Person ${id}`,
@@ -253,14 +264,14 @@ it("shows the poster, time, caption and segments; its halves step and it closes"
     const frame = view.$('[data-happy-desktop-ui="story-viewer-frame"]').element;
     const { width, height } = frame.getBoundingClientRect();
     expect(width / height).toBeCloseTo(9 / 16, 2);
-    // The media fills the frame.
+    // The media's box fills the frame, but its contents are never cropped.
     const media = dialog.querySelector<HTMLElement>(".happy-story-viewer__media")!;
-    expect(getComputedStyle(media).objectFit).toBe("cover");
+    expect(getComputedStyle(media).objectFit).toBe("contain");
     expect(media.getBoundingClientRect().width).toBeCloseTo(width, 0);
 
     await userEvent.click(view.$('[aria-label="Next story"]').element);
     await userEvent.click(view.$('[aria-label="Previous story"]').element);
-    await userEvent.click(view.$('[aria-label="Close"]').element);
+    await userEvent.click(view.$('[aria-label="Close story"]').element);
     await userEvent.keyboard("{Escape}");
     expect(log).toEqual(["step 1", "step -1", "close", "close"]);
     view.destroy();
@@ -290,11 +301,79 @@ it("takes focus only when it mounts", async () => {
     const view = createRenderer();
     view.render(() => <Viewer />, { width: 800, height: 600 });
     await view.ready();
-    const close = view.$('[aria-label="Close"]').element as HTMLElement;
+    const close = view.$('[aria-label="Close story"]').element as HTMLElement;
     close.focus();
     flushSync(rerender);
     expect(view.$('[data-happy-desktop-ui="story-viewer"]').element.textContent).toContain("one!");
     expect(document.activeElement).toBe(close);
+    view.destroy();
+});
+
+it("dismisses a downward swipe from anywhere, by mouse or touch, with one close control", async () => {
+    for (const [selector, pointerType] of [
+        [".happy-story-viewer__media", "mouse"],
+        [".happy-story-viewer__head", "mouse"],
+        ['[aria-label="Next story"]', "mouse"],
+        ['[aria-label="Reply"]', "touch"],
+    ] as const) {
+        const log: string[] = [];
+        const view = viewer(log);
+        await view.ready();
+        const dialog = view.$('[data-happy-desktop-ui="story-viewer"]').element;
+        expect(
+            dialog.querySelectorAll('[aria-label="Close story"], [aria-label="Close"]'),
+        ).toHaveLength(1);
+        const target = view.$(selector).element;
+        const at = (type: string, x: number, y: number) =>
+            target.dispatchEvent(
+                new PointerEvent(type, { bubbles: true, pointerType, clientX: x, clientY: y }),
+            );
+        // Sideways, or not far enough, stays; far enough down closes before the pointer lifts.
+        at("pointerdown", 200, 100);
+        at("pointermove", 300, 160);
+        at("pointerup", 300, 160);
+        at("pointerdown", 200, 100);
+        at("pointermove", 200, 150);
+        expect(log).toEqual([]);
+        at("pointermove", 200, 180);
+        expect(log).toEqual(["close"]);
+        view.destroy();
+    }
+});
+
+it("dismisses a trackpad swipe down, but not a sideways one or one the replies took", async () => {
+    const log: string[] = [];
+    const view = viewer(log);
+    await view.ready();
+    const media = view.$(".happy-story-viewer__media").element;
+    media.dispatchEvent(new WheelEvent("wheel", { bubbles: true, deltaX: -200, deltaY: -10 }));
+    expect(log).toEqual([]);
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    for (let step = 0; step < 4; step++)
+        media.dispatchEvent(new WheelEvent("wheel", { bubbles: true, deltaY: -50 }));
+    expect(log).toEqual(["close"]);
+    view.destroy();
+});
+
+it("contains mismatched media over its stretched ambient sample and keeps thousands of stories bounded", async () => {
+    const view = viewer([], {
+        media: { kind: "video", url: clip, poster: PIXEL, ambient: PIXEL },
+        segment: { index: 500, total: 1000 },
+    });
+    await view.ready();
+    expect(getComputedStyle(view.$(".happy-story-viewer__media").element).objectFit).toBe(
+        "contain",
+    );
+    const backdrop = view.$(".happy-story-viewer__viewport .happy-story-viewer__backdrop").element;
+    expect(backdrop.getAttribute("src")).toBe(PIXEL);
+    expect(getComputedStyle(backdrop).filter).toBe("none");
+    // Fetched ahead: its first frame shows at once, and nothing says it is loading.
+    expect((view.$(".happy-story-viewer__media").element as HTMLVideoElement).poster).toBe(PIXEL);
+    expect((view.$(".happy-story-viewer__status").element as HTMLElement).hidden).toBe(true);
+    expect(view.$(".happy-story-viewer__segments").element.children).toHaveLength(30);
+    expect(view.$(".happy-story-viewer__segments").element.getAttribute("aria-label")).toBe(
+        "Story 501 of 1000",
+    );
     view.destroy();
 });
 
@@ -322,14 +401,17 @@ it("fills the window with a full-height centered frame, outside chevrons and bac
     view.destroy();
 });
 
-it("steps on past a video that cannot play, and mutes and unmutes it", async () => {
+it("shows a legible failure for a video that cannot play, and mutes and unmutes it", async () => {
     const log: string[] = [];
     const view = viewer(log, {
         media: { kind: "video", url: "data:video/mp4;base64,AAAA" },
         segment: { index: 0, total: 2 },
     });
     await view.ready();
-    await expect.poll(() => log).toEqual(["step 1"]);
+    await expect
+        .poll(() => view.$('[role="status"]').element.textContent)
+        .toBe("This story could not be loaded.");
+    expect(log).toEqual([]);
     const video = view.$(".happy-story-viewer__media").element as HTMLVideoElement;
     expect(video.muted).toBe(true);
     await userEvent.click(view.$('[aria-label="Unmute"]').element);
@@ -380,14 +462,11 @@ it("offers repost and delete from ⋯, and opens the original agent from its att
     const log: string[] = [];
     const view = viewer(log, {
         onDelete: () => log.push("delete"),
-        onRepost: async ({ layers, round }) => {
-            log.push(`repost ${layers.text?.text ?? ""} ${String(round)}`);
+        onRepost: async ({ text, mediaLayers }) => {
+            log.push(`repost ${text?.text ?? ""} ${mediaLayers.length}`);
             return true;
         },
-        repost: {
-            from: { name: "Release bot", face: { initials: "RB", type: "agent" } },
-            roundUrl: null,
-        },
+        repost: { from: { name: "Release bot", face: { initials: "RB", type: "agent" } } },
         onChatOpen: () => log.push("chat"),
     });
     await view.ready();
@@ -396,7 +475,7 @@ it("offers repost and delete from ⋯, and opens the original agent from its att
     await userEvent.click(view.$('[aria-label="More"]').element);
     await userEvent.click(named('[role="menuitem"]', "Repost"));
     await userEvent.click(named("button", "Post"));
-    expect(log).toEqual(["repost  null"]);
+    expect(log).toEqual(["repost  0"]);
     await userEvent.click(view.$('[aria-label="More"]').element);
     await userEvent.click(named('[role="menuitem"]', "Delete"));
     await userEvent.click(named("button", "Delete"));
@@ -409,7 +488,7 @@ it("holds media, round and image progress still while ⋯ is open or confirming 
         const log: string[] = [];
         const view = viewer(log, {
             media: { kind, url: kind === "video" ? clip : PIXEL },
-            roundUrl: clip,
+            mediaLayers: [ROUND],
             onDelete: () => log.push("delete"),
             onRepost: async () => true,
         });
@@ -420,8 +499,11 @@ it("holds media, round and image progress still while ⋯ is open or confirming 
         for (const video of videos) video.loop = true;
         const playing = async (expected: boolean) => {
             for (const video of videos) await expect.poll(() => video.paused).toBe(!expected);
+            // A video layer paces an image story once its length is known.
             if (progress)
-                expect(progress.style.animationPlayState).toBe(expected ? "running" : "paused");
+                await expect
+                    .poll(() => progress.style.animationPlayState)
+                    .toBe(expected ? "running" : "paused");
         };
         await playing(true);
         const more = view.$('[aria-label="More"]').element;
@@ -454,13 +536,13 @@ it("keeps the reply field legible over bright media with a dark fill, hairline, 
     const input = view.$('[data-happy-desktop-ui="story-viewer-input"]')
         .element as HTMLInputElement;
     const field = getComputedStyle(input);
-    expect(field.backgroundColor).toBe("rgba(0, 0, 0, 0.4)");
+    expect(field.backgroundColor).toBe("rgba(0, 0, 0, 0.8)");
     expect(field.borderTopColor).toBe("rgba(255, 255, 255, 0.3)");
     expect(field.boxShadow).not.toBe("none");
     expect(field.color).toBe("rgb(255, 255, 255)");
     const scrim = getComputedStyle(view.$(".happy-story-viewer__bottom").element);
     expect(scrim.backgroundImage).toContain("linear-gradient");
-    expect(scrim.backgroundImage).toContain("0.65");
+    expect(scrim.backgroundImage).toContain("0.9");
     view.destroy();
 });
 
@@ -561,8 +643,8 @@ it("offers no recording without H.264 MP4, and keeps a refused repost to try aga
     const cam = camera(false);
     const log: string[] = [];
     const view = await repostOpen(log, {
-        onRepost: async ({ layers }) => {
-            log.push(`repost ${layers.text?.text ?? ""}`);
+        onRepost: async ({ text }) => {
+            log.push(`repost ${text?.text ?? ""}`);
             return false;
         },
     });
@@ -574,7 +656,10 @@ it("offers no recording without H.264 MP4, and keeps a refused repost to try aga
     await userEvent.type(caption, "Look");
     await userEvent.click(named("button", "Post"));
     expect(log).toEqual(["repost Look"]);
-    expect(view.$('[data-happy-desktop-ui="story-text-layer"]').element.textContent).toBe("Look");
+    expect(
+        view.$('[data-happy-desktop-ui="story-text-layer"] > button:first-child').element
+            .textContent,
+    ).toBe("Look");
     view.destroy();
 });
 
@@ -610,7 +695,7 @@ it("AC22 posts a bare repost, and carries dragged emoji text to the same normali
     );
     const view = await repostOpen([], { onRepost: post });
     await userEvent.click(named("button", "Post"));
-    expect(post).toHaveBeenLastCalledWith({ layers: {}, round: null });
+    expect(post).toHaveBeenLastCalledWith({ mediaLayers: [] });
     await userEvent.click(view.$('[aria-label="More"]').element);
     await userEvent.click(named('[role="menuitem"]', "Repost"));
     await userEvent.click(named("button", "Text"));
@@ -628,11 +713,11 @@ it("AC22 posts a bare repost, and carries dragged emoji text to the same normali
     );
     await userEvent.click(named("button", "Post"));
     const sent = post.mock.calls.at(-1)![0];
-    expect(sent.layers.text!.text).toBe("Ready 🚀");
-    expect(sent.layers.text!.x).toBeCloseTo(0.7);
-    expect(sent.layers.text!.y).toBeCloseTo(0.6);
+    expect(sent.text!.text).toBe("Ready 🚀");
+    expect(sent.text!.x).toBeCloseTo(0.7);
+    expect(sent.text!.y).toBeCloseTo(0.6);
     view.destroy();
-    const other = viewer([], { layers: sent.layers });
+    const other = viewer([], { text: sent.text! });
     await other.ready();
     const otherFrame = other
         .$('[data-happy-desktop-ui="story-viewer-frame"]')
@@ -655,6 +740,13 @@ it("AC23 previews without recording, restarts the base, replaces a take, and rel
     await userEvent.click(named("button", "Camera"));
     await expect.poll(() => cam.live()).toBe(true);
     expect(cam.recorders).toHaveLength(0);
+    const stickerBox = view.$(".happy-story-viewer__sticker").element.getBoundingClientRect();
+    const frameBox = view.$(".happy-story-viewer__frame").element.getBoundingClientRect();
+    // Half the frame wide: twice the old 96px circle at the default window.
+    expect(stickerBox.width).toBeCloseTo(frameBox.width * 0.5);
+    const recordBox = view.$('[aria-label="Start recording"]').element.getBoundingClientRect();
+    expect(recordBox.top).toBeLessThan(stickerBox.bottom);
+    expect(recordBox.bottom).toBeGreaterThan(stickerBox.bottom);
     const base = view.$(".happy-story-viewer__media").element as HTMLVideoElement;
     await expect.poll(() => base.readyState).toBeGreaterThanOrEqual(2);
     expect(base.paused).toBe(true);
@@ -697,15 +789,17 @@ it("AC23 previews without recording, restarts the base, replaces a take, and rel
     expect(cam.recorders[1]?.state).toBe("recording");
     await userEvent.click(view.$('[aria-label="Stop"]').element);
     await userEvent.click(named("button", "Post"));
-    expect(post.mock.calls[0]![0].round).toBeInstanceOf(Blob);
-    expect(post.mock.calls[0]![0].layers.round?.x).toBeCloseTo(0.4);
-    expect(post.mock.calls[0]![0].layers.round?.y).toBeCloseTo(0.4);
+    const [taken] = post.mock.calls[0]![0].mediaLayers;
+    expect(taken).toMatchObject({ shape: "round", width: 0.5, aspect: 1 });
+    expect(taken!.blob).toBeInstanceOf(Blob);
+    expect(taken!.x).toBeCloseTo(0.7);
+    expect(taken!.y).toBeCloseTo(0.65);
     await userEvent.click(named("button", "More"));
     await userEvent.click(named('[role="menuitem"]', "Repost"));
     await userEvent.click(named("button", "Camera"));
     await expect.poll(() => cam.live()).toBe(true);
     const resetPosition = view.$(".happy-story-viewer__sticker").element as HTMLElement;
-    expect([resetPosition.style.left, resetPosition.style.top]).toEqual(["20%", "20%"]);
+    expect([resetPosition.style.left, resetPosition.style.top]).toEqual(["50%", "45%"]);
     await userEvent.click(view.$('[aria-label="Remove camera"]').element);
     expect(cam.live()).toBe(false);
     view.destroy();
@@ -754,7 +848,7 @@ it("pauses media and image progress during a hold, fades chrome, resumes on rele
         const log: string[] = [];
         const view = viewer(log, {
             media: { kind, url: kind === "video" ? clip : PIXEL },
-            roundUrl: clip,
+            mediaLayers: [ROUND],
             onRepost: async () => true,
         });
         await view.ready();
@@ -861,7 +955,7 @@ it("zooms around the cursor with its layers, prevents navigation, and leaves vid
     const log: string[] = [];
     const view = viewer(log, {
         media: { kind: "video", url: clip },
-        layers: { text: { text: "A layer", x: 0.5, y: 0.5 } },
+        text: { text: "A layer", x: 0.5, y: 0.5 },
     });
     await view.ready();
     const video = view.$(".happy-story-viewer__media").element as HTMLVideoElement;
@@ -965,8 +1059,8 @@ it("guards an in-flight post, trims text, keeps caption separate, and resets the
     expect(post.mock.calls[0]).toEqual([
         {
             caption: "Caption\nsecond",
-            layers: { text: { text: "Layer", x: 0.5, y: 0.5 } },
-            round: null,
+            text: { text: "Layer", x: 0.5, y: 0.5 },
+            mediaLayers: [],
         },
     ]);
     finish(true);
@@ -978,7 +1072,7 @@ it("guards an in-flight post, trims text, keeps caption separate, and resets the
     await userEvent.click(named("button", "Text"));
     await page.getByRole("textbox", { name: "Story text" }).fill("   ");
     await userEvent.click(named("button", "Post"));
-    expect(post.mock.calls[1]).toEqual([{ layers: {}, round: null }]);
+    expect(post.mock.calls[1]).toEqual([{ mediaLayers: [] }]);
     finish(true);
     view.destroy();
 });
@@ -1012,10 +1106,8 @@ it("layers Escape through editing, composition and replies, and cancels a pendin
 
 it("offers mute controls for a round video over an image story", async () => {
     const view = viewer([], {
-        repost: {
-            from: { name: "Task A", face: { initials: "TA" } },
-            roundUrl: "data:video/mp4;base64,AAAA",
-        },
+        repost: { from: { name: "Task A", face: { initials: "TA" } } },
+        mediaLayers: [{ ...ROUND, url: "data:video/mp4;base64,AAAA" }],
     });
     await view.ready();
     const round = view.$('[data-happy-desktop-ui="story-viewer-round"]')
@@ -1066,7 +1158,7 @@ it("AC24 puts Your Story first and hands gallery images and MP4s to the shared c
     expect(named("button", "Text")).toBeDefined();
     expect(named("button", "Camera")).toBeDefined();
     await userEvent.click(named("button", "Post"));
-    expect(post).toHaveBeenCalledWith({ layers: {}, round: null });
+    expect(post).toHaveBeenCalledWith({ mediaLayers: [] });
     composer.destroy();
 });
 

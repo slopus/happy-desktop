@@ -1,4 +1,12 @@
-import { useLayoutEffect, useRef, useState, useSyncExternalStore, type PointerEvent } from "react";
+import {
+    useLayoutEffect,
+    useRef,
+    useState,
+    useSyncExternalStore,
+    type CSSProperties,
+    type MouseEvent,
+    type PointerEvent,
+} from "react";
 import { Avatar, type AvatarProps } from "./Avatar";
 import { Button } from "./Button";
 import { ConfirmPopover } from "./ConfirmPopover";
@@ -18,31 +26,66 @@ export type StoryViewerReply = {
     readonly text: string;
 };
 
-export type StoryLayers = {
-    readonly text?: { readonly text: string; readonly x: number; readonly y: number };
-    readonly round?: { readonly x: number; readonly y: number };
+export type StoryLayerTransform = {
+    readonly x: number;
+    readonly y: number;
+    readonly scale?: number;
+    readonly rotation?: number;
 };
+
+/**
+ * The viewer's fixed 9:16 canvas in pixels. The top band carries the segments and poster, the
+ * bottom band the caption and reply field; essential content stays inside the sides and bands.
+ */
+export const STORY_CANVAS = { width: 1080, height: 1920, top: 384, bottom: 576, side: 48 };
+
+export type StoryMedia = {
+    readonly kind: "image" | "video";
+    readonly url: string;
+    /** A video's first frame, decoded ahead, shown until it plays. */
+    readonly poster?: string;
+    /** A tiny dimmed sample of the media, stretched behind it where it does not fill the frame. */
+    readonly ambient?: string;
+};
+
+export type StoryTextLayer = StoryLayerTransform & { readonly text: string };
+
+/** A picture or video laid over the base media, composed live and never burned into it. */
+export type StoryMediaLayer = StoryLayerTransform &
+    StoryMedia & {
+        readonly id: string;
+        readonly shape: "rect" | "round";
+        /** Its share of the frame's width before scale; the height follows `aspect`. */
+        readonly width: number;
+        /** Width over height of its media; a round layer is always square. */
+        readonly aspect: number;
+    };
+
+/** A media layer made in the composer, uploaded on its own when the story is posted. */
+export type StoryComposedLayer = Omit<StoryMediaLayer, "id" | "url" | "kind"> & {
+    readonly blob: Blob;
+};
+
 export type StoryComposition = {
     readonly caption?: string;
-    readonly layers: StoryLayers;
-    readonly round: Blob | null;
+    readonly text?: StoryTextLayer;
+    /** In paint order, above the base media and below the text. */
+    readonly mediaLayers: readonly StoryComposedLayer[];
 };
 
 export type StoryViewerProps = {
     readonly poster: { readonly name: string; readonly face: StoryFace };
     /** When it was posted, already worded ("5m"). */
     readonly time: string;
-    readonly media: { readonly kind: "image" | "video"; readonly url: string };
+    readonly media: StoryMedia;
     readonly caption: string | null;
     /** One segment per story of this poster, and which one is open. */
     readonly segment: { readonly index: number; readonly total: number };
-    /** A repost names the agent it came from and may carry a round video. */
-    readonly repost?: {
-        readonly from: { readonly name: string; readonly face: StoryFace };
-        readonly roundUrl: string | null;
-    };
-    readonly layers?: StoryLayers;
-    readonly roundUrl?: string | null;
+    /** A repost names the agent it came from. */
+    readonly repost?: { readonly from: { readonly name: string; readonly face: StoryFace } };
+    readonly text?: StoryTextLayer;
+    /** In paint order, above the base media and below the text. */
+    readonly mediaLayers?: readonly StoryMediaLayer[];
     /** A gallery pick opens this same composer immediately. */
     readonly onPost?: (draft: StoryComposition) => Promise<boolean>;
     readonly onChatOpen?: () => void;
@@ -64,6 +107,28 @@ export type StoryViewerProps = {
 
 /** A round video is at most this long. */
 const ROUND_MAX_MS = 15_000;
+/** The camera opens centered in the clear area between the top and bottom bands, half as wide as the frame. */
+const ROUND_PLACEMENT = { x: 0.5, y: 0.45, width: 0.5 };
+const SCALE_MIN = 0.5;
+const SCALE_MAX = 3;
+/** A trackpad swipe down closes the story after this much scroll. */
+const DISMISS_WHEEL = 160;
+/** An image story, or a video one before its length is known, plays this long. */
+const IMAGE_SECONDS = 5;
+const SEGMENTS_SHOWN = 30;
+
+const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
+/** A layer's box: centered on its point, sized by width and scale, and rotated about its center. */
+const placement = (
+    layer: StoryLayerTransform & { readonly width: number },
+    aspect: number,
+): CSSProperties => ({
+    left: `${layer.x * 100}%`,
+    top: `${layer.y * 100}%`,
+    width: `${layer.width * (layer.scale ?? 1) * 100}%`,
+    aspectRatio: aspect,
+    transform: `translate(-50%, -50%) rotate(${layer.rotation ?? 0}deg)`,
+});
 /** Containers a round is recorded in, best first: iPhones cannot play WebM, so H.264 MP4 leads. */
 const ROUND_TYPES = ["video/mp4;codecs=avc1,mp4a.40.2", "video/mp4;codecs=avc1", "video/mp4"];
 const visibilitySubscribe = (notify: () => void) => {
@@ -82,9 +147,9 @@ type Round =
     | { readonly phase: "recording"; readonly stream: MediaStream; readonly stop: () => void }
     | { readonly phase: "done"; readonly blob: Blob; readonly url: string };
 
-function useLayerDrag(
-    point: { x: number; y: number },
-    move: (point: { x: number; y: number }) => void,
+function useLayerDrag<Layer extends StoryLayerTransform>(
+    point: Layer,
+    move: (point: Layer) => void,
     enabled: boolean,
     tap: () => void,
 ) {
@@ -103,6 +168,7 @@ function useLayerDrag(
                 dy = event.clientY - held.y;
             held.moved ||= Math.abs(dx) + Math.abs(dy) > 3;
             move({
+                ...point,
                 x: Math.max(0, Math.min(1, point.x + dx / box.width)),
                 y: Math.max(0, Math.min(1, point.y + dy / box.height)),
             });
@@ -121,10 +187,51 @@ function useLayerDrag(
     };
 }
 
+/** One corner gesture scales and rotates any sticker, text or media, around its center. */
+function useLayerTransform<Layer extends StoryLayerTransform>(
+    point: Layer,
+    move: (point: Layer) => void,
+) {
+    const held = useRef<{ x: number; y: number; from: number; at: number; point: Layer }>(null);
+    // The pointer's distance and angle in degrees from the sticker's center.
+    const polar = (event: PointerEvent, x: number, y: number) =>
+        [
+            Math.hypot(event.clientX - x, event.clientY - y),
+            (Math.atan2(event.clientY - y, event.clientX - x) * 180) / Math.PI,
+        ] as const;
+    return {
+        onPointerDown(event: PointerEvent<HTMLButtonElement>) {
+            event.stopPropagation();
+            event.currentTarget.setPointerCapture(event.pointerId);
+            const box = event.currentTarget.parentElement!.getBoundingClientRect();
+            const x = box.x + box.width / 2,
+                y = box.y + box.height / 2;
+            const [from, at] = polar(event, x, y);
+            held.current = { x, y, from, at, point };
+        },
+        onPointerMove(event: PointerEvent<HTMLButtonElement>) {
+            const start = held.current;
+            if (!start) return;
+            const [distance, angle] = polar(event, start.x, start.y);
+            const scale = ((start.point.scale ?? 1) * distance) / Math.max(1, start.from);
+            move({
+                ...start.point,
+                scale: clamp(scale, SCALE_MIN, SCALE_MAX),
+                rotation: (((start.point.rotation ?? 0) + angle - start.at + 540) % 360) - 180,
+            });
+        },
+        onPointerUp: () => (held.current = null),
+        onPointerCancel: () => (held.current = null),
+        // The sticker's own tap records or edits; a handle tap does neither.
+        onClick: (event: MouseEvent) => event.stopPropagation(),
+    };
+}
+
 /**
  * StoryViewer — one story over the whole window, always dark, on a 9:16 frame that never moves:
  * gradients carry the poster and segments on top, and the caption, last two replies and reply bar
- * below; replies open inline. ⋯ offers the shared composer and delete.
+ * below; replies open inline. ⋯ offers the shared composer and delete. The base media is contained
+ * over a blurred fill of itself, and every media and text layer is its own element, composed live.
  */
 export function StoryViewer(props: StoryViewerProps) {
     const hidden = useSyncExternalStore(visibilitySubscribe, () => document.hidden);
@@ -137,6 +244,13 @@ export function StoryViewer(props: StoryViewerProps) {
     );
     const [round, setRound] = useState<Round>({ phase: "idle" });
     const [muted, setMuted] = useState(true);
+    // Media fetched ahead opens ready: its first frame or picture is already decoded.
+    const [mediaStatus, setMediaStatus] = useState<"loading" | "ready" | "error">(
+        props.media.ambient ? "ready" : "loading",
+    );
+    const [buffering, setBuffering] = useState(false);
+    // The length of the video that paces this story, once its metadata is in.
+    const [duration, setDuration] = useState<number | null>(null);
     const [repliesOpen, setRepliesOpen] = useState(false);
     const repliesDrag = useRef(0);
     const [zoom, setZoom] = useState({ scale: 1, x: 0, y: 0 });
@@ -150,19 +264,32 @@ export function StoryViewer(props: StoryViewerProps) {
         setHeld(false);
     };
     const { media, segment, replies } = props;
+    const layers = props.mediaLayers ?? [];
     const base = useRef<HTMLVideoElement>(null);
+    // The composer's camera: live while previewing or recording, then the take.
     const roundVideo = useRef<HTMLVideoElement>(null);
-    const backdrop = useRef<HTMLCanvasElement>(null);
-    const [layer, setLayer] = useState<StoryLayers["text"]>();
+    const layerVideos = useRef(new Map<string, HTMLVideoElement>());
+    const [layer, setLayer] = useState<StoryTextLayer>();
     const [editing, setEditing] = useState(false);
-    const [position, setPosition] = useState({ x: 0.2, y: 0.2 });
+    const [roundPlace, setRoundPlace] = useState<StoryLayerTransform & { width: number }>(
+        ROUND_PLACEMENT,
+    );
+    const swipe = useRef<{ x: number; y: number } | null>(null);
+    // One trackpad gesture's upward scroll; whatever else took the gesture keeps it.
+    const wheel = useRef({ sum: 0, at: -Infinity });
     const [menuOpen, setMenuOpen] = useState(false);
     const composing = mode === "repost";
+    const swipeFree = !composing && !repliesOpen && !posting && !menuOpen && mode !== "delete";
     const recording = round.phase === "recording";
     // Every reason the story holds still, round included: replies, a hold, ⋯ or its delete confirm.
     const halted = repliesOpen || held || menuOpen || mode === "delete";
     const paused = (composing && round.phase !== "done" && !recording) || halted || hidden;
     const stream = round.phase === "preview" || recording ? round.stream : null;
+    // What paces the story: its own video, else its first video layer, else five seconds.
+    const driver =
+        media.kind === "video"
+            ? "base"
+            : (layers.find((each) => each.kind === "video")?.id ?? null);
     // Media playback is an imperative browser boundary; drags do not reattach streams or replay videos.
     // eslint-disable-next-line happy-react/no-layout-effect -- Native video streams and playback require synchronization after DOM attachment.
     useLayoutEffect(() => {
@@ -171,16 +298,17 @@ export function StoryViewer(props: StoryViewerProps) {
         for (const [video, pause] of [
             [base.current, paused],
             [node, halted],
+            ...[...layerVideos.current.values()].map((each) => [each, paused] as const),
         ] as const) {
             if (!video) continue;
             if (pause) video.pause();
             else void video.play().catch(() => undefined);
         }
-    }, [paused, stream, halted, round.phase, props.media.url]);
+    }, [paused, stream, halted, round.phase, props.media.url, props.mediaLayers]);
     const zoomReset = () => setZoom({ scale: 1, x: 0, y: 0 });
     const [zoomMount] = useState(() => (node: HTMLDivElement | null) => {
         if (!node) return;
-        const wheel = (event: WheelEvent) => {
+        const wheelZoom = (event: WheelEvent) => {
             if (node.dataset.composing !== undefined || (!event.ctrlKey && !event.metaKey)) return;
             event.preventDefault();
             const box = node.getBoundingClientRect(),
@@ -196,9 +324,9 @@ export function StoryViewer(props: StoryViewerProps) {
             zoomEnd.current = setTimeout(zoomReset, 250);
         };
         // React wheel listeners are passive; prevent the browser's own pinch zoom here.
-        node.addEventListener("wheel", wheel, { passive: false });
+        node.addEventListener("wheel", wheelZoom, { passive: false });
         return () => {
-            node.removeEventListener("wheel", wheel);
+            node.removeEventListener("wheel", wheelZoom);
             clearTimeout(zoomEnd.current);
             clearTimeout(hold.current.timer);
         };
@@ -220,7 +348,7 @@ export function StoryViewer(props: StoryViewerProps) {
     const reset = (next: typeof mode) => {
         roundDrop();
         setLayer(undefined);
-        setPosition({ x: 0.2, y: 0.2 });
+        setRoundPlace(ROUND_PLACEMENT);
         setEditing(false);
         setCaption("");
         setMode(next);
@@ -293,13 +421,18 @@ export function StoryViewer(props: StoryViewerProps) {
             try {
                 accepted = await post({
                     ...(caption.trim() ? { caption: caption.trim() } : {}),
-                    layers: {
-                        ...(layer?.text.trim()
-                            ? { text: { ...layer, text: layer.text.trim() } }
-                            : {}),
-                        ...(round.phase === "done" ? { round: position } : {}),
-                    },
-                    round: round.phase === "done" ? round.blob : null,
+                    ...(layer?.text.trim() ? { text: { ...layer, text: layer.text.trim() } } : {}),
+                    mediaLayers:
+                        round.phase === "done"
+                            ? [
+                                  {
+                                      ...roundPlace,
+                                      shape: "round",
+                                      aspect: 1,
+                                      blob: round.blob,
+                                  },
+                              ]
+                            : [],
                 });
             } finally {
                 inFlight.current = false;
@@ -315,26 +448,28 @@ export function StoryViewer(props: StoryViewerProps) {
         setRepliesOpen(true);
         props.onRepliesOpen();
     };
-    const roundUrl =
-        round.phase === "done"
-            ? round.url
-            : composing
-              ? null
-              : (props.roundUrl ?? props.repost?.roundUrl);
-    const shownText = composing ? layer : props.layers?.text;
-    const roundPosition = composing ? position : (props.layers?.round ?? { x: 0.2, y: 0.2 });
-    const roundDrag = useLayerDrag(roundPosition, setPosition, composing && !recording, () => {
+    const roundShown = round.phase === "preview" || recording || round.phase === "done";
+    // Composing shows the reader's own text once they add it, else whatever the story carries.
+    const shownText = composing ? (layer ?? props.text) : props.text;
+    const textEditable = composing && layer !== undefined && !recording;
+    const roundDrag = useLayerDrag(roundPlace, setRoundPlace, composing && !recording, () => {
         if (round.phase === "preview") record(round.stream);
         else if (round.phase === "done") void camera(true);
     });
     const textDrag = useLayerDrag(
-        shownText ?? { x: 0.5, y: 0.5 },
+        shownText ?? { text: "", x: 0.5, y: 0.5 },
         (point) => {
-            if (shownText) setLayer({ ...shownText, ...point });
+            if (layer) setLayer(point);
         },
-        composing && !recording,
+        textEditable,
         () => setEditing(true),
     );
+    const roundTransform = useLayerTransform(roundPlace, setRoundPlace);
+    const textTransform = useLayerTransform(shownText ?? { text: "", x: 0.5, y: 0.5 }, (point) => {
+        if (layer) setLayer(point);
+    });
+    const ready =
+        mediaStatus === "ready" && (driver === null || driver === "base" || duration !== null);
     const face = (who: { readonly face: StoryFace }) => <Avatar {...who.face} size="sm" />;
     // The same inline list grows from the last two to every reply.
     const list = (shown: readonly StoryViewerReply[]) =>
@@ -348,6 +483,11 @@ export function StoryViewer(props: StoryViewerProps) {
     if (props.onRepost) menu.push({ kind: "item", id: "repost", label: "Repost", icon: "repeat" });
     if (props.onDelete)
         menu.push({ kind: "item", id: "delete", label: "Delete", icon: "trash", danger: true });
+    const firstSegment = clamp(
+        segment.index - Math.floor(SEGMENTS_SHOWN / 2) + 1,
+        0,
+        Math.max(0, segment.total - SEGMENTS_SHOWN),
+    );
     return (
         <WindowCover>
             <div
@@ -372,16 +512,29 @@ export function StoryViewer(props: StoryViewerProps) {
                 ref={mount}
                 role="dialog"
                 tabIndex={-1}
+                // Swipe down from anywhere, by pointer or trackpad; composing and replies keep their drags.
+                onPointerDownCapture={(event) => {
+                    swipe.current = swipeFree ? { x: event.clientX, y: event.clientY } : null;
+                }}
+                onPointerMoveCapture={(event) => {
+                    const dy = event.clientY - (swipe.current?.y ?? Infinity);
+                    if (dy > 64 && dy > Math.abs(event.clientX - swipe.current!.x) * 1.25) {
+                        swipe.current = null;
+                        props.onClose();
+                    }
+                }}
+                onPointerUpCapture={() => (swipe.current = null)}
+                onWheel={(event) => {
+                    // Natural scrolling: fingers moving down scroll up, as replies already read it.
+                    const gesture = wheel.current;
+                    if (event.timeStamp - gesture.at > 250) gesture.sum = 0;
+                    gesture.at = event.timeStamp;
+                    if (!swipeFree || event.ctrlKey || event.metaKey) gesture.sum = -Infinity;
+                    else if (Math.abs(event.deltaY) > Math.abs(event.deltaX))
+                        gesture.sum -= event.deltaY;
+                    if (gesture.sum >= DISMISS_WHEEL) props.onClose();
+                }}
             >
-                {media.kind === "image" ? (
-                    <img alt="" className="happy-story-viewer__backdrop" src={media.url} />
-                ) : (
-                    <canvas
-                        aria-hidden="true"
-                        className="happy-story-viewer__backdrop"
-                        ref={backdrop}
-                    />
-                )}
                 <button
                     aria-label="Previous story"
                     className="happy-story-viewer__nav"
@@ -419,6 +572,13 @@ export function StoryViewer(props: StoryViewerProps) {
                     onDoubleClick={zoomReset}
                 >
                     <div className="happy-story-viewer__viewport">
+                        {media.ambient ? (
+                            <img
+                                alt=""
+                                className="happy-story-viewer__backdrop"
+                                src={media.ambient}
+                            />
+                        ) : null}
                         <div
                             className="happy-story-viewer__zoom"
                             style={{
@@ -430,7 +590,10 @@ export function StoryViewer(props: StoryViewerProps) {
                                 <img
                                     alt={props.caption ?? ""}
                                     className="happy-story-viewer__media"
+                                    draggable={false}
                                     src={media.url}
+                                    onLoad={() => setMediaStatus("ready")}
+                                    onError={() => setMediaStatus("error")}
                                 />
                             ) : (
                                 <video
@@ -440,58 +603,107 @@ export function StoryViewer(props: StoryViewerProps) {
                                     onEnded={() => {
                                         if (!paused) props.onStep(1);
                                     }}
-                                    onError={() => {
-                                        if (!composing) props.onStep(1);
-                                    }}
+                                    onError={() => setMediaStatus("error")}
+                                    onLoadedMetadata={(event) =>
+                                        setDuration(event.currentTarget.duration || null)
+                                    }
+                                    onWaiting={() => setBuffering(true)}
+                                    onPlaying={() => setBuffering(false)}
                                     playsInline
+                                    // Streams by range from the first byte; the frame shows as soon as one decodes.
+                                    preload="auto"
                                     ref={base}
-                                    onLoadedData={(event) => {
-                                        const canvas = backdrop.current,
-                                            video = event.currentTarget;
-                                        if (!canvas) return;
-                                        canvas.width = video.videoWidth;
-                                        canvas.height = video.videoHeight;
-                                        canvas.getContext("2d")?.drawImage(video, 0, 0);
-                                    }}
+                                    onLoadedData={() => setMediaStatus("ready")}
+                                    {...(media.poster ? { poster: media.poster } : {})}
                                     src={media.url}
                                 >
                                     <track kind="captions" />
                                 </video>
                             )}
-                            {round.phase === "preview" || recording || roundUrl ? (
+                            {layers.map((each) => (
                                 <div
                                     className="happy-story-viewer__sticker"
-                                    style={{
-                                        left: `${roundPosition.x * 100}%`,
-                                        top: `${roundPosition.y * 100}%`,
-                                    }}
+                                    data-happy-desktop-ui="story-media-layer"
+                                    data-shape={each.shape}
+                                    key={each.id}
+                                    style={placement(
+                                        each,
+                                        each.shape === "round" ? 1 : each.aspect,
+                                    )}
+                                >
+                                    {each.kind === "image" ? (
+                                        <img alt="" draggable={false} src={each.url} />
+                                    ) : (
+                                        <video
+                                            autoPlay
+                                            className={
+                                                each.shape === "round"
+                                                    ? "happy-story-viewer__round"
+                                                    : undefined
+                                            }
+                                            data-happy-desktop-ui={
+                                                each.shape === "round"
+                                                    ? "story-viewer-round"
+                                                    : undefined
+                                            }
+                                            loop={composing || driver !== each.id}
+                                            muted={muted}
+                                            onEnded={() => {
+                                                if (!paused && driver === each.id) props.onStep(1);
+                                            }}
+                                            onLoadedMetadata={(event) => {
+                                                if (driver === each.id)
+                                                    setDuration(
+                                                        event.currentTarget.duration || null,
+                                                    );
+                                            }}
+                                            playsInline
+                                            preload="auto"
+                                            ref={(node) => {
+                                                if (!node) return;
+                                                layerVideos.current.set(each.id, node);
+                                                return () => {
+                                                    layerVideos.current.delete(each.id);
+                                                };
+                                            }}
+                                            src={each.url}
+                                        >
+                                            <track kind="captions" />
+                                        </video>
+                                    )}
+                                </div>
+                            ))}
+                            {roundShown ? (
+                                <div
+                                    className="happy-story-viewer__sticker"
+                                    data-happy-desktop-ui="story-composer-round"
+                                    data-shape="round"
+                                    style={placement(roundPlace, 1)}
                                     {...roundDrag}
                                 >
                                     <video
                                         autoPlay
                                         className="happy-story-viewer__round"
                                         data-happy-desktop-ui="story-viewer-round"
-                                        key={
-                                            round.phase === "recording" || round.phase === "preview"
-                                                ? "live"
-                                                : roundUrl
-                                        }
+                                        key={round.phase === "done" ? round.url : "live"}
                                         loop
-                                        muted={
-                                            round.phase === "recording" ||
-                                            round.phase === "preview" ||
-                                            muted
-                                        }
+                                        muted={round.phase !== "done" || muted}
                                         playsInline
                                         ref={roundVideo}
-                                        {...(round.phase === "recording" ||
-                                        round.phase === "preview"
-                                            ? {}
-                                            : { src: roundUrl ?? "" })}
+                                        {...(round.phase === "done" ? { src: round.url } : {})}
                                     >
                                         <track kind="captions" />
                                     </video>
-                                    {composing && !recording ? (
+                                    {recording ? (
+                                        <button
+                                            aria-label="Stop"
+                                            className="happy-story-viewer__round-record happy-story-viewer__stop"
+                                            onClick={round.stop}
+                                            type="button"
+                                        >
+                                            <Icon name="stop" size={20} />
+                                        </button>
+                                    ) : (
                                         <>
                                             <button
                                                 aria-label="Remove camera"
@@ -505,32 +717,45 @@ export function StoryViewer(props: StoryViewerProps) {
                                             >
                                                 <Icon name="close" size={16} />
                                             </button>
-                                            {round.phase === "preview" || round.phase === "done" ? (
-                                                <button
-                                                    className="happy-story-viewer__round-record"
-                                                    aria-label={
-                                                        round.phase === "preview"
-                                                            ? "Start recording"
-                                                            : "Re-record"
-                                                    }
-                                                    type="button"
-                                                />
-                                            ) : null}
+                                            {/* Straddles the circle's bottom edge; the circle's own tap records too. */}
+                                            <button
+                                                className="happy-story-viewer__round-record"
+                                                aria-label={
+                                                    round.phase === "preview"
+                                                        ? "Start recording"
+                                                        : "Re-record"
+                                                }
+                                                type="button"
+                                            >
+                                                <Ionicon name="radio-button-on" size={24} />
+                                            </button>
+                                            <button
+                                                aria-label="Resize and rotate camera"
+                                                className="happy-story-viewer__transform"
+                                                type="button"
+                                                {...roundTransform}
+                                            >
+                                                <Icon name="width-expand" size={16} />
+                                            </button>
                                         </>
-                                    ) : null}
+                                    )}
                                 </div>
                             ) : null}
                             {shownText ? (
                                 <div
                                     className="happy-story-viewer__text"
                                     data-happy-desktop-ui="story-text-layer"
-                                    style={{
-                                        left: `${shownText.x * 100}%`,
-                                        top: `${shownText.y * 100}%`,
-                                    }}
+                                    style={
+                                        {
+                                            left: `${shownText.x * 100}%`,
+                                            top: `${shownText.y * 100}%`,
+                                            transform: `translate(-50%, -50%) rotate(${shownText.rotation ?? 0}deg)`,
+                                            "--happy-story-text-scale": shownText.scale ?? 1,
+                                        } as CSSProperties
+                                    }
                                     {...textDrag}
                                 >
-                                    {composing && editing && !recording ? (
+                                    {textEditable && editing ? (
                                         <input
                                             aria-label="Story text"
                                             maxLength={200}
@@ -550,40 +775,87 @@ export function StoryViewer(props: StoryViewerProps) {
                                             onClick={(event) => event.stopPropagation()}
                                         />
                                     ) : (
-                                        <button disabled={!composing || recording} type="button">
+                                        <button disabled={!textEditable} type="button">
                                             {shownText.text}
                                         </button>
                                     )}
+                                    {textEditable && !editing ? (
+                                        <button
+                                            aria-label="Resize and rotate text"
+                                            className="happy-story-viewer__transform"
+                                            type="button"
+                                            {...textTransform}
+                                        >
+                                            <Icon name="width-expand" size={16} />
+                                        </button>
+                                    ) : null}
                                 </div>
                             ) : null}
                         </div>
                     </div>
+                    {/* Always mounted, so loading never shifts the chrome after it. */}
+                    <span
+                        className="happy-story-viewer__status"
+                        hidden={mediaStatus === "ready"}
+                        role="status"
+                    >
+                        {mediaStatus === "error"
+                            ? "This story could not be loaded."
+                            : mediaStatus === "loading"
+                              ? "Loading story…"
+                              : null}
+                    </span>
                     <div className="happy-story-viewer__top">
-                        <span className="happy-story-viewer__segments">
-                            {Array.from({ length: segment.total }, (_, index) => (
-                                <span data-on={index <= segment.index ? "" : undefined} key={index}>
-                                    {media.kind === "image" && index === segment.index ? (
+                        {/* A long run shows a sliding window of segments around the open one. */}
+                        <span
+                            className="happy-story-viewer__segments"
+                            role="img"
+                            aria-label={`Story ${segment.index + 1} of ${segment.total}`}
+                        >
+                            {Array.from(
+                                { length: Math.min(SEGMENTS_SHOWN, segment.total) },
+                                (_, offset) => {
+                                    const index = firstSegment + offset;
+                                    return (
                                         <span
-                                            className="happy-story-viewer__progress"
-                                            key={media.url}
-                                            style={{
-                                                animationPlayState:
-                                                    composing || editing || paused
-                                                        ? "paused"
-                                                        : "running",
-                                            }}
-                                            onAnimationEnd={() => props.onStep(1)}
-                                        />
-                                    ) : null}
-                                </span>
-                            ))}
+                                            data-on={index <= segment.index ? "" : undefined}
+                                            key={index}
+                                        >
+                                            {index === segment.index ? (
+                                                <span
+                                                    className="happy-story-viewer__progress"
+                                                    key={media.url}
+                                                    style={{
+                                                        animationDuration: `${driver === null ? IMAGE_SECONDS : (duration ?? IMAGE_SECONDS)}s`,
+                                                        animationPlayState:
+                                                            composing ||
+                                                            editing ||
+                                                            paused ||
+                                                            buffering ||
+                                                            !ready
+                                                                ? "paused"
+                                                                : "running",
+                                                    }}
+                                                    onAnimationEnd={() => {
+                                                        // A video moves on when it ends, not when its bar fills.
+                                                        if (driver === null) props.onStep(1);
+                                                    }}
+                                                />
+                                            ) : null}
+                                        </span>
+                                    );
+                                },
+                            )}
                         </span>
                         <div className="happy-story-viewer__head">
                             {face(props.poster)}
                             <b>{props.poster.name}</b>
                             <span>{props.time}</span>
                             <div className="happy-story-viewer__actions">
-                                {!recording && (media.kind === "video" || roundUrl) ? (
+                                {!recording &&
+                                (media.kind === "video" ||
+                                    round.phase === "done" ||
+                                    layers.some((each) => each.kind === "video")) ? (
                                     <Button
                                         aria-label={muted ? "Unmute" : "Mute"}
                                         iconOnly
@@ -663,16 +935,7 @@ export function StoryViewer(props: StoryViewerProps) {
                                 {round.phase === "unavailable" ? (
                                     <span>No camera is available.</span>
                                 ) : null}
-                                {round.phase === "recording" ? (
-                                    <button
-                                        aria-label="Stop"
-                                        className="happy-story-viewer__stop"
-                                        onClick={round.stop}
-                                        type="button"
-                                    >
-                                        <Icon name="stop" size={20} />
-                                    </button>
-                                ) : (
+                                {round.phase === "recording" ? null : (
                                     <>
                                         <textarea
                                             aria-label="Caption"
@@ -817,15 +1080,18 @@ export function StoryViewer(props: StoryViewerProps) {
                 >
                     <Icon name="chevron-right" size={32} />
                 </button>
-                <button
-                    aria-label="Close"
-                    className="happy-story-viewer__close"
-                    hidden={recording}
-                    onClick={props.onClose}
-                    type="button"
-                >
-                    <Icon name="close" size={18} />
-                </button>
+                {/* The one close control: in the poster bar while viewing, here while composing. */}
+                {composing ? (
+                    <button
+                        aria-label="Close"
+                        className="happy-story-viewer__close"
+                        hidden={recording}
+                        onClick={props.onClose}
+                        type="button"
+                    >
+                        <Icon name="close" size={18} />
+                    </button>
+                ) : null}
             </div>
         </WindowCover>
     );

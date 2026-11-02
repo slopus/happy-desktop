@@ -7,6 +7,7 @@ import type { StoryFace } from "./StoryViewer";
 export type StoriesRowItem = {
     readonly id: string;
     readonly name: string;
+    readonly shortName?: string;
     /** An agent's rounded tile or a person's round photo. */
     readonly face: StoryFace;
     readonly state: "unseen" | "seen";
@@ -73,10 +74,12 @@ export function StoriesRow(props: {
                             data-seen={item.state === "seen" ? "" : undefined}
                             key={item.id}
                             onClick={() => props.onOpen(item.id)}
+                            title={item.name}
+                            aria-label={item.name}
                             type="button"
                         >
                             <Avatar {...item.face} size="md" />
-                            <span>{item.name}</span>
+                            <span>{item.shortName ?? item.name}</span>
                         </button>
                     ))}
             </div>

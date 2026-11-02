@@ -62,6 +62,7 @@ import {
     happyAgentStoriesStoreCreate,
     type HappyAgentStoriesStore,
 } from "../stories/storiesStore.js";
+import { storyMediaPreload } from "../stories/storyMediaPreload.js";
 import {
     happyAgentAutoJoinSettingsCreate,
     type HappyAgentAutoJoinSettingsStore,
@@ -919,6 +920,7 @@ export function happyAgentWorkspaceClientCreate(
                 client: deps.client,
                 sync: deps.connection.sync,
                 settings: storiesSettings(),
+                preload: storyMediaPreload,
             });
             return storiesStore;
         },

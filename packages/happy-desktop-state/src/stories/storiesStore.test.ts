@@ -60,7 +60,11 @@ function setting(enabled: boolean) {
     };
 }
 
-function open(stories: Story[], enabled = true) {
+function open(
+    stories: Story[],
+    enabled = true,
+    preload?: (media: readonly { kind: string; url: string }[]) => Promise<readonly object[]>,
+) {
     const server = { stories, seen: [] as string[], reads: 0 };
     const client = {
         listStories: vi.fn(async () => {
@@ -74,7 +78,9 @@ function open(stories: Story[], enabled = true) {
             return { story: marked };
         }),
         storyMediaUrl: (id: string) => `https://daemon/v0/stories/${id}/media`,
-        storyRoundUrl: (id: string) => `https://daemon/v0/stories/${id}/round`,
+        storyLayerUrl: (id: string, layer: string) =>
+            `https://daemon/v0/stories/${id}/layers/${layer}`,
+        uploadStoryMedia: vi.fn(async (body: Blob) => ({ upload: { id: `upload-${body.size}` } })),
         endpoint: "https://daemon",
         getUsers: vi.fn(async (ids: string[]) => ({
             users: ids.map((id) => ({ id, name: `Person ${id}`, photo: null })),
@@ -83,29 +89,27 @@ function open(stories: Story[], enabled = true) {
             replies: [1, 2, 3].map((n) => replyOf(id, n)),
         })),
         replyToStory: vi.fn(async (_id: string, _text: string) => ({ reply: {} })),
-        repostStory: vi.fn(async (id: string, body: { layers?: Story["layers"]; round?: Blob }) => {
+        repostStory: vi.fn(async (id: string, body: { layers?: Story["layers"] }) => {
             const of = server.stories.find((each) => each.id === id)!;
             return {
                 story: { ...repost("re", "me", of, true), layers: body.layers },
             };
         }),
-        postStory: vi.fn(async (media: Blob, body: { layers?: Story["layers"]; round?: Blob }) => ({
-            story: {
-                ...story("own", "", Date.now(), true),
-                poster: "person" as const,
-                agentId: null,
-                taskId: null,
-                botId: null,
-                userId: "me",
-                media: {
-                    kind: media.type === "video/mp4" ? ("video" as const) : ("image" as const),
-                    mimeType: media.type,
-                    size: media.size,
+        postStory: vi.fn(
+            async (body: { media: { uploadId: string }; layers?: Story["layers"] }) => ({
+                story: {
+                    ...story("own", "", Date.now(), true),
+                    poster: "person" as const,
+                    agentId: null,
+                    taskId: null,
+                    botId: null,
+                    userId: "me",
+                    media: { kind: "image" as const, mimeType: "image/png", size: 5 },
+                    layers: body.layers,
+                    canDelete: true,
                 },
-                layers: body.layers,
-                canDelete: true,
-            },
-        })),
+            }),
+        ),
         deleteStory: vi.fn(async (_id: string) => ({})),
     };
     const sync = happyAgentSyncCreate();
@@ -114,6 +118,7 @@ function open(stories: Story[], enabled = true) {
         client: client as never,
         sync: sync.source,
         settings,
+        ...(preload ? { preload } : {}),
     });
     store.subscribe(() => undefined);
     sync.writer.bootstrapReceived({} as never);
@@ -156,7 +161,7 @@ it("outlines an agent unseen, then seen once every story of it is opened", async
     expect(on(store.get()).open).toMatchObject({
         story: { id: "a" },
         segment: { index: 0, total: 2 },
-        mediaUrl: "https://daemon/v0/stories/a/media",
+        media: { kind: "image", url: "https://daemon/v0/stories/a/media" },
     });
     await until(() => server.seen.length === 1);
     // One of two seen still leaves the outline in the accent.
@@ -317,8 +322,8 @@ it("drops a story when it expires, keeping the open one where it is", async () =
     }
 });
 
-it("subscribing renders nothing again, and a disposed store follows nothing", async () => {
-    const { store, client } = open([story("a", "task1", 1)]);
+it("subscribing renders nothing again, keeps the feed with nobody subscribed, and a disposed store follows nothing", async () => {
+    const { store, client, sync } = open([story("a", "task1", 1)]);
     await until(() => on(store.get()).outlines.size === 1);
     const before = store.get();
     const listener = vi.fn();
@@ -326,6 +331,11 @@ it("subscribing renders nothing again, and a disposed store follows nothing", as
     expect(listener).not.toHaveBeenCalled();
     expect(store.get()).toBe(before);
     unsubscribe();
+    // Switched away: live stories still land, and coming back reads nothing and shows them at once.
+    post(sync, "0006", story("b", "bot1", 2));
+    await until(() => on(store.get()).row.length === 2);
+    store.subscribe(listener);
+    expect(client.listStories).toHaveBeenCalledTimes(1);
 
     store[Symbol.dispose]();
     store.subscribe(listener);
@@ -360,10 +370,31 @@ it("lays out the row per poster, unseen first, and plays on through it", async (
     store.storyStep(1);
     expect(on(store.get()).open?.story.id).toBe("a");
     store.storyStep(1);
-    expect(on(store.get()).open?.story.id).toBe("s");
-    store.storyStep(-1);
-    expect(on(store.get()).open?.story.id).toBe("a");
+    // A watched author is never autoplayed just because it remains in the row.
+    expect(on(store.get()).open).toBeNull();
+});
+
+it("plays many stories chronologically, preloads the next, and skips fully watched authors", async () => {
+    const { store, sync } = open([
+        story("later", "task1", 3),
+        story("first", "task1", 1),
+        story("middle", "task1", 2),
+        story("watched", "bot1", 9, true),
+        story("fresh", "task2", 0),
+    ]);
+    await until(() => on(store.get()).row.length === 3);
+    store.tileOpen("agent:task1");
+    expect(on(store.get()).open).toMatchObject({
+        story: { id: "first" },
+        media: { kind: "image", url: "https://daemon/v0/stories/first/media" },
+    });
     store.storyStep(1);
+    expect(on(store.get()).open?.story.id).toBe("middle");
+    store.storyStep(1);
+    expect(on(store.get()).open?.story.id).toBe("later");
+    // An author fully watched elsewhere while this viewer was open is skipped too.
+    post(sync, "0006", story("fresh", "task2", 0, true));
+    await until(() => on(store.get()).row.every((tile) => tile.state === "seen"));
     store.storyStep(1);
     expect(on(store.get()).open).toBeNull();
 });
@@ -387,19 +418,81 @@ it("shows the last two replies, every reply once the drawer asks, and sends one"
     await until(() => on(store.get()).failure?.message === "Story ended");
 });
 
-it("reposts with binary video and normalized layer centers, and adopts the repost", async () => {
+it("reposts with each media layer uploaded once and referenced, and adopts the repost", async () => {
     const { store, client } = open([story("a", "task1", 1)]);
     await until(() => on(store.get()).row.length === 1);
     store.agentOpen("task1");
-    const round = new Blob([new Uint8Array([0, 1, 2, 255])], { type: "video/mp4" });
-    const layers = { text: { text: "so good 🚀", x: 0.7, y: 0.6 }, round: { x: 0.3, y: 0.4 } };
-    store.storyRepost({ caption: "Separate caption", layers, round });
+    const blob = new Blob([new Uint8Array([0, 1, 2, 255])], { type: "video/mp4" });
+    const text = { text: "so good 🚀", x: 0.7, y: 0.6, scale: 1.5, rotation: -20 };
+    const round = { shape: "round" as const, x: 0.3, y: 0.4, width: 0.5, aspect: 1, scale: 2 };
+    store.storyRepost({ caption: "Separate caption", text, mediaLayers: [{ ...round, blob }] });
     await until(() => on(store.get()).row.some((tile) => tile.key === "person:me"));
+    expect(client.uploadStoryMedia).toHaveBeenCalledExactlyOnceWith(blob);
     expect(client.repostStory).toHaveBeenCalledWith("a", {
         caption: "Separate caption",
-        layers,
-        round,
+        layers: { text },
+        mediaLayers: [{ ...round, uploadId: "upload-4" }],
     });
+});
+
+it("reads the feed from the startup data, and shows a ring only once its first story can play", async () => {
+    const pending = new Map<string, () => void>();
+    const preload = vi.fn(
+        (media: readonly { url: string }[]) =>
+            new Promise<readonly object[]>((resolve) =>
+                pending.set(media[0]!.url, () => resolve([])),
+            ),
+    );
+    const { store, client, sync } = open([], true, preload);
+    const layered = {
+        ...story("a", "task1", 1),
+        mediaLayers: [
+            {
+                id: "round",
+                kind: "video" as const,
+                mimeType: "video/mp4",
+                size: 9,
+                x: 0.5,
+                y: 0.5,
+                width: 0.4,
+                aspect: 1,
+            },
+        ],
+    };
+    sync.writer.bootstrapReceived({
+        storiesEnabled: true,
+        stories: [layered, story("b", "task1", 2)],
+        cursor: "0007",
+    } as never);
+    await until(() => preload.mock.calls.length === 1);
+    expect(client.listStories).not.toHaveBeenCalled();
+    expect(preload).toHaveBeenCalledWith([
+        { kind: "image", url: "https://daemon/v0/stories/a/media" },
+        expect.objectContaining({
+            id: "round",
+            shape: "rect",
+            url: "https://daemon/v0/stories/a/layers/round",
+        }),
+    ]);
+    expect(on(store.get()).row).toEqual([]);
+    expect(on(store.get()).outlines.size).toBe(0);
+    // Three fetch at once; the fourth poster waits its turn, then is fetched too.
+    for (const [id, at] of [
+        ["c", "0008"],
+        ["d", "0009"],
+        ["e", "0010"],
+    ])
+        post(sync, at!, story(id!, `task${id}`, 3));
+    await until(() => pending.size === 3);
+    pending.get("https://daemon/v0/stories/c/media")!();
+    await until(() => pending.size === 4);
+    pending.get("https://daemon/v0/stories/a/media")!();
+    await until(() => on(store.get()).row.length === 1);
+    expect(on(store.get()).outlines.get("task1")).toBe("unseen");
+    // Opening it fetches the next story ahead of playback.
+    store.agentOpen("task1");
+    await until(() => pending.has("https://daemon/v0/stories/b/media"));
+    expect(client.listStories).not.toHaveBeenCalled();
 });
 
 it("drops a deleted story, by the reader or live from the daemon", async () => {
@@ -421,18 +514,14 @@ it("drops a deleted story, by the reader or live from the daemon", async () => {
     await until(() => on(store.get()).row.length === 0);
 });
 
-it("refuses an oversized round before sending it, and reports a refused repost", async () => {
+it("reports a refused repost, and clears it once one is taken", async () => {
     const { store, client } = open([story("a", "task1", 1)]);
     await until(() => on(store.get()).row.length === 1);
     store.agentOpen("task1");
-    const huge = { size: 16 * 1024 * 1024 + 1 } as Blob;
-    expect(await store.storyRepost({ layers: {}, round: huge })).toBe(false);
-    expect(client.repostStory).not.toHaveBeenCalled();
-    expect(on(store.get()).failure?.message).toContain("16 MB");
     client.repostStory.mockRejectedValueOnce(new Error("Not an H.264 MP4"));
-    expect(await store.storyRepost({ layers: {}, round: null })).toBe(false);
+    expect(await store.storyRepost({ mediaLayers: [] })).toBe(false);
     expect(on(store.get()).failure?.message).toBe("Not an H.264 MP4");
-    expect(await store.storyRepost({ layers: {}, round: null })).toBe(true);
+    expect(await store.storyRepost({ mediaLayers: [] })).toBe(true);
     expect(on(store.get()).failure).toBeNull();
 });
 
@@ -444,14 +533,14 @@ it("posts gallery photos and MP4s without added layers, retains failures, and re
         store.storyDraftOpen(file);
         expect(on(store.get()).draft?.kind).toBe(type === "video/mp4" ? "video" : "image");
         client.postStory.mockRejectedValueOnce(new Error("Try again"));
-        expect(await store.storyPost({ layers: {}, round: null })).toBe(false);
+        expect(await store.storyPost({ mediaLayers: [] })).toBe(false);
         expect(on(store.get()).draft).not.toBeNull();
-        expect(await store.storyPost({ caption: "Gallery caption", layers: {}, round: null })).toBe(
-            true,
-        );
-        expect(client.postStory).toHaveBeenLastCalledWith(file, {
+        expect(await store.storyPost({ caption: "Gallery caption", mediaLayers: [] })).toBe(true);
+        expect(client.uploadStoryMedia).toHaveBeenLastCalledWith(file);
+        expect(client.postStory).toHaveBeenLastCalledWith({
+            media: { uploadId: "upload-5" },
             caption: "Gallery caption",
-            layers: {},
+            mediaLayers: [],
         });
         expect(on(store.get()).draft).toBeNull();
         store.tileOpen("person:me");
@@ -489,7 +578,7 @@ it("carries on past a story that leaves while open, and skips emptied posters", 
     expect(on(store.get()).open?.story.id).toBe("c1");
     store.storyStep(-1);
     expect(on(store.get()).open?.story.id).toBe("a2");
-    // The poster's last one gone, the row's next live poster plays.
+    // The poster's last one gone, the row's next poster plays only while it has unseen stories.
     removed(sync, "0008", "a2");
-    await until(() => on(store.get()).open?.story.id === "c1");
+    await until(() => on(store.get()).open === null);
 });
