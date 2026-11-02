@@ -207,7 +207,11 @@ function HappyAgentRootContent({ context }: { readonly context: HappyAgentRouter
     if (!context.connectionOnboarding) return <Outlet />;
     const signIn = entry?.session ? undefined : entry?.signIn;
     const signInEmpty = signIn ? happyAgentSignInEmpty(signIn) : undefined;
-    const signInAct = context.happyAgents.happyAgentSignIn;
+    // While the browser is open the one act is stopping that sign-in.
+    const signInAct =
+        signIn?.phase === "browser"
+            ? context.happyAgents.happyAgentSignInCancel
+            : context.happyAgents.happyAgentSignIn;
     // A server that wants a sign-in before its first workspace has nothing to
     // show but the way in, so the window says that rather than waiting.
     const content = entry?.session ? (

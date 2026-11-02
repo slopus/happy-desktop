@@ -56,6 +56,7 @@ it("shows each server's phone code, only where a phone can use it", () => {
         add,
         directory: { get: () => directory, subscribe: () => () => {} },
         signIn: () => undefined,
+        signInCancel: () => undefined,
     };
     const own: AppHappyAgentDirectorySnapshot = {
         activeHappyAgentId: "local",

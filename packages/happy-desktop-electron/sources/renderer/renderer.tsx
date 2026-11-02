@@ -1501,8 +1501,9 @@ if (mediaPreviewBridge) {
             },
         });
         const serverSignIn = happyAgents.happyAgentSignIn;
+        const serverSignInStop = happyAgents.happyAgentSignInCancel;
         const servers: AppServers | undefined =
-            serverHost && serverSignIn
+            serverHost && serverSignIn && serverSignInStop
                 ? {
                       add: serverAddStoreCreate({
                           // Written into This Mac's Chief of Staff draft, whose
@@ -1522,6 +1523,7 @@ if (mediaPreviewBridge) {
                       }),
                       directory: happyAgents,
                       signIn: serverSignIn,
+                      signInCancel: serverSignInStop,
                   }
                 : undefined;
         if (servers) appDisposers.push(() => servers.add[Symbol.dispose]());

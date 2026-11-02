@@ -20,6 +20,7 @@ import {
 
 async function serverOpen(signIn: AppHappyAgentSignIn) {
     const signedIn: string[] = [];
+    const cancelled: string[] = [];
     const snapshot: AppHappyAgentDirectorySnapshot = {
         activeHappyAgentId: "connection:team",
         happyAgents: [
@@ -47,6 +48,7 @@ async function serverOpen(signIn: AppHappyAgentSignIn) {
             subscribe: () => () => undefined,
             happyAgentActivate: () => undefined,
             happyAgentSignIn: (id) => signedIn.push(id),
+            happyAgentSignInCancel: (id) => cancelled.push(id),
         },
         settings: happyAgentSettingsStoreCreate(),
     };
@@ -55,7 +57,7 @@ async function serverOpen(signIn: AppHappyAgentSignIn) {
     const view = render(<RouterProvider context={context} router={router} />);
     onTestFinished(() => view.unmount());
     await waitFor(() => expect(view.getByTestId("happy-agent-sign-in")).toBeTruthy());
-    return { view, signedIn };
+    return { view, signedIn, cancelled };
 }
 
 it("offers the first sign-in where the server's workspace would be", async () => {
@@ -65,7 +67,7 @@ it("offers the first sign-in where the server's workspace would be", async () =>
     expect(signedIn).toEqual(["connection:team"]);
 });
 
-it("offers a new sign-in once one ended, and only waits while the browser is open", async () => {
+it("offers a new sign-in once one ended, and its cancelling while the browser is open", async () => {
     const ended = await serverOpen({ phase: "required", reason: "ended" });
     fireEvent.click(ended.view.getByRole("button", { name: "Sign in again" }));
     expect(ended.signedIn).toEqual(["connection:team"]);
@@ -75,5 +77,7 @@ it("offers a new sign-in once one ended, and only waits while the browser is ope
     expect(
         browsing.view.getByText("Finish signing in at sso.example.com in your browser."),
     ).toBeTruthy();
-    expect(browsing.view.queryByRole("button")).toBeNull();
+    fireEvent.click(browsing.view.getByRole("button", { name: "Cancel" }));
+    expect(browsing.cancelled).toEqual(["connection:team"]);
+    expect(browsing.signedIn).toEqual([]);
 });

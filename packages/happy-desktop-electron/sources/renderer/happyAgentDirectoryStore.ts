@@ -148,6 +148,8 @@ export interface HappyAgentDirectoryStore {
     happyAgentReorder(id: string, afterId: string | null): void;
     /** Signs in again to a remote that wants it; absent without a server source. */
     happyAgentSignIn?(id: string): void;
+    /** Stops a remote's sign-in whose browser is open; present with `happyAgentSignIn`. */
+    happyAgentSignInCancel?(id: string): void;
 }
 
 export interface HappyAgentDirectoryDeps {
@@ -495,6 +497,27 @@ export function happyAgentDirectoryStoreCreate(
                     phase({ phase: "failed", message: happyAgentUserError(error).message });
                 },
             );
+    };
+
+    /**
+     * Stops the sign-in whose browser is open. The shell drops the attempt, so
+     * the browser's late return finishes nothing, and the remote wants a
+     * sign-in as it did before.
+     */
+    const signInCancel = (remote: LocalHappyAgent): void => {
+        const controller = remote.signInAbort;
+        if (!controller || remote.entry.signIn?.phase !== "browser") return;
+        remote.signInAbort = undefined;
+        controller.abort();
+        const remoteId = remote.entry.remoteId;
+        const first =
+            remoteId !== undefined &&
+            deps.serverSessions?.get().sessions.get(remoteId) === undefined;
+        remote.entry = {
+            ...remote.entry,
+            signIn: { phase: "required", reason: first ? "first" : "ended" },
+        };
+        publish();
     };
 
     /** Whether the shell holds no sign-in for a server added by address. */
@@ -981,6 +1004,10 @@ export function happyAgentDirectoryStoreCreate(
                   happyAgentSignIn(id: string) {
                       const remote = remotes.get(id);
                       if (remote && deps.servers) signIn(remote, deps.servers);
+                  },
+                  happyAgentSignInCancel(id: string) {
+                      const remote = remotes.get(id);
+                      if (remote) signInCancel(remote);
                   },
               }
             : {}),

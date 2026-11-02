@@ -694,6 +694,8 @@ export interface AppHappyAgentDirectoryStore {
      * that cannot, which leaves the sidebar pointing at Settings instead.
      */
     happyAgentSignIn?(id: string): void;
+    /** Stops the sign-in whose browser is open for a server, back to wanting one. */
+    happyAgentSignInCancel?(id: string): void;
 }
 
 /**
@@ -2920,7 +2922,10 @@ function happyAgentProjectsSection(
             ? signIn.actionLabel
                 ? {
                       action: {
-                          icon: "lock" as const,
+                          icon:
+                              happyAgent.signIn?.phase === "browser"
+                                  ? ("close" as const)
+                                  : ("lock" as const),
                           label: signIn.actionLabel,
                           reveal: "always" as const,
                       },
@@ -2949,7 +2954,7 @@ function happyAgentProjectsSection(
                   empty:
                       happyAgent.status === "connected"
                           ? {
-                                description: "Choose a repository folder on this Mac.",
+                                description: happyAgentProjectsEmptyDescription(happyAgent),
                                 icon: "plus" as const,
                                 title: "No projects yet",
                             }
@@ -3045,9 +3050,20 @@ function happyAgentEmptyDescription(happyAgent: AppHappyAgentEntry): string {
 }
 
 /**
- * What an empty section says while its server wants a new sign-in. The one act
- * is signing in, offered again after a failure and withheld while the browser
- * is already open.
+ * Where an empty Projects list says projects come from. A team server's
+ * folders are on that server, not this computer, and its Chief of Staff can
+ * set one up there.
+ */
+function happyAgentProjectsEmptyDescription(happyAgent: AppHappyAgentEntry): string {
+    if (happyAgent.serverUrl === undefined) return "Choose a repository folder on this Mac.";
+    const chief = happyAgent.bots.find((bot) => bot.systemKey === "chief_of_staff");
+    return `Add a repository folder on this server, or ask ${chief?.name ?? "Chief of Staff"} to set one up.`;
+}
+
+/**
+ * What an empty section says while its server wants a new sign-in. The act is
+ * signing in, offered again after a failure; while the browser is already open
+ * it is cancelling that sign-in instead.
  */
 export function happyAgentSignInEmpty(signIn: AppHappyAgentSignIn): {
     readonly actionLabel?: string;
@@ -3072,6 +3088,7 @@ export function happyAgentSignInEmpty(signIn: AppHappyAgentSignIn): {
                   };
         case "browser":
             return {
+                actionLabel: "Cancel",
                 description: `Finish signing in at ${signIn.host} in your browser.`,
                 icon: "lock",
                 title: "Signing in…",
@@ -3677,8 +3694,9 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                 const happyAgent = happyAgentOf(section.happyAgentId);
                 // A server that wants a new sign-in offers exactly that.
                 if (happyAgent?.signIn && props.happyAgents.happyAgentSignIn) {
-                    if (happyAgent.signIn.phase !== "browser")
-                        props.happyAgents.happyAgentSignIn(happyAgent.id);
+                    if (happyAgent.signIn.phase === "browser")
+                        props.happyAgents.happyAgentSignInCancel?.(happyAgent.id);
+                    else props.happyAgents.happyAgentSignIn(happyAgent.id);
                     return;
                 }
                 if (happyAgent?.status !== "connected") {

@@ -418,6 +418,8 @@ export interface AppServers {
     readonly directory: Pick<AppHappyAgentDirectoryStore, "get" | "subscribe">;
     /** Signs in to one listed server, by its directory entry ID. */
     signIn(id: string): void;
+    /** Stops a listed server's sign-in whose browser is open. */
+    signInCancel(id: string): void;
 }
 
 /** Stands in where the host cannot add servers, so the view subscribes unconditionally. */
@@ -1002,6 +1004,7 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                         onUrlChange={serverAddStore.urlUpdate}
                         onAdd={serverAddStore.serverAddSubmit}
                         onSignIn={(id) => props.servers?.signIn(id)}
+                        onSignInCancel={(id) => props.servers?.signInCancel(id)}
                         onRemove={(id) => {
                             const entry = serverDirectory.happyAgents.find(
                                 (candidate) => candidate.id === id,

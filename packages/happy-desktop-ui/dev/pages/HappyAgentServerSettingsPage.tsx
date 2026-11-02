@@ -14,6 +14,7 @@ const base = {
     onAdd: noop,
     onRemove: noop,
     onSignIn: noop,
+    onSignInCancel: noop,
     onUrlChange: noop,
     phase: { kind: "editing" },
     url: "",

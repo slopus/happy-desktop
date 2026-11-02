@@ -18,7 +18,7 @@ vi.mock("../../../happy-desktop-ui/src/Spinner", () => ({ Spinner: () => null })
  * each listed server can be signed in to or handed back for removal.
  */
 
-const directory: AppHappyAgentDirectorySnapshot = {
+const directoryWantingSignIn: AppHappyAgentDirectorySnapshot = {
     happyAgents: [
         {
             id: "local",
@@ -45,9 +45,12 @@ const directory: AppHappyAgentDirectorySnapshot = {
 
 function settingsRender(options: {
     readonly section: string;
+    readonly directory?: AppHappyAgentDirectorySnapshot;
     readonly chiefOfStaffAsk?: (request: HappyAgentChiefOfStaffRequest) => Promise<void>;
     readonly signIn?: (id: string) => void;
+    readonly signInCancel?: (id: string) => void;
 }) {
+    const directory = options.directory ?? directoryWantingSignIn;
     const appearance = appearanceStoreCreate();
     const add = options.chiefOfStaffAsk
         ? serverAddStoreCreate({ chiefOfStaffAsk: options.chiefOfStaffAsk })
@@ -57,6 +60,7 @@ function settingsRender(options: {
               add,
               directory: { get: () => directory, subscribe: () => () => {} },
               signIn: options.signIn ?? (() => undefined),
+              signInCancel: options.signInCancel ?? (() => undefined),
           }
         : undefined;
     const view = render(
@@ -136,4 +140,25 @@ it("offers Servers only where a host can sign in, and hands the typed address to
     expect(asked.at(-1)).toEqual({ kind: "serverAdd", url: "https://happy.example.com" });
     expect(field.disabled).toBe(true);
     adding.dispose();
+});
+
+it("stops a sign-in whose browser is open", () => {
+    const team = directoryWantingSignIn.happyAgents[1]!;
+    const cancelled: string[] = [];
+    const { view, dispose } = settingsRender({
+        section: "servers",
+        directory: {
+            happyAgents: [
+                directoryWantingSignIn.happyAgents[0]!,
+                { ...team, signIn: { phase: "browser", host: "sso.example.com" } },
+            ],
+        },
+        chiefOfStaffAsk: () => new Promise(() => undefined),
+        signInCancel: (id) => cancelled.push(id),
+    });
+    expect(view.getByText("Finish signing in at sso.example.com in your browser.")).toBeTruthy();
+    expect(view.queryByRole("button", { name: "Sign in" })).toBeNull();
+    fireEvent.click(view.getByRole("button", { name: "Cancel signing in to Example Engineering" }));
+    expect(cancelled).toEqual(["connection:team"]);
+    dispose();
 });

@@ -54,6 +54,8 @@ export interface HappyAgentServerSettingsProps {
     onUrlChange(value: string): void;
     onAdd(): void;
     onSignIn(id: string): void;
+    /** Stops a sign-in whose browser is open; absent where it cannot be stopped. */
+    onSignInCancel?(id: string): void;
     onRemove(id: string): void;
 }
 
@@ -93,6 +95,17 @@ export function HappyAgentServerSettings(props: HappyAgentServerSettingsProps) {
                                                 <Spinner size={12} />
                                                 Signing in…
                                             </span>
+                                        ) : null}
+                                        {server.signIn.kind === "browser" &&
+                                        props.onSignInCancel ? (
+                                            <Button
+                                                aria-label={`Cancel signing in to ${server.name}`}
+                                                onClick={() => props.onSignInCancel?.(server.id)}
+                                                size="small"
+                                                variant="secondary"
+                                            >
+                                                Cancel
+                                            </Button>
                                         ) : null}
                                         {server.signIn.kind === "required" ||
                                         server.signIn.kind === "failed" ? (
