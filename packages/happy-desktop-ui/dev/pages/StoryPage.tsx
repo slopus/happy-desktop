@@ -258,6 +258,57 @@ export function StoryPage() {
                     />
                 </div>
             </Specimen>
+            <Specimen
+                number="13"
+                label="Stories in the list"
+                detail="The row is the list’s first item and scrolls away with the rows"
+                stage="chrome"
+            >
+                <div data-screen="13-sidebar-stories">
+                    <Sidebar
+                        activeItemId=""
+                        bodyLeading={
+                            <StoriesRow
+                                items={[
+                                    {
+                                        id: "a",
+                                        name: "Desktop onboarding",
+                                        face: { initials: "KD", type: "agent" },
+                                        state: "unseen",
+                                    },
+                                    {
+                                        id: "b",
+                                        name: "Release bot",
+                                        face: { initials: "RB", type: "agent" },
+                                        state: "seen",
+                                    },
+                                ]}
+                                onOpen={() => undefined}
+                                create={{
+                                    id: "p",
+                                    face: { initials: "K", tone: "ocean" },
+                                    onPick: () => undefined,
+                                }}
+                            />
+                        }
+                        onItemSelect={() => undefined}
+                        onItemStoryOpen={() => undefined}
+                        sections={[
+                            {
+                                id: "tasks",
+                                label: "Tasks",
+                                items: Array.from({ length: 16 }, (_, index) => ({
+                                    id: `task-${String(index)}`,
+                                    initials: String.fromCharCode(65 + index),
+                                    kind: "project" as const,
+                                    label: `Task ${String(index + 1)}`,
+                                })),
+                            },
+                        ]}
+                        style={{ height: 360, width: 260 }}
+                    />
+                </div>
+            </Specimen>
             {[
                 { width: 1440, height: 900 },
                 { width: 1100, height: 760 },

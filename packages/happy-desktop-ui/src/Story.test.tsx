@@ -131,6 +131,87 @@ it("opens the story from the outline and the chat from the rest of the row", asy
     view.destroy();
 });
 
+it("puts the stories row first in the scrolling list, so it scrolls away with the rows, and leaves no gap when off", async () => {
+    const items: SidebarItem[] = Array.from({ length: 20 }, (_, index) => ({
+        id: `t${String(index)}`,
+        initials: "T",
+        kind: "project",
+        label: `Task ${String(index)}`,
+    }));
+    const stories = (on: boolean) => {
+        const view = createRenderer();
+        view.render(
+            () => (
+                <Sidebar
+                    activeItemId=""
+                    data-testid="sidebar"
+                    onItemSelect={() => undefined}
+                    {...(on
+                        ? {
+                              bodyLeading: (
+                                  <StoriesRow
+                                      items={[
+                                          {
+                                              id: "a",
+                                              name: "Agent",
+                                              face: { initials: "A", type: "agent" },
+                                              state: "unseen",
+                                          },
+                                      ]}
+                                      onOpen={() => undefined}
+                                      create={{
+                                          id: "me",
+                                          face: { initials: "M" },
+                                          onPick: () => undefined,
+                                      }}
+                                  />
+                              ),
+                          }
+                        : {})}
+                    sections={[{ id: "tasks", items, label: "Tasks" }]}
+                    style={{ height: 320, width: 280 }}
+                />
+            ),
+            { width: 304, height: 340 },
+        );
+        return view;
+    };
+    const off = stories(false);
+    await off.ready();
+    const offRoot = off.$('[data-testid="sidebar"]').element;
+    expect(ui(offRoot, "sidebar-body-leading")).toHaveLength(0);
+    const firstRowOff = ui(offRoot, "sidebar-item")[0]!.getBoundingClientRect().top;
+    off.destroy();
+
+    const on = stories(true);
+    await on.ready();
+    const root = on.$('[data-testid="sidebar"]').element;
+    const content = ui(root, "sidebar-body-content")[0]!;
+    const leading = ui(root, "sidebar-body-leading")[0]!;
+    const row = ui(root, "stories-row")[0]!;
+    expect(content.firstElementChild).toBe(leading);
+    expect(leading.contains(row)).toBe(true);
+    expect(ui(root, "sidebar-header-accessory")).toHaveLength(0);
+    // Edge to edge at the scrollport's top, with the rows below it as before.
+    const viewport = content.closest<HTMLElement>(".happy-sidebar__body-viewport")!;
+    const port = viewport.getBoundingClientRect();
+    const box = row.getBoundingClientRect();
+    expect(box.top).toBeCloseTo(port.top, 0);
+    expect(row.parentElement!.getBoundingClientRect().width).toBeCloseTo(port.width, 0);
+    expect(ui(root, "sidebar-item")[0]!.getBoundingClientRect().top).toBeCloseTo(
+        firstRowOff + leading.getBoundingClientRect().height,
+        0,
+    );
+    // Its own scroll stays horizontal.
+    expect(getComputedStyle(row.parentElement!).overflowX).toBe("auto");
+
+    viewport.scrollTop = 120;
+    viewport.dispatchEvent(new Event("scroll"));
+    await expect.poll(() => row.getBoundingClientRect().top).toBeCloseTo(box.top - 120, 0);
+    expect(row.getBoundingClientRect().bottom).toBeLessThan(port.top);
+    on.destroy();
+});
+
 const reply = (id: string, text: string) => ({
     id,
     name: `Person ${id}`,
