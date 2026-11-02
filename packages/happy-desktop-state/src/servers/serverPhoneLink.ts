@@ -1,3 +1,5 @@
+import { formatHappyServerLink } from "@slopus/happy-agent-client";
+
 /** What a phone needs to add a team server: the installation it is, and where it answers. */
 export interface ServerPhoneLinkServer {
     /** The server's own health `instanceId`. */
@@ -6,44 +8,21 @@ export interface ServerPhoneLinkServer {
     readonly url?: string;
 }
 
-/** The longest link the API allows, in characters. */
-const SERVER_LINK_MAX = 4096;
-
 /**
- * The code a phone scans to add a team server, by the API's server-link
- * grammar: `happy://<instanceId>/server?url=<encodeURIComponent(url)>`, where
- * `url` is the server's address exactly as the host Happy Agent normalized it,
- * path prefix and trailing `/` included. It names the server and holds no
- * token: the phone signs in on its own and keeps the server only if its health
- * reports the same instance. Only a server reached over HTTPS whose instance
- * is known has one.
- *
- * Stand-in until the client's `formatHappyServerLink`, which is proposed for
- * 0.0.141; this is the one place the link is written.
+ * The code a phone scans to add a team server, written by the client's
+ * server-link grammar: `happy://<instanceId>/server?url=<url>`, where `url` is
+ * the server's address exactly as the host Happy Agent normalized it. It names
+ * the server and holds no token: the phone signs in on its own and keeps the
+ * server only if its health reports the same instance. A server whose
+ * instance is not known yet, or that is not reached over HTTPS, has none.
  */
 export function serverPhoneLinkFormat(server: ServerPhoneLinkServer): string | undefined {
     const { instanceId, url } = server;
-    if (instanceId === undefined || url === undefined || !serverUrlNormalized(url))
-        return undefined;
-    const link = `happy://${instanceId}/server?url=${encodeURIComponent(url)}`;
-    return link.length <= SERVER_LINK_MAX ? link : undefined;
-}
-
-/** HTTPS, already in canonical form, with no credentials, query, or fragment, ending in `/`. */
-function serverUrlNormalized(url: string): boolean {
-    let parsed: URL;
+    if (instanceId === undefined || url === undefined) return undefined;
     try {
-        parsed = new URL(url);
+        return formatHappyServerLink({ instanceId, url });
     } catch {
-        return false;
+        // Loopback http, an address not in normalized form, or a link too long.
+        return undefined;
     }
-    return (
-        parsed.href === url &&
-        parsed.protocol === "https:" &&
-        parsed.username === "" &&
-        parsed.password === "" &&
-        parsed.search === "" &&
-        parsed.hash === "" &&
-        parsed.pathname.endsWith("/")
-    );
 }
