@@ -76,7 +76,7 @@ export function ModalOverlayPage() {
     return (
         <ComponentPage
             number={componentNumber}
-            summary="The single backdrop every modal-class surface sits on — one dim and stacking level with a 24px minimum safe area, or a clear backdrop that dims nothing for a light command bar. Dialogs center by default; transient type-ahead surfaces may use the adaptive top placement."
+            summary="The single backdrop every modal-class surface sits on — one dim and stacking level with a 24px minimum safe area, a soft dim for a transient type-ahead such as the ⌘K palette, or a clear backdrop that dims nothing. Dialogs center by default; transient type-ahead surfaces may use the adaptive top placement."
             title="Modal overlay"
         >
             <div className="specimen-grid">
@@ -139,7 +139,7 @@ export function ModalOverlayPage() {
 
             <div className="specimen-grid">
                 <Specimen
-                    detail="720 × 640 Electron minimum · 128px top · full 461px palette frame"
+                    detail="720 × 640 Electron minimum · 128px top · full 640 × 461 palette frame"
                     label="Top — Electron minimum"
                     number="O-03"
                     stage="app"
@@ -161,7 +161,7 @@ export function ModalOverlayPage() {
 
             <div className="specimen-grid">
                 <Specimen
-                    detail="1024 × 704 design reference · 128px top · full 461px palette frame"
+                    detail="1024 × 704 design reference · 128px top · full 640 × 461 palette frame"
                     label="Top — design reference"
                     number="O-04"
                     stage="app"
@@ -178,6 +178,38 @@ export function ModalOverlayPage() {
                             </ModalOverlay>
                         </TopWindowFrame>
                     </div>
+                </Specimen>
+            </div>
+
+            <div className="specimen-grid">
+                <Specimen
+                    detail="soft backdrop · a light dim behind the ⌘K palette at the top placement · a press on it dismisses"
+                    label="Soft — command palette"
+                    number="O-06"
+                    stage="app"
+                >
+                    <TopWindowFrame height={704} width={1024}>
+                        <div
+                            style={{
+                                display: "flex",
+                                flex: "1 1 auto",
+                                flexDirection: "column",
+                                gap: "8px",
+                                padding: "24px",
+                                color: "var(--text)",
+                            }}
+                        >
+                            The window stays readable behind a soft dim.
+                        </div>
+                        <ModalOverlay
+                            backdrop="soft"
+                            onDismiss={() => {}}
+                            placement="top"
+                            style={{ position: "absolute" }}
+                        >
+                            <TopPalette />
+                        </ModalOverlay>
+                    </TopWindowFrame>
                 </Specimen>
             </div>
 

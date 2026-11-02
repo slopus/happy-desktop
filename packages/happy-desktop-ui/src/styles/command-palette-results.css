@@ -1,17 +1,18 @@
 /*
  * C-273 CommandPaletteResults — the ⌘K palette's result body.
  *
- * Sections stack with an 8px breath and a 28px mono uppercase caption; captions
- * name a section and nothing else, so there are no rules or stripes between
- * them. A command row is one 44px line, command-bar style: a 20px leading lane
- * (avatar, mark, or glyph), a 10px gutter, the 13px title, then its muted
- * secondary text inline after an em dash, both truncating on that one line,
- * and an optional trailing cap. A settings row hosts the settings page's own
- * row (C-029 FormRow) at its compact 56px after the same lane, so its label
- * starts on the titles' column. The highlighted row carries the rounded
- * selected fill, so keyboard travel is visible while focus stays in the
- * palette input — which is also why the settings list's hairlines are left out
- * here: a list read by its highlight has no use for rules between its rows.
+ * Sections stack with an 8px breath under a 28px sentence-case caption;
+ * captions name a section and nothing else, so there are no rules or stripes
+ * between them. A command row is one compact 40px line, Linear-style: a 20px
+ * leading lane (avatar, mark, or glyph), a 12px gutter, the 14px title, then
+ * its muted 13px secondary text — what it is, or where — on the same baseline,
+ * both truncating on that one line, and an optional trailing cap. A settings
+ * row hosts the settings page's own row (C-029 FormRow) at its compact 56px
+ * after the same lane, so its label starts on the titles' column. The
+ * highlighted row carries the rounded selected fill and lifts its glyph to the
+ * text colour, so keyboard travel is visible while focus stays in the palette
+ * input — which is also why the settings list's hairlines are left out here: a
+ * list read by its highlight has no use for rules between its rows.
  */
 
 .happy-command-palette-results,
@@ -55,16 +56,11 @@
     flex: none;
     align-items: center;
     height: 28px;
-    padding: 0 10px;
-    overflow: hidden;
+    padding: 0 12px;
     color: var(--text-secondary);
-    font-family: var(--happy-font-mono);
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.08em;
+    font-size: 12px;
+    font-weight: 500;
     line-height: 16px;
-    text-overflow: ellipsis;
-    text-transform: uppercase;
     white-space: nowrap;
 }
 
@@ -74,11 +70,11 @@
     display: flex;
     flex: none;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
     width: 100%;
-    min-height: 44px;
+    min-height: 40px;
     margin: 0;
-    padding: 0 10px;
+    padding: 0 12px;
     border: none;
     border-radius: var(--happy-radius-sm);
     background: transparent;
@@ -140,15 +136,6 @@
     background: var(--surface);
 }
 
-/* The palette card publishes the inner radius its 8px inset leaves inside the
-   14px shell corner (14 − 1 border − 8 inset = 5px). The name predates this
-   list; restating the number here would be a copy free to drift from the inset
-   it is derived from. See DESIGN.md, "Nested rounded corners". */
-.happy-command-palette-results__section:last-child .happy-command-palette-results__row:last-child {
-    border-bottom-right-radius: var(--happy-search-results-last-radius, var(--happy-radius-sm));
-    border-bottom-left-radius: var(--happy-search-results-last-radius, var(--happy-radius-sm));
-}
-
 .happy-command-palette-results__leading {
     display: flex;
     flex: none;
@@ -157,6 +144,12 @@
     width: 20px;
     height: 20px;
     color: var(--text-secondary);
+}
+
+/* A row's own news keeps its colour when highlighted. */
+.happy-command-palette-results__row[data-active]
+    .happy-command-palette-results__leading:not([data-emphasis]) {
+    color: var(--text);
 }
 
 /* An image mark stands as drawn, in the 20px box the sidebar gives it. */
@@ -175,17 +168,18 @@
     color: var(--box-warning-text);
 }
 
-/* One line: the title, then what it belongs to, muted, after an em dash. The
-   secondary text gives way first, so a long path never hides whose it is; the
-   title truncates only once the secondary text is gone. */
+/* One line: the title, then what it is or where it lives, muted, on the
+   title's baseline. The secondary text gives way first, so a long path never
+   hides whose it is; the title truncates only once the secondary text is
+   gone. */
 .happy-command-palette-results__body {
     display: flex;
     flex: 1 1 auto;
     align-items: baseline;
+    gap: 8px;
     min-width: 0;
     overflow: hidden;
     white-space: nowrap;
-    font-size: 13px;
     line-height: 20px;
 }
 
@@ -194,6 +188,7 @@
     min-width: 0;
     overflow: hidden;
     color: var(--text);
+    font-size: 14px;
     font-weight: 500;
     text-overflow: ellipsis;
 }
@@ -203,13 +198,9 @@
     min-width: 0;
     overflow: hidden;
     color: var(--text-secondary);
+    font-size: 13px;
     font-weight: 400;
     text-overflow: ellipsis;
-}
-
-.happy-command-palette-results__meta::before {
-    content: " — ";
-    white-space: pre;
 }
 
 .happy-command-palette-results__caps {

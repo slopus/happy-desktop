@@ -671,7 +671,7 @@ const SURFACES: readonly MockSurface[] = [
             members: MEMBERS,
         },
     },
-    // Not joined, so found only by searching.
+    // Not joined, so found only through ⌘K.
     {
         id: "errands",
         joined: false,
@@ -748,30 +748,6 @@ const PROJECTS: readonly SidebarItem[] = [
     { id: "agent", initials: "H", kind: "project", label: "happy-agent" },
 ];
 
-const CHATS: readonly SidebarItem[] = [
-    {
-        icon: "chat",
-        id: "chat-1",
-        kind: "channel",
-        label: "Review the release plan",
-        meta: "happy-desktop",
-    },
-    {
-        icon: "chat",
-        id: "chat-2",
-        kind: "channel",
-        label: "Fix flaky sidebar test",
-        meta: "sidebar-search",
-    },
-    {
-        icon: "chat",
-        id: "chat-3",
-        kind: "channel",
-        label: "Refactor surface store",
-        meta: "happy-agent",
-    },
-];
-
 /** Where the app would open the artifact viewer or a bot's or task's chat. */
 function MockTarget(props: { readonly item: SidebarItem }) {
     return (
@@ -790,13 +766,10 @@ function MockTarget(props: { readonly item: SidebarItem }) {
  * The window as the app composes it: Artifacts heads the sidebar's first,
  * unheaded group and never moves; the reader's Surfaces follow and are
  * dragged among themselves. The + beside the collapse control makes a todo
- * list. Typing in the search replaces the sidebar with what matches —
- * Surfaces joined or not, bots, tasks, projects, and chats — under headings.
- * An artifact, bot, or task kept among the Surfaces opens what it points at.
+ * list. An artifact, bot, or task kept among the Surfaces opens what it points at.
  */
 function MockWindow(props: {
     readonly focusOnType?: boolean;
-    readonly initialSearch?: string;
     readonly initialList?: HappyAgentTodoListSnapshot;
     /** Opens the open Surface's shared chat beside it. */
     readonly initialChat?: boolean;
@@ -806,15 +779,8 @@ function MockWindow(props: {
     const [surfaces, setSurfaces] = useState(SURFACES);
     const [chatOpen, setChatOpen] = useState(props.initialChat ?? false);
     const chat = { open: chatOpen, onToggle: () => setChatOpen(!chatOpen) };
-    const [search, setSearch] = useState(props.initialSearch ?? "");
     const [selected, setSelected] = useState(props.initialSelected ?? "groceries");
     const [creating, setCreating] = useState<HappyAgentSurfaceCreateKind>();
-    const query = search.trim().toLocaleLowerCase();
-    const searching = query.length > 0;
-    const found = (items: readonly SidebarItem[]): SidebarItem[] =>
-        items
-            .filter((item) => item.label.toLocaleLowerCase().includes(query))
-            .map((item) => ({ ...item, depth: 0, reorderable: false }));
     const joined = surfaces.filter((surface) => surface.joined);
     const open = surfaces.find((surface) => surface.id === selected);
     const target = [ARTIFACTS, ...BOTS, ...TASKS].find((item) => item.id === selected);
@@ -828,25 +794,6 @@ function MockWindow(props: {
                 : rest.findIndex((surface) => surface.id === move.afterId) + 1;
         setSurfaces([...rest.slice(0, at), moved, ...rest.slice(at)]);
     };
-    const results = [
-        {
-            id: "search-surfaces",
-            label: "Shared",
-            items: [
-                ...found([ARTIFACTS]),
-                ...found(joined.map((surface) => surfaceItem(surface, true))),
-                ...found(
-                    surfaces
-                        .filter((surface) => !surface.joined)
-                        .map((surface) => surfaceItem(surface, true)),
-                ),
-            ],
-        },
-        { id: "search-bots", label: "Bots", items: found(BOTS) },
-        { id: "search-tasks", label: "Tasks", items: found(TASKS) },
-        { id: "search-projects", label: "Projects", items: found(PROJECTS) },
-        { id: "search-chats", label: "Chats", items: found(CHATS) },
-    ].filter((section) => section.items.length > 0);
     return (
         <div style={{ display: "flex", height: "100%", position: "relative", width: "100%" }}>
             <AppShell
@@ -866,62 +813,45 @@ function MockWindow(props: {
                             setSelected(surface?.reference?.opens ?? id);
                         }}
                         onSectionAction={noop}
-                        search={{ onValueChange: setSearch, placeholder: "Search", value: search }}
-                        sections={
-                            searching
-                                ? results.length > 0
-                                    ? results
-                                    : [
-                                          {
-                                              empty: {
-                                                  description: `Nothing matches “${search.trim()}”.`,
-                                              },
-                                              id: "search-none",
-                                              items: [],
-                                          },
-                                      ]
-                                : [
-                                      {
-                                          id: "top",
-                                          items: [
-                                              ARTIFACTS,
-                                              ...joined.map((surface) =>
-                                                  surfaceItem(surface, false),
-                                              ),
-                                          ],
-                                      },
-                                      {
-                                          action: {
-                                              icon: "plus",
-                                              label: "New bot",
-                                              reveal: "always",
-                                          },
-                                          id: "bots",
-                                          label: "Bots",
-                                          items: [...BOTS],
-                                      },
-                                      {
-                                          action: {
-                                              icon: "plus",
-                                              label: "New task",
-                                              reveal: "always",
-                                          },
-                                          id: "tasks",
-                                          label: "Tasks",
-                                          items: [...TASKS],
-                                      },
-                                      {
-                                          action: {
-                                              icon: "plus",
-                                              label: "Add project",
-                                              reveal: "always",
-                                          },
-                                          id: "projects",
-                                          label: "Projects",
-                                          items: PROJECTS.map(({ meta: _meta, ...item }) => item),
-                                      },
-                                  ]
-                        }
+                        sections={[
+                            {
+                                id: "top",
+                                items: [
+                                    ARTIFACTS,
+                                    ...joined.map((surface) => surfaceItem(surface, false)),
+                                ],
+                            },
+                            {
+                                action: {
+                                    icon: "plus",
+                                    label: "New bot",
+                                    reveal: "always",
+                                },
+                                id: "bots",
+                                label: "Bots",
+                                items: [...BOTS],
+                            },
+                            {
+                                action: {
+                                    icon: "plus",
+                                    label: "New task",
+                                    reveal: "always",
+                                },
+                                id: "tasks",
+                                label: "Tasks",
+                                items: [...TASKS],
+                            },
+                            {
+                                action: {
+                                    icon: "plus",
+                                    label: "Add project",
+                                    reveal: "always",
+                                },
+                                id: "projects",
+                                label: "Projects",
+                                items: PROJECTS.map(({ meta: _meta, ...item }) => item),
+                            },
+                        ]}
                     />
                 }
                 sidebarCollapsible
@@ -1127,23 +1057,13 @@ export function HappyAgentSurfacesBlueprintPage() {
             title="HappyAgentSurfaces"
         >
             <FullScreenSpecimen
-                detail="Live, in the window. Artifacts heads the first group and never moves; drag a Surface among the others. Chief of Staff, Launch spec, and Rewrite onboarding guide are a bot, an artifact, and a task kept among the Surfaces, wearing their own faces and opening where they always open; Old pricing page was deleted since. + beside the collapse control offers a todo list or a document; the search above everything replaces the sidebar with what matches. The list's add field has the caret, and typing anywhere no other control wants lands in it, as in a chat."
+                detail="Live, in the window. Artifacts heads the first group and never moves; drag a Surface among the others. Chief of Staff, Launch spec, and Rewrite onboarding guide are a bot, an artifact, and a task kept among the Surfaces, wearing their own faces and opening where they always open; Old pricing page was deleted since. + beside the collapse control offers a todo list or a document; ⌘K finds the rest. The list's add field has the caret, and typing anywhere no other control wants lands in it, as in a chat."
                 label="Window"
                 number="00"
                 screen="00-window-1100x760"
                 window={{ width: 1100, height: 760 }}
             >
                 <MockWindow focusOnType />
-            </FullScreenSpecimen>
-
-            <FullScreenSpecimen
-                detail="Searching “re”: Surfaces (joined first, then the ones not joined yet, each offering Join), bots, tasks, projects, and chats that match, in place of the usual sidebar. Nothing found is dragged."
-                label="Window, searching"
-                number="00b"
-                screen="00b-search-1100x760"
-                window={{ width: 1100, height: 760 }}
-            >
-                <MockWindow initialSearch="re" />
             </FullScreenSpecimen>
 
             <FullScreenSpecimen

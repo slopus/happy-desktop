@@ -176,21 +176,6 @@
     opacity: 0.4;
 }
 
-/* The search field sits on the rows' own inset, so its edges line up with a
-   row's highlight below it; the body's top inset is the gap under it. It stands
-   on a surface of its own so it reads against the sidebar. */
-.happy-sidebar__search {
-    display: flex;
-    flex: none;
-    min-width: 0;
-    padding: 0 var(--happy-panel-inset);
-}
-
-.happy-sidebar__search .happy-text-field__control {
-    border-color: var(--sidebar-search-border);
-    background: var(--sidebar-search-background);
-}
-
 .happy-sidebar__header-trailing {
     display: flex;
     flex: 0 1 auto;

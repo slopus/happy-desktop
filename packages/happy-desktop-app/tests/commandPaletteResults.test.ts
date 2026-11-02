@@ -1,5 +1,7 @@
 import { expect, it } from "vitest";
 import type {
+    HappyAgentArtifact,
+    HappyAgentArtifactId,
     HappyAgentBot,
     HappyAgentBotId,
     HappyAgentGroupId,
@@ -7,6 +9,10 @@ import type {
     HappyAgentProjectId,
     HappyAgentRecentTabMemory,
     HappyAgentSessionId,
+    HappyAgentSurface,
+    HappyAgentSurfaceActiveTodo,
+    HappyAgentSurfaceId,
+    HappyAgentSurfaceTodoId,
     HappyAgentTask,
     HappyAgentTaskId,
     HappyAgentWorktreeGroup,
@@ -326,4 +332,133 @@ it("numbers the first nine rows that open something for ⌘1…⌘9, never an ac
         }),
     );
     expect(many.numbered.length).toBeLessThanOrEqual(9);
+});
+
+const surface = (
+    id: string,
+    name: string,
+    type: HappyAgentSurface["type"],
+    minutesAgo: number,
+): HappyAgentSurface => ({
+    id: id as HappyAgentSurfaceId,
+    type,
+    name,
+    image: null,
+    members: [],
+    creatorUserId: null,
+    chatAgentId: null,
+    version: "1",
+    updatedAt: NOW - minutesAgo * MINUTE,
+});
+
+const SPEC = surface("srf_spec", "Search ranking spec", { kind: "document" }, 30);
+const NOTES_DOC = surface("srf_notes", "Search notes from the offsite", { kind: "document" }, 5);
+const LAUNCH = surface("srf_launch", "Launch checklist", { kind: "todo" }, 20);
+const ROADMAP = surface("srf_roadmap", "Search roadmap", { kind: "calendar" }, 15);
+// Points at an artifact, which is found under its own title instead.
+const KEPT = surface("srf_kept", "Search hero image", { kind: "artifact" }, 1);
+
+const todo = (id: string, text: string, orderKey: string): HappyAgentSurfaceActiveTodo => ({
+    id: id as HappyAgentSurfaceTodoId,
+    surfaceId: LAUNCH.id,
+    text,
+    authorUserId: null,
+    createdAt: NOW,
+    updatedAt: NOW,
+    version: "1",
+    status: "active",
+    orderKey,
+    completedAt: null,
+    deletedAt: null,
+});
+
+const artifact = (
+    id: string,
+    title: string,
+    type: HappyAgentArtifact["type"],
+    status: HappyAgentArtifact["status"] = "active",
+): HappyAgentArtifact =>
+    ({
+        id: id as HappyAgentArtifactId,
+        type,
+        title,
+        status,
+        updatedAt: NOW,
+    }) as HappyAgentArtifact;
+
+const SOURCES = {
+    surfaces: [SPEC, NOTES_DOC, LAUNCH, ROADMAP, KEPT],
+    // The reader joined the spec and the checklist, not the offsite notes.
+    joined: new Set([SPEC.id, LAUNCH.id, ROADMAP.id]),
+    activeTodos: new Map([
+        [
+            LAUNCH.id,
+            [todo("todo_copy", "Search copy review", "a"), todo("todo_ship", "Ship it", "b")],
+        ],
+    ]),
+};
+
+const ARTIFACTS = [
+    artifact("art_deck", "Search launch deck", "html"),
+    artifact("art_shot", "Search results screenshot", "image"),
+    artifact("art_gone", "Search draft", "markdown", "deleted"),
+];
+
+it("finds documents, open todos, artifacts, and other shared Surfaces by name", () => {
+    const result = commandPaletteResults(
+        input({ query: "search", surfaces: SOURCES, artifacts: ARTIFACTS }),
+    );
+    expect(result.sections.map((section) => section.id)).toEqual([
+        "work",
+        "documents",
+        "todos",
+        "artifacts",
+        "shared",
+        "archived",
+    ]);
+    const section = (id: string) =>
+        result.sections.find((entry) => entry.id === id)?.rows.map((row) => row.id);
+    // A joined document before one the reader has not joined, however recent.
+    expect(section("documents")).toEqual(["surface:srf_spec", "surface:srf_notes"]);
+    // A todo is found by what it says, never by its list's name.
+    expect(section("todos")).toEqual(["todo:todo_copy"]);
+    // A deleted artifact is not offered.
+    expect(section("artifacts")).toEqual(["artifact:art_deck", "artifact:art_shot"]);
+    // A calendar is another shared Surface; a Surface that only points at an
+    // artifact is found under the artifact's own title.
+    expect(section("shared")).toEqual(["surface:srf_roadmap"]);
+    expect(ids(result)).not.toContain("surface:srf_kept");
+
+    expect(result.rows.find((row) => row.id === "surface:srf_notes")).toMatchObject({
+        meta: "Document · not joined",
+        glyph: { kind: "icon", name: "doc" },
+        command: { kind: "surfaceOpen", happyAgentId: "local", surfaceId: "srf_notes" },
+    });
+    expect(result.rows.find((row) => row.id === "todo:todo_copy")).toMatchObject({
+        title: "Search copy review",
+        meta: "Launch checklist",
+        command: { kind: "surfaceOpen", happyAgentId: "local", surfaceId: "srf_launch" },
+    });
+    expect(result.rows.find((row) => row.id === "artifact:art_deck")).toMatchObject({
+        meta: "Web page",
+        glyph: { kind: "icon", name: "globe" },
+        command: { kind: "artifactOpen", happyAgentId: "local", artifactId: "art_deck" },
+    });
+});
+
+it("finds a todo list by its name and says how much is left in it", () => {
+    const result = commandPaletteResults(input({ query: "launch", surfaces: SOURCES }));
+    expect(result.sections.map((section) => section.id)).toEqual(["todos"]);
+    expect(result.rows[0]).toMatchObject({
+        id: "surface:srf_launch",
+        meta: "Todo list · 2 open",
+        glyph: { kind: "icon", name: "tasks" },
+    });
+    // Numbered like the work: these rows go somewhere.
+    expect(result.numbered).toEqual([0]);
+});
+
+it("offers no documents, todos, or artifacts on an empty palette", () => {
+    const result = commandPaletteResults(input({ surfaces: SOURCES, artifacts: ARTIFACTS }));
+    expect(result.sections.map((section) => section.id)).toEqual(["recent"]);
 });

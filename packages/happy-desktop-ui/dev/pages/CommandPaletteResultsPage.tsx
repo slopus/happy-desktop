@@ -13,9 +13,9 @@ import { happyLogoBlackUrl as happyMark } from "../../src/assets";
 /** The component plan this page documents. The selector and the page header read the same value. */
 export const componentNumber = "C-273";
 
-/* The width the list has inside the palette card: 384 − 2 borders − the card's
+/* The width the list has inside the palette card: 640 − 2 borders − the card's
    own 8px body inset on each side. Every specimen is measured at it. */
-const BODY_WIDTH = 366;
+const BODY_WIDTH = 622;
 
 const SESSION_SHORTCUT = commandShortcut("t");
 const SIDEBAR_SHORTCUT = commandShortcut("b");
@@ -131,6 +131,76 @@ const searched: CommandPaletteResultsSection[] = [
                 meta: "Closed · happy-desktop",
                 shortcut: NUMBERS[3],
                 title: "Search ranking notes",
+            },
+        ],
+    },
+];
+
+/** What a typed query finds among the machine's Surfaces and artifacts. */
+const shared: CommandPaletteResultsSection[] = [
+    {
+        id: "documents",
+        caption: "Documents",
+        rows: [
+            {
+                kind: "command",
+                id: "doc-plan",
+                icon: "doc",
+                meta: "Document",
+                shortcut: NUMBERS[0],
+                title: "Launch plan",
+            },
+            {
+                kind: "command",
+                id: "doc-notes",
+                icon: "doc",
+                meta: "Document · not joined",
+                shortcut: NUMBERS[1],
+                title: "Launch retro notes",
+            },
+        ],
+    },
+    {
+        id: "todos",
+        caption: "Todos",
+        rows: [
+            {
+                kind: "command",
+                id: "list-launch",
+                icon: "tasks",
+                meta: "Todo list · 12 open",
+                shortcut: NUMBERS[2],
+                title: "Launch checklist",
+            },
+            {
+                kind: "command",
+                id: "todo-email",
+                icon: "check",
+                meta: "Marketing",
+                shortcut: NUMBERS[3],
+                title: "Write the launch email",
+            },
+        ],
+    },
+    {
+        id: "artifacts",
+        caption: "Artifacts",
+        rows: [
+            {
+                kind: "command",
+                id: "artifact-deck",
+                icon: "globe",
+                meta: "Web page",
+                shortcut: NUMBERS[4],
+                title: "Launch deck",
+            },
+            {
+                kind: "command",
+                id: "artifact-hero",
+                icon: "image",
+                meta: "Image",
+                shortcut: NUMBERS[5],
+                title: "Launch hero image",
             },
         ],
     },
@@ -288,7 +358,7 @@ export function CommandPaletteResultsPage() {
     return (
         <ComponentPage
             number={componentNumber}
-            summary="The ⌘K palette's body: captioned sections of one-line 44px command rows — title, then muted secondary text — and live settings rows at the settings page's compact 56px, with one rounded highlighted row that Enter commits. Props only — the owner holds the flat index and moves it."
+            summary="The ⌘K palette's body: sentence-case captioned sections of compact one-line 40px command rows — glyph, title, then muted secondary text on its baseline — and live settings rows at the settings page's compact 56px, with one rounded highlighted row that Enter commits. Props only — the owner holds the flat index and moves it."
             title="Command palette results"
         >
             <div className="specimen-grid">
@@ -296,7 +366,7 @@ export function CommandPaletteResultsPage() {
                     detail="empty query · the waiting update, then the sidebar's tasks, bots, and projects in their sidebar marks, last opened first, then other live work · no subtasks or archived work · ⌘1…⌘9 on the rows · highlight on the first row"
                     label="Suggestions"
                     number="PR-01"
-                    rule="366px body width · 44px one-line rows · 20px sidebar marks · 28px captions"
+                    rule="622px body width · 40px one-line rows · 20px sidebar marks · 28px captions"
                 >
                     <CommandPaletteResults activeIndex={0} sections={suggestions} />
                 </BodySpecimen>
@@ -318,9 +388,20 @@ export function CommandPaletteResultsPage() {
                     detail="a typed query such as “search” · live work first, archived tasks and closed sessions last however well they match · ⌘1…⌘9 count on across sections"
                     label="Work and archived"
                     number="PR-07"
-                    rule="44px rows · ⌘-number caps on rows that open something"
+                    rule="40px rows · ⌘-number caps on rows that open something"
                 >
                     <CommandPaletteResults activeIndex={0} sections={searched} />
+                </BodySpecimen>
+            </div>
+
+            <div className="specimen-grid">
+                <BodySpecimen
+                    detail="a typed query such as “launch” · documents, joined or not; a todo list with what is left in it, and an open todo by its own words; artifacts by title and type"
+                    label="Documents, todos, artifacts"
+                    number="PR-08"
+                    rule="40px rows · the type or place as secondary text"
+                >
+                    <CommandPaletteResults activeIndex={0} sections={shared} />
                 </BodySpecimen>
             </div>
 
@@ -329,7 +410,7 @@ export function CommandPaletteResultsPage() {
                     detail="a typed query such as “fold sidebar” finds the window's acts, each with the chord that does the same"
                     label="Actions"
                     number="PR-06"
-                    rule="44px rows · trailing cap"
+                    rule="40px rows · trailing cap"
                 >
                     <CommandPaletteResults activeIndex={0} sections={actions} />
                 </BodySpecimen>

@@ -229,7 +229,6 @@ export type {
     HappyAgentUserSettingsSource,
 } from "./happyAgent/happyAgentUserSettings.js";
 export * from "./happyAgent/happyAgentSidebarCollapseStore.js";
-export * from "./happyAgent/happyAgentSidebarSearchStore.js";
 export * from "./happyAgent/happyAgentAttentionStore.js";
 export * from "./happyAgent/happyAgentTaskSettingsStore.js";
 export * from "./stories/storiesStore.js";

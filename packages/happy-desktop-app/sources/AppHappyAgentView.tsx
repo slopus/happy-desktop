@@ -72,7 +72,6 @@ import type {
     HappyAgentModelSelection,
     HappyAgentNavigationOrderStore,
     HappyAgentSidebarCollapseStore,
-    HappyAgentSidebarSearchStore,
     HappyAgentSidebarVisibilityStore,
     HappyAgentAttentionSnapshot,
     HappyAgentAttentionStore,
@@ -166,7 +165,6 @@ import {
     happyAgentAvailabilityProject,
     happyAgentNavigationOrderStoreNoop,
     happyAgentSidebarCollapseStoreNoop,
-    happyAgentSidebarSearchStoreNoop,
     happyAgentSidebarVisibilityStoreNoop,
     happyAgentAttentionStoreNoop,
     happyAgentBotAttention,
@@ -730,12 +728,6 @@ export interface AppHappyAgentViewProps {
      * open rather than offering a fold the next launch would forget.
      */
     sidebarCollapse?: HappyAgentSidebarCollapseStore;
-    /**
-     * What the sidebar's search field holds. While it holds anything the
-     * sidebar lists what matches in place of its usual contents; a host that
-     * keeps no search supplies none and the sidebar offers no field.
-     */
-    sidebarSearch?: HappyAgentSidebarSearchStore;
     /**
      * Which bots the reader muted or hid, per connection. A host that keeps no
      * such record supplies none, and the bot rows offer neither.
@@ -2756,33 +2748,13 @@ function happyAgentTopSection(
 }
 
 /**
- * A chat's row is addressed inside its Happy Agent by the chat alone; the
- * workspace it is filed under is read back from the list that holds it.
- */
-const CHAT_ROW_PREFIX = "chat:";
-
-function chatRowId(chatId: string): string {
-    return `${CHAT_ROW_PREFIX}${chatId}`;
-}
-
-function chatRowParse(rowId: string): string | undefined {
-    return rowId.startsWith(CHAT_ROW_PREFIX) ? rowId.slice(CHAT_ROW_PREFIX.length) : undefined;
-}
-
-/**
  * Where selecting one of a Happy Agent's sidebar rows goes: the group it addresses and the
- * conversation that opens there, if any. Nothing for a chat filed nowhere any more or a bot still
- * being made.
+ * conversation that opens there, if any. Nothing for a bot still being made.
  */
 function rowDestination(
     happyAgent: AppHappyAgentEntry,
     rowId: string,
 ): { readonly groupId: string; readonly chatId: string | undefined } | undefined {
-    const chatId = chatRowParse(rowId);
-    if (chatId !== undefined) {
-        const groupId = chatGroupFind(happyAgent.projects, chatId);
-        return groupId === undefined ? undefined : { groupId, chatId };
-    }
     const subtask = happyAgentBotSubtasks([...happyAgent.bots, ...(happyAgent.tasks ?? [])]).find(
         (task) => task.conversation.id === rowId,
     );
@@ -2804,184 +2776,6 @@ function rowDestination(
             openGroupFind(happyAgent.projects, happyAgent.bots, happyAgent.tasks ?? [], [], rowId)
                 ?.conversations[0]?.id,
     };
-}
-
-/** The project or worktree a chat is filed under, by its id. */
-function chatGroupFind(
-    projects: readonly HappyAgentProjectGroup[],
-    chatId: string,
-): string | undefined {
-    for (const project of projects) {
-        if (project.conversations.some((chat) => chat.id === chatId)) return project.id;
-        for (const worktree of project.worktrees)
-            if (worktree.conversations.some((chat) => chat.id === chatId)) return worktree.id;
-    }
-    return undefined;
-}
-
-/** The most chats a search lists; the newest matching ones are kept. */
-const SEARCH_CHAT_LIMIT = 30;
-
-const SEARCH_SECTION_PREFIX = "happy-agent-search:";
-
-/**
- * What the sidebar lists while its search field holds anything, in place of
- * everything it usually lists: every Surface whose name matches, joined or
- * not, then the bots, tasks, projects, worktrees, and chats that do, each
- * under a heading naming what it is. A match is the text appearing anywhere
- * in a row's name, ignoring case. Rows keep the order the sidebar gives them,
- * except Surfaces the reader has not joined, which follow theirs by name, and
- * chats, which are newest first.
- *
- * Nothing found is arranged by hand: a narrowed list does not hold the rows a
- * move would be stated against. Opening a row is opening it from the sidebar.
- */
-function happyAgentSearchSections(
-    query: string,
-    directory: AppHappyAgentDirectorySnapshot,
-    activeHappyAgentId: string,
-    catalog: HappyAgentSurfaceCatalogSnapshot,
-    activeTodoCounts: ReadonlyMap<HappyAgentSurfaceId, number>,
-    titleShimmerEnabled: boolean,
-    projectsVisibility: ProjectsVisibilitySnapshot,
-    attention: HappyAgentAttentionSnapshot,
-    storyOutline: StoryOutline,
-): SidebarSection[] {
-    const needle = query.trim().toLocaleLowerCase();
-    const matches = (text: string): boolean => text.toLocaleLowerCase().includes(needle);
-    const found = (item: SidebarItem): SidebarItem => ({
-        ...item,
-        depth: 0,
-        reorderable: false,
-    });
-    const sections = directory.happyAgents.flatMap((happyAgent): SidebarSection[] => {
-        const offline = happyAgent.status !== "connected";
-        const rowOf = (item: SidebarItem): SidebarItem =>
-            found({
-                ...item,
-                id: happyAgentItemId(happyAgent.id, item.id),
-                ...happyAgentSidebarItemAvailability(item, happyAgent),
-            });
-        const surfaces: SidebarItem[] = [];
-        if (happyAgent.id === activeHappyAgentId) {
-            if (matches(ARTIFACTS_SIDEBAR_ITEM.label)) surfaces.push(ARTIFACTS_SIDEBAR_ITEM);
-            if (catalog.availability === "available") {
-                const joined = new Set(catalog.joined.map((surface) => surface.id));
-                for (const surface of catalog.joined)
-                    if (matches(surfaceLabel(surface)))
-                        surfaces.push(
-                            found(
-                                surfaceSidebarItem(
-                                    happyAgent.id,
-                                    surface,
-                                    surfacePlacesOf(happyAgent),
-                                    true,
-                                    offline,
-                                    {
-                                        activeTodoCounts,
-                                        chatActivity: catalog.chatActivity,
-                                        labelShimmer: titleShimmerEnabled,
-                                    },
-                                ),
-                            ),
-                        );
-                for (const surface of [...catalog.surfaces].sort((left, right) =>
-                    surfaceLabel(left).localeCompare(surfaceLabel(right)),
-                ))
-                    if (!joined.has(surface.id) && matches(surfaceLabel(surface)))
-                        surfaces.push(
-                            surfaceSidebarItem(
-                                happyAgent.id,
-                                surface,
-                                surfacePlacesOf(happyAgent),
-                                false,
-                                offline,
-                            ),
-                        );
-            }
-        }
-        const bots = happyAgent.bots
-            .filter(
-                (bot) =>
-                    matches(bot.name) &&
-                    happyAgentBotAttention(attention, happyAgent.id, bot.id) !== "hidden",
-            )
-            .map((bot) =>
-                rowOf({
-                    ...botSidebarItem(
-                        bot,
-                        titleShimmerEnabled,
-                        happyAgentBotAttention(attention, happyAgent.id, bot.id) === "muted",
-                    ),
-                    ...storyOutline(happyAgent.id, bot.conversation.id),
-                }),
-            );
-        const tasks = (happyAgent.tasks ?? [])
-            .filter((task) => matches(task.name))
-            .map((task) =>
-                rowOf({
-                    ...taskSidebarItem(task, titleShimmerEnabled),
-                    ...storyOutline(happyAgent.id, task.conversation.id),
-                }),
-            );
-        const projects = projectsVisibilityConnection(projectsVisibility, happyAgent.id)
-            .projectsHidden
-            ? []
-            : happyAgentSidebarTree(happyAgent).projects.flatMap((entry) =>
-                  sidebarItems(entry, titleShimmerEnabled)
-                      .filter((item) => matches(item.label))
-                      // A worktree found on its own says which project it is in.
-                      .map((item) =>
-                          rowOf(item.depth === 1 ? { ...item, meta: entry.project.name } : item),
-                      ),
-              );
-        const chats = happyAgent.projects
-            .flatMap((project) => [
-                ...project.conversations.map((chat) => ({ chat, where: project.name })),
-                ...project.worktrees.flatMap((worktree) =>
-                    worktree.conversations.map((chat) => ({ chat, where: worktree.name })),
-                ),
-            ])
-            .filter(({ chat }) => matches(chat.title))
-            .sort((left, right) => right.chat.updatedAt - left.chat.updatedAt)
-            .slice(0, SEARCH_CHAT_LIMIT)
-            .map(
-                ({ chat, where }): SidebarItem =>
-                    found({
-                        id: happyAgentItemId(happyAgent.id, chatRowId(chat.id)),
-                        kind: "channel",
-                        icon: "chat",
-                        label: chat.title,
-                        labelShimmer: titleShimmerEnabled,
-                        meta: where,
-                        ...sidebarActivity(chat.activity),
-                        ...(chat.unread ? { unread: true } : {}),
-                    }),
-            );
-        const section = (kind: string, label: string, items: SidebarItem[]): SidebarSection[] =>
-            items.length === 0
-                ? []
-                : [{ id: `${SEARCH_SECTION_PREFIX}${kind}:${happyAgent.id}`, label, items }];
-        return [
-            ...section("surfaces", "Shared", surfaces),
-            ...section("bots", "Bots", bots),
-            ...section("tasks", "Tasks", tasks),
-            ...section("projects", "Projects", projects),
-            ...section("chats", "Chats", chats),
-        ];
-    });
-    return sections.length > 0
-        ? sections
-        : [
-              {
-                  id: `${SEARCH_SECTION_PREFIX}none`,
-                  items: [],
-                  empty: {
-                      description: `Nothing matches “${query.trim()}”.`,
-                      icon: "search",
-                  },
-              },
-          ];
 }
 
 /**
@@ -3309,15 +3103,6 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
         sidebarCollapseStore.get,
         sidebarCollapseStore.get,
     );
-    // What the sidebar's search field holds; anything in it replaces the
-    // sidebar's contents with what matches.
-    const sidebarSearchStore = props.sidebarSearch ?? happyAgentSidebarSearchStoreNoop;
-    const sidebarSearch = useSyncExternalStore(
-        sidebarSearchStore.subscribe,
-        sidebarSearchStore.get,
-        sidebarSearchStore.get,
-    );
-    const searching = sidebarSearch.query.trim().length > 0;
     // Which bots the reader muted or hid. Each machine keeps the reader's own
     // choices, and the window keeps its last copy of them, so a machine
     // dropping off neither unmutes nor reveals one.
@@ -3651,8 +3436,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
     );
     const sidebar = (
         <Sidebar
-            // A search replaces everything below the field, pinned rows too.
-            actions={searching ? [] : pinned}
+            actions={pinned}
             {...(sidebarSearchRow ? { searchRow: sidebarSearchRow } : {})}
             // A todo list is made from the sidebar's own heading, beside the
             // control that hides it. A Happy Agent without Surfaces offers none.
@@ -3667,15 +3451,6 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                       onHeaderMenuSelect: (id: string) => {
                           const offer = SURFACE_CREATE_OFFERS.find((entry) => entry.kind === id);
                           if (offer !== undefined) surfaceCatalogStore.createOpen(offer.kind);
-                      },
-                  }
-                : {})}
-            {...(props.sidebarSearch
-                ? {
-                      search: {
-                          onValueChange: sidebarSearchStore.queryUpdate,
-                          placeholder: "Search",
-                          value: sidebarSearch.query,
                       },
                   }
                 : {})}
@@ -3751,8 +3526,6 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                 const row = happyAgentItemParse(item.id);
                 const happyAgent = happyAgentOf(row.happyAgentId);
                 if (!happyAgent) return [];
-                // A chat a search found is only opened from here.
-                if (chatRowParse(row.id) !== undefined) return [];
                 // A joined Surface is left from its menu, as a task is; there
                 // is nothing else to do to one from here.
                 const surfaceId = surfaceRowParse(row.id);
@@ -4173,58 +3946,42 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                       },
                   }
                 : {})}
-            sections={
-                searching
-                    ? happyAgentSearchSections(
-                          sidebarSearch.query,
-                          directory,
-                          active?.id ?? props.happyAgentId,
-                          surfaceCatalog,
-                          activeTodoCounts,
-                          titleShimmerEnabled,
-                          projectsVisibility,
-                          attention,
-                          storyOutline,
-                      )
-                    : [
-                          happyAgentTopSection(
-                              active?.id ?? props.happyAgentId,
-                              active,
-                              surfaceCatalog,
-                              activeTodoCounts,
-                              titleShimmerEnabled,
-                          ),
-                          ...sectionsVoiceFocused(
-                              happyAgentSections(
-                                  directory,
-                                  storyOutline,
-                                  titleShimmerEnabled,
-                                  projectsVisibility,
-                                  attention,
-                                  props.sidebarCollapse
-                                      ? // A navigation into a folded-away Projects list
-                                        // shows it while voice points there.
-                                        voiceFocus?.reason === "navigation" &&
-                                        voiceFocusInProjects(voiceFocus, directory)
-                                          ? new Set(
-                                                [...sidebarCollapse.collapsed].filter(
-                                                    (id) =>
-                                                        id !==
-                                                        happyAgentSectionId(
-                                                            voiceFocus.target.connectionId,
-                                                        ),
-                                                ),
-                                            )
-                                          : sidebarCollapse.collapsed
-                                      : undefined,
-                                  taskCreateTarget,
-                              ),
-                              sidebarCollapse.collapsed,
-                              voiceFocus,
-                              directory,
-                          ),
-                      ]
-            }
+            sections={[
+                happyAgentTopSection(
+                    active?.id ?? props.happyAgentId,
+                    active,
+                    surfaceCatalog,
+                    activeTodoCounts,
+                    titleShimmerEnabled,
+                ),
+                ...sectionsVoiceFocused(
+                    happyAgentSections(
+                        directory,
+                        storyOutline,
+                        titleShimmerEnabled,
+                        projectsVisibility,
+                        attention,
+                        props.sidebarCollapse
+                            ? // A navigation into a folded-away Projects list
+                              // shows it while voice points there.
+                              voiceFocus?.reason === "navigation" &&
+                              voiceFocusInProjects(voiceFocus, directory)
+                                ? new Set(
+                                      [...sidebarCollapse.collapsed].filter(
+                                          (id) =>
+                                              id !==
+                                              happyAgentSectionId(voiceFocus.target.connectionId),
+                                      ),
+                                  )
+                                : sidebarCollapse.collapsed
+                            : undefined,
+                        taskCreateTarget,
+                    ),
+                    sidebarCollapse.collapsed,
+                    voiceFocus,
+                    directory,
+                ),
+            ]}
         />
     );
 
@@ -4244,6 +4001,8 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                 ? { action: props.update.action, version: props.update.version }
                 : undefined,
         workspace: active?.session?.workspace,
+        surfaceCatalog: surfaceCatalogStore,
+        ...(active?.session?.artifacts ? { artifacts: active.session.artifacts.search() } : {}),
         workspaceCreateProjectId: workspaceCreateTarget?.projectId,
         taskCreateAvailable: taskCreateTarget !== undefined,
         // A window that keeps no fold of its own leaves it to the shell, which
@@ -4286,6 +4045,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
         onUpdateApply: props.onUpdateApply,
         onTaskCreateOpen: props.onTaskCreateOpen,
         onSurfaceOpen: props.onSurfaceOpen,
+        onArtifactOpen: props.onArtifactOpen,
         store: commandPaletteStore,
         settings: settingsStore,
         sidebarVisibility: sidebarVisibilityStore,
@@ -4777,6 +4537,13 @@ interface HappyAgentPaletteSubject {
     taskCreateAvailable: boolean;
     updateReady?: { readonly action: "refresh" | "restart"; readonly version?: string };
     workspace?: HappyAgentWorkspaceStore;
+    /** The machine's Surfaces, which a typed query searches by name and by open todo. */
+    surfaceCatalog?: HappyAgentSurfaceCatalogStore;
+    /**
+     * The palette's own reading of the machine's artifacts. It reads only while
+     * the palette is open, so a closed palette costs the connection nothing.
+     */
+    artifacts?: HappyAgentArtifactCatalogStore;
     /** The window's own fold of its left side, when it keeps one. */
     sidebar?: { readonly hidden: boolean };
     /** What the sidebar on screen lists at its top level. */
@@ -4805,6 +4572,7 @@ interface HappyAgentPaletteActions {
     onUpdateApply?(): void;
     onTaskCreateOpen?(happyAgentId: string): void;
     onSurfaceOpen?(happyAgentId: string, surfaceId: string): void;
+    onArtifactOpen?(happyAgentId: string, artifactId: string): void;
 }
 
 /**
@@ -5050,8 +4818,34 @@ function HappyAgentCommandPalette(
         props.settings.get,
         props.settings.get,
     );
+    const surfaceCatalogStore = props.surfaceCatalog ?? happyAgentSurfaceCatalogStoreNoop;
+    const surfaceCatalog = useSyncExternalStore(
+        surfaceCatalogStore.subscribe,
+        surfaceCatalogStore.get,
+        surfaceCatalogStore.get,
+    );
+    // Subscribing is what starts the reading, so the palette's artifacts are
+    // read while it is open and released the moment it closes.
+    const artifactStore = props.artifacts ?? happyAgentArtifactCatalogStoreNoop;
+    const artifactCatalog = useSyncExternalStore(
+        artifactStore.subscribe,
+        artifactStore.get,
+        artifactStore.get,
+    );
     const results = commandPaletteResults({
         ...paletteContext(props, props.facts),
+        ...(surfaceCatalog.availability === "available"
+            ? {
+                  surfaces: {
+                      surfaces: surfaceCatalog.surfaces,
+                      joined: new Set(surfaceCatalog.joined.map((surface) => surface.id)),
+                      activeTodos: surfaceCatalog.activeTodos,
+                  },
+              }
+            : {}),
+        ...(artifactCatalog.availability === "available"
+            ? { artifacts: artifactCatalog.artifacts }
+            : {}),
         query: palette.query,
         scrollbarVisibility: appearance.scrollbarVisibility,
         themeMode: appearance.mode,
@@ -5106,13 +4900,10 @@ function HappyAgentCommandPalette(
     };
 
     return (
-        // No dim: the window stays as it is behind the card, and a press
-        // anywhere outside it — the connection rail included — closes it.
-        <ModalOverlay
-            backdrop="clear"
-            onDismiss={() => props.store.paletteClose()}
-            placement="center"
-        >
+        // A soft dim sets the card apart without hiding the window, and a
+        // press anywhere outside it closes it. It hangs from the top, where a
+        // type-ahead belongs, so the field stays put while the rows change.
+        <ModalOverlay backdrop="soft" onDismiss={() => props.store.paletteClose()} placement="top">
             <CommandPalette
                 onClose={() => props.store.paletteClose()}
                 onQueryChange={(value) => {
@@ -5130,7 +4921,7 @@ function HappyAgentCommandPalette(
                     );
                     highlightIntent();
                 }}
-                placeholder="Search tasks and chats…"
+                placeholder="Search work, documents, todos, and artifacts…"
                 query={palette.query}
             >
                 <CommandPaletteResults
@@ -5397,6 +5188,9 @@ function paletteCommandRun(
             return;
         case "surfaceOpen":
             props.onSurfaceOpen?.(command.happyAgentId, command.surfaceId);
+            return;
+        case "artifactOpen":
+            props.onArtifactOpen?.(command.happyAgentId, command.artifactId);
             return;
         case "panelToggle":
             props.workspace?.panel.panelToggle();

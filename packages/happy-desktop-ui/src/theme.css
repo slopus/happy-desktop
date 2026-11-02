@@ -135,6 +135,7 @@
     --command-palette-shadow:
         0 1px 2px rgb(0 0 0 / 0.06), 0 8px 24px rgb(0 0 0 / 0.08), 0 24px 64px rgb(0 0 0 / 0.12);
     --overlay-backdrop: rgb(15 15 15 / 0.75);
+    --overlay-backdrop-soft: rgb(15 15 15 / 0.12);
     --overlay-panel: rgb(0 0 0 / 0.48);
     --story-shade-top: rgb(0 0 0 / 55%);
     --story-shade-bottom: rgb(0 0 0 / 65%);
@@ -170,8 +171,6 @@
     --composer-send-icon: #000000;
     --input-background: #f5f5f5;
     /* The sidebar search sits on the sidebar itself, so it is lifted off it. */
-    --sidebar-search-background: #ffffff;
-    --sidebar-search-border: rgb(0 0 0 / 0.12);
     --input-text: #000000;
     --input-placeholder: #999999;
     --box-warning-background: #fff8f0;
@@ -410,6 +409,7 @@
         --command-palette-shadow:
             0 1px 2px rgb(0 0 0 / 0.32), 0 8px 24px rgb(0 0 0 / 0.32), 0 24px 64px rgb(0 0 0 / 0.44);
         --overlay-backdrop: rgb(15 15 15 / 0.75);
+        --overlay-backdrop-soft: rgb(0 0 0 / 0.4);
         --overlay-panel: rgb(0 0 0 / 0.48);
         --groupped-background: #1e1e1e;
         --groupped-chevron: #cac4d0;
@@ -436,8 +436,6 @@
         --composer-send-background: #c0c0c0;
         --composer-send-icon: #000000;
         --input-background: #303030;
-        --sidebar-search-background: #303030;
-        --sidebar-search-border: rgb(255 255 255 / 0.1);
         --input-text: #ffffff;
         --input-placeholder: #8e8e93;
         --box-warning-background: rgb(255 159 10 / 0.15);
@@ -623,6 +621,7 @@
     --command-palette-shadow:
         0 1px 2px rgb(0 0 0 / 0.32), 0 8px 24px rgb(0 0 0 / 0.32), 0 24px 64px rgb(0 0 0 / 0.44);
     --overlay-backdrop: rgb(15 15 15 / 0.75);
+    --overlay-backdrop-soft: rgb(0 0 0 / 0.4);
     --overlay-panel: rgb(0 0 0 / 0.48);
     --groupped-background: #1e1e1e;
     --groupped-chevron: #cac4d0;
@@ -649,8 +648,6 @@
     --composer-send-background: #c0c0c0;
     --composer-send-icon: #000000;
     --input-background: #303030;
-    --sidebar-search-background: #303030;
-    --sidebar-search-border: rgb(255 255 255 / 0.1);
     --input-text: #ffffff;
     --input-placeholder: #8e8e93;
     --box-warning-background: rgb(255 159 10 / 0.15);
@@ -807,6 +804,7 @@
     --shadow-floating: rgb(0 0 0 / 0.6);
     --shadow-elevated: rgb(0 0 0 / 0.7);
     --overlay-backdrop: rgb(0 0 0 / 0.72);
+    --overlay-backdrop-soft: rgb(0 0 0 / 0.48);
     --groupped-background: #0b0b0b;
     --groupped-chevron: #8f8f8f;
     --groupped-section-title: #8f8f8f;
@@ -823,8 +821,6 @@
     --composer-send-background: #ececec;
     --composer-send-icon: #0b0b0b;
     --input-background: #1a1a1a;
-    --sidebar-search-background: #1a1a1a;
-    --sidebar-search-border: rgb(255 255 255 / 0.08);
     --input-text: #ececec;
     --input-placeholder: #6e6e6e;
     --permission-button-inactive-background: #1c1c1c;

@@ -365,7 +365,6 @@ export {
     type SidebarProps,
     type SidebarReorder,
     type SidebarRowsVisible,
-    type SidebarSearch,
     type SidebarSection,
 } from "./Sidebar";
 export {

@@ -91,7 +91,7 @@ variable in `packages/happy-desktop-ui/src/theme.css` (for example `surface` is
 | `surface-selected`, `surface-pressed`              | Selected and pressed rows                            |
 | `header-background`                                | Panel headers; on Windows, also the title bar        |
 | `divider`                                          | Hairlines between areas                              |
-| `input-background`, `sidebar-search-background`    | The composer, inputs, and the sidebar search         |
+| `input-background`                                 | The composer and inputs                              |
 | `user-message-background`                          | The person's own chat bubbles                        |
 | `text`, `agent-message-text`, `user-message-text`  | Main text                                            |
 | `text-secondary`, `groupped-section-title`         | Quieter text and section headings                    |

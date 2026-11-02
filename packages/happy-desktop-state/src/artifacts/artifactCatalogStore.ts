@@ -29,6 +29,13 @@ import type {
 
 /** How many artifacts one catalog read asks for. */
 const PAGE_LIMIT = 50;
+/** How many a catalog that reads every page asks for at once: the daemon's largest page. */
+const PAGES_ALL_LIMIT = 100;
+/**
+ * Where a catalog that reads every page stops. The daemon has no search of its
+ * own, so the palette searches what was read; this bounds what one open costs.
+ */
+const PAGES_ALL_MAX = 1_000;
 
 /** One way a list can be narrowed to a place: by its source, or by its conversation. */
 export type HappyAgentArtifactNarrowing =
@@ -160,9 +167,9 @@ function filterDerive(
     };
 }
 
-function queryOf(filter: HappyAgentArtifactFilter): ArtifactListQuery {
+function queryOf(filter: HappyAgentArtifactFilter, limit = PAGE_LIMIT): ArtifactListQuery {
     return {
-        limit: PAGE_LIMIT,
+        limit,
         ...(filter.includeDeleted ? { includeDeleted: true } : {}),
         ...(filter.type === undefined ? {} : { type: filter.type }),
         ...(filter.agentId === undefined ? {} : { agentId: filter.agentId }),
@@ -217,8 +224,16 @@ function notFound(error: unknown): boolean {
  */
 export function happyAgentArtifactCatalogStoreCreate(
     deps: HappyAgentArtifactCatalogDeps,
-    initial: { readonly scope?: HappyAgentArtifactScope } = {},
+    initial: {
+        readonly scope?: HappyAgentArtifactScope;
+        /**
+         * Reads page after page while subscribed, up to `PAGES_ALL_MAX`
+         * artifacts, instead of waiting to be asked for the next one.
+         */
+        readonly pagesAll?: boolean;
+    } = {},
 ): HappyAgentArtifactCatalogStore {
+    const pageLimit = initial.pagesAll === true ? PAGES_ALL_LIMIT : PAGE_LIMIT;
     const listeners = new Set<() => void>();
     let snapshot: HappyAgentArtifactCatalogSnapshot = {
         availability: "checking",
@@ -325,7 +340,7 @@ export function happyAgentArtifactCatalogStoreCreate(
             signal,
             async () => {
                 try {
-                    return await deps.client.listArtifacts(queryOf(filter), { signal });
+                    return await deps.client.listArtifacts(queryOf(filter, pageLimit), { signal });
                 } catch (error) {
                     if (notFound(error)) return undefined;
                     throw error;
@@ -365,6 +380,7 @@ export function happyAgentArtifactCatalogStoreCreate(
                     loadingMore: false,
                     error: undefined,
                 });
+                pagesContinue();
             })
             .catch(() => undefined)
             .finally(end);
@@ -468,6 +484,53 @@ export function happyAgentArtifactCatalogStoreCreate(
         retry = undefined;
     };
 
+    /** Reads the next page of older artifacts, when there is one and none is being read. */
+    const pageNext = (): void => {
+        if (
+            disposed ||
+            following === undefined ||
+            !snapshot.hasMore ||
+            snapshot.loadingMore ||
+            nextPageCursor === null
+        )
+            return;
+        const filter = snapshot.filter;
+        const pageCursor = nextPageCursor;
+        const { signal, mark, end } = readBegin();
+        publish({ loadingMore: true });
+        void deps.client
+            .listArtifacts({ ...queryOf(filter, pageLimit), pageCursor }, { signal })
+            .then(
+                (response) => {
+                    if (signal.aborted) return;
+                    nextPageCursor = response.nextPageCursor;
+                    const complete = nextPageCursor === null;
+                    const known = new Set(snapshot.artifacts.map((artifact) => artifact.id));
+                    const page = response.artifacts
+                        .map(happyAgentArtifactProject)
+                        .filter((artifact) => !known.has(artifact.id));
+                    const artifacts = eventsApply(
+                        [...snapshot.artifacts, ...page],
+                        journal.slice(mark),
+                        complete,
+                    );
+                    deps.authorsSeen?.(happyAgentArtifactAuthors(page));
+                    publish({ artifacts, hasMore: !complete, loadingMore: false });
+                    pagesContinue();
+                },
+                (error: unknown) => {
+                    if (signal.aborted) return;
+                    publish({ loadingMore: false, error: happyAgentUserError(error) });
+                },
+            )
+            .finally(end);
+    };
+
+    /** A catalog that reads every page asks for the next one as soon as a page lands. */
+    const pagesContinue = (): void => {
+        if (initial.pagesAll === true && snapshot.artifacts.length < PAGES_ALL_MAX) pageNext();
+    };
+
     return {
         get: () => snapshot,
         subscribe(listener) {
@@ -502,45 +565,7 @@ export function happyAgentArtifactCatalogStoreCreate(
             if (disposed || scope === snapshot.scope) return;
             filterChange({ ...choices(), scope });
         },
-        pageNextLoad() {
-            if (
-                disposed ||
-                following === undefined ||
-                !snapshot.hasMore ||
-                snapshot.loadingMore ||
-                nextPageCursor === null
-            )
-                return;
-            const filter = snapshot.filter;
-            const pageCursor = nextPageCursor;
-            const { signal, mark, end } = readBegin();
-            publish({ loadingMore: true });
-            void deps.client
-                .listArtifacts({ ...queryOf(filter), pageCursor }, { signal })
-                .then(
-                    (response) => {
-                        if (signal.aborted) return;
-                        nextPageCursor = response.nextPageCursor;
-                        const complete = nextPageCursor === null;
-                        const known = new Set(snapshot.artifacts.map((artifact) => artifact.id));
-                        const page = response.artifacts
-                            .map(happyAgentArtifactProject)
-                            .filter((artifact) => !known.has(artifact.id));
-                        const artifacts = eventsApply(
-                            [...snapshot.artifacts, ...page],
-                            journal.slice(mark),
-                            complete,
-                        );
-                        deps.authorsSeen?.(happyAgentArtifactAuthors(page));
-                        publish({ artifacts, hasMore: !complete, loadingMore: false });
-                    },
-                    (error: unknown) => {
-                        if (signal.aborted) return;
-                        publish({ loadingMore: false, error: happyAgentUserError(error) });
-                    },
-                )
-                .finally(end);
-        },
+        pageNextLoad: pageNext,
         contextApply(context) {
             if (disposed || contextSame(context, snapshot.context)) return;
             const { context: _context, ...rest } = choices();

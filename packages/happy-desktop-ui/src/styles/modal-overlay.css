@@ -81,6 +81,13 @@
     max-height: min(calc(100% - 80px), 760px);
 }
 
+/* The soft backdrop is the same click target at a fraction of the dim: the
+   window stays readable behind a transient type-ahead, and the card still
+   reads as the one thing in front. */
+.happy-modal-overlay[data-backdrop="soft"] {
+    background: var(--overlay-backdrop-soft);
+}
+
 /* The clear backdrop leaves the window exactly as it is: nothing painted, and
    pointers pass through every box the overlay draws to whatever is under them.
    Only the hosted card takes presses; a press anywhere else dismisses through

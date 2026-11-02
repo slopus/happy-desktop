@@ -15,7 +15,6 @@ import type {
     GptLiveRuntimeEvent,
     GptLiveStore,
     HappyAgentAttentionStore,
-    HappyAgentSidebarSearchStore,
 } from "happy-desktop-state";
 import {
     appearanceStoreCreate,
@@ -26,7 +25,6 @@ import {
     HAPPY_AGENT_GROUP_UNLISTED_REFUSAL,
     gptLiveStoreCreate,
     happyAgentAttentionStoreCreate,
-    happyAgentSidebarSearchStoreCreate,
 } from "happy-desktop-state";
 import {
     AppHappyAgentView,
@@ -182,7 +180,6 @@ function view(
         sidebarCollapse?: HappyAgentSidebarCollapseStore;
         attention?: HappyAgentAttentionStore;
         gptLive?: GptLiveStore;
-        sidebarSearch?: HappyAgentSidebarSearchStore;
     } = {},
 ) {
     const subtaskArchive = options.subtaskArchive ?? (() => Promise.resolve());
@@ -243,7 +240,6 @@ function view(
             happyAgents={directory}
             attention={options.attention}
             gptLive={options.gptLive}
-            sidebarSearch={options.sidebarSearch}
         />,
     );
 }
@@ -274,18 +270,6 @@ it("offers Stories only on capable bots, shows the confirmed check, and toggles 
         }
         unmount();
     }
-});
-
-it("searches the canonical project rows without duplicating a bot's worktree", () => {
-    const sidebarSearch = happyAgentSidebarSearchStoreCreate();
-    const { container } = view({ sidebarSearch });
-    act(() => sidebarSearch.queryUpdate("changes-comparison-base"));
-    expect(rowIds(container)).toEqual(["local/wt_free"]);
-    expect(container.querySelector('[data-item-id="local/wt_free"]')!.textContent).toContain(
-        "happy",
-    );
-    act(() => sidebarSearch.queryUpdate("windows-console-flicker"));
-    expect(rowIds(container)).toEqual([]);
 });
 
 it("points at the Bots heading for hidden bots and children without changing the hidden choice", async () => {

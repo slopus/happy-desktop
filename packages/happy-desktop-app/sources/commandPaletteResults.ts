@@ -1,19 +1,26 @@
 import type {
+    HappyAgentArtifact,
+    HappyAgentArtifactType,
     HappyAgentBot,
     HappyAgentBotSubtask,
     HappyAgentRecentTabMemory,
     HappyAgentFileTabKind,
     HappyAgentProjectGroup,
     HappyAgentSessionSummary,
+    HappyAgentSurface,
+    HappyAgentSurfaceActiveTodo,
+    HappyAgentSurfaceId,
     HappyAgentTask,
     HappyAgentWorktreeGroup,
     HappyAgentLinkOpenPlacement,
     ScrollbarVisibility,
     ThemeMode,
 } from "happy-desktop-state";
-import { happyAgentSessionGroupIdOf } from "happy-desktop-state";
+import { happyAgentArtifactTypeLabel, happyAgentSessionGroupIdOf } from "happy-desktop-state";
 import {
     commandShortcut,
+    surfaceTypeIcon,
+    surfaceTypeLabel,
     type CommandPaletteRowEmphasis,
     type CommandShortcut,
     type IconName,
@@ -73,6 +80,7 @@ export type CommandPaletteCommand =
       }
     | { readonly kind: "workspaceOpen"; readonly happyAgentId: string; readonly groupId: string }
     | { readonly kind: "surfaceOpen"; readonly happyAgentId: string; readonly surfaceId: string }
+    | { readonly kind: "artifactOpen"; readonly happyAgentId: string; readonly artifactId: string }
     | {
           readonly kind: "fileOpen";
           readonly happyAgentId: string;
@@ -172,6 +180,10 @@ export type CommandPaletteSectionId =
     | "recent"
     | "work"
     | "tabs"
+    | "documents"
+    | "todos"
+    | "artifacts"
+    | "shared"
     | "actions"
     | "settings"
     | "archived";
@@ -282,8 +294,25 @@ export interface CommandPaletteContext {
     readonly panel?: { readonly open: boolean };
 }
 
+/**
+ * The machine's Surfaces as its catalog last read them: what a typed query
+ * finds among documents, todo lists and their open todos, and the other
+ * shared Surfaces. Absent on a machine that has no Surfaces.
+ */
+export interface CommandPaletteSurfaceSources {
+    /** Every Surface on the machine, joined or not. */
+    readonly surfaces: readonly HappyAgentSurface[];
+    /** The ones in the reader's sidebar. */
+    readonly joined: ReadonlySet<HappyAgentSurfaceId>;
+    /** The open todos of each joined todo list that has been read. */
+    readonly activeTodos: ReadonlyMap<HappyAgentSurfaceId, readonly HappyAgentSurfaceActiveTodo[]>;
+}
+
 export interface CommandPaletteInput extends CommandPaletteContext {
     readonly query: string;
+    readonly surfaces?: CommandPaletteSurfaceSources;
+    /** The artifacts the palette's own catalog has read, newest first. */
+    readonly artifacts?: readonly HappyAgentArtifact[];
     readonly themeMode: ThemeMode;
     readonly themeModes?: readonly ThemeMode[];
     readonly scrollbarVisibility: ScrollbarVisibility;
@@ -551,6 +580,8 @@ function rowRank(
 interface Ranked {
     readonly row: CommandPaletteRow;
     readonly rank: number;
+    /** Among equal matches, lower first: a Surface the reader joined before one they did not. */
+    readonly tier?: number;
     /** Epoch milliseconds of last activity, for the entities that have one. */
     readonly updatedAt: number;
 }
@@ -562,7 +593,12 @@ interface Ranked {
  */
 function rankedOf(rows: readonly Ranked[], limit: number): Ranked[] {
     return [...rows]
-        .sort((left, right) => left.rank - right.rank || right.updatedAt - left.updatedAt)
+        .sort(
+            (left, right) =>
+                left.rank - right.rank ||
+                (left.tier ?? 0) - (right.tier ?? 0) ||
+                right.updatedAt - left.updatedAt,
+        )
         .slice(0, limit);
 }
 
@@ -933,6 +969,153 @@ function tabRows(input: CommandPaletteInput): Ranked[] {
     return rows;
 }
 
+/**
+ * The glyph an artifact wears for its type, from the house set: the palette's
+ * lane holds one curated glyph, so the Artifacts page's own type glyphs are
+ * matched to their nearest house name.
+ */
+function artifactGlyph(type: HappyAgentArtifactType): IconName {
+    switch (type) {
+        case "markdown":
+            return "doc";
+        case "html":
+            return "globe";
+        case "image":
+        case "image_series":
+            return "image";
+        case "video":
+            return "play";
+        case "document":
+            return "files";
+        case "unknown":
+            return "package";
+    }
+}
+
+/** A Surface's mark, as its sidebar row wears it: its picture, else its type's glyph. */
+function surfaceGlyph(surface: HappyAgentSurface): CommandPaletteGlyph {
+    return surface.image
+        ? {
+              kind: "avatar",
+              initials: initialsOf(surface.name).slice(0, 1),
+              imageUrl: surface.image.url,
+          }
+        : { kind: "icon", name: surfaceTypeIcon(surface.type) };
+}
+
+/**
+ * What a typed query finds among the machine's Surfaces, by the section each
+ * belongs in: documents; todo lists and the open todos in the joined ones; and
+ * every other Surface that has a page of its own — calendars, chats, monitors.
+ *
+ * A Surface that only points at an artifact, a bot, or a task is left out: the
+ * thing itself is already found under its own name. So is one this build
+ * cannot show. A Surface the reader has not joined is found too, below the
+ * joined ones it matches as well as.
+ */
+function surfaceRows(input: CommandPaletteInput): {
+    readonly documents: Ranked[];
+    readonly todos: Ranked[];
+    readonly shared: Ranked[];
+} {
+    const query = input.query.trim().toLowerCase();
+    const documents: Ranked[] = [];
+    const todos: Ranked[] = [];
+    const shared: Ranked[] = [];
+    const sources = input.surfaces;
+    if (sources === undefined) return { documents, todos, shared };
+    const surfaceOpen = (surface: HappyAgentSurface): CommandPaletteCommand => ({
+        kind: "surfaceOpen",
+        happyAgentId: input.happyAgentId,
+        surfaceId: surface.id,
+    });
+    for (const surface of sources.surfaces) {
+        const kind = surface.type.kind;
+        if (kind === "artifact" || kind === "bot" || kind === "task" || kind === "unsupported")
+            continue;
+        const joined = sources.joined.has(surface.id);
+        const type = surfaceTypeLabel(surface.type);
+        const rank = rowRank(query, surface.name, type);
+        if (rank === undefined) continue;
+        const open = kind === "todo" ? sources.activeTodos.get(surface.id)?.length : undefined;
+        const meta = [
+            type,
+            open === undefined ? undefined : `${String(open)} open`,
+            joined ? undefined : "not joined",
+        ]
+            .filter((part) => part !== undefined)
+            .join(" · ");
+        const entry: Ranked = {
+            rank,
+            tier: joined ? 0 : 1,
+            updatedAt: surface.updatedAt,
+            row: {
+                kind: "command",
+                id: `surface:${surface.id}`,
+                title: surface.name,
+                meta,
+                glyph: surfaceGlyph(surface),
+                command: surfaceOpen(surface),
+            },
+        };
+        (kind === "document" ? documents : kind === "todo" ? todos : shared).push(entry);
+    }
+    // A todo is found by what it says, never by the list it is in: a list's
+    // name already finds the list.
+    for (const surface of sources.surfaces) {
+        const listed = sources.activeTodos.get(surface.id);
+        if (listed === undefined) continue;
+        for (const todo of listed) {
+            const rank = rowRank(query, todo.text);
+            if (rank === undefined) continue;
+            todos.push({
+                rank,
+                // The list itself outranks its todos when both match equally.
+                tier: 2,
+                updatedAt: todo.updatedAt,
+                row: {
+                    kind: "command",
+                    id: `todo:${todo.id}`,
+                    title: todo.text,
+                    meta: surface.name,
+                    glyph: { kind: "icon", name: "check" },
+                    command: surfaceOpen(surface),
+                },
+            });
+        }
+    }
+    return { documents, todos, shared };
+}
+
+/** What a typed query finds among the artifacts the palette has read, by title. */
+function artifactRows(input: CommandPaletteInput): Ranked[] {
+    const query = input.query.trim().toLowerCase();
+    const rows: Ranked[] = [];
+    for (const artifact of input.artifacts ?? []) {
+        if (artifact.status !== "active") continue;
+        const type = happyAgentArtifactTypeLabel(artifact.type);
+        const rank = rowRank(query, artifact.title, type);
+        if (rank === undefined) continue;
+        rows.push({
+            rank,
+            updatedAt: artifact.updatedAt,
+            row: {
+                kind: "command",
+                id: `artifact:${artifact.id}`,
+                title: artifact.title,
+                meta: type,
+                glyph: { kind: "icon", name: artifactGlyph(artifact.type) },
+                command: {
+                    kind: "artifactOpen",
+                    happyAgentId: input.happyAgentId,
+                    artifactId: artifact.id,
+                },
+            },
+        });
+    }
+    return rows;
+}
+
 /** The four settings the palette answers in place, as their own settings rows. */
 function settingRows(input: CommandPaletteInput): CommandPaletteSettingRow[] {
     const themeSegments = THEME_SEGMENTS.filter(
@@ -1227,10 +1410,12 @@ export function commandPaletteQuickActionRows(
  * addresses and as the sections it draws.
  *
  * An empty query answers with what the reader is likely to open next; anything
- * typed searches the whole machine. The sections a query finds are listed by
- * their best answer, so a typed act ("fold sidebar") is not left under work
- * that merely contains one of its words, while equal answers keep the order
- * work, files, actions, settings.
+ * typed searches the whole machine — its work, the open workspace's files,
+ * its documents, todos, artifacts, and other shared Surfaces, the window's
+ * acts and its settings. The sections a query finds are listed by their best
+ * answer, so a typed act ("fold sidebar") is not left under work that merely
+ * contains one of its words, while equal answers keep the order work, files,
+ * documents, todos, artifacts, shared, actions, settings.
  */
 export function commandPaletteResults(input: CommandPaletteInput): CommandPaletteResults {
     const query = input.query.trim().toLowerCase();
@@ -1240,6 +1425,7 @@ export function commandPaletteResults(input: CommandPaletteInput): CommandPalett
             if (section.rows.length > 0) sections.push(section);
     } else {
         const offers = workOffers(input);
+        const surfaces = surfaceRows(input);
         const workRank = (offer: WorkOffer) => rowRank(query, offer.row.title, ...offer.keywords);
         const offered: readonly {
             readonly id: CommandPaletteSectionId;
@@ -1257,6 +1443,18 @@ export function commandPaletteResults(input: CommandPaletteInput): CommandPalett
                 ),
             },
             { id: "tabs", label: "Files", rows: rankedOf(tabRows(input), SECTION_LIMIT) },
+            {
+                id: "documents",
+                label: "Documents",
+                rows: rankedOf(surfaces.documents, SECTION_LIMIT),
+            },
+            { id: "todos", label: "Todos", rows: rankedOf(surfaces.todos, SECTION_LIMIT) },
+            {
+                id: "artifacts",
+                label: "Artifacts",
+                rows: rankedOf(artifactRows(input), SECTION_LIMIT),
+            },
+            { id: "shared", label: "Shared", rows: rankedOf(surfaces.shared, SECTION_LIMIT) },
             {
                 id: "actions",
                 label: "Actions",
@@ -1307,6 +1505,10 @@ const NUMBERED_SECTIONS: ReadonlySet<CommandPaletteSectionId> = new Set([
     "recent",
     "work",
     "tabs",
+    "documents",
+    "todos",
+    "artifacts",
+    "shared",
     "archived",
 ]);
 

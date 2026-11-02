@@ -34,7 +34,6 @@ import { Spinner } from "./Spinner";
 import { type ImageMark } from "./imageMark";
 import { ScrollArea } from "./Scrollbar";
 import { SidebarSectionContext, SidebarSectionTail } from "./SidebarSectionDetails";
-import { TextField } from "./TextField";
 import { sidebarSectionsReuser } from "./sidebarSectionsReuser";
 /** One control on a row: its glyph, what it does, and when it shows. */
 export type SidebarItemAction = {
@@ -293,17 +292,6 @@ export type SidebarHeaderAction = {
 };
 
 /**
- * The search field under the sidebar's header, above the list. The sidebar
- * only draws it: the caller holds what is typed and decides which rows it
- * leaves.
- */
-export type SidebarSearch = {
-    value: string;
-    placeholder: string;
-    onValueChange: (value: string) => void;
-};
-
-/**
  * Which control in a section reported an act: its heading, the heading's
  * secondary control, or its empty state.
  */
@@ -499,8 +487,6 @@ export type SidebarProps = Omit<HTMLAttributes<HTMLElement>, "style"> & {
     headerAction?: SidebarHeaderAction;
     onHeaderAction?: () => void;
     onHeaderMenuSelect?: (id: string) => void;
-    /** A search field under the heading, above everything the sidebar lists. */
-    search?: SidebarSearch;
     /**
      * Drill-down mode: replaces the brand/title heading with a back button to
      * the left of `title`, and animates the body in. Use for a pushed detail
@@ -2554,7 +2540,6 @@ export function Sidebar(props: SidebarProps) {
         "onSectionAction",
         "onSectionCollapseToggle",
         "onSectionTailToggle",
-        "search",
         "onSectionMenuSelect",
         "sections",
         "style",
@@ -4142,31 +4127,6 @@ export function Sidebar(props: SidebarProps) {
                     </button>
                 ) : null}
             </header>
-            {local.search ? (
-                // Escape empties a search that holds anything, which puts the
-                // sidebar's usual contents back.
-                <div
-                    className="happy-sidebar__search"
-                    data-happy-desktop-ui="sidebar-search"
-                    onKeyDown={(event) => {
-                        if (event.key !== "Escape" || !local.search?.value) return;
-                        event.preventDefault();
-                        event.stopPropagation();
-                        local.search.onValueChange("");
-                    }}
-                >
-                    <TextField
-                        aria-label={local.search.placeholder}
-                        fullWidth
-                        leadingIcon="search"
-                        onValueChange={local.search.onValueChange}
-                        placeholder={local.search.placeholder}
-                        size="small"
-                        type="search"
-                        value={local.search.value}
-                    />
-                </div>
-            ) : null}
             {local.headerAccessory ? (
                 <div
                     className="happy-sidebar__header-accessory"

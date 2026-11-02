@@ -1,14 +1,22 @@
 /*
- * C-060 CommandPalette — the ⌘K command bar.
+ * C-060 CommandPalette — the ⌘K command bar, in Linear's and Slack's
+ * proportions.
  *
- * A compact 384 × 461 card on the 14px shell radius. Nothing behind it is
- * dimmed, so the card tells itself apart from the window by its edge alone: a
- * 1px modal hairline, a soft shadow that dissolves into the page rather than a
- * dark drop, and — where the platform can afford it — a faintly translucent
- * surface that blurs what is under it. A fixed 60px input row (search glyph ·
- * own text input · ghost close) sits over a scrollable body, split by a 1px
- * hairline. It renders the card only, so a host composes it inside a clear
- * ModalOverlay for its stacking and placement.
+ * A 640 × 461 card — the large modal width, and the height ModalOverlay's top
+ * placement is measured for — on the 14px shell radius, opaque on the content
+ * surface, with a 1px modal hairline and a soft shadow that dissolves into the
+ * page. Top to bottom: a 56px borderless search field, a hairline, a fixed
+ * scrollport holding the results, a hairline, and a 36px footer naming the
+ * keys that drive it. Each hairline is its band's own border, outside the
+ * band's height, so what the band centres lands on whole pixels. The card's height never follows its results, so the
+ * field, the footer, and the card's edges stay where they are while the reader
+ * types. It renders the card only, so a host composes it inside a ModalOverlay
+ * for its dim, stacking, and placement.
+ *
+ * Every row below starts its glyph and its words on one pair of columns, and
+ * the field and the footer are on them too: the 20px lead is the body's 8px
+ * inset plus a row's 12px padding, and the field's text starts where a row's
+ * title does, after the same 20px lane and 12px gap.
  */
 
 .happy-command-palette,
@@ -19,16 +27,19 @@
 }
 
 .happy-command-palette {
-    --happy-search-results-last-radius: 5px;
+    /* The footer keeps the last row out of the card's bottom corners, so a
+       hosted SearchResults rounds its last row like every other. */
+    --happy-search-results-last-radius: var(--happy-radius-sm);
 
     display: flex;
     flex: none;
     flex-direction: column;
-    width: 384px;
+    width: 640px;
+    max-width: 100%;
     height: 461px;
     max-height: 100%;
     overflow: hidden;
-    background: var(--surface-high);
+    background: var(--surface);
     border: 1px solid var(--modal-border);
     border-radius: var(--happy-radius-shell);
     box-shadow: var(--command-palette-shadow);
@@ -37,40 +48,27 @@
     font-synthesis: none;
 }
 
-/* Vibrancy: a little of what is under the card shows through, blurred, the
-   way a macOS sheet does. One fixed-size element, so the blur is cheap. Where
-   the platform cannot blur, or the reader asked for less transparency, the
-   surface stays opaque — translucency without the blur would only muddy the
-   text. */
-@supports (backdrop-filter: blur(1px)) {
-    .happy-command-palette {
-        background: color-mix(in srgb, var(--surface-high) 88%, transparent);
-        backdrop-filter: blur(24px) saturate(180%);
-    }
-}
-
-@media (prefers-reduced-transparency: reduce) {
-    .happy-command-palette {
-        background: var(--surface-high);
-        backdrop-filter: none;
-    }
-}
-
-/* ---- Input row -------------------------------------------------------- */
+/* ---- Search field ------------------------------------------------------ */
 
 .happy-command-palette__header {
     display: flex;
     flex: none;
     align-items: center;
     gap: 12px;
-    height: 60px;
-    padding: 0 16px 0 20px;
+    height: 57px;
+    padding: 0 20px;
     border-bottom: 1px solid var(--divider);
 }
 
+/* The 20px lane a row's glyph sits in, so the glyph and the rows' share one
+   centre line. */
 .happy-command-palette__icon {
     display: flex;
     flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
     color: var(--text-secondary);
 }
 
@@ -85,10 +83,9 @@
     outline: none;
     color: var(--text);
     font-family: var(--happy-font-ui);
-    font-size: 18px;
-    font-weight: 500;
+    font-size: 16px;
+    font-weight: 400;
     line-height: 40px;
-    letter-spacing: -0.01em;
     font-synthesis: none;
     caret-color: var(--radio-active);
 }
@@ -96,10 +93,6 @@
 .happy-command-palette__input::placeholder {
     color: var(--text-secondary);
     opacity: 1;
-}
-
-.happy-command-palette__close {
-    flex: none;
 }
 
 /* ---- Body ------------------------------------------------------------- */
@@ -115,24 +108,63 @@
     flex-direction: column;
     overflow-x: hidden;
     overflow-y: auto;
-    /* The bar is the product's one scrollbar — see styles/scrollbar.css. The
-       card states its own inset and its own corners, but not its own bar: a
-       scrollbar that appeared in a different colour, at a different width, on
-       the surface a reader reaches for most is the sort of difference nobody
-       chose. The bar lies over the content's 8px inset, beside the selected row
-       rather than on it, so no gutter is stated here and nothing moves when the
-       list grows long enough to scroll. */
+    /* The bar is the product's one scrollbar — see styles/scrollbar.css. It
+       lies over the content's 8px inset, beside the selected row rather than
+       on it, so no gutter is stated here and nothing moves when the list grows
+       long enough to scroll. */
 }
 
-/* Inner content wrapper carries the 8px inset around the command groups. It is
-   a card's own inset, not the panel one: --happy-search-results-last-radius
-   above is derived from it (14px shell − 1px border − 8px inset = 5px), so
-   retuning it — or pointing it at --happy-panel-inset because the numbers look
-   alike — bends that inner corner out of parallel with the card's. See
-   DESIGN.md, "Nested rounded corners". */
+/* Inner content wrapper carries the 8px inset around the result sections.
+   The footer under it keeps every row out of the card's rounded corners, so
+   no row corner has to run parallel to the card's. */
 .happy-command-palette__body-content {
     display: flex;
     flex: 1 0 auto;
     flex-direction: column;
     padding: 8px;
+}
+
+/* ---- Footer ----------------------------------------------------------- */
+
+.happy-command-palette__footer {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 16px;
+    height: 37px;
+    padding: 0 20px;
+    border-top: 1px solid var(--divider);
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+    white-space: nowrap;
+}
+
+.happy-command-palette__hint {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 6px;
+}
+
+.happy-command-palette__hint-keys {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 2px;
+}
+
+/* A key drawn with a glyph rather than a letter: the KeyCap's own 18px box,
+   fill, and corner, squared to hold one 12px glyph. */
+.happy-command-palette__key {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    background: var(--input-background);
+    border-radius: 4px;
+    color: var(--text-secondary);
+    font: inherit;
 }

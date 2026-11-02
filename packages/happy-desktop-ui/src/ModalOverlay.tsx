@@ -31,9 +31,11 @@ export type ModalOverlayProps = {
      * dim, and pointers pass through to it. A press anywhere outside the hosted
      * card — the app behind it, or chrome outside the overlay such as the
      * connection rail — calls `onDismiss`, and the press still reaches what it
-     * landed on. For a light, transient surface like the ⌘K palette.
+     * landed on. `soft` is the dim at a fraction of its weight, still the
+     * click target that dismisses: for a transient type-ahead such as the ⌘K
+     * palette, which sets itself apart from the window without hiding it.
      */
-    backdrop?: "dim" | "clear";
+    backdrop?: "dim" | "soft" | "clear";
 };
 const FOCUSABLE =
     'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -48,9 +50,10 @@ const FOCUSABLE =
  * window to one immersive surface with no gutter at all. Clicking the dim
  * outside the card calls `onDismiss` when wired; clicks inside never dismiss.
  *
- * A `clear` backdrop paints nothing and lets pointers through, for a light
- * transient card such as the ⌘K palette: the window stays exactly as it was,
- * and a press anywhere outside the card dismisses it.
+ * A `clear` backdrop paints nothing and lets pointers through: the window
+ * stays exactly as it was, and a press anywhere outside the card dismisses it.
+ * A `soft` one dims the window lightly, for a transient type-ahead such as the
+ * ⌘K palette.
  *
  * The overlay owns modal focus: on mount it moves focus to the hosted card's
  * first focusable control (unless the card already focused itself, as the
@@ -117,7 +120,7 @@ export function ModalOverlay(props: ModalOverlayProps) {
             {...rest}
             className={["happy-modal-overlay", local.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="modal-overlay"
-            data-backdrop={clear ? "clear" : undefined}
+            data-backdrop={local.backdrop === "dim" ? undefined : local.backdrop}
             data-placement={local.placement === "center" ? undefined : local.placement}
             onClick={(event) => {
                 if (

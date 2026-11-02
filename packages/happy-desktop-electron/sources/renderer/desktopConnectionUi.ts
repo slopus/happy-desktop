@@ -7,12 +7,10 @@ import {
     commandPaletteStoreCreate,
     happyAgentNavigationOrderStoreCreate,
     happyAgentSidebarCollapseStoreCreate,
-    happyAgentSidebarSearchStoreCreate,
     happyAgentSettingsStoreOwnedCreate,
     type CommandPaletteStore,
     type HappyAgentNavigationOrderStore,
     type HappyAgentSidebarCollapseStore,
-    type HappyAgentSidebarSearchStore,
     type HappyAgentSidebarVisibilityStore,
     type HappyAgentSettingsStore,
     type HappyAgentModelPreferencePersistence,
@@ -28,7 +26,6 @@ export interface DesktopConnectionUi {
     readonly commandPalette: CommandPaletteStore;
     readonly navigationOrder: HappyAgentNavigationOrderStore;
     readonly sidebarCollapse: HappyAgentSidebarCollapseStore;
-    readonly sidebarSearch: HappyAgentSidebarSearchStore;
     readonly sidebarVisibility: HappyAgentSidebarVisibilityStore;
     readonly settings: HappyAgentSettingsStore;
     readonly directory: HappyAgentDirectoryStore;
@@ -138,7 +135,6 @@ export function desktopConnectionUiCreate(input: {
         commandPalette: input.main?.commandPalette ?? commandPaletteStoreCreate(),
         navigationOrder: input.main?.navigationOrder ?? happyAgentNavigationOrderStoreCreate(),
         sidebarCollapse: input.main?.sidebarCollapse ?? happyAgentSidebarCollapseStoreCreate(),
-        sidebarSearch: input.main?.sidebarSearch ?? happyAgentSidebarSearchStoreCreate(),
         sidebarVisibility: input.sidebarVisibility,
         directory: {
             get: () => snapshot,

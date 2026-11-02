@@ -28,7 +28,6 @@ const customTheme: CustomTheme = {
         divider: "#332d27",
         "header-background": "#25211d",
         "input-background": "#2e2924",
-        "sidebar-search-background": "#2e2924",
         "user-message-background": "#332d27",
         text: "#ebdbb2",
         "agent-message-text": "#ebdbb2",

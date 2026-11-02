@@ -40,7 +40,6 @@ import {
     welcomeStoreCreate,
     happyAgentNavigationOrderStoreCreate,
     happyAgentSidebarCollapseStoreCreate,
-    happyAgentSidebarSearchStoreCreate,
     happyAgentSidebarVisibilityStoreCreate,
     happyAgentSettingsStoreOwnedCreate,
     happyAgentAttentionConnection,
@@ -60,7 +59,6 @@ import {
     type WelcomeStore,
     type HappyAgentNavigationOrderStore,
     type HappyAgentSidebarCollapseStore,
-    type HappyAgentSidebarSearchStore,
     type HappyAgentSidebarVisibilityStore,
     type HappyAgentSettingsStore,
     type TitleShimmerStore,
@@ -395,7 +393,6 @@ function HappyAgentBoundary(props: {
     router: HappyAgentRouter;
     navigationOrder: HappyAgentNavigationOrderStore;
     sidebarCollapse: HappyAgentSidebarCollapseStore;
-    sidebarSearch: HappyAgentSidebarSearchStore;
     sidebarVisibility: HappyAgentSidebarVisibilityStore;
     attention: HappyAgentAttentionStore;
     happyAgents: HappyAgentDirectoryStore;
@@ -448,7 +445,6 @@ function HappyAgentBoundary(props: {
                 keepAwake: props.keepAwake,
                 navigationOrder: props.navigationOrder,
                 sidebarCollapse: props.sidebarCollapse,
-                sidebarSearch: props.sidebarSearch,
                 sidebarVisibility: props.sidebarVisibility,
                 attention: props.attention,
                 platform: props.platform,
@@ -615,7 +611,6 @@ interface DesktopRendererProps {
     keepAwake: KeepAwakeStore;
     navigationOrder: HappyAgentNavigationOrderStore;
     sidebarCollapse: HappyAgentSidebarCollapseStore;
-    sidebarSearch: HappyAgentSidebarSearchStore;
     sidebarVisibility: HappyAgentSidebarVisibilityStore;
     attention: HappyAgentAttentionStore;
     platform: "desktop" | "web";
@@ -819,7 +814,6 @@ function DesktopScreens(props: DesktopRendererProps) {
                                     mediaWindow={props.mediaWindow}
                                     navigationOrder={ui.navigationOrder}
                                     sidebarCollapse={ui.sidebarCollapse}
-                                    sidebarSearch={ui.sidebarSearch}
                                     sidebarVisibility={ui.sidebarVisibility}
                                     attention={props.attention}
                                     platform={props.platform}
@@ -1050,7 +1044,6 @@ function DesktopRuntimeContent(
             usageAnalytics={props.usageAnalytics}
             navigationOrder={props.navigationOrder}
             sidebarCollapse={props.sidebarCollapse}
-            sidebarSearch={props.sidebarSearch}
             sidebarVisibility={props.sidebarVisibility}
             attention={props.attention}
             platform={props.platform}
@@ -1298,10 +1291,6 @@ if (mediaPreviewBridge) {
         // folded away. Also the window's own: switching machines does not
         // bring the sidebar back, and the rail beside it goes with it.
         const sidebarVisibility = happyAgentSidebarVisibilityStoreCreate();
-        // What the sidebar's search field holds. Transient like the command
-        // palette below: a search is a question in progress, not a place to
-        // come back to, so nothing is persisted.
-        const sidebarSearch = happyAgentSidebarSearchStoreCreate();
         // Which bots the person muted or hid and when each connection chimes.
         // Each connection's Happy Agent keeps them as the person's own user
         // settings, followed below as every connection opens; the window keeps
@@ -1584,7 +1573,6 @@ if (mediaPreviewBridge) {
                                       commandPalette,
                                       navigationOrder,
                                       sidebarCollapse,
-                                      sidebarSearch,
                                   },
                               }
                             : {}),
@@ -1685,7 +1673,6 @@ if (mediaPreviewBridge) {
                         keepAwake={keepAwake}
                         navigationOrder={navigationOrder}
                         sidebarCollapse={sidebarCollapse}
-                        sidebarSearch={sidebarSearch}
                         sidebarVisibility={sidebarVisibility}
                         attention={attention}
                         // Only the Electron window hides its title bar; the browser

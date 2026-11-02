@@ -6,10 +6,11 @@ import {
     type KeyboardEvent as ReactKeyboardEvent,
     type ReactNode,
 } from "react";
-import { Button } from "./Button";
+import { KeyCap } from "./Badge";
 import { Icon } from "./Icon";
 import { commandShortcut, commandShortcutMatches } from "./keyboardShortcut";
 import { ScrollArea } from "./Scrollbar";
+import { Ionicon } from "./vectorIcons/VectorIcon";
 /**
  * The chord that opens the palette, owned here as well so it can close it. The
  * window dispatcher cannot: an open palette is a dialog, and every window
@@ -25,7 +26,7 @@ export type CommandPaletteProps = {
     query: string;
     /** Emits the committed query text (IME composition is coalesced to its end). */
     onQueryChange: (value: string) => void;
-    /** Dismisses the palette from Escape, ⌘K again, or the close button. */
+    /** Dismisses the palette from Escape or ⌘K again. */
     onClose: () => void;
     /**
      * Moves the owner's highlighted row: 1 for ArrowDown, -1 for ArrowUp typed
@@ -45,7 +46,6 @@ export type CommandPaletteProps = {
     /** Result/command body rendered under the input row. */
     children: ReactNode;
     placeholder?: string;
-    closeLabel?: string;
     /**
      * Focuses the input on mount, caret after the query. On by default so the palette is
      * ready to type; disable it only for deterministic screenshot fixtures.
@@ -56,8 +56,10 @@ export type CommandPaletteProps = {
     "data-testid"?: string;
 };
 /**
- * C-060 CommandPalette — a Slack-style ⌘K palette card with its own focused
- * search input over a scrollable result/command body, hosted by ModalOverlay.
+ * C-060 CommandPalette — the ⌘K palette card, in Linear's and Slack's
+ * proportions: a large borderless search field over a scrollable
+ * result/command body, and a footer naming the keys that drive it. Hosted by
+ * ModalOverlay at its `top` placement.
  *
  * The card owns four behaviors application code should not re-implement: it
  * focuses its input on mount with the caret after the query, returns focus to whatever control
@@ -79,7 +81,6 @@ export function CommandPalette(props: CommandPaletteProps) {
         "onNumberCommit",
         "children",
         "placeholder",
-        "closeLabel",
         "autoFocus",
         "className",
         "style",
@@ -210,15 +211,6 @@ export function CommandPalette(props: CommandPaletteProps) {
                     type="text"
                     value={local.query}
                 />
-                <Button
-                    aria-label={local.closeLabel ?? "Close"}
-                    className="happy-command-palette__close"
-                    icon="close"
-                    iconOnly
-                    onClick={() => local.onClose()}
-                    size="small"
-                    variant="ghost"
-                />
             </div>
             <ScrollArea
                 className="happy-command-palette__body"
@@ -233,6 +225,54 @@ export function CommandPalette(props: CommandPaletteProps) {
                     {local.children}
                 </div>
             </ScrollArea>
+            {/* The keys that drive the card, named once at its foot rather
+                than taught on every row. Travel and commit are offered only by
+                an owner that reads them; Escape always closes. A picture of
+                the keys, so it is not read out: the keys themselves work. */}
+            <div
+                aria-hidden="true"
+                className="happy-command-palette__footer"
+                data-happy-desktop-ui="command-palette-footer"
+            >
+                {local.onSelectionMove ? (
+                    <span
+                        className="happy-command-palette__hint"
+                        data-happy-desktop-ui="command-palette-hint"
+                    >
+                        <span className="happy-command-palette__hint-keys">
+                            <kbd className="happy-command-palette__key">
+                                <Icon name="arrow-up" size={12} />
+                            </kbd>
+                            <kbd className="happy-command-palette__key">
+                                <Icon name="arrow-down" size={12} />
+                            </kbd>
+                        </span>
+                        <span className="happy-command-palette__hint-label">Navigate</span>
+                    </span>
+                ) : null}
+                {local.onSelectionCommit ? (
+                    <span
+                        className="happy-command-palette__hint"
+                        data-happy-desktop-ui="command-palette-hint"
+                    >
+                        <span className="happy-command-palette__hint-keys">
+                            <kbd className="happy-command-palette__key">
+                                <Ionicon name="return-down-back" size={12} />
+                            </kbd>
+                        </span>
+                        <span className="happy-command-palette__hint-label">Open</span>
+                    </span>
+                ) : null}
+                <span
+                    className="happy-command-palette__hint"
+                    data-happy-desktop-ui="command-palette-hint"
+                >
+                    <span className="happy-command-palette__hint-keys">
+                        <KeyCap decorative keys="ESC" />
+                    </span>
+                    <span className="happy-command-palette__hint-label">Close</span>
+                </span>
+            </div>
         </div>
     );
 }

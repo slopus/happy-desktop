@@ -26,6 +26,7 @@ import {
     HAPPY_AGENT_TODO_EVENT_TYPES,
     happyAgentSurfaceEventProject,
     happyAgentTodoEventProject,
+    happyAgentTodoProject,
     happyAgentSurfaceProject,
     happyAgentVersionNewer,
     type HappyAgentSurfaceEvent,
@@ -34,6 +35,7 @@ import { happyAgentSurfacePeopleReaderCreate, happyAgentSurfacePersonOf } from "
 import {
     happyAgentTodoHeading,
     type HappyAgentSurface,
+    type HappyAgentSurfaceActiveTodo,
     type HappyAgentSurfaceId,
     type HappyAgentSurfaceMember,
     type HappyAgentSurfacePerson,
@@ -212,6 +214,12 @@ export interface HappyAgentSurfaceCatalogSnapshot {
      * or deleted.
      */
     readonly activeTodoCounts: ReadonlyMap<HappyAgentSurfaceId, number>;
+    /**
+     * The open todos those counts count, headings left out, in each list's own
+     * order, from the same reads: what the command palette searches. A list
+     * missing from it has not been read yet.
+     */
+    readonly activeTodos: ReadonlyMap<HappyAgentSurfaceId, readonly HappyAgentSurfaceActiveTodo[]>;
     /** The last membership act the daemon refused, until another one is asked for. */
     readonly failure?: {
         readonly surfaceId: HappyAgentSurfaceId;
@@ -370,6 +378,22 @@ export interface HappyAgentSurfaceCatalogDeps {
 const NO_USERS: ReadonlyMap<string, HappyAgentSurfacePerson> = new Map();
 const NO_PENDING: ReadonlySet<HappyAgentSurfaceId> = new Set();
 const NO_COUNTS: ReadonlyMap<HappyAgentSurfaceId, number> = new Map();
+const NO_TODOS: ReadonlyMap<HappyAgentSurfaceId, readonly HappyAgentSurfaceActiveTodo[]> =
+    new Map();
+
+/** Whether a read of a list's open todos says nothing new: the same todos, each at one version. */
+function todosSame(
+    held: readonly HappyAgentSurfaceActiveTodo[] | undefined,
+    read: readonly HappyAgentSurfaceActiveTodo[],
+): boolean {
+    return (
+        held !== undefined &&
+        held.length === read.length &&
+        held.every(
+            (todo, index) => todo.id === read[index]!.id && todo.version === read[index]!.version,
+        )
+    );
+}
 
 const NO_CREATES_REFUSED: ReadonlyMap<HappyAgentSurfaceId, HappyAgentSurfaceCreateRefusal> =
     new Map();
@@ -388,6 +412,7 @@ const UNSUPPORTED: HappyAgentSurfaceCatalogSnapshot = {
     users: NO_USERS,
     membershipPending: NO_PENDING,
     activeTodoCounts: NO_COUNTS,
+    activeTodos: NO_TODOS,
     create: CREATE_CLOSED,
     createsRefused: NO_CREATES_REFUSED,
     chatsOpening: NO_CHATS_OPENING,
@@ -651,6 +676,7 @@ export function happyAgentSurfaceCatalogStoreCreate(
         users: NO_USERS,
         membershipPending: NO_PENDING,
         activeTodoCounts: NO_COUNTS,
+        activeTodos: NO_TODOS,
         create: CREATE_CLOSED,
         createsRefused: NO_CREATES_REFUSED,
         chatsOpening: NO_CHATS_OPENING,
@@ -847,14 +873,21 @@ export function happyAgentSurfaceCatalogStoreCreate(
                 (response) => {
                     if (countReads.get(surfaceId) !== entry) return;
                     if (!countable(snapshot.joined).has(surfaceId)) return;
-                    const count = response.todos.filter(
-                        (todo) =>
-                            todo.status === "active" &&
-                            happyAgentTodoHeading(todo.text) === undefined,
-                    ).length;
-                    if (snapshot.activeTodoCounts.get(surfaceId) === count) return;
+                    const todos = response.todos
+                        .map(happyAgentTodoProject)
+                        .filter(
+                            (todo): todo is HappyAgentSurfaceActiveTodo =>
+                                todo.status === "active" &&
+                                happyAgentTodoHeading(todo.text) === undefined,
+                        )
+                        .sort((left, right) => stringCompare(left.orderKey, right.orderKey));
+                    if (todosSame(snapshot.activeTodos.get(surfaceId), todos)) return;
                     publish({
-                        activeTodoCounts: new Map(snapshot.activeTodoCounts).set(surfaceId, count),
+                        activeTodoCounts: new Map(snapshot.activeTodoCounts).set(
+                            surfaceId,
+                            todos.length,
+                        ),
+                        activeTodos: new Map(snapshot.activeTodos).set(surfaceId, todos),
                     });
                 },
                 () => {
@@ -991,6 +1024,9 @@ export function happyAgentSurfaceCatalogStoreCreate(
         let counts = snapshot.activeTodoCounts;
         if ([...counts.keys()].some((surfaceId) => !counted.has(surfaceId)))
             counts = new Map([...counts].filter(([surfaceId]) => counted.has(surfaceId)));
+        let todos = snapshot.activeTodos;
+        if ([...todos.keys()].some((surfaceId) => !counted.has(surfaceId)))
+            todos = new Map([...todos].filter(([surfaceId]) => counted.has(surfaceId)));
         // Chats follow it too: a Surface left forgets its chat, and one joined,
         // or whose chat was just made, has its chat read.
         const followed = chatFollowed(projected.joined);
@@ -999,6 +1035,7 @@ export function happyAgentSurfaceCatalogStoreCreate(
         publish({
             ...projected,
             activeTodoCounts: counts,
+            activeTodos: todos,
             chatActivity: chatActivityProject(projected.joined),
         });
         for (const surfaceId of counted) if (!counts.has(surfaceId)) countRead(surfaceId);

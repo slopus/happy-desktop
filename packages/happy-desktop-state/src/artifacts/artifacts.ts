@@ -37,6 +37,12 @@ export interface HappyAgentArtifacts {
     catalog(): HappyAgentArtifactCatalogStore;
     /** The list beside the open chat, narrowed to it by the chat's own context. */
     panel(): HappyAgentArtifactCatalogStore;
+    /**
+     * The whole catalog, every page of it read while subscribed, as the
+     * command palette searches it. It is its own list so the Artifacts page's
+     * filters never narrow what a search can find.
+     */
+    search(): HappyAgentArtifactCatalogStore;
     /** The open artifact, its history, and the version on screen. */
     viewer(): HappyAgentArtifactViewerStore;
     /**
@@ -91,6 +97,7 @@ export interface HappyAgentArtifactsDeps {
 export function happyAgentArtifactsCreate(deps: HappyAgentArtifactsDeps): HappyAgentArtifacts {
     let catalog: HappyAgentArtifactCatalogStore | undefined;
     let panel: HappyAgentArtifactCatalogStore | undefined;
+    let search: HappyAgentArtifactCatalogStore | undefined;
     let viewer: HappyAgentArtifactViewerStore | undefined;
     let panelViewer: HappyAgentArtifactViewerStore | undefined;
     let tabViewer: HappyAgentArtifactViewerStore | undefined;
@@ -142,6 +149,18 @@ export function happyAgentArtifactsCreate(deps: HappyAgentArtifactsDeps): HappyA
                 ),
             ));
         },
+        search() {
+            return (search ??= inert(
+                happyAgentArtifactCatalogStoreCreate(
+                    {
+                        client: deps.client,
+                        sync: deps.sync,
+                        authorsSeen: (authors) => peopleOf().request(authors),
+                    },
+                    { pagesAll: true },
+                ),
+            ));
+        },
         viewer() {
             return (viewer ??= viewerCreate());
         },
@@ -188,6 +207,7 @@ export function happyAgentArtifactsCreate(deps: HappyAgentArtifactsDeps): HappyA
             disposed = true;
             catalog?.[Symbol.dispose]();
             panel?.[Symbol.dispose]();
+            search?.[Symbol.dispose]();
             viewer?.[Symbol.dispose]();
             panelViewer?.[Symbol.dispose]();
             tabViewer?.[Symbol.dispose]();

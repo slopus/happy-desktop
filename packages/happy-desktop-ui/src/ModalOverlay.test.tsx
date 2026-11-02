@@ -494,3 +494,47 @@ it("leaves the window as it is behind a clear backdrop and dismisses on a press 
     await userEvent.click(view.$('[data-testid="rail"]').element);
     expect(dismissed).toEqual([1, 1]);
 }, 120000);
+
+it("dims the window lightly behind a soft backdrop, which still dismisses on a press beside the card", async () => {
+    const dismissed: number[] = [];
+    const view = createRenderer();
+    view.render(
+        () => (
+            <TopWindowFrame height={704} width={1024}>
+                <ModalOverlay
+                    backdrop="soft"
+                    data-testid="soft"
+                    onDismiss={() => dismissed.push(1)}
+                    placement="top"
+                    style={{ position: "absolute" }}
+                >
+                    <TopCard />
+                </ModalOverlay>
+            </TopWindowFrame>
+        ),
+        { width: 1024, height: 704 },
+    );
+    await view.ready();
+    const overlay = view.$('[data-testid="soft"]');
+    expect(overlay.element.getAttribute("data-backdrop")).toBe("soft");
+    // A fraction of the full dim, and the overlay is still what a press lands on.
+    expect(overlay.computedStyles(["background-color", "pointer-events"])).toEqual({
+        "background-color": "rgba(15, 15, 15, 0.12)",
+        "pointer-events": "auto",
+    });
+    // The card hangs from the same top gutter the other placements measure.
+    expect(view.$('[data-testid="top-card"]').bounds()).toEqual({
+        x: 192,
+        y: 128,
+        width: 640,
+        height: 461,
+    });
+
+    await userEvent.click(view.$('[data-testid="top-card"]').element);
+    expect(dismissed).toEqual([]);
+    const layout = view.$(
+        '[data-testid="soft"] [data-happy-desktop-ui="modal-overlay-top-layout"]',
+    );
+    await userEvent.click(layout.element, { position: { x: 60, y: 300 } });
+    expect(dismissed).toEqual([1]);
+}, 120000);

@@ -81,7 +81,7 @@ export type CommandPaletteControlRow = {
 export type CommandPaletteResultsRow = CommandPaletteCommandRow | CommandPaletteControlRow;
 export type CommandPaletteResultsSection = {
     id: string;
-    /** Small muted uppercase caption over the section's rows. */
+    /** Small muted sentence-case caption over the section's rows. */
     caption?: string;
     rows: readonly CommandPaletteResultsRow[];
 };
@@ -205,9 +205,9 @@ function commandRowContent(row: CommandPaletteCommandRow) {
  * their native roles, states, and tab stops, and the announcement carries what
  * `aria-selected` would have carried.
  *
- * Two kinds of row share one list. A command row is a button on one 44px
- * line, command-bar style — a leading glyph or avatar, the title, its muted
- * secondary text after an em dash, and an optional trailing cap. A control
+ * Two kinds of row share one list. A command row is a button on one compact
+ * 40px line, Linear-style — a leading glyph or avatar, the title, its muted
+ * secondary text on the title's baseline, and an optional trailing cap. A control
  * row hosts the very FormRow + Switch/SegmentedControl the settings page
  * renders, after the same leading lane, so a preference can be changed where
  * it was found instead of being navigated to; it keeps the settings row's two
