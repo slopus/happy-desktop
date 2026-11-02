@@ -42,7 +42,9 @@ import type {
 } from "happy-desktop-state";
 import {
     botFacePaint,
+    EmptyState,
     SplashScreen,
+    WindowDragRegion,
     type BrowserContentRenderer,
     type HtmlPreviewRenderer,
     type LivePerformanceStore,
@@ -52,6 +54,7 @@ import { messageReferenceEntities, messageReferenceSurfaceNames } from "../messa
 import {
     AppHappyAgentView,
     fileTabKind,
+    happyAgentSignInEmpty,
     type AppBuildIdentity,
     type AppHappyAgentDirectoryStore,
     type AppHappyAgentUpdate,
@@ -202,8 +205,32 @@ function HappyAgentRootContent({ context }: { readonly context: HappyAgentRouter
     // an already materialized workspace must keep its mounted UI and drafts.
     const setup = entry?.setup;
     if (!context.connectionOnboarding) return <Outlet />;
+    const signIn = entry?.session ? undefined : entry?.signIn;
+    const signInEmpty = signIn ? happyAgentSignInEmpty(signIn) : undefined;
+    const signInAct = context.happyAgents.happyAgentSignIn;
+    // A server that wants a sign-in before its first workspace has nothing to
+    // show but the way in, so the window says that rather than waiting.
     const content = entry?.session ? (
         <Outlet />
+    ) : entry && signInEmpty ? (
+        <>
+            <WindowDragRegion />
+            <EmptyState
+                data-testid="happy-agent-sign-in"
+                description={signInEmpty.description}
+                icon={signInEmpty.icon}
+                size="panel"
+                title={signInEmpty.title}
+                {...(signInEmpty.actionLabel && signInAct
+                    ? {
+                          action: {
+                              label: signInEmpty.actionLabel,
+                              onClick: () => signInAct(entry.id),
+                          },
+                      }
+                    : {})}
+            />
+        </>
     ) : (
         <SplashScreen note={entry?.message ?? `Connecting to ${entry?.label ?? "Happy Agent"}…`} />
     );

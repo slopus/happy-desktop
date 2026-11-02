@@ -2885,6 +2885,9 @@ function happyAgentProjectsSection(
 ): SidebarSection {
     const id = happyAgentSectionId(happyAgent.id);
     const hidden = folded?.has(id) === true;
+    const signIn = happyAgent.signIn ? happyAgentSignInEmpty(happyAgent.signIn) : undefined;
+    // An empty list says what a wanted sign-in is about on its own.
+    const signInSaid = signIn !== undefined && happyAgent.projects.length === 0 && !hidden;
     return {
         id,
         // Which machine this is belongs to the connection rail and the window,
@@ -2911,23 +2914,34 @@ function happyAgentProjectsSection(
                   },
               }),
         // Project creation belongs to the Happy Agent named by this section.
-        // Disabled, not removed, while a machine already seen is offline.
-        ...(happyAgent.session
-            ? {
-                  action: {
-                      busy: happyAgent.projectAdd?.pending === true,
-                      disabled: happyAgent.status !== "connected",
-                      icon: "plus" as const,
-                      label: "Add project",
-                      reveal: "always" as const,
-                  },
-                  ...(happyAgent.projectAdd?.error !== undefined
-                      ? { error: happyAgent.projectAdd.error }
-                      : {}),
-              }
-            : {}),
+        // Disabled, not removed, while a machine already seen is offline. A
+        // server that wants a new sign-in offers that here instead.
+        ...(happyAgent.session && signIn
+            ? signIn.actionLabel
+                ? {
+                      action: {
+                          icon: "lock" as const,
+                          label: signIn.actionLabel,
+                          reveal: "always" as const,
+                      },
+                  }
+                : {}
+            : happyAgent.session
+              ? {
+                    action: {
+                        busy: happyAgent.projectAdd?.pending === true,
+                        disabled: happyAgent.status !== "connected",
+                        icon: "plus" as const,
+                        label: "Add project",
+                        reveal: "always" as const,
+                    },
+                    ...(happyAgent.projectAdd?.error !== undefined
+                        ? { error: happyAgent.projectAdd.error }
+                        : {}),
+                }
+              : {}),
         // What a Happy Agent said when it failed belongs under its own heading.
-        ...(happyAgent.status === "error" && happyAgent.message !== undefined
+        ...(happyAgent.status === "error" && happyAgent.message !== undefined && !signInSaid
             ? { error: happyAgent.message }
             : {}),
         ...(happyAgent.projects.length === 0 && !hidden
@@ -3035,7 +3049,7 @@ function happyAgentEmptyDescription(happyAgent: AppHappyAgentEntry): string {
  * is signing in, offered again after a failure and withheld while the browser
  * is already open.
  */
-function happyAgentSignInEmpty(signIn: AppHappyAgentSignIn): {
+export function happyAgentSignInEmpty(signIn: AppHappyAgentSignIn): {
     readonly actionLabel?: string;
     readonly description: string;
     readonly icon: "lock";
