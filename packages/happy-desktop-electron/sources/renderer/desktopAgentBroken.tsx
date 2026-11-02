@@ -273,7 +273,7 @@ function restartStatus(
         case "reconnecting":
             return { label: "Reconnecting…", busy: true };
         case "error":
-            return { label: `Restart failed: ${install.message}`, busy: false };
+            return { label: "Restart failed. Copy the details below for help.", busy: false };
     }
 }
 
@@ -312,13 +312,19 @@ export function DesktopAgentBrokenGate(props: {
             }
             data-testid="desktop-agent-broken-screen"
             scene="owl"
-            status={
-                status ?? { label: snapshot.message ?? "The local Happy Agent is not responding." }
-            }
+            status={status ?? { label: "The local Happy Agent is not responding." }}
             statusReserved
             title="Happy is in a broken state"
         >
-            <SetupPrompt label="prompt" prompt={desktopAgentBrokenPrompt(snapshot)} />
+            <SetupPrompt
+                label="diagnostic details"
+                preview={
+                    snapshot.install.phase === "error"
+                        ? snapshot.install.message
+                        : (snapshot.message ?? "The local Happy Agent is not responding.")
+                }
+                prompt={desktopAgentBrokenPrompt(snapshot)}
+            />
         </SetupPage>
     );
 }

@@ -3,6 +3,8 @@ import { CopyButton } from "./CopyButton";
 export interface SetupPromptProps {
     /** Exactly what the reader is meant to paste into another assistant, copied verbatim. */
     readonly prompt: string;
+    /** A short visible excerpt; copying always includes the complete prompt above. */
+    readonly preview?: string;
     /** Names this particular prompt for assistive technology. */
     readonly label: string;
     readonly "data-testid"?: string;
@@ -14,7 +16,7 @@ export interface SetupPromptProps {
  * C-306 SetupPrompt — one paragraph meant to be handed to another assistant.
  *
  * Where `SetupCommand` is one shell line that must never wrap, this is prose:
- * it wraps at the column's measure, stays selectable, and carries one named
+ * it wraps up to four lines at the column's measure, stays selectable, and carries one named
  * copy action under it, so the whole paragraph can be taken in one press when
  * nothing inside Happy is able to help.
  *
@@ -32,7 +34,7 @@ export function SetupPrompt(props: SetupPromptProps) {
                 className="happy-setup-prompt__text"
                 data-happy-desktop-ui="setup-prompt-text"
             >
-                {props.prompt}
+                {props.preview ?? props.prompt}
             </p>
             <div className="happy-setup-prompt__actions">
                 <CopyButton

@@ -24,6 +24,11 @@
 }
 
 .happy-setup-prompt__text {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 4;
+    max-height: 80px;
+    overflow: hidden;
     margin: 0;
     color: var(--text);
     font-size: 13px;

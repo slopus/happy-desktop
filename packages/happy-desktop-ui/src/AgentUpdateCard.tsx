@@ -114,6 +114,7 @@ const RESTART_COST_LINE = { kind: "text", text: "Stops running tools" } as const
 type Line =
     | { readonly kind: "empty" }
     | { readonly kind: "text"; readonly text: string }
+    | { readonly kind: "error"; readonly text: string }
     | { readonly kind: "agent"; readonly agent: AgentUpdateCardAgent }
     | { readonly kind: "more"; readonly count: number }
     | { readonly kind: "restart" }
@@ -128,7 +129,8 @@ type Line =
  * Every box but the width has a fixed size: the 128px-tall card, the 56px
  * snail, one title slot, three detail slots, and the four-track bar. The width
  * is its host's — the sidebar column it sits in — and every line truncates
- * inside it. A phase change rewrites the text in those slots and nothing else,
+ * inside it. A failed card grows to show up to six lines of selectable,
+ * scrollable error text. Other phase changes rewrite the text in those slots,
  * so the card never moves under the pointer while the update runs on its own.
  *
  * While work is finishing the slots list what is still running first, and
@@ -292,11 +294,16 @@ function DetailLine(props: {
                     data-happy-desktop-ui="agent-update-card-line"
                 />
             );
+        case "error":
         case "text":
             return (
                 <span
                     className="happy-agent-update-card__line"
                     data-happy-desktop-ui="agent-update-card-line"
+                    data-detail={line.kind}
+                    tabIndex={line.kind === "error" ? 0 : undefined}
+                    role={line.kind === "error" ? "region" : undefined}
+                    aria-label={line.kind === "error" ? "Restart or update error" : undefined}
                     title={line.text}
                 >
                     <span className="happy-agent-update-card__text">{line.text}</span>
@@ -497,7 +504,7 @@ function linesFilled(view: AgentUpdateCardView): readonly Line[] {
                 : [{ kind: "text", text: `Took ${durationText(view.tookMs)}` }];
         case "failed":
             return [
-                { kind: "text", text: view.message },
+                { kind: "error", text: view.message },
                 // Only a drain that failed leaves the old daemon in place. Past
                 // that it has been stopped, and saying otherwise would be untrue.
                 view.failedAt === "draining"

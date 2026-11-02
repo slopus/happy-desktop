@@ -144,6 +144,21 @@ const PHASES: readonly Phase[] = [
     },
     FAILED,
     {
+        detail: "A wrapped restart error grows the card; longer traces scroll after six lines",
+        label: "Restart failed · long error",
+        view: {
+            kind: "failed",
+            reason: "restart",
+            failedAt: "starting",
+            message:
+                'Error: The applied migrations for module "stories" are not a prefix of its current migrations.\n' +
+                Array.from(
+                    { length: 12 },
+                    (_, index) => `    at startDaemon (happy-agent:${String(index + 1)}:42)`,
+                ).join("\n"),
+        },
+    },
+    {
         detail: "A reload that failed says so in the restart's words",
         label: "Restart failed",
         view: {
@@ -267,7 +282,7 @@ export function AgentUpdateCardPage() {
     return (
         <ComponentPage
             number={componentNumber}
-            summary="A Happy Agent update or restart, told on a card that stands on the sidebar footer while the window stays usable. Every phase is the same 128px-tall frame, as wide as the footer row: the bare looping snail in a 56px square, a title naming the step with the time since the update began beside it, three fixed detail lines, and four equal unlabelled tracks. While work is finishing, the lines list what is still running first and Restart now, with what it costs, sits below them. Only the words change. The footer's update slot turns into a slowly spinning sync button while the update runs and toggles the card; once the update is cleared, the slot is empty again."
+            summary="A Happy Agent update or restart, told on a card that stands on the sidebar footer while the window stays usable. Active phases keep a 128px-tall frame; failures grow to fit up to six lines of error text, then scroll. The card is as wide as the footer row, with a bare snail in a 56px square, a title naming the step, and four equal unlabelled tracks. While work is finishing, three fixed detail lines list what is still running first and Restart now, with what it costs, sits below them. Recovery actions remain below an error. The footer's update slot turns into a slowly spinning sync button while the update runs and toggles the card; once the update is cleared, the slot is empty again."
             title="Agent update card"
         >
             {CARD_WIDTHS.map((width, widthIndex) => (

@@ -1,5 +1,5 @@
 /*
- * C-288 AgentUpdateCard. Every dimension but the width is fixed, so a phase
+ * C-288 AgentUpdateCard. Except for a failed card's wrapped error, dimensions are fixed, so a phase
  * change can only rewrite text; the width is the host's, and every line
  * truncates inside it:
  *
@@ -127,6 +127,37 @@
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+/* Errors grow the frame up to six lines, then scroll without pushing the
+   recovery actions or the progress bar out of view. */
+.happy-agent-update-card[data-phase="failed"] {
+    height: auto;
+    min-height: 128px;
+}
+
+.happy-agent-update-card[data-phase="failed"] .happy-agent-update-card__row,
+.happy-agent-update-card[data-phase="failed"] .happy-agent-update-card__content {
+    height: auto;
+    min-height: var(--happy-agent-update-card-row);
+}
+
+.happy-agent-update-card__line[data-detail="error"] {
+    align-items: flex-start;
+    height: auto;
+    min-height: var(--happy-agent-update-card-line);
+    max-height: calc(6 * var(--happy-agent-update-card-line));
+    overflow: auto;
+    overscroll-behavior: contain;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    user-select: text;
+}
+
+.happy-agent-update-card__line[data-detail="error"] .happy-agent-update-card__text {
+    width: 100%;
+    overflow: visible;
+    text-overflow: clip;
 }
 
 /* The link hugs its words inside the full-width slot, so the target is the text. */

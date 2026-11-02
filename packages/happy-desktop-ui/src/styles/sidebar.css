@@ -13,7 +13,7 @@
 .happy-sidebar {
     --happy-surface-header-height: 56px;
     --happy-surface-footer-height: 40px;
-    --happy-sidebar-floor: 136px;
+    --happy-sidebar-floor: 226px;
     display: flex;
     flex: none;
     flex-direction: column;
@@ -273,7 +273,7 @@
 /* Inner content wrapper carries the shared panel inset around the sections —
    see --happy-panel-inset for what it promises. Under the last row it keeps a
    permanent floor as tall as the tallest card that floats over the foot of the
-   column (the agent update card, 128px, 8px above the footer), so the rows can
+   column (the expanded agent error card, 218px, 8px above the footer), so the rows can
    always be scrolled clear of it, and nothing that floats there comes or goes
    by moving a row. Border-box, because the sidebar holds its minimum height at
    the bottom of what is on screen (see `Sidebar`). */
