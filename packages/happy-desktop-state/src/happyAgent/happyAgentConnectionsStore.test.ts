@@ -77,10 +77,18 @@ it("ignores a remembered entry that does not name its own connection", () => {
     expect(store.get().items.map((item) => item.id)).toEqual(["local"]);
 });
 
-it("carries the instance the main daemon saw for each remote, and remembers it", async () => {
+it("carries each remote's instance and a server's address, and remembers them", async () => {
     const TEAM = "k3x9q2m7p0a4b8c1d5e6f7g2";
     const listed = {
-        connections: [{ ...remote("team", "Team"), instanceId: TEAM }, remote("lab", "Lab")],
+        connections: [
+            {
+                ...remote("team", "Team"),
+                authentication: "oauth",
+                url: "https://happy.example.com/",
+                instanceId: TEAM,
+            },
+            remote("lab", "Lab"),
+        ],
         version: "v2",
     } as ConnectionListResponse;
     const client = { listConnections: vi.fn(async () => listed) } as unknown as HappyAgentClient;
@@ -102,6 +110,7 @@ it("carries the instance the main daemon saw for each remote, and remembers it",
         name: "Team",
         remoteId: "team",
         instanceId: TEAM,
+        url: "https://happy.example.com/",
     });
     // A remote the main daemon has not reached yet names none.
     expect(store.get().items[2]).not.toHaveProperty("instanceId");

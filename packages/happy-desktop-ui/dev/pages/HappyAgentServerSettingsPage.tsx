@@ -6,6 +6,8 @@ import { ComponentPage, Specimen } from "../kit";
 
 export const componentNumber = "C-332";
 const noop = () => undefined;
+const SERVER_CODE =
+    "happy://k3x9q2m7p0a4b8c1d5e6f7g2/server?url=https%3A%2F%2Fhappy.example.com%2F";
 const handlers = { onAdd: noop, onCancel: noop, onUrlChange: noop };
 const cases: readonly (HappyAgentServerSettingsProps & { readonly label: string })[] = [
     { label: "Empty", url: "", phase: { kind: "editing" }, ...handlers },
@@ -39,6 +41,27 @@ const cases: readonly (HappyAgentServerSettingsProps & { readonly label: string 
         url: "https://happy.example.com",
         phase: { kind: "editing" },
         error: "The sign-in page said the request was not allowed (access_denied).",
+        ...handlers,
+    },
+    {
+        label: "With servers",
+        url: "",
+        phase: { kind: "editing" },
+        servers: [
+            {
+                id: "connection:happy-example-com",
+                name: "Example Engineering",
+                address: "https://happy.example.com/",
+                phoneCode: SERVER_CODE,
+            },
+            {
+                // A loopback test server, or one whose instance is not known
+                // yet, has no code a phone could use.
+                id: "connection:localhost",
+                name: "Local test server",
+                address: "http://localhost:8080/",
+            },
+        ],
         ...handlers,
     },
     {

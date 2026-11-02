@@ -14,3 +14,29 @@
     flex: 1 1 auto;
     min-width: 0;
 }
+
+/* The phone code for one server: the code, what to do with it, and the address it adds. */
+.happy-agent-server-phone {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    font-family: var(--happy-font-ui);
+}
+
+.happy-agent-server-phone__text {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 20px;
+    text-align: center;
+}
+
+.happy-agent-server-phone__address {
+    margin: 0;
+    color: var(--text);
+    font-size: 13px;
+    line-height: 20px;
+    overflow-wrap: anywhere;
+    text-align: center;
+}

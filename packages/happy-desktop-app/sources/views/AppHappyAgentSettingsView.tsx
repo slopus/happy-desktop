@@ -55,6 +55,7 @@ import {
     happyAgentAttentionConnection,
     happyAgentAttentionStoreNoop,
     keepAwakeStoreCreate,
+    serverPhoneLinkFormat,
     serverUrlProblemMessage,
     statusBarStoreNoop,
     titleShimmerStoreNoop,
@@ -92,6 +93,7 @@ import {
     type HappyAgentSecretRow,
     type HappyAgentSettingsCategory,
     type HappyAgentStateDocument,
+    type HappyAgentServerRow,
 } from "happy-desktop-ui";
 import { HappyAgentVersionProvider } from "../HappyAgentVersionProvider";
 import {
@@ -103,6 +105,7 @@ import {
 } from "../components/AppMobilePairing";
 import {
     hostHappyAgent,
+    type AppHappyAgentDirectorySnapshot,
     type AppHappyAgentDirectoryStore,
     type AppHappyAgentEntry,
     type AppHappyAgentUpdate,
@@ -354,6 +357,30 @@ const CATEGORY_DESCRIPTIONS: Record<string, string> = {
     providers: "Model providers and the models they offer",
     usage: "What each provider account has spent",
 };
+
+/**
+ * The team servers added by address, each with the code a phone scans to add
+ * it. Only a server reached over HTTPS whose instance is known has one.
+ */
+function serverRows(
+    entries: AppHappyAgentDirectorySnapshot["happyAgents"],
+): readonly HappyAgentServerRow[] {
+    return entries.flatMap((entry) => {
+        if (entry.serverUrl === undefined) return [];
+        const phoneCode = serverPhoneLinkFormat({
+            url: entry.serverUrl,
+            ...(entry.instanceId === undefined ? {} : { instanceId: entry.instanceId }),
+        });
+        return [
+            {
+                id: entry.id,
+                name: entry.label,
+                address: entry.serverUrl,
+                ...(phoneCode === undefined ? {} : { phoneCode }),
+            },
+        ];
+    });
+}
 
 /** Stands in where the host cannot add servers, so the view subscribes unconditionally. */
 const serverAddAbsentSnapshot = { url: "", phase: { kind: "editing" } } as const;
@@ -915,6 +942,7 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                     <HappyAgentServerSettings
                         url={serverAdd.url}
                         phase={serverAdd.phase}
+                        servers={serverRows(directory.happyAgents)}
                         {...(serverAdd.urlProblem === undefined
                             ? {}
                             : { urlError: serverUrlProblemMessage(serverAdd.urlProblem) })}

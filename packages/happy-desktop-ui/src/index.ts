@@ -955,8 +955,13 @@ export {
 export {
     HappyAgentServerSettings,
     type HappyAgentServerAddPhase,
+    type HappyAgentServerRow,
     type HappyAgentServerSettingsProps,
 } from "./pages/settings/HappyAgentServerSettings";
+export {
+    HappyAgentServerPhoneDialog,
+    type HappyAgentServerPhoneDialogProps,
+} from "./pages/settings/HappyAgentServerPhoneDialog";
 export {
     HappyAgentAccountSettings,
     type HappyAgentAccountSettingsProps,

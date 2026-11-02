@@ -516,6 +516,8 @@ export interface AppHappyAgentEntry {
      * Absent on an older daemon, which has no links that leave the app.
      */
     readonly instanceId?: string;
+    /** A team server added by its address: that address, as the host Happy Agent normalized it. */
+    readonly serverUrl?: string;
     readonly projects: readonly HappyAgentProjectGroup[];
     /**
      * This Happy Agent's bots. They are listed under a heading of their own

@@ -30,6 +30,7 @@ export * from "./servers/serverUrl.js";
 export * from "./servers/serverSource.js";
 export * from "./servers/serverAddStore.js";
 export * from "./servers/serverSourceDaemon.js";
+export * from "./servers/serverPhoneLink.js";
 export * from "./servers/serverStatusesStore.js";
 export * from "./gptLive/gptLiveStore.js";
 export * from "./gptLive/gptLiveRuntime.js";

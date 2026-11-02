@@ -104,6 +104,8 @@ export interface HappyAgentDirectoryEntry {
      * An instance link opens here only when it names exactly this ID.
      */
     readonly instanceId?: string;
+    /** A team server added by its address: that address, as the host Happy Agent normalized it. */
+    readonly serverUrl?: string;
     /**
      * Why this Happy Agent's daemon stopped admitting work, in its own words,
      * from its drain until a replacement admits work again.
@@ -817,6 +819,7 @@ export function happyAgentDirectoryStoreCreate(
                                 ...(item.instanceId === undefined
                                     ? {}
                                     : { instanceId: item.instanceId }),
+                                ...(item.url === undefined ? {} : { serverUrl: item.url }),
                                 label: item.name,
                                 bots: [],
                                 botsCreating: [],
@@ -842,15 +845,21 @@ export function happyAgentDirectoryStoreCreate(
                         if (
                             remote.entry.label !== item.name ||
                             remote.entry.organizationId !== item.organizationId ||
-                            remote.entry.instanceId !== instanceId
+                            remote.entry.instanceId !== instanceId ||
+                            remote.entry.serverUrl !== item.url
                         ) {
-                            const { organizationId: _previous, ...entry } = remote.entry;
+                            const {
+                                organizationId: _previous,
+                                serverUrl: _url,
+                                ...entry
+                            } = remote.entry;
                             remote.entry = {
                                 ...entry,
                                 label: item.name,
                                 ...(item.organizationId === undefined
                                     ? {}
                                     : { organizationId: item.organizationId }),
+                                ...(item.url === undefined ? {} : { serverUrl: item.url }),
                                 instanceId,
                             };
                         }

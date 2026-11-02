@@ -10,6 +10,8 @@ export interface HappyAgentConnectionItem {
     readonly organizationId?: string;
     /** The remote's own health `instanceId`, once the main daemon has seen it. */
     readonly instanceId?: string;
+    /** A server connection by URL: its normalized address, ending in `/`. */
+    readonly url?: string;
 }
 
 export interface HappyAgentConnectionsSnapshot {
@@ -82,10 +84,12 @@ export function happyAgentConnectionsStoreCreate(
             const organizationId =
                 connection.authentication === "workos" ? connection.organizationId : undefined;
             const instanceId = connection.instanceId;
+            const url = connection.authentication === "oauth" ? connection.url : undefined;
             items.push(
                 previous?.name === connection.name &&
                     previous.organizationId === organizationId &&
-                    previous.instanceId === instanceId
+                    previous.instanceId === instanceId &&
+                    previous.url === url
                     ? previous
                     : {
                           id,
@@ -93,6 +97,7 @@ export function happyAgentConnectionsStoreCreate(
                           name: connection.name,
                           ...(organizationId === undefined ? {} : { organizationId }),
                           ...(instanceId === undefined ? {} : { instanceId }),
+                          ...(url === undefined ? {} : { url }),
                       },
             );
         }
