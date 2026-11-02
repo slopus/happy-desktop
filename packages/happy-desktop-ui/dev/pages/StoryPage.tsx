@@ -20,6 +20,33 @@ const FRAME = `data:image/svg+xml,${encodeURIComponent(
     </svg>`,
 )}`;
 
+/** A white app screenshot, the brightest frame a reply field sits on. */
+const WHITE = `data:image/svg+xml,${encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 1600">
+        <rect width="900" height="1600" fill="#ffffff"/>
+        <rect x="60" y="180" width="520" height="40" rx="8" fill="#e9e9ee"/>
+        <rect x="60" y="260" width="780" height="22" rx="6" fill="#f1f1f4"/>
+        <rect x="60" y="300" width="700" height="22" rx="6" fill="#f1f1f4"/>
+        <rect x="60" y="380" width="780" height="420" rx="16" fill="#f6f6f8"/>
+        <rect x="60" y="1460" width="780" height="72" rx="36" fill="#f4f4f6"/>
+    </svg>`,
+)}`;
+
+/** Colour bars: saturated, busy and bright to the bottom edge. */
+const BARS = `data:image/svg+xml,${encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 1600">${[
+        "#ffffff",
+        "#ffff00",
+        "#00ffff",
+        "#00ff00",
+        "#ff00ff",
+        "#ff0000",
+        "#0000ff",
+    ]
+        .map((fill, index) => `<rect x="${index * 129}" width="130" height="1600" fill="${fill}"/>`)
+        .join("")}</svg>`,
+)}`;
+
 const rows = (story: "off" | "on"): SidebarItem[] => [
     {
         id: "onboarding",
@@ -66,6 +93,7 @@ function ViewerSpecimen(props: {
     readonly repost?: boolean;
     readonly composer?: boolean;
     readonly replyCount?: number;
+    readonly media?: string;
     readonly window?: { width: number; height: number };
 }) {
     const [index, setIndex] = useState(1);
@@ -89,7 +117,7 @@ function ViewerSpecimen(props: {
         >
             <StoryViewer
                 caption="Onboarding now opens on the welcome screen, with setup one click away."
-                media={{ kind: "image", url: FRAME }}
+                media={{ kind: "image", url: props.media ?? FRAME }}
                 onClose={() => setIndex(1)}
                 onDelete={() => undefined}
                 onRepliesOpen={() => setReplies(all)}
@@ -277,6 +305,25 @@ export function StoryPage() {
             >
                 <ViewerSpecimen repost window={{ width: 1440, height: 900 }} />
             </FullScreenSpecimen>
+            {[
+                { media: WHITE, name: "white", label: "a white screenshot" },
+                { media: BARS, name: "bars", label: "colour bars" },
+            ].map((bright) => (
+                <FullScreenSpecimen
+                    key={bright.name}
+                    number="11"
+                    label={`Reply over ${bright.label}`}
+                    detail="The reply field stays legible on the brightest media"
+                    window={{ width: 1100, height: 760 }}
+                    screen={`11-${bright.name}-1100x760`}
+                >
+                    <ViewerSpecimen
+                        media={bright.media}
+                        replyCount={0}
+                        window={{ width: 1100, height: 760 }}
+                    />
+                </FullScreenSpecimen>
+            ))}
             {[1, 40].flatMap((count) =>
                 [
                     { width: 1440, height: 900 },
