@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import { parse } from "yaml";
 import { desktopFlavorRead } from "./desktopFlavors.mjs";
 import { desktopBuildVersion } from "./release/desktopVersion.mjs";
-import { packagedMainModulesVerify } from "./verify-packaged-main-modules.mjs";
+import { packagedFilesVerify, packagedMainModulesVerify } from "./verify-packaged-main-modules.mjs";
 
 if (process.platform !== "win32") throw new Error("Windows releases require a Windows builder.");
 const flavorName = process.argv[2] ?? "standard";
@@ -47,6 +47,8 @@ function run(args) {
         windowsHide: true,
     });
 }
+// main.js reads the artifact code renderer from dist/artifact-code by path; see build-mac-apps.mjs.
+run(["build:artifact-code"]);
 if (flavorName === "standard") run(["exec", "vite", "build"]);
 run(["exec", "vite", "build", "--config", "vite.main.config.ts"]);
 run(["exec", "vite", "build", "--config", "vite.preload.config.ts"]);
@@ -112,6 +114,9 @@ const updater = parse(
 packagedMainModulesVerify(join(output, "win-unpacked", "resources", "app.asar"), [
     "dist/main.js",
     "dist/happyAgentRendererUtility.js",
+]);
+packagedFilesVerify(join(output, "win-unpacked", "resources", "app.asar"), [
+    "dist/artifact-code/code.js",
 ]);
 if (
     updater.channel !== flavor.channel ||
