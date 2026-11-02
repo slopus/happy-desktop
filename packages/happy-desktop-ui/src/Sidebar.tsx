@@ -471,6 +471,8 @@ export type SidebarProps = Omit<HTMLAttributes<HTMLElement>, "style"> & {
     footer?: ReactNode;
     /** Stable product context rendered between the 56px heading and scrollport. */
     headerAccessory?: ReactNode;
+    /** The scrolling list's first item, edge to edge, which scrolls away with the rows. */
+    bodyLeading?: ReactNode;
     /**
      * The rows drawn, top to bottom, and which of them are on screen, after
      * a scroll, a resize, a fold or a change of rows: at most once a frame,
@@ -2500,6 +2502,7 @@ export function Sidebar(props: SidebarProps) {
         "activityPlacement",
         "brand",
         "bodyAccessory",
+        "bodyLeading",
         "bottomSection",
         "className",
         "composeActive",
@@ -4185,6 +4188,14 @@ export function Sidebar(props: SidebarProps) {
                         if (event.target === event.currentTarget) dragCancel(event);
                     }}
                 >
+                    {local.bodyLeading ? (
+                        <div
+                            className="happy-sidebar__body-leading"
+                            data-happy-desktop-ui="sidebar-body-leading"
+                        >
+                            {local.bodyLeading}
+                        </div>
+                    ) : null}
                     {local.searchRow ? (
                         <SidebarRow
                             active={false}

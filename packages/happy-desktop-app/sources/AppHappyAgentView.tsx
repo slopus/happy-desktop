@@ -3516,7 +3516,11 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                     // loading, and "Loading sessions…" under a footer saying the
                     // machine is unreachable is a promise nothing is keeping.
                     <Banner tone="neutral">Loading sessions…</Banner>
-                ) : stories.mode === "on" && storiesStore ? (
+                ) : undefined
+            }
+            // Stories open the list and scroll away with its rows rather than staying pinned.
+            bodyLeading={
+                stories.mode === "on" && storiesStore ? (
                     <StoriesRow
                         items={stories.row.map((tile) => ({
                             id: tile.key,

@@ -329,6 +329,17 @@
 
 /* Whatever an agent hangs here is a group in this column like any other, so the
    sidebar — not the guest — owns the clear space on both sides of it. */
+/* Out to the scrollport's edges and top, so it sits where a pinned accessory
+   would, and keeps the inset below it before the first row. */
+.happy-sidebar__body-leading {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    min-width: 0;
+    margin: calc(-1 * var(--happy-panel-inset)) calc(-1 * var(--happy-panel-inset))
+        var(--happy-panel-inset);
+}
+
 .happy-sidebar__body-accessory {
     display: flex;
     flex: none;
