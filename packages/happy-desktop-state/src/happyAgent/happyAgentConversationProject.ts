@@ -164,7 +164,12 @@ function profileAuthor(
         displayName: profile.name,
         username: profile.name,
         kind: "human",
-        ...(profile.avatar === null ? {} : { avatar: profile.avatar }),
+        ...(profile.avatar === null
+            ? {}
+            : {
+                  avatar: { thumbhash: profile.avatar.thumbhash },
+                  imageUrl: profile.avatar.url,
+              }),
     };
     profileAuthors.set(profile, author);
     return author;

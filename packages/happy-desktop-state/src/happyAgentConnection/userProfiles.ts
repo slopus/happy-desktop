@@ -4,7 +4,8 @@ import { HappyAgentApiError, type HappyAgentClient } from "@slopus/happy-agent-c
 export interface UserProfile {
     readonly id: string;
     readonly name: string;
-    readonly avatar: { readonly thumbhash: string } | null;
+    /** The photo's full-size address, with the ThumbHash that stands in until it loads. */
+    readonly avatar: { readonly url: string; readonly thumbhash: string } | null;
 }
 
 interface UserRecord {
@@ -17,9 +18,12 @@ interface UserRecord {
 /** One connection's shared, batched identity resolver. No requests open at construction. */
 export function userProfilesCreate(options: {
     readonly client: Pick<HappyAgentClient, "getUsers">;
+    /** The daemon each photo is read from. */
+    readonly endpoint: string;
     readonly signal: AbortSignal;
     readonly changed: (id: string) => void;
 }) {
+    const base = options.endpoint.replace(/\/$/, "");
     const profiles = new Map<string, UserProfile>();
     const records = new Map<string, UserRecord>();
     let retryTimer: ReturnType<typeof setTimeout> | undefined;
@@ -73,7 +77,12 @@ export function userProfilesCreate(options: {
                               id,
                               name: user.name,
                               avatar:
-                                  user.photo === null ? null : { thumbhash: user.photo.thumbhash },
+                                  user.photo === null
+                                      ? null
+                                      : {
+                                            url: `${base}/v0/users/${encodeURIComponent(id)}/photo`,
+                                            thumbhash: user.photo.thumbhash,
+                                        },
                           }
                         : deleted(id),
                 );

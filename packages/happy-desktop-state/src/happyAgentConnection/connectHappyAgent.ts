@@ -258,6 +258,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
     const userSessions = new Map<string, Set<SessionEntry>>();
     const users = userProfilesCreate({
         client,
+        endpoint,
         signal: rootController.signal,
         changed: (id) => {
             // Version/timestamp-only changes never reach here. Only conversations
@@ -548,7 +549,6 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
      * every task is theirs, and so it shows no owner at all: `null`.
      */
     const taskOwnerOf = (task: Task): TaskOwner | null => {
-        const base = endpoint.replace(/\/$/, "");
         if (task.ownerUserId !== null) {
             const profile = users.profiles.get(task.ownerUserId);
             return {
@@ -556,14 +556,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                 ...(profile === undefined || profile.name === "DELETED"
                     ? {}
                     : { name: profile.name }),
-                ...(profile?.avatar
-                    ? {
-                          avatar: {
-                              url: `${base}/v0/users/${encodeURIComponent(task.ownerUserId)}/photo`,
-                              thumbhash: profile.avatar.thumbhash,
-                          },
-                      }
-                    : {}),
+                ...(profile?.avatar ? { avatar: profile.avatar } : {}),
             };
         }
         return currentUserId === undefined ? null : {};
