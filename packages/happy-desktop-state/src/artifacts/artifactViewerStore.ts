@@ -10,6 +10,11 @@ import {
     happyAgentArtifactVersionNewer,
     type HappyAgentArtifactEvent,
 } from "./artifactCatalog.js";
+import {
+    happyAgentArtifactMarkdownDiffOffered,
+    happyAgentArtifactMarkdownViewDefault,
+    type HappyAgentArtifactMarkdownView,
+} from "./artifactMarkdownDiff.js";
 import { happyAgentArtifactAuthors } from "./artifactPeopleStore.js";
 import { happyAgentArtifactProject, happyAgentArtifactVersionProject } from "./artifactProject.js";
 import type {
@@ -62,6 +67,14 @@ export type HappyAgentArtifactPage =
           readonly omitted: readonly string[];
       };
 
+/** The version before a Markdown version, which that version is read against as a diff. */
+export interface HappyAgentArtifactMarkdownBefore {
+    readonly number: number;
+    readonly text: string;
+    /** Every file of that version by path, so what the diff shows removed still resolves. */
+    readonly files: ReadonlyMap<string, string>;
+}
+
 /** What the viewer shows for the version on screen, by the artifact's type. */
 export type HappyAgentArtifactContent =
     | { readonly type: "loading" }
@@ -72,6 +85,11 @@ export type HappyAgentArtifactContent =
           readonly text: string;
           /** Every file of the version by path, so the entry's references resolve to it. */
           readonly files: ReadonlyMap<string, string>;
+          /**
+           * The version before this one. Absent for version 1, and for a
+           * version whose predecessor could not be read.
+           */
+          readonly before?: HappyAgentArtifactMarkdownBefore;
       }
     | { readonly type: "html"; readonly entryPath: string; readonly page: HappyAgentArtifactPage }
     | { readonly type: "image"; readonly image: HappyAgentArtifactFileLink }
@@ -115,6 +133,13 @@ export interface HappyAgentArtifactViewerSnapshot {
     /** Every file of the version on screen, in path order. */
     readonly files: readonly HappyAgentArtifactFileLink[];
     readonly content: HappyAgentArtifactContent;
+    /**
+     * How a Markdown version with one before it is shown. Decided once, when
+     * the viewer opens on an artifact, by how recently the version it opens on
+     * was made. From then on only the reader changes it: a new version or a
+     * version picked from the history is shown in the same view.
+     */
+    readonly markdownView: HappyAgentArtifactMarkdownView;
     readonly deletion: HappyAgentArtifactDeletion;
 }
 
@@ -130,6 +155,8 @@ export interface HappyAgentArtifactViewerStore {
     artifactOpen(artifactId: HappyAgentArtifactId | undefined, version?: number): void;
     /** Shows one numbered version; the latest number follows the latest again. */
     versionSelect(number: number): void;
+    /** Shows Markdown versions as their diff or as the document, for as long as the artifact is open. */
+    markdownViewSelect(view: HappyAgentArtifactMarkdownView): void;
     /** Reads the next page of older versions. */
     versionsNextLoad(): void;
     /** Asks the reader to confirm deleting the open artifact. */
@@ -168,6 +195,8 @@ export interface HappyAgentArtifactViewerDeps {
     ) => Promise<HappyAgentArtifactSiteOpening>;
     /** Reports who the artifact and its history credit, so the people among them can be named. */
     readonly authorsSeen?: (authors: readonly (HappyAgentArtifactAuthor | null)[]) => void;
+    /** The reader's clock, which decides whether the version opened on is recent enough for its diff. */
+    readonly now?: () => number;
 }
 
 const LOADING = { type: "loading" } as const;
@@ -186,6 +215,7 @@ function snapshotEmpty(
         versionsHasMore: false,
         files: [],
         content: LOADING,
+        markdownView: "document",
         deletion: DELETION_IDLE,
     };
 }
@@ -239,6 +269,11 @@ export function happyAgentArtifactViewerStoreCreate(
     let versionsCursor: string | null = null;
     let inlineUrl: string | undefined;
     let deletionMutationId: string | undefined;
+    /**
+     * Whether how Markdown is shown is settled for the open artifact: by the
+     * first version it opened on, or by the reader picking first.
+     */
+    let markdownViewSettled = false;
     let disposed = false;
 
     const publish = (next: Partial<HappyAgentArtifactViewerSnapshot>): void => {
@@ -272,6 +307,41 @@ export function happyAgentArtifactViewerStoreCreate(
         return { data: file.data, contentType: file.contentType };
     };
 
+    /**
+     * The version before a Markdown version, to read it against. One that
+     * cannot be read is left out rather than failing the version, which still
+     * reads on its own.
+     */
+    const markdownBefore = async (
+        artifact: HappyAgentArtifact,
+        number: number,
+        signal: AbortSignal,
+    ): Promise<HappyAgentArtifactMarkdownBefore | undefined> => {
+        if (!happyAgentArtifactMarkdownDiffOffered(artifact.type, number)) return undefined;
+        const id = artifact.id;
+        const previous = number - 1;
+        try {
+            const version =
+                snapshot.versions.find((held) => held.number === previous) ??
+                happyAgentArtifactVersionProject(
+                    (await deps.client.getArtifactVersion(id, previous, { signal })).version,
+                );
+            const { data } = await fileText(id, previous, version.entry.path, signal);
+            return {
+                number: previous,
+                text: new TextDecoder().decode(data),
+                files: new Map(
+                    version.files.map((file) => [
+                        file.path,
+                        deps.client.artifactFileUrl(id, previous, file.path),
+                    ]),
+                ),
+            };
+        } catch {
+            return undefined;
+        }
+    };
+
     /** Reads what one version shows, by the artifact's type. */
     const contentOf = async (
         artifact: HappyAgentArtifact,
@@ -283,7 +353,10 @@ export function happyAgentArtifactViewerStoreCreate(
         const entry = fileLink(id, number, version.entry);
         switch (artifact.type) {
             case "markdown": {
-                const { data } = await fileText(id, number, version.entry.path, signal);
+                const [{ data }, before] = await Promise.all([
+                    fileText(id, number, version.entry.path, signal),
+                    markdownBefore(artifact, number, signal),
+                ]);
                 return {
                     type: "markdown",
                     entryPath: version.entry.path,
@@ -294,6 +367,7 @@ export function happyAgentArtifactViewerStoreCreate(
                             deps.client.artifactFileUrl(id, number, file.path),
                         ]),
                     ),
+                    ...(before === undefined ? {} : { before }),
                 };
             }
             case "html": {
@@ -373,6 +447,26 @@ export function happyAgentArtifactViewerStoreCreate(
     };
 
     /**
+     * The view the viewer opens on, from the first version it shows. A version
+     * whose text is the same as the one before it — a new title, say — has
+     * nothing to show as a diff, so it opens on the document.
+     */
+    const markdownViewDefault = (
+        artifact: HappyAgentArtifact,
+        version: HappyAgentArtifactVersion,
+        content: HappyAgentArtifactContent,
+    ): HappyAgentArtifactMarkdownView => {
+        if (content.type !== "markdown" || content.before === undefined) return "document";
+        if (content.before.text === content.text) return "document";
+        return happyAgentArtifactMarkdownViewDefault({
+            type: artifact.type,
+            number: version.number,
+            createdAt: version.createdAt,
+            now: (deps.now ?? Date.now)(),
+        });
+    };
+
+    /**
      * Shows the version the reader picked, or the latest. Content of a numbered
      * version never changes, so a version already on screen is not read again.
      */
@@ -408,7 +502,13 @@ export function happyAgentArtifactViewerStoreCreate(
             const content = await contentOf(artifact, version, signal);
             if (signal.aborted) return;
             contentNumber = number;
-            publish({ content });
+            // Decided once, as the viewer opens, and never again while it stays
+            // open: the reader may be looking at it.
+            const markdownView = markdownViewSettled
+                ? snapshot.markdownView
+                : markdownViewDefault(artifact, version, content);
+            markdownViewSettled = true;
+            publish({ content, markdownView });
         })()
             .catch((error: unknown) => {
                 if (signal.aborted) return;
@@ -577,6 +677,12 @@ export function happyAgentArtifactViewerStoreCreate(
         contentLoad();
     };
 
+    const markdownViewSelect = (view: HappyAgentArtifactMarkdownView): void => {
+        if (disposed || snapshot.artifactId === undefined) return;
+        markdownViewSettled = true;
+        if (view !== snapshot.markdownView) publish({ markdownView: view });
+    };
+
     return {
         get: () => snapshot,
         subscribe(listener) {
@@ -603,12 +709,14 @@ export function happyAgentArtifactViewerStoreCreate(
             contentNumber = undefined;
             versionsCursor = null;
             deletionMutationId = undefined;
+            markdownViewSettled = false;
             inlineRelease();
             snapshot = snapshotEmpty(artifactId, version);
             for (const listener of listeners) listener();
             reconcile();
         },
         versionSelect,
+        markdownViewSelect,
         versionsNextLoad() {
             const artifactId = snapshot.artifactId;
             if (

@@ -64,6 +64,7 @@ export {
 } from "./artifacts/artifactCatalog.js";
 export * from "./artifacts/artifactLabels.js";
 export * from "./artifacts/artifactReference.js";
+export * from "./artifacts/artifactMarkdownDiff.js";
 export {
     happyAgentArtifactCatalogStoreNoop,
     type HappyAgentArtifactCatalogSnapshot,
@@ -79,6 +80,7 @@ export type {
     HappyAgentArtifactStaticReason,
     HappyAgentArtifactDeletion,
     HappyAgentArtifactFileLink,
+    HappyAgentArtifactMarkdownBefore,
     HappyAgentArtifactViewerArtifact,
     HappyAgentArtifactViewerSnapshot,
     HappyAgentArtifactViewerStore,

@@ -356,6 +356,14 @@
     border-bottom: 1px solid var(--divider);
 }
 
+/* Why a diff the reader asked for is not drawn, above the document shown instead. */
+.happy-agent-artifact-viewer__note {
+    display: flex;
+    flex: 0 0 auto;
+    padding: 12px 24px;
+    border-bottom: 1px solid var(--divider);
+}
+
 .happy-agent-artifact-viewer__main {
     display: flex;
     flex: 1 1 0%;

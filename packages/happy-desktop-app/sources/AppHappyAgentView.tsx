@@ -5435,6 +5435,7 @@ function HappyAgentArtifactViewerSurface(props: {
                 );
             }}
             onVersionSelect={store.versionSelect}
+            onMarkdownViewSelect={store.markdownViewSelect}
             onVersionsLoadMore={store.versionsNextLoad}
             {...(props.artifactPage ? { renderPage: props.artifactPage } : {})}
             {...(surfaces.availability === "available"
@@ -6037,6 +6038,7 @@ function HappyAgentArtifactPanelViewerSurface(props: {
                 );
             }}
             onVersionSelect={store.versionSelect}
+            onMarkdownViewSelect={store.markdownViewSelect}
             onVersionsLoadMore={store.versionsNextLoad}
             {...(props.artifactPage ? { renderPage: props.artifactPage } : {})}
             tab
@@ -6082,6 +6084,7 @@ function HappyAgentArtifactTabSurface(props: {
                 );
             }}
             onVersionSelect={store.versionSelect}
+            onMarkdownViewSelect={store.markdownViewSelect}
             onVersionsLoadMore={store.versionsNextLoad}
             {...(props.artifactPage ? { renderPage: props.artifactPage } : {})}
             tab
@@ -6102,6 +6105,7 @@ const VIEWER_OPENING = {
     versionsHasMore: false,
     files: [],
     content: { type: "loading" },
+    markdownView: "document",
     deletion: { phase: "idle" },
 } as const satisfies import("happy-desktop-state").HappyAgentArtifactViewerSnapshot;
 

@@ -8,6 +8,7 @@ import {
     type HappyAgentArtifactFile,
     type HappyAgentArtifactFileLink,
     type HappyAgentArtifactId,
+    type HappyAgentArtifactMarkdownView,
     type HappyAgentArtifactNames,
     type HappyAgentArtifactStaticReason,
     type HappyAgentArtifactType,
@@ -189,6 +190,7 @@ const viewerHandlers = {
     onDeletionRequest: noop,
     onFileDownload: noop,
     onVersionSelect: noop,
+    onMarkdownViewSelect: noop,
     onVersionsLoadMore: noop,
     onBack: noop,
 };
@@ -239,6 +241,7 @@ function viewerOf(
         ...(versions[0] ? { version: versions[0] } : {}),
         files,
         content,
+        markdownView: "document",
         deletion: { phase: "idle" },
         ...overrides,
     };
@@ -282,6 +285,35 @@ const launchViewer = viewerOf(
     },
     launchFiles.map((entry) => link("launch", 3, entry)),
 );
+
+/** The launch post as its latest version changed it from version 2. */
+const launchDiffViewer: HappyAgentArtifactViewerSnapshot =
+    launchViewer.content.type === "markdown"
+        ? {
+              ...launchViewer,
+              markdownView: "diff",
+              content: {
+                  ...launchViewer.content,
+                  before: {
+                      number: 2,
+                      text: [
+                          "# Happy, with artifacts",
+                          "",
+                          "Every agent can publish a page or a picture.",
+                          "",
+                          "![The artifacts panel](images/hero.svg)",
+                          "",
+                          "- Published once",
+                          "- Tracked per chat",
+                          "- Shared with everyone on the team",
+                          "",
+                          "Read the [notes](./images/hero.svg) or the [docs](https://example.com/docs).",
+                      ].join("\n"),
+                      files: launchViewer.content.files,
+                  },
+              },
+          }
+        : launchViewer;
 
 function dataUrl(mimeType: string, text: string): string {
     return `data:${mimeType};base64,${btoa(text)}`;
@@ -427,6 +459,20 @@ function LiveSurfaceToggleViewer() {
             labels={labels}
             surface={{ added, onToggle: () => setAdded(!added) }}
             viewer={launchViewer}
+        />
+    );
+}
+
+/** The launch post opened on its diff, with Diff / Latest held here so it can be switched. */
+function LiveMarkdownDiffViewer(props: { tab?: boolean }) {
+    const [markdownView, setMarkdownView] = useState<HappyAgentArtifactMarkdownView>("diff");
+    return (
+        <HappyAgentArtifactViewer
+            {...(props.tab ? panelViewerHandlers : viewerHandlers)}
+            labels={labels}
+            onMarkdownViewSelect={setMarkdownView}
+            {...(props.tab ? { tab: true } : {})}
+            viewer={{ ...launchDiffViewer, markdownView }}
         />
     );
 }
@@ -782,6 +828,26 @@ export function HappyAgentArtifactsBlueprintPage() {
                     labels={labels}
                     viewer={posterViewer}
                 />
+            </FullScreenSpecimen>
+
+            <FullScreenSpecimen
+                detail="Opened on a Markdown version made in the last twenty minutes, the viewer starts on its rendered diff against the version before it: added words on green, removed ones struck on red, and unchanged runs folded. Diff / Latest in the header switches to the document alone and back."
+                label="Viewer · markdown diff"
+                screen="21-markdown-diff-1100x760"
+                window={{ width: 1100, height: 760 }}
+                number="21"
+            >
+                <LiveMarkdownDiffViewer />
+            </FullScreenSpecimen>
+
+            <FullScreenSpecimen
+                detail="The same diff in the side panel's slim toolbar."
+                label="Viewer · markdown diff, side panel"
+                screen="22-markdown-diff-panel-560x760"
+                window={{ width: 560, height: 760 }}
+                number="22"
+            >
+                <LiveMarkdownDiffViewer tab />
             </FullScreenSpecimen>
         </ComponentPage>
     );

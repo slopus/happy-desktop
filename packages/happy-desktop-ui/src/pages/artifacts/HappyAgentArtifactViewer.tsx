@@ -1,12 +1,14 @@
 import { useState, type CSSProperties, type ReactNode } from "react";
 import {
     happyAgentArtifactBackground,
+    happyAgentArtifactMarkdownDiffOffered,
     happyAgentArtifactReferenceResolve,
     happyAgentArtifactTypeLabel,
     type HappyAgentArtifact,
     type HappyAgentArtifactContent,
     type HappyAgentArtifactDeletion,
     type HappyAgentArtifactFileLink,
+    type HappyAgentArtifactMarkdownView,
     type HappyAgentArtifactVersion,
     type HappyAgentArtifactViewerSnapshot,
 } from "happy-desktop-state";
@@ -18,10 +20,13 @@ import { EmptyState } from "../../EmptyState";
 import { HtmlPreviewFrame } from "../../HtmlPreviewFrame";
 import type { HtmlPreviewRenderer } from "../../htmlPreview";
 import { ImageViewer } from "../../ImageViewer";
+import { MarkdownDiff } from "../../MarkdownDiff";
+import { markdownDiffCompute } from "../../markdownDiffModel";
 import { MarkdownDocument, type MarkdownDocumentReferences } from "../../MarkdownDocument";
 import { Modal } from "../../Modal";
 import { ModalOverlay } from "../../ModalOverlay";
 import { ScrollArea } from "../../Scrollbar";
+import { SegmentedControl } from "../../SegmentedControl";
 import { VideoViewer } from "../../VideoViewer";
 import { Ionicon } from "../../vectorIcons/VectorIcon";
 import {
@@ -40,6 +45,8 @@ export interface HappyAgentArtifactViewerProps {
     viewer: HappyAgentArtifactViewerSnapshot;
     labels: HappyAgentArtifactLabels;
     onVersionSelect: (number: number) => void;
+    /** Shows a Markdown version as its diff against the version before it, or as the document. */
+    onMarkdownViewSelect: (view: HappyAgentArtifactMarkdownView) => void;
     /** Reads the next page of older versions. */
     onVersionsLoadMore: () => void;
     onDeletionRequest: () => void;
@@ -95,14 +102,20 @@ export interface HappyAgentArtifactViewerProps {
  * Every file it shows comes from one numbered version, so a page and the
  * pictures it names can never come from two different versions. The history
  * beside it picks which version that is; picking the newest follows the newest
- * again as the artifact changes. Deleting asks first, and names the version it
- * is deleting so a change made meanwhile is not deleted unseen.
+ * again as the artifact changes. A Markdown version with one before it can be
+ * read as a rendered diff against that version, or as the document alone.
+ * Deleting asks first, and names the version it is deleting so a change made
+ * meanwhile is not deleted unseen.
  */
 export function HappyAgentArtifactViewer(props: HappyAgentArtifactViewerProps) {
     const viewer = props.viewer;
     const [historyShown, setHistoryShown] = useState(props.defaultHistoryShown ?? false);
     const state = viewer.artifact;
     const artifact = state.type === "ready" ? state.value : undefined;
+    const shown = artifact ? (viewer.versionSelected ?? artifact.latestVersion) : 0;
+    const diffOffered =
+        artifact?.status === "active" &&
+        happyAgentArtifactMarkdownDiffOffered(artifact.type, shown);
     // Checked again where it becomes a style: a snapshot can be built by hand.
     const background = happyAgentArtifactBackground(viewer.version?.background);
     const back = props.onBack ? (
@@ -134,6 +147,33 @@ export function HappyAgentArtifactViewer(props: HappyAgentArtifactViewerProps) {
                         title={artifact.title || "Untitled"}
                         trailing={
                             <>
+                                {diffOffered ? (
+                                    <SegmentedControl
+                                        aria-label="How this version is shown"
+                                        data-testid="happy-agent-artifact-markdown-view"
+                                        onChange={(value) =>
+                                            props.onMarkdownViewSelect(
+                                                value === "diff" ? "diff" : "document",
+                                            )
+                                        }
+                                        segments={[
+                                            {
+                                                value: "diff",
+                                                label: "Diff",
+                                                title: `Changes since version ${String(shown - 1)}`,
+                                            },
+                                            {
+                                                value: "document",
+                                                label:
+                                                    shown === artifact.latestVersion
+                                                        ? "Latest"
+                                                        : `Version ${String(shown)}`,
+                                            },
+                                        ]}
+                                        size="small"
+                                        value={viewer.markdownView}
+                                    />
+                                ) : null}
                                 {artifact.status === "active" ? (
                                     <Button
                                         aria-pressed={historyShown}
@@ -209,6 +249,7 @@ export function HappyAgentArtifactViewer(props: HappyAgentArtifactViewerProps) {
                             ) : (
                                 <ArtifactContent
                                     content={viewer.content}
+                                    diff={diffOffered && viewer.markdownView === "diff"}
                                     {...(props.entities ? { entities: props.entities } : {})}
                                     files={viewer.files}
                                     key={viewer.version?.number ?? 0}
@@ -315,6 +356,8 @@ function ArtifactOlder(props: {
 /** The version on screen, shown the way its type reads best. */
 function ArtifactContent(props: {
     content: HappyAgentArtifactContent;
+    /** A Markdown version is read as its diff against the version before it. */
+    diff: boolean;
     entities?: MessageReferences;
     files: readonly HappyAgentArtifactFileLink[];
     onFileDownload: (link: HappyAgentArtifactFileLink) => void;
@@ -343,10 +386,17 @@ function ArtifactContent(props: {
             );
         case "markdown": {
             const fileOf = (path: string) => props.files.find((link) => link.file.path === path);
+            const before = content.before;
             const references: MarkdownDocumentReferences = {
+                // A picture the diff shows removed may be gone from this
+                // version; it is still the earlier version's.
                 image: (src) => {
                     const target = happyAgentArtifactReferenceResolve(content.entryPath, src);
-                    return target.type === "file" ? content.files.get(target.path) : undefined;
+                    if (target.type !== "file") return undefined;
+                    return (
+                        content.files.get(target.path) ??
+                        (props.diff ? before?.files.get(target.path) : undefined)
+                    );
                 },
                 link: (href) => {
                     const target = happyAgentArtifactReferenceResolve(content.entryPath, href);
@@ -355,17 +405,49 @@ function ArtifactContent(props: {
                         : undefined;
                 },
             };
-            return (
+            const onFileOpen = (path: string) => {
+                const link = fileOf(path);
+                if (link) props.onFileDownload(link);
+            };
+            if (props.diff && before !== undefined && before.text !== content.text)
+                return (
+                    <MarkdownDiff
+                        className="happy-agent-artifact-viewer__markdown"
+                        data-testid="happy-agent-artifact-markdown-diff"
+                        diff={markdownDiffCompute(before.text, content.text)}
+                        {...(props.entities ? { entities: props.entities } : {})}
+                        onFileOpen={onFileOpen}
+                        references={references}
+                        // A long document is mostly unchanged, and the diff is
+                        // read for the change; a little context stays beside it.
+                        unchangedContext={2}
+                    />
+                );
+            const document = (
                 <MarkdownDocument
                     className="happy-agent-artifact-viewer__markdown"
                     {...(props.entities ? { entities: props.entities } : {})}
-                    onFileOpen={(path) => {
-                        const link = fileOf(path);
-                        if (link) props.onFileDownload(link);
-                    }}
+                    onFileOpen={onFileOpen}
                     references={references}
                     text={content.text}
                 />
+            );
+            if (!props.diff) return document;
+            // Asked for a diff there is none of: say why above the document.
+            return (
+                <>
+                    <div
+                        className="happy-agent-artifact-viewer__note"
+                        data-happy-desktop-ui="happy-agent-artifact-viewer-note"
+                    >
+                        <Banner tone="neutral" title="No diff to show">
+                            {before === undefined
+                                ? "The version before this one could not be read, so this version is shown on its own."
+                                : `The text is the same as in version ${String(before.number)}.`}
+                        </Banner>
+                    </div>
+                    {document}
+                </>
             );
         }
         case "html":
