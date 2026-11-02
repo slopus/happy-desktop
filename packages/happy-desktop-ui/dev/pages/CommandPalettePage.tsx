@@ -14,6 +14,7 @@ import { SearchResults, type SearchResultGroup } from "../../src/SearchResults";
 import { SegmentedControl } from "../../src/SegmentedControl";
 import { Sidebar, type SidebarSection } from "../../src/Sidebar";
 import { Switch } from "../../src/Switch";
+import { TabbedPane } from "../../src/TabbedPane";
 import { ThemeScope } from "../../src/ThemeScope";
 import { ComponentPage, DimensionRule, FullScreenSpecimen, Specimen } from "../kit";
 import { happyLogoBlackUrl as happyMark } from "../../src/assets";
@@ -183,6 +184,52 @@ const mixed: CommandPaletteResultsSection[] = [
     },
 ];
 
+/** What “plan” finds: a few rows, so the card ends right under them. */
+const few: CommandPaletteResultsSection[] = [
+    {
+        id: "artifacts",
+        caption: "Artifacts",
+        rows: [
+            {
+                kind: "command",
+                id: "artifact-overview",
+                icon: "doc",
+                meta: "Markdown",
+                shortcut: NUMBERS[0],
+                title: "Plan overview",
+            },
+        ],
+    },
+    {
+        id: "documents",
+        caption: "Documents",
+        rows: [
+            {
+                kind: "command",
+                id: "doc-plan",
+                icon: "doc",
+                meta: "Document",
+                shortcut: NUMBERS[1],
+                title: "Launch plan",
+            },
+        ],
+    },
+    {
+        id: "todos",
+        caption: "Todos",
+        rows: [
+            {
+                kind: "command",
+                id: "todo-recap",
+                icon: "check",
+                meta: "Launch checklist",
+                shortcut: NUMBERS[2],
+                title: "Write the plan recap",
+            },
+        ],
+    },
+];
+
 const actions: CommandPaletteResultsSection[] = [
     {
         id: "actions",
@@ -334,7 +381,7 @@ function PaletteSpecimen(props: {
     return (
         <Specimen detail={props.detail} label={props.label} number={props.number} stage="app">
             <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                <DimensionRule label="640 × 461 fixed frame · 56px field · 40px rows · 36px key footer" />
+                <DimensionRule label="640 wide · fits its rows up to 461 · 56px field · 40px rows · 36px key footer" />
                 <PaletteFrame query={props.query}>{props.children}</PaletteFrame>
             </div>
         </Specimen>
@@ -342,16 +389,23 @@ function PaletteSpecimen(props: {
 }
 
 /**
- * The palette as the window shows it: hung from the top gutter over a soft dim,
- * in front of the window's own sidebar — which offers Search beside its toggle
- * and at the head of its rows, and no search field of its own.
+ * The window as the app draws it: integrated chrome whose band holds the
+ * sidebar toggle and New task beside the traffic lights (or at the window's
+ * edge without them), the sidebar headed by its Search row, and the palette
+ * hung from the top gutter over a soft dim when it is open.
  */
-function PaletteWindow(props: { children: ReactNode; mode: "light" | "dark"; query: string }) {
+function PaletteWindow(props: {
+    children?: ReactNode;
+    mode: "light" | "dark";
+    query?: string;
+    trafficLights?: boolean;
+}) {
     return (
         <ThemeScope mode={props.mode}>
             <div style={{ display: "flex", height: "100%", position: "relative", width: "100%" }}>
                 <AppShell
                     navigationChrome="integrated"
+                    onSidebarCollapsedChange={noop}
                     sidebar={
                         <Sidebar
                             activeItemId="launch"
@@ -366,26 +420,40 @@ function PaletteWindow(props: { children: ReactNode; mode: "light" | "dark"; que
                             sections={WINDOW_SECTIONS}
                         />
                     }
-                    sidebarSearchAction={{ label: "Search", onClick: noop }}
-                    windowControls
+                    sidebarCollapsed={false}
+                    sidebarCollapsedAction={{ label: "New task (⌘N)", onClick: noop }}
+                    sidebarCollapsedLayout="overlay"
+                    sidebarCollapsible
+                    windowControls={props.trafficLights !== false}
                 >
-                    <div style={{ alignItems: "center", display: "flex", flex: "1 1 0%" }}>
-                        <EmptyState
-                            description="The conversation stays where it is behind the palette."
-                            icon="chat"
-                            size="panel"
-                            title="Launch the desktop beta"
-                        />
-                    </div>
+                    <TabbedPane
+                        activeId="launch"
+                        closePresentation="overlay"
+                        onClose={noop}
+                        onSelect={noop}
+                        tabSizing="content"
+                        tabs={[{ id: "launch", label: "Launch the desktop beta", closable: true }]}
+                    >
+                        <div style={{ alignItems: "center", display: "flex", flex: "1 1 0%" }}>
+                            <EmptyState
+                                description="The conversation stays where it is behind the palette."
+                                icon="chat"
+                                size="panel"
+                                title="Launch the desktop beta"
+                            />
+                        </div>
+                    </TabbedPane>
                 </AppShell>
-                <ModalOverlay
-                    backdrop="soft"
-                    onDismiss={noop}
-                    placement="top"
-                    style={{ position: "absolute" }}
-                >
-                    <PaletteFrame query={props.query}>{props.children}</PaletteFrame>
-                </ModalOverlay>
+                {props.children ? (
+                    <ModalOverlay
+                        backdrop="soft"
+                        onDismiss={noop}
+                        placement="top"
+                        style={{ position: "absolute" }}
+                    >
+                        <PaletteFrame query={props.query ?? ""}>{props.children}</PaletteFrame>
+                    </ModalOverlay>
+                ) : null}
             </div>
         </ThemeScope>
     );
@@ -395,14 +463,14 @@ export function CommandPalettePage() {
     return (
         <ComponentPage
             number={componentNumber}
-            summary="The ⌘K palette in Linear's and Slack's proportions — a fixed 640 × 461 card on the 14px shell radius, opaque, with a hairline edge and a soft dissolving shadow. A 56px borderless search field, a hairline, the scrolling results in compact 40px rows under sentence-case captions, a hairline, and a 36px footer naming the keys: ↑↓ navigate, ↵ open, ESC close. Closed by Escape, ⌘K again, or a press outside it; ⌘1…⌘9 open the numbered rows. Renders the card only; ModalOverlay hangs it from the top gutter over a soft dim."
+            summary="The ⌘K palette in Linear's and Slack's proportions — a 640px card on the 14px shell radius that fits its rows — its results scroll only past 365px, a 461px card, opaque, with a hairline edge and a soft dissolving shadow. A 56px borderless search field, a hairline, the scrolling results in compact 40px rows under sentence-case captions, a hairline, and a 36px footer naming the keys: ↑↓ navigate, ↵ open, ESC close. Closed by Escape, ⌘K again, or a press outside it; ⌘1…⌘9 open the numbered rows. Renders the card only; ModalOverlay hangs it from the top gutter over a soft dim."
             title="Command palette"
         >
             <FullScreenSpecimen
-                detail="What ⌘K opens on, in the window: the waiting update, then the work the reader opened last. The sidebar has no search field — Search sits beside its toggle and heads its rows, and both open this."
-                label="Window, suggestions, light"
+                detail="What ⌘K opens on: the waiting update, then the work the reader opened last. The card ends under its last row."
+                label="Window, empty query, light"
                 number="W-01"
-                screen="01-suggestions-light-1100x760"
+                screen="01-empty-light-1100x760"
                 window={{ width: 1100, height: 760 }}
             >
                 <PaletteWindow mode="light" query="">
@@ -412,9 +480,9 @@ export function CommandPalettePage() {
 
             <FullScreenSpecimen
                 detail="The same, dark."
-                label="Window, suggestions, dark"
+                label="Window, empty query, dark"
                 number="W-02"
-                screen="02-suggestions-dark-1100x760"
+                screen="02-empty-dark-1100x760"
                 window={{ width: 1100, height: 760 }}
             >
                 <PaletteWindow mode="dark" query="">
@@ -423,10 +491,34 @@ export function CommandPalettePage() {
             </FullScreenSpecimen>
 
             <FullScreenSpecimen
-                detail="“launch” across the machine: work, documents joined or not, a todo list and an open todo in another, artifacts, and a calendar — each section numbered on for ⌘1…⌘9."
-                label="Window, mixed results, light"
+                detail="Three rows for “plan”: the card is only as tall as they are."
+                label="Window, few results, light"
                 number="W-03"
-                screen="03-mixed-light-1100x760"
+                screen="03-few-light-1100x760"
+                window={{ width: 1100, height: 760 }}
+            >
+                <PaletteWindow mode="light" query="plan">
+                    <CommandPaletteResults activeIndex={0} sections={few} />
+                </PaletteWindow>
+            </FullScreenSpecimen>
+
+            <FullScreenSpecimen
+                detail="The same, dark."
+                label="Window, few results, dark"
+                number="W-04"
+                screen="04-few-dark-1100x760"
+                window={{ width: 1100, height: 760 }}
+            >
+                <PaletteWindow mode="dark" query="plan">
+                    <CommandPaletteResults activeIndex={0} sections={few} />
+                </PaletteWindow>
+            </FullScreenSpecimen>
+
+            <FullScreenSpecimen
+                detail="“launch” across the machine: work, documents joined or not, a todo list and an open todo in another, artifacts, and a calendar. Past 365px of rows the list scrolls under a still card."
+                label="Window, many results, light"
+                number="W-05"
+                screen="05-many-light-1100x760"
                 window={{ width: 1100, height: 760 }}
             >
                 <PaletteWindow mode="light" query="launch">
@@ -436,9 +528,9 @@ export function CommandPalettePage() {
 
             <FullScreenSpecimen
                 detail="The same, dark."
-                label="Window, mixed results, dark"
-                number="W-04"
-                screen="04-mixed-dark-1100x760"
+                label="Window, many results, dark"
+                number="W-06"
+                screen="06-many-dark-1100x760"
                 window={{ width: 1100, height: 760 }}
             >
                 <PaletteWindow mode="dark" query="launch">
@@ -447,10 +539,84 @@ export function CommandPalettePage() {
             </FullScreenSpecimen>
 
             <FullScreenSpecimen
-                detail="At the window's 720 × 640 minimum the card keeps its size and its 128px top gutter."
-                label="Window, mixed results, minimum"
-                number="W-05"
-                screen="03-mixed-light-720x640"
+                detail="Nothing found is one row's height."
+                label="Window, no results, light"
+                number="W-07"
+                screen="07-no-results-light-1100x760"
+                window={{ width: 1100, height: 760 }}
+            >
+                <PaletteWindow mode="light" query="cobalt">
+                    <CommandPaletteResults
+                        activeIndex={0}
+                        emptyDescription="Try a different search."
+                        emptyLabel="No results"
+                        sections={[]}
+                    />
+                </PaletteWindow>
+            </FullScreenSpecimen>
+
+            <FullScreenSpecimen
+                detail="The same, dark."
+                label="Window, no results, dark"
+                number="W-08"
+                screen="08-no-results-dark-1100x760"
+                window={{ width: 1100, height: 760 }}
+            >
+                <PaletteWindow mode="dark" query="cobalt">
+                    <CommandPaletteResults
+                        activeIndex={0}
+                        emptyDescription="Try a different search."
+                        emptyLabel="No results"
+                        sections={[]}
+                    />
+                </PaletteWindow>
+            </FullScreenSpecimen>
+
+            <FullScreenSpecimen
+                detail="The band beside the traffic lights holds the sidebar toggle and New task; Search is the sidebar's first row and nothing else."
+                label="Window, sidebar header, macOS, light"
+                number="W-09"
+                screen="09-header-macos-light-1100x760"
+                window={{ width: 1100, height: 760 }}
+            >
+                <PaletteWindow mode="light" />
+            </FullScreenSpecimen>
+
+            <FullScreenSpecimen
+                detail="The same, dark."
+                label="Window, sidebar header, macOS, dark"
+                number="W-10"
+                screen="10-header-macos-dark-1100x760"
+                window={{ width: 1100, height: 760 }}
+            >
+                <PaletteWindow mode="dark" />
+            </FullScreenSpecimen>
+
+            <FullScreenSpecimen
+                detail="Without traffic lights the toggle starts at the window's edge."
+                label="Window, sidebar header, Windows and Linux, light"
+                number="W-11"
+                screen="11-header-other-light-1100x760"
+                window={{ width: 1100, height: 760 }}
+            >
+                <PaletteWindow mode="light" trafficLights={false} />
+            </FullScreenSpecimen>
+
+            <FullScreenSpecimen
+                detail="The same, dark."
+                label="Window, sidebar header, Windows and Linux, dark"
+                number="W-12"
+                screen="12-header-other-dark-1100x760"
+                window={{ width: 1100, height: 760 }}
+            >
+                <PaletteWindow mode="dark" trafficLights={false} />
+            </FullScreenSpecimen>
+
+            <FullScreenSpecimen
+                detail="At the window's 720 × 640 minimum the card keeps its width and its top gutter."
+                label="Window, many results, minimum"
+                number="W-13"
+                screen="05-many-light-720x640"
                 window={{ width: 720, height: 640 }}
             >
                 <PaletteWindow mode="light" query="launch">
@@ -515,7 +681,7 @@ export function CommandPalettePage() {
 
             <div className="specimen-grid">
                 <PaletteSpecimen
-                    detail="empty query · inline state stays near the top of the result body"
+                    detail="empty query · a plain state, before results arrive"
                     label="Idle"
                     number="CP-02"
                     query=""
@@ -544,7 +710,7 @@ export function CommandPalettePage() {
 
             <div className="specimen-grid">
                 <PaletteSpecimen
-                    detail="completed query without matches · compact inline state"
+                    detail="completed query without matches · one row’s height"
                     label="No results"
                     number="CP-04"
                     query="cobalt"

@@ -62,7 +62,7 @@ function frame() {
     return new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 }
 
-it("holds the fixed 640x461 CommandPalette frame: field, results, and a footer of keys", async () => {
+it("grows to its 640x461 cap for a long list: field, scrolling results, and a footer of keys", async () => {
     const view = createRenderer();
     view.render(
         () => (
@@ -76,7 +76,7 @@ it("holds the fixed 640x461 CommandPalette frame: field, results, and a footer o
                 placeholder="Search Happy Place…"
                 query="calm"
             >
-                <SearchResults groups={shortGroups} query="calm" variant="flush" />
+                <SearchResults groups={overflowGroups} query="calm" variant="flush" />
             </CommandPalette>
         ),
         { width: 640, height: 461 },
@@ -119,6 +119,7 @@ it("holds the fixed 640x461 CommandPalette frame: field, results, and a footer o
         display: "flex",
         "flex-direction": "column",
         "font-family": fontFamily(),
+        // The card follows its rows; the scrollport's cap is what stops it.
         height: "461px",
         "max-height": "100%",
         "max-width": "100%",
@@ -190,6 +191,13 @@ it("holds the fixed 640x461 CommandPalette frame: field, results, and a footer o
 
     const body = view.$('[data-testid="cp"] [data-happy-desktop-ui="command-palette-body"]');
     expect(body.bounds()).toEqual({ x: 1, y: 58, width: 638, height: 365 });
+    expect(
+        view
+            .$(
+                '[data-testid="cp"] [data-happy-desktop-ui="command-palette-body"] [data-scrollbar-viewport]',
+            )
+            .computedStyles(["max-height"]),
+    ).toEqual({ "max-height": "365px" });
     /* The host frames the body; the viewport inside it is the scrollport. */
     const bodyViewport = view.$(
         '[data-testid="cp"] [data-happy-desktop-ui="command-palette-body"] [data-scrollbar-viewport]',
@@ -223,7 +231,7 @@ it("holds the fixed 640x461 CommandPalette frame: field, results, and a footer o
     });
     // The footer keeps the rows out of the card's corners, so the last row is
     // rounded like every other.
-    const lastRow = view.$('[data-testid="cp"] [data-item-id="launch-room"]');
+    const lastRow = view.$('[data-testid="cp"] [data-item-id="file-5"]');
     expect(
         lastRow.computedStyles([
             "border-bottom-left-radius",
@@ -276,6 +284,83 @@ it("holds the fixed 640x461 CommandPalette frame: field, results, and a footer o
     expect(hints[0]!.bounds().x).toBe(21);
 
     await view.screenshot("CommandPalette.test");
+}, 120_000);
+
+it("fits a short list and nothing found, with the field and the footer where they always are", async () => {
+    const view = createRenderer();
+    view.render(
+        () => (
+            <CommandPalette
+                autoFocus={false}
+                data-testid="short"
+                onClose={() => {}}
+                onQueryChange={() => {}}
+                query="calm"
+            >
+                <SearchResults groups={shortGroups} query="calm" variant="flush" />
+            </CommandPalette>
+        ),
+        { width: 640, height: 461 },
+    );
+    view.render(
+        () => (
+            <CommandPalette
+                autoFocus={false}
+                data-testid="none"
+                onClose={() => {}}
+                onQueryChange={() => {}}
+                query="cobalt"
+            >
+                <CommandPaletteResults
+                    activeIndex={0}
+                    emptyDescription="Try a different search."
+                    emptyLabel="No results"
+                    sections={[]}
+                />
+            </CommandPalette>
+        ),
+        { width: 640, height: 461 },
+    );
+    await view.ready();
+
+    for (const id of ["short", "none"]) {
+        const card = view.$(`[data-testid="${id}"]`).bounds();
+        const header = view.$(
+            `[data-testid="${id}"] [data-happy-desktop-ui="command-palette-header"]`,
+        );
+        const body = view.$(`[data-testid="${id}"] [data-happy-desktop-ui="command-palette-body"]`);
+        const content = view.$(
+            `[data-testid="${id}"] [data-happy-desktop-ui="command-palette-body-content"]`,
+        );
+        const footer = view.$(
+            `[data-testid="${id}"] [data-happy-desktop-ui="command-palette-footer"]`,
+        );
+        // No blank band under the rows: the body is exactly its content, and
+        // the card ends at the footer.
+        expect(header.bounds()).toEqual({ x: 1, y: 1, width: 638, height: 57 });
+        expect(body.bounds().height).toBe(content.bounds().height);
+        expect(footer.bounds().y).toBe(body.bounds().y + body.bounds().height);
+        expect(footer.bounds().height).toBe(37);
+        expect(card.height).toBe(1 + 57 + body.bounds().height + 37 + 1);
+        expect(card.height).toBeLessThan(461);
+    }
+    // Nothing found is one row's height between the body's 8px insets.
+    const empty = view.$(
+        '[data-testid="none"] [data-happy-desktop-ui="command-palette-results-empty"]',
+    );
+    expect(empty.element.getAttribute("role")).toBe("status");
+    expect(
+        [...empty.element.querySelectorAll(".happy-command-palette-results__body > span")].map(
+            (span) => span.textContent,
+        ),
+    ).toEqual(["No results", "Try a different search."]);
+    expect(empty.bounds().height).toBe(40);
+    expect(view.$('[data-testid="none"]').bounds().height).toBe(1 + 57 + 56 + 37 + 1);
+    expect(empty.computedStyles(["background-color"])).toEqual({
+        "background-color": "rgba(0, 0, 0, 0)",
+    });
+
+    await view.screenshot("CommandPalette.fit.test");
 }, 120_000);
 
 it("names only the keys its owner reads: Escape alone for a palette without a list", async () => {
@@ -432,7 +517,7 @@ it("preserves the exact card, header, and input nodes across result-content swap
             </>
         );
     }
-    view.render(SwappingFixture, { width: 680, height: 500, padding: 20 });
+    view.render(SwappingFixture, { width: 680, height: 540, padding: 20 });
     await view.ready();
 
     const card = view.$('[data-testid="identity"]').element;
@@ -443,8 +528,20 @@ it("preserves the exact card, header, and input nodes across result-content swap
         .element as HTMLInputElement;
     input.focus();
     input.setSelectionRange(1, 4);
+    const headerBefore = view
+        .$('[data-testid="identity"] [data-happy-desktop-ui="command-palette-header"]')
+        .bounds();
+    const shortHeight = view.$('[data-testid="identity"]').bounds().height;
     (view.$('[data-testid="swap"]').element as HTMLButtonElement).click();
     await frame();
+    // The longer list grows the card downward to its cap; the field stays put.
+    expect(
+        view
+            .$('[data-testid="identity"] [data-happy-desktop-ui="command-palette-header"]')
+            .bounds(),
+    ).toEqual(headerBefore);
+    expect(shortHeight).toBeLessThan(461);
+    expect(view.$('[data-testid="identity"]').bounds().height).toBe(461);
 
     expect(view.$('[data-testid="identity"]').element).toBe(card);
     expect(

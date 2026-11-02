@@ -1,7 +1,6 @@
 import { useCallback, type CSSProperties, type ReactNode } from "react";
 import { Avatar, type ToneName } from "./Avatar";
 import { KeyCap } from "./Badge";
-import { EmptyState } from "./EmptyState";
 import { Icon, type IconName } from "./Icon";
 import type { KeyboardShortcut } from "./keyboardShortcut";
 import { type ImageMark } from "./imageMark";
@@ -239,12 +238,27 @@ export function CommandPaletteResults(props: CommandPaletteResultsProps) {
             style={props.style}
         >
             {rows.length === 0 ? (
-                <EmptyState
-                    description={props.emptyDescription}
-                    icon="search"
-                    size="inline"
-                    title={props.emptyLabel ?? "No results"}
-                />
+                // One row's height, in a row's columns: nothing found keeps the
+                // card as short as one result would.
+                <div
+                    className="happy-command-palette-results__row happy-command-palette-results__empty"
+                    data-happy-desktop-ui="command-palette-results-empty"
+                    role="status"
+                >
+                    <span aria-hidden="true" className="happy-command-palette-results__leading">
+                        <Icon name="search" size={16} />
+                    </span>
+                    <span className="happy-command-palette-results__body">
+                        <span className="happy-command-palette-results__title">
+                            {props.emptyLabel ?? "No results"}
+                        </span>
+                        {props.emptyDescription ? (
+                            <span className="happy-command-palette-results__meta">
+                                {props.emptyDescription}
+                            </span>
+                        ) : null}
+                    </span>
+                </div>
             ) : (
                 <div
                     aria-label={props.label ?? "Results"}

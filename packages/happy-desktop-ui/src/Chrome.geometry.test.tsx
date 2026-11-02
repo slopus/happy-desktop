@@ -37,7 +37,6 @@ it.each([false, true])(
                     sidebarCollapsed={collapsed}
                     onSidebarCollapsedChange={noop}
                     sidebarCollapsedLayout="overlay"
-                    sidebarSearchAction={{ label: "Search", onClick: noop }}
                     sidebarCollapsedAction={{ label: "New", onClick: noop }}
                     sidebar={<Sidebar activeItemId="" onItemSelect={noop} sections={[]} />}
                     panel={collapsed ? undefined : pane("right")}

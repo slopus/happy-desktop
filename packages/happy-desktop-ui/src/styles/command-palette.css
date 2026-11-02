@@ -2,16 +2,20 @@
  * C-060 CommandPalette — the ⌘K command bar, in Linear's and Slack's
  * proportions.
  *
- * A 640 × 461 card — the large modal width, and the height ModalOverlay's top
- * placement is measured for — on the 14px shell radius, opaque on the content
- * surface, with a 1px modal hairline and a soft shadow that dissolves into the
- * page. Top to bottom: a 56px borderless search field, a hairline, a fixed
- * scrollport holding the results, a hairline, and a 36px footer naming the
- * keys that drive it. Each hairline is its band's own border, outside the
- * band's height, so what the band centres lands on whole pixels. The card's height never follows its results, so the
- * field, the footer, and the card's edges stay where they are while the reader
- * types. It renders the card only, so a host composes it inside a ModalOverlay
- * for its dim, stacking, and placement.
+ * A 640px card — the large modal width — on the 14px shell radius, opaque on
+ * the content surface, with a 1px modal hairline and a soft shadow that
+ * dissolves into the page. Top to bottom: a 56px borderless search field, a
+ * hairline, a scrollport holding the results, a hairline, and a 36px footer
+ * naming the keys that drive it. Each hairline is its band's own border,
+ * outside the band's height, so what the band centres lands on whole pixels.
+ *
+ * The card fits its results: a short list ends the card right under it, and
+ * the scrollport grows with the list up to 365px — a 461px card, the height
+ * ModalOverlay's top placement keeps its gutter for — and scrolls only past
+ * that. Hung from the top, the field stays where it is while the reader
+ * types; only the card's bottom edge follows the list. It renders the card
+ * only, so a host composes it inside a ModalOverlay for its dim, stacking, and
+ * placement.
  *
  * Every row below starts its glyph and its words on one pair of columns, and
  * the field and the footer are on them too: the 20px lead is the body's 8px
@@ -36,7 +40,6 @@
     flex-direction: column;
     width: 640px;
     max-width: 100%;
-    height: 461px;
     max-height: 100%;
     overflow: hidden;
     background: var(--surface);
@@ -97,13 +100,15 @@
 
 /* ---- Body ------------------------------------------------------------- */
 
-/* Scrollport: edge-to-edge, no padding of its own. */
+/* Scrollport: edge-to-edge, no padding of its own. It takes its list's height
+   and gives it back only when the window is too short for the card. */
 .happy-command-palette__body {
-    flex: 1 1 auto;
+    flex: 0 1 auto;
     min-height: 0;
 }
 
 .happy-command-palette__body-viewport {
+    max-height: 365px;
     display: flex;
     flex-direction: column;
     overflow-x: hidden;

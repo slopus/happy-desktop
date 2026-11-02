@@ -4345,18 +4345,10 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                 windowTrafficLights={windowState.trafficLights}
                 connectionRail={windowState.connectionRail}
                 sidebar={sidebar}
-                // One band holds the sidebar toggle, search, and the tabs; the
+                // One band holds the sidebar toggle and the tabs; the
                 // surface header is gone.
                 navigationChrome="integrated"
                 sidebarCollapsedLayout="overlay"
-                {...(props.commandPalette
-                    ? {
-                          sidebarSearchAction: {
-                              label: "Search",
-                              onClick: () => commandPaletteStore.paletteOpen(),
-                          },
-                      }
-                    : {})}
                 {...(taskCreateTarget !== undefined
                     ? {
                           sidebarCollapsedAction: {
@@ -4926,8 +4918,9 @@ function HappyAgentCommandPalette(
             >
                 <CommandPaletteResults
                     activeIndex={palette.activeIndex}
-                    emptyDescription="Try a different search."
-                    emptyLabel="No results"
+                    {...(palette.query.trim()
+                        ? { emptyDescription: "Try a different search.", emptyLabel: "No results" }
+                        : { emptyLabel: "Nothing recent yet" })}
                     label="Search results"
                     onActiveIndexChange={(index) => {
                         props.store.activeIndexUpdate(index);

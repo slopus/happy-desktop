@@ -111,6 +111,17 @@
     background: var(--surface-ripple);
 }
 
+/* Nothing found is said in a row's place and columns, never as a row to pick. */
+.happy-command-palette-results__empty,
+.happy-command-palette-results__empty:hover {
+    background: transparent;
+}
+
+.happy-command-palette-results__empty .happy-command-palette-results__title {
+    color: var(--text-secondary);
+    font-weight: 400;
+}
+
 .happy-command-palette-results__row[data-active] {
     background: var(--surface-selected);
 }
