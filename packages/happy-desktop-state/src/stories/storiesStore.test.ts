@@ -495,6 +495,29 @@ it("reads the feed from the startup data, and shows a ring only once its first s
     expect(client.listStories).not.toHaveBeenCalled();
 });
 
+it("shows a ring whose fetch ahead stalls once the wait runs out, and frees its slot", async () => {
+    vi.useFakeTimers();
+    try {
+        const preload = vi.fn(() => new Promise<readonly object[]>(() => {}));
+        const { store, sync } = open([], true, preload);
+        sync.writer.bootstrapReceived({
+            storiesEnabled: true,
+            stories: ["a", "b", "c", "d"].map((id, at) => story(id, `task${id}`, at)),
+            cursor: "0007",
+        } as never);
+        await vi.advanceTimersByTimeAsync(7_999);
+        expect(on(store.get()).row).toEqual([]);
+        expect(preload).toHaveBeenCalledTimes(3);
+        await vi.advanceTimersByTimeAsync(1);
+        expect(on(store.get()).row).toHaveLength(3);
+        expect(preload).toHaveBeenCalledTimes(4);
+        await vi.advanceTimersByTimeAsync(8_000);
+        expect(on(store.get()).row).toHaveLength(4);
+    } finally {
+        vi.useRealTimers();
+    }
+});
+
 it("drops a deleted story, by the reader or live from the daemon", async () => {
     const { store, sync, client } = open([
         { ...story("a", "task1", 1), canDelete: true },

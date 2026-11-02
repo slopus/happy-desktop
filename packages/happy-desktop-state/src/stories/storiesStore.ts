@@ -58,6 +58,8 @@ export type HappyAgentStoryMedia = HappyAgentStoryMediaFrames & {
 
 /** Stories whose media is fetched at once, ahead of their poster's ring or of playback. */
 const PRELOAD_PARALLEL = 3;
+/** How long a fetch ahead may hold back its ring: past it the story opens on a spinner instead. */
+const PRELOAD_WAIT_MS = 8_000;
 
 const OFF: HappyAgentStoriesSnapshot = { mode: "off" };
 const noop = () => undefined;
@@ -157,9 +159,14 @@ export function happyAgentStoriesStoreCreate(deps: {
             const next = queue.shift()!;
             const { media, mediaLayers } = mediaOf(next);
             const all = [media, ...mediaLayers];
-            // A fetch ahead that fails only loses its frames: the ring still appears.
-            const fetched = deps.preload?.(all).catch(() => []) ?? Promise.resolve([]);
+            // A fetch ahead that fails or stalls only loses its frames: the ring still appears.
+            let timer: ReturnType<typeof setTimeout> | undefined;
+            const fetched = Promise.race([
+                deps.preload?.(all).catch(() => []) ?? [],
+                new Promise<[]>((resolve) => (timer = setTimeout(resolve, PRELOAD_WAIT_MS, []))),
+            ]);
             void fetched.then((each) => {
+                clearTimeout(timer);
                 each.forEach((taken, at) => frames.set(all[at]!.url, taken));
                 loading--;
                 ready.add(next.id);
