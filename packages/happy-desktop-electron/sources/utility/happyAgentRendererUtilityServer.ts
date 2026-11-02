@@ -9,6 +9,7 @@ import {
     HappyAgentDaemonClient,
     type HappyAgentRemoteAuthorization,
 } from "../main/happyAgentDaemonClient";
+import type { ServerRemoteCredential } from "../shared/serverRemoteAuthorization";
 import { happyAgentProxyHandle } from "../main/happyAgentProxyHandle";
 import { happyAgentRendererProxyCreate } from "../main/happyAgentRendererProxy";
 import { happyAgentRequestTimingCreate } from "../main/happyAgentRequestTiming";
@@ -86,11 +87,14 @@ export async function happyAgentRendererUtilityServerCreate(
     let reservationId = 0;
     const backings = new WeakMap<HappyAgentLiveClient, number>();
     // Team-server access tokens from main, which keeps every refresh token.
-    let remoteTokens: Readonly<Record<string, string>> = {};
+    let remoteTokens: Readonly<Record<string, ServerRemoteCredential>> = {};
     let remoteRequestId = 0;
-    const remoteRefreshes = new Map<number, (token: string | undefined) => void>();
+    const remoteRefreshes = new Map<
+        number,
+        (credential: ServerRemoteCredential | undefined) => void
+    >();
     const remote: HappyAgentRemoteAuthorization = {
-        token: (connectionId) => remoteTokens[connectionId],
+        credential: (connectionId) => remoteTokens[connectionId],
         refresh: (connectionId, rejected) =>
             new Promise((resolve) => {
                 const requestId = ++remoteRequestId;
@@ -104,6 +108,14 @@ export async function happyAgentRendererUtilityServerCreate(
             }),
         signInRequire: (connectionId, rejected) =>
             send({ type: "remote-sign-in-required", connectionId, rejected }),
+        serverMoved(connectionId, serverUrl) {
+            // Stop sending it here at once; main ends the sign-in.
+            if (remoteTokens[connectionId]?.serverUrl === serverUrl) {
+                const { [connectionId]: _moved, ...rest } = remoteTokens;
+                remoteTokens = rest;
+            }
+            send({ type: "remote-server-moved", connectionId, serverUrl });
+        },
     };
     const reservations = new Map<
         number,
@@ -171,7 +183,7 @@ export async function happyAgentRendererUtilityServerCreate(
             if (message.type === "remote-refreshed") {
                 const resolve = remoteRefreshes.get(message.requestId);
                 remoteRefreshes.delete(message.requestId);
-                resolve?.(message.token);
+                resolve?.(message.credential);
                 return;
             }
             if (message.type === "detach") {

@@ -47,6 +47,7 @@ import {
     happyAgentAttentionStoreOwnedCreate,
     happyAgentClockStoreCreate,
     happyLinkInboxStoreCreate,
+    parseHappyUrl,
     serverAddStoreCreate,
     serverSessionsStoreCreate,
     serverSourceHostCreate,
@@ -1594,12 +1595,6 @@ if (mediaPreviewBridge) {
                     ?.router ?? happyAgentRouter
             );
         }
-        // A Happy link the reader followed in an artifact or HTML preview page
-        // opens on the Happy Agent on screen, as the same link in a message does.
-        const happyLinkUnsubscribe = desktopBridge.happyLinkOpenSubscribe?.((url) =>
-            happyAgentRouterHappyLinkOpen(activeRouter(), url),
-        );
-        if (happyLinkUnsubscribe) appDisposers.push(happyLinkUnsubscribe);
         // Native first-run setup retains its lifetime, while mobile pairing uses
         // the same local connection store and transport as the workspace.
         const onboardingStore = localOnboardingStoreCreate(desktopBridge, {
@@ -1708,6 +1703,16 @@ if (mediaPreviewBridge) {
         });
         appDisposers.push(() => happyLinkInbox[Symbol.dispose]());
         appDisposers.push(happyAgents.subscribe(happyLinkInbox.targetsChange));
+        // A Happy link the reader followed in an artifact or HTML preview page
+        // opens on the Happy Agent on screen, as the same link in a message
+        // does. One that names an instance is a page's word about where it
+        // goes, so it opens only on that instance, the way a link from outside
+        // the app does.
+        const happyLinkUnsubscribe = desktopBridge.happyLinkOpenSubscribe?.((url) => {
+            if (parseHappyUrl(url)?.instanceId !== undefined) happyLinkInbox.linkReceive(url);
+            else happyAgentRouterHappyLinkOpen(activeRouter(), url);
+        });
+        if (happyLinkUnsubscribe) appDisposers.push(happyLinkUnsubscribe);
         const happyLinksTake = async (): Promise<void> => {
             const take = desktopBridge.happyLinkExternalTake;
             if (!take) return;

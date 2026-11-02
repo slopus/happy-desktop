@@ -323,9 +323,9 @@ export class DesktopRuntime implements AsyncDisposable {
         }
     }
 
-    /** A team server's address from the host Happy Agent's roster, for signing in to it. */
-    serverUrl(connectionId: string): Promise<string | undefined> {
-        return this.browserHost().serverUrl(connectionId);
+    /** Every team server's address in the host Happy Agent's roster, by connection. */
+    serverRoster(): Promise<ReadonlyMap<string, string>> {
+        return this.browserHost().serverRoster();
     }
 
     /**

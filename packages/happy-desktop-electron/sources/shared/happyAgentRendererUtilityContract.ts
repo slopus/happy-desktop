@@ -1,4 +1,5 @@
 import type { Cuid2 } from "@slopus/happy-agent-client";
+import type { ServerRemoteCredential } from "./serverRemoteAuthorization.js";
 
 /** Private ownership metadata; no provider payload or credential is remembered here. */
 export interface RendererLiveAttempt {
@@ -31,12 +32,20 @@ export type RendererUtilityInput =
           readonly disposed: boolean;
       }
     /**
-     * Every team server's current access token, by connection ID, replacing
-     * the last set. Refresh tokens stay in main and are never sent here.
+     * Every team server's current access token with the address it is bound
+     * to, by connection ID, replacing the last set. Refresh tokens stay in
+     * main and are never sent here.
      */
-    | { readonly type: "remote-tokens"; readonly tokens: Readonly<Record<string, string>> }
-    /** Main's answer to one `remote-refresh`: the access token to retry with, if any. */
-    | { readonly type: "remote-refreshed"; readonly requestId: number; readonly token?: string };
+    | {
+          readonly type: "remote-tokens";
+          readonly tokens: Readonly<Record<string, ServerRemoteCredential>>;
+      }
+    /** Main's answer to one `remote-refresh`: the credential to retry with, if any. */
+    | {
+          readonly type: "remote-refreshed";
+          readonly requestId: number;
+          readonly credential?: ServerRemoteCredential;
+      };
 
 export type RendererUtilityOutput =
     | {
@@ -68,5 +77,11 @@ export type RendererUtilityOutput =
           readonly type: "remote-sign-in-required";
           readonly connectionId: string;
           readonly rejected: string;
+      }
+    /** The roster no longer names `serverUrl` for the connection: its sign-in ends. */
+    | {
+          readonly type: "remote-server-moved";
+          readonly connectionId: string;
+          readonly serverUrl: string;
       }
     | { readonly type: "debug"; readonly text: string };

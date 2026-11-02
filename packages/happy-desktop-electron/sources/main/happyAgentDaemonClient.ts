@@ -32,6 +32,8 @@ import { WebSocket, createWebSocketStream } from "ws";
 import {
     SERVER_REMOTE_AUTHORIZATION_HEADER,
     serverRemoteConnectionOf,
+    serverUrlNormalize,
+    type ServerRemoteCredential,
 } from "../shared/serverRemoteAuthorization.js";
 
 /**
@@ -55,20 +57,39 @@ export interface HappyAgentDaemonClientOptions {
 /**
  * Team-server sign-ins, held in memory by main. A request under
  * `/v0/connections/<id>/api/` carries that server's access token; nothing else
- * does, and the refresh token never reaches this client.
+ * does, and the refresh token never reaches this client. Each token is bound
+ * to the address it was issued for, and is attached only while the host Happy
+ * Agent's roster names that same address for the connection.
  */
 export interface HappyAgentRemoteAuthorization {
     /** The access token for the server behind `connectionId`, while signed in. */
-    token(connectionId: string): string | undefined;
+    credential(connectionId: string): ServerRemoteCredential | undefined;
     /**
      * The server refused `rejected` through the daemon. Refreshes the sign-in
-     * once and resolves to the token to retry with, or `undefined` when the
-     * person has to sign in again.
+     * once and resolves to the credential to retry with, or `undefined` when
+     * the person has to sign in again.
      */
-    refresh(connectionId: string, rejected: string | undefined): Promise<string | undefined>;
+    refresh(
+        connectionId: string,
+        rejected: string | undefined,
+    ): Promise<ServerRemoteCredential | undefined>;
     /** The server refused `rejected` even after a refresh: the person must sign in again. */
     signInRequire(connectionId: string, rejected: string): void;
+    /**
+     * The roster names another address for `connectionId`, or none: the
+     * sign-in bound to `serverUrl` ends and its token is never sent again.
+     */
+    serverMoved(connectionId: string, serverUrl: string): void;
+    /** Every team server's address the roster named on one read, by connection. */
+    rosterSeen?(servers: ReadonlyMap<string, string>): void;
 }
+
+/**
+ * Roster reads in flight, by daemon socket. A request joins one already on
+ * its way but never reuses a finished one, so each attach checks a roster read
+ * at or after its own start.
+ */
+const rosterReads = new Map<string, Promise<ReadonlyMap<string, string>>>();
 
 export interface HappyAgentDaemonPaths {
     readonly socketPath: string;
@@ -106,6 +127,8 @@ export class HappyAgentDaemonClient {
     readonly #connectionId?: string;
     readonly #connections = new Map<string, HappyAgentDaemonClient>();
     readonly #remote?: HappyAgentRemoteAuthorization;
+    /** The host Happy Agent itself, unscoped, for its roster. */
+    readonly #host: HappyAgentClient;
 
     constructor(options: HappyAgentDaemonClientOptions, remote?: HappyAgentRemoteAuthorization) {
         this.socketPath = options.socketPath;
@@ -150,6 +173,7 @@ export class HappyAgentDaemonClient {
                 });
             },
         });
+        this.#host = client;
         this.#client = options.connectionId ? client.connection(options.connectionId) : client;
     }
 
@@ -195,7 +219,10 @@ export class HappyAgentDaemonClient {
     ): Promise<T> {
         const connectionId = serverRemoteConnectionOf(path);
         const remote = connectionId === undefined ? undefined : this.#remote;
-        const token = connectionId === undefined ? undefined : remote?.token(connectionId);
+        const token =
+            connectionId === undefined || remote === undefined
+                ? undefined
+                : await this.#remoteBound(connectionId, remote, remote.credential(connectionId));
         try {
             return await open(this.#headers(path, token));
         } catch (error) {
@@ -203,7 +230,11 @@ export class HappyAgentDaemonClient {
             const fresh =
                 connectionId === undefined || remote === undefined
                     ? undefined
-                    : await remote.refresh(connectionId, token);
+                    : await this.#remoteBound(
+                          connectionId,
+                          remote,
+                          await remote.refresh(connectionId, token),
+                      );
             if (fresh === undefined || fresh === token) throw error.refusal();
             try {
                 return await open(this.#headers(path, fresh));
@@ -216,13 +247,49 @@ export class HappyAgentDaemonClient {
     }
 
     /**
-     * The address of a team server this daemon connects to by URL, from its
-     * roster: only an `oauth` entry has one.
+     * The token to attach for `connectionId`, only while the roster names the
+     * address it was issued for. A roster naming another address, or none,
+     * ends that sign-in; a roster that cannot be read sends no token either.
      */
-    async serverUrl(connectionId: string, signal?: AbortSignal): Promise<string | undefined> {
-        const { connections } = await this.#client.listConnections(signal ? { signal } : undefined);
-        const entry = connections.find((connection) => connection.id === connectionId);
-        return entry?.authentication === "oauth" ? entry.url : undefined;
+    async #remoteBound(
+        connectionId: string,
+        remote: HappyAgentRemoteAuthorization,
+        credential: ServerRemoteCredential | undefined,
+    ): Promise<string | undefined> {
+        if (credential === undefined) return undefined;
+        let servers: ReadonlyMap<string, string>;
+        try {
+            servers = await this.serverRoster();
+        } catch {
+            return undefined;
+        }
+        remote.rosterSeen?.(servers);
+        if (servers.get(connectionId) === credential.serverUrl) return credential.accessToken;
+        remote.serverMoved(connectionId, credential.serverUrl);
+        return undefined;
+    }
+
+    /**
+     * The addresses of the team servers the host Happy Agent connects to by
+     * URL, by connection ID, normalized: only an `oauth` entry has one.
+     */
+    serverRoster(): Promise<ReadonlyMap<string, string>> {
+        const pending = rosterReads.get(this.socketPath);
+        if (pending) return pending;
+        const read = this.#host.listConnections().then(({ connections }) => {
+            const servers = new Map<string, string>();
+            for (const connection of connections) {
+                if (connection.authentication !== "oauth") continue;
+                const url = serverUrlNormalize(connection.url);
+                if (url !== undefined) servers.set(connection.id, url);
+            }
+            return servers;
+        });
+        const settled = read.finally(() => {
+            if (rosterReads.get(this.socketPath) === settled) rosterReads.delete(this.socketPath);
+        });
+        rosterReads.set(this.socketPath, settled);
+        return settled;
     }
 
     health(signal?: AbortSignal): Promise<HealthResponse> {

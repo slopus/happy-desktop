@@ -486,7 +486,7 @@ const serverOAuthRedirect = new URL(serverOAuthRedirectUri);
  * add each one to requests through the host Happy Agent.
  */
 const serverSessions = serverSessionsCreate({
-    connectionUrl: (connectionId) => runtime.serverUrl(connectionId),
+    roster: () => runtime.serverRoster(),
     fetch: (input, init) => net.fetch(input instanceof URL ? input.href : input, init),
     async browserOpen(url) {
         await shell.openExternal(url);
@@ -1976,10 +1976,6 @@ void app
         ipcMain.handle(desktopIpc.serverSignInCancel, (event, attemptId: unknown) => {
             desktopDaemonSenderRequire(event.sender);
             if (typeof attemptId === "string") serverSessions.signInCancel(attemptId);
-        });
-        ipcMain.handle(desktopIpc.serverSessionForget, (event, connectionId: unknown) => {
-            desktopDaemonSenderRequire(event.sender);
-            if (typeof connectionId === "string") serverSessions.forget(connectionId);
         });
         ipcMain.handle(desktopIpc.serverSessionsGet, (event) => {
             desktopDaemonSenderRequire(event.sender);

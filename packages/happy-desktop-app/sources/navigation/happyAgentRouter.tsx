@@ -944,7 +944,8 @@ export function happyAgentRouterSurfaceOpen(
  * the reader's list does not hold, or a service or person does nothing.
  *
  * `happyAgentId` names the Happy Agent the link belongs to, as for a link from
- * outside the app; absent, it is the one on screen.
+ * outside the app; absent, it is the one on screen. A link that names an
+ * instance opens only on the Happy Agent that is that instance.
  */
 export function happyAgentRouterHappyLinkOpen(
     router: HappyAgentRouter,
@@ -954,10 +955,12 @@ export function happyAgentRouterHappyLinkOpen(
 ): void {
     const context = router.options.context;
     const directory = context?.happyAgents?.get();
-    const session = directory?.happyAgents.find((entry) => entry.id === happyAgentId)?.session;
+    const target = directory?.happyAgents.find((entry) => entry.id === happyAgentId);
+    const session = target?.session;
     if (context === undefined || happyAgentId === undefined || session === undefined) return;
     const link = parseHappyUrl(url);
     if (link === undefined) return;
+    if (link.instanceId !== undefined && link.instanceId !== target?.instanceId) return;
     if (link.type === "file") {
         const file = happyAgentFileLinkParse(url);
         if (file !== undefined) session.workspace.fileLinkOpen(file, fileTabKind(file.path));

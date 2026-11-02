@@ -36,9 +36,25 @@ page in the system browser. Tailcat, Happy Cloud and WorkOS are not involved.
 
 The tokens live only in main's memory: no keychain, no file, and never the
 window. Quitting the app ends every sign-in; reloading the window keeps them.
-Main refreshes an access token a minute before it expires, one refresh at a
-time per server. A refresh the sign-in server refuses ends the sign-in; one
-that cannot reach it keeps the token and tries again later.
+Main refreshes an access token once four fifths of its lifetime have passed,
+never sooner than ten seconds after the last refresh, one refresh at a time per
+server. A refresh the sign-in server refuses ends the sign-in; one that cannot
+reach it keeps the token and tries again later, backing off.
+
+While the browser is open, the server's row, its sidebar section and its
+window offer Cancel. Main drops the attempt with its state and PKCE verifier,
+including while the code is being redeemed, so a late callback stores nothing.
+
+## Bound to the server's address
+
+Every sign-in and every sign-in attempt is bound to the server address the
+host Happy Agent's roster named when it began. Before a token is attached to
+any request, and before every refresh, the shell reads the roster again; if it
+now names another address for that connection, or no longer lists it, the
+token is not sent, and the sign-in ends ("This server's address changed. Sign
+in again.") or, for a removed server, is forgotten. A code redeemed while the
+address changed is dropped. Main also reads the roster every few seconds while
+it holds any sign-in, so a change is noticed even when nothing is being sent.
 
 ## Redirect URI
 

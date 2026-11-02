@@ -1,5 +1,6 @@
 import type { UtilityProcess } from "electron";
 import type { HappyAgentRemoteAuthorization } from "./happyAgentDaemonClient";
+import type { ServerRemoteCredential } from "../shared/serverRemoteAuthorization";
 import type { HappyAgentRendererProxy, HappyAgentRendererTarget } from "./happyAgentRendererProxy";
 import type {
     RendererUtilityInput,
@@ -20,7 +21,7 @@ export interface RendererUtilityCredentials {
  * token and asks main to refresh; the refresh tokens never leave main.
  */
 export interface RendererRemoteTokens extends HappyAgentRemoteAuthorization {
-    tokens(): Readonly<Record<string, string>>;
+    tokens(): Readonly<Record<string, ServerRemoteCredential>>;
     subscribe(listener: () => void): () => void;
 }
 
@@ -120,12 +121,12 @@ export async function happyAgentRendererUtilityProxyCreate(options: {
             } else if (message.type === "debug") {
                 options.debug?.(message.text);
             } else if (message.type === "remote-refresh" && child === running) {
-                const answer = (token: string | undefined) => {
+                const answer = (credential: ServerRemoteCredential | undefined) => {
                     if (child !== running) return;
                     running.postMessage({
                         type: "remote-refreshed",
                         requestId: message.requestId,
-                        ...(token === undefined ? {} : { token }),
+                        ...(credential === undefined ? {} : { credential }),
                     } satisfies RendererUtilityInput);
                 };
                 if (!remote) answer(undefined);
@@ -135,6 +136,8 @@ export async function happyAgentRendererUtilityProxyCreate(options: {
                         .then(answer, () => answer(undefined));
             } else if (message.type === "remote-sign-in-required") {
                 remote?.signInRequire(message.connectionId, message.rejected);
+            } else if (message.type === "remote-server-moved") {
+                remote?.serverMoved(message.connectionId, message.serverUrl);
             } else if (message.type === "live-attempt-reserve" && child === running) {
                 const key = `${message.attempt.connectionId ?? ""}/${message.attempt.id}`;
                 const target = backings.get(message.backingId);

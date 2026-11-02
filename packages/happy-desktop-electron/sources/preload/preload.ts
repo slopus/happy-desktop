@@ -149,8 +149,6 @@ const bridge: HappyDesktopBridge = {
         ipcRenderer.invoke(desktopIpc.serverSignInBegin, connectionId),
     serverSignInFinish: (attemptId) => ipcRenderer.invoke(desktopIpc.serverSignInFinish, attemptId),
     serverSignInCancel: (attemptId) => ipcRenderer.invoke(desktopIpc.serverSignInCancel, attemptId),
-    serverSessionForget: (connectionId) =>
-        ipcRenderer.invoke(desktopIpc.serverSessionForget, connectionId),
     serverSessionsGet: () => ipcRenderer.invoke(desktopIpc.serverSessionsGet),
     serverSessionsSubscribe(listener: () => void) {
         const receive = () => listener();

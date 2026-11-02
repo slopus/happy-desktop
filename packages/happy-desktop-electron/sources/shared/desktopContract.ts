@@ -912,7 +912,6 @@ export interface HappyDesktopBridge {
     serverSignInFinish?(attemptId: string): Promise<DesktopServerSignInResult<null>>;
     serverSignInCancel?(attemptId: string): Promise<void>;
     /** Drops a removed server's sign-in. */
-    serverSessionForget?(connectionId: string): Promise<void>;
     serverSessionsGet?(): Promise<readonly ServerSessionSnapshot[]>;
     serverSessionsSubscribe?(listener: () => void): () => void;
     /**
@@ -1094,7 +1093,6 @@ export const desktopIpc = {
     serverSignInBegin: "happy:server-sign-in:begin",
     serverSignInFinish: "happy:server-sign-in:finish",
     serverSignInCancel: "happy:server-sign-in:cancel",
-    serverSessionForget: "happy:server-sessions:forget",
     serverSessionsGet: "happy:server-sessions:get",
     serverSessionsChanged: "happy:server-sessions:changed",
     happyLinkExternalReceived: "happy:happy-link:external-received",

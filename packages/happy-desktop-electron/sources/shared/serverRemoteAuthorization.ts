@@ -28,3 +28,32 @@ export interface ServerSessionSnapshot {
     readonly state: "signedIn" | "signedOut";
     readonly message?: string;
 }
+
+/**
+ * A team server's access token and the address it was issued for. A token is
+ * bound to that address when it is issued and is sent only while the host
+ * Happy Agent's roster still names the same address for its connection.
+ */
+export interface ServerRemoteCredential {
+    readonly accessToken: string;
+    /** The server's address, normalized by `serverUrlNormalize`. */
+    readonly serverUrl: string;
+}
+
+/**
+ * One spelling for a server address, so a bound address and the roster's can
+ * be compared exactly; `undefined` for anything that is not an http(s) URL.
+ */
+export function serverUrlNormalize(url: string): string | undefined {
+    let parsed: URL;
+    try {
+        parsed = new URL(url);
+    } catch {
+        return undefined;
+    }
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return undefined;
+    if (parsed.username !== "" || parsed.password !== "") return undefined;
+    parsed.hash = "";
+    parsed.search = "";
+    return parsed.href;
+}

@@ -56,7 +56,13 @@ function windowWith() {
     const directory = {
         get: () => ({
             activeHappyAgentId: "local",
-            happyAgents: [{ id: "local", session: { workspace, artifacts: {} } }],
+            happyAgents: [
+                {
+                    id: "local",
+                    instanceId: "aaaaaaaaaaaaaaaaaaaaaaaa",
+                    session: { workspace, artifacts: {} },
+                },
+            ],
         }),
         subscribe: () => () => undefined,
         happyAgentActivate: () => undefined,
@@ -149,5 +155,20 @@ describe("A Happy link followed in a page", () => {
         expect(router.state.location.pathname).toBe("/chats/local/prj_one/ses_one");
         expect(files).toEqual([]);
         expect(artifacts).toEqual([]);
+    });
+
+    it("opens a link naming an instance only on the Happy Agent that is that instance", async () => {
+        const { directory, artifacts } = windowWith();
+        const router = await windowAt(directory, "/chats/local/prj_one/ses_one");
+
+        happyAgentRouterHappyLinkOpen(router, "happy://bbbbbbbbbbbbbbbbbbbbbbbb/agents/ses_two");
+        happyAgentRouterHappyLinkOpen(router, "happy://bbbbbbbbbbbbbbbbbbbbbbbb/artifacts/art_one");
+        await router.load();
+        expect(router.state.location.pathname).toBe("/chats/local/prj_one/ses_one");
+        expect(artifacts).toEqual([]);
+
+        happyAgentRouterHappyLinkOpen(router, "happy://aaaaaaaaaaaaaaaaaaaaaaaa/agents/ses_two");
+        await router.load();
+        expect(router.state.location.pathname).toBe("/chats/local/wt_one/ses_two");
     });
 });
