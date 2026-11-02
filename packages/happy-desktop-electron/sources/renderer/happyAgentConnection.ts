@@ -647,6 +647,8 @@ export function happyAgentConnectionOpen(input: {
         ...(profileStore ? [profileStore.subscribe(() => undefined)] : []),
         // Following from before bootstrap, the stories setting arrives with it and is not read again.
         client.storiesSettings().subscribe(() => undefined),
+        // So does the feed itself, with its media fetched ahead before the row is drawn.
+        client.stories().subscribe(() => undefined),
     );
 
     return {

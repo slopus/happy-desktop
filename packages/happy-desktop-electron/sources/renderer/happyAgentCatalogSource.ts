@@ -184,6 +184,7 @@ function catalogProject(
         conversation: happyAgentConversationSummaryProject(conversationProject(bot.session)),
         subtasks: subtasksProject(bot.subtasks),
         name: bot.name,
+        ...(bot.shortName === undefined ? {} : { shortName: bot.shortName }),
         username: bot.username,
         ...(bot.stories === undefined ? {} : { stories: bot.stories }),
         ...(bot.systemKey === undefined ? {} : { systemKey: bot.systemKey }),
@@ -198,6 +199,7 @@ function catalogProject(
         id: task.id as HappyAgentTaskId,
         workspaceId: task.workspaceId as HappyAgentWorktreeId,
         name: task.name,
+        ...(task.shortName === undefined ? {} : { shortName: task.shortName }),
         conversation: happyAgentConversationSummaryProject(conversationProject(task.session)),
         subtasks: subtasksProject(task.subtasks),
         owner:

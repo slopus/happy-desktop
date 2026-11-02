@@ -234,9 +234,10 @@ export function happyAgentStoriesStoreCreate(deps: {
             draftDrop();
             fed = false;
             [stories, cursor, open, replies, failure] = [[], undefined, null, null, null];
-        } else if (following && enabled() && !fed) void feedRead(following.signal);
+        } else if (following && synced && enabled() && !fed) void feedRead(following.signal);
         if (disposed || listeners.size === 0 || following) return;
         following = new AbortController();
+        synced = false;
         reader = happyAgentSurfacePeopleReaderCreate({
             client,
             signal: following.signal,
@@ -298,8 +299,12 @@ export function happyAgentStoriesStoreCreate(deps: {
             changed();
         }, noop);
     };
-    /** Whether `stories` is this reader's feed with the setting on, and a read of it in flight. */
+    /**
+     * Whether `stories` is this reader's feed with the setting on, a read of it in flight, and
+     * whether the startup data has arrived: before it, a setting that loads first reads nothing.
+     */
     let fed = false;
+    let synced = false;
     let reading: AbortSignal | undefined;
     const feedRead = async (signal: AbortSignal) => {
         if (reading === signal) return;
@@ -315,6 +320,7 @@ export function happyAgentStoriesStoreCreate(deps: {
             signal,
             events: ["story.changed", "story.removed"],
         })) {
+            if (input.kind === "bootstrap" || input.kind === "reconcile") synced = true;
             if (input.kind === "bootstrap" && input.bootstrap.storiesEnabled !== undefined) {
                 // The startup data carries the feed, its cursor and the switch: nothing to read.
                 const { stories: feed = [], storiesEnabled, cursor: at } = input.bootstrap;

@@ -702,6 +702,8 @@ export interface BotGroup {
     /** The bot's dedicated workspace, which is what its conversation addresses. */
     workspaceId: string;
     name: string;
+    /** The generated short title its story label shows, when the daemon has one. */
+    shortName?: string;
     /** Present only with storyFeed and a daemon-provided bot Stories setting. */
     stories?: boolean;
     /** Immutable local snake_case name, also the bot's folder name. */
@@ -757,6 +759,8 @@ export interface TaskGroup {
     /** The task's dedicated workspace, which is what its conversation addresses. */
     workspaceId: string;
     name: string;
+    /** The generated short title its story label shows, when the daemon has one. */
+    shortName?: string;
     path: string;
     createdAt: number;
     archived: boolean;
