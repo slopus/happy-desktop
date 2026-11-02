@@ -4,7 +4,10 @@ import {
     happyReferencePlaceholder,
     parseHappyLinks,
     parseHappyUrl,
+    happyAgentFileLinkParse,
     replaceHappyLinks,
+    type HappyAgentFileLink,
+    type HappyLink,
     type HappyLinkMatch,
     type HappyReference,
 } from "happy-desktop-state";
@@ -37,6 +40,12 @@ export type MessageReferenceView =
  * sizing rows, so it must be a pure read of the owner's current snapshot.
  */
 export interface MessageReferences {
+    /**
+     * The instance whose stores these references read. A link naming another
+     * instance, or any instance while this is absent, names something these
+     * stores do not hold: it reads as its words and opens nothing.
+     */
+    readonly instanceId?: string;
     view(reference: HappyReference): MessageReferenceView;
     open(reference: HappyReference): void;
 }
@@ -103,11 +112,33 @@ function referenceWords(
         : { link: false, label: view.label, written: false };
 }
 
-/** The reference a `happy://` address names, or nothing for a file link or anything malformed. */
-export function messageReferenceFromHref(href: string | undefined): HappyReference | undefined {
+/** Whether a link is for the instance these references read, or names none. */
+function linkHere(link: HappyLink, references: MessageReferences | undefined): boolean {
+    return link.instanceId === undefined || link.instanceId === references?.instanceId;
+}
+
+/**
+ * The reference a `happy://` address names here, or nothing for a file link,
+ * anything malformed, or a link naming another instance.
+ */
+export function messageReferenceFromHref(
+    href: string | undefined,
+    references: MessageReferences | undefined,
+): HappyReference | undefined {
     if (href === undefined) return undefined;
     const link = parseHappyUrl(href);
-    return link?.type === "reference" ? link.reference : undefined;
+    return link?.type === "reference" && linkHere(link, references) ? link.reference : undefined;
+}
+
+/** The file a link names here, or nothing for any other link or one naming another instance. */
+export function messageFileLinkFromHref(
+    href: string | undefined,
+    references: MessageReferences | undefined,
+): HappyAgentFileLink | undefined {
+    if (href === undefined) return undefined;
+    const link = parseHappyUrl(href);
+    if (link !== undefined && !linkHere(link, references)) return undefined;
+    return happyAgentFileLinkParse(href);
 }
 
 /**
@@ -142,6 +173,8 @@ export function messageReferencesResolve(
                     : match.syntax === "legacyTag"
                       ? "an unavailable reference"
                       : "";
+            // What another instance holds is not read or opened here.
+            if (!linkHere(link, references)) return foreignWords(match, link);
             if (link.type === "file") {
                 if (match.image || match.label.trim().length > 0) return match.source;
                 return `[${labelEscape(link.file.path)}](${formatHappyFileUrl(link.file)})`;
@@ -164,9 +197,22 @@ export function messageReferencesResolve(
     );
 }
 
+/** Escaped Markdown words for a link naming another instance: its label, or a placeholder. */
+function foreignWords(match: HappyLinkMatch, link: HappyLink): string {
+    if (match.label.trim().length > 0) return match.label;
+    return labelEscape(
+        link.type === "file" ? link.file.path : happyReferencePlaceholder(link.reference),
+    );
+}
+
 /** The words one Happy link in a plain body reads as. */
 function linkPlainWords(match: HappyLinkMatch, references: MessageReferences | undefined): string {
     const link = match.link;
+    if (link !== undefined && !linkHere(link, references)) {
+        const written = labelPlain(match.label);
+        if (written.length > 0) return written;
+        return link.type === "file" ? link.file.path : happyReferencePlaceholder(link.reference);
+    }
     if (link?.type === "reference") {
         const words = referenceWords(
             referenceView(link.reference, references),
@@ -229,7 +275,9 @@ export function messagePlainTextSegments(
         const label = linkPlainWords(segment, references);
         const link = segment.link;
         const href =
-            link?.type === "reference" && references?.view(link.reference).type === "link"
+            link?.type === "reference" &&
+            linkHere(link, references) &&
+            references?.view(link.reference).type === "link"
                 ? referenceHref(link.reference)
                 : undefined;
         if (link?.type === "reference" && href !== undefined)

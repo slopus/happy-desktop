@@ -4280,6 +4280,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                     {...(props.surfaceChat ? { chat: props.surfaceChat } : {})}
                     chatConversation={(chat, surfaceName) => (
                         <HappyAgentSurfaceChat
+                            instanceId={active.instanceId}
                             {...(referenceSurfaces ? { referenceSurfaces } : {})}
                             {...(artifactsAvailable && session.artifacts
                                 ? { artifacts: session.artifacts }
@@ -4367,6 +4368,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
         if (active?.session)
             return (
                 <HappyAgentWorkspaceSurface
+                    instanceId={active.instanceId}
                     {...(referenceSurfaces ? { referenceSurfaces } : {})}
                     availability={
                         activeAvailability ??
@@ -5809,6 +5811,11 @@ function HappyAgentSurfaceContent(props: {
  * opened from it, and a web link opens in the machine's browser.
  */
 function HappyAgentSurfaceChat(props: {
+    /**
+     * The instance this machine's health named, which a link naming an
+     * instance must match to resolve here; absent while it has not said.
+     */
+    instanceId: string | undefined;
     workspace: HappyAgentWorkspaceStore;
     groupId: string;
     chatId: string;
@@ -5843,6 +5850,7 @@ function HappyAgentSurfaceChat(props: {
     return (
         <HappyAgentConversationBody
             activitySelected={false}
+            instanceId={props.instanceId}
             {...(props.artifacts ? { artifacts: props.artifacts } : {})}
             referenceEntities={messageReferenceEntities(workspace.list)}
             {...chiefOfStaffNameProps(workspace.list.bots)}
@@ -6278,6 +6286,11 @@ function HappyAgentArtifactsPanelSurface(props: {
 }
 
 interface HappyAgentWorkspaceSurfaceProps {
+    /**
+     * The instance this machine's health named, which a link naming an
+     * instance must match to resolve here; absent while it has not said.
+     */
+    instanceId: string | undefined;
     /** The Surfaces the transcript's references can name, and where one opens. */
     referenceSurfaces?: MessageReferenceSurfaces;
     /** The machine's artifacts, present only once it has said it keeps them. */
@@ -6995,6 +7008,7 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
     // The `happy://` links a document names read and open the way a message's
     // do, from the same snapshots this surface already holds.
     const documentEntities = messageReferencesCreate({
+        instanceId: props.instanceId,
         titles: artifactTitles,
         titlesStore: artifactTitlesStore,
         ...(peopleStore ? { people: peopleStore } : {}),
@@ -7239,6 +7253,7 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
             />
         ) : (
             <HappyAgentConversationBody
+                instanceId={props.instanceId}
                 composerNotice={workspaceComposerNotice}
                 modelUsageWatch={modelUsageWatch}
                 {...(props.artifacts ? { artifacts: props.artifacts } : {})}
@@ -8775,6 +8790,11 @@ function HappyAgentGroupComposer(props: {
 
 /** The open conversation's materialization states, inside the directory's tabs. */
 function HappyAgentConversationBody(props: {
+    /**
+     * The instance this machine's health named, which a link naming an
+     * instance must match to resolve here; absent while it has not said.
+     */
+    instanceId: string | undefined;
     activitySelected: boolean;
     /** The machine's artifacts, which the transcript's references name. */
     artifacts?: HappyAgentArtifacts;
@@ -8851,6 +8871,7 @@ function HappyAgentConversationBody(props: {
     if (conversation.type === "ready")
         return (
             <HappyAgentConversationSurface
+                instanceId={props.instanceId}
                 activitySelected={props.activitySelected}
                 {...(props.artifacts ? { artifacts: props.artifacts } : {})}
                 {...(props.inlineEngines ? { inlineEngines: props.inlineEngines } : {})}
@@ -9235,6 +9256,11 @@ function happyAgentDelegatedElapsedMs(
 }
 
 function HappyAgentConversationSurface(props: {
+    /**
+     * The instance this machine's health named, which a link naming an
+     * instance must match to resolve here; absent while it has not said.
+     */
+    instanceId: string | undefined;
     activitySelected: boolean;
     /** The machine's artifacts, which the transcript's references name. */
     artifacts?: HappyAgentArtifacts;
@@ -9394,6 +9420,7 @@ function HappyAgentConversationSurface(props: {
           })
         : undefined;
     const references = messageReferencesCreate({
+        instanceId: props.instanceId,
         titles,
         titlesStore,
         ...(peopleStore ? { people: peopleStore } : {}),

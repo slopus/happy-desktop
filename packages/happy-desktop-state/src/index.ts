@@ -203,6 +203,7 @@ export {
     parseHappyLinks,
     parseHappyUrl,
     replaceHappyLinks,
+    type HappyLink,
     type HappyLinkMatch,
     type HappyReference,
     type HappyReferenceKind,

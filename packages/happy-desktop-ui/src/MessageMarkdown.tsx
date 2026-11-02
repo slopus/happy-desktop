@@ -7,7 +7,7 @@ import {
     type ComponentPropsWithoutRef,
     type ReactNode,
 } from "react";
-import { happyAgentFileLinkParse, isHappyUrl, type HappyReference } from "happy-desktop-state";
+import { isHappyUrl, type HappyReference } from "happy-desktop-state";
 import Markdown, { type Components, type ExtraProps, type UrlTransform } from "react-markdown";
 import type { Processor } from "unified";
 import { LinkContextMenu } from "./LinkContextMenu";
@@ -24,6 +24,7 @@ import { FILE_REFERENCE_LINK_ATTRIBUTE } from "./messageFileReferences";
 import { MESSAGE_MARKDOWN_REMARK_PLUGINS, type MessageMarkdownAst } from "./messageMarkdownAst";
 import { messageInlineLayoutKey } from "./conversationInlineLayouts";
 import {
+    messageFileLinkFromHref,
     messageReferenceFromHref,
     messageReferencesResolve,
     type MessageReferences,
@@ -282,7 +283,8 @@ const MarkdownLink = ({
     ...props
 }: ComponentPropsWithoutRef<"a"> & ExtraProps) => {
     const references = useContext(MarkdownReferencesContext);
-    const reference = references === undefined ? undefined : messageReferenceFromHref(href);
+    const reference =
+        references === undefined ? undefined : messageReferenceFromHref(href, references);
     const safe = safeHref(href);
     const onFileOpen = useContext(MarkdownFileOpenContext);
     const onFileLinkOpen = useContext(MarkdownFileLinkOpenContext);
@@ -302,7 +304,7 @@ const MarkdownLink = ({
     // A link into another workspace's folder carries that folder, so it opens
     // the same file wherever the message is read. Its scheme means nothing to
     // the browser or the OS, so no click may hand it to either.
-    const fileLink = typeof href === "string" ? happyAgentFileLinkParse(href) : undefined;
+    const fileLink = messageFileLinkFromHref(href, references);
     if (
         fileLink !== undefined &&
         onFileLinkOpen !== undefined &&

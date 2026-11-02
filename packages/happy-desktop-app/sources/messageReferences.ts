@@ -213,6 +213,8 @@ function entityOf(
  * transcript re-renders and re-sizes the rows that name what changed.
  */
 export function messageReferencesCreate(input: {
+    /** The instance references resolve against; a link naming another resolves to nothing. */
+    readonly instanceId?: string | undefined;
     readonly titles: HappyAgentArtifactTitlesSnapshot;
     readonly titlesStore: HappyAgentArtifactTitlesStore;
     readonly entities: MessageReferenceEntities;
@@ -232,6 +234,7 @@ export function messageReferencesCreate(input: {
 }): MessageReferences {
     const peopleNames = input.people?.get();
     return {
+        ...(input.instanceId === undefined ? {} : { instanceId: input.instanceId }),
         view(reference) {
             if (reference.kind === "user") {
                 // A person is named, not opened.

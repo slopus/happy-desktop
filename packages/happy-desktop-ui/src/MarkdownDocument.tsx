@@ -15,12 +15,7 @@ import Markdown, {
     type UrlTransform,
 } from "react-markdown";
 import remarkGfm from "remark-gfm";
-import {
-    happyAgentFileLinkParse,
-    happyReferencePlaceholder,
-    isHappyUrl,
-    type HappyReference,
-} from "happy-desktop-state";
+import { happyReferencePlaceholder, isHappyUrl, type HappyReference } from "happy-desktop-state";
 import { CodeBlock } from "./CodeBlock";
 import {
     fileReferenceFragment,
@@ -32,7 +27,11 @@ import {
 import { markdownFence, markdownFenceIsMermaid } from "./markdownFence";
 import { MermaidDiagram } from "./MermaidDiagram";
 import { markdownTableCodeKeepsLine } from "./messageTextLayout";
-import { messageReferenceFromHref, type MessageReferences } from "./messageReferences";
+import {
+    messageFileLinkFromHref,
+    messageReferenceFromHref,
+    type MessageReferences,
+} from "./messageReferences";
 import { ScrollArea } from "./Scrollbar";
 
 // react-markdown reparses the document when this plugin list changes identity.
@@ -333,6 +332,7 @@ const DocumentLink = ({ children, href, node }: ComponentPropsWithoutRef<"a"> & 
     const onFileOpen = useContext(FileOpenContext);
     const onFileLinkOpen = useContext(FileLinkOpenContext);
     const references = useContext(MarkdownReferencesContext);
+    const entities = useContext(EntitiesContext);
     const web = webHref(href);
     if (web !== undefined)
         return (
@@ -348,7 +348,7 @@ const DocumentLink = ({ children, href, node }: ComponentPropsWithoutRef<"a"> & 
         );
     // A link into another workspace's folder names that folder itself, so it
     // means the same thing whichever document carries it.
-    const fileLink = typeof href === "string" ? happyAgentFileLinkParse(href) : undefined;
+    const fileLink = messageFileLinkFromHref(href, entities);
     if (fileLink !== undefined)
         return onFileLinkOpen === undefined ? (
             <span
@@ -368,7 +368,8 @@ const DocumentLink = ({ children, href, node }: ComponentPropsWithoutRef<"a"> & 
                 {children}
             </button>
         );
-    const reference = typeof href === "string" ? messageReferenceFromHref(href) : undefined;
+    const reference =
+        typeof href === "string" ? messageReferenceFromHref(href, entities) : undefined;
     if (reference !== undefined)
         return (
             <DocumentEntityLink reference={reference} written={(node?.children.length ?? 0) > 0}>
