@@ -1,4 +1,5 @@
 import type { ComposerAttachment } from "../modules/composer/composerState.js";
+import { happyAgentImageDownscale } from "./happyAgentImageDownscale.js";
 import type { HappyAgentImageInput } from "./happyAgentTypes.js";
 
 /**
@@ -201,10 +202,35 @@ export async function happyAgentImageInputsOf(
     happyAgentComposerAttachmentsValidate(attachments);
     const inline = attachments.filter((attachment) => attachment.kind === "inlineImage");
     const images: HappyAgentImageInput[] = [];
-    for (const attachment of inline)
+    for (const attachment of inline) {
+        // A send made before the draft's own preparation finished waits for
+        // that same work rather than carrying the full-size source.
+        const file = await happyAgentImageDownscale(attachment.file);
         images.push({
-            mediaType: attachment.mediaType,
-            data: base64Encode(new Uint8Array(await attachment.file.arrayBuffer())),
+            mediaType: file === attachment.file ? attachment.mediaType : file.type,
+            data: base64Encode(new Uint8Array(await file.arrayBuffer())),
         });
+    }
     return images;
+}
+
+/**
+ * The inline image redrawn smaller, as the draft shows it once its preparation
+ * is done, or `undefined` when the source already travels as it is.
+ */
+export async function happyAgentComposerAttachmentDownscaled(
+    attachment: Extract<ComposerAttachment, { kind: "inlineImage" }>,
+): Promise<Extract<ComposerAttachment, { kind: "inlineImage" }> | undefined> {
+    const file = await happyAgentImageDownscale(attachment.file);
+    if (file === attachment.file) return undefined;
+    const previewUrl = mediaPreviewUrl(file);
+    const { previewUrl: _source, ...rest } = attachment;
+    return {
+        ...rest,
+        name: file.name,
+        size: file.size,
+        mediaType: file.type,
+        file,
+        ...(previewUrl ? { previewUrl } : {}),
+    };
 }

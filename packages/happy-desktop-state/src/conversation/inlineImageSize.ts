@@ -31,16 +31,20 @@ const DEEP_CHARS = 65_536;
 export function inlineImageSize(data: string): InlineImageSize | undefined {
     const head = base64HeadBytes(data, HEAD_CHARS);
     if (!head) return undefined;
-    const size = imageSizeOf(head);
+    const size = inlineImageSizeOfBytes(head);
     if (size) return size;
     // Only JPEG carries its frame header at an unbounded offset; re-reading a
     // wider window for anything else would parse the same bytes twice.
     if (!isJpeg(head) || data.length <= HEAD_CHARS) return undefined;
     const deep = base64HeadBytes(data, DEEP_CHARS);
-    return deep ? imageSizeOf(deep) : undefined;
+    return deep ? inlineImageSizeOfBytes(deep) : undefined;
 }
 
-function imageSizeOf(bytes: Uint8Array): InlineImageSize | undefined {
+/**
+ * The pixel size an image's leading bytes declare, for a caller that holds the
+ * bytes themselves rather than their base64.
+ */
+export function inlineImageSizeOfBytes(bytes: Uint8Array): InlineImageSize | undefined {
     return (
         pngSize(bytes) ??
         gifSize(bytes) ??
