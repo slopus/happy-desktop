@@ -8,9 +8,10 @@ import {
     type OAuthSignIn,
 } from "@slopus/happy-agent-client";
 import { serverOAuthRedirectUri } from "../shared/cloudAuthConfig";
-import type {
-    ServerRemoteCredential,
-    ServerSessionSnapshot,
+import {
+    serverUrlNormalize,
+    type ServerRemoteCredential,
+    type ServerSessionSnapshot,
 } from "../shared/serverRemoteAuthorization";
 import type { HappyAgentRemoteAuthorization } from "./happyAgentDaemonClient";
 
@@ -281,6 +282,12 @@ export function serverSessionsCreate(deps: ServerSessionsDeps): ServerSessions {
                     fetch: deps.fetch,
                 });
                 if (sessions.get(connectionId) !== session) return undefined;
+                // A refreshed token for another server ends the sign-in like a refusal.
+                if (serverUrlNormalize(credential.serverUrl) !== session.serverUrl)
+                    throw new HappyAgentOAuthError(
+                        "audience_mismatch",
+                        "This sign-in is for a different server.",
+                    );
                 session.credential = credential;
                 session.issuedAt = now();
                 session.retryDelay = REFRESH_RETRY_MIN_MS;
@@ -400,7 +407,12 @@ export function serverSessionsCreate(deps: ServerSessionsDeps): ServerSessions {
             const method = await discoveryRead(url);
             let signIn: OAuthSignIn;
             try {
-                signIn = await beginOAuthSignIn(method, { redirectUri: serverOAuthRedirectUri });
+                // The token must name this address in its audience, so a server
+                // that copied another deployment's sign-in never receives its token.
+                signIn = await beginOAuthSignIn(method, {
+                    redirectUri: serverOAuthRedirectUri,
+                    serverUrl: url,
+                });
             } catch (error) {
                 throw new ServerSessionError(
                     error instanceof HappyAgentOAuthError
@@ -448,9 +460,17 @@ export function serverSessionsCreate(deps: ServerSessionsDeps): ServerSessions {
                                 : "Signing in didn't finish. Try again.",
                             error instanceof HappyAgentOAuthError && error.code === "access_denied"
                                 ? "sign_in_denied"
-                                : "sign_in_failed",
+                                : error instanceof HappyAgentOAuthError &&
+                                    error.code === "audience_mismatch"
+                                  ? "audience_mismatch"
+                                  : "sign_in_failed",
                         );
                     }
+                    if (serverUrlNormalize(credential.serverUrl) !== url)
+                        throw new ServerSessionError(
+                            "This sign-in is for a different server.",
+                            "audience_mismatch",
+                        );
                     await bound();
                 } catch (error) {
                     if (attempts.get(id) === attempt) attemptEnd(attempt);

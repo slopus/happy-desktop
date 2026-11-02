@@ -32,7 +32,11 @@ Main reads the server's address from the host Happy Agent's roster, never from
 the window, and reads `<address>v0/authentication` from the server itself
 through Electron's network stack, so the system's certificates and proxy apply.
 It signs in with the authorization code flow and PKCE and opens the sign-in
-page in the system browser. Tailcat, Happy Cloud and WorkOS are not involved.
+page in the system browser. The sign-in is for the roster's address: the token
+and refresh URLs must share the authorization URL's origin, and every access
+token, issued or refreshed, must name that address in its JWT `aud`, so a
+server that copied another deployment's sign-in never receives its token. The
+server's `[feature.team.jwt] audience` must therefore be its public base URL. Tailcat, Happy Cloud and WorkOS are not involved.
 
 The tokens live only in main's memory: no keychain, no file, and never the
 window. Quitting the app ends every sign-in; reloading the window keeps them.

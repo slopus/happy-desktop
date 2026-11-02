@@ -11,6 +11,15 @@ import { serverSessionsCreate, type ServerSessionsDeps } from "./serverSessions"
  */
 
 const URL_BASE = "https://happy.example.com/";
+const ELSEWHERE = "https://elsewhere.example.com/";
+/** The servers the fake authorization server's tokens name by default. */
+const AUDIENCE = [URL_BASE, ELSEWHERE];
+
+const base64url = (value: unknown) => Buffer.from(JSON.stringify(value)).toString("base64url");
+/** The access token issued `n`th: a JWT whose `aud` names `audience`. */
+function access(n: number, audience: readonly string[] = AUDIENCE): string {
+    return `${base64url({ alg: "none" })}.${base64url({ aud: audience, n })}.signature`;
+}
 
 afterEach(() => {
     vi.useRealTimers();
@@ -22,6 +31,8 @@ function serverCreate(
         readonly expiresIn?: number;
         /** Holds the code exchange until the test lets it go. */
         readonly exchangeGate?: Promise<void>;
+        /** The servers issued tokens name in `aud`. */
+        readonly audience?: readonly string[];
     } = {},
 ) {
     let issued = 0;
@@ -52,7 +63,7 @@ function serverCreate(
             if (form.grant_type === "authorization_code") await options.exchangeGate;
             issued += 1;
             return Response.json({
-                access_token: `access-${String(issued)}`,
+                access_token: access(issued, options.audience),
                 token_type: "Bearer",
                 expires_in: options.expiresIn ?? 3600,
                 refresh_token: `refresh-${String(issued)}`,
@@ -117,9 +128,9 @@ it("signs in through the browser and keeps the tokens only in memory", async () 
         `happy://oauth/callback?code=c&state=${authorization.searchParams.get("state")}`,
     );
     await finished;
-    expect(tokenOf(context)).toBe("access-1");
+    expect(tokenOf(context)).toBe(access(1));
     expect(context.sessions.tokens()).toEqual({
-        team: { accessToken: "access-1", serverUrl: URL_BASE },
+        team: { accessToken: access(1), serverUrl: URL_BASE },
     });
     expect(context.sessions.get()).toEqual([{ connectionId: "team", state: "signedIn" }]);
     expect(context.healthReads).toEqual(["team"]);
@@ -154,20 +165,20 @@ it("refreshes once for many refusals, and hands a newer token to a caller that i
     const context = sessionsCreate(server);
     await signedIn(context);
     const [first, second] = await Promise.all([
-        context.sessions.refresh("team", "access-1"),
-        context.sessions.refresh("team", "access-1"),
+        context.sessions.refresh("team", access(1)),
+        context.sessions.refresh("team", access(1)),
     ]);
-    expect([first?.accessToken, second?.accessToken]).toEqual(["access-2", "access-2"]);
+    expect([first?.accessToken, second?.accessToken]).toEqual([access(2), access(2)]);
     expect(server.tokenRequests.filter((form) => form.grant_type === "refresh_token")).toHaveLength(
         1,
     );
-    expect((await context.sessions.refresh("team", "access-1"))?.accessToken).toBe("access-2");
+    expect((await context.sessions.refresh("team", access(1)))?.accessToken).toBe(access(2));
 });
 
 it("ends the sign-in when the refresh is refused, and says so", async () => {
     const context = sessionsCreate(serverCreate({ refreshRefused: true }));
     await signedIn(context);
-    expect(await context.sessions.refresh("team", "access-1")).toBeUndefined();
+    expect(await context.sessions.refresh("team", access(1))).toBeUndefined();
     expect(tokenOf(context)).toBeUndefined();
     expect(context.sessions.get()).toEqual([
         {
@@ -184,9 +195,9 @@ it("refreshes once four fifths of the token's lifetime have passed", async () =>
     const context = sessionsCreate(server);
     await signedIn(context);
     await vi.advanceTimersByTimeAsync(2880_000 - 1_000);
-    expect(tokenOf(context)).toBe("access-1");
+    expect(tokenOf(context)).toBe(access(1));
     await vi.advanceTimersByTimeAsync(2_000);
-    expect(tokenOf(context)).toBe("access-2");
+    expect(tokenOf(context)).toBe(access(2));
 });
 
 it.each([60, 5])(
@@ -205,7 +216,7 @@ it.each([60, 5])(
         const pace = Math.floor(60_000 / Math.max(10_000, expiresIn * 800));
         expect(refreshes()).toBeLessThanOrEqual(pace + 1);
         expect(refreshes()).toBeGreaterThanOrEqual(pace - 1);
-        expect(tokenOf(context)).toBe(`access-${String(refreshes() + 1)}`);
+        expect(tokenOf(context)).toBe(access(refreshes() + 1));
     },
 );
 
@@ -214,8 +225,8 @@ it("forgets a removed server, and a server refused again after a refresh needs a
     const context = sessionsCreate(serverCreate());
     await signedIn(context);
     context.sessions.signInRequire("team", "stale");
-    expect(tokenOf(context)).toBe("access-1");
-    context.sessions.signInRequire("team", "access-1");
+    expect(tokenOf(context)).toBe(access(1));
+    context.sessions.signInRequire("team", access(1));
     expect(context.sessions.get()).toEqual([
         {
             connectionId: "team",
@@ -234,9 +245,9 @@ it("ends a sign-in, and sends its token nowhere, once the roster moves the conne
     const server = serverCreate();
     const context = sessionsCreate(server);
     await signedIn(context);
-    context.roster.set("team", "https://elsewhere.example.com/");
+    context.roster.set("team", ELSEWHERE);
     // A refresh asked for after the move reaches no authorization server.
-    expect(await context.sessions.refresh("team", "access-1")).toBeUndefined();
+    expect(await context.sessions.refresh("team", access(1))).toBeUndefined();
     expect(server.tokenRequests.filter((form) => form.grant_type === "refresh_token")).toEqual([]);
     expect(tokenOf(context)).toBeUndefined();
     expect(context.sessions.tokens()).toEqual({});
@@ -251,11 +262,11 @@ it("ends a sign-in, and sends its token nowhere, once the roster moves the conne
     // Signed in again at the new address, a report about the old one ends nothing.
     await signedIn(context);
     expect(context.sessions.credential("team")).toEqual({
-        accessToken: "access-2",
-        serverUrl: "https://elsewhere.example.com/",
+        accessToken: access(2),
+        serverUrl: ELSEWHERE,
     });
     context.sessions.serverMoved("team", URL_BASE);
-    expect(tokenOf(context)).toBe("access-2");
+    expect(tokenOf(context)).toBe(access(2));
     // The roster watch alone ends it when the address changes again.
     context.roster.set("team", URL_BASE);
     await vi.advanceTimersByTimeAsync(5_000);
@@ -269,7 +280,7 @@ it("fails a sign-in whose server moved before the browser came back", async () =
     const begun = await context.sessions.signInBegin("team");
     const finished = context.sessions.signInFinish(begun.attemptId);
     finished.catch(() => undefined);
-    context.roster.set("team", "https://elsewhere.example.com/");
+    context.roster.set("team", ELSEWHERE);
     await vi.advanceTimersByTimeAsync(5_000);
     await expect(finished).rejects.toMatchObject({ code: "server_moved" });
     expect(context.sessions.callbackReceive(callbackOf(context))).toBe(false);
@@ -286,7 +297,7 @@ it("keeps no tokens from a code redeemed while the server moved", async () => {
     finished.catch(() => undefined);
     context.sessions.callbackReceive(callbackOf(context));
     await vi.waitFor(() => expect(server.tokenRequests).toHaveLength(1));
-    context.roster.set("team", "https://elsewhere.example.com/");
+    context.roster.set("team", ELSEWHERE);
     release();
     await expect(finished).rejects.toMatchObject({ code: "server_moved" });
     expect(tokenOf(context)).toBeUndefined();
@@ -322,7 +333,7 @@ it("hands a finished sign-in to a finish call that arrives after it", async () =
         async browserOpen(url) {
             context.opened.push(url);
             context.sessions.callbackReceive(callbackOf(context));
-            await vi.waitFor(() => expect(tokenOf(context)).toBe("access-1"));
+            await vi.waitFor(() => expect(tokenOf(context)).toBe(access(1)));
         },
     });
     const begun = await context.sessions.signInBegin("team");
@@ -344,4 +355,41 @@ it("hands a finished sign-in to a finish call that arrives after it", async () =
     await expect(context.sessions.signInFinish(third.attemptId)).rejects.toMatchObject({
         code: "sign_in_expired",
     });
+});
+
+it("keeps no token that names another server, and refuses a token URL on another origin", async () => {
+    const server = serverCreate({ audience: ["https://real-deployment.example.com/"] });
+    const context = sessionsCreate(server);
+    const begun = await context.sessions.signInBegin("team");
+    const finished = context.sessions.signInFinish(begun.attemptId);
+    finished.catch(() => undefined);
+    context.sessions.callbackReceive(callbackOf(context));
+    await expect(finished).rejects.toMatchObject({ code: "audience_mismatch" });
+    expect(tokenOf(context)).toBeUndefined();
+
+    const stealing = sessionsCreate(serverCreate(), {
+        fetch: (async (input: RequestInfo | URL) => {
+            const url = new URL(input instanceof Request ? input.url : input.toString());
+            if (url.pathname !== "/v0/authentication")
+                return new Response("not found", { status: 404 });
+            return Response.json({
+                authenticated: false,
+                userId: null,
+                methods: [
+                    {
+                        type: "oauth",
+                        id: "jwt",
+                        name: "Example SSO",
+                        authorizationUrl: "https://login.example.com/authorize",
+                        tokenUrl: "https://attacker.example.net/token",
+                        clientId: "happy",
+                    },
+                ],
+            });
+        }) as typeof globalThis.fetch,
+    });
+    await expect(stealing.sessions.signInBegin("team")).rejects.toMatchObject({
+        code: "sign_in_unavailable",
+    });
+    expect(stealing.opened).toEqual([]);
 });
