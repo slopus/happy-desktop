@@ -35,7 +35,7 @@ const directory: AppHappyAgentDirectorySnapshot = {
             status: "error",
             message: "Sign in to this server to use it.",
             serverUrl: "https://happy.example.com/",
-            signIn: { phase: "required" },
+            signIn: { phase: "required", reason: "first" },
             projects: [],
             bots: [],
             projectsStatus: "loading",

@@ -580,7 +580,11 @@ export interface AppHappyAgentEntry {
 
 /** Where signing in again to one server stands. */
 export type AppHappyAgentSignIn =
-    | { readonly phase: "required" }
+    /**
+     * `first`: this app has not signed in to the server since it started, as
+     * when the server was just added. `ended`: a sign-in it held stopped working.
+     */
+    | { readonly phase: "required"; readonly reason: "first" | "ended" }
     /** The browser is open at `host`, where the person is signing in. */
     | { readonly phase: "browser"; readonly host: string }
     | { readonly phase: "failed"; readonly message: string };
@@ -3039,12 +3043,19 @@ function happyAgentSignInEmpty(signIn: AppHappyAgentSignIn): {
 } {
     switch (signIn.phase) {
         case "required":
-            return {
-                actionLabel: "Sign in again",
-                description: "Your sign-in to this server ended. Sign in to see its work.",
-                icon: "lock",
-                title: "Sign in required",
-            };
+            return signIn.reason === "first"
+                ? {
+                      actionLabel: "Sign in",
+                      description: "Sign in to this server to see its work.",
+                      icon: "lock",
+                      title: "Sign in to this server",
+                  }
+                : {
+                      actionLabel: "Sign in again",
+                      description: "Your sign-in to this server ended. Sign in to see its work.",
+                      icon: "lock",
+                      title: "Sign in required",
+                  };
         case "browser":
             return {
                 description: `Finish signing in at ${signIn.host} in your browser.`,

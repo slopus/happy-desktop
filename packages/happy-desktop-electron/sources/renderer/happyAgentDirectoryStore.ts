@@ -82,7 +82,11 @@ const NO_TASK_FAILURES: HappyAgentSessionListSnapshot["taskFailures"] = new Map(
 
 /** Where signing in again to one server stands. */
 export type HappyAgentDirectorySignIn =
-    | { readonly phase: "required" }
+    /**
+     * `first`: the shell has held no sign-in for the server since the app
+     * started. `ended`: a sign-in stopped working.
+     */
+    | { readonly phase: "required"; readonly reason: "first" | "ended" }
     | { readonly phase: "browser"; readonly host: string }
     | { readonly phase: "failed"; readonly message: string };
 
@@ -429,14 +433,26 @@ export function happyAgentDirectoryStoreCreate(
      */
     const signInRequire = (
         remote: LocalHappyAgent,
-        reported?: { readonly message?: string },
+        reported?: { readonly message?: string; readonly first?: boolean },
     ): void => {
         if (remote.entry.signIn || (remote.entry.session && !reported)) return;
+        // A server added by address that the shell has held no sign-in for in
+        // this run is being signed in to for the first time, whichever says so.
+        const remoteId = remote.entry.remoteId;
+        const first =
+            reported?.first ??
+            (remote.entry.serverUrl !== undefined &&
+                remoteId !== undefined &&
+                deps.serverSessions?.get().sessions.get(remoteId) === undefined);
         remote.entry = {
             ...remote.entry,
             status: "error",
-            message: reported?.message ?? "Your sign-in to this server ended.",
-            signIn: { phase: "required" },
+            message:
+                reported?.message ??
+                (first
+                    ? "Sign in to this server to use it."
+                    : "Your sign-in to this server ended."),
+            signIn: { phase: "required", reason: first ? "first" : "ended" },
         };
         publish();
     };
@@ -506,9 +522,16 @@ export function happyAgentDirectoryStoreCreate(
                 continue;
             const session = sessions.sessions.get(remote.entry.remoteId);
             if (session?.state !== "signedIn") {
-                signInRequire(remote, {
-                    message: session?.message ?? "Sign in to this server to use it.",
-                });
+                // A server the shell has no word on was never signed in to in
+                // this run; one it lists as signed out had a sign-in that ended.
+                signInRequire(
+                    remote,
+                    session === undefined
+                        ? { message: "Sign in to this server to use it.", first: true }
+                        : session.message === undefined
+                          ? {}
+                          : { message: session.message },
+                );
                 continue;
             }
             if (remote.entry.signIn?.phase !== "required") continue;
