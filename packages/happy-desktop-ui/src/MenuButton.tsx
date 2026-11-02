@@ -20,6 +20,8 @@ export interface MenuButtonProps {
     /** Static rows, or a catalog materialized only when the menu opens. */
     readonly items: readonly MenuItem[] | (() => readonly MenuItem[]);
     readonly onSelect: (id: string) => void;
+    /** The popover opened or closed, for a caller that holds still while it is open. */
+    readonly onOpenChange?: (open: boolean) => void;
     readonly align?: "start" | "end";
     /** Which edge of the trigger the popover opens from. */
     readonly placement?: "above" | "below";
@@ -125,6 +127,7 @@ export function MenuButton(props: MenuButtonProps) {
     );
     const close = (returnFocus: boolean): void => {
         setOpen(false);
+        props.onOpenChange?.(false);
         if (returnFocus) triggerFocus();
     };
     const allItems = typeof props.items === "function" ? materializedItems : props.items;
@@ -273,6 +276,7 @@ export function MenuButton(props: MenuButtonProps) {
                             right: bounds.right,
                         });
                         setOpen(true);
+                        props.onOpenChange?.(true);
                     }
                 }}
                 size={props.size ?? "small"}

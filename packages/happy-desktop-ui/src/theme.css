@@ -139,7 +139,9 @@
     --overlay-panel: rgb(0 0 0 / 0.48);
     --story-shade-top: rgb(0 0 0 / 55%);
     --story-shade-bottom: rgb(0 0 0 / 65%);
-    --story-shade-field: rgb(0 0 0 / 25%);
+    --story-shade-field: rgb(0 0 0 / 40%);
+    --story-field-border: rgb(255 255 255 / 30%);
+    --story-field-shadow: 0 2px 12px rgb(0 0 0 / 30%);
     --story-backdrop: rgb(0 0 0 / 92%);
     --story-control: rgb(255 255 255 / 12%);
     --story-text-fill: rgb(0 0 0 / 35%);

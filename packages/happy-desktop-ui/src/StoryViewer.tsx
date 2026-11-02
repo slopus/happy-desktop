@@ -156,10 +156,12 @@ export function StoryViewer(props: StoryViewerProps) {
     const [layer, setLayer] = useState<StoryLayers["text"]>();
     const [editing, setEditing] = useState(false);
     const [position, setPosition] = useState({ x: 0.2, y: 0.2 });
+    const [menuOpen, setMenuOpen] = useState(false);
     const composing = mode === "repost";
     const recording = round.phase === "recording";
-    const paused =
-        (composing && round.phase !== "done" && !recording) || repliesOpen || hidden || held;
+    // Every reason the story holds still, round included: replies, a hold, ⋯ or its delete confirm.
+    const halted = repliesOpen || held || menuOpen || mode === "delete";
+    const paused = (composing && round.phase !== "done" && !recording) || halted || hidden;
     const stream = round.phase === "preview" || recording ? round.stream : null;
     // Media playback is an imperative browser boundary; drags do not reattach streams or replay videos.
     // eslint-disable-next-line happy-react/no-layout-effect -- Native video streams and playback require synchronization after DOM attachment.
@@ -168,13 +170,13 @@ export function StoryViewer(props: StoryViewerProps) {
         if (node && node.srcObject !== stream) node.srcObject = stream;
         for (const [video, pause] of [
             [base.current, paused],
-            [node, repliesOpen || held],
+            [node, halted],
         ] as const) {
             if (!video) continue;
             if (pause) video.pause();
             else void video.play().catch(() => undefined);
         }
-    }, [paused, stream, repliesOpen, held, round.phase, props.media.url]);
+    }, [paused, stream, halted, round.phase, props.media.url]);
     const zoomReset = () => setZoom({ scale: 1, x: 0, y: 0 });
     const [zoomMount] = useState(() => (node: HTMLDivElement | null) => {
         if (!node) return;
@@ -606,6 +608,7 @@ export function StoryViewer(props: StoryViewerProps) {
                                         iconSize={16}
                                         items={menu}
                                         label="More"
+                                        onOpenChange={setMenuOpen}
                                         onSelect={(id) =>
                                             reset(id === "repost" ? "repost" : "delete")
                                         }

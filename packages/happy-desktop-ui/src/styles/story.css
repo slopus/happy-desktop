@@ -211,8 +211,13 @@
 .happy-story-viewer__bottom {
     bottom: 0;
     pointer-events: none;
-    padding-top: 48px;
-    background: linear-gradient(transparent, var(--story-shade-bottom));
+    padding-top: 72px;
+    /* Eased, so a caption and reply field over white media still sit on shade. */
+    background: linear-gradient(
+        transparent,
+        color-mix(in srgb, var(--story-shade-bottom) 75%, transparent) 35%,
+        var(--story-shade-bottom)
+    );
     max-height: calc(100% - 88px);
 }
 .happy-story-viewer__frame[data-replies] .happy-story-viewer__bottom {
@@ -336,12 +341,17 @@
     width: 100%;
     height: 36px;
     padding: 0 14px;
-    border: 1px solid color-mix(in srgb, var(--text) 35%, transparent);
+    border: 1px solid var(--story-field-border);
     border-radius: var(--happy-radius-pill);
     background: var(--story-shade-field);
-    backdrop-filter: blur(16px);
+    backdrop-filter: blur(20px);
+    box-shadow: var(--story-field-shadow);
     color: inherit;
     font: inherit;
+}
+.happy-story-viewer__bottom input::placeholder {
+    color: color-mix(in srgb, var(--text) 72%, transparent);
+    opacity: 1;
 }
 
 .happy-story-viewer__bottom {

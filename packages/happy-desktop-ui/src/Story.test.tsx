@@ -323,6 +323,66 @@ it("offers repost and delete from ⋯, and opens the original agent from its att
     view.destroy();
 });
 
+it("holds media, round and image progress still while ⋯ is open or confirming delete, and resumes when it closes untouched", async () => {
+    for (const kind of ["image", "video"] as const) {
+        const log: string[] = [];
+        const view = viewer(log, {
+            media: { kind, url: kind === "video" ? clip : PIXEL },
+            roundUrl: clip,
+            onDelete: () => log.push("delete"),
+            onRepost: async () => true,
+        });
+        await view.ready();
+        const frame = view.$(".happy-story-viewer__frame").element;
+        const videos = [...frame.querySelectorAll("video")];
+        const progress = frame.querySelector<HTMLElement>(".happy-story-viewer__progress");
+        for (const video of videos) video.loop = true;
+        const playing = async (expected: boolean) => {
+            for (const video of videos) await expect.poll(() => video.paused).toBe(!expected);
+            if (progress)
+                expect(progress.style.animationPlayState).toBe(expected ? "running" : "paused");
+        };
+        await playing(true);
+        const more = view.$('[aria-label="More"]').element;
+
+        await userEvent.click(more);
+        await playing(false);
+        await userEvent.keyboard("{Escape}");
+        expect(more.getAttribute("aria-expanded")).toBe("false");
+        await playing(true);
+
+        await userEvent.click(more);
+        await playing(false);
+        await userEvent.click(view.$('[data-happy-desktop-ui="menu-button-backdrop"]').element);
+        await playing(true);
+
+        // Choosing Delete keeps it still until the confirm is answered, so it cannot step away.
+        await userEvent.click(more);
+        await userEvent.click(named('[role="menuitem"]', "Delete"));
+        await playing(false);
+        await userEvent.click(named("button", "Cancel"));
+        await playing(true);
+        expect(log).toEqual([]);
+        view.destroy();
+    }
+});
+
+it("keeps the reply field legible over bright media with a dark fill, hairline, shadow and scrim", async () => {
+    const view = viewer([]);
+    await view.ready();
+    const input = view.$('[data-happy-desktop-ui="story-viewer-input"]')
+        .element as HTMLInputElement;
+    const field = getComputedStyle(input);
+    expect(field.backgroundColor).toBe("rgba(0, 0, 0, 0.4)");
+    expect(field.borderTopColor).toBe("rgba(255, 255, 255, 0.3)");
+    expect(field.boxShadow).not.toBe("none");
+    expect(field.color).toBe("rgb(255, 255, 255)");
+    const scrim = getComputedStyle(view.$(".happy-story-viewer__bottom").element);
+    expect(scrim.backgroundImage).toContain("linear-gradient");
+    expect(scrim.backgroundImage).toContain("0.65");
+    view.destroy();
+});
+
 /** A camera whose tracks say when they stop, and a recorder that takes only what `mp4` allows. */
 function camera(mp4: boolean) {
     const canvas = document.createElement("canvas");
