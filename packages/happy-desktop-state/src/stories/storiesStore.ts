@@ -157,7 +157,9 @@ export function happyAgentStoriesStoreCreate(deps: {
             const next = queue.shift()!;
             const { media, mediaLayers } = mediaOf(next);
             const all = [media, ...mediaLayers];
-            void (deps.preload?.(all) ?? Promise.resolve([])).then((each) => {
+            // A fetch ahead that fails only loses its frames: the ring still appears.
+            const fetched = deps.preload?.(all).catch(() => []) ?? Promise.resolve([]);
+            void fetched.then((each) => {
                 each.forEach((taken, at) => frames.set(all[at]!.url, taken));
                 loading--;
                 ready.add(next.id);

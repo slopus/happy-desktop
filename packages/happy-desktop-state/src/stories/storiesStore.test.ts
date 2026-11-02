@@ -487,7 +487,7 @@ it("reads the feed from the startup data, and shows a ring only once its first s
     pending.get("https://daemon/v0/stories/c/media")!();
     await until(() => pending.size === 4);
     pending.get("https://daemon/v0/stories/a/media")!();
-    await until(() => on(store.get()).row.length === 1);
+    await until(() => on(store.get()).row.length === 2);
     expect(on(store.get()).outlines.get("task1")).toBe("unseen");
     // Opening it fetches the next story ahead of playback.
     store.agentOpen("task1");

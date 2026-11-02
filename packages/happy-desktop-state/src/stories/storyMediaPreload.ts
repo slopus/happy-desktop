@@ -27,7 +27,8 @@ export function storyMediaPreload(
                     () => false,
                 );
                 const { naturalWidth: wide, naturalHeight: tall } = image;
-                return decoded ? { ambient: sample(image, wide, tall, 24, 0.45) } : {};
+                const ambient = decoded ? sample(image, wide, tall, 24, 0.45) : undefined;
+                return ambient ? { ambient } : {};
             }
             const video = document.createElement("video");
             [video.muted, video.preload, video.src] = [true, "auto", url];
@@ -36,12 +37,12 @@ export function storyMediaPreload(
                     video.addEventListener(type, () => resolve(true), { once: true });
                     video.addEventListener("error", () => resolve(false), { once: true });
                 });
-            const frames: HappyAgentStoryMediaFrames = (await event("loadeddata"))
-                ? {
-                      poster: sample(video, video.videoWidth, video.videoHeight, 720, 1),
-                      ambient: sample(video, video.videoWidth, video.videoHeight, 24, 0.45),
-                  }
-                : {};
+            const loaded = await event("loadeddata");
+            const poster = loaded
+                ? sample(video, video.videoWidth, video.videoHeight, 720, 1)
+                : undefined;
+            const ambient = poster && sample(video, video.videoWidth, video.videoHeight, 24, 0.45);
+            const frames: HappyAgentStoryMediaFrames = poster && ambient ? { poster, ambient } : {};
             if (video.readyState < HTMLMediaElement.HAVE_ENOUGH_DATA) await event("canplaythrough");
             video.removeAttribute("src");
             video.load();
@@ -50,7 +51,10 @@ export function storyMediaPreload(
     );
 }
 
-/** The source drawn at most `width` pixels wide and dimmed to `brightness`, as a JPEG address. */
+/**
+ * The source drawn at most `width` pixels wide and dimmed to `brightness`, as a JPEG address;
+ * none for media from another origin that did not allow reading it back.
+ */
 function sample(
     source: CanvasImageSource,
     wide: number,
@@ -64,5 +68,9 @@ function sample(
     const context = canvas.getContext("2d")!;
     context.filter = `brightness(${brightness})`;
     context.drawImage(source, 0, 0, canvas.width, canvas.height);
-    return canvas.toDataURL("image/jpeg", 0.85);
+    try {
+        return canvas.toDataURL("image/jpeg", 0.85);
+    } catch {
+        return undefined;
+    }
 }
