@@ -5,7 +5,7 @@ import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse } from "yaml";
 import { desktopFlavorNames, desktopFlavorRead } from "./desktopFlavors.mjs";
-import { packagedMainModulesVerify } from "./verify-packaged-main-modules.mjs";
+import { packagedFilesVerify, packagedMainModulesVerify } from "./verify-packaged-main-modules.mjs";
 
 const workspace = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const desktopDirectory = join(workspace, "packages", "happy-desktop-electron");
@@ -40,6 +40,9 @@ for (const selectedFlavorName of flavors) {
                   HAPPY_LOCAL_WEB_ORIGIN: localWebOrigin,
               }
             : {};
+    // main.js reads the artifact code renderer from dist/artifact-code by path, and only this
+    // build writes it; without it every artifact diff and code quote renders as plain text.
+    await run("pnpm", ["--dir", "packages/happy-desktop-electron", "build:artifact-code"]);
     if (selectedFlavorName === "standard")
         await run("pnpm", ["--dir", "packages/happy-desktop-electron", "exec", "vite", "build"]);
     await run(
@@ -209,6 +212,9 @@ async function releaseVerify(selectedFlavor, output) {
         packagedMainModulesVerify(join(application, "Contents", "Resources", "app.asar"), [
             "dist/main.js",
             "dist/happyAgentRendererUtility.js",
+        ]);
+        packagedFilesVerify(join(application, "Contents", "Resources", "app.asar"), [
+            "dist/artifact-code/code.js",
         ]);
         await run("codesign", ["--verify", "--deep", "--strict", "--verbose=2", application]);
         await staplerValidate(application);
