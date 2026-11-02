@@ -632,8 +632,8 @@ function agentIdentityEqual(
         face.kind === other.kind &&
         (face.kind === "image" && other.kind === "image"
             ? face.url === other.url
-            : face.kind === "initials" && other.kind === "initials"
-              ? face.initials === other.initials
+            : face.kind === "placeholder" && other.kind === "placeholder"
+              ? face.seed === other.seed
               : true)
     );
 }

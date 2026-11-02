@@ -93,13 +93,12 @@ export interface ConversationMessageProjection {
 
 /**
  * How an agent is pictured, the same way its own row pictures it: a bot's
- * picture, a team task's owner's photo or initials, the tasks glyph for a task
- * on a standalone machine, or the mark generated from a seed for anything with no picture of its own.
+ * picture or a team task's owner's photo, or for anything with no picture of
+ * its own the live placeholder its seed picks — the ID the phone picks it by.
  */
 export type ConversationAgentFace =
     | { readonly kind: "image"; readonly url: string }
-    | { readonly kind: "initials"; readonly initials: string }
-    | { readonly kind: "task" };
+    | { readonly kind: "placeholder"; readonly seed: string };
 
 /** A known agent as a transcript names it. */
 export interface ConversationAgentIdentity {

@@ -9,6 +9,7 @@ import "./styles/agent-activity-row.css";
 import "./styles/avatar.css";
 import "./styles/typed-text.css";
 import { AgentActivityRow } from "./AgentActivityRow";
+import { avatarPlaceholderIndex } from "./avatarShader/avatarShader";
 import { createRenderer } from "./testing";
 
 const fileDiffTool: ConversationToolCall = {
@@ -382,7 +383,7 @@ it("names a message's sender with its face, and an unnamed one by the start of i
                         kind: "agentMessage",
                         agentId: "byf9avtdw66p0lmixwkcut57",
                         agentName: "Release helper",
-                        agentFace: { kind: "initials", initials: "RH" },
+                        agentFace: { kind: "placeholder", seed: "bot_release_helper" },
                         text,
                     }}
                     data-testid="named"
@@ -392,7 +393,7 @@ it("names a message's sender with its face, and an unnamed one by the start of i
                         kind: "agentMessage",
                         agentId: "p0o9i8u7y6t5r4e3w2q1a2s3",
                         agentName: "Ship the launch",
-                        agentFace: { kind: "task" },
+                        agentFace: { kind: "placeholder", seed: "task_launch" },
                         text,
                     }}
                     data-testid="task"
@@ -410,9 +411,13 @@ it("names a message's sender with its face, and an unnamed one by the start of i
         view.container.querySelector(`[data-testid="${row}"] [data-happy-desktop-ui="${name}"]`);
 
     expect(part("named", "agent-activity-text")?.textContent).toBe("from Release helper");
-    expect(part("named", "avatar-initials")?.textContent).toBe("RH");
+    expect(part("named", "avatar-placeholder")?.getAttribute("data-placeholder-index")).toBe(
+        String(avatarPlaceholderIndex("bot_release_helper")),
+    );
     expect(part("task", "agent-activity-text")?.textContent).toBe("from Ship the launch");
-    expect(part("task", "avatar-glyph")).not.toBeNull();
+    expect(part("task", "avatar-placeholder")?.getAttribute("data-placeholder-index")).toBe(
+        String(avatarPlaceholderIndex("task_launch")),
+    );
     expect(part("task", "avatar-initials")).toBeNull();
 
     expect(part("unnamed", "agent-activity-text")?.textContent).toBe("from byf9avtd…");

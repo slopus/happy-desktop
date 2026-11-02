@@ -1,5 +1,6 @@
 import { partitionComponentProps } from "./componentProps";
 import { type CSSProperties, type HTMLAttributes } from "react";
+import { AvatarPlaceholder } from "./AvatarPlaceholder";
 import { Icon, type IconName } from "./Icon";
 export type AvatarSize = "xs" | "sm" | "md" | "lg";
 export type AvatarType = "human" | "agent";
@@ -16,6 +17,13 @@ export type AvatarProps = Omit<HTMLAttributes<HTMLSpanElement>, "style"> & {
     imageUrl?: string;
     initials: string;
     online?: boolean;
+    /**
+     * The ID of whatever this avatar stands for, when it has no picture of its
+     * own: it then wears the live shader placeholder that ID picks, the same
+     * one the phone draws for it, instead of initials. An `imageUrl` or an
+     * `icon` still wins over it.
+     */
+    placeholderSeed?: string;
     size?: AvatarSize;
     style?: CSSProperties;
     tone?: ToneName;
@@ -23,6 +31,8 @@ export type AvatarProps = Omit<HTMLAttributes<HTMLSpanElement>, "style"> & {
 };
 /** Glyph size per avatar box, leaving the tile's ink inset on every size. */
 const iconSize = { xs: 12, sm: 16, md: 18, lg: 20 } as const satisfies Record<AvatarSize, number>;
+/** Each size's box in CSS pixels, as avatar.css draws it. */
+const boxSize = { xs: 20, sm: 28, md: 36, lg: 44 } as const satisfies Record<AvatarSize, number>;
 export function Avatar(props: AvatarProps) {
     const [local, rest] = partitionComponentProps(props, [
         "children",
@@ -32,6 +42,7 @@ export function Avatar(props: AvatarProps) {
         "imageUrl",
         "initials",
         "online",
+        "placeholderSeed",
         "size",
         "style",
         "tone",
@@ -40,12 +51,17 @@ export function Avatar(props: AvatarProps) {
     const size = () => local.size ?? "md";
     const type = () => local.type ?? "human";
     const tone = () => local.tone ?? "slate";
+    const placeholder =
+        !local.imageUrl && !local.icon && local.placeholderSeed !== undefined
+            ? local.placeholderSeed
+            : undefined;
     return (
         <span
             {...rest}
             className={["happy-avatar", local.className].filter(Boolean).join(" ")}
             data-image={local.imageUrl ? "" : undefined}
             data-image-theme={local.imageTheme}
+            data-placeholder={placeholder === undefined ? undefined : ""}
             data-happy-desktop-ui="avatar"
             data-size={size()}
             data-tone={tone()}
@@ -71,6 +87,12 @@ export function Avatar(props: AvatarProps) {
                 <span className="happy-avatar__glyph" data-happy-desktop-ui="avatar-glyph">
                     <Icon name={local.icon} size={iconSize[size()]} />
                 </span>
+            ) : placeholder !== undefined ? (
+                <AvatarPlaceholder
+                    className="happy-avatar__placeholder"
+                    seed={placeholder}
+                    side={boxSize[size()]}
+                />
             ) : (
                 <span className="happy-avatar__initials" data-happy-desktop-ui="avatar-initials">
                     {local.initials}

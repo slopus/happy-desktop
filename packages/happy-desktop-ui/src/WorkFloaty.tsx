@@ -17,6 +17,10 @@ export type WorkFloatyMark =
           readonly label: string;
           readonly initials: string;
           readonly imageUrl?: string;
+          /** A glyph in place of initials or a placeholder: the home project's house. */
+          readonly icon?: IconName;
+          /** The project's id, whose live placeholder it wears without a picture (`Avatar`). */
+          readonly placeholderSeed?: string;
       }
     | { readonly type: "icon"; readonly icon: IconName };
 
@@ -79,8 +83,10 @@ export function WorkFloaty(props: WorkFloatyProps) {
                 ) : item.mark.type === "project" ? (
                     <span aria-label={item.mark.label} role="img">
                         <Avatar
+                            icon={item.mark.icon}
                             imageUrl={item.mark.imageUrl}
                             initials={item.mark.initials}
+                            placeholderSeed={item.mark.placeholderSeed}
                             size="xs"
                             style={{ width: 16, height: 16, borderRadius: 4 }}
                             type="agent"

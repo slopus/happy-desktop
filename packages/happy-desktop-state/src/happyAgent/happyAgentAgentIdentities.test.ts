@@ -100,23 +100,24 @@ it("names a bot, a task, and a subtask the way their own rows do", () => {
         name: "Release helper",
         face: { kind: "image", url: "http://happy-agent.test/v0/bots/bot_helper/avatar" },
     });
-    // A bot without a picture wears its initials, as its row does.
+    // A bot without a picture wears the placeholder its id picks, as its row does.
     expect(index.get("agent_plain")).toEqual({
         name: "Plain",
-        face: { kind: "initials", initials: "P" },
+        face: { kind: "placeholder", seed: "bot_plain" },
     });
+    // A team task without its owner's photo wears the owner's own placeholder.
     expect(index.get("agent_team")).toEqual({
         name: "Fix invoice rounding",
-        face: { kind: "initials", initials: "AL" },
+        face: { kind: "placeholder", seed: "usr_ann" },
     });
-    // Standalone: every task is the reader's own, so it wears the tasks glyph, never a face.
+    // Standalone: nobody owns it, so it wears the placeholder its own id picks.
     expect(index.get("agent_standalone")).toEqual({
         name: "Ship the launch",
-        face: { kind: "task" },
+        face: { kind: "placeholder", seed: "standalone" },
     });
     expect(index.get("agent_subtask")).toEqual({
         name: "Write the changelog",
-        face: { kind: "initials", initials: "WT" },
+        face: { kind: "placeholder", seed: "agent_subtask" },
     });
 });
 
@@ -144,7 +145,7 @@ it("asks the host once for an agent nothing lists, and leaves one it refuses unn
     await vi.waitFor(() => expect(changed).toHaveBeenCalledTimes(1));
     expect(source.lookup("agent_far")).toEqual({
         name: "Nightly triage",
-        face: { kind: "initials", initials: "NT" },
+        face: { kind: "placeholder", seed: "agent_far" },
     });
 
     source.request("agent_gone");
@@ -213,14 +214,14 @@ it("puts the sender's name and face on the row and leaves the id in the message"
             kind: "agentMessage",
             agentId: "agent_standalone",
             agentName: "Ship the launch",
-            agentFace: { kind: "task" },
+            agentFace: { kind: "placeholder", seed: "standalone" },
             text: envelope("agent_standalone"),
         },
         {
             kind: "agentMessage",
             agentId: "agent_subtask",
             agentName: "Write the changelog",
-            agentFace: { kind: "initials", initials: "WT" },
+            agentFace: { kind: "placeholder", seed: "agent_subtask" },
             text: envelope("agent_subtask"),
         },
         // Nobody can name it: no name and no face, so the row shows its id.

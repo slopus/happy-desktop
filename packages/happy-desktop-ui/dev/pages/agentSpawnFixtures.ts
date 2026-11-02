@@ -86,12 +86,15 @@ export const agentSpawnNamedTask: ConversationToolCall = {
         type: "agentSpawn",
         model: sol,
         agentId: "fcs8eh6n4j3pz2t9yd7w5cxa",
-        agent: { name: "Organize Ada's work", face: { kind: "task" } },
+        agent: {
+            name: "Organize Ada's work",
+            face: { kind: "placeholder", seed: "fcs8eh6n4j3pz2t9yd7w5cxa" },
+        },
     },
     display: "Created collaborator fcs8eh6n4j3pz2t9yd7w5cxa and sent it the task.",
 };
 
-/** An agent with no sidebar row: its title and the mark from its initials. */
+/** An agent with no sidebar row: its title and the placeholder its id picks. */
 export const agentSpawnNamedInitials: ConversationToolCall = {
     ...agentSpawnNamedTask,
     toolCallId: "spawn-named-initials",
@@ -100,7 +103,10 @@ export const agentSpawnNamedInitials: ConversationToolCall = {
         type: "agentSpawn",
         model: grok,
         agentId: "rsc8eh6n4j3pz2t9yd7w5cxa",
-        agent: { name: "Release research", face: { kind: "initials", initials: "RR" } },
+        agent: {
+            name: "Release research",
+            face: { kind: "placeholder", seed: "rsc8eh6n4j3pz2t9yd7w5cxa" },
+        },
     },
 };
 

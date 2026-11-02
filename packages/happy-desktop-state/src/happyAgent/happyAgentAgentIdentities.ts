@@ -25,34 +25,21 @@ export interface HappyAgentAgentIdentitySource {
     subscribe(listener: () => void): () => void;
 }
 
-/** Up to two initials from a person's name, as the task's own row shows them. */
-function initialsOf(name: string): string {
-    return name
-        .trim()
-        .split(/\s+/u)
-        .filter((word) => word.length > 0)
-        .slice(0, 2)
-        .map((word) => word.slice(0, 1).toUpperCase())
-        .join("");
-}
-
 /**
- * A task's face, by the same rules as its row: on a standalone machine every
- * task is the reader's own and wears the tasks glyph; in a team it wears its
- * owner's photo, then their initials, then the mark generated from the task.
+ * A task's face, by the same rules as its row: in a team its owner's photo,
+ * else the owner's own placeholder; a task nobody owns, or every task on a
+ * standalone machine, wears the placeholder its own id picks.
  */
 function taskFace(task: HappyAgentTask): ConversationAgentFace {
     const owner = task.owner;
-    if (owner === null) return { kind: "task" };
-    if (owner.avatar !== undefined) return { kind: "image", url: owner.avatar.url };
-    const initials = owner.name === undefined ? "" : initialsOf(owner.name);
-    return initials === "" ? { kind: "task" } : { kind: "initials", initials };
+    if (owner?.avatar !== undefined) return { kind: "image", url: owner.avatar.url };
+    return { kind: "placeholder", seed: owner?.userId ?? task.id };
 }
 
 /**
  * Every agent the session list names, by agent id: each bot and task by its
  * own name and face, and every other conversation — a subtask, a project's
- * session — by its title and the mark generated from its id. Bots and tasks
+ * session — by its title and the placeholder its id picks. Bots and tasks
  * come last so they win over a conversation listed under a project too.
  */
 export function happyAgentAgentIdentitiesIndex(
@@ -63,7 +50,7 @@ export function happyAgentAgentIdentitiesIndex(
         if (conversation.title.trim().length === 0) return;
         index.set(conversation.id, {
             name: conversation.title,
-            face: { kind: "initials", initials: initialsOf(conversation.title) },
+            face: { kind: "placeholder", seed: conversation.id },
         });
     };
     if (list.projects.type === "ready")
@@ -80,7 +67,7 @@ export function happyAgentAgentIdentitiesIndex(
             name: bot.name,
             face:
                 bot.avatar === undefined
-                    ? { kind: "initials", initials: initialsOf(bot.name) }
+                    ? { kind: "placeholder", seed: bot.id }
                     : { kind: "image", url: bot.avatar.url },
         });
     return index;
@@ -129,7 +116,7 @@ export function happyAgentAgentIdentitySourceCreate(deps: {
                     if (!title) return;
                     fetched.set(agentId, {
                         name: title,
-                        face: { kind: "initials", initials: initialsOf(title) },
+                        face: { kind: "placeholder", seed: agentId },
                     });
                     notify();
                 },

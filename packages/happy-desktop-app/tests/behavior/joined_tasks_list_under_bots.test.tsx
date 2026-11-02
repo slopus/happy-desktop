@@ -22,6 +22,7 @@ import {
     HAPPY_AGENT_GROUP_UNLISTED_REFUSAL,
     projectsVisibilityStoreCreate,
 } from "happy-desktop-state";
+import { avatarPlaceholderIndex } from "happy-desktop-ui";
 import { APP_SHORTCUTS } from "../../sources/appShortcuts";
 import { commandPaletteQuickActionRows } from "../../sources/commandPaletteResults";
 import {
@@ -292,22 +293,22 @@ it("lists the joined tasks under the bots, in the reader's order, with their sub
     ]);
 });
 
-it("wears the owner's photo, then their initials, then the bot placeholder", () => {
+it("wears the owner's photo, then the owner's placeholder, then the task's own", () => {
     const { container } = view();
     const launch = row(container, "ws_launch");
     expect(
         launch.querySelector('[data-happy-desktop-ui="avatar-image"]')?.getAttribute("src"),
     ).toBe(PHOTO);
-    expect(
-        row(container, "ws_billing").querySelector('[data-happy-desktop-ui="avatar-initials"]')
-            ?.textContent,
-    ).toBe("BD");
-    const orphan = row(container, "ws_orphan");
-    expect(orphan.querySelector('[data-happy-desktop-ui="avatar-glyph"]')).not.toBeNull();
-    // A bot without a picture wears the same placeholder.
-    expect(
-        row(container, "ws_helper").querySelector('[data-happy-desktop-ui="avatar-initials"]'),
-    ).not.toBeNull();
+    const placeholder = (id: string) =>
+        row(container, id)
+            .querySelector('[data-happy-desktop-ui="avatar-placeholder"]')
+            ?.getAttribute("data-placeholder-index");
+    // Picked by the owner's user id, as every place pictures them, and by the
+    // task's own id where nobody was identified.
+    expect(placeholder("ws_billing")).toBe(String(avatarPlaceholderIndex("usr_bo")));
+    expect(placeholder("ws_orphan")).toBe(String(avatarPlaceholderIndex("orphan")));
+    // A bot without a picture wears the placeholder its id picks.
+    expect(placeholder("ws_helper")).not.toBeUndefined();
 });
 
 it("leaves a task from the row's own control", () => {
@@ -394,15 +395,19 @@ const STANDALONE_TASKS: readonly HappyAgentTask[] = TASKS.map((entry) => ({
     owner: null,
 }));
 
-it("shows no owner face on a standalone machine, only the plain tasks glyph", () => {
+it("shows no owner face on a standalone machine, only the placeholder each task's id picks", () => {
     const { container } = view({
         entries: (actions) => [entry("local", actions, { tasks: STANDALONE_TASKS })],
     });
-    for (const id of ["ws_launch", "ws_billing", "ws_orphan"]) {
-        const face = row(container, id);
+    for (const id of ["launch", "billing", "orphan"]) {
+        const face = row(container, `ws_${id}`);
         expect(face.querySelector('[data-happy-desktop-ui="avatar-image"]')).toBeNull();
         expect(face.querySelector('[data-happy-desktop-ui="avatar-initials"]')).toBeNull();
-        expect(face.querySelector('[data-happy-desktop-ui="avatar-glyph"]')).not.toBeNull();
+        expect(
+            face
+                .querySelector('[data-happy-desktop-ui="avatar-placeholder"]')
+                ?.getAttribute("data-placeholder-index"),
+        ).toBe(String(avatarPlaceholderIndex(id)));
     }
 });
 

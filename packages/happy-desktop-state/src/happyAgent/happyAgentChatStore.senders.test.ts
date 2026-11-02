@@ -90,14 +90,14 @@ it("asks about an unnamed sender and names its row once the answer arrives", asy
 
     known.set("agent_far", {
         name: "Nightly triage",
-        face: { kind: "initials", initials: "NT" },
+        face: { kind: "placeholder", seed: "agent_far" },
     });
     for (const listener of listeners) listener();
     expect(row()).toEqual({
         kind: "agentMessage",
         agentId: "agent_far",
         agentName: "Nightly triage",
-        agentFace: { kind: "initials", initials: "NT" },
+        agentFace: { kind: "placeholder", seed: "agent_far" },
         text: TEXT,
     });
 

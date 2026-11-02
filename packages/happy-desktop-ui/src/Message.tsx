@@ -208,6 +208,8 @@ export type MessageProps = Omit<HTMLAttributes<HTMLDivElement>, "style"> & {
      * Defaults to `time`. */
     gutterTime?: string;
     imageUrl?: string;
+    /** The ID whose live placeholder the author wears without a picture (`Avatar`). */
+    placeholderSeed?: string;
     /** The conversation's own agent, which wears the Happy logo while it has no picture. */
     brandAvatar?: boolean;
     /** Unframed entity artwork, shared with its sidebar row and tab. */
@@ -384,6 +386,7 @@ export function Message(props: MessageProps) {
         "grouped",
         "gutterTime",
         "imageUrl",
+        "placeholderSeed",
         "brandAvatar",
         "imageMark",
         "images",
@@ -435,6 +438,7 @@ export function Message(props: MessageProps) {
                 imageTheme={happyAgent() ? "brand" : undefined}
                 imageUrl={happyAgent() ? happyLogoBlackUrl : local.imageUrl}
                 initials={local.initials ?? deriveInitials(local.author)}
+                placeholderSeed={happyAgent() ? undefined : local.placeholderSeed}
                 size={size}
                 tone={local.tone}
                 type={local.agent ? "agent" : "human"}

@@ -17,7 +17,10 @@ import { Ionicon } from "./vectorIcons/VectorIcon";
 import { WindowCover } from "./WindowOverlay";
 
 /** Who posted or replied: an agent's rounded tile or a person's round photo. */
-export type StoryFace = Pick<AvatarProps, "icon" | "imageUrl" | "initials" | "tone" | "type">;
+export type StoryFace = Pick<
+    AvatarProps,
+    "icon" | "imageUrl" | "initials" | "placeholderSeed" | "tone" | "type"
+>;
 
 export type StoryViewerReply = {
     readonly id: string;

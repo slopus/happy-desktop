@@ -92,6 +92,8 @@ export type SidebarItem = {
         imageUrl?: string;
         initials?: string;
         icon?: IconName;
+        /** The ID whose live placeholder it wears without a picture or glyph (`Avatar`). */
+        placeholderSeed?: string;
     }[];
     /** The row's glyph. A `person`/`agent`/`project` row paints it inside the avatar tile. */
     icon?: IconName;
@@ -100,6 +102,12 @@ export type SidebarItem = {
     /** Unframed entity artwork in the existing 20px leading lane. */
     imageMark?: ImageMark;
     initials?: string;
+    /**
+     * The ID of what a `person`/`agent`/`project` row stands for, when it has no
+     * picture or glyph of its own: its face is then the live placeholder that ID
+     * picks, the one the phone draws for it, instead of initials.
+     */
+    placeholderSeed?: string;
     /**
      * `section` is a titled heading rather than a destination. It is arranged
      * like any other row, and one that states `collapsed` folds the rows after
@@ -1775,6 +1783,7 @@ function SidebarRow({
                 imageUrl={item().imageUrl}
                 initials={item().initials ?? item().label.slice(0, 1).toUpperCase()}
                 online={item().kind === "person" ? item().online : undefined}
+                placeholderSeed={item().placeholderSeed}
                 size="xs"
                 tone={item().tone}
                 type={item().kind === "agent" || item().kind === "project" ? "agent" : "human"}
@@ -2099,6 +2108,7 @@ function SidebarRow({
                                         avatar.initials ?? avatar.label.slice(0, 1).toUpperCase()
                                     }
                                     icon={avatar.icon}
+                                    placeholderSeed={avatar.placeholderSeed}
                                     size="xs"
                                     style={{ width: 16, height: 16, borderRadius: 4 }}
                                     type="agent"

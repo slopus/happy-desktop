@@ -1013,7 +1013,7 @@ function botSidebarItem(
         label: bot.name,
         labelShimmer: titleShimmerEnabled,
         initials: ownerInitials(bot.name),
-        ...(bot.avatar ? { imageUrl: bot.avatar.url } : {}),
+        ...botFace(bot),
         ...sidebarActivity(bot.conversation.activity),
         ...(bot.conversation.unread ? { unread: true } : {}),
         ...(muted ? { muted: true } : {}),
@@ -1036,27 +1036,36 @@ function botCreatingSidebarItem(
         label: bot.name,
         labelShimmer: titleShimmerEnabled,
         initials: ownerInitials(bot.name),
-        ...(bot.avatar ? { imageUrl: bot.avatar.url } : {}),
+        ...(bot.avatar ? { imageUrl: bot.avatar.url } : { placeholderSeed: bot.id }),
         lifecycle: "creating",
         lifecycleLabel: "creating",
     };
 }
 
-/** A task's face, as its row wears it: the owner's, or a glyph on a standalone machine. */
-function taskFace(task: HappyAgentTask): Pick<SidebarItem, "icon" | "imageUrl" | "initials"> {
+/**
+ * A bot's face: its picture, or the live placeholder its id picks, as the phone
+ * draws it. The Chief of Staff keeps its own picture and never wears one.
+ */
+function botFace(bot: HappyAgentBot): Pick<SidebarItem, "imageUrl" | "placeholderSeed"> {
+    if (bot.avatar) return { imageUrl: bot.avatar.url };
+    return bot.systemKey === "chief_of_staff" ? {} : { placeholderSeed: bot.id };
+}
+
+/**
+ * A task's face, as its row wears it and the phone draws it: in a team its
+ * owner's photo, else the owner's own placeholder, picked by their user id as
+ * every other place pictures them; a task nobody owns, or any task on a
+ * standalone machine, the placeholder its own id picks.
+ */
+function taskFace(
+    task: HappyAgentTask,
+): Pick<SidebarItem, "imageUrl" | "initials" | "placeholderSeed"> {
     const owner = task.owner;
-    if (owner === null) return { icon: "tasks" };
-    const initials =
-        owner.name === undefined || ownerInitials(owner.name) === ""
-            ? undefined
-            : ownerInitials(owner.name);
     return {
-        ...(owner.avatar ? { imageUrl: owner.avatar.url } : {}),
-        ...(initials !== undefined
-            ? { initials }
-            : owner.avatar === undefined
-              ? { icon: "tasks" }
-              : {}),
+        initials: owner?.name === undefined ? "" : ownerInitials(owner.name),
+        ...(owner?.avatar
+            ? { imageUrl: owner.avatar.url }
+            : { placeholderSeed: owner?.userId ?? task.id }),
     };
 }
 
@@ -1079,13 +1088,9 @@ function ownerInitials(name: string): string {
 /**
  * A joined task as its row: a bot's row in every respect but the face, which
  * in a team is the owner's rather than the task's own — a task has none. The
- * owner's photo comes first, then their initials, and a task whose owner
- * nobody could identify wears the same generated mark a bot without a picture
- * does, hashed from the task's id so it survives every rename.
- *
- * On a standalone machine every task is the reader's own, so a face would say
- * nothing: the row wears the plain tasks glyph in the same tile, the way the
- * home project wears its house, and its name stays on the bots' column.
+ * owner's photo comes first, then the owner's placeholder, and a task nobody
+ * owns wears the placeholder its own id picks, so it survives every rename
+ * (`taskFace`).
  *
  * The trailing control leaves the task. Leaving is the reader's own act on
  * their own list and loses nothing — the task carries on for everyone else and
@@ -1138,6 +1143,7 @@ function botSubtaskSidebarItems(
                                   id: project.id,
                                   label: `Project: ${project.name}`,
                                   initials: project.name.slice(0, 1).toUpperCase(),
+                                  placeholderSeed: project.id,
                                   ...(project.kind === "home" ? { icon: "home" as const } : {}),
                                   ...(project.avatar ? { imageUrl: project.avatar.url } : {}),
                               },
@@ -1176,6 +1182,7 @@ function sidebarItems(
             label: project.name,
             labelShimmer: titleShimmerEnabled,
             initials: project.name.slice(0, 1).toUpperCase(),
+            placeholderSeed: project.id,
             ...(project.kind === "home" ? { icon: "home" as const } : {}),
             ...(project.avatar ? { imageUrl: project.avatar.url } : {}),
             // The + always waits for hover, so a project at rest ends with its
@@ -2668,7 +2675,7 @@ function surfaceLabel(surface: HappyAgentSurface): string {
 function surfaceFace(
     surface: HappyAgentSurface,
     places: SurfacePlaces,
-): Pick<SidebarItem, "icon" | "imageUrl" | "initials" | "archived"> {
+): Pick<SidebarItem, "icon" | "imageUrl" | "initials" | "placeholderSeed" | "archived"> {
     const target = surface.target;
     const glyph = { icon: surfaceTypeIcon(surface.type) };
     if (target?.state === "unavailable") return { ...glyph, archived: true };
@@ -2677,7 +2684,7 @@ function surfaceFace(
         const bot = places.bots.find((entry) => entry.id === target.id);
         return {
             initials: ownerInitials(bot?.name ?? surface.name),
-            ...(bot?.avatar ? { imageUrl: bot.avatar.url } : {}),
+            ...(bot ? botFace(bot) : { placeholderSeed: target.id }),
         };
     }
     if (surface.image) return { imageUrl: surface.image.url };
@@ -3353,18 +3360,23 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                       : undefined;
             const name = person?.name ?? "Someone";
             const photo = person?.photo ? { imageUrl: person.photo.url } : {};
-            return { name, face: { initials: ownerInitials(name), type: "human", ...photo } };
+            // A team member wears the placeholder their user id picks, as on the phone.
+            const userId = who.userId ?? surfaceCatalog.viewer?.userId ?? null;
+            const placeholder = userId === null ? {} : { placeholderSeed: userId };
+            return {
+                name,
+                face: { initials: ownerInitials(name), type: "human", ...placeholder, ...photo },
+            };
         }
         const bot = active?.bots.find((each) => each.conversation.id === who.agentId);
         const task = active?.tasks?.find((each) => each.conversation.id === who.agentId);
         const name = bot?.name ?? task?.name ?? "Agent";
         const shortName = bot ? bot.shortName : task?.shortName;
-        const face = task && !bot ? taskFace(task) : {};
-        const photo = bot?.avatar ? { imageUrl: bot.avatar.url } : {};
+        const face = bot ? botFace(bot) : task ? taskFace(task) : {};
         return {
             name,
             ...(shortName ? { shortName } : {}),
-            face: { initials: ownerInitials(name), ...face, ...photo, type: "agent" },
+            face: { initials: ownerInitials(name), ...face, type: "agent" },
         };
     };
     // Only the addressed Happy Agent's rows, whose stories these are, wear outlines.
@@ -5106,6 +5118,9 @@ function paletteResultsRow(
                             ? {}
                             : { imageUrl: row.glyph.imageUrl }),
                         ...(row.glyph.icon === undefined ? {} : { icon: row.glyph.icon }),
+                        ...(row.glyph.placeholderSeed === undefined
+                            ? {}
+                            : { placeholderSeed: row.glyph.placeholderSeed }),
                     },
                 }),
         ...(row.shortcut ? { shortcut: row.shortcut } : {}),
@@ -9056,6 +9071,8 @@ function workFloatyProjectPlace(
             type: "project",
             label: `Project: ${project.name}`,
             initials: project.name.slice(0, 1).toUpperCase(),
+            placeholderSeed: project.id,
+            ...(project.kind === "home" ? { icon: "home" as const } : {}),
             ...(project.avatar ? { imageUrl: project.avatar.url } : {}),
         },
         trailing: { type: "changes", added, deleted },
@@ -9928,6 +9945,7 @@ function happyAgentTaskBrowseDialog(
                     : {
                           owner: {
                               ...(task.owner.name === undefined ? {} : { name: task.owner.name }),
+                              placeholderSeed: task.owner.userId ?? task.id,
                               ...(task.owner.avatar === undefined
                                   ? {}
                                   : { imageUrl: task.owner.avatar.url }),
@@ -10122,6 +10140,7 @@ function happyAgentNamingDialog(
         <HappyAgentProjectSettingsDialog
             draft={rename.draft}
             {...(project?.avatar ? { imageUrl: project.avatar.url } : {})}
+            {...(project ? { placeholderSeed: project.id } : {})}
             {...archiveBlock}
             {...computeBlock}
             {...(project

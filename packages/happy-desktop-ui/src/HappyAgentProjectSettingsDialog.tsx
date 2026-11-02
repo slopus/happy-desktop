@@ -89,6 +89,8 @@ export type HappyAgentProjectSettingsDialogProps = {
     };
     /** The picture the daemon derived from the repository, when it has one. */
     imageUrl?: string;
+    /** The project's id, whose live placeholder it wears without a picture (`Avatar`). */
+    placeholderSeed?: string;
     /** How many worktrees the project holds, and how many sessions live under it, its worktrees' included. Absent with `location`. */
     contents?: {
         worktrees: number;
@@ -300,6 +302,7 @@ export function HappyAgentProjectSettingsDialog(props: HappyAgentProjectSettings
                         <Avatar
                             imageUrl={props.imageUrl}
                             initials={props.name.slice(0, 1).toUpperCase()}
+                            placeholderSeed={props.placeholderSeed}
                             size="md"
                             type="agent"
                         />

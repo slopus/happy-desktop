@@ -751,12 +751,15 @@ function eventTime(value: number | undefined): string | undefined {
  */
 export function authorAvatar(author: ConversationAuthor): {
     readonly imageUrl?: string;
+    readonly placeholderSeed?: string;
     readonly brandAvatar: boolean;
 } {
     const imageUrl =
         author.imageUrl ?? (author.avatar ? thumbhashDataUrl(author.avatar.thumbhash) : undefined);
     return {
         ...(imageUrl === undefined ? {} : { imageUrl }),
+        // A team member without a photo wears the placeholder their user id picks.
+        ...(author.userId === undefined ? {} : { placeholderSeed: author.userId }),
         brandAvatar: author.agentRole === "default",
     };
 }

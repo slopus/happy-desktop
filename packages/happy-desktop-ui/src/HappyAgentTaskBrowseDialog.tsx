@@ -16,8 +16,10 @@ export type HappyAgentTaskBrowseEntry = {
     owner?: {
         /** The owner's name; absent when nobody was identified. */
         name?: string;
-        /** The owner's photo. Without one the owner's initials stand in. */
+        /** The owner's photo. Without one the placeholder `placeholderSeed` picks stands in. */
         imageUrl?: string;
+        /** The owner's user id, or the task's own where nobody was identified (`Avatar`). */
+        placeholderSeed?: string;
     };
     /** Whether the reader is already a member, which offers Open instead of Join. */
     joined: boolean;
@@ -116,9 +118,7 @@ export function HappyAgentTaskBrowseDialog(props: HappyAgentTaskBrowseDialogProp
                                         <Avatar
                                             imageUrl={task.owner.imageUrl}
                                             initials={ownerInitials(task.owner.name ?? "")}
-                                            icon={
-                                                task.owner.name === undefined ? "tasks" : undefined
-                                            }
+                                            placeholderSeed={task.owner.placeholderSeed}
                                             size="sm"
                                         />
                                     )}

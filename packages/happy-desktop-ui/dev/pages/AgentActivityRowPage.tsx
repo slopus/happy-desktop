@@ -341,7 +341,7 @@ export function AgentActivityRowPage() {
                             kind: "agentMessage",
                             agentId: "v2eibi1k9zgwde56wwuhrbku",
                             agentName: "Retry policy rewrite",
-                            agentFace: { kind: "initials", initials: "RP" },
+                            agentFace: { kind: "placeholder", seed: "v2eibi1k9zgwde56wwuhrbku" },
                             text: AGENT_MESSAGE_TEXT,
                         }}
                     />
@@ -350,7 +350,7 @@ export function AgentActivityRowPage() {
                             kind: "agentMessage",
                             agentId: "v2eibi1k9zgwde56wwuhrbku",
                             agentName: "Retry policy rewrite",
-                            agentFace: { kind: "initials", initials: "RP" },
+                            agentFace: { kind: "placeholder", seed: "v2eibi1k9zgwde56wwuhrbku" },
                             text: AGENT_MESSAGE_TEXT,
                         }}
                         defaultExpanded
@@ -369,7 +369,7 @@ export function AgentActivityRowPage() {
                             kind: "agentMessage",
                             agentId: "k3n2b8x0q1w9e7r6t5y4u3i2",
                             agentName: "Fix invoice rounding",
-                            agentFace: { kind: "initials", initials: "AL" },
+                            agentFace: { kind: "placeholder", seed: "usr_ann" },
                             text: AGENT_MESSAGE_TEXT,
                         }}
                     />
@@ -378,7 +378,7 @@ export function AgentActivityRowPage() {
                             kind: "agentMessage",
                             agentId: "p0o9i8u7y6t5r4e3w2q1a2s3",
                             agentName: "Ship the launch checklist",
-                            agentFace: { kind: "task" },
+                            agentFace: { kind: "placeholder", seed: "p0o9i8u7y6t5r4e3w2q1a2s3" },
                             text: AGENT_MESSAGE_TEXT,
                         }}
                     />

@@ -4,6 +4,7 @@
  */
 
 .happy-avatar,
+.happy-avatar__placeholder,
 .happy-avatar__initials,
 .happy-avatar__glyph,
 .happy-avatar__image,
@@ -122,8 +123,18 @@
 
 /* A supplied avatar image owns the entire mark. This is especially important
  * for Happy's theme-selected logo, whose silhouette must not inherit a tile. */
-.happy-avatar[data-image] {
+.happy-avatar[data-image],
+.happy-avatar[data-placeholder] {
     background: transparent;
+}
+
+/* The live placeholder is drawn as a picture is: it fills the mark and takes
+ * its corners, a circle for a person and the rounded square for an agent. */
+.happy-avatar__placeholder {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border-radius: inherit;
 }
 
 .happy-avatar__initials {

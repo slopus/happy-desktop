@@ -24,6 +24,8 @@ export type CommandPaletteResultsAvatar = {
     initials: string;
     imageUrl?: string;
     icon?: IconName;
+    /** The ID whose live placeholder it wears without a picture or glyph (`Avatar`). */
+    placeholderSeed?: string;
     tone?: ToneName;
     type?: "agent" | "human";
 };
@@ -149,6 +151,7 @@ function commandRowContent(row: CommandPaletteCommandRow) {
                         icon={row.avatar.icon}
                         imageUrl={row.avatar.imageUrl}
                         initials={row.avatar.initials}
+                        placeholderSeed={row.avatar.placeholderSeed}
                         size="xs"
                         tone={row.avatar.tone}
                         type={row.avatar.type}

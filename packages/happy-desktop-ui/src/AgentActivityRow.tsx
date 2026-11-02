@@ -1690,19 +1690,17 @@ const AGENT_MESSAGE_FACE_SIZE = 14;
 
 /**
  * The sender's face, as its own row elsewhere pictures it, shrunk to the glyph
- * lane: a picture, initials, the tasks glyph, or the generated mark.
+ * lane: a picture, or the live placeholder its seed picks.
  */
 function AgentMessageFace(props: { face: ConversationAgentFace }) {
     const face = props.face;
     return (
         <Avatar
-            {...(face.kind === "image" ? { imageUrl: face.url } : {})}
-            {...(face.kind === "task" ? { icon: "tasks" as const } : {})}
-            initials={face.kind === "initials" ? face.initials : ""}
+            {...(face.kind === "image" ? { imageUrl: face.url } : { placeholderSeed: face.seed })}
+            initials=""
             size="xs"
             style={{
                 borderRadius: 4,
-                fontSize: 7,
                 height: AGENT_MESSAGE_FACE_SIZE,
                 width: AGENT_MESSAGE_FACE_SIZE,
             }}

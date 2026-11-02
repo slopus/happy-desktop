@@ -186,7 +186,7 @@ it("puts the sidebar first: a hidden bot or a project left out of the sidebar si
     });
 });
 
-it("wears the sidebar's marks: pictures in rounded tiles, the tasks glyph in its tile", () => {
+it("wears the sidebar's marks: pictures in rounded tiles, else the placeholder its id picks", () => {
     const rows = commandPaletteResults(input()).rows;
     expect(rows.find((row) => row.id === "bot:bot_happy")).toMatchObject({
         glyph: { kind: "avatar", initials: "H", imageUrl: PHOTO },
@@ -195,7 +195,7 @@ it("wears the sidebar's marks: pictures in rounded tiles, the tasks glyph in its
         glyph: { kind: "avatar", initials: "S", imageUrl: PHOTO },
     });
     expect(rows.find((row) => row.id === "task:cmdk")).toMatchObject({
-        glyph: { kind: "avatar", icon: "tasks" },
+        glyph: { kind: "avatar", placeholderSeed: "cmdk" },
     });
 });
 

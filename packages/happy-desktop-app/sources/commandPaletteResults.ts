@@ -54,13 +54,15 @@ export type CommandPaletteGlyph =
     | { readonly kind: "icon"; readonly name: IconName }
     /**
      * The rounded tile the sidebar gives a bot, a task, or a project: its
-     * picture, else its glyph, else its initials.
+     * picture, else its glyph, else the live placeholder its seed picks, else
+     * its initials.
      */
     | {
           readonly kind: "avatar";
           readonly initials: string;
           readonly imageUrl?: string;
           readonly icon?: IconName;
+          readonly placeholderSeed?: string;
       }
     | { readonly kind: "emphasis"; readonly emphasis: CommandPaletteRowEmphasis };
 
@@ -614,41 +616,48 @@ function initialsOf(name: string): string {
 }
 
 /**
- * A task's face, as its sidebar row wears it: the owner's photo, then their
- * initials, and the tasks glyph in the same tile where there is neither — or
- * where there is no owner at all, on a standalone machine.
+ * A task's face, as its sidebar row wears it: in a team the owner's photo,
+ * else the owner's placeholder; a task nobody owns, or any task on a
+ * standalone machine, the placeholder its own id picks.
  */
 function taskGlyph(task: HappyAgentTask): CommandPaletteGlyph {
     const owner = task.owner;
-    const initials = owner?.name === undefined ? "" : initialsOf(owner.name);
     return {
         kind: "avatar",
-        initials,
-        ...(owner?.avatar ? { imageUrl: owner.avatar.url } : {}),
-        ...(owner === null || (initials === "" && owner.avatar === undefined)
-            ? { icon: "tasks" as const }
-            : {}),
+        initials: owner?.name === undefined ? "" : initialsOf(owner.name),
+        ...(owner?.avatar
+            ? { imageUrl: owner.avatar.url }
+            : { placeholderSeed: owner?.userId ?? task.id }),
     };
 }
 
-/** A bot's face, as its sidebar row wears it: its picture, else its initials. */
+/**
+ * A bot's face, as its sidebar row wears it: its picture, else the placeholder
+ * its id picks; the Chief of Staff never wears one.
+ */
 function botGlyph(bot: HappyAgentBot): CommandPaletteGlyph {
     return {
         kind: "avatar",
         initials: initialsOf(bot.name),
-        ...(bot.avatar ? { imageUrl: bot.avatar.url } : {}),
+        ...(bot.avatar
+            ? { imageUrl: bot.avatar.url }
+            : bot.systemKey === "chief_of_staff"
+              ? {}
+              : { placeholderSeed: bot.id }),
     };
 }
 
 /**
  * A project's face, as its sidebar row wears it: the picture derived from its
- * remote, else its initial. The catch-all project has no remote and an "H"
- * plaque would read as one more repository, so it wears a house.
+ * remote, else the placeholder its id picks. The catch-all project has no
+ * remote and a placeholder would read as one more repository, so it wears a
+ * house.
  */
 function projectGlyph(project: HappyAgentProjectGroup): CommandPaletteGlyph {
     return {
         kind: "avatar",
         initials: project.name.slice(0, 1).toUpperCase(),
+        placeholderSeed: project.id,
         ...(project.avatar ? { imageUrl: project.avatar.url } : {}),
         ...(project.kind === "home" ? { icon: "home" as const } : {}),
     };
