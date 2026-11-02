@@ -340,6 +340,17 @@
     --happy-radius-window: 8px;
     --happy-radius-shell: 14px;
     --happy-radius-pill: 999px;
+    /* Motion for a surface that appears over the window and goes again, such
+       as the ⌘K palette: it arrives quickly and settles, and leaves faster
+       still, so it never stands between the reader and their next keystroke.
+       Opacity and transform only, so it stays on the compositor. */
+    --happy-motion-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+    --happy-motion-ease-in: cubic-bezier(0.4, 0, 1, 1);
+    --happy-motion-backdrop-enter: 120ms;
+    --happy-motion-pop-enter: 150ms;
+    --happy-motion-pop-exit: 100ms;
+    --happy-motion-pop-enter-transform: translateY(-4px) scale(0.97);
+    --happy-motion-pop-exit-transform: scale(0.98);
     /* The one hover shape: a hovered sidebar row's rounded rectangle and fill.
        Every control with a hover background (toolbar icons, a tab's close,
        a strip's +, a row's own control) wears exactly this. */
@@ -373,6 +384,20 @@
 
     --nl-kind-color: var(--text-link);
     --nl-kind-soft: var(--surface-selected);
+}
+
+/* Reduced motion keeps the arrival and departure but drops the travel: no
+   scale and no settle, and the fade is over within a frame. A transition still
+   runs, so whatever waits for it to end still hears that it did. */
+@media (prefers-reduced-motion: reduce) {
+    :root,
+    .happy-theme-light {
+        --happy-motion-backdrop-enter: 1ms;
+        --happy-motion-pop-enter: 1ms;
+        --happy-motion-pop-exit: 1ms;
+        --happy-motion-pop-enter-transform: none;
+        --happy-motion-pop-exit-transform: none;
+    }
 }
 
 @media (prefers-color-scheme: dark) {

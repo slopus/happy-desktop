@@ -55,6 +55,13 @@ export default defineConfig({
             Math.min(12, Math.round((availableParallelism() * 0.75) / browsers.length)),
         ),
         browser: {
+            /* Lets a test read its component as a reader who asked for reduced
+             * motion does; the page goes back to no preference when it is done. */
+            commands: {
+                reducedMotionEmulate: async ({ page }, reduce: boolean) => {
+                    await page.emulateMedia({ reducedMotion: reduce ? "reduce" : "no-preference" });
+                },
+            },
             enabled: true,
             headless: true,
             instances: browsers.map((browser) => ({ browser })),

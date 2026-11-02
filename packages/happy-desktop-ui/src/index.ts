@@ -606,7 +606,14 @@ export {
 export { Menu, type MenuItem, type MenuProps } from "./Menu";
 export { MenuButton, type MenuButtonProps } from "./MenuButton";
 export { Modal, type ModalProps, type ModalSize, type ModalTone } from "./Modal";
-export { ModalOverlay, type ModalOverlayProps } from "./ModalOverlay";
+export {
+    ModalOverlay,
+    ModalOverlayPresence,
+    useModalOverlayPresence,
+    type ModalOverlayPresenceProps,
+    type ModalOverlayPresenceState,
+    type ModalOverlayProps,
+} from "./ModalOverlay";
 export {
     CloudSignInNoticeDialog,
     type CloudSignInNoticeAccount,

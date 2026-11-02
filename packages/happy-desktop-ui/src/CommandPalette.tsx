@@ -10,6 +10,7 @@ import { KeyCap } from "./Badge";
 import { Icon } from "./Icon";
 import { commandShortcut, commandShortcutMatches } from "./keyboardShortcut";
 import { ScrollArea } from "./Scrollbar";
+import { useModalOverlayPresence } from "./ModalOverlay";
 import { Ionicon } from "./vectorIcons/VectorIcon";
 /**
  * The chord that opens the palette, owned here as well so it can close it. The
@@ -102,14 +103,36 @@ export function CommandPalette(props: CommandPaletteProps) {
             input.setSelectionRange(input.value.length, input.value.length);
         }
     }, [local.autoFocus]);
+    const cardRef = useRef<HTMLDivElement>(null);
+    // Hands focus back to the control that opened the palette, unless the
+    // reader's choice has already put it somewhere else.
+    const focusReturn = (card: HTMLElement | null) => {
+        const invoker = invokerRef.current;
+        if (!invoker || invoker === inputRef.current || !invoker.isConnected) return;
+        const focused = document.activeElement;
+        if (focused === null || focused === document.body || card?.contains(focused) !== false)
+            invoker.focus();
+    };
+    const closing = useModalOverlayPresence()?.closing === true;
+    // eslint-disable-next-line happy-react/no-layout-effect -- a palette that starts leaving hands live focus back at once, so typing during its exit already reaches where the reader is going, and takes it again if it is opened before it is gone
+    useLayoutEffect(() => {
+        if (closing) {
+            focusReturn(cardRef.current);
+            return;
+        }
+        // Opened again while it was still leaving: the same card is back, and
+        // so is the caret, after the query as on a first opening.
+        const input = inputRef.current;
+        if (local.autoFocus === false || !input || document.activeElement === input) return;
+        input.focus();
+        input.setSelectionRange(input.value.length, input.value.length);
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- runs when leaving starts or is called off; focusReturn reads only refs
+    }, [closing]);
     // eslint-disable-next-line happy-react/no-layout-effect -- closing the palette restores focus to the exact still-connected DOM control that invoked it, which is an imperative unmount handoff
-    useLayoutEffect(
-        () => () => {
-            const invoker = invokerRef.current;
-            if (invoker && invoker !== inputRef.current && invoker.isConnected) invoker.focus();
-        },
-        [],
-    );
+    useLayoutEffect(() => {
+        const card = cardRef.current;
+        return () => focusReturn(card);
+    }, []);
     // 229 is the legacy IME "processing" keyCode some engines still report when
     // `isComposing` is not yet set on the keydown that starts a composition.
     const isComposing = (event: ReactKeyboardEvent) =>
@@ -121,6 +144,7 @@ export function CommandPalette(props: CommandPaletteProps) {
             aria-modal="true"
             className={["happy-command-palette", local.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="command-palette"
+            ref={cardRef}
             onKeyDown={(event) => {
                 if (event.key === "Escape" && !isComposing(event)) {
                     event.preventDefault();

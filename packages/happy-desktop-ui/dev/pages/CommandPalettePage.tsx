@@ -1,4 +1,4 @@
-import { type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { AppShell } from "../../src/AppShell";
 import { Banner } from "../../src/Banner";
 import { CommandPalette } from "../../src/CommandPalette";
@@ -9,7 +9,7 @@ import {
 import { EmptyState } from "../../src/EmptyState";
 import { FormRow } from "../../src/FormRow";
 import { commandShortcut } from "../../src/keyboardShortcut";
-import { ModalOverlay } from "../../src/ModalOverlay";
+import { ModalOverlay, ModalOverlayPresence } from "../../src/ModalOverlay";
 import { SearchResults, type SearchResultGroup } from "../../src/SearchResults";
 import { SegmentedControl } from "../../src/SegmentedControl";
 import { Sidebar, type SidebarSection } from "../../src/Sidebar";
@@ -403,47 +403,7 @@ function PaletteWindow(props: {
     return (
         <ThemeScope mode={props.mode}>
             <div style={{ display: "flex", height: "100%", position: "relative", width: "100%" }}>
-                <AppShell
-                    navigationChrome="integrated"
-                    onSidebarCollapsedChange={noop}
-                    sidebar={
-                        <Sidebar
-                            activeItemId="launch"
-                            brand={false}
-                            onCompose={noop}
-                            onItemSelect={noop}
-                            searchRow={{
-                                label: "Search",
-                                onOpen: noop,
-                                shortcut: commandShortcut("k"),
-                            }}
-                            sections={WINDOW_SECTIONS}
-                        />
-                    }
-                    sidebarCollapsed={false}
-                    sidebarCollapsedAction={{ label: "New task (⌘N)", onClick: noop }}
-                    sidebarCollapsedLayout="overlay"
-                    sidebarCollapsible
-                    windowControls={props.trafficLights !== false}
-                >
-                    <TabbedPane
-                        activeId="launch"
-                        closePresentation="overlay"
-                        onClose={noop}
-                        onSelect={noop}
-                        tabSizing="content"
-                        tabs={[{ id: "launch", label: "Launch the desktop beta", closable: true }]}
-                    >
-                        <div style={{ alignItems: "center", display: "flex", flex: "1 1 0%" }}>
-                            <EmptyState
-                                description="The conversation stays where it is behind the palette."
-                                icon="chat"
-                                size="panel"
-                                title="Launch the desktop beta"
-                            />
-                        </div>
-                    </TabbedPane>
-                </AppShell>
+                <WindowBehind onSearchOpen={noop} trafficLights={props.trafficLights !== false} />
                 {props.children ? (
                     <ModalOverlay
                         backdrop="soft"
@@ -454,6 +414,128 @@ function PaletteWindow(props: {
                         <PaletteFrame query={props.query ?? ""}>{props.children}</PaletteFrame>
                     </ModalOverlay>
                 ) : null}
+            </div>
+        </ThemeScope>
+    );
+}
+
+/** The window behind the palette, its Search row opening it. */
+function WindowBehind(props: { onSearchOpen: () => void; trafficLights: boolean }) {
+    return (
+        <AppShell
+            navigationChrome="integrated"
+            onSidebarCollapsedChange={noop}
+            sidebar={
+                <Sidebar
+                    activeItemId="launch"
+                    brand={false}
+                    onCompose={noop}
+                    onItemSelect={noop}
+                    searchRow={{
+                        label: "Search",
+                        onOpen: props.onSearchOpen,
+                        shortcut: commandShortcut("k"),
+                    }}
+                    sections={WINDOW_SECTIONS}
+                />
+            }
+            sidebarCollapsed={false}
+            sidebarCollapsedAction={{ label: "New task (⌘N)", onClick: noop }}
+            sidebarCollapsedLayout="overlay"
+            sidebarCollapsible
+            windowControls={props.trafficLights}
+        >
+            <TabbedPane
+                activeId="launch"
+                closePresentation="overlay"
+                onClose={noop}
+                onSelect={noop}
+                tabSizing="content"
+                tabs={[{ id: "launch", label: "Launch the desktop beta", closable: true }]}
+            >
+                <div style={{ alignItems: "center", display: "flex", flex: "1 1 0%" }}>
+                    <EmptyState
+                        description="The conversation stays where it is behind the palette."
+                        icon="chat"
+                        size="panel"
+                        title="Launch the desktop beta"
+                    />
+                </div>
+            </TabbedPane>
+        </AppShell>
+    );
+}
+
+/** The rows of `mixed` whose titles hold the query, under their own captions. */
+function mixedMatching(query: string): CommandPaletteResultsSection[] {
+    const needle = query.trim().toLowerCase();
+    if (needle === "") return suggestions;
+    return mixed
+        .map((section) => ({
+            ...section,
+            rows: section.rows.filter(
+                (row) => row.kind === "command" && row.title.toLowerCase().includes(needle),
+            ),
+        }))
+        .filter((section) => section.rows.length > 0);
+}
+
+/**
+ * The palette live, as the window runs it: Search in the sidebar opens it, it
+ * arrives and leaves through ModalOverlayPresence, typing narrows the rows, and
+ * Escape, ⌘K, a press outside it, or choosing a row closes it. It starts
+ * closed, so the page itself still shows nothing moving.
+ */
+function LivePaletteWindow(props: { mode: "light" | "dark" }) {
+    const [open, setOpen] = useState(false);
+    const [query, setQuery] = useState("");
+    const [active, setActive] = useState(0);
+    const sections = mixedMatching(query);
+    const count = sections.reduce((sum, section) => sum + section.rows.length, 0);
+    return (
+        <ThemeScope mode={props.mode}>
+            <div style={{ display: "flex", height: "100%", position: "relative", width: "100%" }}>
+                <WindowBehind
+                    onSearchOpen={() => {
+                        setQuery("");
+                        setActive(0);
+                        setOpen(true);
+                    }}
+                    trafficLights
+                />
+                <ModalOverlayPresence open={open}>
+                    <ModalOverlay
+                        backdrop="soft"
+                        onDismiss={() => setOpen(false)}
+                        placement="top"
+                        style={{ position: "absolute" }}
+                    >
+                        <CommandPalette
+                            onClose={() => setOpen(false)}
+                            onQueryChange={(value) => {
+                                setQuery(value);
+                                setActive(0);
+                            }}
+                            onSelectionCommit={() => setOpen(false)}
+                            onSelectionMove={(direction) =>
+                                setActive((index) =>
+                                    count === 0 ? 0 : (index + direction + count) % count,
+                                )
+                            }
+                            placeholder={PLACEHOLDER}
+                            query={query}
+                        >
+                            <CommandPaletteResults
+                                activeIndex={active}
+                                emptyDescription="Try a different search."
+                                emptyLabel="No results"
+                                onActiveIndexChange={setActive}
+                                onSelect={() => setOpen(false)}
+                                sections={sections}
+                            />
+                        </CommandPalette>
+                    </ModalOverlay>
+                </ModalOverlayPresence>
             </div>
         </ThemeScope>
     );
@@ -610,6 +692,26 @@ export function CommandPalettePage() {
                 window={{ width: 1100, height: 760 }}
             >
                 <PaletteWindow mode="dark" trafficLights={false} />
+            </FullScreenSpecimen>
+
+            <FullScreenSpecimen
+                detail="Live: Search in the sidebar opens the palette, which arrives and leaves through ModalOverlayPresence; type to narrow the rows, then Escape, ⌘K, a press outside, or a row closes it."
+                label="Window, live, light"
+                number="W-14"
+                screen="14-live-light-1100x760"
+                window={{ width: 1100, height: 760 }}
+            >
+                <LivePaletteWindow mode="light" />
+            </FullScreenSpecimen>
+
+            <FullScreenSpecimen
+                detail="The same, dark."
+                label="Window, live, dark"
+                number="W-15"
+                screen="15-live-dark-1100x760"
+                window={{ width: 1100, height: 760 }}
+            >
+                <LivePaletteWindow mode="dark" />
             </FullScreenSpecimen>
 
             <FullScreenSpecimen

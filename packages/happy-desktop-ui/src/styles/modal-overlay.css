@@ -101,3 +101,56 @@
 .happy-modal-overlay[data-backdrop="clear"] > .happy-modal-overlay__top-layout > * {
     pointer-events: auto;
 }
+
+/*
+ * Presence motion. Inside a ModalOverlayPresence the overlay arrives and leaves
+ * instead of cutting in and out: the dim fades in, and the card fades in while
+ * it settles a few pixels down from just under its size. Leaving runs faster
+ * and the other way, with the card shrinking slightly as it fades. These are
+ * transitions rather than keyframes, so an overlay opened again while it is
+ * still leaving turns round from wherever it stands, with no restart and no
+ * flash. A leaving overlay is inert (see ModalOverlay), so it takes no press
+ * and no keystroke while it goes.
+ */
+.happy-modal-overlay[data-presence] {
+    transition: opacity var(--happy-motion-backdrop-enter) var(--happy-motion-ease-out);
+}
+
+.happy-modal-overlay[data-presence] > .happy-modal-overlay__top-layout > *,
+.happy-modal-overlay[data-presence] > .happy-modal > .happy-modal__dialog,
+.happy-modal-overlay[data-presence] > :not(.happy-modal-overlay__top-layout, .happy-modal) {
+    transform-origin: 50% 0;
+    transition:
+        opacity var(--happy-motion-pop-enter) var(--happy-motion-ease-out),
+        transform var(--happy-motion-pop-enter) var(--happy-motion-ease-out);
+}
+
+@starting-style {
+    .happy-modal-overlay[data-presence] {
+        opacity: 0;
+    }
+
+    .happy-modal-overlay[data-presence] > .happy-modal-overlay__top-layout > *,
+    .happy-modal-overlay[data-presence] > .happy-modal > .happy-modal__dialog,
+    .happy-modal-overlay[data-presence] > :not(.happy-modal-overlay__top-layout, .happy-modal) {
+        opacity: 0;
+        transform: var(--happy-motion-pop-enter-transform);
+    }
+}
+
+.happy-modal-overlay[data-presence="closing"] {
+    opacity: 0;
+    pointer-events: none;
+    transition-duration: var(--happy-motion-pop-exit);
+    transition-timing-function: var(--happy-motion-ease-in);
+}
+
+.happy-modal-overlay[data-presence="closing"] > .happy-modal-overlay__top-layout > *,
+.happy-modal-overlay[data-presence="closing"] > .happy-modal > .happy-modal__dialog,
+.happy-modal-overlay[data-presence="closing"]
+    > :not(.happy-modal-overlay__top-layout, .happy-modal) {
+    opacity: 0;
+    transform: var(--happy-motion-pop-exit-transform);
+    transition-duration: var(--happy-motion-pop-exit);
+    transition-timing-function: var(--happy-motion-ease-in);
+}

@@ -17,7 +17,11 @@ export interface CommandPaletteSnapshot {
     /** Which row Enter would run, as an index into the owner's flat list. */
     readonly activeIndex: number;
     readonly open: boolean;
-    /** Empty whenever the palette is closed: a closed palette asks nothing. */
+    /**
+     * What was typed. Closing keeps the last query, so a palette still leaving
+     * shows the list the reader left rather than a different one; opening
+     * always starts empty.
+     */
     readonly query: string;
 }
 
@@ -67,10 +71,10 @@ export function commandPaletteStoreCreate(): CommandPaletteStore {
         },
         paletteClose() {
             if (!snapshot.open) return;
-            publish(CLOSED);
+            publish({ ...snapshot, open: false });
         },
         paletteToggle() {
-            publish(snapshot.open ? CLOSED : OPENED);
+            publish(snapshot.open ? { ...snapshot, open: false } : OPENED);
         },
         queryUpdate(value) {
             // A closed palette has no query to change, so a keystroke arriving

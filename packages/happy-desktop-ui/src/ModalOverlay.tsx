@@ -1,5 +1,14 @@
 import { partitionComponentProps } from "./componentProps";
-import { useEffectEvent, useLayoutEffect, useRef, type CSSProperties, type ReactNode } from "react";
+import {
+    createContext,
+    use,
+    useEffectEvent,
+    useLayoutEffect,
+    useRef,
+    useState,
+    type CSSProperties,
+    type ReactNode,
+} from "react";
 export type ModalOverlayProps = {
     className?: string;
     "data-testid"?: string;
@@ -37,6 +46,52 @@ export type ModalOverlayProps = {
      */
     backdrop?: "dim" | "soft" | "clear";
 };
+/**
+ * What a ModalOverlayPresence tells the overlay and the card it hosts: whether
+ * the surface is leaving, and how to say that it has finished leaving.
+ */
+export type ModalOverlayPresenceState = {
+    readonly closing: boolean;
+    readonly exited: () => void;
+};
+const ModalOverlayPresenceContext = createContext<ModalOverlayPresenceState | null>(null);
+/**
+ * The presence an enclosing ModalOverlayPresence gives, or null outside one. A
+ * hosted card reads it to hand focus back the moment its surface starts
+ * leaving rather than when the leaving is over.
+ */
+export function useModalOverlayPresence(): ModalOverlayPresenceState | null {
+    return use(ModalOverlayPresenceContext);
+}
+export type ModalOverlayPresenceProps = {
+    /** Whether the surface should be on screen. */
+    open: boolean;
+    /** The ModalOverlay, mounted while open and through its exit. */
+    children: ReactNode;
+};
+/**
+ * Keeps one ModalOverlay mounted through its exit, so a surface such as the ⌘K
+ * palette arrives and leaves rather than cutting in and out. While `open` it
+ * renders its overlay, which plays its entrance; when `open` turns false the
+ * same overlay stays, inert, and plays its exit, then goes. Opening it again
+ * while it is still leaving turns the very same overlay round — no second
+ * mount, no restarted entrance. Outside one, a ModalOverlay neither enters nor
+ * leaves with motion, which keeps the blueprint's fixtures still.
+ */
+export function ModalOverlayPresence(props: ModalOverlayPresenceProps) {
+    const [mounted, setMounted] = useState(props.open);
+    // An opening is known during render, so the overlay mounts in the same
+    // commit that opened it: its input can take focus before the first frame.
+    if (props.open && !mounted) setMounted(true);
+    if (!mounted) return null;
+    return (
+        <ModalOverlayPresenceContext
+            value={{ closing: !props.open, exited: () => setMounted(false) }}
+        >
+            {props.children}
+        </ModalOverlayPresenceContext>
+    );
+}
 const FOCUSABLE =
     'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 /**
@@ -71,6 +126,10 @@ export function ModalOverlay(props: ModalOverlayProps) {
         "backdrop",
     ]);
     const overlayEl = useRef<HTMLDivElement>(null);
+    const presence = use(ModalOverlayPresenceContext);
+    const present = presence !== null;
+    const closing = presence?.closing === true;
+    const invokerRef = useRef<HTMLElement | null>(null);
     // Imperative focus handoff at the overlay's lifetime boundary: there is no
     // declarative way to move browser focus into the dialog on open and back to
     // the invoking control on close.
@@ -79,13 +138,16 @@ export function ModalOverlay(props: ModalOverlayProps) {
         const overlay = overlayEl.current;
         if (!overlay) return;
         const invoker = document.activeElement as HTMLElement | null;
+        invokerRef.current = invoker;
         // A hosted card may have claimed focus in its own mount effect (child
         // effects run first); only fill the gap when focus is still outside.
         if (!overlay.contains(document.activeElement)) {
             const target = overlay.querySelector<HTMLElement>(FOCUSABLE) ?? overlay;
             target.focus();
         }
-        const passThrough = local.backdrop === "clear";
+        // A press outside a clear overlay, or anything a leaving overlay's
+        // departure set off, may already have put focus somewhere else.
+        const passThrough = local.backdrop === "clear" || presence !== null;
         return () => {
             // A press outside a clear overlay may already have put focus where
             // it landed; that is where the reader went, so leave it there.
@@ -100,6 +162,44 @@ export function ModalOverlay(props: ModalOverlayProps) {
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps -- focus moves in on open and back on close only; the backdrop is read once for that lifetime, and re-running on a change would steal focus mid-dialog
     }, []);
+    const exited = useEffectEvent(() => presence?.exited());
+    // eslint-disable-next-line happy-react/no-layout-effect -- a leaving overlay must hand live browser focus back before it goes (and take it again if opened before it is gone), and its exit ends only when the browser's own transitions on it do
+    useLayoutEffect(() => {
+        const overlay = overlayEl.current;
+        if (!overlay || !present) return;
+        if (!closing) {
+            // Opened again before it was gone: focus comes back in, as on a
+            // first opening, unless the card has already taken it.
+            if (!overlay.contains(document.activeElement))
+                (overlay.querySelector<HTMLElement>(FOCUSABLE) ?? overlay).focus();
+            return;
+        }
+        // Focus goes back as the overlay starts to leave, not when it is gone,
+        // so the next keystroke already lands where the reader is going.
+        const invoker = invokerRef.current;
+        const focused = document.activeElement;
+        if (
+            invoker &&
+            invoker.isConnected &&
+            !overlay.contains(invoker) &&
+            (focused === null || focused === document.body || overlay.contains(focused))
+        )
+            invoker.focus();
+        // Reading the animations settles style, which starts the exit
+        // transitions. Each ends or is cancelled — by opening again, which
+        // turns them round — and either way the wait ends, so a leaving
+        // overlay can never be left standing.
+        // Where there are no Web Animations at all (jsdom), nothing is running.
+        const animations =
+            "getAnimations" in overlay ? overlay.getAnimations({ subtree: true }) : [];
+        let current = true;
+        void Promise.allSettled(animations.map((animation) => animation.finished)).then(() => {
+            if (current) exited();
+        });
+        return () => {
+            current = false;
+        };
+    }, [closing, present]);
     const clear = local.backdrop === "clear";
     const dismissOutside = useEffectEvent((event: PointerEvent) => {
         const overlay = overlayEl.current;
@@ -122,6 +222,8 @@ export function ModalOverlay(props: ModalOverlayProps) {
             data-happy-desktop-ui="modal-overlay"
             data-backdrop={local.backdrop === "dim" ? undefined : local.backdrop}
             data-placement={local.placement === "center" ? undefined : local.placement}
+            data-presence={presence ? (closing ? "closing" : "open") : undefined}
+            inert={closing || undefined}
             onClick={(event) => {
                 if (
                     local.onDismiss &&

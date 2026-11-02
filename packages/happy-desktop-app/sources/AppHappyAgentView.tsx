@@ -237,6 +237,7 @@ import {
     ConfirmPopover,
     Modal,
     ModalOverlay,
+    ModalOverlayPresence,
     ReviewStream,
     HappyAgentActivityControl,
     HappyAgentActivityPanel,
@@ -4486,11 +4487,12 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                     }}
                 />
             ) : null}
-            {/* The palette is mounted only while it is open, so nothing in the
-                window pays for a surface nobody has asked for, and its own
-                subscriptions — the workspace above all — start with it. */}
-            {commandPaletteOpen ? (
-                active?.session?.workspace ? (
+            {/* The palette is mounted only while it is open and for the moment
+                it takes to leave, so nothing in the window pays for a surface
+                nobody has asked for, and its own subscriptions — the workspace
+                above all — start and end with it. */}
+            <ModalOverlayPresence open={commandPaletteOpen}>
+                {active?.session?.workspace ? (
                     <HappyAgentCommandPaletteSurface
                         {...paletteSubject}
                         workspace={active.session.workspace}
@@ -4502,8 +4504,8 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                         {...paletteActions}
                         facts={PALETTE_WORKSPACE_ABSENT}
                     />
-                )
-            ) : null}
+                )}
+            </ModalOverlayPresence>
         </HappyAgentVersionProvider>
     );
 }
