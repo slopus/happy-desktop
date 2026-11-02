@@ -7,7 +7,10 @@ import type {
 } from "electron";
 import { monitorEventLoopDelay, performance } from "node:perf_hooks";
 import { happyAgentRendererOrigin, type HappyAgentRendererProxy } from "./happyAgentRendererProxy";
-import { happyAgentRendererUtilityProxyCreate } from "./happyAgentRendererUtilityProxy";
+import {
+    happyAgentRendererUtilityProxyCreate,
+    type RendererRemoteTokens,
+} from "./happyAgentRendererUtilityProxy";
 import { rendererNavigationAllowed } from "./navigation";
 import { mediaPreviewAddressAllowed } from "./mediaPreviewWindow";
 import { HAPPY_AGENT_LIVE_WINDOW_HEADER, happyAgentLiveRoute } from "./happyAgentLiveRoute";
@@ -31,6 +34,7 @@ export async function happyAgentRendererSessionCreate(
     session: Session,
     fork: () => UtilityProcess,
     debug?: (message: string) => void,
+    remote?: RendererRemoteTokens,
 ): Promise<HappyAgentRendererSession> {
     let active = false;
     let closed = false;
@@ -63,6 +67,7 @@ export async function happyAgentRendererSessionCreate(
             if (!closed) void configure(9).catch(() => undefined);
         },
         ...(debug ? { debug } : {}),
+        ...(remote ? { remote } : {}),
     });
     const windows = new Map<
         number,

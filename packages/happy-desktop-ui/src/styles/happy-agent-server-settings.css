@@ -15,6 +15,45 @@
     min-width: 0;
 }
 
+/* One listed server: its row, then a note on its sign-in when there is one. */
+.happy-agent-server-settings__server {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+/* A server's sign-in state and buttons, side by side; each keeps its own width. */
+.happy-agent-server-settings__actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.happy-agent-server-settings__state {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-secondary);
+    font-family: var(--happy-font-ui);
+    font-size: 13px;
+    line-height: 20px;
+    white-space: nowrap;
+}
+
+.happy-agent-server-settings__note {
+    margin: 0 0 12px;
+    color: var(--text-secondary);
+    font-family: var(--happy-font-ui);
+    font-size: 13px;
+    line-height: 20px;
+    overflow-wrap: anywhere;
+}
+
+.happy-agent-server-settings__note[data-tone="danger"] {
+    color: var(--status-error);
+}
+
 /* The phone code for one server: the code, what to do with it, and the address it adds. */
 .happy-agent-server-phone {
     display: flex;

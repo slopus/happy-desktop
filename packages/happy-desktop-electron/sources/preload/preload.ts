@@ -145,12 +145,18 @@ const bridge: HappyDesktopBridge = {
     cloudAuthCallbackTake: () => ipcRenderer.invoke(desktopIpc.cloudAuthCallbackTake),
     cloudAuthConfigurationGet: () => ipcRenderer.invoke(desktopIpc.cloudAuthConfigurationGet),
     cloudAuthOpen: (url) => ipcRenderer.invoke(desktopIpc.cloudAuthOpen, url),
-    serverOAuthCallbackSubscribe(listener: () => void) {
+    serverSignInBegin: (connectionId) =>
+        ipcRenderer.invoke(desktopIpc.serverSignInBegin, connectionId),
+    serverSignInFinish: (attemptId) => ipcRenderer.invoke(desktopIpc.serverSignInFinish, attemptId),
+    serverSignInCancel: (attemptId) => ipcRenderer.invoke(desktopIpc.serverSignInCancel, attemptId),
+    serverSessionForget: (connectionId) =>
+        ipcRenderer.invoke(desktopIpc.serverSessionForget, connectionId),
+    serverSessionsGet: () => ipcRenderer.invoke(desktopIpc.serverSessionsGet),
+    serverSessionsSubscribe(listener: () => void) {
         const receive = () => listener();
-        ipcRenderer.on(desktopIpc.serverOAuthCallbackReceived, receive);
-        return () => ipcRenderer.removeListener(desktopIpc.serverOAuthCallbackReceived, receive);
+        ipcRenderer.on(desktopIpc.serverSessionsChanged, receive);
+        return () => ipcRenderer.removeListener(desktopIpc.serverSessionsChanged, receive);
     },
-    serverOAuthCallbackTake: () => ipcRenderer.invoke(desktopIpc.serverOAuthCallbackTake),
     happyLinkExternalSubscribe(listener: () => void) {
         const receive = () => listener();
         ipcRenderer.on(desktopIpc.happyLinkExternalReceived, receive);

@@ -5,6 +5,7 @@ import {
     ipcMain,
     Menu,
     nativeTheme,
+    net,
     powerSaveBlocker,
     protocol,
     screen,
@@ -23,6 +24,8 @@ import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { DesktopRuntime } from "./desktopRuntime";
+import { HappyAgentDaemonClient } from "./happyAgentDaemonClient";
+import { ServerSessionError, serverSessionsCreate } from "./serverSessions";
 import { browserPermissionsInstall } from "./browserPermissions";
 import { BrowserPasswords } from "./browserPasswords";
 import { browserPasswordGuestAttach } from "./browserPasswordGuest";
@@ -61,6 +64,7 @@ import {
     type DesktopBrowserStatus,
     type DesktopBrowserTunnelFailure,
     type DesktopCloudAuthConfiguration,
+    type DesktopServerSignInResult,
     type DesktopDebugSnapshot,
     type DesktopGuestKeyEvent,
     type DesktopMediaPreview,
@@ -476,8 +480,24 @@ function cloudAuthCallbackRead(candidate: string): string | undefined {
 }
 
 const serverOAuthRedirect = new URL(serverOAuthRedirectUri);
-/** Team server sign-in callbacks the window has not taken yet, oldest first. */
-const serverOAuthCallbacks: string[] = [];
+/**
+ * Team-server sign-ins, in this process's memory only. The window never holds
+ * a team-server token: the isolated transport and main's own daemon clients
+ * add each one to requests through the host Happy Agent.
+ */
+const serverSessions = serverSessionsCreate({
+    connectionUrl: (connectionId) => runtime.serverUrl(connectionId),
+    fetch: (input, init) => net.fetch(input instanceof URL ? input.href : input, init),
+    async browserOpen(url) {
+        await shell.openExternal(url);
+    },
+    healthRead: (connectionId) => runtime.serverHealthRead(connectionId),
+});
+serverSessions.subscribe(() => {
+    const window = windowLifecycle.get();
+    if (!window || window.isDestroyed() || window.webContents.isDestroyed()) return;
+    window.webContents.send(desktopIpc.serverSessionsChanged);
+});
 /**
  * `happy://` links the system opened Happy with, oldest first, held until the
  * window takes them: a link can arrive before there is a window at all.
@@ -502,6 +522,21 @@ function serverOAuthCallbackRead(candidate: string): string | undefined {
     }
 }
 
+/** A sign-in step's outcome for the window, with only a displayable sentence on failure. */
+async function serverSignInResult<T>(step: Promise<T>): Promise<DesktopServerSignInResult<T>> {
+    try {
+        return { ok: true, value: await step };
+    } catch (error) {
+        return error instanceof ServerSessionError
+            ? { ok: false, message: error.message, code: error.code }
+            : {
+                  ok: false,
+                  message: "Signing in to this server didn't work. Try again.",
+                  code: "sign_in_failed",
+              };
+    }
+}
+
 /** Claims `protocol` for this app, as a packaged app or as this development checkout. */
 function callbackProtocolRegister(protocol: string): void {
     // A hidden run must not take a callback protocol from the installed app.
@@ -518,29 +553,29 @@ callbackProtocolRegister(serverOAuthRedirect.protocol.slice(0, -1));
 
 /**
  * Takes one URL the system opened Happy with, from whichever way it was
- * delivered, and brings the window forward. A WorkOS callback, a server
- * sign-in callback, and any other `happy://` link each keep their own queue:
- * a server's state is not one the WorkOS login recorded, and a link is read
- * by the window's own grammar, never here. Returns whether it was one of them.
+ * delivered, and brings the window forward. A WorkOS callback and any other
+ * `happy://` link each keep their own queue for the window: a link is read by
+ * the window's own grammar, never here. A team server's sign-in callback goes
+ * to the sign-in that is waiting for it and never reaches the window. Returns
+ * whether it was one of them.
  */
 function systemUrlDeliver(candidate: string): boolean {
     const cloud = cloudAuthCallbackRead(candidate);
     const server = cloud ? undefined : serverOAuthCallbackRead(candidate);
     const link = cloud || server ? undefined : happyExternalLinkUrl(candidate);
-    const taken = cloud ?? server ?? link;
-    if (!taken) return false;
-    const queue = cloud ? cloudAuthCallbacks : server ? serverOAuthCallbacks : externalHappyLinks;
-    queue.push(taken);
-    if (queue.length > CLOUD_AUTH_CALLBACKS_MAX) queue.shift();
+    if (server) serverSessions.callbackReceive(server);
+    const taken = cloud ?? link;
+    if (taken) {
+        const queue = cloud ? cloudAuthCallbacks : externalHappyLinks;
+        queue.push(taken);
+        if (queue.length > CLOUD_AUTH_CALLBACKS_MAX) queue.shift();
+    } else if (!server) return false;
     const window = windowLifecycle.get();
     if (!window || window.isDestroyed() || window.webContents.isDestroyed()) return true;
-    window.webContents.send(
-        cloud
-            ? desktopIpc.cloudAuthCallbackReceived
-            : server
-              ? desktopIpc.serverOAuthCallbackReceived
-              : desktopIpc.happyLinkExternalReceived,
-    );
+    if (taken)
+        window.webContents.send(
+            cloud ? desktopIpc.cloudAuthCallbackReceived : desktopIpc.happyLinkExternalReceived,
+        );
     if (window.isMinimized()) window.restore();
     window.show();
     window.focus();
@@ -1694,6 +1729,7 @@ void app
                     { serviceName: "Happy Agent HTTP transport" },
                 ),
             desktopDebugEnabled ? desktopDebugLog : undefined,
+            serverSessions,
         );
         htmlPreviewProxy = await htmlPreviewProxyCreate();
         await htmlPreviewSessionConfigure();
@@ -1763,6 +1799,9 @@ void app
         // A `happy-agent reload` run outside the app is told on the same card.
         daemonController.reloadWatch();
         const connector = localHappyAgentConnectorCreate({
+            // Terminals, tunnels and health reads main opens to a team server
+            // carry its sign-in, as the window's own requests do.
+            clientCreate: (input) => new HappyAgentDaemonClient(input, serverSessions),
             daemonBinary: daemonController,
             debug: desktopDebugLog,
             environment: launchEnvironment,
@@ -1922,9 +1961,29 @@ void app
             desktopDaemonSenderRequire(event.sender);
             return cloudAuthCallbacks.shift();
         });
-        ipcMain.handle(desktopIpc.serverOAuthCallbackTake, (event) => {
+        ipcMain.handle(desktopIpc.serverSignInBegin, (event, connectionId: unknown) => {
             desktopDaemonSenderRequire(event.sender);
-            return serverOAuthCallbacks.shift();
+            if (typeof connectionId !== "string")
+                throw new Error("Happy asked to sign in to an invalid server.");
+            return serverSignInResult(serverSessions.signInBegin(connectionId));
+        });
+        ipcMain.handle(desktopIpc.serverSignInFinish, (event, attemptId: unknown) => {
+            desktopDaemonSenderRequire(event.sender);
+            if (typeof attemptId !== "string")
+                throw new Error("Happy asked to finish an invalid sign-in.");
+            return serverSignInResult(serverSessions.signInFinish(attemptId).then(() => null));
+        });
+        ipcMain.handle(desktopIpc.serverSignInCancel, (event, attemptId: unknown) => {
+            desktopDaemonSenderRequire(event.sender);
+            if (typeof attemptId === "string") serverSessions.signInCancel(attemptId);
+        });
+        ipcMain.handle(desktopIpc.serverSessionForget, (event, connectionId: unknown) => {
+            desktopDaemonSenderRequire(event.sender);
+            if (typeof connectionId === "string") serverSessions.forget(connectionId);
+        });
+        ipcMain.handle(desktopIpc.serverSessionsGet, (event) => {
+            desktopDaemonSenderRequire(event.sender);
+            return serverSessions.get();
         });
         ipcMain.handle(desktopIpc.happyLinkExternalTake, (event) => {
             desktopDaemonSenderRequire(event.sender);
@@ -2280,6 +2339,8 @@ app.on("second-instance", (_event, argv, _directory, launch) => {
 });
 
 app.on("before-quit", (event) => {
+    // Team-server sign-ins end with the app, by design.
+    serverSessions.close();
     if (quitting || !runtime) return;
     event.preventDefault();
     void Promise.all([

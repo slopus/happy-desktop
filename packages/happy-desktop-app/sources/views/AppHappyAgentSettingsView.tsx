@@ -94,6 +94,7 @@ import {
     type HappyAgentSettingsCategory,
     type HappyAgentStateDocument,
     type HappyAgentServerRow,
+    type HappyAgentServerSignIn,
 } from "happy-desktop-ui";
 import { HappyAgentVersionProvider } from "../HappyAgentVersionProvider";
 import {
@@ -359,14 +360,15 @@ const CATEGORY_DESCRIPTIONS: Record<string, string> = {
 };
 
 /**
- * The team servers added by address, each with the code a phone scans to add
- * it. Only a server reached over HTTPS whose instance is known has one.
+ * The team servers the host Happy Agent connects to by address, each with its
+ * sign-in and the code a phone scans to add it. Only a server reached over
+ * HTTPS whose instance is known has a code.
  */
 function serverRows(
     entries: AppHappyAgentDirectorySnapshot["happyAgents"],
 ): readonly HappyAgentServerRow[] {
     return entries.flatMap((entry) => {
-        if (entry.serverUrl === undefined) return [];
+        if (entry.serverUrl === undefined || entry.remoteId === undefined) return [];
         const phoneCode = serverPhoneLinkFormat({
             url: entry.serverUrl,
             ...(entry.instanceId === undefined ? {} : { instanceId: entry.instanceId }),
@@ -376,10 +378,34 @@ function serverRows(
                 id: entry.id,
                 name: entry.label,
                 address: entry.serverUrl,
+                signIn: serverSignInRead(entry),
                 ...(phoneCode === undefined ? {} : { phoneCode }),
             },
         ];
     });
+}
+
+function serverSignInRead(entry: AppHappyAgentEntry): HappyAgentServerSignIn {
+    const signIn = entry.signIn;
+    if (signIn === undefined) return { kind: "signedIn" };
+    switch (signIn.phase) {
+        case "required":
+            return entry.message === undefined
+                ? { kind: "required" }
+                : { kind: "required", message: entry.message };
+        case "browser":
+            return { kind: "browser", host: signIn.host };
+        case "failed":
+            return { kind: "failed", message: signIn.message };
+    }
+}
+
+/** The Chief of Staff's own name on the host Happy Agent, for the words that name it. */
+function chiefOfStaffNameRead(directory: AppHappyAgentDirectorySnapshot): string {
+    return (
+        hostHappyAgent(directory)?.bots.find((bot) => bot.systemKey === "chief_of_staff")?.name ??
+        "Chief of Staff"
+    );
 }
 
 /**
@@ -390,6 +416,8 @@ function serverRows(
 export interface AppServers {
     readonly add: ServerAddStore;
     readonly directory: Pick<AppHappyAgentDirectoryStore, "get" | "subscribe">;
+    /** Signs in to one listed server, by its directory entry ID. */
+    signIn(id: string): void;
 }
 
 /** Stands in where the host cannot add servers, so the view subscribes unconditionally. */
@@ -399,7 +427,7 @@ const serverAddStoreAbsent: ServerAddStore = {
     subscribe: () => () => undefined,
     urlUpdate: () => undefined,
     serverAddSubmit: () => undefined,
-    serverAddCancel: () => undefined,
+    serverRemoveSubmit: () => undefined,
     [Symbol.dispose]: () => undefined,
 };
 const serverDirectoryAbsentSnapshot: AppHappyAgentDirectorySnapshot = { happyAgents: [] };
@@ -963,6 +991,7 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                     <HappyAgentServerSettings
                         url={serverAdd.url}
                         phase={serverAdd.phase}
+                        chiefOfStaffName={chiefOfStaffNameRead(serverDirectory)}
                         servers={serverRows(serverDirectory.happyAgents)}
                         {...(serverAdd.urlProblem === undefined
                             ? {}
@@ -970,11 +999,21 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                         {...(serverAdd.error === undefined
                             ? {}
                             : { error: serverAdd.error.message })}
-                        // Whether a server can be added is the source's to say,
-                        // so the local connection's state does not lock the form.
                         onUrlChange={serverAddStore.urlUpdate}
                         onAdd={serverAddStore.serverAddSubmit}
-                        onCancel={serverAddStore.serverAddCancel}
+                        onSignIn={(id) => props.servers?.signIn(id)}
+                        onRemove={(id) => {
+                            const entry = serverDirectory.happyAgents.find(
+                                (candidate) => candidate.id === id,
+                            );
+                            if (entry?.remoteId === undefined || entry.serverUrl === undefined)
+                                return;
+                            serverAddStore.serverRemoveSubmit({
+                                connectionId: entry.remoteId,
+                                name: entry.label,
+                                url: entry.serverUrl,
+                            });
+                        }}
                     />
                 ) : null
             ) : section === "mobile-access" ? (

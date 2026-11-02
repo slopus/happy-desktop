@@ -29,7 +29,14 @@ export type RendererUtilityInput =
           readonly type: "live-attempt-restore";
           readonly attempt: RendererLiveAttempt;
           readonly disposed: boolean;
-      };
+      }
+    /**
+     * Every team server's current access token, by connection ID, replacing
+     * the last set. Refresh tokens stay in main and are never sent here.
+     */
+    | { readonly type: "remote-tokens"; readonly tokens: Readonly<Record<string, string>> }
+    /** Main's answer to one `remote-refresh`: the access token to retry with, if any. */
+    | { readonly type: "remote-refreshed"; readonly requestId: number; readonly token?: string };
 
 export type RendererUtilityOutput =
     | {
@@ -45,5 +52,21 @@ export type RendererUtilityOutput =
           readonly reservationId: number;
           readonly backingId: number;
           readonly attempt: RendererLiveAttempt;
+      }
+    /**
+     * A team server refused `rejected` through the daemon: main refreshes the
+     * sign-in once and answers with `remote-refreshed`.
+     */
+    | {
+          readonly type: "remote-refresh";
+          readonly requestId: number;
+          readonly connectionId: string;
+          readonly rejected?: string;
+      }
+    /** The server refused `rejected` again after a refresh: the person must sign in. */
+    | {
+          readonly type: "remote-sign-in-required";
+          readonly connectionId: string;
+          readonly rejected: string;
       }
     | { readonly type: "debug"; readonly text: string };

@@ -957,6 +957,7 @@ export {
     type HappyAgentServerAddPhase,
     type HappyAgentServerRow,
     type HappyAgentServerSettingsProps,
+    type HappyAgentServerSignIn,
 } from "./pages/settings/HappyAgentServerSettings";
 export {
     HappyAgentServerPhoneDialog,

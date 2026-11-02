@@ -4,7 +4,6 @@ import {
     appearanceStoreCreate,
     happyAgentSettingsStoreCreate,
     serverAddStoreCreate,
-    type ServerSource,
 } from "happy-desktop-state";
 import { AppHappyAgentSettingsView } from "../../sources/views/AppHappyAgentSettingsView";
 import type { AppHappyAgentDirectorySnapshot } from "../../sources/AppHappyAgentView";
@@ -34,12 +33,14 @@ const directory: AppHappyAgentDirectorySnapshot = {
         entry({}),
         entry({
             id: "connection:team",
+            remoteId: "team",
             label: "Example Engineering",
             serverUrl: "https://happy.example.com/",
             instanceId: TEAM,
         }),
         entry({
             id: "connection:local-test",
+            remoteId: "local-test",
             label: "Local test server",
             serverUrl: "http://localhost:8080/",
             instanceId: "m1n2b3v4c5x6z7l8k9j0h1g2",
@@ -50,14 +51,11 @@ const directory: AppHappyAgentDirectorySnapshot = {
 };
 
 it("shows each server's phone code, only where a phone can use it", () => {
-    const source: ServerSource = {
-        serverAdd: () => new Promise(() => undefined),
-        serverSignIn: () => Promise.resolve(),
-    };
-    const add = serverAddStoreCreate({ source });
+    const add = serverAddStoreCreate({ chiefOfStaffAsk: () => new Promise(() => undefined) });
     const servers = {
         add,
         directory: { get: () => directory, subscribe: () => () => {} },
+        signIn: () => undefined,
     };
     const own: AppHappyAgentDirectorySnapshot = {
         activeHappyAgentId: "local",

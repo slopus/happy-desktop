@@ -1,66 +1,85 @@
+import type { HappyAgentChiefOfStaffRequest } from "../happyAgent/happyAgentChiefOfStaffRequest.js";
 import { happyAgentUserError } from "../happyAgent/happyAgentSupport.js";
 import type { UserError } from "../types.js";
 import { serverUrlParse, type ServerUrlProblem } from "./serverUrl.js";
-import type { ServerSource } from "./serverSource.js";
 
 export type ServerAddPhase =
     | { readonly kind: "editing" }
-    /** Reaching the server and reading how it signs people in. */
-    | { readonly kind: "adding" }
-    /** The browser is open at `host`; the person is signing in there. */
-    | { readonly kind: "signingIn"; readonly host: string };
+    /** Writing the request into the Chief of Staff's draft. */
+    | { readonly kind: "asking" };
 
 export interface ServerAddSnapshot {
     /** The address in the field, as typed. */
     readonly url: string;
-    /** Why the last submitted address was not tried; cleared by editing. */
+    /** Why the last submitted address was not passed on; cleared by editing. */
     readonly urlProblem?: ServerUrlProblem;
     readonly phase: ServerAddPhase;
-    /** Why the last attempt failed, from the source. */
+    /** Why the last request did not reach the Chief of Staff. */
     readonly error?: UserError;
 }
 
-export type ServerAddOutput = {
-    readonly type: "serverAdded";
+/** A team server the reader asks to have removed, as the server list shows it. */
+export interface ServerRemoveTarget {
     readonly connectionId: string;
+    readonly name: string;
     readonly url: string;
-};
+}
 
 export interface ServerAddStore {
     get(): ServerAddSnapshot;
     subscribe(listener: () => void): () => void;
     urlUpdate(value: string): void;
-    /** Adds the server in the field and signs in, unless an attempt is running. */
+    /** Asks the Chief of Staff to add the server in the field, unless a request is being written. */
     serverAddSubmit(): void;
-    /** Stops a running attempt; nothing is added. */
-    serverAddCancel(): void;
+    /** Asks the Chief of Staff to remove a server, unless a request is being written. */
+    serverRemoveSubmit(server: ServerRemoveTarget): void;
     [Symbol.dispose](): void;
 }
 
 export interface ServerAddStoreDeps {
-    readonly source: ServerSource;
-    readonly onOutput?: (output: ServerAddOutput) => void;
+    /**
+     * Writes the request into the Chief of Staff's draft and opens its
+     * conversation; nothing is sent on the reader's behalf. Rejects with a
+     * displayable `UserError`.
+     */
+    readonly chiefOfStaffAsk: (request: HappyAgentChiefOfStaffRequest) => Promise<void>;
 }
 
 const EDITING: ServerAddPhase = { kind: "editing" };
-const ADDING: ServerAddPhase = { kind: "adding" };
+const ASKING: ServerAddPhase = { kind: "asking" };
 
 /**
- * The add-a-server form. The constructor opens nothing; submitting asks the
- * source, and the attempt's progress and failure are this store's state.
+ * Adding and removing team servers, which only the Chief of Staff's admin
+ * tools do. The reader types the address; submitting drafts the request in
+ * the Chief of Staff's conversation. The new server reaches the list through
+ * the host Happy Agent's roster, and the reader signs in to it from there.
+ * The constructor opens nothing.
  */
 export function serverAddStoreCreate(deps: ServerAddStoreDeps): ServerAddStore {
     const listeners = new Set<() => void>();
     let snapshot: ServerAddSnapshot = { url: "", phase: EDITING };
-    let attempt: AbortController | undefined;
+    let generation = 0;
+    let disposed = false;
 
     const set = (next: ServerAddSnapshot): void => {
         snapshot = next;
         for (const listener of listeners) listener();
     };
-    const editing = (error?: UserError): void => {
-        const { error: _error, phase: _phase, ...rest } = snapshot;
-        set({ ...rest, phase: EDITING, ...(error === undefined ? {} : { error }) });
+
+    const ask = (request: HappyAgentChiefOfStaffRequest, settled: () => void): void => {
+        const asked = ++generation;
+        const { error: _error, urlProblem: _problem, ...rest } = snapshot;
+        set({ ...rest, phase: ASKING });
+        deps.chiefOfStaffAsk(request).then(
+            () => {
+                if (disposed || asked !== generation) return;
+                settled();
+            },
+            (error: unknown) => {
+                if (disposed || asked !== generation) return;
+                set({ ...snapshot, phase: EDITING, error: happyAgentUserError(error) });
+            },
+        );
     };
 
     return {
@@ -84,44 +103,14 @@ export function serverAddStoreCreate(deps: ServerAddStoreDeps): ServerAddStore {
                 set({ ...rest, urlProblem: parsed.problem });
                 return;
             }
-            const controller = new AbortController();
-            attempt = controller;
-            const { error: _error, urlProblem: _problem, ...rest } = snapshot;
-            set({ ...rest, phase: ADDING });
-            deps.source
-                .serverAdd(
-                    parsed.url,
-                    {
-                        signInOpened(host) {
-                            if (attempt !== controller) return;
-                            set({ ...snapshot, phase: { kind: "signingIn", host } });
-                        },
-                    },
-                    controller.signal,
-                )
-                .then(
-                    ({ connectionId }) => {
-                        if (attempt !== controller) return;
-                        attempt = undefined;
-                        set({ url: "", phase: EDITING });
-                        deps.onOutput?.({ type: "serverAdded", connectionId, url: parsed.url });
-                    },
-                    (error: unknown) => {
-                        if (attempt !== controller) return;
-                        attempt = undefined;
-                        editing(happyAgentUserError(error));
-                    },
-                );
+            ask({ kind: "serverAdd", url: parsed.url }, () => set({ url: "", phase: EDITING }));
         },
-        serverAddCancel() {
-            if (!attempt) return;
-            attempt.abort();
-            attempt = undefined;
-            editing();
+        serverRemoveSubmit(server) {
+            if (snapshot.phase.kind !== "editing") return;
+            ask({ kind: "serverRemove", ...server }, () => set({ ...snapshot, phase: EDITING }));
         },
         [Symbol.dispose]() {
-            attempt?.abort();
-            attempt = undefined;
+            disposed = true;
             listeners.clear();
         },
     };

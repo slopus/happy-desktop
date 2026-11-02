@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 import { request as httpRequest, type IncomingHttpHeaders, type IncomingMessage } from "node:http";
 import { homedir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
-import type { Duplex, Readable } from "node:stream";
+import { Readable, type Duplex } from "node:stream";
 import {
     HappyAgentApiError,
     HappyAgentClient,
@@ -29,6 +29,10 @@ import {
 } from "@slopus/happy-agent-client";
 import { Value } from "@sinclair/typebox/value";
 import { WebSocket, createWebSocketStream } from "ws";
+import {
+    SERVER_REMOTE_AUTHORIZATION_HEADER,
+    serverRemoteConnectionOf,
+} from "../shared/serverRemoteAuthorization.js";
 
 /**
  * Largest terminal frame carried by either side of the desktop bridge.
@@ -48,6 +52,24 @@ export interface HappyAgentDaemonClientOptions {
     readonly connectionId?: string;
 }
 
+/**
+ * Team-server sign-ins, held in memory by main. A request under
+ * `/v0/connections/<id>/api/` carries that server's access token; nothing else
+ * does, and the refresh token never reaches this client.
+ */
+export interface HappyAgentRemoteAuthorization {
+    /** The access token for the server behind `connectionId`, while signed in. */
+    token(connectionId: string): string | undefined;
+    /**
+     * The server refused `rejected` through the daemon. Refreshes the sign-in
+     * once and resolves to the token to retry with, or `undefined` when the
+     * person has to sign in again.
+     */
+    refresh(connectionId: string, rejected: string | undefined): Promise<string | undefined>;
+    /** The server refused `rejected` even after a refresh: the person must sign in again. */
+    signInRequire(connectionId: string, rejected: string): void;
+}
+
 export interface HappyAgentDaemonPaths {
     readonly socketPath: string;
     readonly tokenPath: string;
@@ -56,7 +78,7 @@ export interface HappyAgentDaemonPaths {
 export interface HappyAgentDaemonRawResponse {
     readonly statusCode: number;
     readonly headers: IncomingHttpHeaders;
-    readonly body: IncomingMessage;
+    readonly body: Readable;
 }
 
 /** One runtime component whose admitted work has not finished draining. */
@@ -83,15 +105,50 @@ export class HappyAgentDaemonClient {
     readonly #client: HappyAgentClient;
     readonly #connectionId?: string;
     readonly #connections = new Map<string, HappyAgentDaemonClient>();
+    readonly #remote?: HappyAgentRemoteAuthorization;
 
-    constructor(options: HappyAgentDaemonClientOptions) {
+    constructor(options: HappyAgentDaemonClientOptions, remote?: HappyAgentRemoteAuthorization) {
         this.socketPath = options.socketPath;
         this.#token = options.token;
         this.#connectionId = options.connectionId;
+        if (remote) this.#remote = remote;
         const client = new HappyAgentClient({
             endpoint: "http://happy-agent/",
             token: options.token,
-            fetch: (input, init) => unixSocketFetch(options.socketPath, input, init),
+            fetch: async (input, init) => {
+                const request = new Request(input, init);
+                const body = request.body ? await request.arrayBuffer() : undefined;
+                const path = new URL(request.url).pathname;
+                return await this.#remoteOpen(path, async (headers) => {
+                    const sent = new Request(request.url, {
+                        method: request.method,
+                        headers: request.headers,
+                        signal: request.signal,
+                        ...(body === undefined ? {} : { body }),
+                    });
+                    for (const [name, value] of Object.entries(headers))
+                        sent.headers.set(name, value);
+                    const response = await unixSocketFetch(options.socketPath, sent);
+                    if (response.status !== 403) return response;
+                    const text = await response.text();
+                    if (remoteSignInRequired(response.status, text))
+                        throw new HappyAgentRemoteSignInRequiredError(
+                            Object.fromEntries(response.headers.entries()),
+                            text,
+                        );
+                    return new Response(text, {
+                        status: response.status,
+                        statusText: response.statusText,
+                        headers: response.headers,
+                    });
+                }).catch((error: unknown) => {
+                    if (!(error instanceof HappyAgentRemoteSignInRequiredRefusal)) throw error;
+                    return new Response(error.body, {
+                        status: 403,
+                        headers: { "content-type": "application/json" },
+                    });
+                });
+            },
         });
         this.#client = options.connectionId ? client.connection(options.connectionId) : client;
     }
@@ -104,14 +161,68 @@ export class HappyAgentDaemonClient {
     connection(id: string): HappyAgentDaemonClient {
         let client = this.#connections.get(id);
         if (!client) {
-            client = new HappyAgentDaemonClient({
-                socketPath: this.socketPath,
-                token: this.#token,
-                connectionId: id,
-            });
+            client = new HappyAgentDaemonClient(
+                { socketPath: this.socketPath, token: this.#token, connectionId: id },
+                this.#remote,
+            );
             this.#connections.set(id, client);
         }
         return client;
+    }
+
+    /**
+     * The daemon credential for `path`, and the team server's access token when
+     * the path reaches one. Every request this client sends is built from it.
+     */
+    #headers(path: string, remoteToken?: string): Record<string, string> {
+        return {
+            authorization: `Bearer ${this.#token}`,
+            ...(serverRemoteConnectionOf(path) !== undefined && remoteToken !== undefined
+                ? { [SERVER_REMOTE_AUTHORIZATION_HEADER]: `Bearer ${remoteToken}` }
+                : {}),
+        };
+    }
+
+    /**
+     * Sends one request to `path`, and once more after a refresh when the
+     * daemon answers that the team server's sign-in is required. That answer
+     * means the server never processed the request, so sending it again is
+     * safe; a second one is left to the caller.
+     */
+    async #remoteOpen<T>(
+        path: string,
+        open: (headers: Record<string, string>) => Promise<T>,
+    ): Promise<T> {
+        const connectionId = serverRemoteConnectionOf(path);
+        const remote = connectionId === undefined ? undefined : this.#remote;
+        const token = connectionId === undefined ? undefined : remote?.token(connectionId);
+        try {
+            return await open(this.#headers(path, token));
+        } catch (error) {
+            if (!(error instanceof HappyAgentRemoteSignInRequiredError)) throw error;
+            const fresh =
+                connectionId === undefined || remote === undefined
+                    ? undefined
+                    : await remote.refresh(connectionId, token);
+            if (fresh === undefined || fresh === token) throw error.refusal();
+            try {
+                return await open(this.#headers(path, fresh));
+            } catch (second) {
+                if (!(second instanceof HappyAgentRemoteSignInRequiredError)) throw second;
+                remote!.signInRequire(connectionId!, fresh);
+                throw second.refusal();
+            }
+        }
+    }
+
+    /**
+     * The address of a team server this daemon connects to by URL, from its
+     * roster: only an `oauth` entry has one.
+     */
+    async serverUrl(connectionId: string, signal?: AbortSignal): Promise<string | undefined> {
+        const { connections } = await this.#client.listConnections(signal ? { signal } : undefined);
+        const entry = connections.find((connection) => connection.id === connectionId);
+        return entry?.authentication === "oauth" ? entry.url : undefined;
     }
 
     health(signal?: AbortSignal): Promise<HealthResponse> {
@@ -167,36 +278,43 @@ export class HappyAgentDaemonClient {
     attachLiveSession(id: Cuid2, windowId: string): Promise<WebSocket> {
         const url = new URL(this.#client.liveSessionControlUrl(id, windowId));
         url.protocol = "ws:";
-        return new Promise((resolve, reject) => {
-            const socket = new WebSocket(url, {
-                createConnection: () => connectLocalSocket(this.socketPath),
-                handshakeTimeout: 10_000,
-                headers: { authorization: `Bearer ${this.#token}` },
-                maxPayload: HAPPY_AGENT_LIVE_MAX_WIRE_BYTES,
-                perMessageDeflate: false,
-            });
-            const fail = (error: Error) => {
-                socket.terminate();
-                reject(error);
-            };
-            socket.once("error", fail);
-            socket.once("unexpected-response", (_request, response) => {
-                response.resume();
-                fail(
-                    new HappyAgentDaemonHttpError(
-                        response.statusCode ?? 502,
-                        "The GPT-Live control channel was refused.",
-                    ),
-                );
-            });
-            socket.once("open", () => {
-                socket.off("error", fail);
-                // Install the relay before receiving the daemon's first hello frame.
-                socket.pause();
-                socket.on("error", () => undefined);
-                resolve(socket);
-            });
-        });
+        return this.#remoteOpen(
+            url.pathname,
+            (headers) =>
+                new Promise((resolve, reject) => {
+                    const socket = new WebSocket(url, {
+                        createConnection: () => connectLocalSocket(this.socketPath),
+                        handshakeTimeout: 10_000,
+                        headers,
+                        maxPayload: HAPPY_AGENT_LIVE_MAX_WIRE_BYTES,
+                        perMessageDeflate: false,
+                    });
+                    const fail = (error: Error) => {
+                        socket.terminate();
+                        reject(error);
+                    };
+                    socket.once("error", fail);
+                    socket.once("unexpected-response", (_request, response) => {
+                        void refusalBodyRead(response).then((text) =>
+                            fail(
+                                remoteSignInRequired(response.statusCode, text)
+                                    ? new HappyAgentRemoteSignInRequiredError()
+                                    : new HappyAgentDaemonHttpError(
+                                          response.statusCode ?? 502,
+                                          "The GPT-Live control channel was refused.",
+                                      ),
+                            ),
+                        );
+                    });
+                    socket.once("open", () => {
+                        socket.off("error", fail);
+                        // Install the relay before receiving the daemon's first hello frame.
+                        socket.pause();
+                        socket.on("error", () => undefined);
+                        resolve(socket);
+                    });
+                }),
+        );
     }
 
     getWorkspace(workspaceId: string, signal?: AbortSignal): Promise<WorkspaceResponse> {
@@ -302,15 +420,49 @@ export class HappyAgentDaemonClient {
         readonly signal?: AbortSignal;
     }): Promise<HappyAgentDaemonRawResponse> {
         const path = happyAgentPath(options.path);
+        return this.#remoteOpen(path, async (credentials) => {
+            const response = await this.#rawSend(path, options, credentials);
+            if (response.statusCode !== 403 || serverRemoteConnectionOf(path) === undefined)
+                return response;
+            // A refusal is small; it is read whole to tell a sign-in from the
+            // server's own 403, and handed on unchanged otherwise.
+            const text = await refusalBodyRead(response.body);
+            if (remoteSignInRequired(response.statusCode, text))
+                throw new HappyAgentRemoteSignInRequiredError(response.headers, text);
+            return { ...response, body: Readable.from([Buffer.from(text)]) };
+        }).catch((error: unknown) => {
+            if (error instanceof HappyAgentRemoteSignInRequiredRefusal) return error.response();
+            throw error;
+        });
+    }
+
+    #rawSend(
+        path: string,
+        options: {
+            readonly method: string;
+            readonly body?: Buffer;
+            readonly headers?: Readonly<Record<string, string>>;
+            readonly signal?: AbortSignal;
+        },
+        credentials: Readonly<Record<string, string>>,
+    ): Promise<HappyAgentDaemonRawResponse> {
         return new Promise((resolvePromise, reject) => {
             if (options.signal?.aborted) {
                 reject(abortedError());
                 return;
             }
+            const supplied = { ...options.headers };
+            // Credentials are this client's alone, whatever the caller sent.
+            for (const name of Object.keys(supplied))
+                if (
+                    name.toLowerCase() === "authorization" ||
+                    name.toLowerCase() === SERVER_REMOTE_AUTHORIZATION_HEADER
+                )
+                    delete supplied[name];
             const headers: Record<string, string | number> = {
                 accept: "application/json",
-                ...options.headers,
-                authorization: `Bearer ${this.#token}`,
+                ...supplied,
+                ...credentials,
             };
             if (options.body !== undefined) headers["content-length"] = options.body.byteLength;
             const request = httpRequest(
@@ -393,6 +545,14 @@ export class HappyAgentDaemonClient {
     }
 
     #openConnect(path: string, signal?: AbortSignal): Promise<Duplex> {
+        return this.#remoteOpen(path, (headers) => this.#connectSend(path, headers, signal));
+    }
+
+    #connectSend(
+        path: string,
+        headers: Record<string, string>,
+        signal?: AbortSignal,
+    ): Promise<Duplex> {
         return new Promise((resolvePromise, reject) => {
             if (signal?.aborted) {
                 reject(abortedError());
@@ -401,7 +561,7 @@ export class HappyAgentDaemonClient {
             const request = httpRequest({
                 // CONNECT must enter the daemon's tunnel router on a fresh connection.
                 agent: false,
-                headers: { authorization: `Bearer ${this.#token}` },
+                headers,
                 method: "CONNECT",
                 path,
                 socketPath: this.socketPath,
@@ -418,7 +578,11 @@ export class HappyAgentDaemonClient {
                 settled = true;
                 cleanup();
                 void refusalBodyRead(body, head).then((text) =>
-                    reject(happyAgentProxyRefusal(statusCode ?? 500, text)),
+                    reject(
+                        remoteSignInRequired(statusCode, text)
+                            ? new HappyAgentRemoteSignInRequiredError()
+                            : happyAgentProxyRefusal(statusCode ?? 500, text),
+                    ),
                 );
             };
             request.once("connect", (response, socket, head) => {
@@ -500,11 +664,15 @@ export class HappyAgentDaemonClient {
     #openBridgeSocket(endpointUrl: string): Promise<WebSocket> {
         const url = new URL(endpointUrl);
         url.protocol = "ws:";
+        return this.#remoteOpen(url.pathname, (headers) => this.#bridgeSocketSend(url, headers));
+    }
+
+    #bridgeSocketSend(url: URL, headers: Record<string, string>): Promise<WebSocket> {
         return new Promise((resolvePromise, reject) => {
             const socket = new WebSocket(url, {
                 createConnection: () => connectLocalSocket(this.socketPath),
                 handshakeTimeout: 10_000,
-                headers: { authorization: `Bearer ${this.#token}` },
+                headers,
                 maxPayload: WORKSPACE_BRIDGE_MAX_BINARY_MESSAGE_BYTES,
                 perMessageDeflate: false,
             });
@@ -523,13 +691,14 @@ export class HappyAgentDaemonClient {
                     bytes += chunk.length;
                     if (bytes <= BRIDGE_REFUSAL_MAX_BYTES) chunks.push(chunk);
                 });
-                const refused = () =>
+                const refused = () => {
+                    const text = Buffer.concat(chunks).toString("utf8");
                     fail(
-                        happyAgentBridgeRefusal(
-                            response.statusCode ?? 502,
-                            Buffer.concat(chunks).toString("utf8"),
-                        ),
+                        remoteSignInRequired(response.statusCode, text)
+                            ? new HappyAgentRemoteSignInRequiredError()
+                            : happyAgentBridgeRefusal(response.statusCode ?? 502, text),
                     );
+                };
                 response.once("error", refused);
                 response.once("end", refused);
                 response.once("close", refused);
@@ -567,11 +736,15 @@ export class HappyAgentDaemonClient {
         const path = `${prefix}/v0/workspaces/${encodeURIComponent(
             workspaceId,
         )}/terminals/${encodeURIComponent(terminalId)}/attach`;
+        return this.#remoteOpen(path, (headers) => this.#terminalSend(path, headers));
+    }
+
+    #terminalSend(path: string, headers: Record<string, string>): Promise<Duplex> {
         return new Promise((resolvePromise, reject) => {
             const socket = new WebSocket(`ws://happy-agent${path}`, {
                 createConnection: () => connectLocalSocket(this.socketPath),
                 handshakeTimeout: 10_000,
-                headers: { authorization: `Bearer ${this.#token}` },
+                headers,
                 maxPayload: HAPPY_AGENT_TERMINAL_MAX_WIRE_BYTES,
                 perMessageDeflate: false,
             });
@@ -582,11 +755,15 @@ export class HappyAgentDaemonClient {
                 socket.terminate();
                 reject(error);
             };
-            const unexpected = (_request: unknown, response: { statusCode?: number }): void => {
-                fail(
-                    new HappyAgentDaemonHttpError(
-                        response.statusCode ?? 500,
-                        "The Happy Agent terminal attachment was refused.",
+            const unexpected = (_request: unknown, response: IncomingMessage): void => {
+                void refusalBodyRead(response).then((text) =>
+                    fail(
+                        remoteSignInRequired(response.statusCode, text)
+                            ? new HappyAgentRemoteSignInRequiredError()
+                            : new HappyAgentDaemonHttpError(
+                                  response.statusCode ?? 500,
+                                  "The Happy Agent terminal attachment was refused.",
+                              ),
                     ),
                 );
             };
@@ -641,6 +818,56 @@ export class HappyAgentDaemonHttpError extends Error {
     ) {
         super(message);
         this.name = "HappyAgentDaemonHttpError";
+    }
+}
+
+/**
+ * The daemon's `403 remote_sign_in_required`: the team server behind a
+ * connection needs its sign-in refreshed or redone, and never saw the request.
+ * A raw request keeps the refusal, to hand it on if refreshing does not help.
+ */
+class HappyAgentRemoteSignInRequiredError extends HappyAgentDaemonHttpError {
+    constructor(
+        readonly headers?: IncomingHttpHeaders,
+        readonly body?: string,
+    ) {
+        super(403, "The team server needs you to sign in again.");
+        this.name = "HappyAgentRemoteSignInRequiredError";
+    }
+
+    /** What the caller gets when refreshing did not help. */
+    refusal(): Error {
+        return this.body === undefined
+            ? new HappyAgentDaemonHttpError(403, this.message)
+            : new HappyAgentRemoteSignInRequiredRefusal(this.headers ?? {}, this.body);
+    }
+}
+
+/** A raw request's final `remote_sign_in_required`, returned to its caller as it came. */
+class HappyAgentRemoteSignInRequiredRefusal extends Error {
+    constructor(
+        readonly headers: IncomingHttpHeaders,
+        readonly body: string,
+    ) {
+        super("The team server needs you to sign in again.");
+    }
+
+    response(): HappyAgentDaemonRawResponse {
+        return {
+            statusCode: 403,
+            headers: this.headers,
+            body: Readable.from([Buffer.from(this.body)]),
+        };
+    }
+}
+
+/** Whether a daemon refusal is its `403 remote_sign_in_required`. */
+function remoteSignInRequired(statusCode: number | undefined, body: string): boolean {
+    if (statusCode !== 403) return false;
+    try {
+        return (JSON.parse(body) as { readonly code?: unknown }).code === "remote_sign_in_required";
+    } catch {
+        return false;
     }
 }
 

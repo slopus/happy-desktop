@@ -28,6 +28,23 @@ export type HappyAgentChiefOfStaffRequest =
           readonly teams: readonly HappyAgentChiefOfStaffTeam[];
       }
     | {
+          /**
+           * The reader wants a team server added by its address. Only the
+           * Chief of Staff's admin tools add a server connection; the reader
+           * signs in to it from the app afterwards.
+           */
+          readonly kind: "serverAdd";
+          /** The address as `serverUrlParse` read it. */
+          readonly url: string;
+      }
+    | {
+          /** The reader wants a team server connection removed. */
+          readonly kind: "serverRemove";
+          readonly connectionId: string;
+          readonly name: string;
+          readonly url: string;
+      }
+    | {
           /** A Happy account sign-in came back to the app without finishing. */
           readonly kind: "cloudSignInFailed";
           readonly reason: HappyAgentCloudSignInFailure;
@@ -139,6 +156,19 @@ export function happyAgentChiefOfStaffRequestText(request: HappyAgentChiefOfStaf
                     .map((team) => `Team: ${teamNameLine(team.name)} (${team.id})`)
                     .join("\n"),
                 'Find the server with your own team tools instead of anything pasted here, connect with WorkOS organization authentication, and check that the connection works. Being on a team doesn\'t prove its server is deployed or reachable, so tell me if a team has no server yet or the check fails. The "Create and deploy a Happy team" recipe covers these steps.',
+            ].join("\n\n");
+        case "serverAdd":
+            return [
+                "Add team server",
+                "Please add the Happy team server at this address as a server connection with your add_server_connection tool. I'll sign in to it from Happy, with my organization's single sign-on, once it's listed.",
+                `Address: ${request.url}`,
+                "If the address doesn't answer like a Happy server, tell me what it said instead of trying another address.",
+            ].join("\n\n");
+        case "serverRemove":
+            return [
+                `Remove team server: ${teamNameLine(request.name)}`,
+                "Please remove this team server connection from Happy with your remove_remote_connection tool. Nothing on the server itself should change.",
+                [`Connection: ${request.connectionId}`, `Address: ${request.url}`].join("\n"),
             ].join("\n\n");
         case "cloudSignInFailed":
             return [

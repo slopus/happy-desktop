@@ -5,6 +5,7 @@ import type {
     DesktopReactDevtoolsMessage,
 } from "./desktopProfiler";
 import type { CustomTheme } from "happy-desktop-state";
+import type { ServerSessionSnapshot } from "./serverRemoteAuthorization";
 
 export type DesktopMode = "local";
 
@@ -16,6 +17,11 @@ export type DesktopScrollbarVisibility = "always" | "automatic";
 export type DesktopLinkOpenPlacement = "panel" | "browser";
 /** When the shell holds this computer out of system sleep. Follows the agents when absent. */
 export type DesktopKeepAwakeMode = "on" | "agent" | "off";
+
+/** One team-server sign-in step's outcome, with a sentence to show when it failed. */
+export type DesktopServerSignInResult<T> =
+    | { readonly ok: true; readonly value: T }
+    | { readonly ok: false; readonly message: string; readonly code: string };
 
 export interface DesktopCloudAuthConfiguration {
     readonly environment: "production" | "staging";
@@ -893,12 +899,22 @@ export interface HappyDesktopBridge {
     /** Opens only the HTTPS authorization URL returned by Happy Agent. */
     cloudAuthOpen(url: string): Promise<void>;
     /**
-     * Announces that the shell received a team server's sign-in callback,
-     * `happy://oauth/callback`. Absent on shells that do not take it.
+     * Team-server sign-in, held by the shell: it reads the server's address
+     * from the host Happy Agent, opens its sign-in page in the browser, takes
+     * `happy://oauth/callback` itself, and keeps every token in its own memory.
+     * The window sees only whether each server is signed in. Absent on shells
+     * that do not sign in to team servers.
      */
-    serverOAuthCallbackSubscribe?(listener: () => void): () => void;
-    /** Takes the oldest untaken server sign-in callback URL, if one has arrived. */
-    serverOAuthCallbackTake?(): Promise<string | undefined>;
+    serverSignInBegin?(
+        connectionId: string,
+    ): Promise<DesktopServerSignInResult<{ readonly attemptId: string; readonly host: string }>>;
+    /** Settles once the attempt's sign-in finished in the browser, or failed. */
+    serverSignInFinish?(attemptId: string): Promise<DesktopServerSignInResult<null>>;
+    serverSignInCancel?(attemptId: string): Promise<void>;
+    /** Drops a removed server's sign-in. */
+    serverSessionForget?(connectionId: string): Promise<void>;
+    serverSessionsGet?(): Promise<readonly ServerSessionSnapshot[]>;
+    serverSessionsSubscribe?(listener: () => void): () => void;
     /**
      * Announces that the system opened Happy with a `happy://` link, from a
      * browser or another application. Absent on shells that do not take them.
@@ -1075,8 +1091,12 @@ export const desktopIpc = {
     cloudAuthCallbackTake: "happy:cloud-auth:callback-take",
     cloudAuthConfigurationGet: "happy:cloud-auth:configuration-get",
     cloudAuthOpen: "happy:cloud-auth:open",
-    serverOAuthCallbackReceived: "happy:server-oauth:callback-received",
-    serverOAuthCallbackTake: "happy:server-oauth:callback-take",
+    serverSignInBegin: "happy:server-sign-in:begin",
+    serverSignInFinish: "happy:server-sign-in:finish",
+    serverSignInCancel: "happy:server-sign-in:cancel",
+    serverSessionForget: "happy:server-sessions:forget",
+    serverSessionsGet: "happy:server-sessions:get",
+    serverSessionsChanged: "happy:server-sessions:changed",
     happyLinkExternalReceived: "happy:happy-link:external-received",
     happyLinkExternalTake: "happy:happy-link:external-take",
     guestKey: "happy:guest:key",

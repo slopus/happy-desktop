@@ -1,4 +1,5 @@
 import type { UtilityProcess } from "electron";
+import type { HappyAgentRemoteAuthorization } from "./happyAgentDaemonClient";
 import type { HappyAgentRendererProxy, HappyAgentRendererTarget } from "./happyAgentRendererProxy";
 import type {
     RendererUtilityInput,
@@ -14,13 +15,24 @@ export interface RendererUtilityCredentials {
     readonly password: string;
 }
 
+/**
+ * Team-server sign-ins main holds. The utility receives each current access
+ * token and asks main to refresh; the refresh tokens never leave main.
+ */
+export interface RendererRemoteTokens extends HappyAgentRemoteAuthorization {
+    tokens(): Readonly<Record<string, string>>;
+    subscribe(listener: () => void): () => void;
+}
+
 /** The utility owns the TCP listener. Main owns only routing and its private control port. */
 export async function happyAgentRendererUtilityProxyCreate(options: {
     readonly fork: () => Child;
     readonly ready: (credentials: RendererUtilityCredentials) => Promise<void>;
     readonly offline: () => void;
     readonly debug?: (text: string) => void;
+    readonly remote?: RendererRemoteTokens;
 }): Promise<HappyAgentRendererProxy> {
+    const remote = options.remote;
     let closed = false;
     let child: Child | undefined;
     let credentials: RendererUtilityCredentials | undefined;
@@ -107,6 +119,22 @@ export async function happyAgentRendererUtilityProxyCreate(options: {
                 if (message.id === currentId) current?.onConnectionError?.();
             } else if (message.type === "debug") {
                 options.debug?.(message.text);
+            } else if (message.type === "remote-refresh" && child === running) {
+                const answer = (token: string | undefined) => {
+                    if (child !== running) return;
+                    running.postMessage({
+                        type: "remote-refreshed",
+                        requestId: message.requestId,
+                        ...(token === undefined ? {} : { token }),
+                    } satisfies RendererUtilityInput);
+                };
+                if (!remote) answer(undefined);
+                else
+                    void remote
+                        .refresh(message.connectionId, message.rejected)
+                        .then(answer, () => answer(undefined));
+            } else if (message.type === "remote-sign-in-required") {
+                remote?.signInRequire(message.connectionId, message.rejected);
             } else if (message.type === "live-attempt-reserve" && child === running) {
                 const key = `${message.attempt.connectionId ?? ""}/${message.attempt.id}`;
                 const target = backings.get(message.backingId);
@@ -130,6 +158,11 @@ export async function happyAgentRendererUtilityProxyCreate(options: {
                 started = true;
                 clearTimeout(timeout);
                 void (async () => {
+                    if (remote)
+                        running.postMessage({
+                            type: "remote-tokens",
+                            tokens: remote.tokens(),
+                        } satisfies RendererUtilityInput);
                     if (current) await sendBacking(current);
                     for (const windowId of liveWindows)
                         running.postMessage({
@@ -174,8 +207,18 @@ export async function happyAgentRendererUtilityProxyCreate(options: {
         running.on("message", onMessage);
         running.on("exit", onExit);
     };
+    let remoteTokensSent = remote?.tokens();
+    const remoteUnsubscribe = remote?.subscribe(() => {
+        const tokens = remote.tokens();
+        if (tokens === remoteTokensSent) return;
+        remoteTokensSent = tokens;
+        child?.postMessage({ type: "remote-tokens", tokens } satisfies RendererUtilityInput);
+    });
     spawn();
-    await initial;
+    await initial.catch((error: unknown) => {
+        remoteUnsubscribe?.();
+        throw error;
+    });
     return {
         get port() {
             return credentials?.port ?? 0;
@@ -227,6 +270,7 @@ export async function happyAgentRendererUtilityProxyCreate(options: {
         close() {
             if (closed) return;
             closed = true;
+            remoteUnsubscribe?.();
             if (reconnect) clearTimeout(reconnect);
             options.offline();
             for (const record of liveAttempts.values())

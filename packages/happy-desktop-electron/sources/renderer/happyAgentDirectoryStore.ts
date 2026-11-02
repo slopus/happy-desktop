@@ -3,7 +3,6 @@ import {
     happyAgentConnectionsStoreCreate,
     happyAgentNodeStoreCreate,
     happyAgentUserError,
-    serverStatusesStoreCreate,
     serverAuthenticationOutcome,
     serverAuthFailure,
     type HappyAgentConnectionItem,
@@ -11,8 +10,8 @@ import {
     type HappyAgentConnectionsStore,
     type HappyAgentNodeIdentity,
     type HappyAgentNodeStore,
+    type ServerSessionsStore,
     type ServerSource,
-    type ServerStatusesStore,
 } from "happy-desktop-state";
 import type {
     HappyAgentActivity,
@@ -154,6 +153,11 @@ export interface HappyAgentDirectoryDeps {
      * that cannot, which leaves such a remote pointing at Settings.
      */
     readonly servers?: ServerSource;
+    /**
+     * The shell's team-server sign-ins. A server added by address that the
+     * shell holds no sign-in for wants one, whatever its connection is doing.
+     */
+    readonly serverSessions?: ServerSessionsStore;
     readonly conversationOpen: (happyAgentId: string, location: HappyAgentSessionLocation) => void;
     readonly groupOpen: (happyAgentId: string, groupId: string) => void;
     /**
@@ -383,8 +387,7 @@ export function happyAgentDirectoryStoreCreate(
     const remotes = new Map<string, LocalHappyAgent>();
     let roster: HappyAgentConnectionsStore | undefined;
     let rosterUnsubscribe: (() => void) | undefined;
-    let statuses: ServerStatusesStore | undefined;
-    let statusesUnsubscribe: (() => void) | undefined;
+    let sessionsUnsubscribe: (() => void) | undefined;
 
     const host: HappyAgentHost = {
         applicationMenuOpen: () => void bridge.applicationMenuOpen().catch(() => undefined),
@@ -419,16 +422,10 @@ export function happyAgentDirectoryStoreCreate(
         for (const listener of listeners) listener();
     };
 
-    /** What the host Happy Agent says of a server connection by URL; absent for any other. */
-    const serverStatusOf = (remote: LocalHappyAgent) => {
-        const remoteId = remote.entry.remoteId;
-        return remoteId === undefined ? undefined : statuses?.get().statuses.get(remoteId);
-    };
-
     /**
      * Marks a remote whose sign-in ended; the sidebar then offers a new one. A
-     * failed request says so only while nothing answers; the host Happy Agent,
-     * which holds the sign-in, says so even over a session still on screen.
+     * failed request says so only while nothing answers; the shell, which
+     * holds the sign-in, says so even over a session still on screen.
      */
     const signInRequire = (
         remote: LocalHappyAgent,
@@ -482,6 +479,45 @@ export function happyAgentDirectoryStoreCreate(
                     phase({ phase: "failed", message: happyAgentUserError(error).message });
                 },
             );
+    };
+
+    /** Whether the shell holds no sign-in for a server added by address. */
+    const serverSignedOut = (remote: LocalHappyAgent): boolean => {
+        const sessions = deps.serverSessions?.get();
+        const remoteId = remote.entry.remoteId;
+        return (
+            sessions?.loaded === true &&
+            remote.entry.serverUrl !== undefined &&
+            remoteId !== undefined &&
+            sessions.sessions.get(remoteId)?.state !== "signedIn"
+        );
+    };
+
+    /**
+     * Holds every server added by address to the shell's word on its sign-in:
+     * one without a sign-in wants one, and one signed in again elsewhere, in
+     * another window or by a refresh, has its connection's state back.
+     */
+    const sessionsReconcile = (): void => {
+        const sessions = deps.serverSessions?.get();
+        if (!sessions?.loaded) return;
+        for (const remote of remotes.values()) {
+            if (remote.entry.serverUrl === undefined || remote.entry.remoteId === undefined)
+                continue;
+            const session = sessions.sessions.get(remote.entry.remoteId);
+            if (session?.state !== "signedIn") {
+                signInRequire(remote, {
+                    message: session?.message ?? "Sign in to this server to use it.",
+                });
+                continue;
+            }
+            if (remote.entry.signIn?.phase !== "required") continue;
+            const { signIn: _signIn, ...entry } = remote.entry;
+            remote.entry = entry.session
+                ? { ...entry, ...connectionRead(remote, entry.session.connection.get()) }
+                : { ...entry, status: "connecting", message: "Connecting to this Happy Agent." };
+            publish();
+        }
     };
 
     const connectionClose = (happyAgent: LocalHappyAgent): void => {
@@ -683,8 +719,8 @@ export function happyAgentDirectoryStoreCreate(
                         });
                     }
                     // A connection that answers again is signed in, however it got
-                    // there, unless the host Happy Agent says its sign-in ended.
-                    const ended = serverStatusOf(happyAgent)?.status === "needs_sign_in";
+                    // there, unless the shell says it holds no sign-in for it.
+                    const ended = serverSignedOut(happyAgent);
                     if (!ended) {
                         happyAgent.signInAbort?.abort();
                         happyAgent.signInAbort = undefined;
@@ -867,42 +903,13 @@ export function happyAgentDirectoryStoreCreate(
                 }
                 publish();
             };
-            rosterUnsubscribe = roster.subscribe(rosterReconcile);
+            rosterUnsubscribe = roster.subscribe(() => {
+                rosterReconcile();
+                sessionsReconcile();
+            });
             // The membership last confirmed is opened now, before the daemon is asked again.
             rosterReconcile();
-            // The host Happy Agent holds each server's sign-in, so it is the one
-            // that says when a server needs a new one.
-            statusesUnsubscribe?.();
-            statuses?.[Symbol.dispose]();
-            const statusStore = serverStatusesStoreCreate(client, happyAgent.connection!.sync);
-            statuses = statusStore;
-            statusesUnsubscribe = statusStore.subscribe(() => {
-                if (statuses !== statusStore) return;
-                for (const remote of remotes.values()) {
-                    const status = serverStatusOf(remote);
-                    if (status?.status === "needs_sign_in")
-                        signInRequire(
-                            remote,
-                            status.message === undefined ? {} : { message: status.message },
-                        );
-                    else if (status && remote.entry.signIn?.phase === "required") {
-                        // Signed in again elsewhere, in another window or by the
-                        // daemon's own refresh: the connection's state stands again.
-                        const { signIn: _signIn, ...entry } = remote.entry;
-                        remote.entry = entry.session
-                            ? {
-                                  ...entry,
-                                  ...connectionRead(remote, entry.session.connection.get()),
-                              }
-                            : {
-                                  ...entry,
-                                  status: "connecting",
-                                  message: "Connecting to this Happy Agent.",
-                              };
-                        publish();
-                    }
-                }
-            });
+            sessionsReconcile();
         }
         publish();
     };
@@ -913,6 +920,7 @@ export function happyAgentDirectoryStoreCreate(
             listeners.add(listener);
             if (listeners.size === 1) {
                 runtimeUnsubscribe = runtime.subscribe(localReconcile);
+                sessionsUnsubscribe = deps.serverSessions?.subscribe(sessionsReconcile);
                 browserOpenUnsubscribe = bridge.browserOpenSubscribe((url) => {
                     snapshot.happyAgents
                         .find((entry) => entry.id === snapshot.activeHappyAgentId)
@@ -931,10 +939,8 @@ export function happyAgentDirectoryStoreCreate(
                 rosterUnsubscribe = undefined;
                 roster?.[Symbol.dispose]();
                 roster = undefined;
-                statusesUnsubscribe?.();
-                statusesUnsubscribe = undefined;
-                statuses?.[Symbol.dispose]();
-                statuses = undefined;
+                sessionsUnsubscribe?.();
+                sessionsUnsubscribe = undefined;
                 for (const remote of remotes.values()) connectionClose(remote);
                 remotes.clear();
                 connectionClose(happyAgent);

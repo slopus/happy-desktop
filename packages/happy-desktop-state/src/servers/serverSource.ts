@@ -10,26 +10,13 @@ export interface ServerSignInProgress {
 }
 
 /**
- * Where team servers are added and signed in to.
- *
- * The window does not decide who holds the credential. The host Happy Agent can
- * own the connection, run discovery and PKCE, and keep the refresh token, or
- * the desktop shell can. Either one implements this. Every promise rejects with
- * a displayable `UserError`, and aborting the signal cancels the sign-in
- * wherever it has got to.
+ * Where the person signs in to a team server. The Chief of Staff adds and
+ * removes servers; this only signs in to one the host Happy Agent already
+ * lists, by its connection ID. The desktop shell holds every token, so the
+ * window never sees one. The promise rejects with a displayable `UserError`,
+ * and aborting the signal cancels the sign-in wherever it has got to.
  */
 export interface ServerSource {
-    /**
-     * Adds the server at `url`, an address `serverUrlParse` accepted, and signs
-     * in to it through the system browser. Settles once the server is added and
-     * signed in.
-     */
-    serverAdd(
-        url: string,
-        progress: ServerSignInProgress,
-        signal: AbortSignal,
-    ): Promise<{ readonly connectionId: string }>;
-    /** Signs in again to a server that was already added, by its connection ID. */
     serverSignIn(
         connectionId: string,
         progress: ServerSignInProgress,
@@ -50,7 +37,8 @@ export interface ServerSource {
  *   reports the same way, so `GET /v0/authentication` with the same bearer
  *   decides; see `serverAuthenticationOutcome`.
  * - `signInRequired` also: the host Happy Agent's `403 remote_sign_in_required`,
- *   its word for a remote server whose sign-in it holds having ended.
+ *   its word for a team server that needs a sign-in it was not given, or that
+ *   refused the one it was given.
  * - `undefined`: the failure is not about signing in.
  *
  * Happy's JSON carries a string `code`, which the client reads into

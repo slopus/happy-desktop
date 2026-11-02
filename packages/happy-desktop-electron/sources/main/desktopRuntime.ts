@@ -323,6 +323,19 @@ export class DesktopRuntime implements AsyncDisposable {
         }
     }
 
+    /** A team server's address from the host Happy Agent's roster, for signing in to it. */
+    serverUrl(connectionId: string): Promise<string | undefined> {
+        return this.browserHost().serverUrl(connectionId);
+    }
+
+    /**
+     * Reads a team server's health through the host Happy Agent, with its
+     * sign-in, so the roster learns which installation it reached.
+     */
+    async serverHealthRead(connectionId: string): Promise<void> {
+        await this.browserHost().connection(connectionId).health();
+    }
+
     private browserHost() {
         if (
             this.snapshotValue.phase !== "ready" ||

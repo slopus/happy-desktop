@@ -48,8 +48,9 @@ import {
     happyAgentClockStoreCreate,
     happyLinkInboxStoreCreate,
     serverAddStoreCreate,
-    serverSourceDaemonCreate,
-    HappyAgentClient,
+    serverSessionsStoreCreate,
+    serverSourceHostCreate,
+    UserError,
     happyAgentMobileConnectorStoreNoop,
     type AppearanceStore,
     type HappyAgentClockStore,
@@ -1400,39 +1401,38 @@ if (mediaPreviewBridge) {
         // told to resolve its address again whenever the set of connected Happy Agents
         // changes, so a machine that connects after the URL already named it opens
         // the addressed conversation without the reader navigating twice.
-        // Team servers are added and signed in to through the host Happy Agent,
-        // which holds every token; the shell only opens the browser and hands
-        // back the callback. A shell that cannot take the callback offers none.
-        const serverSource = desktopBridge.serverOAuthCallbackTake
-            ? serverSourceDaemonCreate({
-                  client() {
-                      const value = runtimeStore.get();
-                      return value?.phase === "ready" && value.activeTarget.mode === "local"
-                          ? new HappyAgentClient({
-                                endpoint: value.activeTarget.happyAgentHttpUrl,
-                                token: "happy-local-capability",
-                            })
-                          : undefined;
-                  },
-                  browserOpen: (url) => desktopBridge.cloudAuthOpen(url),
-              })
-            : undefined;
-        if (serverSource) {
-            appDisposers.push(() => serverSource[Symbol.dispose]());
-            const callbacksTake = async (): Promise<void> => {
-                const take = desktopBridge.serverOAuthCallbackTake;
-                if (!take) return;
-                for (let url = await take(); url !== undefined; url = await take())
-                    serverSource.callbackReceive(url);
-            };
-            const callbacksReceived = desktopBridge.serverOAuthCallbackSubscribe?.(() => {
-                void callbacksTake().catch(() => undefined);
-            });
-            if (callbacksReceived) appDisposers.push(callbacksReceived);
-        }
+        // The Chief of Staff adds and removes team servers; the shell signs in
+        // to each one and holds every token, so this window never sees one. A
+        // shell that cannot sign in to team servers offers none of it.
+        const serverSignInBegin = desktopBridge.serverSignInBegin;
+        const serverSignInFinish = desktopBridge.serverSignInFinish;
+        const serverSignInCancel = desktopBridge.serverSignInCancel;
+        const serverSessionsGet = desktopBridge.serverSessionsGet;
+        const serverSessionsSubscribe = desktopBridge.serverSessionsSubscribe;
+        const serverHost =
+            serverSignInBegin &&
+            serverSignInFinish &&
+            serverSignInCancel &&
+            serverSessionsGet &&
+            serverSessionsSubscribe
+                ? {
+                      source: serverSourceHostCreate({
+                          signInBegin: serverSignInBegin,
+                          signInFinish: serverSignInFinish,
+                          signInCancel: serverSignInCancel,
+                      }),
+                      sessions: serverSessionsStoreCreate({
+                          get: serverSessionsGet,
+                          subscribe: serverSessionsSubscribe,
+                      }),
+                  }
+                : undefined;
+        if (serverHost) appDisposers.push(() => serverHost.sessions[Symbol.dispose]());
         const happyAgents = happyAgentDirectoryStoreCreate(desktopBridge, runtimeStore, {
             cloudHostFor: auth.hostFor,
-            ...(serverSource ? { servers: serverSource } : {}),
+            ...(serverHost
+                ? { servers: serverHost.source, serverSessions: serverHost.sessions }
+                : {}),
             attentionFollow(id, source) {
                 preferencesFor(id);
                 const attentionStop = attentionFollow(id, source);
@@ -1500,9 +1500,30 @@ if (mediaPreviewBridge) {
                 );
             },
         });
-        const servers: AppServers | undefined = serverSource
-            ? { add: serverAddStoreCreate({ source: serverSource }), directory: happyAgents }
-            : undefined;
+        const serverSignIn = happyAgents.happyAgentSignIn;
+        const servers: AppServers | undefined =
+            serverHost && serverSignIn
+                ? {
+                      add: serverAddStoreCreate({
+                          // Written into This Mac's Chief of Staff draft, whose
+                          // conversation then opens; nothing is sent for the reader.
+                          async chiefOfStaffAsk(request) {
+                              const workspace = happyAgents
+                                  .get()
+                                  .happyAgents.find((entry) => entry.id === LOCAL_HAPPY_AGENT_ID)
+                                  ?.session?.workspace;
+                              if (!workspace)
+                                  throw new UserError(
+                                      "The Happy Agent on this computer isn't connected. Try again once it is.",
+                                  );
+                              await workspace.chiefOfStaffDraftAppend(request);
+                              happyAgents.happyAgentActivate(LOCAL_HAPPY_AGENT_ID);
+                          },
+                      }),
+                      directory: happyAgents,
+                      signIn: serverSignIn,
+                  }
+                : undefined;
         if (servers) appDisposers.push(() => servers.add[Symbol.dispose]());
         // What this window reports about how it is used, read from the same
         // directory the sidebar reads. Development windows send nothing.

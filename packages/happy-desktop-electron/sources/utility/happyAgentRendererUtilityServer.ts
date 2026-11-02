@@ -5,7 +5,10 @@ import {
     type ServerResponse,
 } from "node:http";
 import { pipeline } from "node:stream/promises";
-import { HappyAgentDaemonClient } from "../main/happyAgentDaemonClient";
+import {
+    HappyAgentDaemonClient,
+    type HappyAgentRemoteAuthorization,
+} from "../main/happyAgentDaemonClient";
 import { happyAgentProxyHandle } from "../main/happyAgentProxyHandle";
 import { happyAgentRendererProxyCreate } from "../main/happyAgentRendererProxy";
 import { happyAgentRequestTimingCreate } from "../main/happyAgentRequestTiming";
@@ -82,6 +85,26 @@ export async function happyAgentRendererUtilityServerCreate(
     let allowedOrigin: string | undefined;
     let reservationId = 0;
     const backings = new WeakMap<HappyAgentLiveClient, number>();
+    // Team-server access tokens from main, which keeps every refresh token.
+    let remoteTokens: Readonly<Record<string, string>> = {};
+    let remoteRequestId = 0;
+    const remoteRefreshes = new Map<number, (token: string | undefined) => void>();
+    const remote: HappyAgentRemoteAuthorization = {
+        token: (connectionId) => remoteTokens[connectionId],
+        refresh: (connectionId, rejected) =>
+            new Promise((resolve) => {
+                const requestId = ++remoteRequestId;
+                remoteRefreshes.set(requestId, resolve);
+                send({
+                    type: "remote-refresh",
+                    requestId,
+                    connectionId,
+                    ...(rejected === undefined ? {} : { rejected }),
+                });
+            }),
+        signInRequire: (connectionId, rejected) =>
+            send({ type: "remote-sign-in-required", connectionId, rejected }),
+    };
     const reservations = new Map<
         number,
         { resolve(): void; reject(error: Error): void; timer: ReturnType<typeof setTimeout> }
@@ -141,6 +164,16 @@ export async function happyAgentRendererUtilityServerCreate(
                 live.attemptRestore(message.attempt, message.disposed);
                 return;
             }
+            if (message.type === "remote-tokens") {
+                remoteTokens = message.tokens;
+                return;
+            }
+            if (message.type === "remote-refreshed") {
+                const resolve = remoteRefreshes.get(message.requestId);
+                remoteRefreshes.delete(message.requestId);
+                resolve?.(message.token);
+                return;
+            }
             if (message.type === "detach") {
                 if (activeId === message.id) {
                     detach?.();
@@ -150,7 +183,7 @@ export async function happyAgentRendererUtilityServerCreate(
                 }
                 return;
             }
-            const client = new HappyAgentDaemonClient(message.transport);
+            const client = new HappyAgentDaemonClient(message.transport, remote);
             const id = message.id;
             backings.set(client, id);
             const next = await proxy.targetSet({
@@ -253,6 +286,8 @@ export async function happyAgentRendererUtilityServerCreate(
                 reservation.reject(new Error("The GPT-Live transport closed."));
             }
             reservations.clear();
+            for (const resolve of remoteRefreshes.values()) resolve(undefined);
+            remoteRefreshes.clear();
             detach?.();
             proxy.close();
         },
