@@ -2428,9 +2428,8 @@ function happyAgentTasksSection(
                 id: happyAgentItemId(happyAgent.id, item.id),
                 ...happyAgentSidebarItemAvailability(item, happyAgent),
             })),
-        // The heading makes a task the way the Bots heading makes a bot, with
-        // browsing beside it. A Happy Agent from before task creation only
-        // browses, so its search stands where the + would.
+        // The heading makes a task the way the Bots heading makes a bot.
+        // Task search is available through the global search controls.
         ...(materialized && happyAgentTaskCreateSupported(happyAgent)
             ? {
                   action: {
@@ -2444,12 +2443,6 @@ function happyAgentTasksSection(
                           ? { shortcut: APP_SHORTCUTS.taskCreate }
                           : {}),
                   },
-                  secondaryAction: {
-                      disabled: offline,
-                      icon: "search" as const,
-                      label: "Browse tasks",
-                      reveal: "always" as const,
-                  },
                   // Nothing joined yet says so under the heading, with making
                   // the first one right beside it while it can be made.
                   empty: {
@@ -2461,12 +2454,6 @@ function happyAgentTasksSection(
               }
             : materialized
               ? {
-                    action: {
-                        disabled: offline,
-                        icon: "search" as const,
-                        label: "Browse tasks",
-                        reveal: "always" as const,
-                    },
                     empty: {
                         ...(offline ? {} : { actionLabel: "Browse tasks" }),
                         description: "Join a task to keep it here.",
