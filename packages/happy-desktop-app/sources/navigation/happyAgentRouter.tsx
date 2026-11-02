@@ -849,14 +849,27 @@ function surfaceChatShow(
     );
 }
 
-/** Opens one Surface, as its sidebar row does: with its chat beside it if the reader left it open. */
-function happyAgentRouterSurfaceOpen(
+/**
+ * Opens one Surface, as its sidebar row does: with its chat beside it if the
+ * reader left it open. Every way of opening one — its row, ⌘K, a reference in
+ * a message, a link in a page — comes here, and opening one the reader has not
+ * joined joins it: it opens at once and takes its place in the sidebar while
+ * the join goes to the Happy Agent behind it. A refused join is stated under
+ * the sidebar's Surfaces, and the Surface stays open.
+ */
+export function happyAgentRouterSurfaceOpen(
     router: HappyAgentRouter,
     context: HappyAgentRouterContext,
     happyAgentId: string,
     surfaceId: string,
 ): void {
     const catalog = happyAgentSurfaces(context, happyAgentId)?.catalog();
+    const surfaceJoin = () => {
+        const snapshot = catalog?.get();
+        if (snapshot === undefined || snapshot.joined.some((surface) => surface.id === surfaceId))
+            return;
+        catalog?.surfaceJoin(surfaceId as HappyAgentSurfaceId);
+    };
     const shown = catalog?.get().chatsShown.has(surfaceId as HappyAgentSurfaceId);
     const found = shown ? catalog?.get().chats.get(surfaceId as HappyAgentSurfaceId) : undefined;
     if (found !== undefined) {
@@ -869,12 +882,14 @@ function happyAgentRouterSurfaceOpen(
             },
             to: "/surfaces/$happyAgentId/$surfaceId/chat/$chatGroupId/$chatAgentId",
         });
+        surfaceJoin();
         return;
     }
     void router.navigate({
         params: { happyAgentId, surfaceId },
         to: "/surfaces/$happyAgentId/$surfaceId",
     });
+    surfaceJoin();
     // Not found yet in this run: it opens beside the Surface the way
     // the header's Chat opens it, saying so while it is found.
     if (shown && catalog)

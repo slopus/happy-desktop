@@ -26,6 +26,7 @@ import {
     happyAgentGroupAccessRefused,
     HAPPY_AGENT_GROUP_UNLISTED_REFUSAL,
     HAPPY_AGENT_RETAINED_CONVERSATIONS_NONE,
+    UserError,
     happyAgentHostNoop,
     happyAgentSurfaceSupportStoreNone,
 } from "happy-desktop-state";
@@ -153,7 +154,7 @@ function workspace(): HappyAgentWorkspaceStore {
     } as unknown as HappyAgentWorkspaceStore;
 }
 
-function view() {
+function view(catalog: HappyAgentSurfaceCatalogSnapshot = CATALOG) {
     const palette = commandPaletteStoreCreate();
     const onSurfaceOpen = vi.fn();
     const onArtifactOpen = vi.fn();
@@ -161,7 +162,7 @@ function view() {
     const surfaces = {
         catalog: () =>
             ({
-                get: () => CATALOG,
+                get: () => catalog,
                 subscribe: () => () => undefined,
                 [Symbol.dispose]: () => undefined,
             }) as unknown as HappyAgentSurfaceCatalogStore,
@@ -286,4 +287,20 @@ it("finds documents, open todos, and artifacts, and opens each where its own row
     act(() => palette.queryUpdate("plan"));
     rowClick("surface:srf_plan");
     expect(onSurfaceOpen).toHaveBeenLastCalledWith("local", "srf_plan");
+});
+
+it("says under the sidebar's Surfaces when the Happy Agent refused a join that opening one asked for", () => {
+    const calendar = surface("srf_week", "Launch week", "document");
+    const { container } = view({
+        ...CATALOG,
+        surfaces: [...CATALOG.surfaces, calendar],
+        failure: {
+            surfaceId: calendar.id,
+            action: "join",
+            error: new UserError("You can’t join this Surface."),
+        },
+    });
+    expect(
+        container.querySelector('[data-happy-desktop-ui="sidebar-section-error"]')?.textContent,
+    ).toBe("Could not join “Launch week”. You can’t join this Surface.");
 });

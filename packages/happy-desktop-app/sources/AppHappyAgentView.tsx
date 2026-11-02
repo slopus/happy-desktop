@@ -2713,8 +2713,9 @@ function rowSurfaceMenuItems(
  * Surfaces follow in their own order and are dragged among themselves only.
  * Every type is listed by its own name and picture, including a type this
  * build cannot show; only opening one depends on its type. Every act on them
- * applies at once and reaches the Happy Agent in the background, so the
- * group never reports a failure.
+ * applies at once and reaches the Happy Agent in the background. A refused
+ * join — one that opening a Surface asked for — takes the row away again, so
+ * the reason is stated under the group, until the next act on a Surface.
  */
 function happyAgentTopSection(
     happyAgentId: string,
@@ -2724,8 +2725,18 @@ function happyAgentTopSection(
     titleShimmerEnabled: boolean,
 ): SidebarSection {
     const offline = happyAgent?.status !== "connected";
+    const failure = catalog.failure?.action === "join" ? catalog.failure : undefined;
+    const refused =
+        failure === undefined
+            ? undefined
+            : catalog.surfaces.find((surface) => surface.id === failure.surfaceId)?.name;
     return {
         id: happyAgentSurfacesSectionId(happyAgentId),
+        ...(failure === undefined
+            ? {}
+            : {
+                  error: `Could not join “${refused ?? "this Surface"}”. ${failure.error.message}`,
+              }),
         items: [
             ARTIFACTS_SIDEBAR_ITEM,
             ...(catalog.availability === "available"
