@@ -917,6 +917,67 @@
     --onboarding-action-label: #14112e;
 }
 
+/* Pinned sidebar tiles, tinted from NightSkyShader's own palette: its upper and
+   lower night (#060d22, #030517), the galactic band, and the cool starlight
+   (#a3c7ff). Light washes the tiles in thin starlight over a hint of band;
+   dark lays the night itself under them, a shade deeper toward the bottom as
+   the shader's sky is. */
+:root,
+.happy-theme-light {
+    --happy-pin-fill: linear-gradient(
+        180deg,
+        color-mix(in srgb, #a3c7ff 18%, transparent),
+        color-mix(in srgb, #a3c7ff 11%, transparent)
+    );
+    --happy-pin-fill-hover: linear-gradient(
+        180deg,
+        color-mix(in srgb, #a3c7ff 28%, transparent),
+        color-mix(in srgb, #a3c7ff 19%, transparent)
+    );
+    --happy-pin-fill-selected: linear-gradient(
+        180deg,
+        color-mix(in srgb, #a3c7ff 46%, transparent),
+        color-mix(in srgb, #a3c7ff 34%, transparent)
+    );
+    --happy-pin-ring-selected: color-mix(in srgb, #1b2c66 22%, transparent);
+    --happy-pin-lift: 0 6px 18px color-mix(in srgb, #060d22 18%, transparent);
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --happy-pin-fill: linear-gradient(
+            180deg,
+            color-mix(in srgb, #16244f 52%, transparent),
+            color-mix(in srgb, #060d22 52%, transparent)
+        );
+        --happy-pin-fill-hover: linear-gradient(
+            180deg,
+            color-mix(in srgb, #1d2f63 72%, transparent),
+            color-mix(in srgb, #0a1430 72%, transparent)
+        );
+        --happy-pin-fill-selected: linear-gradient(180deg, #24397a, #121f4a);
+        --happy-pin-ring-selected: color-mix(in srgb, #a3c7ff 34%, transparent);
+        --happy-pin-lift: 0 8px 22px color-mix(in srgb, #030517 60%, transparent);
+    }
+}
+
+.happy-theme-dark,
+.happy-theme-midnight {
+    --happy-pin-fill: linear-gradient(
+        180deg,
+        color-mix(in srgb, #16244f 52%, transparent),
+        color-mix(in srgb, #060d22 52%, transparent)
+    );
+    --happy-pin-fill-hover: linear-gradient(
+        180deg,
+        color-mix(in srgb, #1d2f63 72%, transparent),
+        color-mix(in srgb, #0a1430 72%, transparent)
+    );
+    --happy-pin-fill-selected: linear-gradient(180deg, #24397a, #121f4a);
+    --happy-pin-ring-selected: color-mix(in srgb, #a3c7ff 34%, transparent);
+    --happy-pin-lift: 0 8px 22px color-mix(in srgb, #030517 60%, transparent);
+}
+
 /* ThemeScope intentionally has no layout box. */
 .happy-theme-scope {
     display: contents;

@@ -432,6 +432,13 @@ export type SidebarProps = Omit<HTMLAttributes<HTMLElement>, "style"> & {
     onSectionCollapseToggle?: (sectionId: string) => void;
     onSectionTailToggle?: (sectionId: string) => void;
     activeItemId: string;
+    /**
+     * Further rows that show as selected alongside `activeItemId`, for a
+     * destination the list draws in more than one place — a subtask under its
+     * bot and again among the tasks. Every row naming what is open wears the
+     * selection; `activeItemId` stays the one the keyboard's Tab stop lands on.
+     */
+    activeItemIds?: readonly string[];
     /** Which end of a row reports work. Defaults to `trailing`. */
     activityPlacement?: SidebarActivityPlacement;
     /**
@@ -2499,6 +2506,7 @@ export function Sidebar(props: SidebarProps) {
         "actions",
         "actionsDivider",
         "activeItemId",
+        "activeItemIds",
         "activityPlacement",
         "brand",
         "bodyAccessory",
@@ -2550,6 +2558,8 @@ export function Sidebar(props: SidebarProps) {
         "title",
     ]);
     const interactionEnabled = props.interactionEnabled !== false;
+    const rowActive = (id: string) =>
+        id === local.activeItemId || (local.activeItemIds?.includes(id) ?? false);
     const menuRoot = useRef<HTMLDivElement>(null);
     // The item that last had focus, which stays the list's Tab stop until
     // another item comes on screen, as going back or forward brings one.
@@ -4266,7 +4276,7 @@ export function Sidebar(props: SidebarProps) {
                                 const dragging = drag?.moved === true;
                                 return (
                                     <SidebarRow
-                                        active={local.activeItemId === action.id}
+                                        active={rowActive(action.id)}
                                         foldControlPlacement={local.foldControlPlacement}
                                         // A nested row is drawn as a section's is.
                                         className={
@@ -4729,7 +4739,7 @@ export function Sidebar(props: SidebarProps) {
                                                         local.onItemStoryOpen !== undefined &&
                                                         item.story !== undefined
                                                     }
-                                                    active={item.id === local.activeItemId}
+                                                    active={rowActive(item.id)}
                                                     activityPlacement={local.activityPlacement}
                                                     foldControlPlacement={
                                                         local.foldControlPlacement
@@ -4854,7 +4864,7 @@ export function Sidebar(props: SidebarProps) {
                                     <SidebarRow
                                         key={item.id}
                                         item={item}
-                                        active={local.activeItemId === item.id}
+                                        active={rowActive(item.id)}
                                         onContextMenu={openItemMenu}
                                         onSelect={local.onItemSelect}
                                     />
