@@ -20,6 +20,7 @@ import {
     type AppHappyAgentUpdate,
     type AppHappyAgentDebugStore,
     type AppHappyAgentProfilerStore,
+    type AppServers,
     type HappyAgentRouter,
 } from "happy-desktop-app";
 import {
@@ -53,7 +54,6 @@ import {
     type AppearanceStore,
     type HappyAgentClockStore,
     type HappyLinkInboxStore,
-    type ServerAddStore,
     type HappyAgentAttentionStore,
     type HappyAgentCompletionSound,
     type CommandPaletteStore,
@@ -398,7 +398,7 @@ function HappyAgentBoundary(props: {
     platform: "desktop" | "web";
     gptLive: GptLiveStore;
     usageAnalytics: UsageAnalyticsStore;
-    servers?: ServerAddStore;
+    servers?: AppServers;
     router: HappyAgentRouter;
     navigationOrder: HappyAgentNavigationOrderStore;
     sidebarCollapse: HappyAgentSidebarCollapseStore;
@@ -619,7 +619,7 @@ interface DesktopRendererProps {
     gptLive: GptLiveStore;
     usageAnalytics: UsageAnalyticsStore;
     /** Adds team servers through the host Happy Agent; absent on a shell that cannot. */
-    servers?: ServerAddStore;
+    servers?: AppServers;
     keepAwake: KeepAwakeStore;
     navigationOrder: HappyAgentNavigationOrderStore;
     sidebarCollapse: HappyAgentSidebarCollapseStore;
@@ -1430,8 +1430,6 @@ if (mediaPreviewBridge) {
             });
             if (callbacksReceived) appDisposers.push(callbacksReceived);
         }
-        const servers = serverSource ? serverAddStoreCreate({ source: serverSource }) : undefined;
-        if (servers) appDisposers.push(() => servers[Symbol.dispose]());
         const happyAgents = happyAgentDirectoryStoreCreate(desktopBridge, runtimeStore, {
             cloudHostFor: auth.hostFor,
             ...(serverSource ? { servers: serverSource } : {}),
@@ -1502,6 +1500,10 @@ if (mediaPreviewBridge) {
                 );
             },
         });
+        const servers: AppServers | undefined = serverSource
+            ? { add: serverAddStoreCreate({ source: serverSource }), directory: happyAgents }
+            : undefined;
+        if (servers) appDisposers.push(() => servers.add[Symbol.dispose]());
         // What this window reports about how it is used, read from the same
         // directory the sidebar reads. Development windows send nothing.
         const analytics = desktopAnalyticsCreate({

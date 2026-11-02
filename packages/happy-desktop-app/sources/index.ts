@@ -47,6 +47,7 @@ export {
     type AppHappyAgentProfilerCapabilities,
     type AppHappyAgentProfilerSnapshot,
     type AppHappyAgentProfilerStore,
+    type AppServers,
 } from "./views/AppHappyAgentSettingsView";
 export {
     happyAgentHistoryCreate,

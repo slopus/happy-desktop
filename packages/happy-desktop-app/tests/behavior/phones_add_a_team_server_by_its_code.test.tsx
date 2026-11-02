@@ -15,6 +15,8 @@ vi.mock("../../../happy-desktop-ui/src/Spinner", () => ({ Spinner: () => null })
  * A phone adds a team server only by scanning the code this computer shows for
  * it in Settings › Servers. The code names the server's instance and HTTPS
  * address and holds no credential; a server without both offers no code.
+ * Settings opens inside one connection, whose own directory names only itself,
+ * so the servers are listed from the window's whole directory.
  */
 
 const TEAM = "k3x9q2m7p0a4b8c1d5e6f7g2";
@@ -52,13 +54,21 @@ it("shows each server's phone code, only where a phone can use it", () => {
         serverAdd: () => new Promise(() => undefined),
         serverSignIn: () => Promise.resolve(),
     };
-    const servers = serverAddStoreCreate({ source });
+    const add = serverAddStoreCreate({ source });
+    const servers = {
+        add,
+        directory: { get: () => directory, subscribe: () => () => {} },
+    };
+    const own: AppHappyAgentDirectorySnapshot = {
+        activeHappyAgentId: "local",
+        happyAgents: [directory.happyAgents[0]!],
+    };
     const appearance = appearanceStoreCreate();
     const view = render(
         <AppHappyAgentSettingsView
             appearance={appearance}
             happyAgents={{
-                get: () => directory,
+                get: () => own,
                 subscribe: () => () => {},
                 happyAgentActivate: () => {},
             }}
@@ -82,6 +92,6 @@ it("shows each server's phone code, only where a phone can use it", () => {
     fireEvent.click(view.getByRole("button", { name: "Done" }));
     expect(view.queryByTestId("happy-agent-server-phone")).toBeNull();
     view.unmount();
-    servers[Symbol.dispose]();
+    add[Symbol.dispose]();
     appearance[Symbol.dispose]();
 });

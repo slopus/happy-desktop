@@ -32,7 +32,10 @@ const directory: AppHappyAgentDirectorySnapshot = {
 
 function settingsRender(options: { readonly section: string; readonly source?: ServerSource }) {
     const appearance = appearanceStoreCreate();
-    const servers = options.source ? serverAddStoreCreate({ source: options.source }) : undefined;
+    const add = options.source ? serverAddStoreCreate({ source: options.source }) : undefined;
+    const servers = add
+        ? { add, directory: { get: () => directory, subscribe: () => () => {} } }
+        : undefined;
     const view = render(
         <AppHappyAgentSettingsView
             appearance={appearance}
@@ -52,7 +55,7 @@ function settingsRender(options: { readonly section: string; readonly source?: S
         view,
         dispose() {
             view.unmount();
-            servers?.[Symbol.dispose]();
+            add?.[Symbol.dispose]();
             appearance[Symbol.dispose]();
         },
     };

@@ -24,7 +24,6 @@ import type {
     GptLiveStore,
     HappyAgentGroupId,
     UsageAnalyticsStore,
-    ServerAddStore,
     KeepAwakeStore,
     StatusBarStore,
     HappyAgentFileTabKind,
@@ -65,6 +64,7 @@ import {
     type AppHappyAgentDaemonStore,
     type AppHappyAgentDebugStore,
     type AppHappyAgentProfilerStore,
+    type AppServers,
 } from "../views/AppHappyAgentSettingsView";
 import type { AppHappyAgentReleaseNotesStore, AppHappyAgentUpdateStore } from "../agentUpdate";
 
@@ -146,7 +146,7 @@ export interface HappyAgentRouterContext {
     /** Whether this window sends product analytics events. Absent where it sends none. */
     readonly usageAnalytics?: UsageAnalyticsStore;
     /** Adds team servers by address. Absent where the host cannot add them. */
-    readonly servers?: ServerAddStore;
+    readonly servers?: AppServers;
     /** Window-owned GPT-Live opt-in; unrelated to coding-provider settings. */
     readonly gptLive?: GptLiveStore;
     /**

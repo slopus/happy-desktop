@@ -382,6 +382,16 @@ function serverRows(
     });
 }
 
+/**
+ * Team servers in Settings › Servers: adding one by address, and the window's
+ * whole directory they are listed from. A connection's own directory names only
+ * that connection, so the list cannot come from it.
+ */
+export interface AppServers {
+    readonly add: ServerAddStore;
+    readonly directory: Pick<AppHappyAgentDirectoryStore, "get" | "subscribe">;
+}
+
 /** Stands in where the host cannot add servers, so the view subscribes unconditionally. */
 const serverAddAbsentSnapshot = { url: "", phase: { kind: "editing" } } as const;
 const serverAddStoreAbsent: ServerAddStore = {
@@ -391,6 +401,11 @@ const serverAddStoreAbsent: ServerAddStore = {
     serverAddSubmit: () => undefined,
     serverAddCancel: () => undefined,
     [Symbol.dispose]: () => undefined,
+};
+const serverDirectoryAbsentSnapshot: AppHappyAgentDirectorySnapshot = { happyAgents: [] };
+const serverDirectoryAbsent: AppServers["directory"] = {
+    get: () => serverDirectoryAbsentSnapshot,
+    subscribe: () => () => undefined,
 };
 
 /** Stands in where the host cannot hold the machine awake, keeping hook order fixed. */
@@ -426,7 +441,7 @@ export interface AppHappyAgentSettingsViewProps {
     /** Whether this window sends product analytics events. Absent where it sends none. */
     usageAnalytics?: UsageAnalyticsStore;
     /** Adds team servers by address. Absent where the host cannot, which leaves Servers out. */
-    servers?: ServerAddStore;
+    servers?: AppServers;
     gptLive?: GptLiveStore;
     /** Absent where the host cannot hold the machine awake. */
     keepAwake?: KeepAwakeStore;
@@ -488,11 +503,17 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
         usageAnalyticsStore.get,
         usageAnalyticsStore.get,
     );
-    const serverAddStore = props.servers ?? serverAddStoreAbsent;
+    const serverAddStore = props.servers?.add ?? serverAddStoreAbsent;
     const serverAdd = useSyncExternalStore(
         serverAddStore.subscribe,
         serverAddStore.get,
         serverAddStore.get,
+    );
+    const serverDirectoryStore = props.servers?.directory ?? serverDirectoryAbsent;
+    const serverDirectory = useSyncExternalStore(
+        serverDirectoryStore.subscribe,
+        serverDirectoryStore.get,
+        serverDirectoryStore.get,
     );
     const section = props.section;
     const stateOpen = section === "debug";
@@ -942,7 +963,7 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                     <HappyAgentServerSettings
                         url={serverAdd.url}
                         phase={serverAdd.phase}
-                        servers={serverRows(directory.happyAgents)}
+                        servers={serverRows(serverDirectory.happyAgents)}
                         {...(serverAdd.urlProblem === undefined
                             ? {}
                             : { urlError: serverUrlProblemMessage(serverAdd.urlProblem) })}
