@@ -373,6 +373,24 @@ export function happyAgentFeedCreate(deps: HappyAgentFeedDeps): HappyAgentFeed {
                 cursor = input.update.cursor;
             }
         };
+        /**
+         * The daemon answered a read-all: by its contract every entry that was
+         * open at or before `through` is now closed, whether or not its own
+         * event has arrived yet. The held copies say so; a later change to one
+         * arrives with a greater version and replaces it.
+         */
+        const readAllConfirmed = (through: string, at: number): void => {
+            let changed = false;
+            const items = snapshot.items.map((item) => {
+                if (item.cursor > through) return item;
+                pending.delete(item.id);
+                if (item.seenAt !== null) return item;
+                changed = true;
+                return { ...item, seenAt: at };
+            });
+            if (changed) publish({ items });
+            pendingPublish();
+        };
         const seenFailed = (ids: readonly string[], error: unknown): void => {
             for (const id of ids) pending.delete(id);
             publish({ error: happyAgentUserError(error) });
@@ -450,16 +468,18 @@ export function happyAgentFeedCreate(deps: HappyAgentFeedDeps): HappyAgentFeed {
                     if (!newest || open.length === 0) return;
                     for (const item of open) pending.set(item.id, item.version);
                     pendingPublish();
-                    client
-                        .markFeedReadAll({ through: newest.cursor, mutationId: mutationIdCreate() })
-                        .then(
-                            (response) => unreadStore?.unreadReceived(response.unread),
-                            (error: unknown) =>
-                                seenFailed(
-                                    open.map((item) => item.id),
-                                    error,
-                                ),
-                        );
+                    const through = newest.cursor;
+                    client.markFeedReadAll({ through, mutationId: mutationIdCreate() }).then(
+                        (response) => {
+                            readAllConfirmed(through, Date.now());
+                            unreadStore?.unreadReceived(response.unread);
+                        },
+                        (error: unknown) =>
+                            seenFailed(
+                                open.map((item) => item.id),
+                                error,
+                            ),
+                    );
                 },
             } satisfies HappyAgentFeedPageStore,
             /** Entries a mutation elsewhere closed, as the daemon answered it. */
