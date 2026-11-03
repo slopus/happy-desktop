@@ -180,7 +180,7 @@ export type ComposerModelControlProps = {
      */
     accountsReadOnly?: boolean;
     /**
-     * Adds "Manage accounts" to the model list, above the benchmarks link. The
+     * Adds "Manage accounts" to the model list's footer. The
      * menu closes once it settles; a rejection's message is shown under it.
      */
     onAccountsManage?(): Promise<void>;
@@ -194,8 +194,6 @@ export type ComposerModelControlProps = {
     preview?: ComposerModelControlPreview;
     style?: CSSProperties;
 };
-
-export const COMPOSER_MODEL_BENCHMARKS_URL = "https://happy.engineering/model-benchmarks";
 
 /** Breathing room kept between an opened list and the top of the pane. */
 const VIEWPORT_GAP = 16;
@@ -1544,14 +1542,14 @@ export function ComposerModelControl(props: ComposerModelControlProps) {
                                     })}
                                 </div>
                             </ScrollArea>
-                            <div className="happy-composer-model-control__footer">
-                                <div
-                                    className="happy-composer-model-control__separator"
-                                    role="separator"
-                                />
-                                {props.onAccountsManage ? (
+                            {props.onAccountsManage ? (
+                                <div className="happy-composer-model-control__footer">
+                                    <div
+                                        className="happy-composer-model-control__separator"
+                                        role="separator"
+                                    />
                                     <button
-                                        className="happy-composer-model-control__benchmarks"
+                                        className="happy-composer-model-control__footer-action"
                                         data-happy-desktop-ui="composer-model-control-accounts-manage"
                                         data-menu-item="model"
                                         disabled={manage.pending}
@@ -1580,30 +1578,16 @@ export function ComposerModelControl(props: ComposerModelControlProps) {
                                             Manage accounts
                                         </span>
                                     </button>
-                                ) : null}
-                                {manage.error ? (
-                                    <span
-                                        className="happy-composer-model-control__footer-error"
-                                        role="alert"
-                                    >
-                                        {manage.error}
-                                    </span>
-                                ) : null}
-                                <a
-                                    className="happy-composer-model-control__benchmarks"
-                                    data-happy-desktop-ui="composer-model-control-benchmarks"
-                                    data-menu-item="model"
-                                    href={COMPOSER_MODEL_BENCHMARKS_URL}
-                                    onClick={close}
-                                    rel="noreferrer"
-                                    target="_blank"
-                                >
-                                    <span className="happy-composer-model-control__name">
-                                        Latest benchmarks
-                                    </span>
-                                    <Octicon name="link-external" size={12} />
-                                </a>
-                            </div>
+                                    {manage.error ? (
+                                        <span
+                                            className="happy-composer-model-control__footer-error"
+                                            role="alert"
+                                        >
+                                            {manage.error}
+                                        </span>
+                                    ) : null}
+                                </div>
+                            ) : null}
                             {accountsService ? renderAccounts(accountsService) : null}
                         </div>
                     ) : null}

@@ -182,7 +182,7 @@ it("marks an unavailable selection red and asks the Chief of Staff from its popo
     );
 }, 60000);
 
-it("puts Manage accounts directly above Latest benchmarks in the model list footer", async () => {
+it("puts Manage accounts in the model list footer", async () => {
     const onAccountsManage = vi.fn(() => Promise.resolve());
     const view = render(() => (
         <Fixture onAccountsManage={onAccountsManage} selectionModel={OPUS} />
@@ -200,17 +200,9 @@ it("puts Manage accounts directly above Latest benchmarks in the model list foot
         children.map(
             (child) => child.getAttribute("data-happy-desktop-ui") ?? child.getAttribute("role"),
         ),
-    ).toEqual([
-        "separator",
-        "composer-model-control-accounts-manage",
-        "composer-model-control-benchmarks",
-    ]);
+    ).toEqual(["separator", "composer-model-control-accounts-manage"]);
     const manage = view.$('[data-happy-desktop-ui="composer-model-control-accounts-manage"]');
-    const benchmarks = view.$('[data-happy-desktop-ui="composer-model-control-benchmarks"]');
     expect(manage.element.textContent).toBe("Manage accounts");
-    expect(manage.bounds().x).toBe(benchmarks.bounds().x);
-    expect(manage.bounds().width).toBe(benchmarks.bounds().width);
-    expect(manage.bounds().height).toBe(benchmarks.bounds().height);
     await userEvent.click(manage.element);
     expect(onAccountsManage).toHaveBeenCalledTimes(1);
     await vi.waitFor(() =>

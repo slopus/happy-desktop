@@ -209,6 +209,7 @@
 .happy-composer-model-control__list-viewport {
     display: flex;
     flex-direction: column;
+    overflow-x: hidden;
     overflow-y: auto;
     overscroll-behavior: contain;
 }
@@ -219,6 +220,7 @@
     flex: 0 0 auto;
     flex-direction: column;
     gap: 4px;
+    min-width: 0;
     padding: 0 var(--happy-panel-inset);
 }
 
@@ -231,11 +233,11 @@
 }
 
 /* Every line has the same side padding, so headers, model names, and the
- * benchmarks link all start on one left edge; a check follows its label. */
+ * footer action all start on one left edge; a check follows its label. */
 .happy-composer-model-control__service-header,
 .happy-composer-model-control__row,
 .happy-composer-model-control__option,
-.happy-composer-model-control__benchmarks {
+.happy-composer-model-control__footer-action {
     position: relative;
     isolation: isolate;
     display: flex;
@@ -273,7 +275,7 @@
  * always keep 4px apart instead of touching. The line keeps its full hit box. */
 .happy-composer-model-control__row::before,
 .happy-composer-model-control__option::before,
-.happy-composer-model-control__benchmarks::before {
+.happy-composer-model-control__footer-action::before {
     position: absolute;
     inset: 2px 0;
     z-index: -1;
@@ -287,20 +289,20 @@
 .happy-composer-model-control__row:hover:not(:disabled)::before,
 .happy-composer-model-control__option:hover::before,
 .happy-composer-model-control__option[data-shown]::before,
-.happy-composer-model-control__benchmarks:hover::before {
+.happy-composer-model-control__footer-action:hover::before {
     background: var(--surface-pressed);
 }
 
 /* Focus rings are drawn inside the highlight they belong to, never across a neighbour. */
 .happy-composer-model-control__row:focus-visible::before,
 .happy-composer-model-control__option:focus-visible::before,
-.happy-composer-model-control__benchmarks:focus-visible::before {
+.happy-composer-model-control__footer-action:focus-visible::before {
     box-shadow: inset 0 0 0 2px var(--radio-active);
 }
 
 .happy-composer-model-control__row:focus-visible,
 .happy-composer-model-control__option:focus-visible,
-.happy-composer-model-control__benchmarks:focus-visible {
+.happy-composer-model-control__footer-action:focus-visible {
     outline: none;
 }
 
@@ -530,6 +532,10 @@
     right: 0;
     left: auto;
     max-width: 100%;
+    /* The header stays on one line, but its tooltip must wrap inside this
+     * width: even invisible overflowing text enlarges the list's scroll area. */
+    white-space: normal;
+    overflow-wrap: anywhere;
     transform: translateY(calc(-1 * var(--happy-tooltip-rise)));
 }
 
@@ -552,19 +558,13 @@
     cursor: pointer;
 }
 
-.happy-composer-model-control__benchmarks {
-    justify-content: space-between;
-}
-
-.happy-composer-model-control__benchmarks {
+.happy-composer-model-control__footer-action {
     color: var(--text-secondary);
     font-size: 13px;
-    text-decoration: none;
     cursor: pointer;
 }
 
-/* "Manage accounts" is a footer line like the benchmarks link, as a button. */
-.happy-composer-model-control__benchmarks:disabled {
+.happy-composer-model-control__footer-action:disabled {
     cursor: default;
     opacity: 0.48;
 }

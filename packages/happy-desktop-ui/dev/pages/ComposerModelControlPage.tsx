@@ -740,7 +740,7 @@ export function ComposerModelControlPage() {
             <Specimen
                 number="13"
                 label="Long catalog"
-                detail="The model list stops at 480 px and scrolls. Its scrollbar stays visible whenever the list overflows, even in Automatic mode, showing where you are in the catalog. The benchmarks link stays in view."
+                detail="The model list stops at 480 px and scrolls vertically. Its scrollbar stays visible whenever the list overflows, even in Automatic mode, showing where you are in the catalog. Manage accounts stays in view."
                 stage="surface"
             >
                 <Open height={560} services={LONG_SERVICES} />
@@ -885,7 +885,7 @@ export function ComposerModelControlPage() {
             <Specimen
                 number="21"
                 label="Manage accounts"
-                detail="The model list's footer offers Manage accounts directly above Latest benchmarks, on the same line style. It adds a Manage connected accounts request to the Chief of Staff's draft and opens that conversation."
+                detail="The model list's footer offers Manage accounts. It adds a Manage connected accounts request to the Chief of Staff's draft and opens that conversation."
                 stage="surface"
             >
                 <Open
