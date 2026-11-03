@@ -6,7 +6,7 @@ import { promisify } from "node:util";
 import { encode } from "./encode.mjs";
 import { overlaysBuild } from "./overlays.mjs";
 import { soundtrackWrite } from "./sounds.mjs";
-import { splitEncode } from "./split.mjs";
+import { holdsGraph, splitEncode } from "./split.mjs";
 
 /*
  * Stages an already recorded take: the desktop movie and its synchronized
@@ -66,8 +66,16 @@ async function probe(file) {
 }
 
 /** One decoder, yielding exact raw RGB frames resampled onto the output clock. */
-function decoderOpen(file, filter, size) {
-    const argv = ["-hide_banner", "-loglevel", "error", "-i", file, "-an", "-vf", filter];
+function decoderOpen(file, filter, size, holds = []) {
+    const argv = ["-hide_banner", "-loglevel", "error", "-i", file, "-an"];
+    if (holds.length === 0) argv.push("-vf", filter);
+    else
+        argv.push(
+            "-filter_complex",
+            [...holdsGraph("0:v", "held", holds), `[held]${filter}[out]`].join(";"),
+            "-map",
+            "[out]",
+        );
     argv.push("-f", "rawvideo", "-pix_fmt", "rgb24", "pipe:1");
     const child = spawn("ffmpeg", argv, { stdio: ["ignore", "pipe", "inherit"] });
     child.stdout.pause();
@@ -666,10 +674,12 @@ export async function compositionRender({
         desktopWidth * desktopHeight * 3,
     );
     const { width: screenWidth, height: screenHeight } = composition.phone.screen;
+    const phoneHolds = composition.phoneHolds ?? [];
     const phoneDecoder = decoderOpen(
         phone,
         `fps=${output.fps},scale=${screenWidth}:${screenHeight}:${decodeColour},format=rgb24`,
         screenWidth * screenHeight * 3,
+        phoneHolds,
     );
     const posterFrame = Math.round(composition.poster.seconds * output.fps);
     const poster = join(out, `${composition.id}.poster.png`);
@@ -762,6 +772,37 @@ export async function compositionRender({
         ...cue,
         seconds: timeline.outputFrame(Math.round(cue.seconds * output.fps)) / output.fps,
     }));
+    // Every edit the cut makes to the takes, for its provenance.
+    const edits = {
+        speedUps: composition.speedUps ?? [],
+        freezesCut: {
+            count: timeline.cuts.length,
+            frames: timeline.cuts.reduce((sum, cut) => sum + cut.to - cut.from, 0),
+        },
+        phoneHolds: phoneHolds.map((hold) => {
+            const shown = [];
+            for (let frame = hold.from; frame < hold.to; frame += 1)
+                if (timeline.kept(frame)) shown.push(timeline.outputFrame(frame));
+            return {
+                takeFrames: [hold.from, hold.to],
+                heldFrame: hold.from - 1,
+                cutSeconds:
+                    shown.length === 0
+                        ? null
+                        : [shown[0] / output.fps, (shown.at(-1) + 1) / output.fps],
+                cutFrames: shown.length,
+            };
+        }),
+        loopSeconds: composition.loop?.seconds ?? 0,
+    };
+    // The take's evidence travels with the cut, with the cut's edits added.
+    const evidenceFile = join(dirname(cues), `${composition.id}.evidence.json`);
+    const evidence = await readFile(evidenceFile, "utf8").then(JSON.parse, () => undefined);
+    if (evidence)
+        await writeFile(
+            join(out, `${composition.id}.evidence.json`),
+            JSON.stringify({ ...evidence, edits }, null, 2) + "\n",
+        );
     await writeFile(
         join(out, `${composition.id}.json`),
         JSON.stringify(
@@ -774,6 +815,7 @@ export async function compositionRender({
                 seconds,
                 bytes: size,
                 freezes: timeline.cuts,
+                edits,
                 cutCues,
             },
             null,
@@ -793,6 +835,8 @@ export async function compositionRender({
                 desktopInfo.video,
             ),
             phone,
+            phoneHolds,
+            edits,
             select: timeline.select,
             frames,
             cues: cutCues,
