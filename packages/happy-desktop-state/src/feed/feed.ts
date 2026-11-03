@@ -1,25 +1,113 @@
 import type {
+    FeedActor,
     FeedCluster,
     FeedEntry,
     FeedItem,
     FeedSubject,
     HappyAgentClient,
 } from "@slopus/happy-agent-client";
+import type { HappyAgentArtifactTitlesStore } from "../artifacts/artifactTitlesStore.js";
+import type { HappyAgentArtifactId } from "../artifacts/artifactTypes.js";
 import type { HappyAgentSync } from "../happyAgentConnection/happyAgentSync.js";
 import { happyAgentSyncRead } from "../happyAgentConnection/happyAgentSyncRead.js";
 import { happyAgentUserError } from "../happyAgent/happyAgentSupport.js";
-import { happyAgentSurfacePeopleReaderCreate } from "../surfaces/surfacePeople.js";
-import type { HappyAgentSurfacePerson } from "../surfaces/surfaceTypes.js";
 import type { UserError } from "../types.js";
+import {
+    feedTodoKey,
+    happyAgentFeedReferencesCreate,
+    type HappyAgentFeedReferencesStore,
+    type HappyAgentFeedTodoReference,
+} from "./feedReferences.js";
 
-export type {
-    FeedActor,
-    FeedCluster,
-    FeedEntry,
-    FeedItem,
-    FeedSnapshot,
-    FeedSubject,
-} from "@slopus/happy-agent-client";
+export type { FeedActor, FeedSubject } from "@slopus/happy-agent-client";
+export * from "./feedReferences.js";
+
+/**
+ * One subject's folded changes, as references only. Nothing about the
+ * subject itself is held: its name, face, and type are read from the stores
+ * that sync it, so a rename shows at once. An older daemon still sends a copy
+ * of the subject frozen at the change; it is never kept.
+ */
+export interface HappyAgentFeedPeekEntry {
+    /** The newest change folded in; entries sort newest `cursor` first. */
+    readonly cursor: string;
+    readonly subject: FeedSubject;
+    /** The home cluster of the newest change folded in. */
+    readonly cluster: string;
+    /** Whether the subject's creation is among the folded changes. */
+    readonly created: boolean;
+    /** Further changes: new todos, document edit sessions, or artifact versions. */
+    readonly updates: number;
+    /** The first five distinct actors, in the order they first acted. */
+    readonly actors: readonly FeedActor[];
+    /** How many distinct actors are folded in. */
+    readonly actorCount: number;
+    /** The todo the newest change added, for a todo list's entry. */
+    readonly todo?: HappyAgentFeedTodoReference;
+    readonly firstAt: number;
+    readonly lastAt: number;
+}
+
+/** One entry in the reader's feed. */
+export interface HappyAgentFeedItem extends HappyAgentFeedPeekEntry {
+    /** Minted when the entry opened; stable as the entry moves up. Key rows by it. */
+    readonly id: string;
+    /** Minted at every change to the entry; of two copies, the greater is current. */
+    readonly version: string;
+    /** When the reader saw it; `null` while open. */
+    readonly seenAt: number | null;
+}
+
+/** One place the feed gathers from, by reference: `*`, `team`, or `<kind>:<id>`. */
+export interface HappyAgentFeedPlace {
+    readonly cluster: string;
+    /** `everything` is `*`; an unknown kind is an opaque name. */
+    readonly kind: string;
+    /** The reader's own choice; `null` follows `*`. */
+    readonly state: FeedCluster["state"];
+    readonly lastAt: number | null;
+}
+
+/**
+ * The todo an entry's newest change added, from the daemon's reference to it.
+ * A daemon from before entries named their newest change sends none.
+ */
+function feedTodoOf(entry: FeedEntry): HappyAgentFeedTodoReference | undefined {
+    const latest = entry.latest;
+    if (entry.subject.type !== "surface" || latest?.type !== "todo.created") return undefined;
+    return latest.todoId === undefined
+        ? undefined
+        : { surfaceId: entry.subject.id, todoId: latest.todoId };
+}
+
+function feedPeekEntryOf(entry: FeedEntry): HappyAgentFeedPeekEntry {
+    const todo = feedTodoOf(entry);
+    return {
+        cursor: entry.cursor,
+        subject: { type: entry.subject.type, id: entry.subject.id },
+        cluster: entry.cluster,
+        created: entry.created,
+        updates: entry.updates,
+        actors: entry.actors.map((actor) => ({ userId: actor.userId, agentId: actor.agentId })),
+        actorCount: entry.actorCount,
+        ...(todo === undefined ? {} : { todo }),
+        firstAt: entry.firstAt,
+        lastAt: entry.lastAt,
+    };
+}
+
+function feedItemOf(item: FeedItem): HappyAgentFeedItem {
+    return { ...feedPeekEntryOf(item), id: item.id, version: item.version, seenAt: item.seenAt };
+}
+
+function feedPlaceOf(cluster: FeedCluster): HappyAgentFeedPlace {
+    return {
+        cluster: cluster.cluster,
+        kind: cluster.kind,
+        state: cluster.state,
+        lastAt: cluster.lastAt,
+    };
+}
 
 /**
  * Whether this Happy Agent keeps a feed: not known until it has said what it
@@ -40,9 +128,14 @@ export type HappyAgentFeedView = "activity" | "following";
 export interface HappyAgentFeedPageSnapshot {
     readonly availability: HappyAgentFeedAvailability;
     readonly view: HappyAgentFeedView;
-    /** Newest `cursor` first; an entry that takes in a change keeps its object identity only while unchanged. */
-    readonly items: readonly FeedItem[];
-    /** The first read has not answered yet. */
+    /**
+     * Newest `cursor` first; an entry that takes in a change keeps its object
+     * identity only while unchanged. An entry is here only once everything it
+     * names that is read by id — the people and agents who acted, a bot, an
+     * artifact, a todo — has been read, so a row never shows a stand-in name.
+     */
+    readonly items: readonly HappyAgentFeedItem[];
+    /** The first read, and what its entries name, have not answered yet. */
     readonly loading: boolean;
     /** Older entries exist beyond the last one held. */
     readonly hasMore: boolean;
@@ -59,8 +152,8 @@ export interface HappyAgentFeedPageSnapshot {
 /** One cluster looked into without following it. */
 export interface HappyAgentFeedPeek {
     readonly cluster: string;
-    readonly name: string;
-    readonly entries: readonly FeedEntry[];
+    /** Only entries whose references have been read, as for the page. */
+    readonly entries: readonly HappyAgentFeedPeekEntry[];
     readonly loading: boolean;
     readonly error: UserError | null;
 }
@@ -68,7 +161,7 @@ export interface HappyAgentFeedPeek {
 /** The places the reader's feed gathers from, and one of them peeked into. */
 export interface HappyAgentFeedClustersSnapshot {
     readonly availability: HappyAgentFeedAvailability;
-    readonly clusters: readonly FeedCluster[];
+    readonly clusters: readonly HappyAgentFeedPlace[];
     readonly loading: boolean;
     readonly error: UserError | null;
     /** Clusters whose follow or mute is on its way. */
@@ -106,11 +199,6 @@ export interface HappyAgentFeedClustersStore {
     peekClose(): void;
 }
 
-export interface HappyAgentFeedPeopleStore {
-    get(): ReadonlyMap<string, HappyAgentSurfacePerson>;
-    subscribe(listener: () => void): () => void;
-}
-
 /**
  * One Happy Agent's feed for its reader. Each store is materialized on first
  * access and opens nothing until something subscribes to it.
@@ -122,8 +210,11 @@ export interface HappyAgentFeed {
     page(): HappyAgentFeedPageStore;
     /** The clusters, read while subscribed. */
     clusters(): HappyAgentFeedClustersStore;
-    /** The names and photos of the people entries credit, by user id, as they are read. */
-    people(): HappyAgentFeedPeopleStore;
+    /**
+     * The people, agents, bots, and todos entries name, read as entries
+     * arrive and kept current while subscribed.
+     */
+    references(): HappyAgentFeedReferencesStore;
     /**
      * The reader opened a subject somewhere else in the window: an artifact,
      * a Surface. Its open entry closes. Nothing is asked of a Happy Agent that
@@ -144,9 +235,15 @@ export interface HappyAgentFeedDeps {
         | "muteFeedCluster"
         | "peekFeedCluster"
         | "getUsers"
+        | "getAgent"
+        | "listBots"
+        | "getBot"
+        | "getTodo"
         | "endpoint"
     >;
     readonly sync: HappyAgentSync;
+    /** The live titles of artifacts by id, which artifact entries are named by. */
+    readonly artifactTitles: () => HappyAgentArtifactTitlesStore;
 }
 
 /** How many entries one read takes. */
@@ -162,30 +259,62 @@ const mutationIdCreate = (): string => globalThis.crypto.randomUUID();
 const byCursor = (left: { cursor: string }, right: { cursor: string }): number =>
     left.cursor < right.cursor ? 1 : left.cursor > right.cursor ? -1 : 0;
 
+/** The same entries in the same order, so the list published before still stands. */
+const sameEntries = <Entry>(left: readonly Entry[], right: readonly Entry[]): boolean =>
+    left.length === right.length && left.every((entry, index) => entry === right[index]);
+
 export function happyAgentFeedCreate(deps: HappyAgentFeedDeps): HappyAgentFeed {
     const { client, sync } = deps;
     let disposed = false;
-    // The people entries credit, each read once while the feed lives.
-    const peopleController = new AbortController();
-    const peopleListeners = new Set<() => void>();
-    let people: ReadonlyMap<string, HappyAgentSurfacePerson> = new Map();
-    const peopleReader = happyAgentSurfacePeopleReaderCreate({
-        client,
-        signal: peopleController.signal,
-        read: (read) => {
-            people = new Map([...people, ...read]);
-            for (const listener of peopleListeners) listener();
-        },
-    });
-    const peopleStore: HappyAgentFeedPeopleStore = {
-        get: () => people,
-        subscribe(listener) {
-            peopleListeners.add(listener);
-            return () => peopleListeners.delete(listener);
-        },
+    const references = happyAgentFeedReferencesCreate({ client, sync });
+    /** Asks for everything entries name that is read by id. */
+    const referencesRequest = (entries: readonly HappyAgentFeedPeekEntry[]): void => {
+        const userIds: string[] = [];
+        const agentIds: string[] = [];
+        const todos: HappyAgentFeedTodoReference[] = [];
+        const artifactIds: HappyAgentArtifactId[] = [];
+        for (const entry of entries) {
+            for (const actor of entry.actors) {
+                if (actor.agentId !== null) agentIds.push(actor.agentId);
+                else if (actor.userId !== null) userIds.push(actor.userId);
+            }
+            if (entry.subject.type === "artifact")
+                artifactIds.push(entry.subject.id as HappyAgentArtifactId);
+            if (entry.todo !== undefined) todos.push(entry.todo);
+        }
+        references.request({ userIds, agentIds, todos });
+        if (artifactIds.length > 0) deps.artifactTitles().request(artifactIds);
     };
-    const actorsSeen = (entries: readonly Pick<FeedEntry, "actors">[]): void =>
-        peopleReader.request(entries.flatMap((entry) => entry.actors.map((actor) => actor.userId)));
+    /** Whether everything an entry names that is read by id has been read. */
+    const entrySettled = (entry: HappyAgentFeedPeekEntry): boolean => {
+        const held = references.get();
+        for (const actor of entry.actors) {
+            if (actor.agentId !== null) {
+                if (!held.agents.has(actor.agentId)) return false;
+            } else if (actor.userId !== null && !held.people.has(actor.userId)) return false;
+        }
+        if (entry.subject.type === "bot" && held.bots === null) return false;
+        if (
+            entry.subject.type === "artifact" &&
+            !deps
+                .artifactTitles()
+                .get()
+                .has(entry.subject.id as HappyAgentArtifactId)
+        )
+            return false;
+        if (entry.todo !== undefined && !held.todos.has(feedTodoKey(entry.todo))) return false;
+        return true;
+    };
+    /**
+     * Follows the stores entries are read from while `signal` lives, calling
+     * `changed` whenever something they hold may have settled.
+     */
+    const referencesFollow = (signal: AbortSignal, changed: () => void): void => {
+        const releases = [references.subscribe(changed), deps.artifactTitles().subscribe(changed)];
+        signal.addEventListener("abort", () => releases.forEach((release) => release()), {
+            once: true,
+        });
+    };
     const availability = (): HappyAgentFeedAvailability => {
         const health = sync.health();
         if (health === undefined) return "unknown";
@@ -279,37 +408,64 @@ export function happyAgentFeedCreate(deps: HappyAgentFeedDeps): HappyAgentFeed {
             error: null,
             seenPending: SEEN_PENDING_NONE,
         };
+        /**
+         * Every entry read, newest first, whether or not what it names has
+         * been read yet; `items` is the settled part of it.
+         */
+        let held: readonly HappyAgentFeedItem[] = [];
+        /** The first read has answered, but what its entries name has not been read yet. */
+        let firstSettling = true;
+        let firstAnswered = false;
         /** The version each pending entry had when it was opened or read. */
         const pending = new Map<string, string>();
         let following: AbortController | undefined;
         let cursor: string | undefined;
         const publish = (next: Partial<HappyAgentFeedPageSnapshot>): void => {
-            snapshot = { ...snapshot, ...next };
+            const settled = held.filter(entrySettled);
+            // The first page shows at once, with every name it needs.
+            if (firstSettling && firstAnswered && settled.length === held.length)
+                firstSettling = false;
+            const items = sameEntries(settled, snapshot.items) ? snapshot.items : settled;
+            const loading = !firstAnswered || firstSettling;
+            snapshot = { ...snapshot, ...next, items, loading };
             for (const listener of listeners) listener();
+        };
+        /** Something an entry names was read: the entries it held back may show now. */
+        const referencesChanged = (): void => {
+            const settled = held.filter(entrySettled);
+            if (sameEntries(settled, snapshot.items) && !firstSettling) return;
+            publish({});
         };
         /** The pending set as it now stands, to publish beside whatever changed it. */
         const seenPendingNow = (): Pick<HappyAgentFeedPageSnapshot, "seenPending"> => ({
             seenPending: pending.size === 0 ? SEEN_PENDING_NONE : new Set(pending.keys()),
         });
         const pendingPublish = (): void => publish(seenPendingNow());
+        /** Sets what is held, asking for everything new entries name. */
+        const heldSet = (next: readonly HappyAgentFeedItem[]): void => {
+            if (next === held) return;
+            const known = new Set(held);
+            held = next;
+            referencesRequest(next.filter((item) => !known.has(item)));
+        };
         /**
          * Takes in copies of entries: the greater `version` of each wins, and
          * an entry older than the last one held is left for paging to bring,
          * so the list never has a gap. Unchanged entries keep their objects.
          */
         const upsert = (
-            current: readonly FeedItem[],
-            incoming: readonly FeedItem[],
+            current: readonly HappyAgentFeedItem[],
+            incoming: readonly HappyAgentFeedItem[],
             hasMore: boolean,
-        ): readonly FeedItem[] => {
+        ): readonly HappyAgentFeedItem[] => {
             if (incoming.length === 0) return current;
             const byId = new Map(current.map((item) => [item.id, item]));
             const tail = current.at(-1)?.cursor;
             let changed = false;
             for (const item of incoming) {
-                const held = byId.get(item.id);
-                if (held !== undefined && held.version >= item.version) continue;
-                if (held === undefined && hasMore && tail !== undefined && item.cursor < tail)
+                const known = byId.get(item.id);
+                if (known !== undefined && known.version >= item.version) continue;
+                if (known === undefined && hasMore && tail !== undefined && item.cursor < tail)
                     continue;
                 byId.set(item.id, item);
                 changed = true;
@@ -319,12 +475,10 @@ export function happyAgentFeedCreate(deps: HappyAgentFeedDeps): HappyAgentFeed {
             return changed ? [...byId.values()].sort(byCursor) : current;
         };
         const remove = (itemId: string): void => {
-            if (!snapshot.items.some((item) => item.id === itemId)) return;
+            if (!held.some((item) => item.id === itemId)) return;
             pending.delete(itemId);
-            publish({
-                items: snapshot.items.filter((item) => item.id !== itemId),
-                ...seenPendingNow(),
-            });
+            heldSet(held.filter((item) => item.id !== itemId));
+            publish(seenPendingNow());
         };
         /**
          * Reads the newest page and lays it over what is held: entries newer
@@ -339,21 +493,22 @@ export function happyAgentFeedCreate(deps: HappyAgentFeedDeps): HappyAgentFeed {
             );
             if (signal.aborted) return;
             cursor = response.cursor;
-            actorsSeen(response.items);
-            const floor = response.items.at(-1)?.cursor;
-            const ids = new Set(response.items.map((item) => item.id));
+            const items = response.items.map(feedItemOf);
+            const floor = items.at(-1)?.cursor;
+            const ids = new Set(items.map((item) => item.id));
             const older =
                 floor === undefined || !response.hasMore
                     ? []
-                    : snapshot.items.filter((item) => item.cursor < floor && !ids.has(item.id));
-            const fresh = upsert(
-                snapshot.items.filter((item) => ids.has(item.id) || older.includes(item)),
-                response.items,
-                false,
+                    : held.filter((item) => item.cursor < floor && !ids.has(item.id));
+            heldSet(
+                upsert(
+                    held.filter((item) => ids.has(item.id) || older.includes(item)),
+                    items,
+                    false,
+                ),
             );
+            firstAnswered = true;
             publish({
-                items: fresh,
-                loading: false,
                 hasMore: older.length > 0 ? snapshot.hasMore : response.hasMore,
                 error: null,
                 ...seenPendingNow(),
@@ -367,8 +522,9 @@ export function happyAgentFeedCreate(deps: HappyAgentFeedDeps): HappyAgentFeed {
             })) {
                 if (input.kind === "bootstrap" || input.kind === "reconcile") {
                     const available = availability();
-                    publish({ availability: available, loading: available === "available" });
                     if (available === "available") void firstRead(signal).catch(noop);
+                    else firstAnswered = available === "unsupported";
+                    publish({ availability: available });
                     continue;
                 }
                 if (
@@ -379,9 +535,11 @@ export function happyAgentFeedCreate(deps: HappyAgentFeedDeps): HappyAgentFeed {
                     continue;
                 const { event } = input.update;
                 if (event.type === "feed.item.created" || event.type === "feed.item.updated") {
-                    actorsSeen([event.payload.item]);
-                    const items = upsert(snapshot.items, [event.payload.item], snapshot.hasMore);
-                    if (items !== snapshot.items) publish({ items, ...seenPendingNow() });
+                    const next = upsert(held, [feedItemOf(event.payload.item)], snapshot.hasMore);
+                    if (next !== held) {
+                        heldSet(next);
+                        publish(seenPendingNow());
+                    }
                 } else if (event.type === "feed.item.removed") remove(event.payload.itemId);
                 cursor = input.update.cursor;
             }
@@ -394,14 +552,15 @@ export function happyAgentFeedCreate(deps: HappyAgentFeedDeps): HappyAgentFeed {
          */
         const readAllConfirmed = (through: string, at: number): void => {
             let changed = false;
-            const items = snapshot.items.map((item) => {
+            const next = held.map((item) => {
                 if (item.cursor > through) return item;
                 pending.delete(item.id);
                 if (item.seenAt !== null) return item;
                 changed = true;
                 return { ...item, seenAt: at };
             });
-            publish({ ...(changed ? { items } : {}), ...seenPendingNow() });
+            if (changed) heldSet(next);
+            publish(seenPendingNow());
         };
         const seenFailed = (ids: readonly string[], error: unknown): void => {
             for (const id of ids) pending.delete(id);
@@ -415,6 +574,7 @@ export function happyAgentFeedCreate(deps: HappyAgentFeedDeps): HappyAgentFeed {
                     listeners.add(listener);
                     if (!following) {
                         following = new AbortController();
+                        referencesFollow(following.signal, referencesChanged);
                         void followLoop(following.signal).catch(noop);
                     }
                     return () => void listeners.delete(listener);
@@ -423,20 +583,19 @@ export function happyAgentFeedCreate(deps: HappyAgentFeedDeps): HappyAgentFeed {
                     if (view !== snapshot.view) publish({ view });
                 },
                 pageNextLoad() {
-                    const last = snapshot.items.at(-1);
+                    const last = held.at(-1);
                     const signal = following?.signal;
                     if (!signal || !last || !snapshot.hasMore || snapshot.loadingMore) return;
                     publish({ loadingMore: true });
                     client.getFeed({ before: last.cursor, limit: PAGE }, { signal }).then(
                         (response) => {
                             if (signal.aborted) return;
-                            actorsSeen(response.items);
-                            const merged = [...snapshot.items];
+                            const items = response.items.map(feedItemOf);
+                            const merged = [...held];
                             const ids = new Set(merged.map((item) => item.id));
-                            for (const item of response.items)
-                                if (!ids.has(item.id)) merged.push(item);
+                            for (const item of items) if (!ids.has(item.id)) merged.push(item);
+                            heldSet(upsert(merged.sort(byCursor), items, false));
                             publish({
-                                items: upsert(merged.sort(byCursor), response.items, false),
                                 hasMore: response.hasMore,
                                 loadingMore: false,
                                 error: null,
@@ -449,7 +608,7 @@ export function happyAgentFeedCreate(deps: HappyAgentFeedDeps): HappyAgentFeed {
                     );
                 },
                 entryOpen(itemId: string) {
-                    const item = snapshot.items.find((entry) => entry.id === itemId);
+                    const item = held.find((entry) => entry.id === itemId);
                     if (!item || item.seenAt !== null || pending.has(itemId)) return;
                     pending.set(itemId, item.version);
                     pendingPublish();
@@ -464,10 +623,8 @@ export function happyAgentFeedCreate(deps: HappyAgentFeedDeps): HappyAgentFeed {
                                 // it reads unread again.
                                 if (!response.items.some((closed) => closed.id === itemId))
                                     pending.delete(itemId);
-                                publish({
-                                    items: upsert(snapshot.items, response.items, false),
-                                    ...seenPendingNow(),
-                                });
+                                heldSet(upsert(held, response.items.map(feedItemOf), false));
+                                publish(seenPendingNow());
                                 unreadStore?.unreadReceived(response.unread);
                             },
                             (error: unknown) => seenFailed([itemId], error),
@@ -497,9 +654,10 @@ export function happyAgentFeedCreate(deps: HappyAgentFeedDeps): HappyAgentFeed {
             } satisfies HappyAgentFeedPageStore,
             /** Entries a mutation elsewhere closed, as the daemon answered it. */
             itemsReceived(items: readonly FeedItem[]): void {
-                const next = upsert(snapshot.items, items, false);
-                if (next === snapshot.items) return;
-                publish({ items: next, ...seenPendingNow() });
+                const next = upsert(held, items.map(feedItemOf), false);
+                if (next === held) return;
+                heldSet(next);
+                publish(seenPendingNow());
             },
             [Symbol.dispose](): void {
                 following?.abort();
@@ -520,16 +678,39 @@ export function happyAgentFeedCreate(deps: HappyAgentFeedDeps): HappyAgentFeed {
             pending: SEEN_PENDING_NONE,
             peek: null,
         };
+        /** The peeked cluster's entries as read, whether or not what they name has been. */
+        let peekHeld: readonly HappyAgentFeedPeekEntry[] = [];
+        let peekAnswered = false;
         let following: AbortController | undefined;
         let settle: ReturnType<typeof setTimeout> | undefined;
         const publish = (next: Partial<HappyAgentFeedClustersSnapshot>): void => {
             snapshot = { ...snapshot, ...next };
             for (const listener of listeners) listener();
         };
-        const clusterAdopt = (cluster: FeedCluster): void =>
+        /**
+         * The peek as it stands: its settled entries, and loading until the
+         * read and everything its entries name have answered.
+         */
+        const peekOf = (peek: HappyAgentFeedPeek): HappyAgentFeedPeek => {
+            const settled = peekHeld.filter(entrySettled);
+            const loading = !peekAnswered || (peek.loading && settled.length < peekHeld.length);
+            return {
+                ...peek,
+                entries: sameEntries(settled, peek.entries) ? peek.entries : settled,
+                loading,
+            };
+        };
+        const peekChanged = (): void => {
+            const peek = snapshot.peek;
+            if (!peek) return;
+            const next = peekOf(peek);
+            if (next.entries !== peek.entries || next.loading !== peek.loading)
+                publish({ peek: next });
+        };
+        const clusterAdopt = (cluster: HappyAgentFeedPlace): void =>
             publish({
-                clusters: snapshot.clusters.map((held) =>
-                    held.cluster === cluster.cluster ? cluster : held,
+                clusters: snapshot.clusters.map((known) =>
+                    known.cluster === cluster.cluster ? cluster : known,
                 ),
             });
         const clustersRead = async (signal: AbortSignal): Promise<void> => {
@@ -539,31 +720,30 @@ export function happyAgentFeedCreate(deps: HappyAgentFeedDeps): HappyAgentFeed {
                 (error) => publish({ error: happyAgentUserError(error) }),
             );
             if (signal.aborted) return;
-            publish({ clusters: response.clusters, loading: false, error: null });
+            publish({
+                clusters: response.clusters.map(feedPlaceOf),
+                loading: false,
+                error: null,
+            });
         };
         const peekRead = (signal: AbortSignal, cluster: string): void => {
             client.peekFeedCluster(cluster, { limit: PEEK_LIMIT }, { signal }).then(
                 (response) => {
                     if (signal.aborted || snapshot.peek?.cluster !== cluster) return;
-                    actorsSeen(response.entries);
-                    publish({
-                        peek: {
-                            cluster,
-                            name: response.cluster.name,
-                            entries: response.entries,
-                            loading: false,
-                            error: null,
-                        },
-                    });
+                    peekHeld = response.entries.map(feedPeekEntryOf);
+                    peekAnswered = true;
+                    referencesRequest(peekHeld);
+                    publish({ peek: peekOf({ ...snapshot.peek, error: null }) });
                 },
                 (error: unknown) => {
                     if (signal.aborted || snapshot.peek?.cluster !== cluster) return;
+                    peekAnswered = true;
                     publish({
-                        peek: {
+                        peek: peekOf({
                             ...snapshot.peek,
                             loading: false,
                             error: happyAgentUserError(error),
-                        },
+                        }),
                     });
                 },
             );
@@ -606,6 +786,7 @@ export function happyAgentFeedCreate(deps: HappyAgentFeedDeps): HappyAgentFeed {
                     listeners.add(listener);
                     if (!following) {
                         following = new AbortController();
+                        referencesFollow(following.signal, peekChanged);
                         void followLoop(following.signal).catch(noop);
                     }
                     return () => {
@@ -626,7 +807,7 @@ export function happyAgentFeedCreate(deps: HappyAgentFeedDeps): HappyAgentFeed {
                         : client.muteFeedCluster(cluster, options)
                     ).then(
                         (response) => {
-                            clusterAdopt(response.cluster);
+                            clusterAdopt(feedPlaceOf(response.cluster));
                             pendingSet(cluster, false);
                             publish({ error: null });
                         },
@@ -639,12 +820,13 @@ export function happyAgentFeedCreate(deps: HappyAgentFeedDeps): HappyAgentFeed {
                 peekOpen(cluster: string) {
                     const signal = following?.signal;
                     if (!signal) return;
-                    const name =
-                        snapshot.clusters.find((held) => held.cluster === cluster)?.name ?? cluster;
-                    publish({ peek: { cluster, name, entries: [], loading: true, error: null } });
+                    peekHeld = [];
+                    peekAnswered = false;
+                    publish({ peek: { cluster, entries: [], loading: true, error: null } });
                     peekRead(signal, cluster);
                 },
                 peekClose() {
+                    peekHeld = [];
                     if (snapshot.peek) publish({ peek: null });
                 },
             } satisfies HappyAgentFeedClustersStore,
@@ -661,7 +843,7 @@ export function happyAgentFeedCreate(deps: HappyAgentFeedDeps): HappyAgentFeed {
         unread: () => unreadOf().store,
         page: () => (pageStore ??= pageCreate()).store,
         clusters: () => (clustersStore ??= clustersCreate()).store,
-        people: () => peopleStore,
+        references: () => references,
         subjectSeen(subject) {
             if (disposed || availability() !== "available") return;
             client.markFeedSeen({ subjects: [subject], mutationId: mutationIdCreate() }).then(
@@ -680,8 +862,7 @@ export function happyAgentFeedCreate(deps: HappyAgentFeedDeps): HappyAgentFeed {
             unreadStore?.[Symbol.dispose]();
             pageStore?.[Symbol.dispose]();
             clustersStore?.[Symbol.dispose]();
-            peopleController.abort();
-            peopleListeners.clear();
+            references[Symbol.dispose]();
         },
     };
 }

@@ -4333,13 +4333,10 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                             }
                         }
                     }}
-                    places={{
-                        bots: active.bots,
-                        projects: active.projects,
-                        tasks: active.tasks ?? [],
-                    }}
+                    artifactTitles={session.artifacts?.titles() ?? artifactTitlesStoreNoop}
                     {...(surfaceCatalog.profile ? { profile: surfaceCatalog.profile } : {})}
                     surfaces={surfaceCatalog.surfaces}
+                    workspace={session.workspace}
                     {...(activeAvailability?.refusal === undefined
                         ? {}
                         : { unavailable: activeAvailability.refusal })}

@@ -5,13 +5,16 @@ import {
     HAPPY_AGENT_ARTIFACT_EVENT_TYPES,
     happyAgentArtifactEventProject,
 } from "./artifactCatalog.js";
-import type { HappyAgentArtifactId } from "./artifactTypes.js";
+import { happyAgentArtifactTypeProject } from "./artifactProject.js";
+import type { HappyAgentArtifactId, HappyAgentArtifactType } from "./artifactTypes.js";
 
 /** What one artifact a message names reads as, once it has been read. */
 export type HappyAgentArtifactTitle =
     | {
           readonly type: "ready";
           readonly title: string;
+          /** What kind of artifact it is, which it stays for its whole life. */
+          readonly artifactType: HappyAgentArtifactType;
           readonly status: "active" | "deleted";
       }
     /** No artifact has this id on this Happy Agent, or this reader cannot see it. */
@@ -87,6 +90,7 @@ export function happyAgentArtifactTitlesStoreCreate(
             (held.type === "missing" ||
                 (title.type === "ready" &&
                     held.title === title.title &&
+                    held.artifactType === title.artifactType &&
                     held.status === title.status))
         )
             return;
@@ -118,6 +122,7 @@ export function happyAgentArtifactTitlesStoreCreate(
                         : {
                               type: "ready",
                               title: artifact.title,
+                              artifactType: happyAgentArtifactTypeProject(artifact.type),
                               status: artifact.status,
                           },
                 );
@@ -161,6 +166,7 @@ export function happyAgentArtifactTitlesStoreCreate(
                     artifactSet(event.artifact.id, {
                         type: "ready",
                         title: event.artifact.title,
+                        artifactType: event.artifact.type,
                         status: event.artifact.status,
                     });
                     continue;
@@ -172,7 +178,7 @@ export function happyAgentArtifactTitlesStoreCreate(
                 artifactSet(
                     event.artifactId,
                     event.type === "updated"
-                        ? { type: "ready", title: event.changes.title, status: held.status }
+                        ? { ...held, title: event.changes.title }
                         : { ...held, status: "deleted" },
                 );
             }

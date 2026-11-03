@@ -1,4 +1,5 @@
 import { HappyAgentApiError, type HappyAgentClient } from "@slopus/happy-agent-client";
+import { happyAgentImageUrl } from "../utils/happyAgentImageUrl.js";
 
 /** The only user data copied into transcripts. Transport revisions stay private. */
 export interface UserProfile {
@@ -80,7 +81,11 @@ export function userProfilesCreate(options: {
                                   user.photo === null
                                       ? null
                                       : {
-                                            url: `${base}/v0/users/${encodeURIComponent(id)}/photo`,
+                                            url: happyAgentImageUrl(
+                                                base,
+                                                `/v0/users/${encodeURIComponent(id)}/photo`,
+                                                user.photo.thumbhash,
+                                            ),
                                             thumbhash: user.photo.thumbhash,
                                         },
                           }

@@ -1125,6 +1125,8 @@ export function happyAgentSurfaceCatalogStoreCreate(
             ...current,
             members: event.members,
             ...(event.chatAgentId === undefined ? {} : { chatAgentId: event.chatAgentId }),
+            ...(event.name === undefined ? {} : { name: event.name }),
+            ...(event.image === undefined ? {} : { image: event.image }),
             updatedAt: event.updatedAt,
             version: event.version,
         };

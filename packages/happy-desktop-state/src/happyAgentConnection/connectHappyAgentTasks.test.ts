@@ -93,7 +93,7 @@ it("gives a team task its owner's name and photo route, read through getUsers", 
             userId: "usr_ann",
             name: "Ann Lee",
             avatar: {
-                url: "http://happy-agent.test/v0/users/usr_ann/photo",
+                url: "http://happy-agent.test/v0/users/usr_ann/photo?v=ann-hash",
                 thumbhash: "ann-hash",
             },
         }),

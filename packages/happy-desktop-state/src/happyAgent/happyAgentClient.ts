@@ -593,7 +593,12 @@ export function happyAgentWorkspaceClientCreate(
     let artifacts: HappyAgentArtifacts | undefined;
     let feed: HappyAgentFeed | undefined;
     const feedOf = (): HappyAgentFeed =>
-        (feed ??= happyAgentFeedCreate({ client: deps.client, sync: deps.connection.sync }));
+        (feed ??= happyAgentFeedCreate({
+            client: deps.client,
+            sync: deps.connection.sync,
+            // Artifact entries are named by their live titles, which the artifacts own.
+            artifactTitles: () => workspace.artifacts().titles(),
+        }));
     let surfaces: HappyAgentSurfaces | undefined;
     let toolMediaDocument: HappyAgentToolMediaDocumentStore | undefined;
     const deviceBridgeStores = new Map<HappyAgentGroupId, HappyAgentDeviceBridgesStore>();

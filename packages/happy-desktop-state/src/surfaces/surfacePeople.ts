@@ -1,5 +1,6 @@
 import type { HappyAgentClient } from "@slopus/happy-agent-client";
 import type { HappyAgentSurfacePerson } from "./surfaceTypes.js";
+import { happyAgentImageUrl } from "../utils/happyAgentImageUrl.js";
 
 /** The daemon's bound on one user lookup. */
 const USERS_BATCH_LIMIT = 100;
@@ -16,7 +17,10 @@ export function happyAgentSurfacePersonOf(
         photo:
             photo === null
                 ? null
-                : { url: `${endpoint.replace(/\/$/u, "")}${path}`, thumbhash: photo.thumbhash },
+                : {
+                      url: happyAgentImageUrl(endpoint, path, photo.thumbhash),
+                      thumbhash: photo.thumbhash,
+                  },
     };
 }
 

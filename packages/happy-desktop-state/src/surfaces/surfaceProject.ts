@@ -37,6 +37,7 @@ import type {
     HappyAgentSurfaceTodo,
     HappyAgentSurfaceTodoId,
 } from "./surfaceTypes.js";
+import { happyAgentImageUrl } from "../utils/happyAgentImageUrl.js";
 
 /** The `surface.*` events a catalog follows. */
 export const HAPPY_AGENT_SURFACE_EVENT_TYPES = [
@@ -226,7 +227,11 @@ export function happyAgentSurfaceProject(endpoint: string, surface: Surface): Ha
             surface.image === null
                 ? null
                 : {
-                      url: `${base}/v0/surfaces/${encodeURIComponent(surface.id)}/image`,
+                      url: happyAgentImageUrl(
+                          base,
+                          `/v0/surfaces/${encodeURIComponent(surface.id)}/image`,
+                          surface.image.thumbhash,
+                      ),
                       thumbhash: surface.image.thumbhash,
                   },
         members: surface.members.map(memberProject),
@@ -423,6 +428,10 @@ export type HappyAgentSurfaceEvent =
           readonly members: readonly HappyAgentSurfaceMember[];
           /** The chat's agent, when this change is the chat being made. */
           readonly chatAgentId?: HappyAgentSessionId | null;
+          /** The new name, when this change renamed it. */
+          readonly name?: string;
+          /** The new picture, or `null` once removed, when this change replaced it. */
+          readonly image?: HappyAgentSurface["image"];
           readonly updatedAt: number;
       };
 
@@ -449,6 +458,24 @@ export function happyAgentSurfaceEventProject(
                     : {
                           chatAgentId: event.payload.changes
                               .chatAgentId as HappyAgentSessionId | null,
+                      }),
+                ...(event.payload.changes.name === undefined
+                    ? {}
+                    : { name: event.payload.changes.name }),
+                ...(event.payload.changes.image === undefined
+                    ? {}
+                    : {
+                          image:
+                              event.payload.changes.image === null
+                                  ? null
+                                  : {
+                                        url: happyAgentImageUrl(
+                                            endpoint,
+                                            `/v0/surfaces/${encodeURIComponent(event.payload.surfaceId)}/image`,
+                                            event.payload.changes.image.thumbhash,
+                                        ),
+                                        thumbhash: event.payload.changes.image.thumbhash,
+                                    },
                       }),
                 updatedAt: event.payload.changes.updatedAt,
             };

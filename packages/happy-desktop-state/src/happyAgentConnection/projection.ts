@@ -42,6 +42,7 @@ import type {
     UserInputRequest,
     WorkspaceGroup,
 } from "./types.js";
+import { happyAgentImageUrl } from "../utils/happyAgentImageUrl.js";
 
 export interface TranscriptMessage {
     message: Message;
@@ -597,7 +598,11 @@ export function projectBots(
                     ? {}
                     : {
                           avatar: {
-                              url: `${endpoint.replace(/\/$/, "")}/v0/bots/${bot.id}/avatar`,
+                              url: happyAgentImageUrl(
+                                  endpoint,
+                                  `/v0/bots/${bot.id}/avatar`,
+                                  bot.avatar.thumbhash,
+                              ),
                               thumbhash: bot.avatar.thumbhash,
                           },
                       }),
