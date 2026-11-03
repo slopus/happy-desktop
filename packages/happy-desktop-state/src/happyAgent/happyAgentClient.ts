@@ -128,6 +128,7 @@ import {
 } from "./happyAgentCloudStore.js";
 import { happyAgentTeamsStoreCreate, type HappyAgentTeamsStore } from "./happyAgentTeamsStore.js";
 import { happyAgentArtifactsCreate, type HappyAgentArtifacts } from "../artifacts/artifacts.js";
+import { happyAgentFeedCreate, type HappyAgentFeed } from "../feed/feed.js";
 import { happyAgentSurfaceChatGroupsCreate } from "../surfaces/surfaceChatGroups.js";
 import { happyAgentSurfacesCreate, type HappyAgentSurfaces } from "../surfaces/surfaces.js";
 import {
@@ -232,6 +233,12 @@ export interface HappyAgentWorkspaceClient {
      * have artifacts says so through each surface's availability.
      */
     artifacts(): HappyAgentArtifacts;
+    /**
+     * The reader's feed on this Happy Agent: its unread count, its entries, and
+     * the clusters it gathers from. Materialized on first access; a daemon too
+     * old to keep a feed says so through each store's availability.
+     */
+    feed(): HappyAgentFeed;
     /**
      * This Happy Agent's Surfaces: the catalog, the reader's sidebar of it, and
      * each todo list. Materialized on first access; a daemon too old to have
@@ -584,6 +591,9 @@ export function happyAgentWorkspaceClientCreate(
     let securityPolicyStore: HappyAgentSecurityPolicyStore | undefined;
     let secretsStore: HappyAgentSecretsStore | undefined;
     let artifacts: HappyAgentArtifacts | undefined;
+    let feed: HappyAgentFeed | undefined;
+    const feedOf = (): HappyAgentFeed =>
+        (feed ??= happyAgentFeedCreate({ client: deps.client, sync: deps.connection.sync }));
     let surfaces: HappyAgentSurfaces | undefined;
     let toolMediaDocument: HappyAgentToolMediaDocumentStore | undefined;
     const deviceBridgeStores = new Map<HappyAgentGroupId, HappyAgentDeviceBridgesStore>();
@@ -780,8 +790,15 @@ export function happyAgentWorkspaceClientCreate(
                           siteOpen: deps.hostServices.artifactSiteOpen.bind(deps.hostServices),
                       }
                     : {}),
+                artifactOpened: (artifactId) => {
+                    if (!disposed) feedOf().subjectSeen({ type: "artifact", id: artifactId });
+                },
             });
             return artifacts;
+        },
+        feed() {
+            if (disposed) throw new Error("The Happy Agent client is disposed.");
+            return feedOf();
         },
         surfaces() {
             if (disposed) throw new Error("The Happy Agent client is disposed.");
@@ -1113,6 +1130,8 @@ export function happyAgentWorkspaceClientCreate(
             deviceBridgeSupport?.[Symbol.dispose]();
             deviceBridgeSupport = undefined;
             artifacts = undefined;
+            feed?.[Symbol.dispose]();
+            feed = undefined;
             surfaces?.[Symbol.dispose]();
             surfaces = undefined;
             deps.catalogSource[Symbol.dispose]();

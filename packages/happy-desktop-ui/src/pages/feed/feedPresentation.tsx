@@ -42,6 +42,8 @@ export interface HappyAgentFeedEntry {
     readonly created: boolean;
     /** The further changes folded in. */
     readonly updates: number;
+    /** A few words about the newest change, such as a new todo's text. */
+    readonly detail?: string;
     /** When the latest change happened. */
     readonly lastAt: number;
     readonly unread: boolean;
@@ -52,10 +54,12 @@ export type HappyAgentFeedClusterState = "subscribed" | "muted";
 
 /** What a cluster gathers, for its glyph. */
 export type HappyAgentFeedClusterKind =
+    | "everything"
     | "team"
     | "task"
     | "bot"
     | "surface"
+    | "project"
     | "workspace"
     | "unknown";
 
@@ -109,6 +113,8 @@ export function FeedSubjectGlyph(props: {
 
 export function FeedClusterGlyph(props: { kind: HappyAgentFeedClusterKind; size: 16 | 18 }) {
     switch (props.kind) {
+        case "everything":
+            return <Icon name="feed" size={props.size} />;
         case "team":
             return <Icon name="users" size={props.size} />;
         case "task":
@@ -117,6 +123,8 @@ export function FeedClusterGlyph(props: { kind: HappyAgentFeedClusterKind; size:
             return <Icon name="agents" size={props.size} />;
         case "surface":
             return <Icon name="files" size={props.size} />;
+        case "project":
+            return <Icon name="code" size={props.size} />;
         case "workspace":
             return <Icon name="branch" size={props.size} />;
         case "unknown":
@@ -157,23 +165,31 @@ export function feedActorsText(actors: readonly HappyAgentFeedActor[], count: nu
     return `${names[0]} and ${others} ${others === 1 ? "other" : "others"}`;
 }
 
+/** What one folded change to a subject is, in the singular and the plural. */
+function changeNoun(subject: HappyAgentFeedSubjectKind): readonly [string, string] {
+    switch (subject) {
+        case "todoList":
+            return ["new todo", "new todos"];
+        case "document":
+            return ["edit", "edits"];
+        case "artifact":
+            return ["new version", "new versions"];
+        default:
+            return ["update", "updates"];
+    }
+}
+
 /**
  * What happened, as the folded changes add up: made, changed some number of
- * times, or both. A todo list's changes are the todos added to it, so they are
- * counted as those.
+ * times, or both. Each change is counted as what it is: a todo list's are the
+ * todos added to it, a document's its edits, an artifact's its new versions.
  */
 export function feedActivityText(
     entry: Pick<HappyAgentFeedEntry, "created" | "updates" | "subject">,
 ): string {
-    const noun =
-        entry.subject === "todoList"
-            ? entry.updates === 1
-                ? "new todo"
-                : "new todos"
-            : entry.updates === 1
-              ? "update"
-              : "updates";
-    const changes = entry.updates > 0 ? `${String(entry.updates)} ${noun}` : "";
+    const [one, many] = changeNoun(entry.subject);
+    const changes =
+        entry.updates > 0 ? `${String(entry.updates)} ${entry.updates === 1 ? one : many}` : "";
     if (entry.created && changes) return `Created · ${changes}`;
     if (entry.created) return "Created";
     return changes || "Changed";

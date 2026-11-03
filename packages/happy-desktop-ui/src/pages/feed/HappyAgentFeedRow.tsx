@@ -28,9 +28,12 @@ export interface HappyAgentFeedRowProps {
 export function HappyAgentFeedRow(props: HappyAgentFeedRowProps) {
     const entry = props.entry;
     const actors = feedActorsText(entry.actors, entry.actorCount);
-    const meta = [feedSubjectLabel(entry.subject), actors, feedActivityText(entry)].filter(
-        (part) => part.length > 0,
-    );
+    const meta = [
+        feedSubjectLabel(entry.subject),
+        actors,
+        feedActivityText(entry),
+        entry.detail === undefined ? "" : `“${entry.detail}”`,
+    ].filter((part) => part.length > 0);
     return (
         <button
             className="happy-agent-feed-row"

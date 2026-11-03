@@ -109,6 +109,8 @@ import type {
     HappyAgentSubtaskRoot,
     HappyAgentTask,
     HappyAgentTaskId,
+    HappyAgentFeedUnreadSnapshot,
+    HappyAgentFeedUnreadStore,
     ProjectsVisibilityStore,
     ProjectsVisibilitySnapshot,
     HappyAgentGroupLifecycle,
@@ -358,6 +360,7 @@ import {
     type HappyAgentPreviewMedia,
 } from "./views/HappyAgentToolMediaPreview";
 import { BlueprintView } from "./views/BlueprintView";
+import { HappyAgentFeedSurface } from "./views/HappyAgentFeedSurface";
 import { sidebarReadAheadRows } from "./sidebarReadAhead";
 import type {
     AppHappyAgentDaemonSnapshot,
@@ -659,6 +662,11 @@ export interface AppHappyAgentSession {
      * would show artifacts stays away.
      */
     readonly artifacts?: HappyAgentArtifacts;
+    /**
+     * The reader's feed on this Happy Agent. A Happy Agent that keeps none
+     * says so through each store's availability, and the Feed page says so.
+     */
+    readonly feed?: import("happy-desktop-state").HappyAgentFeed;
     /**
      * This Happy Agent's shared Surfaces, such as todo lists. A Happy Agent
      * without them says so through its catalog, and the sidebar offers none.
@@ -3135,6 +3143,13 @@ const FEED_ITEM = "feed";
 /** A subscription to nothing, for a hook whose store is absent. */
 const SUBSCRIBE_NONE = (): (() => void) => () => undefined;
 
+/** The unread count of a connection without a feed: nothing to count. */
+const feedUnreadStoreNone: HappyAgentFeedUnreadStore = {
+    get: () => FEED_UNREAD_NONE,
+    subscribe: SUBSCRIBE_NONE,
+};
+const FEED_UNREAD_NONE: HappyAgentFeedUnreadSnapshot = { availability: "unknown", unread: 0 };
+
 /** How many todos a list holds open, headings aside, once it has been read. */
 function todoListActiveCount(store: HappyAgentTodoListStore | undefined): number | undefined {
     const list = store?.get();
@@ -3320,8 +3335,14 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
     const daemon = useSyncExternalStore(daemonStore.subscribe, daemonStore.get, daemonStore.get);
     const inboxPending = inbox.pending.length;
     // The Feed row counts what the reader has not looked at on the addressed
-    // Happy Agent. Until the feed store exists nothing is counted.
-    const feedUnread = 0;
+    // Happy Agent, whether or not the feed is open: like the inbox's count,
+    // it is there to be seen while the reader is doing something else.
+    const feedUnreadStore = active?.session?.feed?.unread() ?? feedUnreadStoreNone;
+    const feedUnread = useSyncExternalStore(
+        feedUnreadStore.subscribe,
+        () => feedUnreadStore.get().unread,
+        () => feedUnreadStore.get().unread,
+    );
     // Whether the addressed Happy Agent keeps artifacts at all. The catalog is
     // read whether or not it is on screen, because the panel beside every chat
     // exists only once the machine has answered that it does; one too old to
@@ -4307,15 +4328,73 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
 
         // The feed belongs to the addressed machine, like its artifacts. Its
         // header carries Mark all read, so the header is the window's drag band.
-        if (props.feedOpen && active?.session)
+        if (props.feedOpen && active?.session) {
+            const session = active.session;
+            if (!session.feed)
+                return (
+                    <EmptyState
+                        description="This Happy Agent does not keep a feed. Updating it adds one."
+                        icon="feed"
+                        size="panel"
+                        title="No feed here"
+                    />
+                );
             return (
-                <EmptyState
-                    description="This Happy Agent does not keep a feed yet. Updating it adds one."
-                    icon="feed"
-                    size="panel"
-                    title="No feed here"
+                <HappyAgentFeedSurface
+                    clock={session.clock}
+                    feed={session.feed}
+                    onSubjectOpen={(subject) => {
+                        switch (subject.type) {
+                            case "artifact":
+                                props.onArtifactOpen?.(active.id, subject.id);
+                                return;
+                            case "surface":
+                                props.onSurfaceOpen?.(active.id, subject.id);
+                                return;
+                            case "bot": {
+                                const bot = active.bots.find((entry) => entry.id === subject.id);
+                                if (bot)
+                                    props.onChatSelect(
+                                        active.id,
+                                        bot.workspaceId,
+                                        bot.conversation.id,
+                                    );
+                                return;
+                            }
+                            case "task": {
+                                const taskId = subject.id as HappyAgentTaskId;
+                                const open = (task: HappyAgentTask) =>
+                                    props.onChatSelect(
+                                        active.id,
+                                        task.workspaceId,
+                                        task.conversation.id,
+                                    );
+                                const task = active.tasks?.find((entry) => entry.id === taskId);
+                                if (task) {
+                                    open(task);
+                                    return;
+                                }
+                                // A task the reader is not in is joined, and then opened.
+                                if (!activeHappyAgentOnline()) return;
+                                void session.workspace
+                                    .taskJoin(taskId)
+                                    .then(() => taskJoinedThen(session.workspace, taskId, open))
+                                    .catch(() => undefined);
+                                return;
+                            }
+                        }
+                    }}
+                    places={{
+                        bots: active.bots,
+                        projects: active.projects,
+                        tasks: active.tasks ?? [],
+                    }}
+                    {...(activeAvailability?.refusal === undefined
+                        ? {}
+                        : { unavailable: activeAvailability.refusal })}
                 />
             );
+        }
 
         // A Surface belongs to the addressed machine, like its artifacts. Its
         // header carries Leave or Join, so the header is the window's drag

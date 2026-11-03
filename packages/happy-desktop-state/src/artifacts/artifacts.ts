@@ -92,6 +92,8 @@ export interface HappyAgentArtifactsDeps {
         artifactId: HappyAgentArtifactId,
         version: number,
     ) => Promise<HappyAgentArtifactSiteOpening>;
+    /** A viewer opened an artifact. */
+    readonly artifactOpened?: (artifactId: HappyAgentArtifactId) => void;
 }
 
 export function happyAgentArtifactsCreate(deps: HappyAgentArtifactsDeps): HappyAgentArtifacts {
@@ -122,6 +124,7 @@ export function happyAgentArtifactsCreate(deps: HappyAgentArtifactsDeps): HappyA
                 sync: deps.sync,
                 ...(deps.documentInline ? { documentInline: deps.documentInline } : {}),
                 ...(deps.siteOpen ? { siteOpen: deps.siteOpen } : {}),
+                ...(deps.artifactOpened ? { artifactOpened: deps.artifactOpened } : {}),
                 authorsSeen: (authors) => peopleOf().request(authors),
             }),
         );

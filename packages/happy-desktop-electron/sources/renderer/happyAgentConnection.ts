@@ -131,6 +131,8 @@ export interface HappyAgentSession {
     readonly secrets: () => HappyAgentSecretsStore;
     /** This Happy Agent's published artifacts, materialized as their surfaces open. */
     readonly artifacts: HappyAgentArtifacts;
+    /** The reader's feed on this Happy Agent, materialized as its surfaces open. */
+    readonly feed: import("happy-desktop-state").HappyAgentFeed;
     /** This Happy Agent's shared Surfaces, such as todo lists, materialized as they open. */
     readonly surfaces: HappyAgentSurfaces;
     readonly clock: HappyAgentClockStore;
@@ -596,6 +598,7 @@ export function happyAgentConnectionOpen(input: {
                     securityPolicy: client.securityPolicy(),
                     secrets: () => client.secrets(),
                     artifacts: client.artifacts(),
+                    feed: client.feed(),
                     surfaces: client.surfaces(),
                     clock,
                 };

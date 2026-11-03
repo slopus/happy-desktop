@@ -480,6 +480,13 @@ const artifactRoute = createRoute({
  */
 const surfaceRoute = createRoute({
     getParentRoute: () => workspaceRoute,
+    // Opening a Surface is seeing what is new in it.
+    loader: ({ context, params }) => {
+        context.happyAgents
+            .get()
+            .happyAgents.find((happyAgent) => happyAgent.id === params.happyAgentId)
+            ?.session?.feed?.subjectSeen({ type: "surface", id: params.surfaceId });
+    },
     path: "/surfaces/$happyAgentId/$surfaceId",
 });
 

@@ -130,7 +130,8 @@ const ready = <Item,>(items: readonly Item[]): HappyAgentFeedListState<Item> => 
 });
 
 const clusters: readonly HappyAgentFeedCluster[] = [
-    { id: "team", kind: "team", label: "Everyone on the team", state: "subscribed" },
+    { id: "*", kind: "everything", label: "Everything", state: "subscribed" },
+    { id: "team", kind: "team", label: "Team", state: "subscribed" },
     { id: "task:billing", kind: "task", label: "Migrate the billing tables", state: "subscribed" },
     { id: "bot:release", kind: "bot", label: "Release coordinator", state: "muted" },
     {

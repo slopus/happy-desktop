@@ -2,8 +2,9 @@
  * P-028 Happy Agent feed: what happened on the installation, for one reader,
  * and the places it gathers from.
  *
- * The page reads down one column under a surface header, at the measure the
- * artifacts and the inbox use. Every row is one fixed height, so the long
+ * The page reads down one column under a surface header, as wide as the
+ * header, so each row's time and unread mark sit under the header's own
+ * trailing action. Every row is one fixed height, so the long
  * list is drawn only where it is on screen and laid out without measuring.
  *
  * Layout is flexbox throughout, except the drawn rows, which are positioned
@@ -32,7 +33,6 @@
     gap: 12px;
     box-sizing: border-box;
     width: 100%;
-    max-width: 720px;
     padding: 0 16px 12px;
 }
 
@@ -42,7 +42,6 @@
     flex-direction: column;
     box-sizing: border-box;
     width: 100%;
-    max-width: 720px;
     padding: 0 16px 12px;
 }
 
@@ -53,7 +52,6 @@
     gap: 8px;
     box-sizing: border-box;
     width: 100%;
-    max-width: 720px;
     padding: 0 16px 8px 12px;
 }
 
@@ -90,7 +88,6 @@
     gap: 12px;
     box-sizing: border-box;
     width: 100%;
-    max-width: 720px;
     padding: 4px 16px 48px;
 }
 

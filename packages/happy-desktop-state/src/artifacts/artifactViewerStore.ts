@@ -197,6 +197,8 @@ export interface HappyAgentArtifactViewerDeps {
     readonly authorsSeen?: (authors: readonly (HappyAgentArtifactAuthor | null)[]) => void;
     /** The reader's clock, which decides whether the version opened on is recent enough for its diff. */
     readonly now?: () => number;
+    /** The reader opened an artifact: what is new in it is no longer news. */
+    readonly artifactOpened?: (artifactId: HappyAgentArtifactId) => void;
 }
 
 const LOADING = { type: "loading" } as const;
@@ -714,6 +716,7 @@ export function happyAgentArtifactViewerStoreCreate(
             snapshot = snapshotEmpty(artifactId, version);
             for (const listener of listeners) listener();
             reconcile();
+            if (artifactId !== undefined) deps.artifactOpened?.(artifactId);
         },
         versionSelect,
         markdownViewSelect,

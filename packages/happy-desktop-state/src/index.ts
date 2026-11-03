@@ -102,6 +102,7 @@ export type {
     HappyAgentToolMediaDocumentView,
 } from "./happyAgent/happyAgentToolMediaDocumentStore.js";
 export type { HappyAgentArtifacts } from "./artifacts/artifacts.js";
+export * from "./feed/feed.js";
 export type {
     HappyAgentInlineArtifact,
     HappyAgentInlineArtifactContent,
