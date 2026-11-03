@@ -1184,7 +1184,7 @@ it("uses your circular avatar with a separate add badge, then opens your live st
     const view = createRenderer();
     view.render(() => <Row />, { width: 300, height: 100 });
     await view.ready();
-    const main = view.$(".happy-stories-row__self .happy-stories-row__item").element;
+    const main = view.$(".happy-stories-row__self .happy-stories-row__photo").element;
     const avatar = main.querySelector<HTMLElement>(".happy-avatar")!,
         before = main.getBoundingClientRect().toJSON();
     expect(avatar.querySelector("img")!.src).toBe(PIXEL);
@@ -1195,19 +1195,21 @@ it("uses your circular avatar with a separate add badge, then opens your live st
         badgeBox = badge.getBoundingClientRect();
     expect(badgeBox.right).toBeGreaterThan(avatarBox.right);
     expect(badgeBox.bottom).toBeGreaterThan(avatarBox.bottom);
-    expect(getComputedStyle(badge).borderWidth).toBe("2px");
+    expect(badgeBox.width).toBe(15);
     const picker = vi
         .spyOn(view.$('input[type="file"]').element as HTMLInputElement, "click")
         .mockImplementation(() => undefined);
     await userEvent.click(main);
     expect(picker).toHaveBeenCalledOnce();
     flushSync(() => phaseSet("unseen"));
-    expect(view.$(".happy-stories-row__self .happy-stories-row__item").element).toBe(main);
+    expect(view.$(".happy-stories-row__self .happy-stories-row__photo").element).toBe(main);
     expect(main.getBoundingClientRect().toJSON()).toEqual(before);
     expect(
         view.$(".happy-stories-row").element.querySelectorAll(".happy-stories-row__item"),
     ).toHaveLength(1);
-    expect(main.querySelector("span:last-child")!.textContent).toBe("Your Story");
+    expect(
+        main.closest(".happy-stories-row__item")!.querySelector(":scope > span")!.textContent,
+    ).toBe("Your Story");
     expect(getComputedStyle(avatar).outlineStyle).toBe("solid");
     const unseen = getComputedStyle(avatar).outlineColor;
     await userEvent.click(main);

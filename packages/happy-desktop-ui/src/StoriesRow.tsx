@@ -1,6 +1,6 @@
 import { Avatar } from "./Avatar";
 import { useRef } from "react";
-import { Icon } from "./Icon";
+import { Ionicon } from "./vectorIcons/VectorIcon";
 import type { StoryFace } from "./StoryViewer";
 
 /** One poster in the stories row. */
@@ -30,25 +30,30 @@ export function StoriesRow(props: {
         <div className="happy-stories-scroll">
             <div className="happy-stories-row" data-happy-desktop-ui="stories-row">
                 {props.create ? (
-                    <div className="happy-stories-row__self">
-                        <button
-                            className="happy-stories-row__item"
-                            data-story={own ? "" : undefined}
-                            data-seen={own?.state === "seen" ? "" : undefined}
-                            type="button"
-                            onClick={() => (own ? props.onOpen(own.id) : picker.current?.click())}
-                        >
-                            <Avatar {...props.create.face} size="md" type="human" />
-                            <span>Your Story</span>
-                        </button>
-                        <button
-                            aria-label="Add a story"
-                            className="happy-stories-row__add"
-                            type="button"
-                            onClick={() => picker.current?.click()}
-                        >
-                            <Icon name="plus" size={12} />
-                        </button>
+                    <div className="happy-stories-row__item">
+                        <div className="happy-stories-row__self">
+                            <button
+                                className="happy-stories-row__photo"
+                                aria-label="Your Story"
+                                data-story={own ? "" : undefined}
+                                data-seen={own?.state === "seen" ? "" : undefined}
+                                type="button"
+                                onClick={() =>
+                                    own ? props.onOpen(own.id) : picker.current?.click()
+                                }
+                            >
+                                <Avatar {...props.create.face} size="md" type="human" />
+                            </button>
+                            <button
+                                aria-label="Add a story"
+                                className="happy-stories-row__add"
+                                type="button"
+                                onClick={() => picker.current?.click()}
+                            >
+                                <Ionicon name="add-circle" size={14} />
+                            </button>
+                        </div>
+                        <span>Your Story</span>
                     </div>
                 ) : null}
                 <input
@@ -79,7 +84,7 @@ export function StoriesRow(props: {
                             type="button"
                         >
                             <Avatar {...item.face} size="md" />
-                            <span>{item.shortName ?? item.name}</span>
+                            <span>{item.shortName ?? item.name.split(" ")[0]}</span>
                         </button>
                     ))}
             </div>

@@ -6,22 +6,35 @@
     cursor: pointer;
 }
 
-.happy-sidebar__item-leading:has(> .happy-sidebar__item-story) > .happy-avatar,
-.happy-stories-row__item[data-story] > .happy-avatar {
+.happy-sidebar__item-leading:has(> .happy-sidebar__item-story) > .happy-avatar {
     outline: 1.5px solid var(--radio-active);
     outline-offset: 1.5px;
 }
 
-.happy-sidebar__item-leading:has(> [data-seen]) > .happy-avatar,
-.happy-stories-row__item[data-seen] > .happy-avatar {
+.happy-sidebar__item-leading:has(> [data-seen]) > .happy-avatar {
     outline-color: var(--text-secondary);
 }
 
-/* The posters with live stories, across the top of the sidebar. */
+/* The posters with live stories, across the top of the sidebar. Each slot fits a
+   ten-character label; the photo, the size of the rail's tiles, lines up with the sidebar's icons. */
 .happy-stories-row {
     display: flex;
-    gap: 8px;
-    padding: 8px 12px;
+    gap: 4px;
+    padding: 8px
+        calc(var(--happy-panel-inset) + var(--happy-sidebar-row-leading, var(--happy-panel-inset)))
+        8px
+        calc(
+            var(--happy-panel-inset) + var(--happy-sidebar-row-leading, var(--happy-panel-inset)) -
+                (9ch - 36px) / 2
+        );
+    font: 400 10px / 13px var(--happy-font-ui);
+}
+.happy-stories-row [data-story] > .happy-avatar {
+    outline: 2px solid var(--radio-active);
+    outline-offset: 2px;
+}
+.happy-stories-row [data-seen] > .happy-avatar {
+    outline-color: var(--text-secondary);
 }
 .happy-stories-scroll {
     display: flex;
@@ -34,18 +47,16 @@
     flex: none;
     flex-direction: column;
     align-items: center;
-    gap: 6px;
-    width: 70px;
+    gap: 5px;
+    width: 9ch;
     padding: 4px 0 0;
     border: 0;
     background: none;
-    color: var(--text-secondary);
-    font: 350 10px / 13px var(--happy-font-ui);
+    color: var(--text);
+    font: inherit;
 }
-
-/* A label spans its whole slot, the gaps to both neighbours included, centred under the ring. */
-.happy-stories-row__item > span {
-    max-width: calc(100% + 8px);
+.happy-stories-row__item > span:not(.happy-avatar) {
+    max-width: 100%;
     letter-spacing: -0.01em;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -53,21 +64,30 @@
 }
 .happy-stories-row__self {
     position: relative;
+    display: flex;
 }
+.happy-stories-row__photo {
+    display: flex;
+    padding: 0;
+    border: 0;
+    background: none;
+    cursor: pointer;
+}
+/* A disc of 0.3 the photo, flush with its corner; the background around it and through its plus. */
 .happy-stories-row__add {
     position: absolute;
-    top: 26px;
-    right: 1px;
+    bottom: -2px;
+    right: -2px;
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 20px;
-    height: 20px;
+    width: 15px;
+    height: 15px;
     padding: 0;
-    border: 2px solid var(--groupped-background);
+    border: 0;
     border-radius: 50%;
-    background: var(--radio-active);
-    color: var(--button-primary-tint);
+    background: var(--groupped-background);
+    color: var(--text);
 }
 
 .happy-story-viewer {

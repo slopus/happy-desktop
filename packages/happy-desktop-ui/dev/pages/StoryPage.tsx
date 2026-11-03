@@ -315,21 +315,69 @@ export function StoryPage() {
                                 items={[
                                     {
                                         id: "a",
-                                        name: "Desktop onboarding",
-                                        face: { initials: "KD", type: "agent" },
+                                        name: "Fixing Stories feature issues",
+                                        face: {
+                                            initials: "FS",
+                                            placeholderSeed: "task-stories",
+                                            type: "agent",
+                                        },
                                         state: "unseen",
                                     },
                                     {
                                         id: "b",
                                         name: "Release bot",
-                                        face: { initials: "RB", type: "agent" },
+                                        shortName: "Release",
+                                        face: {
+                                            initials: "RB",
+                                            placeholderSeed: "bot-release",
+                                            type: "agent",
+                                        },
+                                        state: "seen",
+                                    },
+                                    {
+                                        id: "c",
+                                        name: "Steve Korshakov",
+                                        shortName: "Steve",
+                                        face: {
+                                            initials: "SK",
+                                            placeholderSeed: "person-steve",
+                                            type: "human",
+                                        },
+                                        state: "unseen",
+                                    },
+                                    {
+                                        id: "d",
+                                        name: "Desktop onboarding",
+                                        shortName: "Onboarding",
+                                        face: {
+                                            initials: "DO",
+                                            placeholderSeed: "task-onboarding",
+                                            type: "agent",
+                                        },
+                                        state: "unseen",
+                                    },
+                                    {
+                                        id: "e",
+                                        name: "Header shortcuts",
+                                        shortName: "Shortcuts",
+                                        face: {
+                                            initials: "HS",
+                                            placeholderSeed: "task-shortcuts",
+                                            type: "agent",
+                                        },
                                         state: "seen",
                                     },
                                 ]}
                                 onOpen={() => undefined}
                                 create={{
                                     id: "p",
-                                    face: { initials: "K", tone: "ocean" },
+                                    face: {
+                                        initials: "K",
+                                        imageUrl: new URL(
+                                            "../assets/profile-photo.webp",
+                                            import.meta.url,
+                                        ).href,
+                                    },
                                     onPick: () => undefined,
                                 }}
                             />
@@ -348,7 +396,7 @@ export function StoryPage() {
                                 })),
                             },
                         ]}
-                        style={{ height: 360, width: 260 }}
+                        style={{ height: 360, width: 330 }}
                     />
                 </div>
             </Specimen>
