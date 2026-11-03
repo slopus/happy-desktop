@@ -197,18 +197,20 @@ export type {
 export {
     HAPPY_REFERENCE_KINDS,
     formatHappyFileUrl,
-    formatHappyReferenceUrl,
-    happyReferencePlaceholder,
     isHappyUrl,
     isKnownHappyReferenceKind,
-    parseHappyLinks,
-    parseHappyUrl,
-    replaceHappyLinks,
     type HappyLink,
     type HappyLinkMatch,
     type HappyReference,
     type HappyReferenceKind,
 } from "@slopus/happy-agent-client";
+export {
+    formatHappyReferenceUrl,
+    happyReferencePlaceholder,
+    parseHappyLinks,
+    parseHappyUrl,
+    replaceHappyLinks,
+} from "./happyLinks/happyTabLinks.js";
 export {
     HAPPY_AGENT_FILE_LINK_READ_ONLY_REFUSAL,
     happyAgentFileLinkParse,

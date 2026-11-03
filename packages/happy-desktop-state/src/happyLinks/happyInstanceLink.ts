@@ -1,4 +1,5 @@
-import { formatHappyUrl, parseHappyUrl, type HappyLink } from "@slopus/happy-agent-client";
+import type { HappyLink } from "@slopus/happy-agent-client";
+import { formatHappyUrl, parseHappyUrl } from "./happyTabLinks.js";
 
 /*
  * Instance links, as the Happy Agent API specifies them: an external link is

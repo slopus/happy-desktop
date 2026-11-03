@@ -30,6 +30,7 @@ import {
     type SendMessageRequest,
     type ServiceMessage,
     type StoredUserSetting,
+    type Surface,
     type Task,
     type TaskMembership,
     type User,
@@ -38,6 +39,7 @@ import {
 } from "@slopus/happy-agent-client";
 import { MINIMUM_HAPPY_AGENT_VERSION } from "../happyAgentConnection/compatibility.js";
 import { generateKeyBetween } from "../utils/fractionalIndexing.js";
+import { fakeHappyAgentTabsCreate } from "./fakeHappyAgentTabs.js";
 
 /**
  * A programmable in-memory Happy Agent daemon for state-package tests.
@@ -81,6 +83,8 @@ export interface FakeHappyAgentDaemon {
         },
     ): Task;
     taskGet(taskId: string): Task;
+    /** Seed a tab with explicit membership and reference identity. */
+    surfaceSeed(input: Partial<Surface> & Pick<Surface, "id">): Surface;
     /** The viewer's membership in one task, as the task routes answer it. */
     taskMembershipGet(taskId: string): TaskMembership | null;
     /** Replace one task wholesale, bumping nothing; the next read serves it. */
@@ -678,7 +682,14 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
         ...(desktopLiveControl === undefined ? {} : { capabilities: { desktopLiveControl } }),
     });
 
+    const tabs = fakeHappyAgentTabsCreate({
+        record,
+        viewer: () => profile.userId ?? null,
+        version: () => versionOf((versionCounter += 1)),
+        cursor: () => latestCursor,
+    });
     const client = {
+        ...tabs.client,
         endpoint: "http://fake-happy-agent.test/",
         async getUsage(...args: unknown[]) {
             await record("getUsage", args);
@@ -1453,6 +1464,7 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
         agentGet: agentRequired,
         taskSeed: seedTask,
         taskGet: taskRequired,
+        surfaceSeed: tabs.seed,
         taskMembershipGet: (taskId) => memberships.get(taskId) ?? null,
         taskReplace(task) {
             tasks.set(task.id, task);

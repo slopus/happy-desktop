@@ -107,7 +107,7 @@ export function happyAgentRoutePath(route: HappyAgentRoute): string {
             const chat = route.chat
                 ? `/chat/${part(route.chat.groupId)}/${part(route.chat.chatId)}`
                 : "";
-            return `/surfaces/${part(route.happyAgentId)}/${part(route.surfaceId)}${chat}`;
+            return `/tabs/${part(route.happyAgentId)}/${part(route.surfaceId)}${chat}`;
         }
         case "taskCreate":
             return `/tasks/new/${part(route.happyAgentId)}`;
@@ -200,6 +200,7 @@ export function happyAgentRoutePathParse(pathname: string): HappyAgentRoute | un
         case "settings":
             if (first === undefined) return { kind: "settings" };
             return segments.length === 2 ? { kind: "settingsSection", section: first } : undefined;
+        case "tabs":
         case "surfaces":
             if (first === undefined || second === undefined) return undefined;
             if (segments.length === 3)

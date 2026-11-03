@@ -78,6 +78,7 @@ function store(
         taskFailures: new Map(),
     } as unknown as HappyAgentSessionListSnapshot;
     const loading = { type: "loading" } as const;
+    const referenceAdd = vi.fn();
     const client = new Proxy(
         {
             models: {
@@ -99,6 +100,7 @@ function store(
                     },
                 ),
             chat: () => new Promise(() => undefined),
+            surfaces: () => ({ catalog: () => ({ referenceAdd }) }),
             openInTargetsRead: () => new Promise(() => undefined),
             workspaceFilesSubscribe: () => () => undefined,
         } as Record<PropertyKey, unknown>,
@@ -109,8 +111,16 @@ function store(
         output: (event) => outputs.push(event),
     });
     const unsubscribe = workspace.subscribe(() => undefined);
-    return { workspace, outputs, unsubscribe };
+    return { workspace, outputs, unsubscribe, referenceAdd };
 }
+
+it("opening a task keeps its explicit task identity as a tab", () => {
+    const { workspace, unsubscribe, referenceAdd } = store(() => new Promise(() => undefined));
+    workspace.conversationOpen(TASK.conversation.id as HappyAgentSessionId, TASK.workspaceId);
+    expect(referenceAdd).toHaveBeenCalledExactlyOnceWith({ kind: "task", id: TASK.id }, TASK.name);
+    unsubscribe();
+    workspace[Symbol.dispose]();
+});
 
 it("opens a task draft of its own, and Create turns the window to the new task", async () => {
     const taskCreate = vi.fn(() =>

@@ -791,7 +791,11 @@ export function happyAgentWorkspaceClientCreate(
                       }
                     : {}),
                 artifactOpened: (artifactId) => {
-                    if (!disposed) feedOf().subjectSeen({ type: "artifact", id: artifactId });
+                    if (disposed) return;
+                    feedOf().subjectSeen({ type: "artifact", id: artifactId });
+                    surfaces
+                        ?.catalog()
+                        .referenceAdd({ kind: "artifact", id: artifactId }, "Artifact");
                 },
             });
             return artifacts;

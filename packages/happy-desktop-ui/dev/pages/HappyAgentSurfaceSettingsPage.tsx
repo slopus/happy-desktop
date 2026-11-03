@@ -90,7 +90,7 @@ export function HappyAgentSurfaceSettingsPage() {
                 <FullScreenSpecimen
                     key={width}
                     detail="Each connection keeps the person's preference"
-                    label={`Surfaces settings ${width} × ${height}`}
+                    label={`Tab settings ${width} × ${height}`}
                     number={String(width)}
                     screen={`surfaces-${width}x${height}`}
                     window={{ width, height }}

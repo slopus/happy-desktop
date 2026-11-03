@@ -262,7 +262,7 @@ function FeedClusters(props: HappyAgentFeedPageProps) {
                         description={
                             clusters.loading
                                 ? "Reading where this Happy Agent's feed gathers from."
-                                : "Tasks, bots, and Surfaces appear here once something happens in them."
+                                : "Tasks, bots, and tabs appear here once something happens in them."
                         }
                         icon={clusters.loading ? "clock" : "users"}
                         size="panel"

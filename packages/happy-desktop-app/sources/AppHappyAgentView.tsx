@@ -2485,7 +2485,7 @@ const SURFACE_CREATE_OFFERS: readonly {
     { kind: "todo", icon: "tasks", label: "New todo list" },
     { kind: "document", icon: "doc", label: "New document" },
     { kind: "calendar", icon: "calendar", label: "New calendar" },
-    { kind: "system_monitor", icon: "pulse", label: "New system monitor" },
+    { kind: "system_monitor", icon: "pulse", label: "System monitor" },
     { kind: "chat", icon: "users", label: "New chat" },
 ];
 
@@ -2607,13 +2607,13 @@ function surfaceSidebarItem(
             ? {
                   disabled: offline,
                   icon: "close" as const,
-                  label: `Leave ${label}`,
+                  label: `Close ${label} tab`,
                   reveal: "hover" as const,
               }
             : {
                   disabled: offline,
                   icon: "plus" as const,
-                  label: `Join ${label}`,
+                  label: `Open ${label} tab`,
               },
     };
 }
@@ -2695,13 +2695,13 @@ function rowSurfaceMenuItems(
             ? {
                   kind: "item",
                   id: ROW_MENU_SURFACE_REMOVE,
-                  label: "Remove from top of sidebar",
+                  label: "Close tab",
                   icon: "close",
               }
             : {
                   kind: "item",
                   id: ROW_MENU_SURFACE_ADD,
-                  label: "Add to top of sidebar",
+                  label: "Open tab",
                   icon: "plus",
               },
         ...(items.length > 0 ? ([{ kind: "separator" }] as const) : []),
@@ -2739,7 +2739,7 @@ function happyAgentTopSection(
         ...(failure === undefined
             ? {}
             : {
-                  error: `Could not join “${refused ?? "this Surface"}”. ${failure.error.message}`,
+                  error: `Could not open “${refused ?? "this tab"}”. ${failure.error.message}`,
               }),
         items: [
             ARTIFACTS_SIDEBAR_ITEM,
@@ -3574,11 +3574,20 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                       headerAction: {
                           disabled: active?.status !== "connected",
                           icon: "plus" as const,
-                          label: "New…",
+                          label: "New tab…",
                           menu: surfaceCreateMenu(surfaceSupport),
                       },
                       onHeaderMenuSelect: (id: string) => {
                           const offer = SURFACE_CREATE_OFFERS.find((entry) => entry.kind === id);
+                          if (offer?.kind === "system_monitor") {
+                              const surfaceId = surfaceCatalogStore.surfaceCreate({
+                                  kind: "system_monitor",
+                                  name: "System monitor",
+                              });
+                              if (surfaceId !== undefined && active !== undefined)
+                                  props.onSurfaceOpen?.(active.id, surfaceId);
+                              return;
+                          }
                           if (offer !== undefined) surfaceCatalogStore.createOpen(offer.kind);
                       },
                   }

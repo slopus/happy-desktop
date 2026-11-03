@@ -739,7 +739,7 @@ export function CommandPalettePage() {
 
             <div className="specimen-grid">
                 <PaletteSpecimen
-                    detail="a typed query finds work, documents, todos, artifacts, and other shared Surfaces, each under its own caption"
+                    detail="a typed query finds work, documents, todos, artifacts, and other tabs, each under its own caption"
                     label="Mixed results"
                     number="CP-09"
                     query="launch"

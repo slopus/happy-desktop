@@ -226,7 +226,7 @@ export function feedSubjectLabel(subject: HappyAgentFeedSubjectKind): string {
         case "calendar":
             return "Calendar";
         case "surface":
-            return "Surface";
+            return "Tab";
         case "unknown":
             return "Update";
     }

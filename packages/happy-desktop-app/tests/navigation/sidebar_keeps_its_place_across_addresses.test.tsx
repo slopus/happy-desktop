@@ -188,7 +188,7 @@ it("keeps the sidebar's scroll element and its scroll wherever a click or an add
 
     // Every other address the sidebar opens.
     for (const address of [
-        "/surfaces/local/srf_one",
+        "/tabs/local/srf_one",
         "/inbox/local",
         "/bots/new/local",
         "/tasks/new/local",
@@ -208,5 +208,5 @@ it("leaves the sidebar as it was across a click, a hover and an address", async 
     await act(() => window.router.history.push("/surfaces/local/srf_one"));
     await act(() => new Promise((resolve) => setTimeout(resolve, 50)));
 
-    expect(window.rows()).toEqual(["artifacts", "local/prj_one"]);
+    expect(window.rows()).toEqual(["artifacts", "feed", "local/prj_one"]);
 });

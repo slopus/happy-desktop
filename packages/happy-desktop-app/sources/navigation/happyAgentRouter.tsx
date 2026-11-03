@@ -487,7 +487,7 @@ const surfaceRoute = createRoute({
             .happyAgents.find((happyAgent) => happyAgent.id === params.happyAgentId)
             ?.session?.feed?.subjectSeen({ type: "surface", id: params.surfaceId });
     },
-    path: "/surfaces/$happyAgentId/$surfaceId",
+    path: "/tabs/$happyAgentId/$surfaceId",
 });
 
 /**
@@ -524,11 +524,31 @@ const surfaceChatRoute = createRoute({
                     surfaceId: params.surfaceId,
                 },
                 replace: true,
-                to: "/surfaces/$happyAgentId/$surfaceId/chat/$chatGroupId/$chatAgentId",
+                to: "/tabs/$happyAgentId/$surfaceId/chat/$chatGroupId/$chatAgentId",
             });
         workspace.conversationOpen(location.sessionId, location.groupId);
     },
     path: "chat/$chatGroupId/$chatAgentId",
+});
+
+// Bookmarks and persisted history keep working without giving tabs a second identity.
+const legacySurfaceRoute = createRoute({
+    getParentRoute: () => workspaceRoute,
+    path: "/surfaces/$happyAgentId/$surfaceId",
+    beforeLoad: ({ params }) => {
+        throw redirect({ to: "/tabs/$happyAgentId/$surfaceId", params, replace: true });
+    },
+});
+const legacySurfaceChatRoute = createRoute({
+    getParentRoute: () => workspaceRoute,
+    path: "/surfaces/$happyAgentId/$surfaceId/chat/$chatGroupId/$chatAgentId",
+    beforeLoad: ({ params }) => {
+        throw redirect({
+            to: "/tabs/$happyAgentId/$surfaceId/chat/$chatGroupId/$chatAgentId",
+            params,
+            replace: true,
+        });
+    },
 });
 
 /**
@@ -589,6 +609,8 @@ const routeTree = rootRoute.addChildren([
         artifactRoute,
         feedRoute,
         surfaceRoute.addChildren([surfaceChatRoute]),
+        legacySurfaceRoute,
+        legacySurfaceChatRoute,
         botCreateRoute,
         taskCreateRoute,
         ...(import.meta.env.DEV ? [blueprintRoute] : []),
@@ -894,7 +916,7 @@ function surfaceChatShow(
             ? {
                   params: { happyAgentId, surfaceId },
                   replace: true,
-                  to: "/surfaces/$happyAgentId/$surfaceId",
+                  to: "/tabs/$happyAgentId/$surfaceId",
               }
             : {
                   params: {
@@ -904,7 +926,7 @@ function surfaceChatShow(
                       surfaceId,
                   },
                   replace: true,
-                  to: "/surfaces/$happyAgentId/$surfaceId/chat/$chatGroupId/$chatAgentId",
+                  to: "/tabs/$happyAgentId/$surfaceId/chat/$chatGroupId/$chatAgentId",
               },
     );
 }
@@ -940,14 +962,14 @@ export function happyAgentRouterSurfaceOpen(
                 happyAgentId,
                 surfaceId,
             },
-            to: "/surfaces/$happyAgentId/$surfaceId/chat/$chatGroupId/$chatAgentId",
+            to: "/tabs/$happyAgentId/$surfaceId/chat/$chatGroupId/$chatAgentId",
         });
         surfaceJoin();
         return;
     }
     void router.navigate({
         params: { happyAgentId, surfaceId },
-        to: "/surfaces/$happyAgentId/$surfaceId",
+        to: "/tabs/$happyAgentId/$surfaceId",
     });
     surfaceJoin();
     // Not found yet in this run: it opens beside the Surface the way

@@ -258,7 +258,7 @@ export function HappyAgentFeedBlueprintPage() {
         <ComponentPage
             contract="Props only"
             number={componentNumber}
-            summary="What happened on a Happy Agent, for one reader: new tasks, bots, Surfaces, and artifacts, and changes to them, newest change first. Unseen changes fold into one entry per subject; the places the feed gathers from can be muted, followed, or peeked into."
+            summary="What happened on a Happy Agent, for one reader: new tasks, bots, tabs, and artifacts, and changes to them, newest change first. Unseen changes fold into one entry per subject; the places the feed gathers from can be muted, followed, or peeked into."
             title="HappyAgentFeed"
         >
             <FullScreenSpecimen

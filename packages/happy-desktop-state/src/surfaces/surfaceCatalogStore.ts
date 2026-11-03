@@ -695,6 +695,10 @@ export function happyAgentSurfaceCatalogStoreCreate(
         }
     >();
     let creates: PendingCreate[] = [];
+    let referencesOpening: readonly {
+        readonly reference: HappyAgentSurfaceReference;
+        readonly name: string;
+    }[] = [];
     let queueRunning = false;
     let following: AbortController | undefined;
     let retry: ReturnType<typeof setTimeout> | undefined;
@@ -1204,6 +1208,9 @@ export function happyAgentSurfaceCatalogStoreCreate(
         snapshot = rest;
         usersRequest(authoritative);
         republish({ ...reader, availability: "available" });
+        const opening = referencesOpening;
+        referencesOpening = [];
+        for (const { reference, name } of opening) store.referenceAdd(reference, name);
         countsRefresh();
         chatsRefresh();
         if (gap) reload();
@@ -1507,6 +1514,21 @@ export function happyAgentSurfaceCatalogStoreCreate(
         surfaceCreate(input) {
             const name = input.name.replace(NAME_FORBIDDEN, " ").trim().slice(0, NAME_LIMIT);
             if (disposed || name.length === 0) return undefined;
+            // A monitor belongs to this reader on this connection. Reopening
+            // it must not create a second tab or adopt somebody else's tab.
+            if (input.kind === "system_monitor") {
+                if (snapshot.viewer === undefined) return undefined;
+                const owned = (surface: HappyAgentSurface): boolean =>
+                    surface.type.kind === "system_monitor" &&
+                    (surface.creatorUserId === snapshot.viewer?.userId ||
+                        creates.some((create) => create.surfaceId === surface.id));
+                const existing = snapshot.surfaces.find(owned);
+                if (existing !== undefined) {
+                    store.surfaceJoin(existing.id);
+                    store.createClose();
+                    return existing.id;
+                }
+            }
             const surfaceId = idCreate() as HappyAgentSurfaceId;
             const mutationId = idCreate();
             let settle!: { resolve: () => void; reject: (error: unknown) => void };
@@ -1697,8 +1719,26 @@ export function happyAgentSurfaceCatalogStoreCreate(
             publish({ chatsOpening: chats });
         },
         referenceAdd(reference, name) {
-            if (disposed || snapshot.viewer === undefined) return;
-            const existing = happyAgentSurfaceReferenceFind(snapshot.surfaces, reference);
+            if (disposed || snapshot.availability === "unsupported") return;
+            if (snapshot.viewer === undefined || snapshot.availability !== "available") {
+                referencesOpening = [
+                    ...referencesOpening.filter(
+                        (entry) =>
+                            entry.reference.kind !== reference.kind ||
+                            entry.reference.id !== reference.id,
+                    ),
+                    { reference, name },
+                ];
+                return;
+            }
+            const existing =
+                happyAgentSurfaceReferenceFind(snapshot.joined, reference) ??
+                happyAgentSurfaceReferenceFind(
+                    snapshot.surfaces.filter(
+                        (surface) => surface.creatorUserId === snapshot.viewer?.userId,
+                    ),
+                    reference,
+                );
             if (existing === undefined) {
                 store.surfaceCreate({ kind: "reference", name, reference });
                 return;
@@ -1715,6 +1755,7 @@ export function happyAgentSurfaceCatalogStoreCreate(
             for (const op of ops) membershipOpSettle(op, false);
             ops = [];
             creates = [];
+            referencesOpening = [];
             for (const running of chatOpenings.values()) running.abort.abort();
             chatOpenings.clear();
         },

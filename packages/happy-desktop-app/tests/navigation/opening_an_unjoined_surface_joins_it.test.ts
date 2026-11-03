@@ -94,7 +94,7 @@ it("joins a Surface the reader has not joined once, with the window already on i
     // Navigation does not wait for the Happy Agent: the join is only queued.
     expect(surfaceJoin).toHaveBeenCalledExactlyOnceWith("srf_notes");
     await router.load();
-    expect(router.state.location.pathname).toBe("/surfaces/local/srf_notes");
+    expect(router.state.location.pathname).toBe("/tabs/local/srf_notes");
 });
 
 it("only opens a Surface the reader has joined", async () => {
@@ -103,7 +103,7 @@ it("only opens a Surface the reader has joined", async () => {
 
     happyAgentRouterSurfaceOpen(router, context, "local", "srf_plan");
     await router.load();
-    expect(router.state.location.pathname).toBe("/surfaces/local/srf_plan");
+    expect(router.state.location.pathname).toBe("/tabs/local/srf_plan");
     expect(surfaceJoin).not.toHaveBeenCalled();
 });
 
@@ -113,6 +113,22 @@ it("joins one a link in a page opens, as the same Surface from ⌘K", async () =
 
     happyAgentRouterHappyLinkOpen(router, "happy://surfaces/srf_notes");
     await router.load();
-    expect(router.state.location.pathname).toBe("/surfaces/local/srf_notes");
+    expect(router.state.location.pathname).toBe("/tabs/local/srf_notes");
     expect(surfaceJoin).toHaveBeenCalledExactlyOnceWith("srf_notes");
+});
+
+it("opens a canonical tab link using the existing membership", async () => {
+    const { directory, surfaceJoin } = windowWith();
+    const { router } = await windowAt(directory);
+    happyAgentRouterHappyLinkOpen(router, "happy://tabs/srf_plan");
+    await router.load();
+    expect(router.state.location.pathname).toBe("/tabs/local/srf_plan");
+    expect(surfaceJoin).not.toHaveBeenCalled();
+});
+
+it("redirects a historical surface bookmark to the same tab", async () => {
+    window.history.replaceState(null, "", "/#/surfaces/local/srf_plan");
+    const { directory } = windowWith();
+    const { router } = await windowAt(directory);
+    await vi.waitFor(() => expect(router.state.location.pathname).toBe("/tabs/local/srf_plan"));
 });

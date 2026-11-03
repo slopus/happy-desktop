@@ -2312,6 +2312,27 @@ export function happyAgentWorkspaceStoreCreate(
     deps: HappyAgentWorkspaceDeps = {},
 ): HappyAgentWorkspaceStore {
     const list: HappyAgentSessionListStore = client.sessionList();
+    let groupTabRequested: HappyAgentGroupId | undefined;
+    const groupTabOpen = (groupId: HappyAgentGroupId | undefined): void => {
+        groupTabRequested = groupId;
+        if (groupId === undefined) return;
+        const snapshot = list.get();
+        const bot = snapshot.bots.find((entry) => entry.workspaceId === groupId);
+        if (bot !== undefined) {
+            groupTabRequested = undefined;
+            client.surfaces().catalog().referenceAdd({ kind: "bot", id: bot.id }, bot.name);
+            return;
+        }
+        const task = snapshot.taskDirectory.find((entry) => entry.workspaceId === groupId);
+        if (task !== undefined) {
+            groupTabRequested = undefined;
+            client.surfaces().catalog().referenceAdd({ kind: "task", id: task.id }, task.name);
+        } else if (snapshot.catalogRevision > 0) {
+            // A project/worktree is already represented by its own file and
+            // conversation tabs; it does not need a durable reference tab.
+            groupTabRequested = undefined;
+        }
+    };
     const output = deps.output ?? (() => undefined);
     const activityRecord = (activity: HappyAgentActivity): void =>
         output({ type: "activityRecorded", activity });
@@ -6659,6 +6680,7 @@ export function happyAgentWorkspaceStoreCreate(
         workspaceFilesDirectoryLoadPump();
         filePreprocessLoadPump();
         unsubscribeList = list.subscribe(() => {
+            if (groupTabRequested !== undefined) groupTabOpen(groupTabRequested);
             if (openId) list.sessionRead(openId);
             // A group addressed before its sessions arrived could not have its
             // remembered files reopened yet; the list saying which sessions it
@@ -7097,6 +7119,7 @@ export function happyAgentWorkspaceStoreCreate(
         },
 
         conversationOpen: (conversationId, groupId) => {
+            groupTabOpen(groupId);
             addressApply(groupId, conversationId);
             if (groupId !== addressedGroupId) {
                 fileTreeExpansionLoad(groupId);
@@ -7130,6 +7153,7 @@ export function happyAgentWorkspaceStoreCreate(
             openConversation(conversationId);
         },
         groupOpen: (groupId) => {
+            groupTabOpen(groupId);
             addressApply(groupId, undefined);
             if (groupId !== addressedGroupId) {
                 displayedMainViewId = undefined;

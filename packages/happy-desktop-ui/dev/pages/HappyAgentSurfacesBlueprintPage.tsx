@@ -700,10 +700,10 @@ function surfaceItem(surface: MockSurface, fixed: boolean): SidebarItem {
         action: surface.joined
             ? {
                   icon: "close" as const,
-                  label: `Leave ${surface.view.name}`,
+                  label: `Close ${surface.view.name} tab`,
                   reveal: "hover" as const,
               }
-            : { icon: "plus" as const, label: `Join ${surface.view.name}` },
+            : { icon: "plus" as const, label: `Open ${surface.view.name} tab` },
     };
 }
 
@@ -1053,11 +1053,11 @@ export function HappyAgentSurfacesBlueprintPage() {
         <ComponentPage
             contract="Props only"
             number={componentNumber}
-            summary="Shared Surfaces on a Happy Agent: the sidebar group they head with Artifacts, a todo list whose active todos are dragged into a shared order, a shared document, an artifact, bot, or task kept among them, the state for a type this build cannot show, and the dialog that makes one."
-            title="HappyAgentSurfaces"
+            summary="Individual tabs on a Happy Agent: todo lists, documents, calendars, chats, system monitors, artifacts, bots, and tasks. Each reader keeps their own open tabs; shared content retains its members."
+            title="Happy Agent tabs"
         >
             <FullScreenSpecimen
-                detail="Live, in the window. Artifacts heads the first group and never moves; drag a Surface among the others. Chief of Staff, Launch spec, and Rewrite onboarding guide are a bot, an artifact, and a task kept among the Surfaces, wearing their own faces and opening where they always open; Old pricing page was deleted since. + beside the collapse control offers a todo list or a document; ⌘K finds the rest. The list's add field has the caret, and typing anywhere no other control wants lands in it, as in a chat."
+                detail="Live, in the window. Artifacts heads the first group and never moves; drag a tab among the others. Chief of Staff, Launch spec, and Rewrite onboarding guide are a bot, an artifact, and a task kept as tabs, wearing their own faces and opening where they always open; Old pricing page was deleted since. + beside the collapse control offers a todo list or a document; ⌘K finds the rest. The list's add field has the caret, and typing anywhere no other control wants lands in it, as in a chat."
                 label="Window"
                 number="00"
                 screen="00-window-1100x760"
@@ -1392,7 +1392,7 @@ export function HappyAgentSurfacesBlueprintPage() {
             </Specimen>
 
             <FullScreenSpecimen
-                detail="An artifact kept among the Surfaces that has not been read for this reader yet: its header, and nothing guessed. Once read, its row opens the artifact viewer itself and this page is not seen."
+                detail="An artifact kept as a tab that has not been read for this reader yet: its header, and nothing guessed. Once read, its row opens the artifact viewer itself and this page is not seen."
                 label="Reference, resolving"
                 number="09"
                 screen="09-reference-resolving-720x640"
@@ -1405,7 +1405,7 @@ export function HappyAgentSurfacesBlueprintPage() {
             </FullScreenSpecimen>
 
             <FullScreenSpecimen
-                detail="A task someone kept among the Surfaces that the reader is not in: joining puts it in their Tasks and opens its chat."
+                detail="A task someone kept as a tab that the reader is not in: joining puts it in their Tasks and opens its chat."
                 label="Reference, a task to join"
                 number="09b"
                 screen="09b-reference-join-720x640"
@@ -1622,7 +1622,7 @@ export function HappyAgentSurfacesBlueprintPage() {
             </Specimen>
 
             <Specimen
-                detail="The composer's @ picker, as wide as its composer: the reader's Surfaces first, then the bots, tasks, and chats they can open, then files, each with the glyph of what it is. Choosing a Surface or chat writes the Happy reference that names it."
+                detail="The composer's @ picker, as wide as its composer: the reader's tabs first, then the bots, tasks, and chats they can open, then files, each with the glyph of what it is. Choosing a tab or chat writes the Happy reference that names it."
                 label="Mentioning a Surface or chat"
                 number="12"
                 stage="surface"

@@ -53,7 +53,7 @@ const states: MenuItem[] = [
 /* A task row's menu in the sidebar: the plus, the pencil, and the cross share the
    icon column with a framed outline glyph, each on its own keyline. */
 const taskRow: MenuItem[] = [
-    { kind: "item", id: "surface", label: "Add to top of sidebar", icon: "plus" },
+    { kind: "item", id: "surface", label: "Open tab", icon: "plus" },
     { kind: "separator" },
     { kind: "item", id: "rename", label: "Rename task", icon: "edit" },
     { kind: "item", id: "leave", label: "Leave task", icon: "close" },
