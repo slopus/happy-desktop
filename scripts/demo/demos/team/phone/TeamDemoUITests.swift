@@ -97,9 +97,23 @@ final class TeamDemoUITests: XCTestCase {
         }
         mark("typed")
         pause(0.6)
+        // Steve puts the keyboard away the way a thumb does: a short drag
+        // down from just above the composer, which the transcript hands to
+        // the keyboard (interactive dismissal), so the answer that follows
+        // has the whole screen. Where it starts is measured before Send, so
+        // the drag follows the send at once.
+        let origin = app.coordinate(withNormalizedOffset: .zero)
+        let start = origin.withOffset(CGVector(dx: app.frame.midX, dy: composer.frame.minY - 44))
+        let end = origin.withOffset(CGVector(dx: app.frame.midX, dy: app.frame.maxY - 6))
         app.buttons["Send"].tap()
         mark("sent")
-        if app.buttons["Continue"].waitForExistence(timeout: 1) { app.buttons["Continue"].tap() }
+        if app.buttons["Continue"].exists { app.buttons["Continue"].tap() }
+        pause(0.3)
+        for attempt in 0..<2 where attempt == 0 || app.keyboards.count > 0 {
+            start.press(forDuration: 0.05, thenDragTo: end, withVelocity: 700, thenHoldForDuration: 0.05)
+            pause(0.6)
+        }
+        mark(app.keyboards.count == 0 ? "keyboard-down" : "keyboard-stayed")
         pause(Double(environment["TEAM_TAIL_SECONDS"] ?? "8") ?? 8)
         mark("done")
     }

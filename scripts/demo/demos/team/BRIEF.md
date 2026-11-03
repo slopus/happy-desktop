@@ -10,8 +10,11 @@ Owner: Kirill. Script: [SCRIPT.md](./SCRIPT.md).
 ## What it must say
 
 1. **Any provider, any model.** The take opens on Kirill's new-task screen
-   with the model menu already open. He picks the provider, Claude, then
-   Opus 5.5, and types the waveform request.
+   with the model list already open, every provider's models in it. His
+   pointer goes up the list, past Antigravity's, Grok's and Codex's models,
+   and picks Opus 5.5 under Claude; he types the waveform request. No account
+   is picked: each service shows its own account as Kirill's app does,
+   Current CLI.
 2. **This is a busy, real workspace.** Around it: two servers in the rail
    (Kirill's personal one and the team server Happy Core), bots with their
    real faces, tasks owned by Kirill and Steve with subtasks and diff stats.
@@ -20,7 +23,10 @@ Owner: Kirill. Script: [SCRIPT.md](./SCRIPT.md).
    moment it is in Steve's sidebar on his phone, with Kirill's face. Nobody
    forwards it.
 4. **The team answers.** Steve checks the design on his phone and gives
-   feedback in the same task. That is the ending.
+   feedback in the same task. Opus acts on it: the preview goes to five bars
+   on both screens and it says _"Five bars it is."_ The result rests on both
+   screens, then the phone steps away and the cut eases back into its first
+   frame, because the homepage loops it.
 
 ## Rules carried over from earlier takes
 
@@ -48,5 +54,5 @@ Owner: Kirill. Script: [SCRIPT.md](./SCRIPT.md).
 
 - Stem cells, Focus, the Spaces sidebar, chat onboarding: removed from the app.
 - The new task does not fan out; the several repositories are Steve's task.
-- Shipping, CI, archiving, loop-ins: the take ends on Steve's feedback.
+- Shipping, CI, archiving, loop-ins: the take ends on the five-bar preview.
 - More than two servers, other people, generated or placeholder faces.

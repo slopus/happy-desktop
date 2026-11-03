@@ -72,7 +72,18 @@ const codecs = {
  * turns the take's selected frames into the track's picture; `overlay`, if
  * any, is an image laid over it first.
  */
-async function trackEncode({ name, source, overlay, select, size, frames, fps, soundtrack, out }) {
+async function trackEncode({
+    name,
+    source,
+    overlay,
+    select,
+    size,
+    frames,
+    fps,
+    loopFrames,
+    soundtrack,
+    out,
+}) {
     const variants = [
         { file: `${name}.webm`, codec: "av1", rate: fps, size },
         { file: `${name}.mp4`, codec: "h264", rate: fps, size },
@@ -96,12 +107,22 @@ async function trackEncode({ name, source, overlay, select, size, frames, fps, s
             variant.size.width === size.width
                 ? ""
                 : `,scale=${variant.size.width}:${variant.size.height}:flags=lanczos`;
+        // A track that loops ends where it began: its last frames dissolve
+        // into its first (the composed cut's `loopBlend`, in ffmpeg's terms).
+        const loop = loopFrames
+            ? [
+                  `[lit]split[body][head]`,
+                  `[head]trim=end_frame=1,loop=loop=${loopFrames - 1}:size=1,setpts=N/(${fps}*TB)[first]`,
+                  `[body][first]xfade=transition=fade:duration=${loopFrames / fps}:offset=${(frames - loopFrames) / fps}[looped]`,
+              ]
+            : [`[lit]null[looped]`];
         const graph = [
             `[0:v]select='${select}',setpts=N/(${fps}*TB)[cut]`,
             overlay
                 ? `[1:v]${lightsFormat}[lights];[cut][lights]overlay=0:0[lit]`
                 : `[cut]null[lit]`,
-            `[lit]fps=${variant.rate}${scale},format=yuv420p,setparams=range=tv:color_primaries=bt709:color_trc=iec61966-2-1:colorspace=bt709[v]`,
+            ...loop,
+            `[looped]fps=${variant.rate}${scale},format=yuv420p,setparams=range=tv:color_primaries=bt709:color_trc=iec61966-2-1:colorspace=bt709[v]`,
         ].join(";");
         const audio = soundtrack
             ? variant.codec === "av1"
@@ -204,6 +225,7 @@ export async function splitEncode({
     work,
 }) {
     const { fps } = composition.output;
+    const loopFrames = composition.loop ? Math.round(composition.loop.seconds * fps) : 0;
     await rm(out, { force: true, recursive: true });
     await mkdir(out, { recursive: true });
     const lights = join(work, "window-overlay.png");
@@ -217,6 +239,7 @@ export async function splitEncode({
         size: desktopSize,
         frames,
         fps,
+        loopFrames,
         soundtrack,
         out,
     });
@@ -227,6 +250,7 @@ export async function splitEncode({
         size: { width: composition.phone.screen.width, height: composition.phone.screen.height },
         frames,
         fps,
+        loopFrames,
         out,
     });
     const seconds = frames / fps;

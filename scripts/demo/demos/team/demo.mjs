@@ -1,9 +1,13 @@
 import * as world from "./world.mjs";
 import { cuid, nodeAvatarSet, personalOpen, photoSet } from "./personal.mjs";
 import { phoneOpen } from "./phone.mjs";
-import { access, mkdir, writeFile } from "node:fs/promises";
+import { execFile as execFileCallback } from "node:child_process";
+import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
+import { promisify } from "node:util";
+
+const execFile = promisify(execFileCallback);
 
 /**
  * The whole app, as one window: the server rail, the sidebar, and the new
@@ -25,7 +29,7 @@ const cue = (name, demo, phone, place = {}) => {
     phone?.cue?.(name, demo);
 };
 
-async function until(demo, read, label, timeout = 30000) {
+async function until(demo, read, label, timeout = 30000, interval = 200) {
     const deadline = Date.now() + timeout;
     for (;;) {
         const value = await Promise.resolve()
@@ -33,8 +37,106 @@ async function until(demo, read, label, timeout = 30000) {
             .catch(() => undefined);
         if (value) return value;
         if (Date.now() > deadline) throw new Error(`Team demo: timed out waiting for ${label}.`);
-        await demo.hold(200);
+        await demo.hold(interval);
     }
+}
+
+/**
+ * The take is shot in two passes on one timeline, so each screen keeps its
+ * frame rate: the phone's, with the Simulator running, and then the
+ * desktop's, without it. Every moment both screens share is a beat. The
+ * phone's pass records when each beat fell; the desktop's pass waits for the
+ * same instant on its own clock before acting, so the phone's movie from the
+ * first pass lands on the second's frames. `late` is how far the desktop's
+ * pass missed a beat it could not reach in time.
+ */
+function beatsCreate(demo, schedule) {
+    const seconds = () => demo.timing.frames / demo.timing.fps;
+    const at = {};
+    const late = {};
+    return {
+        at,
+        late,
+        async beat(name) {
+            if (schedule) {
+                const target = schedule[name];
+                if (target === undefined)
+                    throw new Error(`The phone's pass has no "${name}" beat.`);
+                const wait = target - seconds();
+                if (wait > 0) await demo.hold(wait * 1000);
+                late[name] = seconds() - target;
+            }
+            at[name] = seconds();
+        },
+        /** A beat the phone set, at the take's second it fell on. */
+        record(name, value) {
+            at[name] = value;
+        },
+    };
+}
+
+/** About how long Steve's words take from his client to Kirill's window. */
+const steveTripSeconds = 0.3;
+
+/** How many bars the live preview's page draws on the desktop, once it has loaded. */
+async function previewBars(page) {
+    for (const frame of page.frames()) {
+        if (!frame.url().includes("/__demo_artifact/")) continue;
+        const count = await frame
+            .locator("#speaking i")
+            .count()
+            .catch(() => 0);
+        if (count > 0) return count;
+    }
+    return 0;
+}
+
+/** Whether the preview's bars are on screen whole, under nothing of the window's. */
+async function previewInView(page) {
+    for (const frame of page.frames()) {
+        if (!frame.url().includes("/__demo_artifact/")) continue;
+        const box = await frame
+            .locator("#speaking")
+            .boundingBox()
+            .catch(() => null);
+        if (!box) continue;
+        const x = box.x + box.width / 2;
+        const edges = [box.y + 2, box.y + box.height - 2];
+        const hits = await page.evaluate(
+            ([x, edges]) => edges.map((y) => document.elementFromPoint(x, y)?.tagName),
+            [x, edges],
+        );
+        return hits.every((tag) => tag === "IFRAME");
+    }
+    return false;
+}
+
+/** The phone's movie from its own pass, at exactly the desktop pass's length. */
+async function phoneConform(source, target, frames, fps) {
+    await execFile("ffmpeg", [
+        "-y",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-i",
+        source,
+        "-vf",
+        `fps=${fps},tpad=stop_mode=clone:stop=${frames}`,
+        "-frames:v",
+        String(frames),
+        "-an",
+        "-c:v",
+        "libx264",
+        "-crf",
+        "12",
+        "-preset",
+        "slow",
+        "-pix_fmt",
+        "yuv420p",
+        "-movflags",
+        "+faststart",
+        target,
+    ]);
 }
 
 /** Off-camera polling, before the take has a timeline. */
@@ -315,16 +417,6 @@ export default {
             await memberPrepare(steve, world.team.members[1]),
         ];
         filmed.profiles = { kirill: kirillProfile, steve: steveProfile };
-        // Steve's phone, paired once with Happy Core as Steve.
-        const phone =
-            process.env.TEAM_PHONE === "1"
-                ? await phoneOpen({ output, work: join(output, ".work", "team") })
-                : undefined;
-        if (phone) {
-            await phone.prepare();
-            filmed.phonePairing = await phone.pair(steve);
-            process.stdout.write(`    phone     paired (${filmed.phonePairing.paired})\n`);
-        }
         if (await exists(world.assetPath("happy-core.png")))
             await nodeAvatarSet(kirill, "happy-core.png", world.seedMode);
         await botsPrepare(kirill);
@@ -336,6 +428,17 @@ export default {
         const ticker = liveTicker();
         while (Object.values(ticker.step).some((step) => step <= 2))
             if (!ticker.advance()) await new Promise((settle) => setTimeout(settle, 200));
+        // Steve's phone, paired once with Happy Core as Steve, once his
+        // sidebar has what it shows.
+        const phone =
+            process.env.TEAM_PHONE === "1"
+                ? await phoneOpen({ output, work: join(output, ".work", "team") })
+                : undefined;
+        if (phone) {
+            await phone.prepare();
+            filmed.phonePairing = await phone.pair(steve);
+            process.stdout.write(`    phone     paired (${filmed.phonePairing.paired})\n`);
+        }
         for (const client of [kirill, steve, personal.client]) await readAll(client);
 
         const page = demo.page;
@@ -380,22 +483,19 @@ export default {
             throw new Error("New work on Happy Core does not start on GPT-6.1 Terra.");
         await page.waitForTimeout(600);
         await trigger.click();
-        await page
+        const modelSetting = page
             .locator('[data-happy-desktop-ui="composer-model-control-model-setting"]')
-            .first()
-            .click();
-        const service = page
-            .locator('[data-happy-desktop-ui="composer-model-control-account-label"]')
-            .filter({ hasText: world.onCamera.service })
             .first();
-        await service.waitFor();
-        const choice = page
-            .locator('[data-happy-desktop-ui="composer-model-control-row"]')
-            .filter({ hasText: world.onCamera.model })
-            .first();
+        await modelSetting.click();
+        const modelRow = (label) =>
+            page
+                .locator('[data-happy-desktop-ui="composer-model-control-row"]')
+                .filter({ hasText: label })
+                .first();
+        const scanFrom = modelRow(world.onCamera.scanFrom);
+        const choice = modelRow(world.onCamera.model);
+        await scanFrom.waitFor();
         await choice.waitFor();
-        await page.mouse.move(viewport.width * 0.42, 40);
-        await page.waitForTimeout(500);
         // The pictures still waiting for Kirill's exports, where they sit.
         // Kirill's personal server keeps its own, hidden sidebar with a Chief of Staff too.
         const shownRow = (label) =>
@@ -410,6 +510,12 @@ export default {
         });
         filmed.pictures = { opening: await pictures() };
         framing = await demo.framingPrepare(composer, { rawWindow: true });
+        // The hand rests where it opened the list, on the Model row.
+        await demo.pointerPlace({
+            ...(await modelSetting.boundingBox()),
+            offset: { x: 0.3, y: 0.5 },
+        });
+        await page.waitForTimeout(500);
         await writeFile(join(output, "framing.json"), JSON.stringify(framing, null, 2));
         await page.screenshot({ path: join(output, "opening.png") });
         await writeFile(join(output, "opening.txt"), await page.locator("body").innerText());
@@ -423,6 +529,14 @@ export default {
             await writeFile(join(output, "filmed.json"), JSON.stringify(filmed, null, 2));
             return;
         }
+        // The desktop's pass follows the phone's: its beats, its phone movie
+        // and its phone's cues, from the phone pass's artifacts.
+        const scheduleDirectory = process.env.TEAM_SCHEDULE;
+        const schedule = scheduleDirectory
+            ? JSON.parse(await readFile(join(scheduleDirectory, "beats.json"), "utf8"))
+            : undefined;
+        if (schedule && phone) throw new Error("The desktop's pass runs without the phone.");
+        const beats = beatsCreate(demo, schedule?.beats);
         if (phone) {
             await phone.start({
                 TEAM_TASK: world.taskTitle,
@@ -437,51 +551,64 @@ export default {
         ticker.start(3000);
         const feed = feedKeptRead([kirill, steve]);
         feed.start();
+        const takeSeconds = (epochMs) =>
+            (epochMs - (performance.timeOrigin + demo.timing.startedAt)) / 1000;
 
-        // ---- On camera: the new task, with the model list open.
+        // ---- On camera: the new task, with the model list open. The hand
+        // glides into the list at its foot and up through every provider's
+        // models to Opus, and the pick closes the menu.
+        const rowPoint = async (row) => ({
+            ...(await row.boundingBox()),
+            offset: { x: 0.3, y: 0.5 },
+        });
         try {
             cue("open", demo, phone);
-            await demo.hold(1800);
-            await demo.click(service, { after: 450 });
-            const account = page
-                .locator('[data-happy-desktop-ui="composer-model-control-account"]')
-                .filter({ hasText: world.onCamera.account })
-                .first();
-            await demo.click(account, { after: 350 });
-            cue("provider-chosen", demo, phone);
+            await demo.hold(1000);
+            await beats.beat("scan");
+            await demo.moveTo(await rowPoint(scanFrom), { duration: 600 });
+            await demo.hold(150);
+            cue("model-scan", demo, phone);
+            await demo.moveTo(await rowPoint(choice), { duration: 1500 });
+            await beats.beat("model");
             await demo.click(choice, { after: 250 });
             cue("model-chosen", demo, phone);
             if (!(await trigger.innerText()).includes("Opus"))
                 throw new Error("The pick did not land on Opus 5.5.");
-            await demo.moveTo(composer, { duration: 800 });
-            await demo.hold(500);
-            await demo.click(composer, { after: 150 });
+            await beats.beat("composer");
+            await demo.click(composer, { duration: 650, after: 150 });
             await demo.pointerVisible(false);
+            await beats.beat("typing");
             cue("typing-started", demo, phone);
             await demo.type(world.prompt, { perKey: 52, after: 0 });
             await demo.hold(450);
+            await beats.beat("sent");
             await demo.press("Enter", { badge: 0, before: 0, after: 150 });
             cue("sent", demo, phone);
 
             // The task exists only now: its row arrives, named from the message.
             const row = sidebarRow(page, world.taskTitle);
-            await until(demo, () => row.isVisible(), "the new task's row", 20000);
+            await until(demo, () => row.isVisible(), "the new task's row", 20000, 50);
             cue("task-created", demo, phone, { rect: await row.boundingBox() });
             await demo.hold(350);
+            await beats.beat("phone-enter");
             cue("phone-enter", demo, phone);
             await until(demo, () => world.hasReached("read-bars"), "the first read", 20000);
             await demo.hold(1400);
+            await beats.beat("read-bars");
             world.release("read-bars");
             cue("working", demo, phone);
             await until(demo, () => world.hasReached("read-voice"), "the second read", 20000);
             await demo.hold(1500);
+            await beats.beat("read-voice");
             world.release("read-voice");
             await until(demo, () => world.hasReached("artifact"), "the preview", 20000);
             await demo.hold(1300);
+            await beats.beat("artifact");
             world.release("artifact");
             await until(demo, () => world.hasReached("reply"), "the preview's page", 30000);
             cue("preview", demo, phone);
             await demo.hold(2200);
+            await beats.beat("reply");
             world.release("reply");
             await until(
                 demo,
@@ -489,10 +616,13 @@ export default {
                 "the reply",
                 20000,
             );
-            // Steve reads it on his phone and answers there. A rehearsal without
-            // the phone sends his words through his own client instead.
+            // Steve reads it on his phone and answers there. Without the phone
+            // his words go through his own client: in the desktop's pass so
+            // they land when they landed in the phone's, in a rehearsal a
+            // little after the reply.
             if (!phone) {
-                await demo.hold(4000);
+                if (!schedule) await demo.hold(4000);
+                await beats.beat("steve-send");
                 const task = await taskFind(steve, world.taskTitle);
                 const { mode } = await steve.getAgentMode(task.agent.id);
                 await steve.sendMessage(task.agent.id, {
@@ -502,17 +632,53 @@ export default {
                 });
             }
             const feedback = page.getByText(world.steveFeedback, { exact: false }).first();
-            await until(demo, () => feedback.isVisible(), "Steve's feedback", 240000);
+            await until(demo, () => feedback.isVisible(), "Steve's feedback", 240000, 50);
             cue("steve-feedback", demo, phone, { rect: await feedback.boundingBox() });
+            // The desktop's pass sends his words this long before they should
+            // land, about what the trip from his client to the window takes.
+            if (phone) beats.record("steve-send", cues.at(-1).seconds - steveTripSeconds);
             await demo.hold(1200);
-            // The agent takes Steve's note; its answer starts as the take ends.
+            // The agent takes Steve's note: it rewrites the page with five
+            // bars, both screens' previews follow, and it says so.
+            await beats.beat("feedback");
             world.release("feedback");
-            await demo.hold(2300);
+            await until(demo, () => world.hasReached("five-bars"), "the five-bar page", 20000, 50);
+            filmed.fiveBarsShown = await until(
+                demo,
+                async () => (await previewBars(page)) === world.fiveBars,
+                "the five-bar preview",
+                10000,
+                50,
+            ).catch(() => false);
+            cue("five-bars", demo, phone);
+            await demo.hold(900);
+            await beats.beat("five-bars");
+            world.release("five-bars");
+            await until(
+                demo,
+                () => page.getByText(world.fiveBarsReply).first().isVisible(),
+                "the last word",
+                20000,
+                50,
+            );
             cue("outro", demo, phone);
-            await demo.hold(2500);
-            // The phone stays up to the last frame.
+            // The desktop's preview, five bars, still in view above the answer.
+            filmed.fiveBarsInView = await previewInView(page);
+            // The result rests on both screens, then the phone steps away.
+            await demo.hold(2600);
+            await beats.beat("phone-exit");
             cue("phone-exit", demo, phone);
             filmed.pictures.closing = await pictures();
+            // The phone is away and the window back; the cut's loop dissolves
+            // from here into its first frame, its caption already gone.
+            await demo.hold(750);
+            cue("settled", demo, phone);
+            await demo.hold(650);
+            await beats.beat("end");
+        } catch (error) {
+            // A take that fails still stops Steve's driver and the recorder.
+            await phone?.finish().catch(() => undefined);
+            throw error;
         } finally {
             ticker.stop();
             feed.stop();
@@ -522,11 +688,12 @@ export default {
         filmed.startedAtEpochMs = startedAtEpochMs;
         filmed.frames = demo.timing.frames;
         filmed.capture = demo.captureSummary(0);
+        const phoneCues = [];
         if (phone) {
             await phone.finish();
             filmed.phoneMarks = phone.marks.map((mark) => ({
                 ...mark,
-                seconds: (mark.epochMs - startedAtEpochMs) / 1000,
+                seconds: takeSeconds(mark.epochMs),
             }));
             const at = (name) => filmed.phoneMarks.find((mark) => mark.name === name)?.seconds;
             for (const [mark, name] of [
@@ -535,7 +702,7 @@ export default {
                 ["typing", "phone-typing"],
                 ["sent", "phone-sent"],
             ])
-                if (at(mark) !== undefined) cues.push({ name, seconds: at(mark) });
+                if (at(mark) !== undefined) phoneCues.push({ name, seconds: at(mark) });
             // The phone's movie, on the desktop's clock, and how smoothly the
             // Simulator delivered it while the phone was moving.
             const { report } = await phone.export({
@@ -550,13 +717,55 @@ export default {
                     },
                     { name: "Steve types", from: at("typing"), to: at("typed") },
                     { name: "Steve sends", from: at("typed"), to: at("sent") + 1.5 },
+                    { name: "the five-bar page", from: at("sent") + 1.5, to: at("sent") + 5 },
                 ].filter((window) => window.from !== undefined && window.to > window.from),
             });
             filmed.phoneCapture = report;
             process.stdout.write(
                 `    phone     ${report.cadence.map((window) => `${window.name} ${window.fps.toFixed(1)} fps`).join(", ")}\n`,
             );
+            await writeFile(
+                join(output, "beats.json"),
+                JSON.stringify(
+                    {
+                        fps: demo.timing.fps,
+                        frames: demo.timing.frames,
+                        beats: beats.at,
+                        phoneCues,
+                        steveLandedSeconds: cues.find((entry) => entry.name === "steve-feedback")
+                            ?.seconds,
+                    },
+                    null,
+                    2,
+                ),
+            );
         }
+        if (schedule) {
+            // The phone's pass's movie and cues, on this pass's frames.
+            await phoneConform(
+                join(scheduleDirectory, "phone-screen.mp4"),
+                join(output, "phone-screen.mp4"),
+                demo.timing.frames,
+                demo.timing.fps,
+            );
+            phoneCues.push(...schedule.phoneCues);
+            const late = Object.values(beats.late);
+            // Where Steve's words landed in each pass: the one moment the
+            // desktop's pass does not set itself.
+            const landed = cues.find((entry) => entry.name === "steve-feedback")?.seconds;
+            filmed.sync = {
+                phonePass: scheduleDirectory,
+                phonePassFrames: schedule.frames,
+                late: beats.late,
+                worstLateSeconds: Math.max(0, ...late),
+                steveLandedSeconds: landed,
+                steveLandedDifferenceSeconds: landed - schedule.steveLandedSeconds,
+            };
+            process.stdout.write(
+                `    sync      worst beat ${(filmed.sync.worstLateSeconds * 1000).toFixed(0)} ms late of ${late.length}; Steve's words ${(filmed.sync.steveLandedDifferenceSeconds * 1000).toFixed(0)} ms from the phone pass\n`,
+            );
+        }
+        cues.push(...phoneCues);
         filmed.kirillFeed = await kirill.getFeed({ limit: 5 }).catch((error) => String(error));
         cues.sort((a, b) => a.seconds - b.seconds);
         await writeFile(join(output, "cues.json"), JSON.stringify(cues, null, 4));
