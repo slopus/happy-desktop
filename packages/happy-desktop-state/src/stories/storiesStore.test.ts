@@ -164,8 +164,8 @@ it("outlines an agent unseen, then seen once every story of it is opened", async
         media: { kind: "image", url: "https://daemon/v0/stories/a/media" },
     });
     await until(() => server.seen.length === 1);
-    // One of two seen still leaves the outline in the accent.
-    expect(on(store.get()).outlines.get("task1")).toBe("unseen");
+    // One of two seen leaves the outline in the accent once the next one is fetched ahead.
+    await until(() => on(store.get()).outlines.get("task1") === "unseen");
 
     store.storyStep(1);
     expect(on(store.get()).open?.story.id).toBe("b");
@@ -668,11 +668,14 @@ it("addresses a repost's shared media through its original, fetching each file o
     });
 });
 
-it("keeps a ring's last state until a new first story can play, for at most the wait", async () => {
+it("keeps a ring grey until its new first unseen story can play, for at most the wait", async () => {
     vi.useFakeTimers();
     try {
+        const stall = new Set(["b", "d"]);
         const preload = vi.fn(async (media: readonly { url: string }[]) =>
-            media[0]!.url.includes("/a/") ? [] : new Promise<readonly object[]>(() => {}),
+            [...stall].some((id) => media[0]!.url.includes(`/${id}/`))
+                ? new Promise<readonly object[]>(() => {})
+                : [],
         );
         const { store, sync } = open([story("a", "task1", 1, true)], true, preload);
         await vi.advanceTimersByTimeAsync(0);
@@ -688,13 +691,20 @@ it("keeps a ring's last state until a new first story can play, for at most the 
         await vi.advanceTimersByTimeAsync(1);
         expect(on(store.get()).row).toMatchObject([{ state: "unseen" }]);
         expect(on(store.get()).outlines.get("task1")).toBe("unseen");
-        // An unseen ring stays unseen while the next story is fetched, and greys once watched.
-        post(sync, "0007", story("c", "task1", 3));
+        // The unseen story leaves while the next is still fetched: grey, not a ring onto a spinner.
+        post(sync, "0007", story("d", "task1", 3));
+        sync.writer.updateReceived({
+            kind: "event",
+            cursor: "0008",
+            event: { type: "story.removed", payload: { storyId: "b" } },
+        } as never);
         await vi.advanceTimersByTimeAsync(0);
+        expect(on(store.get()).row).toMatchObject([{ state: "seen" }]);
+        expect(on(store.get()).outlines.get("task1")).toBe("seen");
+        await vi.advanceTimersByTimeAsync(8_000);
+        expect(on(store.get()).row).toMatchObject([{ state: "unseen" }]);
         store.agentOpen("task1");
-        expect(on(store.get()).open?.story.id).toBe("b");
-        expect(on(store.get()).outlines.get("task1")).toBe("unseen");
-        store.storyStep(1);
+        expect(on(store.get()).open?.story.id).toBe("d");
         expect(on(store.get()).outlines.get("task1")).toBe("seen");
     } finally {
         vi.useRealTimers();

@@ -163,10 +163,10 @@ export function happyAgentStoriesStoreCreate(deps: {
             })),
         };
     };
-    // Stories whose media is ready or asked for, and each poster's ring once it has appeared.
+    // Stories whose media is ready or asked for, and posters whose ring has appeared and so stays.
     const ready = new Set<string>();
     const asked = new Set<string>();
-    const shown = new Map<string, "unseen" | "seen">();
+    const shown = new Set<string>();
     /** Each address fetched or being fetched ahead, once however many stories share it. */
     const fetches = new Map<string, Promise<unknown>>();
     const queue: Story[] = [];
@@ -205,15 +205,10 @@ export function happyAgentStoriesStoreCreate(deps: {
         queue.push(story);
         pump();
     };
-    /**
-     * A ring turns unseen only once its first unseen story can play, and until then keeps the state
-     * it was last drawn in; watching greys it at once.
-     */
+    /** A ring is unseen only while its first unseen story can play, so a tap never lands on a spinner. */
     const ring = (key: string) => {
         const opening = first(key)!;
-        const state = opening.seen ? "seen" : ready.has(opening.id) ? "unseen" : shown.get(key)!;
-        shown.set(key, state);
-        return state;
+        return !opening.seen && ready.has(opening.id) ? "unseen" : "seen";
     };
     const row = (): HappyAgentStoryTile[] => {
         const tiles = new Map<string, HappyAgentStoryTile & { latest: number }>();
@@ -290,7 +285,7 @@ export function happyAgentStoriesStoreCreate(deps: {
         // A poster's ring appears once its first story can play at once, and then stays.
         for (const key of new Set(stories.map(keyOf))) {
             const opening = first(key);
-            if (opening && ready.has(opening.id)) shown.set(key, opening.seen ? "seen" : "unseen");
+            if (opening && ready.has(opening.id)) shown.add(key);
             else preload(opening);
         }
         // Forget what the feed no longer holds: frames, fetches, stories and posters.
