@@ -8,6 +8,7 @@ import { HappyAgentCreateTaskPage } from "../../src/HappyAgentCreateTaskPage";
 import { commandShortcut } from "../../src/keyboardShortcut";
 import { ModalOverlay } from "../../src/ModalOverlay";
 import { Sidebar } from "../../src/Sidebar";
+import { TabbedPane } from "../../src/TabbedPane";
 import { ThemeScope } from "../../src/ThemeScope";
 import { WindowCover } from "../../src/WindowOverlay";
 import { ComponentPage, FullScreenSpecimen } from "../kit";
@@ -34,8 +35,9 @@ const connections: ConnectionShellItem[] = [
 
 /**
  * The window as the app assembles it — connection rail, connection surface,
- * shell, sidebar — so the creation screens wear the same header as every other
- * screen and the palette's dim reaches the rail as well as the sidebar.
+ * shell, sidebar — so the creation screens wear the workspace's own tab strip,
+ * as every other screen does, and the palette's dim reaches the rail as well
+ * as the sidebar.
  */
 export function HeaderShortcutsFlowPage() {
     return (
@@ -43,7 +45,7 @@ export function HeaderShortcutsFlowPage() {
             number={componentNumber}
             title="Creation headers and window palette"
             contract="Props only"
-            summary="Both creation screens keep the standard conversation header, header controls name their chords in a tooltip, and the palette's dim covers the whole window, connection rail included."
+            summary="Both creation screens head their content with the workspace's tab strip, one tab naming what is being made; header controls name their chords in a tooltip, and the palette's dim covers the whole window, connection rail included."
         >
             {windows.flatMap((window) =>
                 screens.map((screen, index) => (
@@ -128,33 +130,49 @@ export function HeaderShortcutsFlowPage() {
                                                 />
                                             }
                                         >
-                                            {screen === "bot"
-                                                ? botCreationSpecimen(
-                                                      <HappyAgentCreateBotPage
-                                                          name=""
-                                                          faceSlot={0}
-                                                          faces={[
-                                                              "blueprint1",
-                                                              "blueprint2",
-                                                              "blueprint3",
-                                                              "blueprint4",
-                                                          ]}
-                                                          onNameChange={noop}
-                                                          onSubmit={noop}
-                                                          onCreditOpen={noop}
-                                                          onFacePick={noop}
-                                                          onFacesRoll={noop}
-                                                      />,
-                                                      "",
-                                                  )
-                                                : taskCreationSpecimen(
-                                                      <HappyAgentCreateTaskPage
-                                                          name=""
-                                                          onNameChange={noop}
-                                                          onSubmit={noop}
-                                                      />,
-                                                      "",
-                                                  )}
+                                            <TabbedPane
+                                                activeId="create"
+                                                onSelect={noop}
+                                                size="medium"
+                                                tabSizing="content"
+                                                tabs={[
+                                                    {
+                                                        id: "create",
+                                                        label: labels[
+                                                            screen === "bot" ? "bot" : "task"
+                                                        ],
+                                                        closable: false,
+                                                    },
+                                                ]}
+                                            >
+                                                {screen === "bot"
+                                                    ? botCreationSpecimen(
+                                                          <HappyAgentCreateBotPage
+                                                              name=""
+                                                              faceSlot={0}
+                                                              faces={[
+                                                                  "blueprint1",
+                                                                  "blueprint2",
+                                                                  "blueprint3",
+                                                                  "blueprint4",
+                                                              ]}
+                                                              onNameChange={noop}
+                                                              onSubmit={noop}
+                                                              onCreditOpen={noop}
+                                                              onFacePick={noop}
+                                                              onFacesRoll={noop}
+                                                          />,
+                                                          "",
+                                                      )
+                                                    : taskCreationSpecimen(
+                                                          <HappyAgentCreateTaskPage
+                                                              name=""
+                                                              onNameChange={noop}
+                                                              onSubmit={noop}
+                                                          />,
+                                                          "",
+                                                      )}
+                                            </TabbedPane>
                                         </AppShell>
                                         {screen === "palette" ? (
                                             <WindowCover>

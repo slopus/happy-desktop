@@ -70,7 +70,6 @@ export function taskCreationSpecimen(
 ) {
     return (
         <ConversationView
-            title="New task"
             dock={
                 <ConversationDock
                     composer={composerWith(text)}

@@ -4210,32 +4210,36 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
         // surface: what it is called is the only thing being decided here.
         if (props.botCreateOpen && active?.session?.workspace)
             return (
-                <HappyAgentCreateBotSurface
-                    happyAgentOnline={activeHappyAgentOnline}
-                    providerUsage={active.session.providerUsage}
-                    // The artist's page is on the web, and this window has
-                    // no workspace behind it for an embedded tab to run in,
-                    // so it goes to the machine's own browser where the
-                    // host can send it there.
-                    onExternalLinkOpen={props.onExternalLinkOpen ?? openExternalLink}
-                    workspace={active.session.workspace}
-                    {...(activeAvailability?.refusal === undefined
-                        ? {}
-                        : { unavailable: activeAvailability.refusal })}
-                />
+                <CreationTabbedPane label="New bot">
+                    <HappyAgentCreateBotSurface
+                        happyAgentOnline={activeHappyAgentOnline}
+                        providerUsage={active.session.providerUsage}
+                        // The artist's page is on the web, and this window has
+                        // no workspace behind it for an embedded tab to run in,
+                        // so it goes to the machine's own browser where the
+                        // host can send it there.
+                        onExternalLinkOpen={props.onExternalLinkOpen ?? openExternalLink}
+                        workspace={active.session.workspace}
+                        {...(activeAvailability?.refusal === undefined
+                            ? {}
+                            : { unavailable: activeAvailability.refusal })}
+                    />
+                </CreationTabbedPane>
             );
 
         // A task is made on the addressed machine, as a bot is.
         if (props.taskCreateOpen && active?.session?.workspace)
             return (
-                <HappyAgentCreateTaskSurface
-                    happyAgentOnline={activeHappyAgentOnline}
-                    providerUsage={active.session.providerUsage}
-                    workspace={active.session.workspace}
-                    {...(activeAvailability?.refusal === undefined
-                        ? {}
-                        : { unavailable: activeAvailability.refusal })}
-                />
+                <CreationTabbedPane label="New task">
+                    <HappyAgentCreateTaskSurface
+                        happyAgentOnline={activeHappyAgentOnline}
+                        providerUsage={active.session.providerUsage}
+                        workspace={active.session.workspace}
+                        {...(activeAvailability?.refusal === undefined
+                            ? {}
+                            : { unavailable: activeAvailability.refusal })}
+                    />
+                </CreationTabbedPane>
             );
 
         // The artifacts belong to the addressed machine, like its inbox. A
@@ -10218,6 +10222,26 @@ function happyAgentNamingDialog(
 }
 
 /**
+ * The band every other screen heads its content with — the workspace's own tab
+ * strip — holding the one conversation being made. It is the same
+ * `TabbedPane`, so the band's surface, hairline, height, and window drag are
+ * the workspace's own rather than a header made to look like them.
+ */
+function CreationTabbedPane(props: { children: ReactNode; label: string }) {
+    return (
+        <TabbedPane
+            activeId="create"
+            onSelect={() => {}}
+            size="medium"
+            tabSizing="content"
+            tabs={[{ id: "create", label: props.label, closable: false }]}
+        >
+            {props.children}
+        </TabbedPane>
+    );
+}
+
+/**
  * Where a bot is made: the conversation it is about to become, with nothing in
  * it yet. The body holds what is decided beforehand — the face, the name, and
  * Create — and the composer underneath is already the bot's own, standing
@@ -10251,7 +10275,6 @@ function HappyAgentCreateBotSurface(props: {
     const menus = botCreate.menus;
     return (
         <ConversationView
-            title="New bot"
             agentAuthor={agentAuthor}
             dock={
                 <HappyAgentComposerDock
@@ -10377,7 +10400,6 @@ function HappyAgentCreateTaskSurface(props: {
     const menus = taskCreate.menus;
     return (
         <ConversationView
-            title="New task"
             agentAuthor={agentAuthor}
             dock={
                 <HappyAgentComposerDock

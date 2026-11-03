@@ -113,7 +113,6 @@ export function botCreationSpecimen(
 ) {
     return (
         <ConversationView
-            title="New bot"
             dock={
                 <ConversationDock
                     composer={composerWith(text, attachments)}
