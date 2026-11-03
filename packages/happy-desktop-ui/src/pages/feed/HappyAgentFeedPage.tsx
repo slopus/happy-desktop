@@ -10,11 +10,18 @@ import {
     HAPPY_AGENT_FEED_CLUSTER_ROW_HEIGHT,
     HappyAgentFeedClusterRow,
 } from "./HappyAgentFeedClusterRow";
-import { HAPPY_AGENT_FEED_ROW_HEIGHT, HappyAgentFeedRow } from "./HappyAgentFeedRow";
-import type {
-    HappyAgentFeedCluster,
-    HappyAgentFeedEntry,
-    HappyAgentFeedListState,
+import {
+    HAPPY_AGENT_FEED_HEADING_HEIGHT,
+    HAPPY_AGENT_FEED_ROW_HEIGHT,
+    HappyAgentFeedHeading,
+    HappyAgentFeedRow,
+} from "./HappyAgentFeedRow";
+import {
+    feedSlotsByDate,
+    type HappyAgentFeedCluster,
+    type HappyAgentFeedEntry,
+    type HappyAgentFeedListState,
+    type HappyAgentFeedSlot,
 } from "./feedPresentation";
 
 /** Which of the page's two lists is on screen. */
@@ -67,8 +74,9 @@ const VIEWS = [
 /**
  * HappyAgentFeedPage — what happened on the installation, for one reader:
  * new tasks, bots, documents, todo lists, and artifacts, and changes to them,
- * newest change first. Changes the reader has not looked at fold into one
- * entry per subject, which rises as it takes in more.
+ * newest change first, in inset grouped cards under the day they happened —
+ * the card lists Happy's phones draw. Changes the reader has not looked at
+ * fold into one entry per subject, which rises as it takes in more.
  *
  * Beside it, the places the feed gathers from, which the reader can mute,
  * follow again, or peek into without following.
@@ -138,41 +146,108 @@ function FeedNotice(props: { title: string; error: string | undefined }) {
     );
 }
 
+/** A row's height or a heading's, for every slot of the feed's card lists. */
+function slotHeight(rowHeight: number) {
+    return (slot: HappyAgentFeedSlot<unknown>): number =>
+        slot.kind === "heading" ? HAPPY_AGENT_FEED_HEADING_HEIGHT : rowHeight;
+}
+const entrySlotHeight = slotHeight(HAPPY_AGENT_FEED_ROW_HEIGHT);
+const clusterSlotHeight = slotHeight(HAPPY_AGENT_FEED_CLUSTER_ROW_HEIGHT);
+
+/** Entries as their date's cards, newest first. */
+function FeedEntryCards(props: {
+    label: string;
+    list: HappyAgentFeedListState<HappyAgentFeedEntry>;
+    now: number;
+    zone?: LocalTimeZone;
+    empty: { readonly loading: string; readonly title: string; readonly description: string };
+    loadingTitle: string;
+    onOpen: (entryId: string) => void;
+    onLoadMore: () => void;
+}) {
+    const list = props.list;
+    return (
+        <FeedVirtualList
+            aria-label={props.label}
+            empty={
+                <EmptyState
+                    description={list.loading ? props.empty.loading : props.empty.description}
+                    icon={list.loading ? "clock" : "feed"}
+                    size="panel"
+                    title={list.loading ? props.loadingTitle : props.empty.title}
+                />
+            }
+            hasMore={list.hasMore}
+            loadingMore={list.loadingMore}
+            onLoadMore={props.onLoadMore}
+            renderSlot={(slot) =>
+                slot.kind === "heading" ? (
+                    <HappyAgentFeedHeading label={slot.label} />
+                ) : (
+                    <HappyAgentFeedRow
+                        entry={slot.row}
+                        first={slot.first}
+                        last={slot.last}
+                        now={props.now}
+                        onOpen={props.onOpen}
+                        {...(props.zone ? { zone: props.zone } : {})}
+                    />
+                )
+            }
+            slotHeight={entrySlotHeight}
+            slots={feedSlotsByDate(list.items, props.now, props.zone)}
+        />
+    );
+}
+
 function FeedActivity(props: HappyAgentFeedPageProps) {
     const feed = props.feed;
     return (
         <>
             <FeedNotice error={feed.error} title="The feed may be out of date" />
-            <FeedVirtualList
-                aria-label="Feed"
-                empty={
-                    <EmptyState
-                        description={
-                            feed.loading
-                                ? "Reading what happened on this Happy Agent."
-                                : "New tasks, bots, documents, todo lists, and artifacts appear here, with every change to them."
-                        }
-                        icon={feed.loading ? "clock" : "feed"}
-                        size="panel"
-                        title={feed.loading ? "Loading the feed…" : "Nothing has happened yet"}
-                    />
-                }
-                hasMore={feed.hasMore}
-                items={feed.items}
-                loadingMore={feed.loadingMore}
+            <FeedEntryCards
+                empty={{
+                    loading: "Reading what happened on this Happy Agent.",
+                    title: "Nothing has happened yet",
+                    description:
+                        "New tasks, bots, documents, todo lists, and artifacts appear here, with every change to them.",
+                }}
+                label="Feed"
+                list={feed}
+                loadingTitle="Loading the feed…"
+                now={props.now}
                 onLoadMore={props.onLoadMore}
-                renderRow={(entry) => (
-                    <HappyAgentFeedRow
-                        entry={entry}
-                        now={props.now}
-                        onOpen={props.onEntryOpen}
-                        {...(props.zone ? { zone: props.zone } : {})}
-                    />
-                )}
-                rowHeight={HAPPY_AGENT_FEED_ROW_HEIGHT}
+                onOpen={props.onEntryOpen}
+                {...(props.zone ? { zone: props.zone } : {})}
             />
         </>
     );
+}
+
+/** The clusters as two cards: everything and the team, then each place on its own. */
+function clusterSlots(
+    clusters: readonly HappyAgentFeedCluster[],
+): HappyAgentFeedSlot<HappyAgentFeedCluster>[] {
+    const broad = clusters.filter(
+        (cluster) => cluster.kind === "everything" || cluster.kind === "team",
+    );
+    const places = clusters.filter(
+        (cluster) => cluster.kind !== "everything" && cluster.kind !== "team",
+    );
+    const card = (id: string, label: string, rows: readonly HappyAgentFeedCluster[]) =>
+        rows.length === 0
+            ? []
+            : [
+                  { kind: "heading" as const, id: `heading:${id}`, label },
+                  ...rows.map((row, index) => ({
+                      kind: "row" as const,
+                      id: row.id,
+                      row,
+                      first: index === 0,
+                      last: index === rows.length - 1,
+                  })),
+              ];
+    return [...card("everywhere", "Everywhere", broad), ...card("places", "Places", places)];
 }
 
 function FeedClusters(props: HappyAgentFeedPageProps) {
@@ -195,20 +270,26 @@ function FeedClusters(props: HappyAgentFeedPageProps) {
                     />
                 }
                 hasMore={clusters.hasMore}
-                items={clusters.items}
                 loadingMore={clusters.loadingMore}
-                renderRow={(cluster) => (
-                    <HappyAgentFeedClusterRow
-                        cluster={
-                            props.unavailable === undefined
-                                ? cluster
-                                : { ...cluster, pending: true }
-                        }
-                        onFollowChange={props.onClusterFollowChange}
-                        onPeek={props.onClusterPeek}
-                    />
-                )}
-                rowHeight={HAPPY_AGENT_FEED_CLUSTER_ROW_HEIGHT}
+                renderSlot={(slot) =>
+                    slot.kind === "heading" ? (
+                        <HappyAgentFeedHeading label={slot.label} />
+                    ) : (
+                        <HappyAgentFeedClusterRow
+                            cluster={
+                                props.unavailable === undefined
+                                    ? slot.row
+                                    : { ...slot.row, pending: true }
+                            }
+                            first={slot.first}
+                            last={slot.last}
+                            onFollowChange={props.onClusterFollowChange}
+                            onPeek={props.onClusterPeek}
+                        />
+                    )
+                }
+                slotHeight={clusterSlotHeight}
+                slots={clusterSlots(clusters.items)}
             />
         </>
     );
@@ -232,33 +313,19 @@ function FeedPeek(
                 <span className="happy-agent-feed__peek-label">{props.peek.label}</span>
             </div>
             <FeedNotice error={list.error} title="This may be out of date" />
-            <FeedVirtualList
-                aria-label={props.peek.label}
-                empty={
-                    <EmptyState
-                        description={
-                            list.loading
-                                ? "Reading what happened here."
-                                : "Nothing has happened here in the last 30 days."
-                        }
-                        icon={list.loading ? "clock" : "feed"}
-                        size="panel"
-                        title={list.loading ? "Loading…" : "Quiet here"}
-                    />
-                }
-                hasMore={list.hasMore}
-                items={list.items}
-                loadingMore={list.loadingMore}
+            <FeedEntryCards
+                empty={{
+                    loading: "Reading what happened here.",
+                    title: "Quiet here",
+                    description: "Nothing has happened here in the last 30 days.",
+                }}
+                label={props.peek.label}
+                list={list}
+                loadingTitle="Loading…"
+                now={props.now}
                 onLoadMore={props.onPeekLoadMore}
-                renderRow={(entry) => (
-                    <HappyAgentFeedRow
-                        entry={entry}
-                        now={props.now}
-                        onOpen={props.onPeekEntryOpen}
-                        {...(props.zone ? { zone: props.zone } : {})}
-                    />
-                )}
-                rowHeight={HAPPY_AGENT_FEED_ROW_HEIGHT}
+                onOpen={props.onPeekEntryOpen}
+                {...(props.zone ? { zone: props.zone } : {})}
             />
         </>
     );

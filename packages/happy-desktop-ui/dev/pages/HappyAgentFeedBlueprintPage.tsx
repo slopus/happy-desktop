@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Button } from "../../src/Button";
 import type {
+    HappyAgentFeedActor,
     HappyAgentFeedCluster,
     HappyAgentFeedEntry,
     HappyAgentFeedListState,
@@ -19,10 +20,30 @@ const NOW = 1_760_100_000_000;
 const ZONE = { locale: "en-US", timeZone: "UTC" } as const;
 const MINUTE = 60_000;
 
-const steve = { key: "user-steve", name: "Steve" };
-const ana = { key: "user-ana", name: "Ana" };
-const releaseBot = { key: "agent-release", name: "Release notes bot" };
-const research = { key: "agent-research", name: "Market research" };
+const steve: HappyAgentFeedActor = {
+    key: "user-steve",
+    name: "Steve",
+    face: {
+        type: "human",
+        initials: "S",
+        imageUrl: new URL("../assets/profile-photo.webp", import.meta.url).href,
+    },
+};
+const ana: HappyAgentFeedActor = {
+    key: "user-ana",
+    name: "Ana",
+    face: { type: "human", initials: "A", placeholderSeed: "user-ana" },
+};
+const releaseBot: HappyAgentFeedActor = {
+    key: "agent-release",
+    name: "Release notes bot",
+    face: { type: "agent", initials: "RN", placeholderSeed: "bot-release" },
+};
+const research: HappyAgentFeedActor = {
+    key: "agent-research",
+    name: "Market research",
+    face: { type: "agent", initials: "MR", placeholderSeed: "bot-research" },
+};
 
 const lead: readonly HappyAgentFeedEntry[] = [
     {
@@ -45,6 +66,7 @@ const lead: readonly HappyAgentFeedEntry[] = [
         actorCount: 1,
         created: false,
         updates: 5,
+        detail: "Oat milk, two cartons",
         lastAt: NOW - 14 * MINUTE,
         unread: true,
     },
@@ -52,6 +74,7 @@ const lead: readonly HappyAgentFeedEntry[] = [
         id: "e-task",
         subject: "task",
         title: "Migrate the billing tables to the new schema",
+        face: steve.face,
         actors: [steve],
         actorCount: 1,
         created: true,
@@ -63,6 +86,7 @@ const lead: readonly HappyAgentFeedEntry[] = [
         id: "e-bot",
         subject: "bot",
         title: "Release coordinator",
+        face: { type: "agent", initials: "RC", placeholderSeed: "bot-release-coordinator" },
         actors: [ana],
         actorCount: 1,
         created: true,
@@ -112,6 +136,11 @@ const history: readonly HappyAgentFeedEntry[] = Array.from({ length: 400 }, (_, 
     subject: (["task", "artifact", "document", "bot"] as const)[index % 4]!,
     ...(index % 4 === 1 ? { artifactType: "image" as const } : {}),
     title: `Earlier work ${String(index + 1)}`,
+    ...(index % 4 === 3
+        ? { face: { type: "agent", initials: "", placeholderSeed: `bot-history-${String(index)}` } }
+        : index % 4 === 0
+          ? { face: steve.face }
+          : {}),
     actors: [index % 3 === 0 ? steve : research],
     actorCount: 1,
     created: index % 2 === 0,
@@ -132,8 +161,20 @@ const ready = <Item,>(items: readonly Item[]): HappyAgentFeedListState<Item> => 
 const clusters: readonly HappyAgentFeedCluster[] = [
     { id: "*", kind: "everything", label: "Everything", state: "subscribed" },
     { id: "team", kind: "team", label: "Team", state: "subscribed" },
-    { id: "task:billing", kind: "task", label: "Migrate the billing tables", state: "subscribed" },
-    { id: "bot:release", kind: "bot", label: "Release coordinator", state: "muted" },
+    {
+        id: "task:billing",
+        kind: "task",
+        label: "Migrate the billing tables",
+        face: steve.face,
+        state: "subscribed",
+    },
+    {
+        id: "bot:release",
+        kind: "bot",
+        label: "Release coordinator",
+        face: { type: "agent", initials: "RC", placeholderSeed: "bot-release-coordinator" },
+        state: "muted",
+    },
     {
         id: "surface:shopping",
         kind: "surface",
@@ -221,7 +262,7 @@ export function HappyAgentFeedBlueprintPage() {
             title="HappyAgentFeed"
         >
             <FullScreenSpecimen
-                detail="Three unread entries over a long, virtualized history. Each row: the subject's glyph, its title, what kind of thing it is, who changed it and how much, and when. Unread rows are set heavier and carry a dot in a lane every row reserves."
+                detail="Three unread entries over a long, virtualized history, in one card per date. Each row: the subject's avatar, its title and when, and the faces of who changed it beside what they did. Unread rows are set heavier and carry a dot in a lane every row reserves."
                 label="Activity"
                 number="01"
                 screen="01-activity-1100x760"

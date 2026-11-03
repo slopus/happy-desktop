@@ -5,14 +5,11 @@ import type {
     FeedSubject,
     HappyAgentClient,
 } from "@slopus/happy-agent-client";
-import {
-    happyAgentArtifactPeopleCreate,
-    type HappyAgentArtifactPeople,
-    type HappyAgentArtifactPeopleStore,
-} from "../artifacts/artifactPeopleStore.js";
 import type { HappyAgentSync } from "../happyAgentConnection/happyAgentSync.js";
 import { happyAgentSyncRead } from "../happyAgentConnection/happyAgentSyncRead.js";
 import { happyAgentUserError } from "../happyAgent/happyAgentSupport.js";
+import { happyAgentSurfacePeopleReaderCreate } from "../surfaces/surfacePeople.js";
+import type { HappyAgentSurfacePerson } from "../surfaces/surfaceTypes.js";
 import type { UserError } from "../types.js";
 
 export type {
@@ -109,6 +106,11 @@ export interface HappyAgentFeedClustersStore {
     peekClose(): void;
 }
 
+export interface HappyAgentFeedPeopleStore {
+    get(): ReadonlyMap<string, HappyAgentSurfacePerson>;
+    subscribe(listener: () => void): () => void;
+}
+
 /**
  * One Happy Agent's feed for its reader. Each store is materialized on first
  * access and opens nothing until something subscribes to it.
@@ -120,8 +122,8 @@ export interface HappyAgentFeed {
     page(): HappyAgentFeedPageStore;
     /** The clusters, read while subscribed. */
     clusters(): HappyAgentFeedClustersStore;
-    /** The names of the people entries credit. */
-    people(): HappyAgentArtifactPeopleStore;
+    /** The names and photos of the people entries credit, by user id, as they are read. */
+    people(): HappyAgentFeedPeopleStore;
     /**
      * The reader opened a subject somewhere else in the window: an artifact,
      * a Surface. Its open entry closes. Nothing is asked of a Happy Agent that
@@ -142,6 +144,7 @@ export interface HappyAgentFeedDeps {
         | "muteFeedCluster"
         | "peekFeedCluster"
         | "getUsers"
+        | "endpoint"
     >;
     readonly sync: HappyAgentSync;
 }
@@ -162,17 +165,27 @@ const byCursor = (left: { cursor: string }, right: { cursor: string }): number =
 export function happyAgentFeedCreate(deps: HappyAgentFeedDeps): HappyAgentFeed {
     const { client, sync } = deps;
     let disposed = false;
-    let people: HappyAgentArtifactPeople | undefined;
-    const peopleOf = (): HappyAgentArtifactPeople =>
-        (people ??= happyAgentArtifactPeopleCreate(client));
+    // The people entries credit, each read once while the feed lives.
+    const peopleController = new AbortController();
+    const peopleListeners = new Set<() => void>();
+    let people: ReadonlyMap<string, HappyAgentSurfacePerson> = new Map();
+    const peopleReader = happyAgentSurfacePeopleReaderCreate({
+        client,
+        signal: peopleController.signal,
+        read: (read) => {
+            people = new Map([...people, ...read]);
+            for (const listener of peopleListeners) listener();
+        },
+    });
+    const peopleStore: HappyAgentFeedPeopleStore = {
+        get: () => people,
+        subscribe(listener) {
+            peopleListeners.add(listener);
+            return () => peopleListeners.delete(listener);
+        },
+    };
     const actorsSeen = (entries: readonly Pick<FeedEntry, "actors">[]): void =>
-        peopleOf().request(
-            entries.flatMap((entry) =>
-                entry.actors.flatMap((actor) =>
-                    actor.userId === null ? [] : [{ kind: "user" as const, userId: actor.userId }],
-                ),
-            ),
-        );
+        peopleReader.request(entries.flatMap((entry) => entry.actors.map((actor) => actor.userId)));
     const availability = (): HappyAgentFeedAvailability => {
         const health = sync.health();
         if (health === undefined) return "unknown";
@@ -649,7 +662,7 @@ export function happyAgentFeedCreate(deps: HappyAgentFeedDeps): HappyAgentFeed {
         unread: () => unreadOf().store,
         page: () => (pageStore ??= pageCreate()).store,
         clusters: () => (clustersStore ??= clustersCreate()).store,
-        people: () => peopleOf().store,
+        people: () => peopleStore,
         subjectSeen(subject) {
             if (disposed || availability() !== "available") return;
             client.markFeedSeen({ subjects: [subject], mutationId: mutationIdCreate() }).then(
@@ -668,7 +681,8 @@ export function happyAgentFeedCreate(deps: HappyAgentFeedDeps): HappyAgentFeed {
             unreadStore?.[Symbol.dispose]();
             pageStore?.[Symbol.dispose]();
             clustersStore?.[Symbol.dispose]();
-            people?.[Symbol.dispose]();
+            peopleController.abort();
+            peopleListeners.clear();
         },
     };
 }

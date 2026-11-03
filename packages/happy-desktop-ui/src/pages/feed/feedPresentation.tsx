@@ -1,5 +1,14 @@
 import type { HappyAgentArtifactType } from "happy-desktop-state";
+import type { ReactNode } from "react";
+import { Avatar, type AvatarProps } from "../../Avatar";
 import { Icon } from "../../Icon";
+import {
+    localClockTime,
+    localDaysFrom,
+    localShortDate,
+    localWeekdayShort,
+    type LocalTimeZone,
+} from "../../localTime";
 import { ArtifactTypeGlyph } from "../artifacts/artifactPresentation";
 
 /**
@@ -16,11 +25,22 @@ export type HappyAgentFeedSubjectKind =
     | "surface"
     | "unknown";
 
+/**
+ * What an avatar on the feed is drawn from: a photo or picture, the live
+ * placeholder an id picks, or a glyph. People are round; agents and things
+ * are rounded squares.
+ */
+export type HappyAgentFeedFace = Pick<
+    AvatarProps,
+    "icon" | "imageUrl" | "initials" | "placeholderSeed" | "type"
+>;
+
 /** Someone who made a change an entry folds in: a person, or an agent working. */
 export interface HappyAgentFeedActor {
     /** Stable within the entry: the user or agent id. */
     readonly key: string;
     readonly name: string;
+    readonly face: HappyAgentFeedFace;
 }
 
 /**
@@ -34,6 +54,11 @@ export interface HappyAgentFeedEntry {
     /** An artifact's type, so it wears the glyph the artifact list gives it. */
     readonly artifactType?: HappyAgentArtifactType;
     readonly title: string;
+    /**
+     * The subject's own avatar: a bot's face, a task's, a Surface's picture.
+     * Without one the row wears the subject's glyph.
+     */
+    readonly face?: HappyAgentFeedFace;
     /** The first few distinct people and agents, in the order they acted. */
     readonly actors: readonly HappyAgentFeedActor[];
     /** How many distinct people and agents acted, listed or not. */
@@ -68,6 +93,8 @@ export interface HappyAgentFeedCluster {
     readonly id: string;
     readonly kind: HappyAgentFeedClusterKind;
     readonly label: string;
+    /** The place's own avatar, as for an entry; without one it wears its kind's glyph. */
+    readonly face?: HappyAgentFeedFace;
     readonly state: HappyAgentFeedClusterState;
     /** A change of state the reader asked for that has not been confirmed yet. */
     readonly pending?: boolean;
@@ -109,6 +136,57 @@ export function FeedSubjectGlyph(props: {
         case "unknown":
             return <Icon name="feed" size={props.size} />;
     }
+}
+
+/** A subject's avatar, or its glyph on a tile of the same size and shape. */
+export function FeedSubjectAvatar(props: {
+    face: HappyAgentFeedFace | undefined;
+    size: "md" | "sm";
+    children: ReactNode;
+}) {
+    if (props.face !== undefined) return <Avatar {...props.face} size={props.size} />;
+    return (
+        <span
+            aria-hidden="true"
+            className="happy-agent-feed-tile"
+            data-happy-desktop-ui="happy-agent-feed-tile"
+            data-size={props.size}
+        >
+            {props.children}
+        </span>
+    );
+}
+
+/**
+ * Who acted, as their faces side by side, the first three and then how many
+ * more; their names are the faces' label.
+ */
+export function FeedActorFaces(props: { actors: readonly HappyAgentFeedActor[]; count: number }) {
+    const shown = props.actors.slice(0, 3);
+    const rest = Math.max(props.count, props.actors.length) - shown.length;
+    if (shown.length === 0) return null;
+    const names = feedActorsText(props.actors, props.count);
+    return (
+        <span
+            aria-label={names}
+            className="happy-agent-feed-faces"
+            data-happy-desktop-ui="happy-agent-feed-faces"
+            role="img"
+            title={names}
+        >
+            {shown.map((actor) => (
+                <Avatar
+                    {...actor.face}
+                    className="happy-agent-feed-faces__face"
+                    key={actor.key}
+                    size="xs"
+                />
+            ))}
+            {rest > 0 ? (
+                <span className="happy-agent-feed-faces__more">+{String(rest)}</span>
+            ) : null}
+        </span>
+    );
 }
 
 export function FeedClusterGlyph(props: { kind: HappyAgentFeedClusterKind; size: 16 | 18 }) {
@@ -193,4 +271,140 @@ export function feedActivityText(
     if (entry.created && changes) return `Created · ${changes}`;
     if (entry.created) return "Created";
     return changes || "Changed";
+}
+
+/**
+ * When something happened, as the feed groups it: today, yesterday, the seven
+ * and thirty days before, then by month — the buckets Happy's phones group
+ * their card lists by.
+ */
+export type HappyAgentFeedDateBucket =
+    | { readonly kind: "today" }
+    | { readonly kind: "yesterday" }
+    | { readonly kind: "previous7Days" }
+    | { readonly kind: "previous30Days" }
+    | { readonly kind: "month"; readonly year: number; readonly month: number };
+
+const monthFormats = new Map<string, Intl.DateTimeFormat>();
+function monthFormat(zone: LocalTimeZone, withYear: boolean): Intl.DateTimeFormat {
+    const key = JSON.stringify([zone.locale ?? null, zone.timeZone ?? null, withYear]);
+    let value = monthFormats.get(key);
+    if (value === undefined) {
+        value = new Intl.DateTimeFormat(zone.locale, {
+            month: "long",
+            ...(withYear ? { year: "numeric" } : {}),
+            ...(zone.timeZone === undefined ? {} : { timeZone: zone.timeZone }),
+        });
+        monthFormats.set(key, value);
+    }
+    return value;
+}
+
+function yearMonthOf(at: number, zone: LocalTimeZone): { year: number; month: number } {
+    const parts = new Intl.DateTimeFormat("en-US", {
+        year: "numeric",
+        month: "numeric",
+        ...(zone.timeZone === undefined ? {} : { timeZone: zone.timeZone }),
+    }).formatToParts(at);
+    const part = (type: string) => Number(parts.find((each) => each.type === type)?.value ?? 0);
+    return { year: part("year"), month: part("month") };
+}
+
+/** The bucket `at` falls in, seen from `now`. A moment after now is today. */
+export function feedDateBucket(
+    at: number,
+    now: number,
+    zone: LocalTimeZone = {},
+): HappyAgentFeedDateBucket {
+    const days = localDaysFrom(now, at, zone);
+    if (days >= 0) return { kind: "today" };
+    if (days === -1) return { kind: "yesterday" };
+    if (days >= -7) return { kind: "previous7Days" };
+    if (days >= -30) return { kind: "previous30Days" };
+    return { kind: "month", ...yearMonthOf(at, zone) };
+}
+
+/** A bucket's heading: the month alone this year, with its year before. */
+export function feedDateBucketLabel(
+    bucket: HappyAgentFeedDateBucket,
+    now: number,
+    zone: LocalTimeZone = {},
+): string {
+    switch (bucket.kind) {
+        case "today":
+            return "Today";
+        case "yesterday":
+            return "Yesterday";
+        case "previous7Days":
+            return "Previous 7 days";
+        case "previous30Days":
+            return "Previous 30 days";
+        case "month": {
+            const thisYear = yearMonthOf(now, zone).year;
+            // The middle of the month, so no time zone moves it into another.
+            const at = Date.UTC(bucket.year, bucket.month - 1, 15);
+            return monthFormat({ ...zone, timeZone: "UTC" }, bucket.year !== thisYear).format(at);
+        }
+    }
+}
+
+const bucketKey = (bucket: HappyAgentFeedDateBucket): string =>
+    bucket.kind === "month" ? `month:${bucket.year}-${bucket.month}` : bucket.kind;
+
+/**
+ * When an entry last changed, as short as its bucket allows: the time today
+ * and yesterday, the weekday within the week, the day and month this year,
+ * the whole date before.
+ */
+export function feedTimeText(at: number, now: number, zone: LocalTimeZone = {}): string {
+    const bucket = feedDateBucket(at, now, zone);
+    if (bucket.kind === "today" || bucket.kind === "yesterday") return localClockTime(at, zone);
+    if (bucket.kind === "previous7Days") return localWeekdayShort(at, zone);
+    return localShortDate(at, now, zone);
+}
+
+/** One slot of a feed's card list: a date's heading, or one row of its card. */
+export type HappyAgentFeedSlot<Row> =
+    | { readonly kind: "heading"; readonly id: string; readonly label: string }
+    | {
+          readonly kind: "row";
+          readonly id: string;
+          readonly row: Row;
+          /** The first row rounds its card's top, the last its bottom and draws no rule under it. */
+          readonly first: boolean;
+          readonly last: boolean;
+      };
+
+/**
+ * Rows in their order, under a heading for each bucket, each bucket one card.
+ * A row out of order — an update arriving late — is kept with its bucket.
+ */
+export function feedSlotsByDate<Row extends { readonly id: string; readonly lastAt: number }>(
+    rows: readonly Row[],
+    now: number,
+    zone: LocalTimeZone = {},
+): HappyAgentFeedSlot<Row>[] {
+    const groups: { key: string; bucket: HappyAgentFeedDateBucket; rows: Row[] }[] = [];
+    for (const row of rows) {
+        const bucket = feedDateBucket(row.lastAt, now, zone);
+        const key = bucketKey(bucket);
+        const group =
+            groups.at(-1)?.key === key ? groups.at(-1) : groups.find((each) => each.key === key);
+        if (group) group.rows.push(row);
+        else groups.push({ key, bucket, rows: [row] });
+    }
+    return groups.flatMap((group) => [
+        {
+            kind: "heading" as const,
+            id: `heading:${group.key}`,
+            label: feedDateBucketLabel(group.bucket, now, zone),
+        },
+        ...group.rows.map((row, index) => ({
+            kind: "row" as const,
+            id: row.id,
+            row,
+            first: index === 0,
+            last: index === group.rows.length - 1,
+        })),
+    ]);
 }

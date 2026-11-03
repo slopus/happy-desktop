@@ -60,6 +60,19 @@ export function localListTime(at: number, now: number, zone: LocalTimeZone = {})
     return format(zone, { day: "numeric", month: "numeric" }).format(at);
 }
 
+/** The day and short month, with the year when it is not this one: "Oct 9", "Oct 9, 2024". */
+export function localShortDate(at: number, now: number, zone: LocalTimeZone = {}): string {
+    const sameYear =
+        format(zone, { year: "numeric" }).format(at) ===
+        format(zone, { year: "numeric" }).format(now);
+    return format(
+        zone,
+        sameYear
+            ? { month: "short", day: "numeric" }
+            : { month: "short", day: "numeric", year: "numeric" },
+    ).format(at);
+}
+
 /**
  * How long ago something happened, as a chat list tells it beside a name:
  * "now" within the minute, minutes and then hours for the past day, the short

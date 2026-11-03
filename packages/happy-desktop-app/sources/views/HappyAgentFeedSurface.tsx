@@ -6,13 +6,14 @@ import {
     type FeedEntry,
     type FeedItem,
     type FeedSubject,
-    type HappyAgentArtifactNames,
     type HappyAgentArtifactPlaces,
     type HappyAgentArtifactType,
     type HappyAgentClockStore,
     type HappyAgentFeed,
     type HappyAgentFeedClustersSnapshot,
     type HappyAgentFeedClustersStore,
+    type HappyAgentSurface,
+    type HappyAgentSurfacePerson,
 } from "happy-desktop-state";
 import {
     EmptyState,
@@ -21,8 +22,10 @@ import {
     type HappyAgentFeedCluster,
     type HappyAgentFeedClusterKind,
     type HappyAgentFeedEntry,
+    type HappyAgentFeedFace,
     type HappyAgentFeedSubjectKind,
 } from "happy-desktop-ui";
+import { botFace, ownerInitials, taskFace } from "../agentFaces";
 
 /** The clusters of a page showing its other list: nothing is read for them. */
 const CLUSTERS_UNREAD: HappyAgentFeedClustersSnapshot = {
@@ -69,30 +72,101 @@ function feedArtifactType(type: string | undefined): HappyAgentArtifactType {
     return HAPPY_AGENT_ARTIFACT_TYPES.find((known) => known === type) ?? "unknown";
 }
 
+/** People are named from the feed's own people store, so the shared lookup is given none. */
+const PEOPLE_NAMES_NONE: ReadonlyMap<string, string> = new Map();
+
+/** Everything a face or a name on the feed is looked up in. */
+interface FeedFaces {
+    readonly places: HappyAgentArtifactPlaces;
+    readonly surfaces: readonly HappyAgentSurface[];
+    readonly people: ReadonlyMap<string, HappyAgentSurfacePerson>;
+    /** The standalone person, who is credited with no user id. */
+    readonly profile: HappyAgentSurfacePerson | undefined;
+    /** A conversation's title. */
+    readonly agentName: (agentId: string) => string | undefined;
+}
+
+function personFace(person: HappyAgentSurfacePerson | undefined, name: string, seed?: string) {
+    return {
+        type: "human",
+        initials: ownerInitials(name),
+        ...(seed === undefined ? {} : { placeholderSeed: seed }),
+        ...(person?.photo ? { imageUrl: person.photo.url } : {}),
+    } satisfies HappyAgentFeedFace;
+}
+
 /**
- * Who made a change, by the name the window already knows them by. An agent
- * is named by its conversation; a person by the user directory. The one
- * person of a standalone installation is credited with no id at all, and is
- * the reader.
+ * Who made a change, by the name and face the window already knows them by.
+ * An agent is its bot's or task's face and its conversation's title; a person
+ * is their photo and name from the user directory. The one person of a
+ * standalone installation is credited with no id at all, and is the reader.
  */
-function feedActorOf(
-    actor: FeedItem["actors"][number],
-    names: HappyAgentArtifactNames,
-): HappyAgentFeedActor {
-    if (actor.agentId !== null)
-        return { key: `agent:${actor.agentId}`, name: names.agent?.(actor.agentId) ?? "An agent" };
-    if (actor.userId !== null)
-        return { key: `user:${actor.userId}`, name: names.user?.(actor.userId) ?? "A person" };
-    return { key: "you", name: "You" };
+function feedActorOf(actor: FeedItem["actors"][number], faces: FeedFaces): HappyAgentFeedActor {
+    if (actor.agentId !== null) {
+        const agentId = actor.agentId;
+        const bot = faces.places.bots.find((each) => each.conversation.id === agentId);
+        const task = faces.places.tasks.find((each) => each.conversation.id === agentId);
+        const name = bot?.name ?? task?.name ?? faces.agentName(agentId) ?? "An agent";
+        return {
+            key: `agent:${agentId}`,
+            name,
+            face: {
+                type: "agent",
+                initials: ownerInitials(name),
+                ...(bot ? botFace(bot) : task ? taskFace(task) : { placeholderSeed: agentId }),
+            },
+        };
+    }
+    if (actor.userId !== null) {
+        const person = faces.people.get(actor.userId);
+        const name = person?.name ?? "A person";
+        return {
+            key: `user:${actor.userId}`,
+            name,
+            face: personFace(person, name, actor.userId),
+        };
+    }
+    return { key: "you", name: "You", face: personFace(faces.profile, faces.profile?.name ?? "") };
+}
+
+/**
+ * A subject's own avatar: a bot's face, a task's, a Surface's picture. An
+ * artifact, and a Surface without a picture, wear their glyph instead.
+ */
+function feedSubjectFace(
+    entry: Pick<FeedEntry, "subject" | "snapshot">,
+    faces: FeedFaces,
+): HappyAgentFeedFace | undefined {
+    const id = entry.subject.id;
+    const initials = ownerInitials(entry.snapshot.title);
+    switch (entry.subject.type) {
+        case "bot": {
+            const bot = faces.places.bots.find((each) => each.id === id);
+            return { type: "agent", initials, ...(bot ? botFace(bot) : { placeholderSeed: id }) };
+        }
+        case "task": {
+            const task = faces.places.tasks.find((each) => each.id === id);
+            return task
+                ? { type: "agent", ...taskFace(task) }
+                : { type: "agent", initials, placeholderSeed: id };
+        }
+        case "surface": {
+            const image = faces.surfaces.find((each) => each.id === id)?.image;
+            return image ? { type: "agent", initials, imageUrl: image.url } : undefined;
+        }
+        default:
+            return undefined;
+    }
 }
 
 function feedEntryOf(
     id: string,
     entry: FeedEntry,
     unread: boolean,
-    names: HappyAgentArtifactNames,
+    faces: FeedFaces,
 ): HappyAgentFeedEntry {
     const subject = feedSubjectKind(entry);
+    const face = feedSubjectFace(entry, faces);
     return {
         id,
         subject,
@@ -100,7 +174,8 @@ function feedEntryOf(
             ? { artifactType: feedArtifactType(entry.snapshot.artifactType) }
             : {}),
         title: entry.snapshot.title,
-        actors: entry.actors.map((actor) => feedActorOf(actor, names)),
+        ...(face ? { face } : {}),
+        actors: entry.actors.map((actor) => feedActorOf(actor, faces)),
         actorCount: entry.actorCount,
         created: entry.created,
         updates: entry.updates,
@@ -133,15 +208,50 @@ function feedClusterOf(
     cluster: FeedCluster,
     everything: FeedCluster["state"],
     pending: boolean,
+    faces: FeedFaces,
 ): HappyAgentFeedCluster {
     const state = cluster.state ?? everything ?? "subscribed";
+    const face = feedClusterFace(cluster, faces);
     return {
         id: cluster.cluster,
         kind: feedClusterKind(cluster.kind),
         label: cluster.name,
+        ...(face ? { face } : {}),
         state,
         ...(pending ? { pending } : {}),
     };
+}
+
+/**
+ * A cluster's avatar: its bot's, task's, or project's face, or its Surface's
+ * picture. The daemon names a place's cluster `<kind>:<id>`.
+ */
+function feedClusterFace(cluster: FeedCluster, faces: FeedFaces): HappyAgentFeedFace | undefined {
+    const prefix = `${cluster.kind}:`;
+    if (!cluster.cluster.startsWith(prefix)) return undefined;
+    const id = cluster.cluster.slice(prefix.length);
+    const initials = ownerInitials(cluster.name);
+    switch (cluster.kind) {
+        case "bot":
+        case "task":
+        case "surface":
+            return feedSubjectFace(
+                { subject: { type: cluster.kind, id }, snapshot: { title: cluster.name } },
+                faces,
+            );
+        case "project": {
+            const project = faces.places.projects.find((each) => each.id === id);
+            if (!project) return undefined;
+            return {
+                type: "agent",
+                initials,
+                placeholderSeed: project.id,
+                ...(project.avatar ? { imageUrl: project.avatar.url } : {}),
+            };
+        }
+        default:
+            return undefined;
+    }
 }
 
 /** A peek entry has no id of its own: its subject names it. */
@@ -156,6 +266,10 @@ export function HappyAgentFeedSurface(props: {
     feed: HappyAgentFeed;
     clock: HappyAgentClockStore;
     places: HappyAgentArtifactPlaces;
+    /** The Happy Agent's Surfaces, whose pictures their entries wear. */
+    surfaces: readonly HappyAgentSurface[];
+    /** The standalone reader, who is credited with no user id. */
+    profile?: HappyAgentSurfacePerson;
     /** Why this Happy Agent cannot take the reader's changes right now. */
     unavailable?: string;
     /** Goes to what an entry is about; an unknown kind of subject goes nowhere. */
@@ -184,7 +298,14 @@ export function HappyAgentFeedSurface(props: {
                 title="No feed here"
             />
         );
-    const names = happyAgentArtifactNames(props.places, people);
+    const faces: FeedFaces = {
+        places: props.places,
+        surfaces: props.surfaces,
+        people,
+        profile: props.profile,
+        agentName:
+            happyAgentArtifactNames(props.places, PEOPLE_NAMES_NONE).agent ?? (() => undefined),
+    };
     const everything = clusters.clusters.find((cluster) => cluster.cluster === "*")?.state ?? null;
     const peek = clusters.peek;
     const clustersStoreLive = props.feed.clusters();
@@ -192,7 +313,12 @@ export function HappyAgentFeedSurface(props: {
         <HappyAgentFeedPage
             clusters={{
                 items: clusters.clusters.map((cluster) =>
-                    feedClusterOf(cluster, everything, clusters.pending.has(cluster.cluster)),
+                    feedClusterOf(
+                        cluster,
+                        everything,
+                        clusters.pending.has(cluster.cluster),
+                        faces,
+                    ),
                 ),
                 loading: clusters.loading,
                 hasMore: false,
@@ -205,7 +331,7 @@ export function HappyAgentFeedSurface(props: {
                         item.id,
                         item,
                         item.seenAt === null && !page.seenPending.has(item.id),
-                        names,
+                        faces,
                     ),
                 ),
                 loading: page.loading,
@@ -237,7 +363,7 @@ export function HappyAgentFeedSurface(props: {
                           label: peek.name,
                           list: {
                               items: peek.entries.map((entry) =>
-                                  feedEntryOf(peekEntryId(entry), entry, false, names),
+                                  feedEntryOf(peekEntryId(entry), entry, false, faces),
                               ),
                               loading: peek.loading,
                               hasMore: false,

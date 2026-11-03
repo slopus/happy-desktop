@@ -2,13 +2,14 @@
  * P-028 Happy Agent feed: what happened on the installation, for one reader,
  * and the places it gathers from.
  *
- * The page reads down one column under a surface header, as wide as the
- * header, so each row's time and unread mark sit under the header's own
- * trailing action. Every row is one fixed height, so the long
- * list is drawn only where it is on screen and laid out without measuring.
+ * The page is the inset grouped card list Happy's phones draw: on the grouped
+ * background, one card per date under a small heading, each row an avatar,
+ * the subject's name, and who did what to it. The cards stand on the header's
+ * 16px inset. Every row is one fixed height, so the long list is drawn only
+ * where it is on screen and laid out without measuring.
  *
- * Layout is flexbox throughout, except the drawn rows, which are positioned
- * (see below); colors, radii, and type come only from theme roles.
+ * Layout is flexbox throughout, except the drawn slots and a row's rule (see
+ * below); colors, radii, and type come only from theme roles.
  */
 
 .happy-agent-feed {
@@ -18,14 +19,14 @@
     min-width: 0;
     min-height: 0;
     width: 100%;
-    background: var(--surface);
+    background: var(--groupped-background);
     color: var(--text);
     font-family: var(--happy-font-ui);
     font-synthesis: none;
 }
 
 /* The view switch sits on the header's 16px inset, so the title, the switch,
-   and each row's highlight share one leading edge. */
+   and the cards share one leading edge. */
 .happy-agent-feed__bar {
     display: flex;
     flex: 0 0 auto;
@@ -33,7 +34,8 @@
     gap: 12px;
     box-sizing: border-box;
     width: 100%;
-    padding: 0 16px 12px;
+    /* The first date heading's slot carries the gap down to its card. */
+    padding: 0 16px;
 }
 
 .happy-agent-feed__notice {
@@ -88,7 +90,7 @@
     gap: 12px;
     box-sizing: border-box;
     width: 100%;
-    padding: 4px 16px 48px;
+    padding: 8px 16px 48px;
 }
 
 .happy-agent-feed__list {
@@ -97,10 +99,10 @@
     width: 100%;
 }
 
-/* Positioned rather than flowed: a virtualized row sits at its own computed
-   offset in a column of thousands, and only the drawn rows exist, so no flex
+/* Positioned rather than flowed: a virtualized slot sits at its own computed
+   offset in a column of thousands, and only the drawn slots exist, so no flex
    flow can place them. */
-.happy-agent-feed__item {
+.happy-agent-feed__slot {
     position: absolute;
     top: 0;
     left: 0;
@@ -112,12 +114,12 @@
 /* At the top of the list a row that moves glides to its new slot, and the
    rows it passes glide aside. Scrolled into the list, the reader is reading:
    the list holds what is on screen still instead, so nothing glides. */
-.happy-agent-feed__list[data-glide] > .happy-agent-feed__item {
+.happy-agent-feed__list[data-glide] > .happy-agent-feed__slot {
     transition: transform 240ms cubic-bezier(0.2, 0, 0, 1);
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .happy-agent-feed__list[data-glide] > .happy-agent-feed__item {
+    .happy-agent-feed__list[data-glide] > .happy-agent-feed__slot {
         transition: none;
     }
 }
@@ -127,9 +129,38 @@
     justify-content: center;
 }
 
-/* ---- Entry row --------------------------------------------------------- */
+/* ---- Date heading ------------------------------------------------------ */
 
-.happy-agent-feed-row {
+/* The heading sits at the foot of its slot, 7px over its card; the rest of the
+   slot is the gap down from the card before. */
+.happy-agent-feed-heading {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: flex-end;
+    box-sizing: border-box;
+    min-width: 0;
+    height: 100%;
+    padding: 0 16px 7px;
+}
+
+.happy-agent-feed-heading__label {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--groupped-section-title);
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 18px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* ---- Card row ---------------------------------------------------------- */
+
+/* One row of a card. The card is its rows: the first rounds its top, the last
+   its bottom, and every row but the last draws a rule under its text. */
+.happy-agent-feed-card-row {
+    --happy-agent-feed-row-background: var(--surface);
+    position: relative;
     display: flex;
     flex: 1 1 auto;
     align-items: center;
@@ -138,38 +169,53 @@
     min-width: 0;
     height: 100%;
     margin: 0;
-    padding: 8px;
+    padding: 0 16px;
     border: 0;
-    border-radius: var(--happy-radius-md);
-    background: var(--surface);
+    border-radius: 0;
+    background: var(--happy-agent-feed-row-background);
     color: var(--text);
     font: inherit;
     text-align: left;
-    cursor: pointer;
 }
 
-.happy-agent-feed-row:hover {
-    background: var(--surface-pressed);
+.happy-agent-feed-card-row[data-first] {
+    border-top-left-radius: var(--happy-radius-md);
+    border-top-right-radius: var(--happy-radius-md);
 }
 
-.happy-agent-feed-row:focus-visible {
+.happy-agent-feed-card-row[data-last] {
+    border-bottom-left-radius: var(--happy-radius-md);
+    border-bottom-right-radius: var(--happy-radius-md);
+}
+
+.happy-agent-feed-card-row:hover {
+    --happy-agent-feed-row-background: var(--surface-pressed);
+}
+
+.happy-agent-feed-card-row:focus-visible {
     outline: 2px solid var(--text-link);
     outline-offset: -2px;
 }
 
-.happy-agent-feed-row__glyph {
-    display: flex;
-    flex: 0 0 auto;
-    align-items: center;
-    justify-content: center;
-    width: 36px;
-    height: 36px;
-    border-radius: var(--happy-radius-md);
-    background: var(--surface-high);
-    color: var(--text-secondary);
+/* The rule is drawn over the row's foot rather than taking a line of the
+   column, so every row stays the one fixed height the list lays out by; it
+   starts where the text does, past the avatar, and runs to the card's edge. */
+.happy-agent-feed-card-row:not([data-last])::after {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: 64px;
+    height: 1px;
+    background: var(--divider);
+    content: "";
+    pointer-events: none;
 }
 
-.happy-agent-feed-row__text {
+.happy-agent-feed-cluster.happy-agent-feed-card-row:not([data-last])::after {
+    left: 56px;
+}
+
+.happy-agent-feed-card-row__text {
     display: flex;
     flex: 1 1 auto;
     flex-direction: column;
@@ -177,18 +223,48 @@
     min-width: 0;
 }
 
-.happy-agent-feed-row__headline {
+.happy-agent-feed-card-row__headline {
     display: flex;
     align-items: baseline;
     gap: 8px;
     min-width: 0;
 }
 
+/* A subject with no avatar of its own wears its glyph on a tile the shape of
+   an agent's avatar, so every row's leading mark is one size. */
+.happy-agent-feed-tile {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    background: var(--surface-ripple);
+    color: var(--text-secondary);
+}
+
+.happy-agent-feed-tile[data-size="md"] {
+    width: 36px;
+    height: 36px;
+    border-radius: 9px;
+}
+
+.happy-agent-feed-tile[data-size="sm"] {
+    width: 28px;
+    height: 28px;
+    border-radius: 7px;
+}
+
+/* ---- Entry row --------------------------------------------------------- */
+
+.happy-agent-feed-row {
+    cursor: pointer;
+}
+
 .happy-agent-feed-row__title {
     flex: 0 1 auto;
     min-width: 0;
     overflow: hidden;
-    color: var(--text-secondary);
+    color: var(--text);
     font-size: 14px;
     font-weight: 500;
     line-height: 20px;
@@ -198,7 +274,6 @@
 }
 
 .happy-agent-feed-row[data-unread] .happy-agent-feed-row__title {
-    color: var(--text);
     font-weight: 600;
 }
 
@@ -211,23 +286,14 @@
     font-variant-numeric: tabular-nums lining-nums;
 }
 
-.happy-agent-feed-row__meta {
-    min-width: 0;
-    overflow: hidden;
-    color: var(--text-secondary);
-    font-size: 12px;
-    line-height: 16px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
 /* Every row reserves the dot's lane, so reading an entry only fades it. */
 .happy-agent-feed-row__unread {
     flex: none;
+    align-self: center;
     width: 6px;
     height: 6px;
     border-radius: var(--happy-radius-pill);
-    background: var(--status-error);
+    background: var(--text-link);
     opacity: 0;
     transition: opacity 160ms ease-out;
 }
@@ -236,44 +302,61 @@
     opacity: 1;
 }
 
+.happy-agent-feed-row__meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    height: 20px;
+}
+
+.happy-agent-feed-row__summary {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 18px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* ---- Faces ------------------------------------------------------------- */
+
+/* Who acted, overlapping a little; each face is ringed in the row's own
+   background so the one behind reads as behind, hovered or not. */
+.happy-agent-feed-faces {
+    display: flex;
+    flex: none;
+    align-items: center;
+}
+
+.happy-agent-feed-faces__face {
+    box-shadow: 0 0 0 1.5px var(--happy-agent-feed-row-background);
+}
+
+.happy-agent-feed-faces__face + .happy-agent-feed-faces__face {
+    margin-left: -5px;
+}
+
+.happy-agent-feed-faces__more {
+    margin-left: 4px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 16px;
+    font-variant-numeric: tabular-nums;
+}
+
 /* ---- Cluster row ------------------------------------------------------- */
 
-.happy-agent-feed-cluster {
-    display: flex;
-    flex: 1 1 auto;
-    align-items: center;
-    gap: 12px;
-    box-sizing: border-box;
-    min-width: 0;
-    height: 100%;
-    padding: 0 8px;
-    border-radius: var(--happy-radius-md);
-    background: var(--surface);
-}
-
-.happy-agent-feed-cluster:hover {
-    background: var(--surface-pressed);
-}
-
-.happy-agent-feed-cluster__glyph {
-    display: flex;
-    flex: 0 0 auto;
-    align-items: center;
-    justify-content: center;
-    width: 28px;
-    height: 28px;
-    border-radius: var(--happy-radius-sm);
-    background: var(--surface-high);
-    color: var(--text-secondary);
-}
-
 .happy-agent-feed-cluster__label {
-    flex: 1 1 auto;
     min-width: 0;
     overflow: hidden;
     color: var(--text);
-    font-size: 13px;
-    line-height: 18px;
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 20px;
     text-overflow: ellipsis;
     white-space: nowrap;
 }

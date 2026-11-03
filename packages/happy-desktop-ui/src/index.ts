@@ -862,6 +862,7 @@ export {
     type HappyAgentFeedClusterKind,
     type HappyAgentFeedClusterState,
     type HappyAgentFeedEntry,
+    type HappyAgentFeedFace,
     type HappyAgentFeedListState,
     type HappyAgentFeedSubjectKind,
 } from "./pages/feed/feedPresentation";
