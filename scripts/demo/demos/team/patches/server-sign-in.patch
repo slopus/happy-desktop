@@ -1,0 +1,56 @@
+diff --git a/packages/happy-desktop-electron/sources/main/browserDevServer.ts b/packages/happy-desktop-electron/sources/main/browserDevServer.ts
+--- a/packages/happy-desktop-electron/sources/main/browserDevServer.ts
++++ b/packages/happy-desktop-electron/sources/main/browserDevServer.ts
+@@ -3,7 +3,12 @@ import type { Plugin } from "vite";
+ import { desktopConfigPath, DesktopConfigStore } from "./desktopConfig";
+ import type { LocalHappyAgentConnection } from "./localHappyAgent";
+ import { localHappyAgentConnectorCreate } from "./localHappyAgent";
+-import { happyAgentDaemonConnectionUnavailable } from "./happyAgentDaemonClient";
++import {
++    HappyAgentDaemonClient,
++    happyAgentDaemonConnectionUnavailable,
++    type HappyAgentRemoteAuthorization,
++} from "./happyAgentDaemonClient";
++import type { ServerRemoteCredential } from "../shared/serverRemoteAuthorization";
+ import { happyAgentProxyHandle } from "./happyAgentProxyHandle";
+ import { happyAgentTerminalBridgeCreate } from "./happyAgentTerminalBridge";
+ import { deviceBridgeHostCreate } from "./deviceBridgeHost";
+@@ -33,8 +38,37 @@ export interface BrowserLocalHappyAgentOptions {
+  * this connection's token, so restarting the daemon under a running `vite` heals
+  * on the renderer's next health probe instead of serving 503 until a restart.
+  */
++/**
++ * Demo recorder only: team-server sign-ins the gym minted, by connection ID.
++ * The packaged shell signs in through the browser and holds these tokens in
++ * main; browser-local mode has no sign-in page, so the recorder hands its own
++ * world's tokens to this bridge in `HAPPY_DEMO_SERVER_CREDENTIALS`. They are
++ * attached exactly as main attaches its own, and never reach the page.
++ */
++function demoServerSessions(): HappyAgentRemoteAuthorization | undefined {
++    const configured = process.env.HAPPY_DEMO_SERVER_CREDENTIALS;
++    if (!configured) return undefined;
++    const credentials = new Map(
++        Object.entries(JSON.parse(configured) as Record<string, ServerRemoteCredential>),
++    );
++    return {
++        credential: (connectionId) => credentials.get(connectionId),
++        refresh: async (connectionId) => credentials.get(connectionId),
++        signInRequire: () => undefined,
++        serverMoved: () => undefined,
++    };
++}
++
+ export function browserLocalHappyAgentPlugin(options: BrowserLocalHappyAgentOptions = {}): Plugin {
+-    const connect = options.connect ?? (() => localHappyAgentConnectorCreate().connect());
++    const demoRemote = demoServerSessions();
++    const connect =
++        options.connect ??
++        (() =>
++            localHappyAgentConnectorCreate(
++                demoRemote
++                    ? { clientCreate: (input) => new HappyAgentDaemonClient(input, demoRemote) }
++                    : {},
++            ).connect());
+     let desktopConfigTask: Promise<DesktopConfigStore> | undefined;
+     const desktopConfig = (): Promise<DesktopConfigStore> => {
+         desktopConfigTask ??= DesktopConfigStore.create(

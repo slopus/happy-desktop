@@ -35,11 +35,13 @@ export function teamTokenSign(secret, subject) {
 }
 
 /** The machine configuration a team gym runs on: JWT sign-in and the seeded members. */
-export function teamConfigToml({ port, members }) {
+export function teamConfigToml({ port, members, node }) {
     const lines = [
         "[settings]",
         "happy_integration = false",
         "",
+        // The installation's own display name, as the rail and phones show it.
+        ...(node ? ["[node]", `name = ${JSON.stringify(node)}`, ""] : []),
         "[feature.team]",
         "enabled = true",
         'authentication = "jwt"',

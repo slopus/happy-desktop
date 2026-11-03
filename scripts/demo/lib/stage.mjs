@@ -131,6 +131,9 @@ async function viteStart(options) {
         "HAPPY_HOME_DIR",
         "HAPPY_AGENT_SERVER_SOCKET_PATH",
         "HAPPY_AGENT_SERVER_TOKEN_PATH",
+        // Team-server sign-ins a demo's own world minted, for a demo patch
+        // that attaches them in place of the shell's browser sign-in.
+        "HAPPY_DEMO_SERVER_CREDENTIALS",
     ];
     const daemonEnvironment = Object.fromEntries(
         allowedDaemonKeys.flatMap((key) =>
@@ -149,40 +152,48 @@ async function viteStart(options) {
     // bootstrap itself recursively when HOME is deliberately isolated.
     const rendererRequire = createRequire(join(renderer, "package.json"));
     const viteEntry = join(dirname(rendererRequire.resolve("vite/package.json")), "bin/vite.js");
-    const child = spawn(process.execPath, [viteEntry, "--host", "127.0.0.1"], {
-        // Vite resolves absolute entry URLs such as
-        // `/sources/renderer/renderer.tsx` against process.cwd(). Keep
-        // that root explicit when the package lives in a disposable
-        // mirror instead of relying on pnpm's project-selection flags.
-        cwd: renderer,
-        // Give this recorder-owned process tree its own group. Stopping a
-        // take can then stop Vite and pnpm together instead of leaving the
-        // grandchild holding the output pipes and loopback port open.
-        detached: process.platform !== "win32",
-        env: {
-            // The Vite process serves a disposable recording mirror. Keep
-            // ambient cloud, Git, SSH, and package credentials out of it;
-            // only the exact daemon variables supplied by the gym/protocol
-            // cross this boundary.
-            PATH: process.env.PATH ?? "/usr/bin:/bin:/usr/sbin:/sbin",
-            HOME: processHome,
-            TMPDIR: processTemp,
-            LANG: process.env.LANG,
-            LC_ALL: process.env.LC_ALL,
-            TERM: process.env.TERM,
-            CI: process.env.CI,
-            FORCE_COLOR: "0",
-            // Names one exact daemon — the gym's — so the dev bridge can
-            // never fall back to the user's own Happy Agent.
-            ...daemonEnvironment,
-            // The mirror links to the workspace's existing pnpm install.
-            // Its literal Vite patch admits exactly that dependency root
-            // while keeping the rest of Vite's filesystem guard enabled.
-            HAPPY_DEMO_DEPENDENCY_ROOT: join(workspace, "node_modules"),
-            VITE_HAPPY_BROWSER_LOCAL: "1",
+    // A production-mode server runs React's production build, without its
+    // development checks, for takes that must hold their frame rate.
+    const production = process.env.HAPPY_DEMO_VITE_PRODUCTION === "1";
+    const child = spawn(
+        process.execPath,
+        [viteEntry, "--host", "127.0.0.1", ...(production ? ["--mode", "production"] : [])],
+        {
+            // Vite resolves absolute entry URLs such as
+            // `/sources/renderer/renderer.tsx` against process.cwd(). Keep
+            // that root explicit when the package lives in a disposable
+            // mirror instead of relying on pnpm's project-selection flags.
+            cwd: renderer,
+            // Give this recorder-owned process tree its own group. Stopping a
+            // take can then stop Vite and pnpm together instead of leaving the
+            // grandchild holding the output pipes and loopback port open.
+            detached: process.platform !== "win32",
+            env: {
+                // The Vite process serves a disposable recording mirror. Keep
+                // ambient cloud, Git, SSH, and package credentials out of it;
+                // only the exact daemon variables supplied by the gym/protocol
+                // cross this boundary.
+                PATH: process.env.PATH ?? "/usr/bin:/bin:/usr/sbin:/sbin",
+                HOME: processHome,
+                TMPDIR: processTemp,
+                LANG: process.env.LANG,
+                LC_ALL: process.env.LC_ALL,
+                TERM: process.env.TERM,
+                CI: process.env.CI,
+                FORCE_COLOR: "0",
+                // Names one exact daemon — the gym's — so the dev bridge can
+                // never fall back to the user's own Happy Agent.
+                ...daemonEnvironment,
+                // The mirror links to the workspace's existing pnpm install.
+                // Its literal Vite patch admits exactly that dependency root
+                // while keeping the rest of Vite's filesystem guard enabled.
+                HAPPY_DEMO_DEPENDENCY_ROOT: join(workspace, "node_modules"),
+                VITE_HAPPY_BROWSER_LOCAL: "1",
+                ...(production ? { NODE_ENV: "production" } : {}),
+            },
+            stdio: ["ignore", "pipe", "pipe"],
         },
-        stdio: ["ignore", "pipe", "pipe"],
-    });
+    );
     const log = [];
     let url;
     try {
@@ -342,6 +353,13 @@ export async function stageOpen(options) {
             });
             url = offline.url;
         }
+        // A production-mode dev server still emits Fast Refresh registrations
+        // but no runtime for them; they become no-ops.
+        if (process.env.HAPPY_DEMO_VITE_PRODUCTION === "1")
+            await context.addInitScript(() => {
+                window.$RefreshReg$ = () => {};
+                window.$RefreshSig$ = () => (type) => type;
+            });
         await context.addInitScript(overlayInstall, {
             ...overlayOptions(options.appearance),
             daemon: demoDaemonBaseline,

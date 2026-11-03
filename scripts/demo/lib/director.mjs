@@ -135,6 +135,34 @@ export class Director {
         };
     }
 
+    /**
+     * Where the screencast stalled in the middle of motion: one picture held
+     * for at least `minimumMs` while new pictures arrived about every frame on
+     * both sides of it. A page that is merely still sends nothing either, but
+     * not between two steady runs. Each freeze is `{ from, to }` in take
+     * frames, `to` exclusive: the repeats of the held picture, so cutting it
+     * joins that picture to the first one after.
+     */
+    captureFreezes(minimumMs = 80) {
+        const frames = this.#sink.frames;
+        const fresh = frames.flatMap((frame, index) =>
+            index > 0 && frame.sourceFrame === frames[index - 1].sourceFrame ? [] : [index],
+        );
+        // Steady: at least five of the six intervals on that side are one or two frames.
+        const steady = (from) => {
+            const run = fresh.slice(Math.max(0, from), Math.max(0, from + 7));
+            const intervals = run.slice(1).map((index, offset) => index - run[offset]);
+            return intervals.length === 6 && intervals.filter((frames) => frames <= 2).length >= 5;
+        };
+        const freezes = [];
+        for (let next = 1; next < fresh.length; next += 1) {
+            const held = fresh[next] - fresh[next - 1];
+            if (held * this.#step < minimumMs || !steady(next - 7) || !steady(next)) continue;
+            freezes.push({ from: fresh[next - 1] + 1, to: fresh[next] });
+        }
+        return freezes;
+    }
+
     /** Milliseconds one frame is worth. */
     get #step() {
         return 1000 / this.#fps;
