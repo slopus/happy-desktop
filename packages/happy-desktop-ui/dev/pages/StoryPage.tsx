@@ -121,6 +121,7 @@ function ViewerSpecimen(props: {
             }}
         >
             <StoryViewer
+                id={String(index)}
                 caption="Onboarding now opens on the welcome screen, with setup one click away."
                 media={{ kind: "image", url: props.media ?? FRAME }}
                 onClose={() => setIndex(1)}

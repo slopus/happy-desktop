@@ -232,6 +232,7 @@ const reply = (id: string, text: string) => ({
 
 function viewer(log: string[], overrides: Partial<StoryViewerProps> = {}) {
     const props: StoryViewerProps = {
+        id: "s1",
         caption: "Shipped the onboarding",
         media: { kind: "image", url: PIXEL },
         onClose: () => log.push("close"),
@@ -284,6 +285,7 @@ it("takes focus only when it mounts", async () => {
         rerender = () => captionSet((previous) => `${previous}!`);
         return (
             <StoryViewer
+                id="s1"
                 caption={caption}
                 media={{ kind: "image", url: PIXEL }}
                 onClose={() => undefined}
@@ -357,7 +359,7 @@ it("dismisses a trackpad swipe down, but not a sideways one or one the replies t
 
 it("contains mismatched media over its stretched ambient sample and keeps thousands of stories bounded", async () => {
     const view = viewer([], {
-        media: { kind: "video", url: clip, poster: PIXEL, ambient: PIXEL },
+        media: { kind: "video", url: clip, ambient: PIXEL },
         segment: { index: 500, total: 1000 },
     });
     await view.ready();
@@ -367,8 +369,7 @@ it("contains mismatched media over its stretched ambient sample and keeps thousa
     const backdrop = view.$(".happy-story-viewer__viewport .happy-story-viewer__backdrop").element;
     expect(backdrop.getAttribute("src")).toBe(PIXEL);
     expect(getComputedStyle(backdrop).filter).toBe("none");
-    // Fetched ahead: its first frame shows at once, and nothing says it is loading.
-    expect((view.$(".happy-story-viewer__media").element as HTMLVideoElement).poster).toBe(PIXEL);
+    // Fetched ahead: nothing says it is loading.
     expect((view.$(".happy-story-viewer__status").element as HTMLElement).hidden).toBe(true);
     expect(view.$(".happy-story-viewer__segments").element.children).toHaveLength(30);
     expect(view.$(".happy-story-viewer__segments").element.getAttribute("aria-label")).toBe(
@@ -395,7 +396,7 @@ it("fills the window with a full-height centered frame, outside chevrons and bac
     expect(
         view.$('[aria-label="Next story"]').element.getBoundingClientRect().left,
     ).toBeGreaterThan(frame.right);
-    expect(getComputedStyle(root).backgroundColor).toBe("rgba(0, 0, 0, 0.92)");
+    expect(getComputedStyle(root, "::before").backgroundColor).toBe("rgba(0, 0, 0, 0.92)");
     root.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     expect(log).toEqual(["close"]);
     view.destroy();

@@ -621,7 +621,7 @@ it("addresses a repost's shared media through its original, fetching each file o
     const fetched: string[] = [];
     const preload = vi.fn(async (media: readonly { url: string }[]) => {
         fetched.push(...media.map(({ url }) => url));
-        return media.map(({ url }) => ({ poster: `frame of ${url}` }));
+        return media.map(({ url }) => ({ ambient: `frame of ${url}` }));
     });
     const original = { ...story("a", "task1", 1), mediaLayers: [layer("sticker")] };
     // The daemon lists the original's layers first under their own ids, then the reposter's.
@@ -637,12 +637,12 @@ it("addresses a repost's shared media through its original, fetching each file o
     );
     store.tileOpen("person:u2");
     expect(on(store.get()).open).toMatchObject({
-        media: { url: at("a/media"), poster: `frame of ${at("a/media")}` },
+        media: { url: at("a/media"), ambient: `frame of ${at("a/media")}` },
         mediaLayers: [
             {
                 id: "sticker",
                 url: at("a/layers/sticker"),
-                poster: `frame of ${at("a/layers/sticker")}`,
+                ambient: `frame of ${at("a/layers/sticker")}`,
             },
             { id: "x2", url: at("r2/layers/x2") },
         ],
@@ -713,7 +713,7 @@ it("keeps a ring grey until its new first unseen story can play, for at most the
 
 it("forgets the frames and fetches of a story once it leaves the feed", async () => {
     const preload = vi.fn(async (media: readonly { url: string }[]) =>
-        media.map(() => ({ poster: "frame" })),
+        media.map(() => ({ ambient: "frame" })),
     );
     const { store, sync } = open([story("a", "task1", 1), story("b", "task2", 2)], true, preload);
     await until(() => on(store.get()).row.length === 2);
@@ -732,5 +732,5 @@ it("forgets the frames and fetches of a story once it leaves the feed", async ()
     ]);
     expect(on(store.get()).row.map(({ key }) => key)).toEqual(["agent:task1"]);
     store.agentOpen("task1");
-    expect(on(store.get()).open?.media.poster).toBe("frame");
+    expect(on(store.get()).open?.media.ambient).toBe("frame");
 });

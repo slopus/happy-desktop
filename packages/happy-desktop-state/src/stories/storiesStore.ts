@@ -22,6 +22,9 @@ export type HappyAgentStoryTile = {
     readonly agentId: string | null;
     readonly userId: string | null;
     readonly state: "unseen" | "seen";
+    /** Its live stories, and how many of them were watched: one arc each around its ring. */
+    readonly total: number;
+    readonly seen: number;
 };
 
 export type HappyAgentStoriesSnapshot =
@@ -36,6 +39,8 @@ export type HappyAgentStoriesSnapshot =
           readonly people: ReadonlyMap<string, HappyAgentSurfacePerson>;
           readonly open: {
               readonly story: Story;
+              /** Its poster's tile key, the ring it opens from. */
+              readonly key: string;
               readonly media: HappyAgentStoryMedia;
               /** Above the base media in paint order, each at its own address. */
               readonly mediaLayers: readonly (StoryMediaLayer &
@@ -95,7 +100,7 @@ export function happyAgentStoriesStoreCreate(deps: {
     readonly settings: Pick<HappyAgentAutoJoinSettingsStore, "get" | "subscribe">;
     /**
      * Settles once these can play at once through the app's shared media cache: an image decoded,
-     * a video buffered to play through, with each video's first frame. Never rejects. A poster's
+     * a video buffered to play through, each kept warm to move into place. Never rejects. A poster's
      * ring waits for its first story.
      */
     readonly preload?: (
@@ -221,6 +226,8 @@ export function happyAgentStoriesStoreCreate(deps: {
                     agentId: story.agentId,
                     userId: story.userId,
                     state: held?.state ?? ring(keyOf(story)),
+                    total: (held?.total ?? 0) + 1,
+                    seen: (held?.seen ?? 0) + Number(story.seen),
                     latest: Math.max(held?.latest ?? 0, story.postedAt),
                 });
         }
@@ -241,6 +248,7 @@ export function happyAgentStoriesStoreCreate(deps: {
         const held = story ? walk(keyOf(story)) : [];
         const view = story && {
             story,
+            key: keyOf(story),
             ...mediaOf(story),
             segment: { index: held.indexOf(story), total: held.length },
             replies: replies?.id === story.id ? replies.all : story.replies,

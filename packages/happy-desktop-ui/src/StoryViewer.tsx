@@ -1,4 +1,5 @@
 import {
+    useCallback,
     useLayoutEffect,
     useRef,
     useState,
@@ -45,8 +46,8 @@ export const STORY_CANVAS = { width: 1080, height: 1920, top: 384, bottom: 576, 
 export type StoryMedia = {
     readonly kind: "image" | "video";
     readonly url: string;
-    /** A video's first frame, decoded ahead, shown until it plays. */
-    readonly poster?: string;
+    /** The media fetched ahead and kept decoded, moved into place so it paints with the click. */
+    readonly element?: HTMLImageElement | HTMLVideoElement;
     /** A tiny dimmed sample of the media, stretched behind it where it does not fill the frame. */
     readonly ambient?: string;
 };
@@ -77,6 +78,10 @@ export type StoryComposition = {
 };
 
 export type StoryViewerProps = {
+    /** Which story is open; another one starts in place, loading afresh with its replies folded. */
+    readonly id: string;
+    /** The `data-story-ring` it grows out of and shrinks back to; without one it opens and closes at once. */
+    readonly ring?: string;
     readonly poster: { readonly name: string; readonly face: StoryFace };
     /** When it was posted, already worded ("5m"). */
     readonly time: string;
@@ -138,6 +143,50 @@ const visibilitySubscribe = (notify: () => void) => {
     document.addEventListener("visibilitychange", notify);
     return () => document.removeEventListener("visibilitychange", notify);
 };
+
+const reduced = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+const MOTION = { duration: 240, easing: "cubic-bezier(0.2, 0, 0, 1)" };
+/** The ring a story belongs to while it is on screen, unless the reader asked for less motion. */
+const ringBox = (key: string | undefined) =>
+    [
+        ...(key && !reduced()
+            ? document.querySelectorAll(`[data-story-ring="${CSS.escape(key)}"]`)
+            : []),
+    ]
+        .map((ring) => ring.getBoundingClientRect())
+        .find(
+            ({ width, top, right, bottom, left }) =>
+                width && bottom > 0 && right > 0 && top < innerHeight && left < innerWidth,
+        );
+/** The frame drawn over the ring: centered on it, as wide as it. */
+const onRing = (frame: DOMRect, ring: DOMRect) =>
+    `translate(${ring.x + ring.width / 2 - frame.x - frame.width / 2}px, ${ring.y + ring.height / 2 - frame.y - frame.height / 2}px) scale(${ring.width / frame.width})`;
+let made:
+    | { readonly url: string; readonly element: HTMLImageElement | HTMLVideoElement }
+    | undefined;
+/** The media's warm element, else one made for it once while it stays open. */
+function mediaElement(media: StoryMedia) {
+    if (!media.element && made?.url !== media.url)
+        made = {
+            url: media.url,
+            element: document.createElement(media.kind === "image" ? "img" : "video"),
+        };
+    const element = media.element ?? made!.element;
+    // A warm video that let go of its stream to keep fewer open loads it again.
+    if (!element.getAttribute("src")) element.src = media.url;
+    return element;
+}
+/** Ready once its element holds a picture or frame, or an ambient fill stands in for it. */
+function statusOf(media: StoryMedia) {
+    const node = mediaElement(media);
+    const painted =
+        node instanceof HTMLImageElement
+            ? node.complete && node.naturalWidth > 0
+            : node.readyState >= 2;
+    return painted || media.ambient ? "ready" : "loading";
+}
+const durationOf = (media: StoryMedia) =>
+    media.element instanceof HTMLVideoElement ? media.element.duration || null : null;
 
 /** The first supported MP4 type, or undefined when recording is unavailable. */
 export function roundMimeType(isSupported: (type: string) => boolean | undefined) {
@@ -248,13 +297,24 @@ export function StoryViewer(props: StoryViewerProps) {
     const [round, setRound] = useState<Round>({ phase: "idle" });
     const [muted, setMuted] = useState(true);
     // Media fetched ahead opens ready: its first frame or picture is already decoded.
-    const [mediaStatus, setMediaStatus] = useState<"loading" | "ready" | "error">(
-        props.media.ambient ? "ready" : "loading",
+    const [mediaStatus, setMediaStatus] = useState<"loading" | "ready" | "error">(() =>
+        statusOf(props.media),
     );
     const [buffering, setBuffering] = useState(false);
     // The length of the video that paces this story, once its metadata is in.
-    const [duration, setDuration] = useState<number | null>(null);
+    const [duration, setDuration] = useState(() => durationOf(props.media));
     const [repliesOpen, setRepliesOpen] = useState(false);
+    // Another story opens in place: loading afresh, its replies folded, nothing typed or confirming.
+    const [shown, setShown] = useState(props.id);
+    if (shown !== props.id) {
+        setShown(props.id);
+        setMediaStatus(statusOf(props.media));
+        setBuffering(false);
+        setDuration(durationOf(props.media));
+        setRepliesOpen(false);
+        setText("");
+        if (mode === "delete") setMode("reply");
+    }
     const repliesDrag = useRef(0);
     const [zoom, setZoom] = useState({ scale: 1, x: 0, y: 0 });
     const zoomEnd = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -334,6 +394,49 @@ export function StoryViewer(props: StoryViewerProps) {
             clearTimeout(hold.current.timer);
         };
     });
+    const frameNode = useRef<HTMLDivElement>(null);
+    const stepped = useRef<1 | -1 | 0>(0);
+    // Once per poster, so its identity follows `props.ring`: the frame grows out of the ring on
+    // open, and slides in from the side it was stepped to on another poster's; every frame of it
+    // shows the story, and only transforms and opacity move.
+    const frameMount = useCallback(
+        (frame: HTMLDivElement | null) => {
+            if (!frame) return;
+            frameNode.current = frame;
+            const ring = stepped.current === 0 ? ringBox(props.ring) : undefined;
+            const from = ring
+                ? onRing(frame.getBoundingClientRect(), ring)
+                : `translateX(${stepped.current * 30}%) scale(0.9)`;
+            if (ring || (stepped.current && !reduced()))
+                frame.animate({ transform: [from, "none"] }, MOTION);
+            if (ring)
+                frame.parentElement!.animate(
+                    { opacity: [0, 1] },
+                    { ...MOTION, pseudoElement: "::before" },
+                );
+            return zoomMount(frame);
+        },
+        [props.ring, zoomMount],
+    );
+    const step = (delta: 1 | -1) => {
+        stepped.current = delta;
+        props.onStep(delta);
+    };
+    // Shrinks back into the ring when it is on screen, else fades, and only then lets the story go.
+    const close = () => {
+        const frame = frameNode.current,
+            root = frame?.parentElement;
+        if (!frame || !root || !props.ring || reduced()) return props.onClose();
+        const ring = ringBox(props.ring);
+        const motion = { ...MOTION, duration: 200, fill: "forwards" as const };
+        root.setAttribute("inert", "");
+        root.animate({ opacity: [1, 0] }, { ...motion, easing: "ease-in" });
+        const shrink = ring ? onRing(frame.getBoundingClientRect(), ring) : "scale(0.9)";
+        void frame.animate({ transform: ["none", shrink] }, motion).finished.then(
+            () => frame.isConnected && props.onClose(),
+            () => undefined,
+        );
+    };
     // Whatever the current round holds (camera, recorder, timer or blob URL) and how to let it go.
     const release = useRef<() => void>(() => undefined);
     // Stable, so it focuses the dialog once on mount and lets the round go on unmount.
@@ -499,6 +602,8 @@ export function StoryViewer(props: StoryViewerProps) {
                 className="happy-story-viewer happy-theme-dark"
                 data-happy-desktop-ui="story-viewer"
                 onKeyDown={(event) => {
+                    const arrow = { ArrowLeft: -1, ArrowRight: 1 }[event.key] as 1 | -1 | undefined;
+                    if (arrow && event.target === event.currentTarget && !composing) step(arrow);
                     if (event.key !== "Escape") return;
                     event.stopPropagation();
                     event.currentTarget.focus({ preventScroll: true });
@@ -506,11 +611,11 @@ export function StoryViewer(props: StoryViewerProps) {
                     else if (repliesOpen) setRepliesOpen(false);
                     else if (mode !== "reply" && !posting) {
                         reset("reply");
-                        if (props.onPost) props.onClose();
-                    } else if (!posting) props.onClose();
+                        if (props.onPost) close();
+                    } else if (!posting) close();
                 }}
                 onClick={(event) => {
-                    if (event.target === event.currentTarget) props.onClose();
+                    if (event.target === event.currentTarget) close();
                 }}
                 ref={mount}
                 role="dialog"
@@ -523,7 +628,7 @@ export function StoryViewer(props: StoryViewerProps) {
                     const dy = event.clientY - (swipe.current?.y ?? Infinity);
                     if (dy > 64 && dy > Math.abs(event.clientX - swipe.current!.x) * 1.25) {
                         swipe.current = null;
-                        props.onClose();
+                        close();
                     }
                 }}
                 onPointerUpCapture={() => (swipe.current = null)}
@@ -535,14 +640,14 @@ export function StoryViewer(props: StoryViewerProps) {
                     if (!swipeFree || event.ctrlKey || event.metaKey) gesture.sum = -Infinity;
                     else if (Math.abs(event.deltaY) > Math.abs(event.deltaX))
                         gesture.sum -= event.deltaY;
-                    if (gesture.sum >= DISMISS_WHEEL) props.onClose();
+                    if (gesture.sum >= DISMISS_WHEEL) close();
                 }}
             >
                 <button
                     aria-label="Previous story"
                     className="happy-story-viewer__nav"
                     disabled={composing}
-                    onClick={() => zoom.scale === 1 && props.onStep(-1)}
+                    onClick={() => zoom.scale === 1 && step(-1)}
                     type="button"
                 >
                     <Icon name="chevron-left" size={32} />
@@ -550,7 +655,7 @@ export function StoryViewer(props: StoryViewerProps) {
                 <div
                     className="happy-story-viewer__frame"
                     data-happy-desktop-ui="story-viewer-frame"
-                    ref={zoomMount}
+                    ref={frameMount}
                     data-composing={composing ? "" : undefined}
                     data-held={held ? "" : undefined}
                     data-replies={repliesOpen ? "" : undefined}
@@ -589,40 +694,37 @@ export function StoryViewer(props: StoryViewerProps) {
                                 transformOrigin: `${zoom.x * 100}% ${zoom.y * 100}%`,
                             }}
                         >
-                            {media.kind === "image" ? (
-                                <img
-                                    alt={props.caption ?? ""}
-                                    className="happy-story-viewer__media"
-                                    draggable={false}
-                                    src={media.url}
-                                    onLoad={() => setMediaStatus("ready")}
-                                    onError={() => setMediaStatus("error")}
-                                />
-                            ) : (
-                                <video
-                                    autoPlay
-                                    className="happy-story-viewer__media"
-                                    muted={muted}
-                                    onEnded={() => {
-                                        if (!paused) props.onStep(1);
-                                    }}
-                                    onError={() => setMediaStatus("error")}
-                                    onLoadedMetadata={(event) =>
-                                        setDuration(event.currentTarget.duration || null)
+                            {/* The warm element itself, moved in: a decoded picture or first frame
+                            paints with the click, and the video plays from its own buffer. */}
+                            <span
+                                className="happy-story-viewer__media-host"
+                                ref={(host) => {
+                                    if (!host) return;
+                                    const node = mediaElement(media);
+                                    node.className = "happy-story-viewer__media";
+                                    node.onerror = () => setMediaStatus("error");
+                                    if (node instanceof HTMLImageElement) {
+                                        [node.alt, node.draggable] = [props.caption ?? "", false];
+                                        node.onload = () => setMediaStatus("ready");
+                                    } else {
+                                        node.muted = muted;
+                                        node.onended = () => !paused && step(1);
+                                        node.onloadedmetadata = () =>
+                                            setDuration(node.duration || null);
+                                        node.onloadeddata = () => setMediaStatus("ready");
+                                        node.onwaiting = () => setBuffering(true);
+                                        node.onplaying = () => setBuffering(false);
                                     }
-                                    onWaiting={() => setBuffering(true)}
-                                    onPlaying={() => setBuffering(false)}
-                                    playsInline
-                                    // Streams by range from the first byte; the frame shows as soon as one decodes.
-                                    preload="auto"
-                                    ref={base}
-                                    onLoadedData={() => setMediaStatus("ready")}
-                                    {...(media.poster ? { poster: media.poster } : {})}
-                                    src={media.url}
-                                >
-                                    <track kind="captions" />
-                                </video>
-                            )}
+                                    base.current = node instanceof HTMLVideoElement ? node : null;
+                                    if (host.firstChild === node) return;
+                                    // A video starts over, rewound as it leaves so its first frame
+                                    // is ready again; seeking as it comes back would drop it.
+                                    for (const video of [host.firstChild, node])
+                                        if (video instanceof HTMLVideoElement && video.currentTime)
+                                            video.currentTime = 0;
+                                    host.replaceChildren(node);
+                                }}
+                            />
                             {layers.map((each) => (
                                 <div
                                     className="happy-story-viewer__sticker"
@@ -652,7 +754,7 @@ export function StoryViewer(props: StoryViewerProps) {
                                             loop={composing || driver !== each.id}
                                             muted={muted}
                                             onEnded={() => {
-                                                if (!paused && driver === each.id) props.onStep(1);
+                                                if (!paused && driver === each.id) step(1);
                                             }}
                                             onLoadedMetadata={(event) => {
                                                 if (driver === each.id)
@@ -841,7 +943,7 @@ export function StoryViewer(props: StoryViewerProps) {
                                                     }}
                                                     onAnimationEnd={() => {
                                                         // A video moves on when it ends, not when its bar fills.
-                                                        if (driver === null) props.onStep(1);
+                                                        if (driver === null) step(1);
                                                     }}
                                                 />
                                             ) : null}
@@ -891,11 +993,7 @@ export function StoryViewer(props: StoryViewerProps) {
                                         variant="ghost"
                                     />
                                 ) : null}
-                                <button
-                                    aria-label="Close story"
-                                    onClick={props.onClose}
-                                    type="button"
-                                >
+                                <button aria-label="Close story" onClick={close} type="button">
                                     <Ionicon name="close-outline" size={32} />
                                 </button>
                             </div>
@@ -1078,7 +1176,7 @@ export function StoryViewer(props: StoryViewerProps) {
                     aria-label="Next story"
                     className="happy-story-viewer__nav"
                     disabled={composing}
-                    onClick={() => zoom.scale === 1 && props.onStep(1)}
+                    onClick={() => zoom.scale === 1 && step(1)}
                     type="button"
                 >
                     <Icon name="chevron-right" size={32} />
@@ -1089,7 +1187,7 @@ export function StoryViewer(props: StoryViewerProps) {
                         aria-label="Close"
                         className="happy-story-viewer__close"
                         hidden={recording}
-                        onClick={props.onClose}
+                        onClick={close}
                         type="button"
                     >
                         <Icon name="close" size={18} />

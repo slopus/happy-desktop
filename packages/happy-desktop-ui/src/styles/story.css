@@ -36,6 +36,43 @@
 .happy-stories-row [data-seen] > .happy-avatar {
     outline-color: var(--text-secondary);
 }
+/* Two or more live stories split the ring Telegram's way, one arc each with a small gap:
+   the first `--story-seen` grey, the rest in the accent. One conic fill, cut by one mask. */
+:is(.happy-stories-row [data-arcs], .happy-sidebar__item-leading:has(> [data-arcs]))
+    > .happy-avatar {
+    outline-color: transparent;
+}
+.happy-stories-row [data-arcs] > .happy-avatar::after,
+.happy-sidebar__item-story[data-arcs] {
+    --arc: calc(1turn / var(--story-total));
+    content: "";
+    position: absolute;
+    inset: -4px;
+    padding: 2px;
+    border-radius: var(--happy-radius-pill);
+    background-image: conic-gradient(
+        var(--text-secondary) calc(var(--arc) * var(--story-seen)),
+        var(--radio-active) 0
+    );
+    /* Only the mask's alpha counts: the arcs with their gaps, cut to a band around the photo. */
+    mask:
+        repeating-conic-gradient(
+            from 6deg,
+            black 0 calc(var(--arc) - 12deg),
+            transparent 0 var(--arc)
+        ),
+        linear-gradient(black 0 0) content-box,
+        linear-gradient(black 0 0);
+    mask-composite: intersect, exclude;
+}
+.happy-stories-row [data-arcs] > .happy-avatar[data-type="agent"]::after {
+    border-radius: 13px;
+}
+.happy-sidebar__item-story[data-arcs] {
+    inset: auto;
+    padding: 1.5px;
+    border-radius: 9px;
+}
 .happy-stories-scroll {
     display: flex;
     overflow-x: auto;
@@ -100,13 +137,24 @@
     gap: 24px;
     box-sizing: border-box;
     padding: 12px;
-    background: var(--story-backdrop);
     color: var(--text);
     font: 14px / 19px var(--happy-font-ui);
     outline: none;
     isolation: isolate;
     overflow: hidden;
     touch-action: pan-x;
+}
+
+/* Its own layer, so opening fades it in while the frame grows out of the ring. */
+.happy-story-viewer::before {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    inset: 0;
+    background: var(--story-backdrop);
+}
+.happy-story-viewer__media-host {
+    display: contents;
 }
 
 /* The frame never moves: everything over it is laid on top. */
@@ -319,12 +367,16 @@
 }
 
 .happy-story-viewer__segments {
-    gap: 3px;
+    gap: 4px;
+    filter: drop-shadow(0 0 1px var(--story-ink-shadow));
 }
 
+/* Hairlines with round ends, the current one filling inside its own. */
 .happy-story-viewer__segments > span {
     flex: 1;
-    height: 2px;
+    height: 1.5px;
+    border-radius: 1px;
+    overflow: hidden;
     background: var(--text);
     opacity: 0.35;
 }

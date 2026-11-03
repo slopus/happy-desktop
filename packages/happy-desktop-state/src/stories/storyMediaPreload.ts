@@ -2,11 +2,18 @@ import type { HappyAgentStoryMedia } from "./storiesStore.js";
 
 /** What a fetch ahead leaves to show the instant a story opens. */
 export type HappyAgentStoryMediaFrames = {
-    /** A video's first frame, decoded, at most 720 pixels wide. */
-    readonly poster?: string;
+    /**
+     * The media itself, decoded and kept warm: a viewer moves it into place rather than loading
+     * it again, so its picture or first frame paints with the click.
+     */
+    readonly element?: HTMLImageElement | HTMLVideoElement;
     /** A dimmed 24-pixel sample of the media, stretched behind it as its ambient fill. */
     readonly ambient?: string;
 };
+
+/** Videos kept warm at once, newest last; an older one not on screen lets its stream go. */
+const warm: HTMLVideoElement[] = [];
+const WARM_VIDEOS = 8;
 
 /**
  * Fetches story media through the browser's own HTTP cache, the same path every `<img>` and
@@ -26,9 +33,8 @@ export function storyMediaPreload(
                     () => true,
                     () => false,
                 );
-                const { naturalWidth: wide, naturalHeight: tall } = image;
-                const ambient = decoded ? sample(image, wide, tall, 24, 0.45) : undefined;
-                return ambient ? { ambient } : {};
+                const ambient = decoded ? await sample(image, image.naturalWidth) : undefined;
+                return decoded ? { element: image, ...(ambient ? { ambient } : {}) } : {};
             }
             const video = document.createElement("video");
             [video.muted, video.preload, video.src] = [true, "auto", url];
@@ -37,36 +43,33 @@ export function storyMediaPreload(
                     video.addEventListener(type, () => resolve(true), { once: true });
                     video.addEventListener("error", () => resolve(false), { once: true });
                 });
-            const loaded = await event("loadeddata");
-            const poster = loaded
-                ? sample(video, video.videoWidth, video.videoHeight, 720, 1)
-                : undefined;
-            const ambient = poster && sample(video, video.videoWidth, video.videoHeight, 24, 0.45);
-            const frames: HappyAgentStoryMediaFrames = poster && ambient ? { poster, ambient } : {};
+            if (!(await event("loadeddata"))) return {};
+            const ambient = await sample(video, video.videoWidth);
             if (video.readyState < HTMLMediaElement.HAVE_ENOUGH_DATA) await event("canplaythrough");
-            video.removeAttribute("src");
-            video.load();
-            return frames;
+            warm.push(video);
+            for (const old of warm.splice(0, Math.max(0, warm.length - WARM_VIDEOS))) {
+                if (old.isConnected) continue;
+                old.removeAttribute("src");
+                old.load();
+            }
+            return { element: video, ...(ambient ? { ambient } : {}) };
         }),
     );
 }
 
 /**
- * The source drawn at most `width` pixels wide and dimmed to `brightness`, as a JPEG address;
- * none for media from another origin that did not allow reading it back.
+ * The source drawn 24 pixels wide and dimmed, as a JPEG address, once the page is idle so it never
+ * lands on an open or a step; none for media from another origin that did not allow reading it.
+ * Drawing the decoded source costs less than `createImageBitmap`, which copies a video's whole
+ * frame on the main thread.
  */
-function sample(
-    source: CanvasImageSource,
-    wide: number,
-    tall: number,
-    width: number,
-    brightness: number,
-) {
+async function sample(source: HTMLImageElement | HTMLVideoElement, wide: number) {
+    await new Promise((resolve) => (window.requestIdleCallback ?? setTimeout)(resolve));
+    const tall = source instanceof HTMLVideoElement ? source.videoHeight : source.naturalHeight;
     const canvas = document.createElement("canvas");
-    const scale = Math.min(1, width / Math.max(1, wide));
-    [canvas.width, canvas.height] = [Math.max(1, wide * scale), Math.max(1, tall * scale)];
+    [canvas.width, canvas.height] = [24, Math.max(1, Math.round((tall * 24) / Math.max(1, wide)))];
     const context = canvas.getContext("2d")!;
-    context.filter = `brightness(${brightness})`;
+    context.filter = "brightness(0.45)";
     context.drawImage(source, 0, 0, canvas.width, canvas.height);
     try {
         return canvas.toDataURL("image/jpeg", 0.85);

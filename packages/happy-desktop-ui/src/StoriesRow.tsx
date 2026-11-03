@@ -1,5 +1,5 @@
 import { Avatar } from "./Avatar";
-import { useRef } from "react";
+import { useRef, type CSSProperties } from "react";
 import { Ionicon } from "./vectorIcons/VectorIcon";
 import type { StoryFace } from "./StoryViewer";
 
@@ -11,7 +11,26 @@ export type StoriesRowItem = {
     /** An agent's rounded tile or a person's round photo. */
     readonly face: StoryFace;
     readonly state: "unseen" | "seen";
+    /** Its live stories and how many were watched, one arc each; one story is a whole ring. */
+    readonly total?: number;
+    readonly seen?: number;
 };
+
+/**
+ * A ring's address, which the viewer grows out of and shrinks back to, and its split into an arc
+ * per story once there are two: the watched grey, the rest in the accent unless all are grey.
+ */
+export function storyRing(
+    key: string,
+    state: "unseen" | "seen",
+    { seen = 0, total = 1 }: { readonly seen?: number; readonly total?: number } = {},
+) {
+    const arcs = { "--story-seen": state === "seen" ? total : seen, "--story-total": total };
+    return {
+        "data-story-ring": key,
+        ...(total > 1 ? { "data-arcs": "", style: arcs as CSSProperties } : {}),
+    };
+}
 
 /** StoriesRow — posters with live stories atop the sidebar, ringed accent unseen, grey seen. */
 export function StoriesRow(props: {
@@ -37,6 +56,7 @@ export function StoriesRow(props: {
                                 aria-label="Your Story"
                                 data-story={own ? "" : undefined}
                                 data-seen={own?.state === "seen" ? "" : undefined}
+                                {...(own && storyRing(own.id, own.state, own))}
                                 type="button"
                                 onClick={() =>
                                     own ? props.onOpen(own.id) : picker.current?.click()
@@ -77,6 +97,7 @@ export function StoriesRow(props: {
                             data-happy-desktop-ui="stories-row-item"
                             data-story=""
                             data-seen={item.state === "seen" ? "" : undefined}
+                            {...storyRing(item.id, item.state, item)}
                             key={item.id}
                             onClick={() => props.onOpen(item.id)}
                             title={item.name}
