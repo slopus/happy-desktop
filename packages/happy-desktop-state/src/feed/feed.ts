@@ -287,10 +287,11 @@ export function happyAgentFeedCreate(deps: HappyAgentFeedDeps): HappyAgentFeed {
             snapshot = { ...snapshot, ...next };
             for (const listener of listeners) listener();
         };
-        const pendingPublish = (): void =>
-            publish({
-                seenPending: pending.size === 0 ? SEEN_PENDING_NONE : new Set(pending.keys()),
-            });
+        /** The pending set as it now stands, to publish beside whatever changed it. */
+        const seenPendingNow = (): Pick<HappyAgentFeedPageSnapshot, "seenPending"> => ({
+            seenPending: pending.size === 0 ? SEEN_PENDING_NONE : new Set(pending.keys()),
+        });
+        const pendingPublish = (): void => publish(seenPendingNow());
         /**
          * Takes in copies of entries: the greater `version` of each wins, and
          * an entry older than the last one held is left for paging to bring,
@@ -320,8 +321,10 @@ export function happyAgentFeedCreate(deps: HappyAgentFeedDeps): HappyAgentFeed {
         const remove = (itemId: string): void => {
             if (!snapshot.items.some((item) => item.id === itemId)) return;
             pending.delete(itemId);
-            publish({ items: snapshot.items.filter((item) => item.id !== itemId) });
-            pendingPublish();
+            publish({
+                items: snapshot.items.filter((item) => item.id !== itemId),
+                ...seenPendingNow(),
+            });
         };
         /**
          * Reads the newest page and lays it over what is held: entries newer
@@ -353,9 +356,9 @@ export function happyAgentFeedCreate(deps: HappyAgentFeedDeps): HappyAgentFeed {
                 loading: false,
                 hasMore: older.length > 0 ? snapshot.hasMore : response.hasMore,
                 error: null,
+                ...seenPendingNow(),
             });
             unreadStore?.unreadReceived(response.unread);
-            pendingPublish();
         };
         const followLoop = async (signal: AbortSignal): Promise<void> => {
             for await (const input of sync.follow({
@@ -378,10 +381,7 @@ export function happyAgentFeedCreate(deps: HappyAgentFeedDeps): HappyAgentFeed {
                 if (event.type === "feed.item.created" || event.type === "feed.item.updated") {
                     actorsSeen([event.payload.item]);
                     const items = upsert(snapshot.items, [event.payload.item], snapshot.hasMore);
-                    if (items !== snapshot.items) {
-                        publish({ items });
-                        pendingPublish();
-                    }
+                    if (items !== snapshot.items) publish({ items, ...seenPendingNow() });
                 } else if (event.type === "feed.item.removed") remove(event.payload.itemId);
                 cursor = input.update.cursor;
             }
@@ -401,13 +401,11 @@ export function happyAgentFeedCreate(deps: HappyAgentFeedDeps): HappyAgentFeed {
                 changed = true;
                 return { ...item, seenAt: at };
             });
-            if (changed) publish({ items });
-            pendingPublish();
+            publish({ ...(changed ? { items } : {}), ...seenPendingNow() });
         };
         const seenFailed = (ids: readonly string[], error: unknown): void => {
             for (const id of ids) pending.delete(id);
-            publish({ error: happyAgentUserError(error) });
-            pendingPublish();
+            publish({ error: happyAgentUserError(error), ...seenPendingNow() });
         };
         return {
             store: {
@@ -466,8 +464,10 @@ export function happyAgentFeedCreate(deps: HappyAgentFeedDeps): HappyAgentFeed {
                                 // it reads unread again.
                                 if (!response.items.some((closed) => closed.id === itemId))
                                     pending.delete(itemId);
-                                publish({ items: upsert(snapshot.items, response.items, false) });
-                                pendingPublish();
+                                publish({
+                                    items: upsert(snapshot.items, response.items, false),
+                                    ...seenPendingNow(),
+                                });
                                 unreadStore?.unreadReceived(response.unread);
                             },
                             (error: unknown) => seenFailed([itemId], error),
@@ -499,8 +499,7 @@ export function happyAgentFeedCreate(deps: HappyAgentFeedDeps): HappyAgentFeed {
             itemsReceived(items: readonly FeedItem[]): void {
                 const next = upsert(snapshot.items, items, false);
                 if (next === snapshot.items) return;
-                publish({ items: next });
-                pendingPublish();
+                publish({ items: next, ...seenPendingNow() });
             },
             [Symbol.dispose](): void {
                 following?.abort();

@@ -159,7 +159,6 @@
 /* One row of a card. The card is its rows: the first rounds its top, the last
    its bottom, and every row but the last draws a rule under its text. */
 .happy-agent-feed-card-row {
-    --happy-agent-feed-row-background: var(--surface);
     position: relative;
     display: flex;
     flex: 1 1 auto;
@@ -172,7 +171,7 @@
     padding: 0 16px;
     border: 0;
     border-radius: 0;
-    background: var(--happy-agent-feed-row-background);
+    background: var(--surface);
     color: var(--text);
     font: inherit;
     text-align: left;
@@ -189,7 +188,7 @@
 }
 
 .happy-agent-feed-card-row:hover {
-    --happy-agent-feed-row-background: var(--surface-pressed);
+    background: var(--surface-pressed);
 }
 
 .happy-agent-feed-card-row:focus-visible {
@@ -332,7 +331,11 @@
 }
 
 .happy-agent-feed-faces__face {
-    box-shadow: 0 0 0 1.5px var(--happy-agent-feed-row-background);
+    box-shadow: 0 0 0 1.5px var(--surface);
+}
+
+.happy-agent-feed-card-row:hover .happy-agent-feed-faces__face {
+    box-shadow: 0 0 0 1.5px var(--surface-pressed);
 }
 
 .happy-agent-feed-faces__face + .happy-agent-feed-faces__face {
