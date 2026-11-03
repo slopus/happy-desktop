@@ -458,6 +458,15 @@ const artifactsRoute = createRoute({
     path: "/artifacts/$happyAgentId",
 });
 
+/**
+ * One machine's feed for the reader. The Happy Agent is in the address because
+ * what happened is that machine's news, the way its artifacts are.
+ */
+const feedRoute = createRoute({
+    getParentRoute: () => workspaceRoute,
+    path: "/feed/$happyAgentId",
+});
+
 /** One artifact open in the viewer, on the machine that keeps it. */
 const artifactRoute = createRoute({
     getParentRoute: () => workspaceRoute,
@@ -571,6 +580,7 @@ const routeTree = rootRoute.addChildren([
         inboxRoute,
         artifactsRoute,
         artifactRoute,
+        feedRoute,
         surfaceRoute.addChildren([surfaceChatRoute]),
         botCreateRoute,
         taskCreateRoute,
@@ -597,6 +607,7 @@ function HappyAgentWorkspaceLayout() {
         artifacts: matched.has(artifactsRoute.id) || matched.has(artifactRoute.id),
         blueprint: matched.has(blueprintRoute.id),
         botCreate: matched.has(botCreateRoute.id),
+        feed: matched.has(feedRoute.id),
         inbox: matched.has(inboxRoute.id),
         surface: matched.has(surfaceRoute.id),
         taskCreate: matched.has(taskCreateRoute.id),
@@ -638,6 +649,7 @@ function HappyAgentWorkspaceLayout() {
             taskCreateOpen={shows.taskCreate}
             inboxOpen={shows.inbox}
             artifactsOpen={shows.artifacts}
+            feedOpen={shows.feed}
             {...(shows.artifacts && params.artifactId !== undefined
                 ? { artifactId: params.artifactId }
                 : {})}
@@ -687,6 +699,12 @@ function HappyAgentWorkspaceLayout() {
                 void navigate({
                     params: { happyAgentId: params.happyAgentId ?? happyAgentDefaultId(context) },
                     to: "/artifacts/$happyAgentId",
+                })
+            }
+            onFeedOpen={() =>
+                void navigate({
+                    params: { happyAgentId: params.happyAgentId ?? happyAgentDefaultId(context) },
+                    to: "/feed/$happyAgentId",
                 })
             }
             onArtifactOpen={(happyAgentId, artifactId) =>

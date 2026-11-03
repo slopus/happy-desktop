@@ -32,6 +32,8 @@ export type HappyAgentRoute =
           readonly chatId: string;
       }
     | { readonly kind: "chats" }
+    /** One machine's feed for the reader: what happened there, newest change first. */
+    | { readonly kind: "feed"; readonly happyAgentId: string }
     | {
           readonly kind: "file";
           readonly happyAgentId: string;
@@ -83,6 +85,8 @@ export function happyAgentRoutePath(route: HappyAgentRoute): string {
             return `/chats/${part(route.happyAgentId)}/${part(route.groupId)}/${part(route.chatId)}`;
         case "chats":
             return "/chats";
+        case "feed":
+            return `/feed/${part(route.happyAgentId)}`;
         case "file": {
             const parent = route.chatId ? `/${part(route.chatId)}` : "";
             return `/chats/${part(route.happyAgentId)}/${part(route.groupId)}${parent}/file/${part(route.fileKind)}/${part(route.path)}`;
@@ -185,6 +189,10 @@ export function happyAgentRoutePathParse(pathname: string): HappyAgentRoute | un
                     : undefined;
             }
             return undefined;
+        case "feed":
+            return first !== undefined && segments.length === 2
+                ? { kind: "feed", happyAgentId: first }
+                : undefined;
         case "inbox":
             return first !== undefined && segments.length === 2
                 ? { kind: "inbox", happyAgentId: first }
@@ -255,6 +263,10 @@ export function happyAgentRouteParse(value: unknown): HappyAgentRoute | undefine
         }
         case "chats":
             return { kind: "chats" };
+        case "feed": {
+            const happyAgentId = fieldOf(record, "happyAgentId");
+            return happyAgentId ? { kind: "feed", happyAgentId } : undefined;
+        }
         case "file": {
             const happyAgentId = fieldOf(record, "happyAgentId");
             const groupId = fieldOf(record, "groupId");

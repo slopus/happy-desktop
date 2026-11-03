@@ -86,6 +86,7 @@ export type IconName =
     | "location"
     | "dot"
     | "pulse"
+    | "feed"
     | "width-expand"
     | "width-center";
 export type IconProps = {
@@ -309,6 +310,8 @@ const glyphs: Record<IconName, IconGlyph> = {
     dice: { set: "ionicons", name: "dice-outline" },
     dot: { set: "ionicons", name: "ellipse" },
     pulse: { set: "ionicons", name: "pulse-outline" },
+    // What happened on the installation, as a paper reads it: the Feed.
+    feed: { set: "ionicons", name: "newspaper-outline" },
 };
 export const iconNames = Object.keys(glyphs) as IconName[];
 function glyphContent(glyph: IconGlyph) {

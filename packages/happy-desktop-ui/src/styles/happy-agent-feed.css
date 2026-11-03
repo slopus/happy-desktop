@@ -1,0 +1,293 @@
+/*
+ * P-028 Happy Agent feed: what happened on the installation, for one reader,
+ * and the places it gathers from.
+ *
+ * The page reads down one column under a surface header, at the measure the
+ * artifacts and the inbox use. Every row is one fixed height, so the long
+ * list is drawn only where it is on screen and laid out without measuring.
+ *
+ * Layout is flexbox throughout, except the drawn rows, which are positioned
+ * (see below); colors, radii, and type come only from theme roles.
+ */
+
+.happy-agent-feed {
+    display: flex;
+    flex: 1 1 0%;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    width: 100%;
+    background: var(--surface);
+    color: var(--text);
+    font-family: var(--happy-font-ui);
+    font-synthesis: none;
+}
+
+/* The view switch sits on the header's 16px inset, so the title, the switch,
+   and each row's highlight share one leading edge. */
+.happy-agent-feed__bar {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 12px;
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 720px;
+    padding: 0 16px 12px;
+}
+
+.happy-agent-feed__notice {
+    display: flex;
+    flex: 0 0 auto;
+    flex-direction: column;
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 720px;
+    padding: 0 16px 12px;
+}
+
+.happy-agent-feed__peek {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 8px;
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 720px;
+    padding: 0 16px 8px 12px;
+}
+
+.happy-agent-feed__peek-label {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 20px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-agent-feed__scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+}
+
+.happy-agent-feed__scroll-viewport {
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+}
+
+/* The top padding is `LIST_INSET` in FeedVirtualList.tsx: the virtualizer is
+   told of it, so the two must change together. */
+.happy-agent-feed__content {
+    display: flex;
+    flex: 1 0 auto;
+    flex-direction: column;
+    gap: 12px;
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 720px;
+    padding: 4px 16px 48px;
+}
+
+.happy-agent-feed__list {
+    position: relative;
+    flex: none;
+    width: 100%;
+}
+
+/* Positioned rather than flowed: a virtualized row sits at its own computed
+   offset in a column of thousands, and only the drawn rows exist, so no flex
+   flow can place them. */
+.happy-agent-feed__item {
+    position: absolute;
+    top: 0;
+    left: 0;
+    display: flex;
+    width: 100%;
+    min-width: 0;
+}
+
+/* At the top of the list a row that moves glides to its new slot, and the
+   rows it passes glide aside. Scrolled into the list, the reader is reading:
+   the list holds what is on screen still instead, so nothing glides. */
+.happy-agent-feed__list[data-glide] > .happy-agent-feed__item {
+    transition: transform 240ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .happy-agent-feed__list[data-glide] > .happy-agent-feed__item {
+        transition: none;
+    }
+}
+
+.happy-agent-feed__more {
+    display: flex;
+    justify-content: center;
+}
+
+/* ---- Entry row --------------------------------------------------------- */
+
+.happy-agent-feed-row {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    gap: 12px;
+    box-sizing: border-box;
+    min-width: 0;
+    height: 100%;
+    margin: 0;
+    padding: 8px;
+    border: 0;
+    border-radius: var(--happy-radius-md);
+    background: var(--surface);
+    color: var(--text);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.happy-agent-feed-row:hover {
+    background: var(--surface-pressed);
+}
+
+.happy-agent-feed-row:focus-visible {
+    outline: 2px solid var(--text-link);
+    outline-offset: -2px;
+}
+
+.happy-agent-feed-row__glyph {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: var(--happy-radius-md);
+    background: var(--surface-high);
+    color: var(--text-secondary);
+}
+
+.happy-agent-feed-row__text {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.happy-agent-feed-row__headline {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    min-width: 0;
+}
+
+.happy-agent-feed-row__title {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--text-secondary);
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 20px;
+    letter-spacing: -0.01em;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-agent-feed-row[data-unread] .happy-agent-feed-row__title {
+    color: var(--text);
+    font-weight: 600;
+}
+
+.happy-agent-feed-row__time {
+    flex: 0 0 auto;
+    margin-left: auto;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+    font-variant-numeric: tabular-nums lining-nums;
+}
+
+.happy-agent-feed-row__meta {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Every row reserves the dot's lane, so reading an entry only fades it. */
+.happy-agent-feed-row__unread {
+    flex: none;
+    width: 6px;
+    height: 6px;
+    border-radius: var(--happy-radius-pill);
+    background: var(--status-error);
+    opacity: 0;
+    transition: opacity 160ms ease-out;
+}
+
+.happy-agent-feed-row[data-unread] .happy-agent-feed-row__unread {
+    opacity: 1;
+}
+
+/* ---- Cluster row ------------------------------------------------------- */
+
+.happy-agent-feed-cluster {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    gap: 12px;
+    box-sizing: border-box;
+    min-width: 0;
+    height: 100%;
+    padding: 0 8px;
+    border-radius: var(--happy-radius-md);
+    background: var(--surface);
+}
+
+.happy-agent-feed-cluster:hover {
+    background: var(--surface-pressed);
+}
+
+.happy-agent-feed-cluster__glyph {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: var(--happy-radius-sm);
+    background: var(--surface-high);
+    color: var(--text-secondary);
+}
+
+.happy-agent-feed-cluster__label {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--text);
+    font-size: 13px;
+    line-height: 18px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-agent-feed-cluster[data-state="muted"] .happy-agent-feed-cluster__label {
+    color: var(--text-secondary);
+}
+
+.happy-agent-feed-cluster__actions {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 8px;
+}

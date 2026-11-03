@@ -908,6 +908,10 @@ export interface AppHappyAgentViewProps {
     onArtifactOpen?(happyAgentId: string, artifactId: string): void;
     /** Leaves the open artifact for wherever it was opened from. */
     onArtifactClose?(happyAgentId: string): void;
+    /** Whether the URL addresses the addressed Happy Agent's feed. */
+    feedOpen?: boolean;
+    /** Addresses that feed. */
+    onFeedOpen?(): void;
     /** The shared Surface the URL opens, on the addressed Happy Agent. */
     surfaceId?: string;
     /** Addresses one Surface on one Happy Agent. */
@@ -2737,8 +2741,9 @@ function rowSurfaceMenuItems(
 }
 
 /**
- * The first group in the sidebar, under no heading. Artifacts leads it and is
- * always there; it never moves and nothing is dragged past it. The reader's
+ * The first group in the sidebar, under no heading. Artifacts leads it, the
+ * Feed under it; both are always there, never move, and nothing is dragged
+ * past them. The reader's
  * Surfaces follow in their own order and are dragged among themselves only.
  * Every type is listed by its own name and picture, including a type this
  * build cannot show; only opening one depends on its type. Every act on them
@@ -2752,6 +2757,7 @@ function happyAgentTopSection(
     catalog: HappyAgentSurfaceCatalogSnapshot,
     activeTodoCounts: ReadonlyMap<HappyAgentSurfaceId, number>,
     titleShimmerEnabled: boolean,
+    feedUnread: number,
 ): SidebarSection {
     const offline = happyAgent?.status !== "connected";
     const failure = catalog.failure?.action === "join" ? catalog.failure : undefined;
@@ -2768,6 +2774,7 @@ function happyAgentTopSection(
               }),
         items: [
             ARTIFACTS_SIDEBAR_ITEM,
+            { ...FEED_SIDEBAR_ITEM, ...(feedUnread > 0 ? { badge: feedUnread } : {}) },
             ...(catalog.availability === "available"
                 ? catalog.joined.map((surface) =>
                       surfaceSidebarItem(
@@ -3118,6 +3125,13 @@ const INBOX_ITEM = "inbox";
  */
 const ARTIFACTS_ITEM = "artifacts";
 
+/**
+ * The row that opens the reader's feed on the addressed Happy Agent: what
+ * happened there, newest change first. It sits directly under Artifacts and,
+ * like it, never moves; it counts what the reader has not looked at yet.
+ */
+const FEED_ITEM = "feed";
+
 /** A subscription to nothing, for a hook whose store is absent. */
 const SUBSCRIBE_NONE = (): (() => void) => () => undefined;
 
@@ -3134,6 +3148,14 @@ const ARTIFACTS_SIDEBAR_ITEM: SidebarItem = {
     id: ARTIFACTS_ITEM,
     kind: "project",
     label: "Artifacts",
+    reorderable: false,
+};
+
+const FEED_SIDEBAR_ITEM: SidebarItem = {
+    icon: "feed",
+    id: FEED_ITEM,
+    kind: "project",
+    label: "Feed",
     reorderable: false,
 };
 
@@ -3297,6 +3319,9 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
     const daemonStore = props.daemon ?? sidebarDaemonStoreNoop;
     const daemon = useSyncExternalStore(daemonStore.subscribe, daemonStore.get, daemonStore.get);
     const inboxPending = inbox.pending.length;
+    // The Feed row counts what the reader has not looked at on the addressed
+    // Happy Agent. Until the feed store exists nothing is counted.
+    const feedUnread = 0;
     // Whether the addressed Happy Agent keeps artifacts at all. The catalog is
     // read whether or not it is on screen, because the panel beside every chat
     // exists only once the machine has answered that it does; one too old to
@@ -3587,19 +3612,21 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                     ? INBOX_ITEM
                     : props.artifactsOpen
                       ? ARTIFACTS_ITEM
-                      : props.surfaceId !== undefined
-                        ? happyAgentItemId(props.happyAgentId, surfaceRowId(props.surfaceId))
-                        : props.groupId
-                          ? happyAgentItemId(
-                                props.happyAgentId,
-                                activeRowId(
-                                    active?.bots ?? [],
-                                    active?.tasks ?? [],
-                                    props.groupId,
-                                    props.chatId,
-                                ),
-                            )
-                          : ""
+                      : props.feedOpen
+                        ? FEED_ITEM
+                        : props.surfaceId !== undefined
+                          ? happyAgentItemId(props.happyAgentId, surfaceRowId(props.surfaceId))
+                          : props.groupId
+                            ? happyAgentItemId(
+                                  props.happyAgentId,
+                                  activeRowId(
+                                      active?.bots ?? [],
+                                      active?.tasks ?? [],
+                                      props.groupId,
+                                      props.chatId,
+                                  ),
+                              )
+                            : ""
             }
             // The integrated band holds the toggle and search in this lane, so
             // the product mark stands down.
@@ -3866,6 +3893,10 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                     props.onArtifactsOpen?.();
                     return;
                 }
+                if (id === FEED_ITEM) {
+                    props.onFeedOpen?.();
+                    return;
+                }
                 const row = happyAgentItemParse(id);
                 const happyAgent = happyAgentOf(row.happyAgentId);
                 if (!happyAgent) return;
@@ -4086,6 +4117,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                     surfaceCatalog,
                     activeTodoCounts,
                     titleShimmerEnabled,
+                    feedUnread,
                 ),
                 ...sectionsVoiceFocused(
                     happyAgentSections(
@@ -4272,6 +4304,18 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                 </>
             );
         }
+
+        // The feed belongs to the addressed machine, like its artifacts. Its
+        // header carries Mark all read, so the header is the window's drag band.
+        if (props.feedOpen && active?.session)
+            return (
+                <EmptyState
+                    description="This Happy Agent does not keep a feed yet. Updating it adds one."
+                    icon="feed"
+                    size="panel"
+                    title="No feed here"
+                />
+            );
 
         // A Surface belongs to the addressed machine, like its artifacts. Its
         // header carries Leave or Join, so the header is the window's drag

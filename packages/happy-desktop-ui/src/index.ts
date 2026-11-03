@@ -853,6 +853,23 @@ export {
     type HappyAgentArtifactViewerProps,
 } from "./pages/artifacts/HappyAgentArtifactViewer";
 export { artifactHtmlDocument } from "./pages/artifacts/artifactHtmlDocument";
+export {
+    feedActivityText,
+    feedActorsText,
+    feedSubjectLabel,
+    type HappyAgentFeedActor,
+    type HappyAgentFeedCluster,
+    type HappyAgentFeedClusterKind,
+    type HappyAgentFeedClusterState,
+    type HappyAgentFeedEntry,
+    type HappyAgentFeedListState,
+    type HappyAgentFeedSubjectKind,
+} from "./pages/feed/feedPresentation";
+export {
+    HappyAgentFeedPage,
+    type HappyAgentFeedPageProps,
+    type HappyAgentFeedView,
+} from "./pages/feed/HappyAgentFeedPage";
 export { REORDERING_LIST_STATIC, ReorderingList, type ReorderingListProps } from "./ReorderingList";
 export {
     SurfaceAvatar,
