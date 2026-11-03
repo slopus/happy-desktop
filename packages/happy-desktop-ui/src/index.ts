@@ -128,6 +128,7 @@ export {
     Avatar,
     type AvatarProps,
     type AvatarSize,
+    type AvatarTint,
     type AvatarType,
     type ToneName,
 } from "./Avatar";
@@ -871,6 +872,7 @@ export {
     SurfaceAvatar,
     SurfaceMemberStack,
     surfaceMembersText,
+    surfaceSidebarMark,
     surfaceTypeIcon,
     surfaceTypeLabel,
     type HappyAgentSurfaceMemberView,

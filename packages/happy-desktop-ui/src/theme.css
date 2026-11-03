@@ -217,6 +217,25 @@
     --happy-sidebar-archive-wash-strong: color-mix(in srgb, var(--status-error) 13%, transparent);
     --happy-sidebar-archive-ink: color-mix(in srgb, var(--status-error) 55%, var(--text-secondary));
 
+    /* A glyph row mark's tile: the hue's ink on the same hue very light,
+       one hue per kind of row, as the phone's grouped home draws them (iOS
+       GroupedSidebarTokens.swift, Android RowTile): iOS's system colours.
+       Declared in every theme block with that appearance's values. */
+    --happy-tile-blue: #007aff;
+    --happy-tile-blue-fill: rgb(0 122 255 / 0.11);
+    --happy-tile-green: #28a745;
+    --happy-tile-green-fill: rgb(52 199 89 / 0.14);
+    --happy-tile-orange: #f08c00;
+    --happy-tile-orange-fill: rgb(255 149 0 / 0.14);
+    --happy-tile-indigo: #5856d6;
+    --happy-tile-indigo-fill: rgb(88 86 214 / 0.12);
+    --happy-tile-purple: #a347d6;
+    --happy-tile-purple-fill: rgb(175 82 222 / 0.12);
+    --happy-tile-red: #ff3b30;
+    --happy-tile-red-fill: rgb(255 59 48 / 0.11);
+    --happy-tile-teal: #1c9fb8;
+    --happy-tile-teal-fill: rgb(48 176 199 / 0.14);
+
     --status-connected: #34c759;
     --status-connecting: #007aff;
     --status-disconnected: #999999;
@@ -607,6 +626,20 @@
             var(--status-error) 55%,
             var(--text-secondary)
         );
+        --happy-tile-blue: #0a84ff;
+        --happy-tile-blue-fill: rgb(10 132 255 / 0.2);
+        --happy-tile-green: #30d158;
+        --happy-tile-green-fill: rgb(48 209 88 / 0.2);
+        --happy-tile-orange: #ff9f0a;
+        --happy-tile-orange-fill: rgb(255 159 10 / 0.2);
+        --happy-tile-indigo: #7d7aff;
+        --happy-tile-indigo-fill: rgb(94 92 230 / 0.24);
+        --happy-tile-purple: #bf5af2;
+        --happy-tile-purple-fill: rgb(191 90 242 / 0.2);
+        --happy-tile-red: #ff453a;
+        --happy-tile-red-fill: rgb(255 69 58 / 0.2);
+        --happy-tile-teal: #40c8e0;
+        --happy-tile-teal-fill: rgb(64 200 224 / 0.2);
         /* Declared again here, so they resolve against the dark palette. */
     }
 }
@@ -812,6 +845,20 @@
     --happy-sidebar-archive-wash: color-mix(in srgb, var(--status-error) 7%, transparent);
     --happy-sidebar-archive-wash-strong: color-mix(in srgb, var(--status-error) 13%, transparent);
     --happy-sidebar-archive-ink: color-mix(in srgb, var(--status-error) 55%, var(--text-secondary));
+    --happy-tile-blue: #0a84ff;
+    --happy-tile-blue-fill: rgb(10 132 255 / 0.2);
+    --happy-tile-green: #30d158;
+    --happy-tile-green-fill: rgb(48 209 88 / 0.2);
+    --happy-tile-orange: #ff9f0a;
+    --happy-tile-orange-fill: rgb(255 159 10 / 0.2);
+    --happy-tile-indigo: #7d7aff;
+    --happy-tile-indigo-fill: rgb(94 92 230 / 0.24);
+    --happy-tile-purple: #bf5af2;
+    --happy-tile-purple-fill: rgb(191 90 242 / 0.2);
+    --happy-tile-red: #ff453a;
+    --happy-tile-red-fill: rgb(255 69 58 / 0.2);
+    --happy-tile-teal: #40c8e0;
+    --happy-tile-teal-fill: rgb(64 200 224 / 0.2);
     /* Declared again here, so they resolve against the dark palette. */
 }
 

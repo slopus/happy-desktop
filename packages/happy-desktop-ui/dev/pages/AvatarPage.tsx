@@ -1,4 +1,5 @@
-import { Avatar, type AvatarSize, type ToneName } from "../../src/Avatar";
+import { Avatar, type AvatarSize, type AvatarTint, type ToneName } from "../../src/Avatar";
+import type { IconName } from "../../src/Icon";
 import { happyLogoBlackUrl } from "../../src/assets";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
@@ -17,6 +18,16 @@ const SIZES: Array<{
     { size: "lg", dimension: 44, initials: "AR" },
 ];
 const TONES: ToneName[] = ["violet", "ember", "mint", "ocean", "rose", "amber", "slate", "brand"];
+/** Each tile hue on the glyph the sidebar gives it. */
+const TINTS: ReadonlyArray<{ tint: AvatarTint; icon: IconName }> = [
+    { tint: "blue", icon: "doc" },
+    { tint: "green", icon: "tasks" },
+    { tint: "orange", icon: "tasks" },
+    { tint: "indigo", icon: "agents" },
+    { tint: "purple", icon: "doc" },
+    { tint: "red", icon: "calendar" },
+    { tint: "teal", icon: "pulse" },
+];
 const row: Record<string, string> = {
     display: "flex",
     alignItems: "flex-end",
@@ -100,6 +111,35 @@ export function AvatarPage() {
                                 tone={tone}
                             />
                             <DimensionRule label={tone} />
+                        </div>
+                    ))}
+                </div>
+            </Specimen>
+
+            <Specimen
+                number="03A"
+                label="Tinted glyph tiles"
+                detail="A glyph in its hue on the same hue very light, as the phone's home rows draw them · 20 and 36"
+                stage="app"
+            >
+                <div style={row}>
+                    {TINTS.map((entry) => (
+                        <div key={entry.tint} style={cell}>
+                            <Avatar
+                                icon={entry.icon}
+                                initials=""
+                                size="xs"
+                                tint={entry.tint}
+                                type="agent"
+                            />
+                            <Avatar
+                                icon={entry.icon}
+                                initials=""
+                                size="md"
+                                tint={entry.tint}
+                                type="agent"
+                            />
+                            <DimensionRule label={entry.tint} />
                         </div>
                     ))}
                 </div>

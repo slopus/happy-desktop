@@ -1,5 +1,5 @@
 import type { HappyAgentSurfaceType } from "happy-desktop-state";
-import { Avatar } from "../../Avatar";
+import { Avatar, type AvatarTint } from "../../Avatar";
 import { Icon, type IconName } from "../../Icon";
 import { thumbhashDataUrl } from "../../thumbhashDataUrl";
 
@@ -62,6 +62,37 @@ export function surfaceTypeIcon(type: HappyAgentSurfaceType): IconName {
             return "tasks";
         case "unsupported":
             return "package";
+    }
+}
+
+/**
+ * The glyph and tile hue a Surface's sidebar row wears when it has no picture
+ * of its own, as the phone's home list draws it (iOS `Rows.surfaceGlyph` and
+ * `RowView.tint`, Android `RowTile.surface`). The phone gives a kept artifact
+ * and a type it does not know the document's mark; a kept task or bot takes
+ * the hue the phone gives a task's or a bot's row.
+ */
+export function surfaceSidebarMark(type: HappyAgentSurfaceType): {
+    readonly icon: IconName;
+    readonly tint: AvatarTint;
+} {
+    switch (type.kind) {
+        case "todo":
+            return { icon: "tasks", tint: "green" };
+        case "calendar":
+            return { icon: "calendar", tint: "red" };
+        case "system_monitor":
+            return { icon: "pulse", tint: "teal" };
+        case "chat":
+            return { icon: "users", tint: "teal" };
+        case "task":
+            return { icon: "tasks", tint: "orange" };
+        case "bot":
+            return { icon: "agents", tint: "indigo" };
+        case "document":
+        case "artifact":
+        case "unsupported":
+            return { icon: "doc", tint: "blue" };
     }
 }
 

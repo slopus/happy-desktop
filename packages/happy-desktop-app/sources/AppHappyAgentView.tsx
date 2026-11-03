@@ -280,7 +280,7 @@ import {
     HappyAgentCalendarSurfacePage,
     type HappyAgentDocumentSurfaceContent,
     type DocumentEditorUser,
-    surfaceTypeIcon,
+    surfaceSidebarMark,
     type HappyAgentSurfaceMemberView,
     type HappyAgentSurfaceView,
     HappyAgentProjectSettingsDialog,
@@ -1229,7 +1229,7 @@ function sidebarItems(
             labelShimmer: titleShimmerEnabled,
             initials: project.name.slice(0, 1).toUpperCase(),
             placeholderSeed: project.id,
-            ...(project.kind === "home" ? { icon: "home" as const } : {}),
+            ...(project.kind === "home" ? { icon: "home" as const, tint: "blue" as const } : {}),
             ...(project.avatar ? { imageUrl: project.avatar.url } : {}),
             // The + always waits for hover, so a project at rest ends with its
             // delta on the same column as every other row and nothing is
@@ -2716,14 +2716,15 @@ function surfaceLabel(surface: HappyAgentSurface): string {
  * A bot wears its own face, and an artifact the Surface's picture or a
  * picture glyph for an image, while the reader can see them; one they cannot
  * falls back to its type's glyph. An unavailable target's row dims. Any other
- * Surface wears its picture, or its type's glyph.
+ * Surface wears its picture, or its type's glyph. A glyph sits on its type's
+ * tinted tile, as the phone draws it.
  */
 function surfaceFace(
     surface: HappyAgentSurface,
     places: SurfacePlaces,
-): Pick<SidebarItem, "icon" | "imageUrl" | "initials" | "placeholderSeed" | "archived"> {
+): Pick<SidebarItem, "icon" | "tint" | "imageUrl" | "initials" | "placeholderSeed" | "archived"> {
     const target = surface.target;
-    const glyph = { icon: surfaceTypeIcon(surface.type) };
+    const glyph = surfaceSidebarMark(surface.type);
     if (target?.state === "unavailable") return { ...glyph, archived: true };
     if (surface.type.kind === "task") return glyph;
     if (target?.kind === "bot") {
@@ -2734,7 +2735,7 @@ function surfaceFace(
         };
     }
     if (surface.image) return { imageUrl: surface.image.url };
-    if (target?.kind === "artifact" && target.hasImage) return { icon: "image" };
+    if (target?.kind === "artifact" && target.hasImage) return { ...glyph, icon: "image" };
     return glyph;
 }
 
@@ -3193,7 +3194,8 @@ function todoListActiveCount(store: HappyAgentTodoListStore | undefined): number
 }
 
 const ARTIFACTS_SIDEBAR_ITEM: SidebarItem = {
-    icon: "package",
+    icon: "doc",
+    tint: "purple",
     id: ARTIFACTS_ITEM,
     kind: "project",
     label: "Artifacts",
@@ -3202,6 +3204,7 @@ const ARTIFACTS_SIDEBAR_ITEM: SidebarItem = {
 
 const FEED_SIDEBAR_ITEM: SidebarItem = {
     icon: "feed",
+    tint: "red",
     id: FEED_ITEM,
     kind: "project",
     label: "Feed",

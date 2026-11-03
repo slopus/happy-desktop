@@ -39,7 +39,7 @@ import { HappyAgentSurfaceNotMadePage } from "../../src/pages/surfaces/HappyAgen
 import { HappyAgentSurfaceUnsupportedPage } from "../../src/pages/surfaces/HappyAgentSurfaceUnsupportedPage";
 import { HappyAgentTodoSurfacePage } from "../../src/pages/surfaces/HappyAgentTodoSurfacePage";
 import {
-    surfaceTypeIcon,
+    surfaceSidebarMark,
     type HappyAgentSurfaceView,
 } from "../../src/pages/surfaces/surfacePresentation";
 import type { HappyAgentSurfaceCreateKind } from "../../src/pages/surfaces/HappyAgentSurfaceCreateDialog";
@@ -605,7 +605,7 @@ interface MockSurface {
  */
 interface MockReference {
     readonly view: HappyAgentSurfaceReferenceView;
-    readonly face: Pick<SidebarItem, "archived" | "icon" | "imageUrl" | "initials">;
+    readonly face: Pick<SidebarItem, "archived" | "icon" | "imageUrl" | "initials" | "tint">;
     /** The row in Artifacts, Bots, or Tasks it opens; absent when it cannot be opened. */
     readonly opens?: string;
 }
@@ -641,12 +641,12 @@ const SURFACES: readonly MockSurface[] = [
     }),
     { id: "launch", joined: true, view: KANBAN },
     reference("ref-spec", "Launch spec", "artifact", {
-        face: { icon: "package" },
+        face: surfaceSidebarMark({ kind: "artifact" }),
         opens: "artifacts",
         view: { phase: "available", kind: "artifact", name: "Launch spec", action: "open" },
     }),
     reference("ref-onboarding", "Rewrite onboarding guide", "task", {
-        face: { icon: "tasks" },
+        face: surfaceSidebarMark({ kind: "task" }),
         opens: "task-docs",
         view: {
             phase: "available",
@@ -657,7 +657,7 @@ const SURFACES: readonly MockSurface[] = [
     }),
     // Deleted since it was kept: its label and the artifact glyph, dimmed, and a quiet page.
     reference("ref-pricing", "Old pricing page", "artifact", {
-        face: { icon: "package", archived: true },
+        face: { ...surfaceSidebarMark({ kind: "artifact" }), archived: true },
         view: { phase: "unavailable", kind: "artifact" },
     }),
     {
@@ -694,7 +694,7 @@ function surfaceItem(surface: MockSurface, fixed: boolean): SidebarItem {
             ? surface.reference.face
             : surface.view.image
               ? { imageUrl: surface.view.image.url }
-              : { icon: surfaceTypeIcon(surface.view.type) }),
+              : surfaceSidebarMark(surface.view.type)),
         ...(surface.joined && surface.count ? { count: surface.count } : {}),
         ...(fixed ? { reorderable: false } : {}),
         action: surface.joined
@@ -720,7 +720,8 @@ const CREATE_MENU: MenuItem[] = [
 ];
 
 const ARTIFACTS: SidebarItem = {
-    icon: "package",
+    icon: "doc",
+    tint: "purple",
     id: "artifacts",
     kind: "project",
     label: "Artifacts",

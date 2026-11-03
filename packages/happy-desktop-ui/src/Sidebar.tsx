@@ -13,7 +13,7 @@ import {
     type PointerEvent as ReactPointerEvent,
     type ReactNode,
 } from "react";
-import { Avatar, type ToneName } from "./Avatar";
+import { Avatar, type AvatarTint, type ToneName } from "./Avatar";
 import { ChangeStats } from "./ChangeStats";
 import { haptic } from "./haptics";
 import { CountBadge, KeyCap } from "./Badge";
@@ -99,6 +99,12 @@ export type SidebarItem = {
     }[];
     /** The row's glyph. A `person`/`agent`/`project` row paints it inside the avatar tile. */
     icon?: IconName;
+    /**
+     * The hue of the tile a `person`/`agent`/`project` row's glyph sits on, for
+     * a row that is one kind of place, such as Artifacts or a todo list. Absent
+     * keeps the neutral chip; a picture or placeholder face ignores it.
+     */
+    tint?: AvatarTint;
     id: string;
     imageUrl?: string;
     /** Unframed entity artwork in the existing 20px leading lane. */
@@ -1804,6 +1810,7 @@ function SidebarRow({
                 online={item().kind === "person" ? item().online : undefined}
                 placeholderSeed={item().placeholderSeed}
                 size="xs"
+                tint={item().tint}
                 tone={item().tone}
                 type={item().kind === "agent" || item().kind === "project" ? "agent" : "human"}
             />

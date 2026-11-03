@@ -121,6 +121,44 @@
     background: var(--button-primary-background);
 }
 
+/* A tinted glyph mark: the glyph in its hue on the same hue very light, as
+   the phone's home rows draw theirs. The fill is translucent, so the tile
+   keeps the same small step over a hovered or selected row as over the list. */
+.happy-avatar[data-tint="blue"] {
+    background: var(--happy-tile-blue-fill);
+    color: var(--happy-tile-blue);
+}
+
+.happy-avatar[data-tint="green"] {
+    background: var(--happy-tile-green-fill);
+    color: var(--happy-tile-green);
+}
+
+.happy-avatar[data-tint="orange"] {
+    background: var(--happy-tile-orange-fill);
+    color: var(--happy-tile-orange);
+}
+
+.happy-avatar[data-tint="indigo"] {
+    background: var(--happy-tile-indigo-fill);
+    color: var(--happy-tile-indigo);
+}
+
+.happy-avatar[data-tint="purple"] {
+    background: var(--happy-tile-purple-fill);
+    color: var(--happy-tile-purple);
+}
+
+.happy-avatar[data-tint="red"] {
+    background: var(--happy-tile-red-fill);
+    color: var(--happy-tile-red);
+}
+
+.happy-avatar[data-tint="teal"] {
+    background: var(--happy-tile-teal-fill);
+    color: var(--happy-tile-teal);
+}
+
 /* A supplied avatar image owns the entire mark. This is especially important
  * for Happy's theme-selected logo, whose silhouette must not inherit a tile. */
 .happy-avatar[data-image],

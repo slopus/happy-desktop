@@ -5,6 +5,12 @@ import { Icon, type IconName } from "./Icon";
 export type AvatarSize = "xs" | "sm" | "md" | "lg";
 export type AvatarType = "human" | "agent";
 export type ToneName = "violet" | "ember" | "mint" | "ocean" | "rose" | "amber" | "slate" | "brand";
+/**
+ * The hue of a glyph mark's soft tile: the glyph in the hue, on the same hue
+ * very light. One hue per kind of thing, as the phone's home list draws its
+ * rows' marks.
+ */
+export type AvatarTint = "blue" | "green" | "orange" | "indigo" | "purple" | "red" | "teal";
 export type AvatarProps = Omit<HTMLAttributes<HTMLSpanElement>, "style"> & {
     /**
      * Marks an entity that is named by a symbol rather than by a person or a
@@ -26,6 +32,11 @@ export type AvatarProps = Omit<HTMLAttributes<HTMLSpanElement>, "style"> & {
     placeholderSeed?: string;
     size?: AvatarSize;
     style?: CSSProperties;
+    /**
+     * Draws an `icon` mark as a coloured glyph on a softly tinted tile instead
+     * of the neutral chip. A picture or a placeholder ignores it.
+     */
+    tint?: AvatarTint;
     tone?: ToneName;
     type?: AvatarType;
 };
@@ -45,6 +56,7 @@ export function Avatar(props: AvatarProps) {
         "placeholderSeed",
         "size",
         "style",
+        "tint",
         "tone",
         "type",
     ]);
@@ -64,6 +76,7 @@ export function Avatar(props: AvatarProps) {
             data-placeholder={placeholder === undefined ? undefined : ""}
             data-happy-desktop-ui="avatar"
             data-size={size()}
+            data-tint={!local.imageUrl && local.icon ? local.tint : undefined}
             data-tone={tone()}
             data-type={type()}
             style={local.style}
