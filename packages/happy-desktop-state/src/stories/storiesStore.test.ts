@@ -605,3 +605,122 @@ it("carries on past a story that leaves while open, and skips emptied posters", 
     removed(sync, "0008", "a2");
     await until(() => on(store.get()).open === null);
 });
+
+const layer = (id: string) => ({
+    id,
+    kind: "video" as const,
+    mimeType: "video/mp4",
+    size: 9,
+    x: 0.5,
+    y: 0.5,
+    width: 0.4,
+    aspect: 1,
+});
+
+it("addresses a repost's shared media through its original, fetching each file once", async () => {
+    const fetched: string[] = [];
+    const preload = vi.fn(async (media: readonly { url: string }[]) => {
+        fetched.push(...media.map(({ url }) => url));
+        return media.map(({ url }) => ({ poster: `frame of ${url}` }));
+    });
+    const original = { ...story("a", "task1", 1), mediaLayers: [layer("sticker")] };
+    // The daemon lists the original's layers first under their own ids, then the reposter's.
+    const reposts = [
+        { ...repost("r2", "u2", original), mediaLayers: [layer("sticker"), layer("x2")] },
+        { ...repost("r1", "u1", original), mediaLayers: [layer("sticker"), layer("round")] },
+    ];
+    const { store } = open([...reposts, original], true, preload);
+    await until(() => on(store.get()).row.length === 3);
+    const at = (path: string) => `https://daemon/v0/stories/${path}`;
+    expect([...fetched].sort()).toEqual(
+        ["a/layers/sticker", "a/media", "r1/layers/round", "r2/layers/x2"].map(at),
+    );
+    store.tileOpen("person:u2");
+    expect(on(store.get()).open).toMatchObject({
+        media: { url: at("a/media"), poster: `frame of ${at("a/media")}` },
+        mediaLayers: [
+            {
+                id: "sticker",
+                url: at("a/layers/sticker"),
+                poster: `frame of ${at("a/layers/sticker")}`,
+            },
+            { id: "x2", url: at("r2/layers/x2") },
+        ],
+    });
+    // A legacy round is always the reposter's own.
+    store.tileOpen("person:u1");
+    expect(on(store.get()).open?.mediaLayers.map(({ url }) => url)).toEqual([
+        at("a/layers/sticker"),
+        at("r1/layers/round"),
+    ]);
+    // Opening the original and every repost fetched nothing more.
+    store.tileOpen("agent:task1");
+    await settle();
+    expect(fetched).toHaveLength(4);
+
+    // Without the original, the reposts share the first repost's copy.
+    const alone = open(reposts, true);
+    await until(() => on(alone.store.get()).row.length === 2);
+    alone.store.tileOpen("person:u2");
+    expect(on(alone.store.get()).open).toMatchObject({
+        media: { url: at("r1/media") },
+        mediaLayers: [{ url: at("r1/layers/sticker") }, { url: at("r2/layers/x2") }],
+    });
+});
+
+it("keeps a ring's last state until a new first story can play, for at most the wait", async () => {
+    vi.useFakeTimers();
+    try {
+        const preload = vi.fn(async (media: readonly { url: string }[]) =>
+            media[0]!.url.includes("/a/") ? [] : new Promise<readonly object[]>(() => {}),
+        );
+        const { store, sync } = open([story("a", "task1", 1, true)], true, preload);
+        await vi.advanceTimersByTimeAsync(0);
+        expect(on(store.get()).row).toMatchObject([{ key: "agent:task1", state: "seen" }]);
+        post(sync, "0006", story("b", "task1", 2));
+        await vi.advanceTimersByTimeAsync(0);
+        expect(preload).toHaveBeenCalledTimes(2);
+        // Its new story is still being fetched: the row and the sidebar keep it grey.
+        expect(on(store.get()).row).toMatchObject([{ state: "seen" }]);
+        expect(on(store.get()).outlines.get("task1")).toBe("seen");
+        await vi.advanceTimersByTimeAsync(7_999);
+        expect(on(store.get()).row).toMatchObject([{ state: "seen" }]);
+        await vi.advanceTimersByTimeAsync(1);
+        expect(on(store.get()).row).toMatchObject([{ state: "unseen" }]);
+        expect(on(store.get()).outlines.get("task1")).toBe("unseen");
+        // An unseen ring stays unseen while the next story is fetched, and greys once watched.
+        post(sync, "0007", story("c", "task1", 3));
+        await vi.advanceTimersByTimeAsync(0);
+        store.agentOpen("task1");
+        expect(on(store.get()).open?.story.id).toBe("b");
+        expect(on(store.get()).outlines.get("task1")).toBe("unseen");
+        store.storyStep(1);
+        expect(on(store.get()).outlines.get("task1")).toBe("seen");
+    } finally {
+        vi.useRealTimers();
+    }
+});
+
+it("forgets the frames and fetches of a story once it leaves the feed", async () => {
+    const preload = vi.fn(async (media: readonly { url: string }[]) =>
+        media.map(() => ({ poster: "frame" })),
+    );
+    const { store, sync } = open([story("a", "task1", 1), story("b", "task2", 2)], true, preload);
+    await until(() => on(store.get()).row.length === 2);
+    sync.writer.updateReceived({
+        kind: "event",
+        cursor: "0006",
+        event: { type: "story.removed", payload: { storyId: "b" } },
+    } as never);
+    await until(() => on(store.get()).row.length === 1);
+    // Posted again, it is fetched afresh and its ring waits for it once more.
+    preload.mockImplementationOnce(() => new Promise(() => {}));
+    post(sync, "0007", story("b", "task2", 2));
+    await until(() => preload.mock.calls.length === 3);
+    expect(preload).toHaveBeenLastCalledWith([
+        { kind: "image", url: "https://daemon/v0/stories/b/media" },
+    ]);
+    expect(on(store.get()).row.map(({ key }) => key)).toEqual(["agent:task1"]);
+    store.agentOpen("task1");
+    expect(on(store.get()).open?.media.poster).toBe("frame");
+});

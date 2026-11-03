@@ -140,35 +140,59 @@ export function happyAgentStoriesStoreCreate(deps: {
     const opened = () => stories.find((story) => story.id === open?.story.id);
     const frames = new Map<string, HappyAgentStoryMediaFrames>();
     const playable = (kind: "image" | "video", url: string) => ({ kind, url, ...frames.get(url) });
-    const mediaOf = (story: Story) => ({
-        media: playable(story.media.kind, client.storyMediaUrl(story.id)),
-        mediaLayers: (story.mediaLayers ?? []).map((layer) => ({
-            ...layer,
-            ...playable(layer.kind, client.storyLayerUrl(story.id, layer.id)),
-            shape: layer.shape ?? "rect",
-        })),
-    });
-    // Stories whose media is ready or asked for, and posters whose ring has appeared and so stays.
+    /**
+     * A repost is its original's media and layers under the same ids, plus its own: each piece has
+     * the address of the first story carrying it, the original and then reposts by id; never a round.
+     */
+    const mediaOf = (story: Story) => {
+        const of = story.repostOf ?? story.id;
+        const rank = (each: Story) => (each.id === of ? "" : each.id);
+        const group = stories
+            .filter((each) => rank(each) === "" || each.repostOf === of)
+            .sort((left, right) => rank(left).localeCompare(rank(right)));
+        const holder = (id: string) =>
+            (id === "round" ? [] : group).find((each) =>
+                each.mediaLayers?.some((layer) => layer.id === id),
+            ) ?? story;
+        return {
+            media: playable(story.media.kind, client.storyMediaUrl((group[0] ?? story).id)),
+            mediaLayers: (story.mediaLayers ?? []).map((layer) => ({
+                ...layer,
+                ...playable(layer.kind, client.storyLayerUrl(holder(layer.id).id, layer.id)),
+                shape: layer.shape ?? "rect",
+            })),
+        };
+    };
+    // Stories whose media is ready or asked for, and each poster's ring once it has appeared.
     const ready = new Set<string>();
     const asked = new Set<string>();
-    const shown = new Set<string>();
+    const shown = new Map<string, "unseen" | "seen">();
+    /** Each address fetched or being fetched ahead, once however many stories share it. */
+    const fetches = new Map<string, Promise<unknown>>();
     const queue: Story[] = [];
     let loading = 0;
     const pump = () => {
-        for (; loading < PRELOAD_PARALLEL && queue.length > 0; loading++) {
+        while (loading < PRELOAD_PARALLEL && queue.length > 0) {
             const next = queue.shift()!;
             const { media, mediaLayers } = mediaOf(next);
             const all = [media, ...mediaLayers];
+            const fresh = all.filter(({ url }) => !fetches.has(url));
+            // Only a story with an address of its own to fetch takes one of the slots.
+            const slot = fresh.length > 0 ? 1 : 0;
+            loading += slot;
+            const batch = Promise.resolve(
+                slot && deps.preload ? deps.preload(fresh).catch(() => []) : [],
+            ).then((each) => fresh.forEach(({ url }, at) => frames.set(url, each[at] ?? {})));
+            for (const { url } of fresh) fetches.set(url, batch);
             // A fetch ahead that fails or stalls only loses its frames: the ring still appears.
             let timer: ReturnType<typeof setTimeout> | undefined;
             const fetched = Promise.race([
-                deps.preload?.(all).catch(() => []) ?? [],
-                new Promise<[]>((resolve) => (timer = setTimeout(resolve, PRELOAD_WAIT_MS, []))),
+                Promise.all(all.map(({ url }) => fetches.get(url))),
+                new Promise<void>((resolve) => (timer = setTimeout(resolve, PRELOAD_WAIT_MS))),
             ]);
-            void fetched.then((each) => {
+            void fetched.then(() => {
                 clearTimeout(timer);
-                each.forEach((taken, at) => frames.set(all[at]!.url, taken));
-                loading--;
+                loading -= slot;
                 ready.add(next.id);
                 pump();
                 if (following) changed();
@@ -181,21 +205,31 @@ export function happyAgentStoriesStoreCreate(deps: {
         queue.push(story);
         pump();
     };
+    /**
+     * A ring turns unseen only once its first unseen story can play, and until then keeps the state
+     * it was last drawn in; watching greys it at once.
+     */
+    const ring = (key: string) => {
+        const opening = first(key)!;
+        const state = opening.seen ? "seen" : ready.has(opening.id) ? "unseen" : shown.get(key)!;
+        shown.set(key, state);
+        return state;
+    };
     const row = (): HappyAgentStoryTile[] => {
         const tiles = new Map<string, HappyAgentStoryTile & { latest: number }>();
         for (const story of stories) {
             const held = tiles.get(keyOf(story));
-            tiles.set(keyOf(story), {
-                key: keyOf(story),
-                poster: story.poster,
-                agentId: story.agentId,
-                userId: story.userId,
-                state: held?.state === "unseen" || !story.seen ? "unseen" : "seen",
-                latest: Math.max(held?.latest ?? 0, story.postedAt),
-            });
+            if (shown.has(keyOf(story)))
+                tiles.set(keyOf(story), {
+                    key: keyOf(story),
+                    poster: story.poster,
+                    agentId: story.agentId,
+                    userId: story.userId,
+                    state: held?.state ?? ring(keyOf(story)),
+                    latest: Math.max(held?.latest ?? 0, story.postedAt),
+                });
         }
         return [...tiles.values()]
-            .filter((tile) => shown.has(tile.key))
             .sort(
                 (left, right) =>
                     Number(left.state === "seen") - Number(right.state === "seen") ||
@@ -205,14 +239,9 @@ export function happyAgentStoriesStoreCreate(deps: {
     };
     const compute = (): HappyAgentStoriesSnapshot => {
         const outlines = new Map<string, "unseen" | "seen">();
-        for (const { agentId, seen, poster } of stories)
-            if (
-                poster === "agent" &&
-                agentId &&
-                shown.has(`agent:${agentId}`) &&
-                outlines.get(agentId) !== "unseen"
-            )
-                outlines.set(agentId, seen ? "seen" : "unseen");
+        for (const { agentId, poster } of stories)
+            if (poster === "agent" && agentId && shown.has(`agent:${agentId}`))
+                outlines.set(agentId, ring(`agent:${agentId}`));
         const story = opened();
         const held = story ? walk(keyOf(story)) : [];
         const view = story && {
@@ -261,9 +290,18 @@ export function happyAgentStoriesStoreCreate(deps: {
         // A poster's ring appears once its first story can play at once, and then stays.
         for (const key of new Set(stories.map(keyOf))) {
             const opening = first(key);
-            if (opening && ready.has(opening.id)) shown.add(key);
+            if (opening && ready.has(opening.id)) shown.set(key, opening.seen ? "seen" : "unseen");
             else preload(opening);
         }
+        // Forget what the feed no longer holds: frames, fetches, stories and posters.
+        const live = new Set(
+            stories.flatMap((story) => {
+                const { media, mediaLayers } = mediaOf(story);
+                return [story.id, keyOf(story), media.url, ...mediaLayers.map(({ url }) => url)];
+            }),
+        );
+        for (const held of [frames, fetches, ready, asked, shown])
+            for (const key of held.keys()) if (!live.has(key)) held.delete(key);
         // The open story left: on to its poster's next one, or the row's next poster.
         if (open && !opened()) {
             const { story: gone, through } = open;
