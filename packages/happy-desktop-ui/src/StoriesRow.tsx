@@ -84,7 +84,7 @@ export function StoriesRow(props: {
                             type="button"
                         >
                             <Avatar {...item.face} size="md" />
-                            <span>{item.shortName ?? item.name.split(" ")[0]}</span>
+                            <span>{item.shortName ?? item.name}</span>
                         </button>
                     ))}
             </div>
