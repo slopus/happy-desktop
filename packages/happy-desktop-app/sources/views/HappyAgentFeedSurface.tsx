@@ -67,10 +67,8 @@ interface FeedWorld {
     readonly tasks: readonly HappyAgentTask[];
     readonly surfaces: readonly HappyAgentSurface[];
     readonly titles: HappyAgentArtifactTitlesSnapshot;
-    /** People, agents, archived bots, and todos, read by id as entries name them. */
+    /** People, agents, archived bots, todos, and the reader, read as entries name them. */
     readonly references: HappyAgentFeedReferencesSnapshot;
-    /** The standalone person, who is credited with no user id. */
-    readonly profile: HappyAgentSurfacePerson | undefined;
     readonly names: HappyAgentArtifactNames;
 }
 
@@ -150,7 +148,11 @@ function feedActorOf(actor: FeedActor, world: FeedWorld): HappyAgentFeedActor | 
             face: personFace(read.value, name, actor.userId),
         };
     }
-    return { key: "you", name: "You", face: personFace(world.profile, world.profile?.name ?? "") };
+    // The reader of a standalone installation, as their own chat names them: by
+    // their profile's photo, else the initials of its name, else of "You".
+    const profile = world.references.profile;
+    const own = profile?.name?.trim() || "You";
+    return { key: "you", name: "You", face: personFace(profile ?? undefined, own) };
 }
 
 /** A Surface's kind, as the page draws it. */
@@ -362,8 +364,6 @@ export function HappyAgentFeedSurface(props: {
     artifactTitles: HappyAgentArtifactTitlesStore;
     /** The Happy Agent's Surfaces, whose names and pictures their entries wear. */
     surfaces: readonly HappyAgentSurface[];
-    /** The standalone reader, who is credited with no user id. */
-    profile?: HappyAgentSurfacePerson;
     /** Why this Happy Agent cannot take the reader's changes right now. */
     unavailable?: string;
     /** Goes to what an entry is about; an unknown kind of subject goes nowhere. */
@@ -417,7 +417,6 @@ export function HappyAgentFeedSurface(props: {
         surfaces: props.surfaces,
         titles,
         references,
-        profile: props.profile,
         names: happyAgentArtifactNames({ projects, bots: list.bots, tasks }, PEOPLE_NAMES_NONE),
     };
     const everything = clusters.clusters.find((cluster) => cluster.cluster === "*")?.state ?? null;

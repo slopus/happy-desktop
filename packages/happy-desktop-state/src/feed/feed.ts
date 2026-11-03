@@ -239,6 +239,7 @@ export interface HappyAgentFeedDeps {
         | "listBots"
         | "getBot"
         | "getTodo"
+        | "getProfile"
         | "endpoint"
     >;
     readonly sync: HappyAgentSync;
@@ -291,7 +292,9 @@ export function happyAgentFeedCreate(deps: HappyAgentFeedDeps): HappyAgentFeed {
         for (const actor of entry.actors) {
             if (actor.agentId !== null) {
                 if (!held.agents.has(actor.agentId)) return false;
-            } else if (actor.userId !== null && !held.people.has(actor.userId)) return false;
+            } else if (actor.userId !== null) {
+                if (!held.people.has(actor.userId)) return false;
+            } else if (held.profile === null) return false;
         }
         if (entry.subject.type === "bot" && held.bots === null) return false;
         if (

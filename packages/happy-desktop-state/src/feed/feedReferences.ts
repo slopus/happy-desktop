@@ -1,4 +1,9 @@
-import { HappyAgentApiError, type Bot, type HappyAgentClient } from "@slopus/happy-agent-client";
+import {
+    HappyAgentApiError,
+    type Bot,
+    type HappyAgentClient,
+    type Profile,
+} from "@slopus/happy-agent-client";
 import type { HappyAgentSync } from "../happyAgentConnection/happyAgentSync.js";
 import { happyAgentSyncRead } from "../happyAgentConnection/happyAgentSyncRead.js";
 import { happyAgentSurfacePersonOf } from "../surfaces/surfacePeople.js";
@@ -55,6 +60,11 @@ export interface HappyAgentFeedReferencesSnapshot {
     readonly bots: ReadonlyMap<string, HappyAgentFeedBot> | null;
     /** Todos entries name, by `feedTodoKey`. */
     readonly todos: ReadonlyMap<string, HappyAgentFeedLookup<HappyAgentFeedTodo>>;
+    /**
+     * The reader's own profile, once read: who a change credited with no user
+     * id is on a standalone installation.
+     */
+    readonly profile: HappyAgentSurfacePerson | null;
 }
 
 export interface HappyAgentFeedReferencesStore {
@@ -75,7 +85,7 @@ export interface HappyAgentFeedReferencesStore {
 export interface HappyAgentFeedReferencesDeps {
     readonly client: Pick<
         HappyAgentClient,
-        "endpoint" | "getUsers" | "getAgent" | "listBots" | "getBot" | "getTodo"
+        "endpoint" | "getUsers" | "getAgent" | "listBots" | "getBot" | "getTodo" | "getProfile"
     >;
     readonly sync: HappyAgentSync;
 }
@@ -136,6 +146,7 @@ export function happyAgentFeedReferencesCreate(
         agents: new Map(),
         bots: null,
         todos: new Map(),
+        profile: null,
     };
     const wantedPeople = new Set<string>();
     const wantedAgents = new Set<string>();
@@ -263,6 +274,24 @@ export function happyAgentFeedReferencesCreate(
         publish({
             bots: new Map(bots.map((bot) => [bot.id, feedBotOf(client.endpoint, bot)])),
         });
+    const profileAdopt = (profile: Profile): void =>
+        publish({
+            profile: happyAgentSurfacePersonOf(
+                client.endpoint,
+                profile.name,
+                profile.photo,
+                "/v0/profile/photo",
+            ),
+        });
+    const profileRead = (signal: AbortSignal): void =>
+        once("profile", async () => {
+            const response = await happyAgentSyncRead(
+                signal,
+                () => client.getProfile({ signal }),
+                noop,
+            );
+            if (!signal.aborted) profileAdopt(response.profile);
+        });
     const botRead = (botId: string, signal: AbortSignal): void =>
         once(`bot:${botId}`, async () => {
             const response = await happyAgentSyncRead(
@@ -310,6 +339,7 @@ export function happyAgentFeedReferencesCreate(
                     failed = false;
                     if (input.bootstrap.bots === undefined) botsRead(active.signal);
                     else botsAdopt(input.bootstrap.bots);
+                    profileAdopt(input.bootstrap.profile);
                     reconcile(active.signal);
                     continue;
                 }
@@ -319,6 +349,7 @@ export function happyAgentFeedReferencesCreate(
                 ) {
                     failed = false;
                     botsRead(active.signal);
+                    profileRead(active.signal);
                     reconcile(active.signal);
                     continue;
                 }
@@ -326,7 +357,9 @@ export function happyAgentFeedReferencesCreate(
                 const event = input.update.event;
                 switch (event.type) {
                     case "profile.updated":
-                        if (
+                        if (event.payload.profile !== undefined)
+                            profileAdopt(event.payload.profile);
+                        else if (
                             event.payload.userId !== undefined &&
                             wantedPeople.has(event.payload.userId)
                         )

@@ -4334,7 +4334,6 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                         }
                     }}
                     artifactTitles={session.artifacts?.titles() ?? artifactTitlesStoreNoop}
-                    {...(surfaceCatalog.profile ? { profile: surfaceCatalog.profile } : {})}
                     surfaces={surfaceCatalog.surfaces}
                     workspace={session.workspace}
                     {...(activeAvailability?.refusal === undefined
