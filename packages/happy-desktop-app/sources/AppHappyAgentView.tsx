@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useSyncExternalStore, type ReactNode } from "react";
+import { useCallback, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import type { HappyAgentSystemMonitorStore } from "happy-desktop-state";
 import {
     HappyAgentSystemMonitorSurfacePage,
@@ -1280,6 +1280,7 @@ function workspaceLifecyclePhase(
 
 /** The row action ids the sidebar's context menu dispatches back to this surface. */
 const ROW_MENU_ARCHIVE = "archive";
+const ROW_MENU_DELETE_REMOTE = "delete-remote-project";
 /** Edits the existing sidebar label without changing the row's layout. */
 const ROW_MENU_RENAME = "rename";
 const ROW_MENU_SETTINGS = "settings";
@@ -1334,6 +1335,7 @@ function rowMenuItems(
      * the window keeps no such record, and the row offers neither act.
      */
     botAttention: ((bot: HappyAgentBot) => HappyAgentBotAttention) | undefined,
+    remote: boolean,
 ): MenuItem[] {
     // A subtask's title is the daemon's to write, so archiving is all its row
     // offers. The task stops and leaves its bot; its history and its worktree
@@ -1420,6 +1422,14 @@ function rowMenuItems(
         { kind: "item", id: ROW_MENU_RENAME, label: "Rename project", icon: "edit" },
         { kind: "item", id: ROW_MENU_SETTINGS, label: "Project settings…", icon: "settings" },
         { kind: "separator" },
+        ...(remote ? [{
+            kind: "item" as const,
+            id: ROW_MENU_DELETE_REMOTE,
+            label: "Eliminar proyecto y carpeta…",
+            icon: "trash" as const,
+            danger: true,
+
+        }] : []),
         {
             kind: "item",
             id: ROW_MENU_ARCHIVE,
@@ -2909,6 +2919,23 @@ function happyAgentProjectsSection(
                         icon: "plus" as const,
                         label: "Add project",
                         reveal: "always" as const,
+                      ...(happyAgent.remoteId === undefined
+                          ? {
+                                menuItems: [
+                                    { kind: "item" as const, id: "custom-project-new", label: "Crear proyecto (nueva carpeta)…" },
+                                    { kind: "item" as const, id: "custom-project-import", label: "Importar carpeta existente…" },
+                                    { kind: "separator" as const },
+                                    { kind: "item" as const, id: "custom-project-clone", label: "Clonar desde GitHub…" },
+                                ],
+                            }
+                          : {
+                                menuItems: [
+                                    { kind: "item" as const, id: "custom-project-new", label: "Crear proyecto en servidor…" },
+                                    { kind: "item" as const, id: "custom-project-import", label: "Importar carpeta del servidor…" },
+                                    { kind: "separator" as const },
+                                    { kind: "item" as const, id: "custom-project-clone", label: "Clonar desde GitHub…" },
+                                ],
+                            }),
                     },
                     ...(happyAgent.projectAdd?.error !== undefined
                         ? { error: happyAgent.projectAdd.error }
@@ -3143,6 +3170,14 @@ const FEED_SIDEBAR_ITEM: SidebarItem = {
  * content area instead of taking the window away.
  */
 export function AppHappyAgentView(props: AppHappyAgentViewProps) {
+    const [remoteDelete, setRemoteDelete] = useState<{
+        agentId: string;
+        projectId: HappyAgentProjectGroup["id"];
+        name: string;
+    } | null>(null);
+
+    const [remoteDeletePending, setRemoteDeletePending] = useState(false);
+    const [remoteDeleteError, setRemoteDeleteError] = useState<string | null>(null);
     const directory = useSyncExternalStore(
         props.happyAgents.subscribe,
         props.happyAgents.get,
@@ -3690,6 +3725,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                         props.attention
                             ? (bot) => happyAgentBotAttention(attention, happyAgent.id, bot.id)
                             : undefined,
+                        happyAgent.remoteId !== undefined,
                     ),
                 );
             }}
@@ -3836,6 +3872,20 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                     workspace.renameOpen(owner.project.id, undefined);
                     return;
                 }
+                if (
+                    actionId === ROW_MENU_DELETE_REMOTE &&
+                    happyAgent.remoteId !== undefined &&
+                    !owner.worktreeId &&
+                    owner.project.kind !== "home"
+                ) {
+
+                    setRemoteDelete({
+                        agentId: happyAgent.id,
+                        projectId: owner.project.id,
+                        name: owner.project.name,
+                    });
+                    return;
+                }
                 if (actionId !== ROW_MENU_ARCHIVE) return;
                 // Deliberately no navigation here. An archive that the host
                 // refuses would have ejected the reader from a project that is
@@ -3852,6 +3902,21 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
             // The Bots heading's menu of hidden bots puts one, or all, back.
             onSectionMenuSelect={(sectionId, _source, actionId) => {
                 const section = happyAgentSectionParse(sectionId);
+                if (section?.kind === "projects") {
+                    const agent = happyAgentOf(section.happyAgentId);
+                    if (agent?.status !== "connected" || !agent.session) return;
+                    const workspace = agent.session.workspace;
+                    if (actionId === "custom-project-new") {
+                        if (agent.remoteId === undefined) workspace.projectAdd();
+                        else workspace.projectRemoteOpen("create");
+                    } else if (actionId === "custom-project-import") {
+                        if (agent.remoteId === undefined) workspace.projectAdd();
+                        else workspace.projectRemoteOpen("import");
+                    } else if (actionId === "custom-project-clone") {
+                        workspace.projectCloneOpen();
+                    }
+                    return;
+                }
                 if (section?.kind !== "bots") return;
                 const happyAgent = happyAgentOf(section.happyAgentId);
                 if (!happyAgent) return;
@@ -4637,6 +4702,86 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                         }
                     />
                 ) : null}
+            {remoteDelete ? (
+                <ModalOverlay
+                    onDismiss={() => {
+                        if (!remoteDeletePending) setRemoteDelete(null);
+                    }}
+                >
+                    <Modal
+                        title="Eliminar proyecto y carpeta"
+                        tone="danger"
+                        onClose={remoteDeletePending
+                            ? undefined
+                            : () => setRemoteDelete(null)}
+                        footer={
+                            <>
+                                <Button
+                                    variant="ghost"
+                                    disabled={remoteDeletePending}
+                                    onClick={() => setRemoteDelete(null)}
+                                >
+                                    Cancelar
+                                </Button>
+                                <Button
+                                    variant="danger"
+                                    disabled={remoteDeletePending}
+                                    onClick={() => {
+                                        if (remoteDeletePending) return;
+
+                                        const agent = happyAgentOf(remoteDelete.agentId);
+                                        if (
+                                            agent?.status !== "connected" ||
+                                            !agent.session
+                                        ) {
+                                            setRemoteDeleteError(
+                                                "servidor remoto no está conectado."
+                                            );
+                                            return;
+                                        }
+
+                                        setRemoteDeleteError(null);
+                                        setRemoteDeletePending(true);
+
+                                        void agent.session.workspace
+                                            .projectDeleteRemote(remoteDelete.projectId)
+                                            .then(() => {
+                                                setRemoteDelete(null);
+
+                                            })
+                                            .catch((error: unknown) => {
+                                                setRemoteDeleteError(
+                                                    error instanceof Error
+                                                        ? error.message
+                                                        : String(error)
+                                                );
+                                            })
+                                            .finally(() => {
+                                                setRemoteDeletePending(false);
+                                            });
+                                    }}
+                                >
+                                    {remoteDeletePending
+                                        ? "Eliminando…"
+                                        : "Eliminar definitivamente"}
+                                </Button>
+                            </>
+                        }
+                    >
+                        <p>
+                            Proyecto: <strong>{remoteDelete.name}</strong>
+                        </p>
+                        <p>
+                            Se archivará el proyecto y se intentará eliminar
+                            su carpeta física de servidor remoto.
+                            Esta acción no se puede deshacer.
+                        </p>
+                        {remoteDeleteError ? (
+                            <p role="alert">{remoteDeleteError}</p>
+                        ) : null}
+                    </Modal>
+                </ModalOverlay>
+            ) : null}
                 {/* Command-K belongs to the window rather than to a workspace: it is
                 offered on every route, including the ones no machine is behind.
                 It only opens. The dispatcher stands down while any dialog is
@@ -9905,6 +10050,68 @@ function HappyAgentWindowDialogs(props: {
                 props.happyAgentOnline,
                 props.unavailable,
             )}
+            {workspace.projectRemote ? (
+                <ModalOverlay
+                    onDismiss={() => {
+                        if (!workspace.projectRemote?.submitting)
+                            props.workspace.projectRemoteCancel();
+                    }}
+                >
+                    <Modal
+                        title={workspace.projectRemote.kind === "create"
+                            ? "Crear proyecto en servidor remoto"
+                            : "Importar carpeta de servidor remoto"}
+                        icon="plus"
+                        size="medium"
+                        onClose={workspace.projectRemote.submitting
+                            ? undefined
+                            : () => props.workspace.projectRemoteCancel()}
+                        footer={
+                            <>
+                                <Button
+                                    variant="ghost"
+                                    disabled={workspace.projectRemote.submitting}
+                                    onClick={() => props.workspace.projectRemoteCancel()}
+                                >
+                                    Cancelar
+                                </Button>
+                                <Button
+                                    variant="primary"
+                                    disabled={workspace.projectRemote.submitting ||
+                                        !workspace.projectRemote.value.trim()}
+                                    onClick={() => props.workspace.projectRemoteSubmit()}
+                                >
+                                    {workspace.projectRemote.submitting
+                                        ? "Procesando…"
+                                        : workspace.projectRemote.kind === "create"
+                                          ? "Crear proyecto"
+                                          : "Importar carpeta"}
+                                </Button>
+                            </>
+                        }
+                    >
+                        <TextField
+                            autoFocus
+                            fullWidth
+                            disabled={workspace.projectRemote.submitting}
+                            label={workspace.projectRemote.kind === "create"
+                                ? "Nombre del proyecto"
+                                : "Ruta del servidor"}
+                            placeholder={workspace.projectRemote.kind === "create"
+                                ? "mi-proyecto"
+                                : "/workspace/mi-proyecto"}
+                            hint={workspace.projectRemote.kind === "create"
+                                ? "Se creará en /workspace del servidor."
+                                : "La carpeta debe existir en servidor remoto."}
+                            error={workspace.projectRemote.error}
+                            value={workspace.projectRemote.value}
+                            onValueChange={(value) =>
+                                props.workspace.projectRemoteUpdate(value)}
+                            onSubmit={() => props.workspace.projectRemoteSubmit()}
+                        />
+                    </Modal>
+                </ModalOverlay>
+            ) : null}
             {workspace.projectClone ? (
                 <HappyAgentProjectCloneDialog
                     repository={workspace.projectClone.repository}

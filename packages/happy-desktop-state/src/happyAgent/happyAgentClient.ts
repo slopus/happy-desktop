@@ -352,6 +352,8 @@ export interface HappyAgentWorkspaceClient {
      * as a displayable `UserError`.
      */
     projectAdd(path: string): Promise<HappyAgentProjectId>;
+    projectCreateRemote(name: string): Promise<HappyAgentProjectId>;
+    projectRemoveArchivedDirectory(projectId: string): Promise<void>;
     /** Applications this host can open a project or worktree directory in. */
     openInTargetsRead(): Promise<HappyAgentOpenInTargets>;
     /**
@@ -759,6 +761,217 @@ export function happyAgentWorkspaceClientCreate(
                 return project.id as HappyAgentProjectId;
             } catch (error) {
                 throw happyAgentProjectAddError(error, path);
+            }
+        },
+
+        async projectCreateRemote(name) {
+            if (!/^[\p{L}\p{N}][\p{L}\p{N} _.-]{0,62}$/u.test(name)) {
+                throw new Error("Nombre inválido: evitá barras y caracteres especiales no permitidos.");
+            }
+
+            const path = `/workspace/${name}`;
+            const projects = (await deps.client.listProjects()).projects;
+
+            if (projects.some((project) =>
+                project.compute.type === "host" &&
+                project.compute.path === path
+            )) {
+                throw new Error("El proyecto ya está registrado.");
+            }
+
+            const executor = projects.find((project) =>
+                project.status === "active" &&
+                project.initialization.status === "ready" &&
+                project.compute.type === "host" &&
+                project.compute.path?.startsWith("/workspace/")
+            );
+
+            if (!executor) {
+                throw new Error("No hay un proyecto remoto disponible para ejecutar la creación.");
+            }
+
+            const opened = await deps.client.openTerminal(executor.id, {
+                shell: "/bin/sh",
+                command: `umask 077; mkdir -- '${path}'`,
+            });
+
+            let created = false;
+            try {
+                for (let attempt = 0; attempt < 100; attempt++) {
+                    const response = await deps.client.listTerminals(executor.id);
+                    const terminal = response.terminals.find(
+                        (item) => item.id === opened.terminal.id
+                    );
+
+                    if (!terminal) {
+                        throw new Error("La terminal remota desapareció.");
+                    }
+
+                    if (terminal.status === "exited") {
+                        if (terminal.exitCode !== 0) {
+                            throw new Error("No se pudo crear la carpeta; puede que ya exista.");
+                        }
+                        created = true;
+                        break;
+                    }
+
+                    await new Promise((resolve) => setTimeout(resolve, 100));
+                }
+            } finally {
+                await deps.client.stopTerminal(executor.id, opened.terminal.id)
+                    .catch(() => undefined);
+            }
+
+            if (!created) {
+                throw new Error("No se confirmó la creación del directorio.");
+            }
+
+            try {
+                const project = await deps.connection.projects.add(path);
+                return project.id as HappyAgentProjectId;
+            } catch (error) {
+                throw new Error(
+                    `La carpeta ${path} fue creada, pero no se pudo registrar: ${String(error)}`
+                );
+            }
+        },
+
+        async projectRemoveArchivedDirectory(projectId) {
+            const projects = (await deps.client.listProjects()).projects;
+            const target = projects.find((project) => project.id === projectId);
+
+            if (!target || target.status !== "archived") {
+                throw new Error("Solo se pueden eliminar carpetas de proyectos archivados.");
+            }
+
+            if (target.compute.type !== "host") {
+                throw new Error("El proyecto no utiliza el filesystem del servidor.");
+            }
+
+            const path = target.compute.path;
+            if (!path || !/^\/workspace\/[\p{L}\p{N}][\p{L}\p{N} _.-]{0,62}$/u.test(path)) {
+                throw new Error("Ruta fuera del directorio autorizado.");
+            }
+
+            const current = (
+                await deps.client.getProject(projectId)
+            ).project;
+
+            if (
+                current.status !== "archived" ||
+                current.compute.type !== "host" ||
+                current.compute.path !== path
+            ) {
+                throw new Error(
+                    "El proyecto cambió durante la eliminación. Operación cancelada."
+                );
+            }
+
+            const workspaces = (
+                await deps.client.listWorkspaces({
+                    projectId,
+                    includeArchived: true,
+                })
+            ).workspaces;
+
+            if (
+                workspaces.length === 0 ||
+                workspaces.some((workspace) =>
+                    workspace.status !== "archived" ||
+                    workspace.serviceCleanup != null
+                )
+            ) {
+                throw new Error(
+                    "El proyecto todavía tiene workspaces activos o limpieza pendiente."
+                );
+            }
+
+            const sharedPath = projects.find((project) =>
+                project.id !== projectId &&
+                project.compute.type === "host" &&
+                (
+                    project.compute.path === path ||
+                    project.compute.path?.startsWith(path + "/")
+                )
+            );
+
+            if (sharedPath) {
+                throw new Error(
+                    "El directorio contiene otro proyecto registrado. Eliminación bloqueada."
+                );
+            }
+
+            const executor = projects.find((project) =>
+                project.id !== projectId &&
+                project.status === "active" &&
+                project.compute.type === "host" &&
+                project.compute.path?.startsWith("/workspace/")
+            );
+
+            if (!executor) {
+                throw new Error("No hay un proyecto activo para ejecutar la limpieza.");
+            }
+
+            const command = [
+                "set -eu",
+                `p='${path}'`,
+                'test -d "$p"',
+                'test ! -L "$p"',
+                'test "$(realpath -e -- "$p")" = "$p"',
+                'test ! -e "$p/.happy-delete-protected"',
+                'awk -v p="$p" \'$5 == p || index($5, p "/") == 1 { found=1 } END { exit(found ? 1 : 0) }\' /proc/self/mountinfo',
+                'for proc in /proc/[0-9]*; do',
+                '  [ -d "$proc" ] || continue',
+                '  cwd=$(readlink "$proc/cwd" 2>/dev/null || true)',
+                '  case "$cwd" in',
+                '    "$p"|"$p"/*) exit 23 ;;',
+                '  esac',
+                '  for fd in "$proc"/fd/*; do',
+                '    [ -L "$fd" ] || continue',
+                '    target=$(readlink "$fd" 2>/dev/null || true)',
+                '    case "$target" in',
+                '      "$p"|"$p"/*) exit 24 ;;',
+                '    esac',
+                '  done',
+                'done',
+                'rm -rf --one-file-system -- "$p"',
+                'test ! -e "$p"',
+            ].join("\n");
+
+            const opened = await deps.client.openTerminal(executor.id, {
+                shell: "/bin/sh",
+                command,
+            });
+
+            let completed = false;
+            try {
+                for (let attempt = 0; attempt < 100; attempt++) {
+                    const response = await deps.client.listTerminals(executor.id);
+                    const terminal = response.terminals.find(
+                        (item) => item.id === opened.terminal.id
+                    );
+
+                    if (!terminal) {
+                        throw new Error("Se perdió la terminal de eliminación.");
+                    }
+
+                    if (terminal.status === "exited") {
+                        if (terminal.exitCode !== 0) {
+                            throw new Error("La eliminación de la carpeta fue rechazada o falló.");
+                        }
+                        completed = true;
+                        break;
+                    }
+
+                    await new Promise((resolve) => setTimeout(resolve, 100));
+                }
+            } finally {
+                await deps.client.stopTerminal(executor.id, opened.terminal.id)
+                    .catch(() => undefined);
+            }
+
+            if (!completed) {
+                throw new Error("No se confirmó la eliminación del directorio.");
             }
         },
         openInTargetsRead: () => deps.hostServices.openInTargetsRead(),
