@@ -139,7 +139,13 @@ Disclosed in `team.evidence.json` beside every take.
   (`freezes.json`) and the cut drops those frames from both screens, so motion
   joins up instead of hanging. The cut's last 0.6 s dissolve into its first
   frame, and each split track's into its own, so the homepage loop has no
-  seam. Kirill's feed is marked read while he watches his own task, so no
+  seam. When the agent rewrites the page, the phone's web view paints the
+  inline preview blank for a moment before the five-bar page appears (take 8:
+  22 frames of the take, 8 of them in the cut, at 32.45–32.58 s); the cut and
+  the phone track hold the 28-bar frame before over them, as the desktop keeps
+  its old preview until the new one paints. Every edit is listed under
+  `edits` in the cut's `team.json`, its `team.evidence.json` and the split
+  tracks' `take.json`. Kirill's feed is marked read while he watches his own task, so no
   feed badge interrupts the take.
 - **Background work.** The earlier tasks and Steve's running _Team servers_
   are made off camera through the same API; their transcripts and the pace of

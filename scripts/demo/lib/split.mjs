@@ -68,6 +68,25 @@ const codecs = {
 };
 
 /**
+ * The filter graph, from pad `input` to pad `output`, that holds frames of a
+ * take over: each hold's frames, `[from, to)` in the take's own frames, show
+ * the frame just before them instead.
+ */
+export function holdsGraph(input, output, holds) {
+    if (holds.length === 0) return [`[${input}]null[${output}]`];
+    return holds.flatMap((hold, index) => {
+        if (!(hold.from >= 1 && hold.to > hold.from))
+            throw new Error(`A hold must cover frames after the first: ${JSON.stringify(hold)}.`);
+        const from = index === 0 ? input : `hold${index}`;
+        const to = index === holds.length - 1 ? output : `hold${index + 1}`;
+        return [
+            `[${from}]split[shown${index}][kept${index}]`,
+            `[shown${index}][kept${index}]freezeframes=first=${hold.from}:last=${hold.to - 1}:replace=${hold.from - 1}[${to}]`,
+        ];
+    });
+}
+
+/**
  * Encodes one track in every web variant. `picture` is the filter chain that
  * turns the take's selected frames into the track's picture; `overlay`, if
  * any, is an image laid over it first.
@@ -75,6 +94,7 @@ const codecs = {
 async function trackEncode({
     name,
     source,
+    holds = [],
     overlay,
     select,
     size,
@@ -117,7 +137,8 @@ async function trackEncode({
               ]
             : [`[lit]null[looped]`];
         const graph = [
-            `[0:v]select='${select}',setpts=N/(${fps}*TB)[cut]`,
+            ...(holds.length > 0 ? holdsGraph("0:v", "held", holds) : []),
+            `[${holds.length > 0 ? "held" : "0:v"}]select='${select}',setpts=N/(${fps}*TB)[cut]`,
             overlay
                 ? `[1:v]${lightsFormat}[lights];[cut][lights]overlay=0:0[lit]`
                 : `[cut]null[lit]`,
@@ -217,6 +238,8 @@ export async function splitEncode({
     desktopSize,
     windowOverlay,
     phone,
+    phoneHolds = [],
+    edits,
     select,
     frames,
     cues,
@@ -246,6 +269,7 @@ export async function splitEncode({
     const phoneFiles = await trackEncode({
         name: "phone",
         source: phone,
+        holds: phoneHolds,
         select,
         size: { width: composition.phone.screen.width, height: composition.phone.screen.height },
         frames,
@@ -271,6 +295,7 @@ export async function splitEncode({
                 },
                 phonePart: focusFrom && focusTo ? [cueAt(focusFrom), cueAt(focusTo)] : undefined,
                 cues,
+                edits,
                 files: [...desktopFiles, ...phoneFiles],
             },
             null,

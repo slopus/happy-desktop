@@ -51,6 +51,12 @@ export default {
     // a time, and the desktop waits, unchanged, while he types.
     speedUps: [{ from: "phone-typing", to: "phone-sent", rate: 2 }],
     cutFreezes: true,
+    // Take 8: when the agent rewrites the page, the phone's web view paints its
+    // inline preview blank for 22 frames (8 of them in the cut) before the
+    // five-bar page appears; the 28-bar frame before stays on screen over
+    // them, as the desktop keeps its old preview until the new one paints.
+    // In the take's own frames, [from, to).
+    phoneHolds: [{ from: 2413, to: 2435 }],
     // Kirill's exports, once they are in the demo's assets, replace the take's
     // placeholders in the cut; the take measured where each one is drawn.
     pictures: {
