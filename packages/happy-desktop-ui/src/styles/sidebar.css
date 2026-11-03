@@ -297,6 +297,16 @@
     flex-direction: column;
 }
 
+.happy-sidebar__search-tooltip {
+    display: flex;
+    flex: none;
+    width: 100%;
+}
+
+.happy-sidebar__search-tooltip > .happy-sidebar__compose {
+    flex: 1;
+}
+
 .happy-sidebar[data-actions-divider] .happy-sidebar__actions {
     gap: 2px;
     padding-bottom: 12px;
@@ -1377,47 +1387,18 @@
     gap: 4px;
 }
 
-/*
- * Command discovery borrows the row's existing trailing lane. Ordinary reports
- * temporarily step aside; without one, the label yields enough width for the
- * right-aligned key cap.
- */
-.happy-sidebar__item-shortcut {
-    display: none;
-    flex: none;
-}
-
 /* A key cap's ink, not its padded box, ends on the trailing column the deltas
    end on: the box hangs its own padding into the row's. */
-.happy-sidebar__item[data-shortcut-always] .happy-sidebar__item-shortcut {
-    margin-right: -4px;
-}
-
-.happy-sidebar__item[data-shortcut-always] > .happy-sidebar__item-shortcut,
-.happy-sidebar__item[data-shortcut-always]
-    > .happy-sidebar__item-main
-    > .happy-sidebar__item-shortcut {
+.happy-sidebar__item-shortcut {
     display: inline-flex;
+    flex: none;
+    margin-right: -4px;
 }
 
 /* With trailing lanes the key cap sits in the row's main column; it still
    belongs at the far edge, as on a row without lanes. */
 .happy-sidebar__item-main > .happy-sidebar__item-shortcut {
     margin-left: auto;
-}
-
-[data-shortcut-hints]
-    .happy-sidebar__item[data-shortcut-row]:not(:has(> .happy-sidebar__item-trailing:focus-within))
-    > .happy-sidebar__item-shortcut {
-    display: inline-flex;
-}
-
-[data-shortcut-hints]
-    .happy-sidebar__item[data-shortcut-row]:not(:has(> .happy-sidebar__item-trailing:focus-within))
-    > :not(.happy-sidebar__item-branch):not(.happy-sidebar__item-leading):not(
-        .happy-sidebar__item-label
-    ):not(.happy-sidebar__item-shortcut) {
-    display: none;
 }
 
 /*

@@ -182,7 +182,7 @@ export function TabbedPanePage() {
                     </div>
                 </Specimen>
                 <Specimen
-                    detail="The add-session action stays the same square plus button at rest, on hover, and while Command is held; its Cmd-T cap floats below without moving the strip."
+                    detail="The add-session action stays the same square plus button on hover; its Cmd-T cap floats below without moving the strip."
                     label="Bar-action shortcut — stable geometry"
                     number="T-06"
                     stage="app"
@@ -195,31 +195,8 @@ export function TabbedPanePage() {
                             padding: "24px",
                         }}
                     >
-                        {[
-                            { held: false, label: "REST" },
-                            { held: true, label: "COMMAND HELD" },
-                        ].map((state) => (
-                            <div
-                                data-shortcut-hints={state.held ? "" : undefined}
-                                key={state.label}
-                                style={{
-                                    display: "flex",
-                                    flexDirection: "column",
-                                    gap: "8px",
-                                }}
-                            >
-                                <span
-                                    style={{
-                                        color: "var(--text-secondary)",
-                                        font: "var(--font-caption)",
-                                    }}
-                                >
-                                    {state.label}
-                                </span>
-                                <Pane active="one" tabs={sessionTabs} withAction withShortcut />
-                            </div>
-                        ))}
-                        <DimensionRule label="action 28 square in every state · cap floats below" />
+                        <Pane active="one" tabs={sessionTabs} withAction withShortcut />
+                        <DimensionRule label="action 28 square on hover · cap floats below" />
                     </div>
                 </Specimen>
             </div>

@@ -2287,12 +2287,7 @@ const COMPOSER_TYPING_COMPONENTS = {
         "AppShell",
         "Sidebar",
     ],
-    palette: [
-        "HappyAgentCommandPaletteSurface",
-        "HappyAgentQuickActionsSurface",
-        "HappyAgentCommandPalette",
-        "HappyAgentQuickActions",
-    ],
+    palette: ["HappyAgentCommandPaletteSurface", "HappyAgentCommandPalette"],
 } as const;
 
 interface ComposerTypingKeystroke {

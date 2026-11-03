@@ -1443,12 +1443,6 @@ const SHORTCUT_SECTIONS: SidebarSection[] = [
         label: "This Mac",
     },
 ];
-const SHORTCUT_TARGETS = [
-    { itemId: "project", sectionId: "shortcuts" },
-    { itemId: "workspace-hints", sectionId: "shortcuts" },
-    { itemId: "workspace-layout", sectionId: "shortcuts" },
-    { itemId: "other-project", sectionId: "shortcuts" },
-] as const;
 
 function InlineRenameDemo() {
     const [items, setItems] = useState<SidebarItem[]>([
@@ -1972,52 +1966,25 @@ export function SidebarPage() {
             </Specimen>
 
             <Specimen
-                detail="rest and held-Command states · the current project's main checkout is Cmd-1, then its workspaces, then other projects; its plus keeps Shift-Cmd-N as a delayed floating hover hint, and the Agents heading's plus Cmd-N"
-                label="Number shortcuts"
+                detail="The current project's plus keeps Shift-Cmd-N as a delayed floating hover hint, and the Agents heading's plus Cmd-N"
+                label="Action shortcuts"
                 number="04b"
                 stage="app"
             >
                 <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                    <div style={{ display: "flex", gap: "20px" }}>
-                        {[
-                            { label: "REST", revealed: false },
-                            { label: "HELD", revealed: true },
-                        ].map((state) => (
-                            <div
-                                data-shortcut-hints={state.revealed ? "" : undefined}
-                                key={state.label}
-                                style={{
-                                    display: "flex",
-                                    flexDirection: "column",
-                                    gap: "8px",
-                                }}
-                            >
-                                <span
-                                    style={{
-                                        color: "var(--text-secondary)",
-                                        font: "600 10px var(--happy-font-mono)",
-                                    }}
-                                >
-                                    {state.label}
-                                </span>
-                                <Frame height={320}>
-                                    <Sidebar
-                                        actions={SHORTCUT_ACTIONS}
-                                        activeItemId="project"
-                                        composeLabel="Create"
-                                        numberShortcuts="display"
-                                        numberShortcutTargets={SHORTCUT_TARGETS}
-                                        onCompose={() => {}}
-                                        onItemAction={() => {}}
-                                        onItemSelect={() => {}}
-                                        sections={SHORTCUT_SECTIONS}
-                                        title="Happy"
-                                    />
-                                </Frame>
-                            </div>
-                        ))}
-                    </div>
-                    <DimensionRule label="row 32 px · labels yield width to held-Command caps" />
+                    <Frame height={320}>
+                        <Sidebar
+                            actions={SHORTCUT_ACTIONS}
+                            activeItemId="project"
+                            composeLabel="Create"
+                            onCompose={() => {}}
+                            onItemAction={() => {}}
+                            onItemSelect={() => {}}
+                            sections={SHORTCUT_SECTIONS}
+                            title="Happy"
+                        />
+                    </Frame>
+                    <DimensionRule label="row 32 px" />
                 </div>
             </Specimen>
 

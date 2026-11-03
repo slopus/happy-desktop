@@ -26,9 +26,8 @@ export type ButtonProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, "style">
      */
     working?: boolean;
     /**
-     * Command-key hint. It floats below the unchanged button after the ordinary
-     * hover delay, or immediately when an ancestor carries
-     * `data-shortcut-hints` after AppShell's deliberate Command hold.
+     * Command-key hint. It floats below the button after the hover delay or
+     * immediately on keyboard focus.
      */
     shortcut?: KeyboardShortcut;
     size?: ButtonSize;

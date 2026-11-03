@@ -286,8 +286,6 @@ import {
     type HappyAgentUserInputAnswerMap,
     HappyAgentUsagePanel,
     HappyAgentDevicesPanel,
-    QuickActionsCard,
-    type QuickActionsCardItem,
     SegmentedControl,
     Sidebar,
     StoriesRow,
@@ -331,17 +329,17 @@ import {
     WorkFloaty,
     type WorkFloatyRow,
     WorkTabControls,
+    WindowCover,
+    Tooltip,
     type WorkspaceLifecyclePhase,
 } from "happy-desktop-ui";
 import { APP_SHORTCUTS } from "./appShortcuts";
 import { happyAgentConversationContent } from "happy-desktop-state";
 import { HappyAgentVersionProvider } from "./HappyAgentVersionProvider";
 import {
-    COMMAND_PALETTE_PREVIEW_LIMIT,
     commandPaletteIndexMove,
     commandPaletteResults,
     commandPaletteRowAt,
-    commandPaletteQuickActionRows,
     type CommandPaletteCommand,
     type CommandPaletteContext,
     type CommandPaletteRow,
@@ -3585,7 +3583,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                       },
                   }
                 : {})}
-            numberShortcuts="navigate"
+            numberShortcuts
             numberShortcutTargets={projectShortcutTargets(
                 directory,
                 active?.id,
@@ -4134,7 +4132,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
         />
     );
 
-    // What the palette and the held-Command card are both about. The update is
+    // What the palette is about. The update is
     // offered only once it is downloaded and there is something to apply it
     // with, which is the same test the sidebar's own update control makes.
     const paletteSubject: HappyAgentPaletteSubject = {
@@ -4173,16 +4171,6 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
             ).projectsHidden,
         },
     };
-    // The same suggestions the empty palette offers, on the gesture the reader
-    // already has for discovering chords. The shell mounts it only while
-    // Command is held, so this card's own reading of the workspace lasts
-    // exactly as long as the hold. A window with no palette shows no card: its
-    // footer promises ⌘K, and a promise nothing answers is worse than silence.
-    const paletteHints = !props.commandPalette ? undefined : active?.session?.workspace ? (
-        <HappyAgentQuickActionsSurface {...paletteSubject} workspace={active.session.workspace} />
-    ) : (
-        <HappyAgentQuickActions {...paletteSubject} facts={PALETTE_WORKSPACE_ABSENT} />
-    );
     const paletteActions: HappyAgentPaletteActions = {
         appearance: props.appearance,
         experiments: experimentsStore,
@@ -4222,38 +4210,32 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
         // surface: what it is called is the only thing being decided here.
         if (props.botCreateOpen && active?.session?.workspace)
             return (
-                <>
-                    {desktop ? <WindowDragRegion /> : null}
-                    <HappyAgentCreateBotSurface
-                        happyAgentOnline={activeHappyAgentOnline}
-                        providerUsage={active.session.providerUsage}
-                        // The artist's page is on the web, and this window has
-                        // no workspace behind it for an embedded tab to run in,
-                        // so it goes to the machine's own browser where the
-                        // host can send it there.
-                        onExternalLinkOpen={props.onExternalLinkOpen ?? openExternalLink}
-                        workspace={active.session.workspace}
-                        {...(activeAvailability?.refusal === undefined
-                            ? {}
-                            : { unavailable: activeAvailability.refusal })}
-                    />
-                </>
+                <HappyAgentCreateBotSurface
+                    happyAgentOnline={activeHappyAgentOnline}
+                    providerUsage={active.session.providerUsage}
+                    // The artist's page is on the web, and this window has
+                    // no workspace behind it for an embedded tab to run in,
+                    // so it goes to the machine's own browser where the
+                    // host can send it there.
+                    onExternalLinkOpen={props.onExternalLinkOpen ?? openExternalLink}
+                    workspace={active.session.workspace}
+                    {...(activeAvailability?.refusal === undefined
+                        ? {}
+                        : { unavailable: activeAvailability.refusal })}
+                />
             );
 
         // A task is made on the addressed machine, as a bot is.
         if (props.taskCreateOpen && active?.session?.workspace)
             return (
-                <>
-                    {desktop ? <WindowDragRegion /> : null}
-                    <HappyAgentCreateTaskSurface
-                        happyAgentOnline={activeHappyAgentOnline}
-                        providerUsage={active.session.providerUsage}
-                        workspace={active.session.workspace}
-                        {...(activeAvailability?.refusal === undefined
-                            ? {}
-                            : { unavailable: activeAvailability.refusal })}
-                    />
-                </>
+                <HappyAgentCreateTaskSurface
+                    happyAgentOnline={activeHappyAgentOnline}
+                    providerUsage={active.session.providerUsage}
+                    workspace={active.session.workspace}
+                    {...(activeAvailability?.refusal === undefined
+                        ? {}
+                        : { unavailable: activeAvailability.refusal })}
+                />
             );
 
         // The artifacts belong to the addressed machine, like its inbox. A
@@ -4567,8 +4549,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                               onSidebarWidthChange: sidebarVisibilityStore.sidebarWidthUpdate,
                           }
                         : {})}
-                    shortcutHints="interactive"
-                    shortcutHintsSurface={paletteHints}
+                    sidebarShortcut
                     windowControls={desktop}
                     windowFullScreen={windowState.fullScreen}
                     windowTrafficLights={windowState.trafficLights}
@@ -4581,7 +4562,8 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                     {...(taskCreateTarget !== undefined
                         ? {
                               sidebarCollapsedAction: {
-                                  label: "New task (⌘N)",
+                                  label: "New task",
+                                  shortcut: APP_SHORTCUTS.taskCreate,
                                   onClick: () => props.onTaskCreateOpen?.(taskCreateTarget),
                               },
                           }
@@ -4723,32 +4705,33 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                 {/* The palette is mounted only while it is open and for the moment
                 it takes to leave, so nothing in the window pays for a surface
                 nobody has asked for, and its own subscriptions — the workspace
-                above all — start and end with it. */}
-                <ModalOverlayPresence open={commandPaletteOpen}>
-                    {active?.session?.workspace ? (
-                        <HappyAgentCommandPaletteSurface
-                            {...paletteSubject}
-                            workspace={active.session.workspace}
-                            {...paletteActions}
-                        />
-                    ) : (
-                        <HappyAgentCommandPalette
-                            {...paletteSubject}
-                            {...paletteActions}
-                            facts={PALETTE_WORKSPACE_ABSENT}
-                        />
-                    )}
-                </ModalOverlayPresence>
+                above all — start and end with it. It belongs to the window, so
+                its dim covers the whole window, the connection rail included. */}
+                <WindowCover>
+                    <ModalOverlayPresence open={commandPaletteOpen}>
+                        {active?.session?.workspace ? (
+                            <HappyAgentCommandPaletteSurface
+                                {...paletteSubject}
+                                workspace={active.session.workspace}
+                                {...paletteActions}
+                            />
+                        ) : (
+                            <HappyAgentCommandPalette
+                                {...paletteSubject}
+                                {...paletteActions}
+                                facts={PALETTE_WORKSPACE_ABSENT}
+                            />
+                        )}
+                    </ModalOverlayPresence>
+                </WindowCover>
             </LinkCopyContext.Provider>
         </HappyAgentVersionProvider>
     );
 }
 
 /**
- * What the palette and its held-Command preview are both about: the machine on
- * screen, where in it the reader is standing, and what this window could do
- * from there. Both surfaces answer the same question, so neither is given its
- * own idea of the subject.
+ * The machine on screen, where the reader is standing, and what the palette
+ * can do from there.
  */
 interface HappyAgentPaletteSubject {
     happyAgentId: string;
@@ -4931,28 +4914,6 @@ function HappyAgentCommandPaletteSurface(
     );
 }
 
-/** The same reading, for the held-Command card. */
-function HappyAgentQuickActionsSurface(
-    props: HappyAgentPaletteSubject & { workspace: HappyAgentWorkspaceStore },
-) {
-    const workspace = useSyncExternalStore(
-        reactFrameSubscribe(props.workspace),
-        props.workspace.get,
-        props.workspace.get,
-    );
-    const panel = useSyncExternalStore(
-        props.workspace.panel.subscribe,
-        props.workspace.panel.get,
-        props.workspace.panel.get,
-    );
-    return (
-        <HappyAgentQuickActions
-            {...props}
-            facts={paletteFacts(workspace, panel, props.groupId, props.online)}
-        />
-    );
-}
-
 /** Everything the results are computed from, assembled once for either surface. */
 function paletteContext(
     subject: HappyAgentPaletteSubject,
@@ -4980,37 +4941,6 @@ function paletteContext(
         sidebarListing: subject.sidebarListing,
         visits: facts.visits,
     };
-}
-
-/**
- * What holding Command puts in the middle of the window: the acts the palette
- * answers a typed query with, each wearing the chord that runs it.
- *
- * It is the same list, from the same transform, so the card never teaches a
- * chord for something the palette would not run. Rows the card cannot draw —
- * a picture, a live settings control — are left out rather than approximated;
- * actions produce none today.
- */
-function HappyAgentQuickActions(
-    props: HappyAgentPaletteSubject & { facts: HappyAgentPaletteFacts },
-) {
-    const items = commandPaletteQuickActionRows(paletteContext(props, props.facts))
-        .slice(0, COMMAND_PALETTE_PREVIEW_LIMIT)
-        .flatMap((row): QuickActionsCardItem[] =>
-            row.glyph.kind === "avatar"
-                ? []
-                : [
-                      {
-                          id: row.id,
-                          title: row.title,
-                          ...(row.glyph.kind === "emphasis"
-                              ? { emphasis: row.glyph.emphasis }
-                              : { icon: row.glyph.name }),
-                          ...(row.shortcut ? { shortcut: row.shortcut } : {}),
-                      },
-                  ],
-        );
-    return <QuickActionsCard items={items} />;
 }
 
 /**
@@ -7466,6 +7396,7 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                       panelToggleAction: {
                           open: panel.open,
                           onClick: () => props.workspace.panel.panelToggle(),
+                          shortcut: APP_SHORTCUTS.panelToggle,
                       },
                   })}
             // The width this checkout was last left at, or the shell's own
@@ -7790,16 +7721,21 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                                    bot or task can never take a second chat, so
                                    it offers none. */
                                 openGroup.singleConversationId === undefined ? (
-                                    <Button
-                                        aria-label="Create a session in this project"
-                                        disabled={!sessionCreateAvailable}
-                                        icon="plus"
-                                        iconOnly
-                                        onClick={() => groupConversationCreate(openGroup)}
+                                    <Tooltip
+                                        label="Create a session in this project"
+                                        placement="bottom"
                                         shortcut={APP_SHORTCUTS.sessionCreate}
-                                        size="small"
-                                        variant="ghost"
-                                    />
+                                    >
+                                        <Button
+                                            aria-label="Create a session in this project"
+                                            disabled={!sessionCreateAvailable}
+                                            icon="plus"
+                                            iconOnly
+                                            onClick={() => groupConversationCreate(openGroup)}
+                                            size="small"
+                                            variant="ghost"
+                                        />
+                                    </Tooltip>
                                 ) : null
                             }
                             trailing={
@@ -10315,6 +10251,7 @@ function HappyAgentCreateBotSurface(props: {
     const menus = botCreate.menus;
     return (
         <ConversationView
+            title="New bot"
             agentAuthor={agentAuthor}
             dock={
                 <HappyAgentComposerDock
@@ -10440,6 +10377,7 @@ function HappyAgentCreateTaskSurface(props: {
     const menus = taskCreate.menus;
     return (
         <ConversationView
+            title="New task"
             agentAuthor={agentAuthor}
             dock={
                 <HappyAgentComposerDock

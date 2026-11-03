@@ -252,9 +252,7 @@
     transition-delay: 500ms;
 }
 
-[data-shortcut-hint]:focus-visible > .happy-shortcut-hint--floating,
-[data-shortcut-hints] .happy-shortcut-hint--floating,
-[data-shortcut-hints] [data-shortcut-hint]:hover > .happy-shortcut-hint--floating {
+[data-shortcut-hint]:focus-visible > .happy-shortcut-hint--floating {
     top: calc(100% + 4px);
     opacity: 1;
     transform: translateX(-50%);

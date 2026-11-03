@@ -37,9 +37,7 @@ import { APP_SHORTCUTS } from "./appShortcuts";
  * is reflected without the palette asking anyone for fresh data.
  *
  * The transform is deliberately a plain function over explicit inputs rather
- * than a hook: the same action rows fill the palette's answers and the
- * held-Command preview, and neither of those two surfaces should be able to
- * offer an act the other does not.
+ * than a hook, keeping its answers independent of the UI rendering them.
  */
 
 /**
@@ -228,10 +226,8 @@ export type CommandPaletteTab =
 /**
  * Where the reader is and what they could do from there.
  *
- * It is stated apart from the query and the settings values because the
- * held-Command preview offers the same actions without either: it is not a
- * search, and it changes nothing, so it must not have to read the theme to say
- * what a reader could do next.
+ * It is stated apart from the query and settings values so the available
+ * actions depend only on the addressed workspace and machine.
  */
 export interface CommandPaletteContext {
     /** The machine whose work the palette lists: the one the address names. */
@@ -326,9 +322,6 @@ export interface CommandPaletteInput extends CommandPaletteContext {
 const SECTION_LIMIT = 6;
 /** How many recent chats the empty palette suggests. */
 const RECENT_LIMIT = 8;
-/** How many actions the held-Command preview shows. */
-export const COMMAND_PALETTE_PREVIEW_LIMIT = 6;
-
 const THEME_SEGMENTS: readonly { readonly value: ThemeMode; readonly label: string }[] = [
     { value: "system", label: "System" },
     { value: "light", label: "Light" },
@@ -1281,7 +1274,7 @@ interface ActionOffer {
  * The things the window can do from anywhere, each with the chord that does
  * the same outside the palette. They are found by typing rather than listed on
  * an empty palette: the palette is a search, and its actions are answers to it.
- * The update joins them only under a typed query or on the held-Command card:
+ * The update joins them only under a typed query:
  * the empty palette already gives it the top row, and offering it twice would
  * be the palette shouting.
  */
@@ -1399,19 +1392,6 @@ export function commandPaletteSuggestionSections(
                   rows: actionOffers(context).map((offer) => offer.row),
               },
     ];
-}
-
-/**
- * What holding Command shows: the waiting update and the window's actions,
- * each wearing the chord that runs it. Discovering chords is that card's whole
- * purpose, so it offers the same acts a typed query finds, in the same words,
- * and none of the work, which has no chord to teach.
- */
-export function commandPaletteQuickActionRows(
-    context: CommandPaletteContext,
-): CommandPaletteCommandRow[] {
-    const update = updateRow(context);
-    return [...(update ? [update] : []), ...actionOffers(context).map((offer) => offer.row)];
 }
 
 /**

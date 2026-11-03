@@ -24,7 +24,7 @@ import {
 } from "happy-desktop-state";
 import { avatarPlaceholderIndex } from "happy-desktop-ui";
 import { APP_SHORTCUTS } from "../../sources/appShortcuts";
-import { commandPaletteQuickActionRows } from "../../sources/commandPaletteResults";
+import { commandPaletteSuggestionSections } from "../../sources/commandPaletteResults";
 import {
     AppHappyAgentView,
     type AppHappyAgentDirectorySnapshot,
@@ -584,7 +584,10 @@ it("offers New task in the command palette with its chord, only where a task can
         tabs: [],
         workspaceCreateAvailable: false,
     };
-    const rows = commandPaletteQuickActionRows({ ...context, taskCreateAvailable: true });
+    const rows = commandPaletteSuggestionSections({
+        ...context,
+        taskCreateAvailable: true,
+    }).flatMap((section) => section.rows);
     const task = rows.find((candidate) => candidate.id === "action:task-create");
     expect(task).toMatchObject({
         title: "New task",
@@ -592,8 +595,8 @@ it("offers New task in the command palette with its chord, only where a task can
         command: { kind: "taskCreate" },
     });
     expect(
-        commandPaletteQuickActionRows({ ...context, taskCreateAvailable: false }).some(
-            (candidate) => candidate.id === "action:task-create",
-        ),
+        commandPaletteSuggestionSections({ ...context, taskCreateAvailable: false })
+            .flatMap((section) => section.rows)
+            .some((candidate) => candidate.id === "action:task-create"),
     ).toBe(false);
 });

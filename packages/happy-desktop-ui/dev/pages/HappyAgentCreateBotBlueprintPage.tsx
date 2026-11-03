@@ -104,7 +104,7 @@ function region(children: ReactNode, size: { height: string; width: string } = R
  * the same model, access, and speed pickers every composer carries, with the
  * one sentence about what sending does standing where the context meter will.
  */
-function inPlace(
+export function botCreationSpecimen(
     panel: ReactNode,
     text: string,
     submitDisabled = false,
@@ -113,6 +113,7 @@ function inPlace(
 ) {
     return (
         <ConversationView
+            title="New bot"
             dock={
                 <ConversationDock
                     composer={composerWith(text, attachments)}
@@ -171,7 +172,7 @@ export function HappyAgentCreateBotBlueprintPage() {
                 stage="app"
             >
                 {region(
-                    inPlace(
+                    botCreationSpecimen(
                         <HappyAgentCreateBotPage
                             {...HANDLERS}
                             faceSlot={0}
@@ -190,7 +191,7 @@ export function HappyAgentCreateBotBlueprintPage() {
                 stage="app"
             >
                 {region(
-                    inPlace(
+                    botCreationSpecimen(
                         <HappyAgentCreateBotPage
                             {...HANDLERS}
                             faceSlot={2}
@@ -212,7 +213,7 @@ export function HappyAgentCreateBotBlueprintPage() {
             >
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "16px" }}>
                     {region(
-                        inPlace(
+                        botCreationSpecimen(
                             <HappyAgentCreateBotPage
                                 {...HANDLERS}
                                 faceSlot={2}
@@ -227,7 +228,7 @@ export function HappyAgentCreateBotBlueprintPage() {
                         MINIMUM_REGION,
                     )}
                     {region(
-                        inPlace(
+                        botCreationSpecimen(
                             <HappyAgentCreateBotPage
                                 {...HANDLERS}
                                 error="The bot's folder could not be created."
@@ -248,7 +249,7 @@ export function HappyAgentCreateBotBlueprintPage() {
                 stage="app"
             >
                 {region(
-                    inPlace(
+                    botCreationSpecimen(
                         <HappyAgentCreateBotPage
                             {...HANDLERS}
                             faceSlot={0}

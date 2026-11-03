@@ -161,7 +161,7 @@ export function ButtonPage() {
                     </div>
                 </Specimen>
                 <Specimen
-                    detail="500ms hover or held-Command discovery · cap sits 4px beneath the unchanged 28px control"
+                    detail="500ms hover · cap sits 4px beneath the unchanged 28px control"
                     label="Shortcut hint"
                     number="B-08"
                     stage="app"
@@ -175,38 +175,14 @@ export function ButtonPage() {
                             padding: "20px",
                         }}
                     >
-                        {[
-                            { label: "REST", revealed: false },
-                            { label: "HELD", revealed: true },
-                        ].map((state) => (
-                            <div
-                                data-shortcut-hints={state.revealed ? "" : undefined}
-                                key={state.label}
-                                style={{
-                                    alignItems: "center",
-                                    display: "flex",
-                                    flexDirection: "column",
-                                    gap: "8px",
-                                }}
-                            >
-                                <span
-                                    style={{
-                                        color: "var(--text-secondary)",
-                                        font: "600 10px var(--happy-font-mono)",
-                                    }}
-                                >
-                                    {state.label}
-                                </span>
-                                <Button
-                                    aria-label="Show panel"
-                                    icon="panel-expand"
-                                    iconOnly
-                                    shortcut={panelShortcut}
-                                    size="small"
-                                    variant="ghost"
-                                />
-                            </div>
-                        ))}
+                        <Button
+                            aria-label="Show panel"
+                            icon="panel-expand"
+                            iconOnly
+                            shortcut={panelShortcut}
+                            size="small"
+                            variant="ghost"
+                        />
                     </div>
                 </Specimen>
                 <Specimen

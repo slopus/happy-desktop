@@ -92,14 +92,11 @@ function windowAtMinimum(children: ReactNode) {
     );
 }
 
-function shortcutShell(revealed: boolean) {
+function shortcutShell() {
     return window1024(
-        <div
-            data-shortcut-hints={revealed ? "" : undefined}
-            style={{ display: "flex", height: "100%", width: "100%" }}
-        >
+        <div style={{ display: "flex", height: "100%", width: "100%" }}>
             <AppShell
-                shortcutHints="display"
+                sidebarShortcut
                 sidebar={<Slot label="sidebar" note="resizable · 288px" />}
                 sidebarCollapsible
                 titleBar={titleBarSlot()}
@@ -306,21 +303,12 @@ export function AppShellPage() {
             </Specimen>
 
             <Specimen
-                detail="default state: shortcut KeyCaps stay in the DOM but paint nothing and leave both 28px controls unchanged"
-                label="Command shortcuts · rest"
+                detail="Hover controls to see their shortcuts."
+                label="Command shortcuts"
                 number="07"
                 stage="chrome"
             >
-                {shortcutShell(false)}
-            </Specimen>
-
-            <Specimen
-                detail="deterministic held-Command state after the 500ms discovery delay: the sidebar toggle and descendant panel control reveal out-of-flow KeyCaps without changing either hit box"
-                label="Command shortcuts · held"
-                number="08"
-                stage="chrome"
-            >
-                {shortcutShell(true)}
+                {shortcutShell()}
             </Specimen>
 
             <Specimen

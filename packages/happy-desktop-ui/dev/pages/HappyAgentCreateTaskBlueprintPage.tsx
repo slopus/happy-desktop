@@ -62,9 +62,15 @@ function region(children: ReactNode, size: { height: string; width: string } = R
  * task is about to become, over the composer that is already that
  * conversation's, exactly as a new bot's is.
  */
-function inPlace(panel: ReactNode, text: string, submitDisabled = false, disabled = false) {
+export function taskCreationSpecimen(
+    panel: ReactNode,
+    text: string,
+    submitDisabled = false,
+    disabled = false,
+) {
     return (
         <ConversationView
+            title="New task"
             dock={
                 <ConversationDock
                     composer={composerWith(text)}
@@ -122,7 +128,9 @@ export function HappyAgentCreateTaskBlueprintPage() {
                 number="01"
                 stage="app"
             >
-                {region(inPlace(<HappyAgentCreateTaskPage {...HANDLERS} name="" />, ""))}
+                {region(
+                    taskCreationSpecimen(<HappyAgentCreateTaskPage {...HANDLERS} name="" />, ""),
+                )}
                 <DimensionRule label="column centred on both axes · 24px between header and name · title 32px · lede measure 440px · name and Create 360px, 8px apart" />
             </Specimen>
             <Specimen
@@ -132,7 +140,7 @@ export function HappyAgentCreateTaskBlueprintPage() {
                 stage="app"
             >
                 {region(
-                    inPlace(
+                    taskCreationSpecimen(
                         <HappyAgentCreateTaskPage {...HANDLERS} name="Invoice rounding" />,
                         WORK,
                     ),
@@ -146,7 +154,7 @@ export function HappyAgentCreateTaskBlueprintPage() {
             >
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "16px" }}>
                     {region(
-                        inPlace(
+                        taskCreationSpecimen(
                             <HappyAgentCreateTaskPage
                                 {...HANDLERS}
                                 name="Invoice rounding"
@@ -159,7 +167,7 @@ export function HappyAgentCreateTaskBlueprintPage() {
                         MINIMUM_REGION,
                     )}
                     {region(
-                        inPlace(
+                        taskCreationSpecimen(
                             <HappyAgentCreateTaskPage
                                 {...HANDLERS}
                                 error="The task's folder could not be created."
@@ -178,7 +186,7 @@ export function HappyAgentCreateTaskBlueprintPage() {
                 stage="app"
             >
                 {region(
-                    inPlace(
+                    taskCreationSpecimen(
                         <HappyAgentCreateTaskPage
                             {...HANDLERS}
                             name=""

@@ -135,9 +135,23 @@
     transform: translateY(calc(-1 * var(--happy-tooltip-rise)));
 }
 
-.happy-tooltip:hover > .happy-tooltip__bubble[data-align="start"],
-.happy-tooltip:has(:focus-visible) > .happy-tooltip__bubble[data-align="start"],
-.happy-tooltip[data-open] > .happy-tooltip__bubble[data-align="start"] {
+/* Ending at the trigger's trailing edge, mirrored, for the window's far side. */
+.happy-tooltip__bubble[data-align="end"][data-placement="top"] {
+    right: 0;
+    left: auto;
+    transform: translateY(var(--happy-tooltip-rise));
+}
+
+.happy-tooltip__bubble[data-align="end"][data-placement="bottom"] {
+    right: 0;
+    left: auto;
+    transform: translateY(calc(-1 * var(--happy-tooltip-rise)));
+}
+
+.happy-tooltip:hover > .happy-tooltip__bubble:is([data-align="start"], [data-align="end"]),
+.happy-tooltip:has(:focus-visible)
+    > .happy-tooltip__bubble:is([data-align="start"], [data-align="end"]),
+.happy-tooltip[data-open] > .happy-tooltip__bubble:is([data-align="start"], [data-align="end"]) {
     transform: none;
 }
 

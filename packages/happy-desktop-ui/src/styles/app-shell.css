@@ -227,21 +227,13 @@
     outline-offset: 1px;
 }
 
-/* The toggle's bubble and its held-Command chord both hang under the toggle
-   itself, never under the controls' lane, which spans the sidebar. */
+/* The toggle's bubble hangs under the toggle itself. */
 .happy-desktop-app-shell__sidebar-tip {
     flex: none;
 }
 
 .happy-desktop-app-shell__sidebar-toggle {
     position: relative;
-}
-
-/* While Command is held the chord stands alone; the bubble would repeat it. */
-.happy-desktop-app-shell[data-shortcut-hints]
-    .happy-desktop-app-shell__sidebar-tip
-    > .happy-tooltip__bubble {
-    opacity: 0;
 }
 
 .happy-desktop-app-shell__sidebar-controls[data-collapsed] {
@@ -679,48 +671,6 @@
    entirely rather than leaving a zero-height flex item in it. */
 .happy-desktop-app-shell__overlays {
     display: contents;
-}
-
-/*
- * The held-Command read-out's lane. It is over the window rather than in it:
- * the card covers the rail, sidebar, and workspace at once, so it leaves the
- * flex flow instead of asking for a lane between them. The pointer passes
- * through, and the first press of it is what ends the hold anyway.
- *
- * The gutter is quoted from styles/modal-overlay.css `top` placement, shape and
- * all: a container cannot resolve cqh units against itself, so this box is the
- * size container and the layout below it owns the padding. Holding the same
- * geometry is the point — pressing K while still holding Command promotes this
- * card into the palette without either of them moving.
- *
- * Which is why this is `fixed` and not `absolute`. ModalOverlay is fixed to the
- * viewport, while the shell is mounted below whatever chrome the host puts
- * above it — the Electron host adds a 32px connection header when the agent
- * drops. Measured against the shell, the same formula would land 32px lower
- * exactly when that header is showing, and promoting the card into the palette
- * would visibly jump. The two must share one coordinate space, so this card
- * lands where the palette will be regardless of the chrome around the shell.
- */
-.happy-desktop-app-shell__shortcut-hints {
-    position: fixed;
-    inset: 0;
-    z-index: var(--happy-z-overlay);
-    container-type: size;
-    pointer-events: none;
-}
-
-.happy-desktop-app-shell__shortcut-hints-layout {
-    box-sizing: border-box;
-    display: flex;
-    flex: none;
-    align-items: flex-start;
-    justify-content: center;
-    width: 100%;
-    height: 100%;
-    padding-top: min(128px, max(24px, calc(100cqh - 485px)));
-    padding-right: 24px;
-    padding-bottom: 24px;
-    padding-left: 24px;
 }
 
 .happy-desktop-app-shell__title-bar {

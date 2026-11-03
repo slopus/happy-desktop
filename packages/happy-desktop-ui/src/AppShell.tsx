@@ -13,11 +13,10 @@ import { KeyCap } from "./Badge";
 import { Icon } from "./Icon";
 import { LinkContextMenu } from "./LinkContextMenu";
 import {
-    commandModifier,
-    commandModifierHeld,
     commandShortcut,
     commandShortcutMatches,
     windowShortcutBlocked,
+    type KeyboardShortcut,
 } from "./keyboardShortcut";
 import { Tooltip } from "./Tooltip";
 import { WindowOverlayHostContext } from "./WindowOverlay";
@@ -32,7 +31,7 @@ export type AppShellProps = Omit<HTMLAttributes<HTMLDivElement>, "style"> & {
     panel?: ReactNode;
     panelWidth?: number;
     /** One persistent header control at the window's right edge. */
-    panelToggleAction?: { open: boolean; onClick: () => void };
+    panelToggleAction?: { open: boolean; onClick: () => void; shortcut?: KeyboardShortcut };
     /** Optional 64px feature rail. When omitted the content spans the full body. */
     rail?: ReactNode;
     sidebar?: ReactNode;
@@ -57,7 +56,7 @@ export type AppShellProps = Omit<HTMLAttributes<HTMLDivElement>, "style"> & {
     /** Compact, shared title/tab band, with sidebar controls at its leading edge. */
     navigationChrome?: "integrated";
     /** Create control beside the sidebar toggle in the integrated header. */
-    sidebarCollapsedAction?: { label: string; onClick: () => void };
+    sidebarCollapsedAction?: { label: string; onClick: () => void; shortcut?: KeyboardShortcut };
     /**
      * The open sidebar draws its own Create row, so the header keeps its create
      * control only while the sidebar is hidden: one Create on screen, never two.
@@ -108,25 +107,8 @@ export type AppShellProps = Omit<HTMLAttributes<HTMLDivElement>, "style"> & {
     sidebarCollapseLabel?: string;
     sidebarExpandLabel?: string;
     sidebarResizeLabel?: string;
-    /**
-     * Renders Command-key discovery for this window. `interactive` holds
-     * Command for 500ms to reveal descendant hints and binds Command-B;
-     * `display` renders the same caps for a deterministic fixture whose
-     * ancestor supplies `data-shortcut-hints`.
-     */
-    shortcutHints?: "display" | "interactive";
-    /**
-     * A card shown in the middle of the window for as long as Command is held —
-     * what the reader could do next, on the same gesture that reveals the caps.
-     * It rides the existing hold: the same 500ms, the same boolean, the same
-     * exits, and no listener or timer of its own.
-     *
-     * The layer is pointer-transparent and decorative. Anything modal here —
-     * `role="dialog"`, `role="menu"`, a ModalOverlay — would read as a modal to
-     * `windowShortcutBlocked()` and switch off the held-Command detection that
-     * put it on screen. Pass `QuickActionsCard`, not a Modal.
-     */
-    shortcutHintsSurface?: ReactNode;
+    /** Bind the window-wide Command-B sidebar toggle. */
+    sidebarShortcut?: boolean;
     /**
      * Enables pointer/keyboard resize of the right inspector panel. When omitted the
      * panel keeps its existing `panelWidth`/clamp contract and renders no handle.
@@ -230,7 +212,6 @@ function laneMaxWidthOf(
     if (!(viewport > 0)) return cap;
     return Math.max(min, Math.min(cap, viewport - occupied - workspaceMin));
 }
-const SHORTCUT_HINT_DELAY_MS = 500;
 const SIDEBAR_SHORTCUT = commandShortcut("b");
 /**
  * The chord this shell folds its sidebar on. Exported so a surface that offers
@@ -409,8 +390,7 @@ export function AppShell(props: AppShellProps) {
         "workspaceReadableWidth",
         "sidebarExpandLabel",
         "sidebarResizeLabel",
-        "shortcutHints",
-        "shortcutHintsSurface",
+        "sidebarShortcut",
         "panelResizable",
         "onPanelWidthChange",
         "panelDefaultWidth",
@@ -497,96 +477,21 @@ export function AppShell(props: AppShellProps) {
     const panelMax =
         local.panelMaxWidth ??
         laneMaxWidthOf(panelCap, panelMin, railFootprint + sidebarOccupied, workspaceMin);
-    const [shortcutHintsHeld, setShortcutHintsHeld] = useState(false);
     const sidebarInteractive = local.sidebarCollapsible === true;
     const sidebarSized = sidebarInteractive || local.sidebarDefaultWidth !== undefined;
-    const shortcutHintsEnabled = local.shortcutHints !== undefined;
-    const shortcutHintsInteractive = local.shortcutHints === "interactive";
-    const shortcutHintsVisible = shortcutHintsInteractive && shortcutHintsHeld;
-    // eslint-disable-next-line happy-react/no-layout-effect -- modifier discovery and a window-wide sidebar chord must work regardless of which descendant control owns focus
+    const sidebarShortcut = local.sidebarShortcut === true && sidebarInteractive;
+    // eslint-disable-next-line happy-react/no-layout-effect -- the window-wide sidebar chord works regardless of which descendant control owns focus
     useLayoutEffect(() => {
-        if (!shortcutHintsInteractive) return;
-        let shortcutTimer: number | undefined;
-        const pressedCommandKeys = new Set<string>();
-        const timerClear = () => {
-            if (shortcutTimer !== undefined) window.clearTimeout(shortcutTimer);
-            shortcutTimer = undefined;
-        };
-        const hintsHide = () => {
-            timerClear();
-            pressedCommandKeys.clear();
-            setShortcutHintsHeld(false);
-        };
+        if (!sidebarShortcut) return;
         const onKeyDown = (event: KeyboardEvent) => {
-            if (event.key === commandModifier) {
-                if (
-                    windowShortcutBlocked() ||
-                    event.defaultPrevented ||
-                    event.isComposing ||
-                    event.keyCode === 229 ||
-                    event.altKey ||
-                    (commandModifier === "Meta" ? event.ctrlKey : event.metaKey) ||
-                    event.shiftKey
-                )
-                    return;
-                const code = event.code || commandModifier;
-                if (pressedCommandKeys.has(code)) return;
-                pressedCommandKeys.add(code);
-                if (shortcutTimer !== undefined) return;
-                shortcutTimer = window.setTimeout(() => {
-                    shortcutTimer = undefined;
-                    if (pressedCommandKeys.size > 0 && !windowShortcutBlocked())
-                        setShortcutHintsHeld(true);
-                }, SHORTCUT_HINT_DELAY_MS);
-                return;
-            }
-            // Once a command chord is chosen, discovery has done its job. Hide
-            // immediately and cancel a nearly-finished timer so hints cannot
-            // flash up just after the action runs.
-            if (commandModifierHeld(event)) hintsHide();
-            if (
-                !sidebarInteractive ||
-                !commandShortcutMatches(event, SIDEBAR_SHORTCUT) ||
-                windowShortcutBlocked()
-            )
-                return;
+            if (!commandShortcutMatches(event, SIDEBAR_SHORTCUT) || windowShortcutBlocked()) return;
             event.preventDefault();
             if (!sidebarCollapsedControlled) setSidebarCollapsedLocal(!sidebarCollapsed);
             onSidebarCollapsedChange?.(!sidebarCollapsed);
         };
-        const onKeyUp = (event: KeyboardEvent) => {
-            if (event.key !== commandModifier) return;
-            pressedCommandKeys.delete(event.code || commandModifier);
-            if (pressedCommandKeys.size === 0) hintsHide();
-        };
-        const onVisibilityChange = () => {
-            if (document.visibilityState !== "visible") hintsHide();
-        };
-        const onPointerDown = () => {
-            if (pressedCommandKeys.size > 0) hintsHide();
-        };
         window.addEventListener("keydown", onKeyDown);
-        window.addEventListener("keyup", onKeyUp);
-        window.addEventListener("blur", hintsHide);
-        window.addEventListener("pointerdown", onPointerDown);
-        document.addEventListener("visibilitychange", onVisibilityChange);
-        return () => {
-            timerClear();
-            pressedCommandKeys.clear();
-            setShortcutHintsHeld(false);
-            window.removeEventListener("keydown", onKeyDown);
-            window.removeEventListener("keyup", onKeyUp);
-            window.removeEventListener("blur", hintsHide);
-            window.removeEventListener("pointerdown", onPointerDown);
-            document.removeEventListener("visibilitychange", onVisibilityChange);
-        };
-    }, [
-        onSidebarCollapsedChange,
-        shortcutHintsInteractive,
-        sidebarCollapsed,
-        sidebarCollapsedControlled,
-        sidebarInteractive,
-    ]);
+        return () => window.removeEventListener("keydown", onKeyDown);
+    }, [onSidebarCollapsedChange, sidebarShortcut, sidebarCollapsed, sidebarCollapsedControlled]);
     const panelResizable = local.panelResizable === true;
     // Controlled when a resizable panel is given a width; otherwise AppShell owns it.
     const panelWidthControlled = panelResizable && local.panelWidth !== undefined;
@@ -719,11 +624,11 @@ export function AppShell(props: AppShellProps) {
     const revealButton = sidebarHidden ? (
         <button
             aria-label={local.sidebarExpandLabel ?? "Show sidebar"}
-            aria-keyshortcuts={shortcutHintsInteractive ? SIDEBAR_SHORTCUT.aria : undefined}
+            aria-keyshortcuts={sidebarShortcut ? SIDEBAR_SHORTCUT.aria : undefined}
             className="happy-desktop-app-shell__reveal-button"
             data-floating={revealFloating ? "" : undefined}
             data-happy-desktop-ui="app-shell-reveal-button"
-            data-shortcut-hint={shortcutHintsEnabled ? "" : undefined}
+            data-shortcut-hint={sidebarShortcut ? "" : undefined}
             onClick={() => setSidebarCollapsed(false)}
             type="button"
         >
@@ -732,7 +637,7 @@ export function AppShell(props: AppShellProps) {
                 fills only 14 of its 16 box, so a 14 box would set 12.25px of
                 ink beside 14px of ink. */}
             <Icon name="sidebar-expand" size={16} />
-            {shortcutHintsEnabled ? (
+            {sidebarShortcut ? (
                 <KeyCap
                     className="happy-shortcut-hint--floating"
                     decorative
@@ -757,15 +662,23 @@ export function AppShell(props: AppShellProps) {
                 <div className="happy-desktop-app-shell__reveal-controls">
                     {revealButton}
                     {local.navigationChrome === "integrated" && local.sidebarCollapsedAction ? (
-                        <button
-                            aria-label={local.sidebarCollapsedAction.label}
-                            className="happy-desktop-app-shell__reveal-button"
-                            data-happy-desktop-ui="app-shell-collapsed-action"
-                            onClick={local.sidebarCollapsedAction.onClick}
-                            type="button"
+                        <Tooltip
+                            align="start"
+                            label={local.sidebarCollapsedAction.label}
+                            placement="bottom"
+                            shortcut={local.sidebarCollapsedAction.shortcut}
                         >
-                            <Icon name="compose" size={16} />
-                        </button>
+                            <button
+                                aria-label={local.sidebarCollapsedAction.label}
+                                aria-keyshortcuts={local.sidebarCollapsedAction.shortcut?.aria}
+                                className="happy-desktop-app-shell__reveal-button"
+                                data-happy-desktop-ui="app-shell-collapsed-action"
+                                onClick={local.sidebarCollapsedAction.onClick}
+                                type="button"
+                            >
+                                <Icon name="compose" size={16} />
+                            </button>
+                        </Tooltip>
                     ) : null}
                 </div>
             ) : (
@@ -782,19 +695,17 @@ export function AppShell(props: AppShellProps) {
             data-collapsed={sidebarHidden ? "" : undefined}
             data-happy-desktop-ui="app-shell-sidebar-controls"
         >
-            {/* Hovered, the toggle says what it does and its chord in one
-                bubble hanging from it, never past the window's edge; held
-                Command shows the chord alone, under the same button. */}
+            {/* Keep the tooltip anchored to the toggle itself. */}
             <Tooltip
                 align="start"
                 className="happy-desktop-app-shell__sidebar-tip"
                 label={sidebarToggleLabel}
                 placement="bottom"
-                shortcut={shortcutHintsEnabled ? SIDEBAR_SHORTCUT : undefined}
+                shortcut={sidebarShortcut ? SIDEBAR_SHORTCUT : undefined}
             >
                 <button
                     aria-label={sidebarToggleLabel}
-                    aria-keyshortcuts={shortcutHintsInteractive ? SIDEBAR_SHORTCUT.aria : undefined}
+                    aria-keyshortcuts={sidebarShortcut ? SIDEBAR_SHORTCUT.aria : undefined}
                     aria-pressed={!sidebarHidden}
                     className="happy-desktop-app-shell__sidebar-toggle"
                     data-happy-desktop-ui={
@@ -804,25 +715,26 @@ export function AppShell(props: AppShellProps) {
                     type="button"
                 >
                     <Icon name={sidebarHidden ? "sidebar-expand" : "sidebar-collapse"} size={16} />
-                    {shortcutHintsEnabled ? (
-                        <KeyCap
-                            className="happy-shortcut-hint--floating"
-                            decorative
-                            keys={SIDEBAR_SHORTCUT.caps}
-                        />
-                    ) : null}
                 </button>
             </Tooltip>
             {local.sidebarCollapsedAction && (sidebarHidden || !local.sidebarOwnsCreate) ? (
-                <button
-                    aria-label={local.sidebarCollapsedAction.label}
-                    className="happy-desktop-app-shell__new-work"
-                    data-happy-desktop-ui="app-shell-collapsed-action"
-                    onClick={local.sidebarCollapsedAction.onClick}
-                    type="button"
+                <Tooltip
+                    align="start"
+                    label={local.sidebarCollapsedAction.label}
+                    placement="bottom"
+                    shortcut={local.sidebarCollapsedAction.shortcut}
                 >
-                    <Icon name="compose" size={16} />
-                </button>
+                    <button
+                        aria-label={local.sidebarCollapsedAction.label}
+                        aria-keyshortcuts={local.sidebarCollapsedAction.shortcut?.aria}
+                        className="happy-desktop-app-shell__new-work"
+                        data-happy-desktop-ui="app-shell-collapsed-action"
+                        onClick={local.sidebarCollapsedAction.onClick}
+                        type="button"
+                    >
+                        <Icon name="compose" size={16} />
+                    </button>
+                </Tooltip>
             ) : null}
             <span aria-hidden="true" className="happy-desktop-app-shell__sidebar-controls-rule" />
         </div>
@@ -845,7 +757,6 @@ export function AppShell(props: AppShellProps) {
                 data-embedded={local.embedded ? "" : undefined}
                 data-focused-pane={focusedPane}
                 data-happy-desktop-ui="app-shell"
-                data-shortcut-hints={shortcutHintsVisible ? "" : undefined}
                 data-sidebar-collapsed={sidebarHidden ? "" : undefined}
                 data-sidebar-collapsed-layout={local.sidebarCollapsedLayout}
                 data-sidebar-travel={sidebarTravel ? "" : undefined}
@@ -956,22 +867,18 @@ export function AppShell(props: AppShellProps) {
                                                 local.sidebarCollapseLabel ?? "Hide sidebar"
                                             }
                                             aria-keyshortcuts={
-                                                shortcutHintsInteractive
-                                                    ? SIDEBAR_SHORTCUT.aria
-                                                    : undefined
+                                                sidebarShortcut ? SIDEBAR_SHORTCUT.aria : undefined
                                             }
                                             className="happy-desktop-app-shell__sidebar-collapse"
                                             data-happy-desktop-ui="app-shell-sidebar-collapse"
-                                            data-shortcut-hint={
-                                                shortcutHintsEnabled ? "" : undefined
-                                            }
+                                            data-shortcut-hint={sidebarShortcut ? "" : undefined}
                                             onClick={() => setSidebarCollapsed(true)}
                                             type="button"
                                         >
                                             {/* Matches the reveal control above; see
                                             the note there for why 16. */}
                                             <Icon name="sidebar-collapse" size={16} />
-                                            {shortcutHintsEnabled ? (
+                                            {sidebarShortcut ? (
                                                 <KeyCap
                                                     className="happy-shortcut-hint--floating"
                                                     decorative
@@ -1059,24 +966,38 @@ export function AppShell(props: AppShellProps) {
                         className="happy-desktop-app-shell__panel-controls"
                         data-happy-desktop-ui="app-shell-panel-controls"
                     >
-                        <button
-                            aria-label={
+                        <Tooltip
+                            align="end"
+                            label={
                                 local.panelToggleAction.open
                                     ? "Hide secondary pane"
                                     : "Show secondary pane"
                             }
-                            aria-pressed={local.panelToggleAction.open}
-                            className="happy-desktop-app-shell__panel-toggle"
-                            onClick={local.panelToggleAction.onClick}
-                            type="button"
+                            placement="bottom"
+                            shortcut={local.panelToggleAction.shortcut}
                         >
-                            <Icon
-                                name={
-                                    local.panelToggleAction.open ? "panel-collapse" : "panel-expand"
+                            <button
+                                aria-label={
+                                    local.panelToggleAction.open
+                                        ? "Hide secondary pane"
+                                        : "Show secondary pane"
                                 }
-                                size={16}
-                            />
-                        </button>
+                                aria-pressed={local.panelToggleAction.open}
+                                aria-keyshortcuts={local.panelToggleAction.shortcut?.aria}
+                                className="happy-desktop-app-shell__panel-toggle"
+                                onClick={local.panelToggleAction.onClick}
+                                type="button"
+                            >
+                                <Icon
+                                    name={
+                                        local.panelToggleAction.open
+                                            ? "panel-collapse"
+                                            : "panel-expand"
+                                    }
+                                    size={16}
+                                />
+                            </button>
+                        </Tooltip>
                     </div>
                 ) : null}
                 {/* Last, after every drag surface in the body. Native draggable
@@ -1084,24 +1005,6 @@ export function AppShell(props: AppShellProps) {
                 a control that punches a hole in one has to come after it — the
                 same order the sidebar's own toggle already sits in. */}
                 {revealFloating ? reveal : null}
-                {/* The held-Command read-out. It hangs on the window rather than
-                in the layout because it covers the window, and it is mounted
-                only while the hold lasts — every way out of the gesture above
-                (chord, keyup, blur, pointerdown, tab hidden) takes it away with
-                it. It draws nothing and takes no room otherwise. */}
-                {shortcutHintsVisible && local.shortcutHintsSurface ? (
-                    <div
-                        className="happy-desktop-app-shell__shortcut-hints"
-                        data-happy-desktop-ui="app-shell-shortcut-hints"
-                    >
-                        <div
-                            className="happy-desktop-app-shell__shortcut-hints-layout"
-                            data-happy-desktop-ui="app-shell-shortcut-hints-layout"
-                        >
-                            {local.shortcutHintsSurface}
-                        </div>
-                    </div>
-                ) : null}
                 {/* The window's overlay lane. A modal-class surface written
                 deep in the product hangs here instead, so its z-index is
                 resolved against the window rather than against whatever

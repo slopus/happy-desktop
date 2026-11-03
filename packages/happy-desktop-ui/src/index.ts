@@ -824,11 +824,7 @@ export {
     type BrowserStartPage,
     type BrowserStartTool,
 } from "./BrowserPanel";
-export {
-    QuickActionsCard,
-    type QuickActionsCardItem,
-    type QuickActionsCardProps,
-} from "./QuickActionsCard";
+export { WindowCover } from "./WindowOverlay";
 export { ZoomIndicator } from "./ZoomIndicator";
 export {
     HappyAgentInboxPage,

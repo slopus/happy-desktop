@@ -31,6 +31,7 @@ import { Menu, type MenuItem } from "./Menu";
 import { MenuButton } from "./MenuButton";
 import { ShimmerText } from "./ShimmerText";
 import { Spinner } from "./Spinner";
+import { Tooltip } from "./Tooltip";
 import { type ImageMark } from "./imageMark";
 import { ScrollArea } from "./Scrollbar";
 import { SidebarSectionContext, SidebarSectionTail } from "./SidebarSectionDetails";
@@ -577,13 +578,12 @@ export type SidebarProps = Omit<HTMLAttributes<HTMLElement>, "style"> & {
         actionId: string,
     ) => void;
     /**
-     * Gives up to nine visible section destinations Command-1…9 caps.
-     * `navigate` also binds the chords; `display` is the deterministic fixture
-     * state. `numberShortcutTargets` can state their order; otherwise visible
-     * rows are numbered in reading order. Pinned utilities and Compose never
-     * consume destination digits.
+     * Binds Command-1…9 to up to nine visible section destinations.
+     * `numberShortcutTargets` can state their order; otherwise visible rows
+     * are numbered in reading order. Pinned utilities and Compose never consume
+     * destination digits.
      */
-    numberShortcuts?: "display" | "navigate";
+    numberShortcuts?: boolean;
     numberShortcutTargets?: readonly SidebarNumberShortcutTarget[];
     sections: SidebarSection[];
     style?: CSSProperties;
@@ -1988,8 +1988,6 @@ function SidebarRow({
             data-happy-desktop-ui="sidebar-item"
             data-lifecycle={lifecycle()}
             data-status={item().status}
-            data-shortcut-row={props.shortcut ? "" : undefined}
-            data-shortcut-always={props.shortcutAlwaysVisible ? "" : undefined}
             title={props.tooltip}
             data-unread={unread() ? "" : undefined}
             data-muted={item().muted ? "" : undefined}
@@ -2283,7 +2281,7 @@ function SidebarRow({
                                 <Icon name="mic" size={12} />
                             </span>
                         ) : null}
-                        {props.shortcut ? (
+                        {props.shortcut && props.shortcutAlwaysVisible ? (
                             <KeyCap
                                 className="happy-sidebar__item-shortcut"
                                 decorative
@@ -2808,8 +2806,7 @@ export function Sidebar(props: SidebarProps) {
     const actionRows = visibleRows(local.actions ?? []);
     const actions = actionRows.map((row) => row.item);
     const actionsTree = actions.some((action) => (action.depth ?? 0) > 0);
-    const numberShortcuts = local.numberShortcuts !== undefined;
-    const numberShortcutNavigation = local.numberShortcuts === "navigate";
+    const numberShortcuts = local.numberShortcuts === true;
     // Rows keep their objects across equal snapshots, so a store update that changes nothing
     // the sidebar shows leaves every row's memoized render standing. See the reuser.
     const [sectionsReuse] = useState(sidebarSectionsReuser);
@@ -2966,11 +2963,11 @@ export function Sidebar(props: SidebarProps) {
     });
     // eslint-disable-next-line happy-react/no-layout-effect -- Command-number navigation must reach the sidebar no matter which window control currently owns focus
     useLayoutEffect(() => {
-        if (!numberShortcutNavigation) return;
+        if (!numberShortcuts) return;
         const onKeyDown = (event: KeyboardEvent) => shortcutNavigate(event);
         window.addEventListener("keydown", onKeyDown);
         return () => window.removeEventListener("keydown", onKeyDown);
-    }, [numberShortcutNavigation]);
+    }, [numberShortcuts]);
     const shortcutByRow = new Map<string, CommandShortcut>(
         shortcutRows.map((row, index) => [
             rowKey(row.sectionId, row.item.id),
@@ -4207,20 +4204,28 @@ export function Sidebar(props: SidebarProps) {
                         </div>
                     ) : null}
                     {local.searchRow ? (
-                        <SidebarRow
-                            active={false}
-                            className="happy-sidebar__compose"
-                            item={{
-                                icon: "search",
-                                id: "search",
-                                kind: "action",
-                                label: local.searchRow.label,
-                            }}
-                            onSelect={local.searchRow.onOpen}
+                        <Tooltip
+                            align="start"
+                            className="happy-sidebar__search-tooltip"
+                            label={local.searchRow.label}
+                            placement="bottom"
                             shortcut={local.searchRow.shortcut}
-                            shortcutActive={local.searchRow.shortcut !== undefined}
-                            shortcutAlwaysVisible={local.searchRow.shortcut !== undefined}
-                        />
+                        >
+                            <SidebarRow
+                                active={false}
+                                className="happy-sidebar__compose"
+                                item={{
+                                    icon: "search",
+                                    id: "search",
+                                    kind: "action",
+                                    label: local.searchRow.label,
+                                }}
+                                onSelect={local.searchRow.onOpen}
+                                shortcut={local.searchRow.shortcut}
+                                shortcutActive={local.searchRow.shortcut !== undefined}
+                                shortcutAlwaysVisible={local.searchRow.shortcut !== undefined}
+                            />
+                        </Tooltip>
                     ) : null}
                     {local.onCompose ? (
                         <SidebarRow
@@ -4757,7 +4762,7 @@ export function Sidebar(props: SidebarProps) {
                                                     reorderable={reorderable}
                                                     shortcutActive={
                                                         item.shortcut !== undefined ||
-                                                        numberShortcutNavigation
+                                                        numberShortcuts
                                                     }
                                                     shortcut={item.shortcut ?? shortcut}
                                                     shortcutAlwaysVisible={

@@ -4,12 +4,13 @@ import { partitionComponentProps } from "./componentProps";
 import type { KeyboardShortcut } from "./keyboardShortcut";
 
 export type TooltipPlacement = "top" | "bottom";
-export type TooltipAlign = "center" | "start";
+export type TooltipAlign = "center" | "start" | "end";
 
 export interface TooltipProps {
     /**
-     * Where the bubble sits along the trigger: centered on it, or starting at
-     * its leading edge, for a trigger near the window's own leading edge.
+     * Where the bubble sits along the trigger: centered on it, starting at its
+     * leading edge, or ending at its trailing edge, for a trigger near one of
+     * the window's own edges.
      */
     readonly align?: TooltipAlign;
     /** The trigger. It keeps its own box; the bubble leaves the flow entirely. */
@@ -73,7 +74,7 @@ export function Tooltip(props: TooltipProps) {
             <span
                 className="happy-tooltip__bubble"
                 data-happy-desktop-ui="tooltip-bubble"
-                data-align={local.align === "start" ? "start" : undefined}
+                data-align={local.align === "center" ? undefined : local.align}
                 data-placement={local.placement ?? "top"}
                 id={bubbleId}
                 role="tooltip"
