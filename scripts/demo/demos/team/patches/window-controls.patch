@@ -1,0 +1,24 @@
+diff --git a/packages/happy-desktop-app/sources/AppHappyAgentView.tsx b/packages/happy-desktop-app/sources/AppHappyAgentView.tsx
+--- a/packages/happy-desktop-app/sources/AppHappyAgentView.tsx
++++ b/packages/happy-desktop-app/sources/AppHappyAgentView.tsx
+@@ -4569,7 +4569,7 @@
+                         : {})}
+                     shortcutHints="interactive"
+                     shortcutHintsSurface={paletteHints}
+-                    windowControls={desktop}
++                    windowControls
+                     windowFullScreen={windowState.fullScreen}
+                     windowTrafficLights={windowState.trafficLights}
+                     connectionRail={windowState.connectionRail}
+diff --git a/packages/happy-desktop-electron/sources/renderer/renderer.tsx b/packages/happy-desktop-electron/sources/renderer/renderer.tsx
+--- a/packages/happy-desktop-electron/sources/renderer/renderer.tsx
++++ b/packages/happy-desktop-electron/sources/renderer/renderer.tsx
+@@ -783,7 +783,7 @@
+                 }
+                 reordering={directory.reordering}
+                 reorderError={directory.reorderError}
+-                windowControls={props.platform === "desktop"}
++                windowControls
+                 collapsed={sidebarVisibility.hidden}
+                 error={directory.error}
+             >

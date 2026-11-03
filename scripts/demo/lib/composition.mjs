@@ -6,6 +6,7 @@ import { promisify } from "node:util";
 import { encode } from "./encode.mjs";
 import { overlaysBuild } from "./overlays.mjs";
 import { soundtrackWrite } from "./sounds.mjs";
+import { splitEncode } from "./split.mjs";
 
 /*
  * Stages an already recorded take: the desktop movie and its synchronized
@@ -115,11 +116,28 @@ async function shadow(width, height, body, sigma) {
         .toBuffer();
 }
 
+/** macOS's window buttons, at `scale` pixels per CSS pixel, for a window whose corner is at (x, y). */
+function trafficLightsSvg(x, y, scale) {
+    // 12 px circles, 20 px apart, the first centred 20 px from the window's corner.
+    return [
+        ["#ff5f57", "#e0443e"],
+        ["#febc2e", "#dea123"],
+        ["#28c840", "#1aab29"],
+    ]
+        .map(
+            ([fill, stroke], index) =>
+                `<circle cx="${x + (20 + index * 20) * scale}" cy="${y + 20 * scale}" r="${6 * scale - 0.5}" fill="${fill}" stroke="${stroke}" stroke-width="1"/>`,
+        )
+        .join("");
+}
+
 /**
- * Backdrop with the desktop's shadow, and the window knocked out of it, plus
- * the trim drawn over the window's edge after the desktop is laid in.
+ * The backdrop, and the window's shadow, corner mask, and trim in the
+ * window's own space, so the window can be laid anywhere on the backdrop:
+ * the shadow under it, the desktop masked to its corners, the trim over its
+ * edge.
  */
-async function desktopLayersBuild(composition, directory) {
+async function desktopLayersBuild(composition, directory, measured) {
     const { output, desktop } = composition;
     const backdropSource = resolve(directory, composition.backdrop.source);
     // The photograph is softened just past its own grain: it sits behind the
@@ -128,56 +146,106 @@ async function desktopLayersBuild(composition, directory) {
     const backdrop = await sharp(backdropSource)
         .resize(output.width, output.height, { fit: "cover", kernel: "lanczos3" })
         .blur(composition.backdrop.blur)
-        .png()
+        .removeAlpha()
+        .raw()
         .toBuffer();
     const radius = (desktop.cssRadius * desktop.width) / desktop.cssWidth;
+    // Room around the window for the ambient shadow's drop and blur.
+    const pad = 140;
+    const tile = { width: desktop.width + pad * 2, height: desktop.height + pad * 2 };
     const rectangle = (inset, dy, fill) =>
-        `<rect x="${desktop.x - inset}" y="${desktop.y - inset + dy}" width="${desktop.width + inset * 2}" height="${desktop.height + inset * 2}" rx="${radius + inset}" fill="${fill}"/>`;
+        `<rect x="${pad - inset}" y="${pad - inset + dy}" width="${desktop.width + inset * 2}" height="${desktop.height + inset * 2}" rx="${radius + inset}" fill="${fill}"/>`;
     // An ambient shadow that lifts the window off the photograph, and a
     // contact shadow that keeps its edge from floating.
-    const ambient = await shadow(
-        output.width,
-        output.height,
-        rectangle(8, 30, "rgba(0,0,0,0.55)"),
-        34,
-    );
-    const contact = await shadow(
-        output.width,
-        output.height,
-        rectangle(1, 3, "rgba(0,0,0,0.5)"),
-        4,
-    );
-    const overlay = await sharp(backdrop)
-        .composite([
-            { input: ambient },
-            { input: contact },
-            { blend: "dest-out", input: svg(output.width, output.height, rectangle(0, 0, "#000")) },
-        ])
+    const ambient = await shadow(tile.width, tile.height, rectangle(8, 30, "rgba(0,0,0,0.55)"), 34);
+    const contact = await shadow(tile.width, tile.height, rectangle(1, 3, "rgba(0,0,0,0.5)"), 4);
+    const windowShadow = await sharp(ambient)
+        .composite([{ input: contact }])
         .png()
         .toBuffer();
-    // macOS draws its window buttons over the app's reserved lane: 12 px
-    // circles, 20 px apart, the first centred 20 px from the window's corner.
+    const mask = await sharp(
+        svg(
+            desktop.width,
+            desktop.height,
+            `<rect width="${desktop.width}" height="${desktop.height}" rx="${radius}" fill="#fff"/>`,
+        ),
+    )
+        .extractChannel(3)
+        .raw()
+        .toBuffer();
+    // macOS draws its window buttons over the app's reserved lane.
     const scale = desktop.width / desktop.cssWidth;
-    const trafficLights = desktop.trafficLights
-        ? [
-              ["#ff5f57", "#e0443e"],
-              ["#febc2e", "#dea123"],
-              ["#28c840", "#1aab29"],
-          ]
-              .map(
-                  ([fill, stroke], index) =>
-                      `<circle cx="${desktop.x + (20 + index * 20) * scale}" cy="${desktop.y + 20 * scale}" r="${6 * scale - 0.5}" fill="${fill}" stroke="${stroke}" stroke-width="1"/>`,
-              )
-              .join("")
-        : "";
+    const trafficLights = desktop.trafficLights ? trafficLightsSvg(pad, pad, scale) : "";
     // A dark outer hairline, then the website's light inner one.
     const trim = svg(
-        output.width,
-        output.height,
-        `${trafficLights}<rect x="${desktop.x - 0.5}" y="${desktop.y - 0.5}" width="${desktop.width + 1}" height="${desktop.height + 1}" rx="${radius + 0.5}" fill="none" stroke="rgba(0,0,0,0.55)" stroke-width="1"/>
-         <rect x="${desktop.x + 0.75}" y="${desktop.y + 0.75}" width="${desktop.width - 1.5}" height="${desktop.height - 1.5}" rx="${radius - 0.75}" fill="none" stroke="rgba(255,255,255,0.17)" stroke-width="1.5"/>`,
+        tile.width,
+        tile.height,
+        `${trafficLights}<rect x="${pad - 0.5}" y="${pad - 0.5}" width="${desktop.width + 1}" height="${desktop.height + 1}" rx="${radius + 0.5}" fill="none" stroke="rgba(0,0,0,0.55)" stroke-width="1"/>
+         <rect x="${pad + 0.75}" y="${pad + 0.75}" width="${desktop.width - 1.5}" height="${desktop.height - 1.5}" rx="${radius - 0.75}" fill="none" stroke="rgba(255,255,255,0.17)" stroke-width="1.5"/>`,
     );
-    return { overlay, trim: await sharp(trim).png().toBuffer() };
+    return {
+        backdrop,
+        mask,
+        pad,
+        pictures: await picturesBuild(composition, directory, measured, scale),
+        tile,
+        shadow: windowShadow,
+        trim: await sharp(trim).png().toBuffer(),
+    };
+}
+
+/**
+ * Pictures that replace the take's placeholders without shooting it again:
+ * for each `composition.pictures` entry whose file exists, the image, cut to
+ * the corner radius of the box the take measured for it (filmed.json's
+ * `pictures`, at the take's start and end, which must agree), at `scale`
+ * pixels per CSS pixel. Each layer is placed relative to the window's corner.
+ */
+async function picturesBuild(composition, directory, measured, scale) {
+    const layers = [];
+    for (const [name, file] of Object.entries(composition.pictures ?? {})) {
+        const path = resolve(directory, file);
+        if (!(await stat(path).catch(() => undefined))) continue;
+        const box = measured?.opening?.[name];
+        if (!box) throw new Error(`The take measured no box for the ${name} picture.`);
+        if (JSON.stringify(box) !== JSON.stringify(measured.closing?.[name]))
+            throw new Error(
+                `The ${name} picture moved during the take; it cannot be swapped in the cut.`,
+            );
+        const width = Math.round(box.width * scale);
+        const height = Math.round(box.height * scale);
+        const radius = box.radius.endsWith("%")
+            ? (Number.parseFloat(box.radius) / 100) * width
+            : Number.parseFloat(box.radius) * scale;
+        const input = await sharp(path)
+            .resize(width, height, { fit: "cover", kernel: "lanczos3" })
+            .ensureAlpha()
+            .composite([
+                {
+                    input: svg(
+                        width,
+                        height,
+                        `<rect width="${width}" height="${height}" rx="${radius}" fill="#fff"/>`,
+                    ),
+                    blend: "dest-in",
+                },
+            ])
+            .png()
+            .toBuffer();
+        layers.push({ input, left: Math.round(box.x * scale), top: Math.round(box.y * scale) });
+    }
+    return layers;
+}
+
+/** The window's traffic lights and swapped pictures as one transparent image at the window's recorded size. */
+async function windowOverlayBuild(composition, directory, measured, { width, height }) {
+    const scale = width / composition.desktop.cssWidth;
+    return sharp(
+        svg(width, height, composition.desktop.trafficLights ? trafficLightsSvg(0, 0, scale) : ""),
+    )
+        .composite(await picturesBuild(composition, directory, measured, scale))
+        .png()
+        .toBuffer();
 }
 
 /**
@@ -261,11 +329,11 @@ async function phoneLayersBuild(composition, directory) {
     };
 }
 
-/** Where the phone is at one instant: parked, focused, or easing between. */
-function phonePose(composition, focus, seconds, canvas) {
-    const { output, phone } = composition;
+/** How far into the phone's focus one instant is: 0 parked or away, 1 focused, eased between. */
+function focusProgress(composition, focus, seconds) {
+    const { phone } = composition;
     const ease = cubicBezier(phone.transition.easing);
-    const progress = Math.max(
+    return Math.max(
         ...focus.map((window) =>
             seconds < window.enter
                 ? 0
@@ -274,6 +342,12 @@ function phonePose(composition, focus, seconds, canvas) {
                   : 1 - ease((seconds - window.exit) / phone.transition.seconds),
         ),
     );
+}
+
+/** Where the phone is at one instant: parked, focused, or easing between. */
+function phonePose(composition, focus, seconds, canvas) {
+    const { output, phone } = composition;
+    const progress = focusProgress(composition, focus, seconds);
     // A phone that enters from below rises from out of frame to its pose and
     // leaves the same way; between its focus windows it is not on screen.
     if (phone.enter === "bottom") {
@@ -390,30 +464,70 @@ async function frameCompose({
         const { width: w, height: h } = await sharp(layer.input).metadata();
         overlays.push(...(await placed(layer.input, layer.left, layer.top, w, h)));
     }
-    return sharp({
-        create: { width: output.width, height: output.height, channels: 3, background: "#000" },
+    // The window slides aside, on the phone's own easing, while the phone is up.
+    const windowLeft = Math.round(
+        desktop.x + (desktop.focusShift ?? 0) * focusProgress(composition, focus, seconds),
+    );
+    const { pad, tile } = layers.desktop;
+    const framed = await sharp(desktopRgb, {
+        raw: { width: desktop.width, height: desktop.height, channels: 3 },
+    })
+        .joinChannel(layers.desktop.mask, {
+            raw: { width: desktop.width, height: desktop.height, channels: 1 },
+        })
+        .png({ compressionLevel: 0 })
+        .toBuffer();
+    return sharp(layers.desktop.backdrop, {
+        raw: { width: output.width, height: output.height, channels: 3 },
     }).composite([
-        {
-            input: desktopRgb,
-            raw: { width: desktop.width, height: desktop.height, channels: 3 },
-            left: desktop.x,
-            top: desktop.y,
-        },
-        { input: layers.desktop.overlay },
-        { input: layers.desktop.trim },
+        ...(await placed(
+            layers.desktop.shadow,
+            windowLeft - pad,
+            desktop.y - pad,
+            tile.width,
+            tile.height,
+        )),
+        { input: framed, left: windowLeft, top: desktop.y },
+        ...layers.desktop.pictures.map((picture) => ({
+            ...picture,
+            left: windowLeft + picture.left,
+            top: desktop.y + picture.top,
+        })),
+        ...(await placed(
+            layers.desktop.trim,
+            windowLeft - pad,
+            desktop.y - pad,
+            tile.width,
+            tile.height,
+        )),
         ...(await placed(shadowScaled, shadowLeft, shadowTop, shadowWidth, shadowHeight)),
         ...(await placed(handsetScaled, left, top, width, height)),
         ...overlays,
     ]);
 }
 
+/** The take's freezes, in its own frames; a take recorded at another rate cannot be cut here. */
+async function freezesRead(file, fps) {
+    const recorded = JSON.parse(await readFile(file, "utf8"));
+    if (recorded.fps !== fps)
+        throw new Error(`${file} counts ${recorded.fps}fps frames; the cut runs at ${fps}fps.`);
+    return recorded.freezes;
+}
+
 /**
- * Editorial speed-ups: between two cues, keep every `rate`-th frame of both
- * takes, so the stretch plays `rate` times faster and the screens stay in
- * step. Returns which source frames are kept and where a source frame lands
- * on the output timeline, for re-timing the take's sounds.
+ * Which frames of the two takes the cut keeps, the same for both, so the
+ * screens stay in step.
+ *
+ * Editorial speed-ups: between two cues, keep every `rate`-th frame, so the
+ * stretch plays `rate` times faster. Freezes: a composition that sets
+ * `cutFreezes` drops the frames the desktop capture held while its
+ * screencast stalled mid-motion (the take's `freezes.json`, from the
+ * director's `captureFreezes`), so the motion on either side of a stall
+ * joins up instead of hanging. Returns which source frames are kept, where a
+ * source frame lands on the output timeline, for re-timing the take's sounds
+ * and cues, and the same rule as an ffmpeg `select` expression.
  */
-function speedUpsRead(composition, cues) {
+function timelineRead(composition, cues, freezes) {
     const fps = composition.output.fps;
     const at = (reference) => {
         const [name, occurrence = "1"] = reference.split("#");
@@ -426,20 +540,31 @@ function speedUpsRead(composition, cues) {
             throw new Error("A speed-up rate must be a whole number above 1.");
         return { from: at(entry.from), to: at(entry.to), rate: entry.rate };
     });
+    const cuts = composition.cutFreezes ? freezes : [];
+    const kept = (frame) =>
+        windows.every(
+            (window) =>
+                frame < window.from ||
+                frame >= window.to ||
+                (frame - window.from) % window.rate === 0,
+        ) && cuts.every((cut) => frame < cut.from || frame >= cut.to);
+    const select = [
+        ...windows.map(
+            (window) =>
+                `(lt(n,${window.from})+gte(n,${window.to})+not(mod(n-${window.from},${window.rate})))`,
+        ),
+        ...cuts.map((cut) => `(lt(n,${cut.from})+gte(n,${cut.to}))`),
+    ];
     return {
-        windows,
-        kept: (frame) =>
-            windows.every(
-                (window) =>
-                    frame < window.from ||
-                    frame >= window.to ||
-                    (frame - window.from) % window.rate === 0,
-            ),
-        outputFrame: (frame) =>
-            windows.reduce((position, window) => {
-                const inside = Math.max(0, Math.min(frame, window.to) - window.from);
-                return position - inside + inside / window.rate;
-            }, frame),
+        edited: windows.length > 0 || cuts.length > 0,
+        cuts,
+        kept,
+        select: select.length === 0 ? "1" : select.join("*"),
+        outputFrame: (frame) => {
+            let position = 0;
+            for (let source = 0; source < frame; source += 1) if (kept(source)) position += 1;
+            return position;
+        },
     };
 }
 
@@ -477,7 +602,10 @@ export async function compositionRender({
     const { output } = composition;
     const cueList = JSON.parse(await readFile(cues, "utf8"));
     const focus = focusRead(cueList);
-    const speedUps = speedUpsRead(composition, cueList);
+    const freezes = composition.cutFreezes
+        ? await freezesRead(join(dirname(cues), "freezes.json"), output.fps)
+        : [];
+    const timeline = timelineRead(composition, cueList, freezes);
     const [desktopInfo, phoneInfo] = await Promise.all([probe(desktop), probe(phone)]);
     if (desktopInfo.video.r_frame_rate !== phoneInfo.video.r_frame_rate)
         throw new Error("The desktop and phone takes must share one frame rate.");
@@ -494,8 +622,12 @@ export async function compositionRender({
     await mkdir(composed, { recursive: true });
 
     process.stdout.write(`\n  ${composition.title}\n`);
+    // What the take measured of its placeholder pictures, if it measured any.
+    const measured = composition.pictures
+        ? JSON.parse(await readFile(join(dirname(cues), "filmed.json"), "utf8")).pictures
+        : undefined;
     const layers = {
-        desktop: await desktopLayersBuild(composition, directory),
+        desktop: await desktopLayersBuild(composition, directory, measured),
         phone: await phoneLayersBuild(composition, directory),
     };
     phoneClearanceCheck(composition, layers.phone.canvas);
@@ -533,7 +665,7 @@ export async function compositionRender({
             if (desktopNext.done) break;
             const source = decoded;
             decoded += 1;
-            if (!speedUps.kept(source)) continue;
+            if (!timeline.kept(source)) continue;
             const index = frames;
             frames += 1;
             const job = (async () => {
@@ -569,13 +701,13 @@ export async function compositionRender({
     if (posterFrame >= frames) throw new Error("The poster instant is past the end of the take.");
 
     // The desktop take carries the recorded soundtrack; the phone is silent.
-    // A sped-up take re-mixes its sounds on the output timeline instead, so
-    // nothing is pitched up.
+    // A sped-up or cut take re-mixes its sounds on the output timeline
+    // instead, so nothing is pitched up or clipped.
     let soundtrack;
-    if (speedUps.windows.length > 0) {
+    if (timeline.edited) {
         const events = JSON.parse(await readFile(join(dirname(cues), "sounds.json"), "utf8"));
         soundtrack = await soundtrackWrite(
-            events.map((event) => ({ ...event, frame: speedUps.outputFrame(event.frame) })),
+            events.map((event) => ({ ...event, frame: timeline.outputFrame(event.frame) })),
             output.fps,
             frames,
             join(work, "soundtrack.wav"),
@@ -599,11 +731,49 @@ export async function compositionRender({
         target,
     });
     const { size } = await stat(target);
+    // The take's cues where they land in the cut.
+    const cutCues = cueList.map((cue) => ({
+        ...cue,
+        seconds: timeline.outputFrame(Math.round(cue.seconds * output.fps)) / output.fps,
+    }));
     await writeFile(
         join(out, `${composition.id}.json`),
-        JSON.stringify({ desktop, phone, cues, focus, frames, seconds, bytes: size }, null, 2) +
-            "\n",
+        JSON.stringify(
+            {
+                desktop,
+                phone,
+                cues,
+                focus,
+                frames,
+                seconds,
+                bytes: size,
+                freezes: timeline.cuts,
+                cutCues,
+            },
+            null,
+            2,
+        ) + "\n",
     );
+    if (composition.split)
+        await splitEncode({
+            composition,
+            desktop,
+            desktopSize: { width: desktopInfo.video.width, height: desktopInfo.video.height },
+            // The recorded window's traffic lights and swapped pictures, at its own scale.
+            windowOverlay: await windowOverlayBuild(
+                composition,
+                directory,
+                measured,
+                desktopInfo.video,
+            ),
+            phone,
+            select: timeline.select,
+            frames,
+            cues: cutCues,
+            soundtrack,
+            out: join(out, "split"),
+            work,
+        });
     if (size > maximumBytes)
         throw new Error(
             `${target} is ${size} bytes, above the ${maximumBytes}-byte ceiling; raise the CRF.`,

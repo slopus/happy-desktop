@@ -31,13 +31,16 @@ export const windowRadius = 28;
  * Retina capture, so the scene is filled with real pixels rather than upscaled
  * ones. A compact desktop window at 2.5× keeps controls legible in the delivered
  * video while preserving enough physical pixels for the camera's close-ups.
+ * A take that never zooms and is composed smaller may ask for fewer pixels
+ * with HAPPY_DEMO_DEVICE_SCALE, so every frame is cheap enough to deliver at
+ * the full frame rate.
  */
-export const deviceScaleFactor = 2.5;
+export const deviceScaleFactor = Number(process.env.HAPPY_DEMO_DEVICE_SCALE ?? 2.5);
 
 /** Browser viewport, in CSS pixels. A compact laptop layout. */
 export const viewport = {
-    width: window.width / deviceScaleFactor,
-    height: window.height / deviceScaleFactor,
+    width: Math.floor(window.width / deviceScaleFactor),
+    height: Math.floor(window.height / deviceScaleFactor),
 };
 
 /** The largest zoom that is still drawn entirely from captured detail. */

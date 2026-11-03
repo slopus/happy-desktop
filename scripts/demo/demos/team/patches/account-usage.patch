@@ -1,0 +1,16 @@
+diff --git a/packages/happy-desktop-ui/src/ComposerModelControl.tsx b/packages/happy-desktop-ui/src/ComposerModelControl.tsx
+--- a/packages/happy-desktop-ui/src/ComposerModelControl.tsx
++++ b/packages/happy-desktop-ui/src/ComposerModelControl.tsx
+@@ -1276,10 +1276,10 @@
+                         );
+                     })}
+                 </div>
+-                {shown ? (
++                {shown && (shownUsage?.week || shownUsage?.session) ? (
+                     <div className="happy-composer-model-control__separator" role="separator" />
+                 ) : null}
+-                {shown ? (
++                {shown && (shownUsage?.week || shownUsage?.session) ? (
+                     <ComposerModelAccountUsageDetails
+                         now={liveUsage?.now}
+                         reserve={service.accounts.flatMap((account) => [

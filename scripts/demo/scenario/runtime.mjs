@@ -143,7 +143,10 @@ async function teamDaemonStart(p, command, env, team) {
         await writeFile(p.teamSecretPath, secret, { encoding: "utf8", mode: 0o600 });
     }
     await mkdir(dirname(p.teamConfigPath), { recursive: true });
-    await writeFile(p.teamConfigPath, teamConfigToml({ port: teamPort, members: team.members }));
+    await writeFile(
+        p.teamConfigPath,
+        teamConfigToml({ port: teamPort, members: team.members, node: team.node }),
+    );
     const log = await open(join(p.root, "team-daemon.log"), "a");
     const child = spawn(command, ["run"], {
         cwd: p.root,
@@ -178,6 +181,7 @@ async function teamDaemonStart(p, command, env, team) {
     );
     return {
         token,
+        memberToken: (key) => teamTokenSign(secret, key),
         async stop() {
             await teamDaemonStop(p);
             await Promise.all(proxies.map((proxy) => proxy.close()));
@@ -277,6 +281,7 @@ async function daemonStart(
     nativeEffort,
     team,
     defaults,
+    accounts,
 ) {
     const executable = await happyAgentExecutableResolve();
     const command = join(p.bin, "happy-agent");
@@ -299,11 +304,24 @@ async function daemonStart(
     // daemon before starting this lifetime so the token and gateway URL match.
     await execFile(command, ["stop"], { cwd: p.root, env, timeout: 15_000 }).catch(() => undefined);
     await unlink(p.socketPath).catch(() => undefined);
-    await runtimeConfigurationWrite(p, models, gateway === undefined, nativeEffort, defaults);
+    await runtimeConfigurationWrite(
+        p,
+        models,
+        gateway === undefined,
+        nativeEffort,
+        defaults,
+        accounts,
+    );
     if (team) {
         if (!gateway) throw new Error("A team world runs on screenplay inference.");
         const started = await teamDaemonStart(p, command, env, team);
-        return { command, env, token: started.token, teamStop: started.stop };
+        return {
+            command,
+            env,
+            token: started.token,
+            memberToken: started.memberToken,
+            teamStop: started.stop,
+        };
     }
     let launchCheck;
     let codexVersion;
@@ -354,8 +372,24 @@ async function daemonStart(
  * the claude provider is enabled by hand so sessions can carry a real model
  * identity — its inference still routes to the gym gateway, which backs every
  * provider while the URL is set.
+ *
+ * A world's `accounts` name the built-in accounts and add more of a built-in
+ * type, `{ id, type, name, models }`, so the picker's account lists read like
+ * a real installation's. Their inference routes to the gateway all the same.
  */
-async function runtimeConfigurationWrite(p, models, native = false, nativeEffort, defaults) {
+async function runtimeConfigurationWrite(
+    p,
+    models,
+    native = false,
+    nativeEffort,
+    defaults,
+    accounts = [],
+) {
+    const named = (id) => {
+        const account = accounts.find((entry) => entry.id === id);
+        return account?.name ? [`name = ${JSON.stringify(account.name)}`] : [];
+    };
+    const builtIn = new Set(["codex", "grok", "claude"]);
     await mkdir(join(p.happyHome, "agent"), { recursive: true });
     if (native) {
         if (!nativeEffort) throw new Error("Native filming requires an explicit reasoning effort.");
@@ -407,22 +441,35 @@ async function runtimeConfigurationWrite(p, models, native = false, nativeEffort
                 : []),
             "[providers.codex]",
             'type = "codex"',
+            ...named("codex"),
             ...(models?.codex ? [`include_models = ${JSON.stringify(models.codex)}`] : []),
             "enabled = true",
             "auto_enable = true",
             "",
             "[providers.grok]",
             'type = "grok"',
+            ...named("grok"),
             ...(models?.grok ? [`include_models = ${JSON.stringify(models.grok)}`] : []),
             "enabled = true",
             "auto_enable = true",
             "",
             "[providers.claude]",
             'type = "claude"',
+            ...named("claude"),
             ...(models?.claude ? [`include_models = ${JSON.stringify(models.claude)}`] : []),
             "enabled = true",
             "auto_enable = true",
             "",
+            ...accounts
+                .filter((account) => !builtIn.has(account.id))
+                .flatMap((account) => [
+                    `[providers.${account.id}]`,
+                    `type = ${JSON.stringify(account.type)}`,
+                    `name = ${JSON.stringify(account.name)}`,
+                    `include_models = ${JSON.stringify(account.models)}`,
+                    "enabled = true",
+                    "",
+                ]),
             // Antigravity is a harness with its own login, offered as an
             // account of its own. Until its agent answers, the picker offers
             // the harness's built-in model list, filtered like any account.
@@ -711,6 +758,7 @@ export async function gymOpen(options = {}) {
         definition.effort,
         definition.team,
         definition.defaults,
+        definition.accounts,
     );
     let client = await clientCreate(p, daemon.token);
     await healthWait(client, 30_000);
@@ -794,6 +842,17 @@ export async function gymOpen(options = {}) {
             if (!definition.team) throw new Error("This world has no team.");
             return happyAgentClientCreate(teamSocketPath(p, key), daemon.token);
         },
+        /**
+         * In a team world, the member's own bearer token and the team listener
+         * it is good for, for a client that reaches the team daemon over HTTP
+         * rather than through the member's socket.
+         */
+        memberSignIn(key) {
+            if (!daemon.memberToken) throw new Error("This world has no team.");
+            return { accessToken: daemon.memberToken(key), url: `http://127.0.0.1:${teamPort}/` };
+        },
+        /** The screenplay gateway, for another daemon this world starts beside the gym's. */
+        gateway: gateway ? { url: gateway.url, token: gateway.token } : undefined,
         /** Environment for the Vite process, naming this exact daemon. */
         viteEnvironment: {
             HAPPY_HOME_DIR: p.happyHome,
@@ -838,6 +897,7 @@ export async function gymOpen(options = {}) {
                 native,
                 definition.effort,
                 definition.defaults,
+                definition.accounts,
             );
             const startStartedAt = Date.now();
             await execFile(daemon.command, ["start"], { cwd: p.root, env, timeout: 30_000 });
