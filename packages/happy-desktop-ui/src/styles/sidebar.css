@@ -521,9 +521,7 @@
 .happy-sidebar[data-fold-control-reveal="hover"]
     .happy-sidebar__section-head:has(:focus-visible)
     .happy-sidebar__section-action,
-.happy-sidebar[data-fold-control-reveal="hover"]
-    .happy-sidebar__item:hover
-    .happy-sidebar__item-fold,
+.happy-sidebar[data-fold-control-reveal="hover"] .happy-sidebar__item-fold:hover,
 .happy-sidebar[data-fold-control-reveal="hover"]
     .happy-sidebar__item:focus-visible
     .happy-sidebar__item-fold,
@@ -1205,33 +1203,79 @@
 }
 
 /*
- * A row that is shut keeps its chevron showing. The reader has to be able to
- * find the work they folded away by looking down the column, rather than
- * sweeping it to see which rows answer — and a project that has quietly hidden
- * its checkouts while looking exactly like one with none is the whole failure
- * this control could have.
+ * The chevron comes up only while the pointer is on the mark it covers — the
+ * rest of the row opens it, and a column of chevrons following the pointer
+ * down the list would say nothing about which rows fold. The fold fills the
+ * mark's box, so its own hover is exactly the mark's. Keyboard focus raises it
+ * too, since a focused row is the one being reached for.
  */
-.happy-sidebar__item:hover .happy-sidebar__item-fold,
-.happy-sidebar__item:focus-visible .happy-sidebar__item-fold,
-.happy-sidebar:not([data-fold-control-reveal="hover"])
-    .happy-sidebar__item[data-collapsed]
-    .happy-sidebar__item-fold {
+.happy-sidebar__item-fold:hover,
+.happy-sidebar__item:focus-visible .happy-sidebar__item-fold {
     opacity: 1;
 }
 
 /* The mark steps aside for exactly as long as the chevron is up. The unread dot
    is not part of the mark and keeps its place: whether a row has activity in it
    is not something reaching for the fold should take away. */
-.happy-sidebar__item:not([data-fold-placement="trailing"])[data-foldable]:hover
-    .happy-sidebar__item-leading
+.happy-sidebar__item:not([data-fold-placement="trailing"])[data-foldable]
+    .happy-sidebar__item-leading:hover
     > :not(.happy-sidebar__item-fold):not(.happy-sidebar__item-leading-unread),
 .happy-sidebar__item:not([data-fold-placement="trailing"])[data-foldable]:focus-visible
     .happy-sidebar__item-leading
-    > :not(.happy-sidebar__item-fold):not(.happy-sidebar__item-leading-unread),
-.happy-sidebar:not([data-fold-control-reveal="hover"])
-    .happy-sidebar__item:not([data-fold-placement="trailing"])[data-collapsed]
-    .happy-sidebar__item-leading
     > :not(.happy-sidebar__item-fold):not(.happy-sidebar__item-leading-unread) {
+    opacity: 0;
+}
+
+/*
+ * A row that is shut says how many rows it folded away, on the corner of its
+ * mark. The reader has to be able to find that work by looking down the
+ * column rather than sweeping it to see which rows answer — a project that has
+ * quietly hidden its checkouts while looking exactly like one with none is the
+ * whole failure this control could have — and the avatar itself stays as it
+ * is. The count is laid over the lane rather than placed in it, so it moves
+ * nothing, and it steps aside with the mark when the chevron comes up.
+ *
+ * It sits on the corner opposite the unread dot, ringed in the sidebar's own
+ * surface as that dot is, so the two never touch and either reads against
+ * whatever picture is under it.
+ */
+.happy-sidebar__item-folded {
+    position: absolute;
+    right: -5px;
+    bottom: -4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: content-box;
+    min-width: 8px;
+    height: 12px;
+    padding: 0 2px;
+    border: 1px solid var(--surface);
+    border-radius: var(--happy-radius-pill);
+    background: var(--input-background);
+    color: var(--text-secondary);
+    font-family: var(--happy-font-mono);
+    font-size: 8.5px;
+    font-weight: 700;
+    line-height: 12px;
+    font-variant-numeric: lining-nums tabular-nums;
+    font-synthesis: none;
+    white-space: nowrap;
+    pointer-events: none;
+}
+
+/* Without a mark of its own, the row's fold is in its branch box on the
+   parent's stem, and so is its count: a knot on the line where the elbow
+   was. */
+.happy-sidebar__item-branch > .happy-sidebar__item-folded {
+    top: 50%;
+    right: auto;
+    bottom: auto;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+
+.happy-sidebar__item-branch:hover > .happy-sidebar__item-folded {
     opacity: 0;
 }
 
@@ -1305,12 +1349,12 @@
 }
 
 /* An avatar-less row borrows the existing branch box for disclosure instead
-   of adding an empty identity slot. Hide only the elbow under the overlay. */
-.happy-sidebar__item[data-fold-in-branch]:hover .happy-sidebar__item-branch::after,
+   of adding an empty identity slot. Hide only the elbow under the overlay, or
+   under the count a shut row wears there. */
+.happy-sidebar__item[data-fold-in-branch] .happy-sidebar__item-branch:hover::after,
 .happy-sidebar__item[data-fold-in-branch]:focus-visible .happy-sidebar__item-branch::after,
-.happy-sidebar:not([data-fold-control-reveal="hover"])
-    .happy-sidebar__item[data-fold-in-branch][data-collapsed]
-    .happy-sidebar__item-branch::after {
+.happy-sidebar__item[data-fold-in-branch]
+    .happy-sidebar__item-branch:has(> .happy-sidebar__item-folded)::after {
     opacity: 0;
 }
 

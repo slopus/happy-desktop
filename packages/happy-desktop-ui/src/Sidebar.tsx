@@ -618,6 +618,11 @@ interface SidebarVisibleRow {
     readonly item: SidebarItem;
     /** True when rows are nested under this one, whether or not they show now. */
     readonly foldable: boolean;
+    /**
+     * How many rows this row's own fold is hiding: every row nested under it,
+     * at any depth, while it is shut, and none while it is open.
+     */
+    readonly folded: number;
 }
 
 /**
@@ -651,7 +656,11 @@ function visibleRows(items: readonly SidebarItem[]): readonly SidebarVisibleRow[
         if ((item.kind === "section" || item.kind === "separator") && depth === 0) {
             hiddenBelow = undefined;
             runHidden = item.kind === "section" && item.collapsed === true;
-            rows.push({ foldable: item.kind === "section" && item.collapsed !== undefined, item });
+            rows.push({
+                foldable: item.kind === "section" && item.collapsed !== undefined,
+                folded: 0,
+                item,
+            });
             continue;
         }
         if (runHidden) continue;
@@ -659,8 +668,12 @@ function visibleRows(items: readonly SidebarItem[]): readonly SidebarVisibleRow[
             if (depth >= hiddenBelow) continue;
             hiddenBelow = undefined;
         }
-        rows.push({ foldable: (items[index + 1]?.depth ?? 0) > depth, item });
-        if (item.collapsed === true) hiddenBelow = depth + 1;
+        let folded = 0;
+        if (item.collapsed === true) {
+            hiddenBelow = depth + 1;
+            while ((items[index + 1 + folded]?.depth ?? 0) > depth) folded += 1;
+        }
+        rows.push({ foldable: (items[index + 1]?.depth ?? 0) > depth, folded, item });
     }
     return rows;
 }
@@ -1470,6 +1483,7 @@ const SidebarListRow = memo(function SidebarListRow({
     foldControlPlacement?: "leading" | "trailing";
     dragging: boolean;
     expandable: boolean;
+    folded: number;
     grabbed: boolean;
     item: SidebarItem;
     reorderable: boolean;
@@ -1558,6 +1572,8 @@ function SidebarRow({
      * or not it draws a fold control: it says so to assistive technology.
      */
     expandable?: boolean;
+    /** How many rows the row's fold is hiding while it is shut; see `SidebarVisibleRow`. */
+    folded?: number;
     foldControlPlacement?: "leading" | "trailing";
     onSelect: (id: string) => void;
     /** The row can be arranged, which is what the keyboard shortcut is offered for. */
@@ -1809,7 +1825,7 @@ function SidebarRow({
     };
     const foldInBranch = () => !showsLeadingSlot(item()) && !activityLeading();
     // A live story owns the mark of an open row, so no chevron is laid over it; a
-    // shut row keeps its chevron there, or what it folded away could not come back.
+    // shut row keeps its fold there, or what it folded away could not come back.
     const markFolds = () =>
         props.onCollapseToggle !== undefined &&
         (props.foldControlPlacement === "trailing" || !props.onStoryOpen || !!item().collapsed);
@@ -1829,6 +1845,21 @@ function SidebarRow({
                 onPointerDown={(event) => event.stopPropagation()}
             >
                 <Icon name={item().collapsed ? "chevron-right" : "chevron-down"} size={12} />
+            </span>
+        ) : null;
+    // How many rows the fold put away, worn by a shut row in the fold's own box
+    // and laid over it rather than placed beside it, so it moves nothing.
+    const foldedCount = () =>
+        props.foldControlPlacement !== "trailing" &&
+        markFolds() &&
+        item().collapsed &&
+        (props.folded ?? 0) > 0 ? (
+            <span
+                aria-hidden="true"
+                className="happy-sidebar__item-folded"
+                data-happy-desktop-ui="sidebar-item-folded"
+            >
+                {props.folded}
             </span>
         ) : null;
     if (item().kind === "separator")
@@ -2057,9 +2088,12 @@ function SidebarRow({
                     className="happy-sidebar__item-branch"
                     data-happy-desktop-ui="sidebar-item-branch"
                 >
-                    {foldInBranch() && props.foldControlPlacement !== "trailing"
-                        ? foldControl()
-                        : null}
+                    {foldInBranch() && props.foldControlPlacement !== "trailing" ? (
+                        <>
+                            {foldedCount()}
+                            {foldControl()}
+                        </>
+                    ) : null}
                 </span>
             ) : null}
             {item().imageMark || showsLeadingSlot(item()) || activityLeading() ? (
@@ -2168,12 +2202,17 @@ function SidebarRow({
 
                         It is stacked over the mark rather than replacing it, so
                         that reaching for the chevron never resizes or reflows the
-                        row. A row that is shut keeps it showing: the reader has
-                        to be able to find the work they folded away without
-                        sweeping the column to see which rows answer. */}
-                    {props.foldControlPlacement !== "trailing" && markFolds()
-                        ? foldControl()
-                        : null}
+                        row, and it comes up only while the pointer is on the mark
+                        itself: the rest of the row is for opening it. A row that
+                        is shut wears the count of what it folded away on the
+                        mark's corner instead, so the reader can still find that
+                        work by looking down the column. */}
+                    {props.foldControlPlacement !== "trailing" && markFolds() ? (
+                        <>
+                            {foldedCount()}
+                            {foldControl()}
+                        </>
+                    ) : null}
                 </span>
             ) : null}
             <>
@@ -4276,12 +4315,13 @@ export function Sidebar(props: SidebarProps) {
                                     }}
                                 />
                             ) : null}
-                            {actionRows.map(({ foldable, item: action }, index) => {
+                            {actionRows.map(({ foldable, folded, item: action }, index) => {
                                 const drag = dragOf(ACTIONS_LIST);
                                 const dragging = drag?.moved === true;
                                 return (
                                     <SidebarRow
                                         active={local.activeItemId === action.id}
+                                        folded={folded}
                                         foldControlPlacement={local.foldControlPlacement}
                                         // A nested row is drawn as a section's is.
                                         className={
@@ -4682,7 +4722,7 @@ export function Sidebar(props: SidebarProps) {
                                                 else connectorNodes.delete(key);
                                             }}
                                         />
-                                        {shown.map(({ foldable, item }, index) => {
+                                        {shown.map(({ foldable, folded, item }, index) => {
                                             const reorderable =
                                                 local.onItemReorder !== undefined &&
                                                 item.reorderable !== false;
@@ -4730,6 +4770,7 @@ export function Sidebar(props: SidebarProps) {
                                                     expandable={
                                                         foldable && item.collapsed !== undefined
                                                     }
+                                                    folded={folded}
                                                     canRename={local.itemRename !== undefined}
                                                     tabStop={
                                                         local.keyboardNavigation

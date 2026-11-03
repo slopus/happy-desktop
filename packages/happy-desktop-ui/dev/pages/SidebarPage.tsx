@@ -622,19 +622,23 @@ function ReorderDemo() {
  * The folded rows are held here exactly as a product store holds them: the
  * sidebar is told which rows are shut and reports a press, and never decides for
  * itself what is open. A folded row takes its descendants with it,
- * which is why the tree is three levels deep and why one row starts shut.
+ * which is why the trees are three levels deep and why some rows start shut:
+ * a bot by its avatar, a channel by its glyph, and a nested row with no mark
+ * of its own by its branch.
  */
 function FoldDemo() {
-    const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set(["chan-four"]));
-    const rows = reorderItems(REORDER_TREE);
-    const items = rows.map((item, index) =>
-        collapsed.has(item.id) && (rows[index + 1]?.depth ?? 0) > (item.depth ?? 0)
-            ? { ...item, collapsed: true }
-            : item,
+    const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(
+        new Set(["chan-four", "fold-growth-bot", "sub-b"]),
     );
+    const fold = (rows: readonly SidebarItem[]) =>
+        rows.map((item, index) =>
+            collapsed.has(item.id) && (rows[index + 1]?.depth ?? 0) > (item.depth ?? 0)
+                ? { ...item, collapsed: true }
+                : item,
+        );
     return (
         <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-            <Frame height={420}>
+            <Frame height={560}>
                 <Sidebar
                     activeItemId="chan-one"
                     onItemCollapseToggle={(id) => {
@@ -645,14 +649,55 @@ function FoldDemo() {
                         });
                     }}
                     onItemSelect={() => {}}
-                    sections={[{ id: "channels", items, label: "Channels" }]}
+                    sections={[
+                        { id: "bots", items: fold(FOLD_BOTS), label: "Bots" },
+                        {
+                            id: "channels",
+                            items: fold(reorderItems(REORDER_TREE)),
+                            label: "Channels",
+                        },
+                    ]}
                     title="Fold"
                 />
             </Frame>
-            <DimensionRule label="chevron 12px over the 20px leading lane · row 32 px unchanged · a shut row keeps its chevron showing" />
+            <DimensionRule label="chevron 12px over the 20px leading lane, only while the pointer is on it · a shut row wears the count it folded away · row 32 px unchanged" />
         </div>
     );
 }
+
+/** Bots with their tasks nested under them, the way the window draws them. */
+const FOLD_BOTS: readonly SidebarItem[] = [
+    {
+        id: "fold-release-bot",
+        kind: "agent",
+        label: "Release coordinator",
+        placeholderSeed: "release",
+    },
+    {
+        contextAvatars: [{ id: "happy", label: "Project: happy", placeholderSeed: "happy" }],
+        depth: 1,
+        id: "release-notes-task",
+        kind: "workspace",
+        label: "Draft release notes",
+    },
+    {
+        depth: 1,
+        id: "release-checks-task",
+        kind: "workspace",
+        label: "Run preview checks",
+    },
+    {
+        depth: 2,
+        id: "release-checks-mac",
+        kind: "workspace",
+        label: "macOS signing",
+    },
+    { id: "fold-growth-bot", kind: "agent", label: "Growth", placeholderSeed: "growth" },
+    { depth: 1, id: "growth-a", kind: "workspace", label: "Weekly funnel" },
+    { depth: 1, id: "growth-b", kind: "workspace", label: "Onboarding drop-off" },
+    { depth: 2, id: "growth-c", kind: "workspace", label: "Step 3 copy" },
+    { id: "fold-qa-bot", kind: "agent", label: "QA tester", placeholderSeed: "qa" },
+];
 
 const QUIET_BOTS: readonly {
     readonly id: string;
@@ -1786,7 +1831,7 @@ export function SidebarPage() {
             </Specimen>
 
             <Specimen
-                detail="A row with anything nested under it folds from the chevron stacked over its own mark, so no lane is taken from every row in the window for a control most rows do not have. A shut row keeps its chevron showing — work folded away has to be findable by looking down the column. A fold takes the whole tree beneath it, and the rows it hides can be neither dragged past nor counted as anyone's neighbour."
+                detail="A row with anything nested under it folds from the chevron stacked over its own mark, so no lane is taken from every row in the window for a control most rows do not have. The chevron comes up only while the pointer is on that mark; a shut row instead wears a small count of every row it folded away on the mark's corner, so work folded away is findable by looking down the column. A fold takes the whole tree beneath it, and the rows it hides can be neither dragged past nor counted as anyone's neighbour."
                 label="Fold a row"
                 number="02c"
                 stage="app"
