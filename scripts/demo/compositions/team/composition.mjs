@@ -3,9 +3,10 @@
  * caption band, on the README's photographic backdrop. Steve's phone is not
  * on screen until Kirill's new task reaches it; then it rises from below the
  * frame, whole, beside the window as the window slides left to make room,
- * with a label naming whose phone it is, and stays to the end. Nothing
- * covers the window. The window carries macOS's own traffic lights, drawn
- * over the app's lane.
+ * with a label naming whose phone it is. When the five-bar page has rested
+ * on both screens the phone steps down and the window slides back, and the
+ * cut dissolves into its own first frame. Nothing covers the window. The
+ * window carries macOS's own traffic lights, drawn over the app's lane.
  *
  * Geometry is in output pixels: the homepage player's 1618×1000 golden
  * rectangle. The recorded window is 1000×700 CSS pixels; its corner radius is
@@ -58,11 +59,15 @@ export default {
         "disk-sweeper": "../../demos/team/assets/disk-sweeper.png",
     },
     // Steve's part, for the hero to bring his phone forward: from the moment
-    // the task reaches him to his answer landing on Kirill's desktop.
-    split: { phonePart: ["phone-enter", "steve-feedback"] },
+    // the task reaches him until the five-bar page has rested on both screens.
+    split: { phonePart: ["phone-enter", "phone-exit"] },
+    // The cut and its split tracks loop on the homepage: after the phone has
+    // stepped away, the last frames dissolve into the first.
+    loop: { seconds: 0.6 },
     captions: [
+        // The list, every provider's models, then the hand going up it.
         { from: 0, text: "*Any provider*" },
-        { from: "model-chosen", text: "*any model*" },
+        { from: "model-scan", text: "*any model*" },
         { from: "typing-started", text: "Just say what you want done" },
         { from: "phone-enter", text: "*Steve* sees it the moment it starts" },
         // Held while the task reaches Steve's phone and he opens it.
@@ -70,7 +75,8 @@ export default {
         { from: "preview", text: "and shows a *live preview*" },
         { from: "phone-typing", text: "Steve checks the design *from his phone*" },
         { from: "steve-feedback", text: "and answers *in the same task*" },
-        { from: "outro", text: "*Happy.* Work together." },
+        // Gone before the loop's dissolve, which brings in the first caption.
+        { from: "outro", to: "settled", text: "*Happy.* Work together." },
     ],
     // The first frame, the new task with its model list open, is the poster.
     poster: { seconds: 0 },

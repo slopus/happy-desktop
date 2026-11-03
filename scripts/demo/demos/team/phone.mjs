@@ -14,10 +14,13 @@ const execFile = promisify(execFileCallback);
  * renders. The Simulator window stays open and unobscured on the Mac's
  * display, so the device renders at the display's 60 Hz.
  *
- * The recording and the desktop take share the Mac's wall clock: the
- * recording's start is noted when the Simulator acknowledges it, and every
- * moment the driver acts on is printed as `TEAM_PHONE <mark> <epoch seconds>`.
- * The phone's movie is placed on the take's timeline by time.
+ * The recording and the desktop take share the Mac's wall clock: every
+ * moment the driver acts on is printed as `TEAM_PHONE <mark> <epoch seconds>`,
+ * and the phone's movie is placed on the take's timeline by time. The
+ * recording's own clock starts at its first frame, which a Simulator that has
+ * just booted may write seconds after it says it started; so before the take
+ * the status bar reads 9:42 for a moment at a noted time, and the movie's
+ * clock is read from where that moment falls in it.
  */
 
 const testId = (name) => `HappyDirectUITests/TeamDemoUITests/${name}`;
@@ -25,6 +28,52 @@ const bundleId = "com.slopus.happy.teamdemo";
 
 async function run(command, args) {
     return (await execFile(command, args, { maxBuffer: 64 * 1024 * 1024 })).stdout;
+}
+
+const sleep = (ms) => new Promise((settle) => setTimeout(settle, ms));
+
+/** Where the status bar's clock is drawn on the Simulator's 1206×2622 screen. */
+const clockCrop = { x: 120, y: 40, width: 220, height: 100 };
+
+/**
+ * The movie seconds at which the status bar's clock changed, from its first
+ * frames: a frame whose clock differs from the frame before it in more than
+ * a few dozen pixels.
+ */
+async function clockChanges(source, times, within) {
+    const count = times.filter((time) => time < within).length;
+    const width = clockCrop.width / 2;
+    const height = clockCrop.height / 2;
+    const { stdout } = await execFile(
+        "ffmpeg",
+        [
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-i",
+            source,
+            "-frames:v",
+            String(count),
+            "-vf",
+            `crop=${clockCrop.width}:${clockCrop.height}:${clockCrop.x}:${clockCrop.y},scale=${width}:${height},format=gray`,
+            "-fps_mode",
+            "passthrough",
+            "-f",
+            "rawvideo",
+            "-",
+        ],
+        { encoding: "buffer", maxBuffer: 256 * 1024 * 1024 },
+    );
+    const size = width * height;
+    const changes = [];
+    for (let index = 1; index < Math.min(count, stdout.length / size); index += 1) {
+        let changed = 0;
+        for (let pixel = 0; pixel < size; pixel += 1)
+            if (Math.abs(stdout[index * size + pixel] - stdout[(index - 1) * size + pixel]) > 60)
+                changed += 1;
+        if (changed > 25) changes.push(times[index]);
+    }
+    return changes;
 }
 
 export async function phoneOpen({ output, work }) {
@@ -192,11 +241,14 @@ export async function phoneOpen({ output, work }) {
         },
         /**
          * Pairs the phone with Happy Core as Steve once; a paired phone keeps
-         * its pairing for every later take on the same world.
+         * its pairing for every later take on the same world. A new world
+         * starts the app over, so the phone knows only this world's server.
          */
         async pair(steve) {
             const { mobileConnector } = await steve.getMobileConnector();
             if (mobileConnector.devices.length > 0) return { paired: "earlier" };
+            await run("xcrun", ["simctl", "uninstall", udid, bundleId]).catch(() => undefined);
+            await run("xcrun", ["simctl", "keychain", udid, "reset"]);
             const started = (await steve.startMobilePairing()).mobileConnector;
             if (!started.pairing?.qr)
                 throw new Error(`Happy Core gave no pairing code: ${started.error ?? ""}`);
@@ -252,7 +304,23 @@ export async function phoneOpen({ output, work }) {
                 child.stdout.on("data", receive);
                 child.stderr.on("data", receive);
             });
-            recording = { child, exit, source, requestedAtEpochMs, startedAtEpochMs };
+            // The clock mark: 9:42 for a moment, at a noted time, well after
+            // the recording's first frame and long before the take begins.
+            await sleep(4000);
+            await statusBar("9:42");
+            const clockMarkEpochMs = Date.now();
+            await sleep(800);
+            await statusBar("9:41");
+            const clockRestoreEpochMs = Date.now();
+            recording = {
+                child,
+                exit,
+                source,
+                requestedAtEpochMs,
+                startedAtEpochMs,
+                clockMarkEpochMs,
+                clockRestoreEpochMs,
+            };
             take = test("testTake", environment);
             take.exit.catch(() => undefined);
             await Promise.race([take.mark("ready", 180_000), take.exit]);
@@ -286,7 +354,6 @@ export async function phoneOpen({ output, work }) {
          * second while the phone was moving.
          */
         async export({ desktopStartedAtEpochMs, fps, frames, windows }) {
-            const trim = (desktopStartedAtEpochMs - recording.startedAtEpochMs) / 1000;
             const probe = JSON.parse(
                 await run("ffprobe", [
                     "-v",
@@ -301,6 +368,23 @@ export async function phoneOpen({ output, work }) {
                 ]),
             );
             const times = probe.frames.map((frame) => Number(frame.best_effort_timestamp_time));
+            // The movie's clock: where the 9:42 moment and its end fall in it,
+            // the two changes the right time apart.
+            const markSeconds = (recording.clockRestoreEpochMs - recording.clockMarkEpochMs) / 1000;
+            const changes = await clockChanges(
+                recording.source,
+                times,
+                (recording.clockRestoreEpochMs - recording.startedAtEpochMs) / 1000 + 2,
+            );
+            const markAt = changes.find((change) =>
+                changes.some((later) => Math.abs(later - change - markSeconds) < 0.25),
+            );
+            if (markAt === undefined)
+                throw new Error(
+                    `The phone recording never shows the status bar's 9:42 moment (changes at ${changes.map((change) => change.toFixed(2)).join(", ") || "none"}).`,
+                );
+            const zeroEpochMs = recording.clockMarkEpochMs - markAt * 1000;
+            const trim = (desktopStartedAtEpochMs - zeroEpochMs) / 1000;
             const duration = times.at(-1) ?? 0;
             if (trim < 0 || duration < trim + frames / fps)
                 throw new Error(
@@ -346,6 +430,8 @@ export async function phoneOpen({ output, work }) {
                 udid,
                 size: probe.streams?.[0],
                 trimSeconds: trim,
+                // How long after the Simulator said it was recording its first frame came.
+                firstFrameLateSeconds: (zeroEpochMs - recording.startedAtEpochMs) / 1000,
                 recordedFrames: times.length,
                 cadence,
             };

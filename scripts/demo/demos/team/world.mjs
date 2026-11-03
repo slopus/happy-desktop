@@ -60,17 +60,11 @@ export const models = {
 /** What new work starts on before Kirill picks: Terra, so picking Opus is a real change. */
 export const defaults = { providerId: "codex", modelId: "openai/gpt-6.1-terra", effort: "medium" };
 /**
- * Happy Core's accounts: the team's own for each service, and Kirill's own
- * Claude account beside it, which is the provider he picks on camera.
+ * What the hand does on camera: into the list at its last model, then up
+ * past every provider's to Opus. Each service keeps its built-in account,
+ * named as the daemon names it, Current CLI; no account is picked.
  */
-export const accounts = [
-    { id: "codex", name: "Team" },
-    { id: "grok", name: "Team" },
-    { id: "claude", name: "Team" },
-    { id: "claude_kirill", type: "claude", name: "Kirill’s Max", models: models.claude },
-];
-/** What Kirill picks on camera: the account, then the model. */
-export const onCamera = { service: "Claude", account: "Kirill’s Max", model: "Opus 5.5 1M" };
+export const onCamera = { scanFrom: "Gemini 3.8 Flash", model: "Opus 5.5 1M" };
 /** Every scripted background agent's mode. */
 export const terraMode = {
     effort: "medium",
@@ -191,9 +185,10 @@ function change(path, seed, { base, deleted, added, language }) {
     };
 }
 
-// The waveform the new task reads before it designs.
-export const voicePath = "packages/happy-app/sources/components/VoiceAssistantStatusBar.tsx";
-export const barsPath = "packages/happy-app/sources/components/VoiceBars.tsx";
+// The waveform the new task reads before it designs, where the app's
+// components live at the repository's root, so its reads name short paths.
+export const voicePath = "sources/components/VoiceAssistantStatusBar.tsx";
+export const barsPath = "sources/components/VoiceBars.tsx";
 
 /** Steve's running work: one file per repository, edited in steps while the take runs. */
 export const liveChanges = {
@@ -383,9 +378,16 @@ export const previewReply =
 /** What Steve types on his phone, word for word. */
 export const steveFeedback = "Love it. Narrower though, five bars max.";
 export const bars = 28;
+/**
+ * What the agent answers Steve with once the page has five bars. It is the
+ * turn's last word, so the phone, which shows a turn by its last word, says it
+ * too; nothing follows it to push the desktop's preview out of view.
+ */
+export const fiveBarsReply = "Five bars it is.";
+export const fiveBars = 5;
 
 /** The page the agent publishes: the waveform speaking, and silent. */
-export function artifactPage() {
+export function artifactPage(count = bars) {
     return `<!doctype html>
 <html>
 <head>
@@ -394,8 +396,9 @@ export function artifactPage() {
 :root { color-scheme: light dark; }
 html, body { margin: 0; background: transparent; }
 body { font-family: var(--happy-host-font, system-ui); color: var(--happy-host-text, #eee); }
-.row { display: flex; align-items: center; gap: 18px; padding: 6px 0; }
-.bars { --bars: ${bars}; display: flex; align-items: center; gap: 4px; height: 56px; width: calc(var(--bars) * 9px - 4px); }
+.row { display: flex; align-items: center; gap: 18px; padding: 4px 0; }
+.bars { --bars: ${count}; display: flex; align-items: center; gap: 4px; height: 56px; width: calc(var(--bars) * 9px - 4px); }
+.bars.silent { height: 24px; }
 .bars i { flex: none; width: 5px; height: 6px; border-radius: 4px; background: #f0b85a; }
 .speaking i { background: linear-gradient(#f3c26b, #e07aae); animation: wave 1s ease-in-out infinite; }
 @keyframes wave { 0%, 100% { height: 6px; } 50% { height: var(--h); } }
@@ -447,6 +450,7 @@ export function close() {
 /** Forgets which gates were reached, for the next take on the same world. */
 export function rehearse() {
     close();
+    filmedArtifactId = undefined;
 }
 async function gate(name) {
     reached.add(name);
@@ -646,9 +650,21 @@ export async function reply(payload) {
     // The filmed task: Kirill's message, then Steve's.
     if (turn.text === prompt) return await filmedReply(turn, system);
     if (turn.text === steveFeedback) {
-        // It starts on Steve's note; the take ends while it does.
-        await gate("feedback");
-        return paced([text("Five bars it is.")]);
+        // Steve's note: the agent rewrites the page with five bars, both
+        // screens' previews follow, and it says so.
+        if (turn.answered === 0) {
+            await gate("feedback");
+            if (!filmedArtifactId) throw new Error("The filmed task published no preview.");
+            return paced([
+                tool("write_artifact_file", {
+                    artifactId: filmedArtifactId,
+                    path: "index.html",
+                    content: artifactPage(fiveBars),
+                }),
+            ]);
+        }
+        await gate("five-bars");
+        return paced([text(fiveBarsReply)]);
     }
     return undefined;
 }
@@ -682,9 +698,13 @@ async function checkoutPrepare(system) {
     return checkout;
 }
 
+/** The preview the filmed task published, which it rewrites on Steve's note. */
+let filmedArtifactId;
+
 async function filmedReply(turn, system) {
-    const checkout = await checkoutPrepare(system);
-    const files = (path) => join(checkout, path);
+    await checkoutPrepare(system);
+    // Relative to the task's folder, as an agent names a file it works on.
+    const files = (path) => `happy/${path}`;
     if (turn.answered === 0) {
         await gate("read-bars");
         return paced(
@@ -714,6 +734,7 @@ async function filmedReply(turn, system) {
             /(?:\bid |artifactId"?\s*[:=]\s*"?|happy-artifact id=")([a-z0-9]{20,32})\b/u,
         );
         if (!found) throw new Error(`create_artifact named no artifact: ${resultsOf(turn.after)}`);
+        filmedArtifactId = found[1];
         return paced([
             tool("write_artifact_file", {
                 artifactId: found[1],

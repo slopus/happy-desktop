@@ -506,6 +506,30 @@ async function frameCompose({
     ]);
 }
 
+/** Smoothstep: eases in and out of a blend. */
+const smoothstep = (t) => t * t * (3 - 2 * t);
+
+/**
+ * A movie that loops ends where it began: its last `count` composed frames
+ * dissolve into its first, so the jump back to frame 0 is no jump at all.
+ */
+async function loopBlend(directory, frames, count) {
+    if (count <= 0) return;
+    if (count >= frames) throw new Error("The loop's dissolve is longer than the cut.");
+    const file = (index) => join(directory, `f${String(index).padStart(6, "0")}.jpg`);
+    const first = await sharp(file(0)).raw().toBuffer({ resolveWithObject: true });
+    for (let step = 0; step < count; step += 1) {
+        const index = frames - count + step;
+        const weight = smoothstep((step + 1) / (count + 1));
+        const { data } = await sharp(file(index)).raw().toBuffer({ resolveWithObject: true });
+        for (let byte = 0; byte < data.length; byte += 1)
+            data[byte] = Math.round(data[byte] * (1 - weight) + first.data[byte] * weight);
+        await sharp(data, { raw: first.info })
+            .jpeg({ chromaSubsampling: "4:4:4", quality: 95 })
+            .toFile(file(index));
+    }
+}
+
 /** The take's freezes, in its own frames; a take recorded at another rate cannot be cut here. */
 async function freezesRead(file, fps) {
     const recorded = JSON.parse(await readFile(file, "utf8"));
@@ -699,6 +723,8 @@ export async function compositionRender({
     }
     process.stdout.write(`\r    composing ${frames} frames — done\n`);
     if (posterFrame >= frames) throw new Error("The poster instant is past the end of the take.");
+    if (composition.loop)
+        await loopBlend(composed, frames, Math.round(composition.loop.seconds * output.fps));
 
     // The desktop take carries the recorded soundtrack; the phone is silent.
     // A sped-up or cut take re-mixes its sounds on the output timeline

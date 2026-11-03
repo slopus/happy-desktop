@@ -691,6 +691,24 @@ export class Director {
         this.#pointer.visible = visible;
     }
 
+    /**
+     * Puts the pointer, shown, on a target at once, the real mouse with it: where
+     * a take's first frame finds the hand resting.
+     */
+    async pointerPlace(target) {
+        const point = await this.#point(target);
+        this.#pointer.x = point.x;
+        this.#pointer.y = point.y;
+        this.#pointer.visible = true;
+        await this.#page.mouse.move(point.x, point.y);
+        // Drawn now, so the first captured frame already has it.
+        await this.#page.evaluate(
+            ([x, y]) => window.__happyDemo?.pointer(x, y, 0, true),
+            [point.x, point.y],
+        );
+        return point;
+    }
+
     // ---------------------------------------------------------------- target
 
     /**
