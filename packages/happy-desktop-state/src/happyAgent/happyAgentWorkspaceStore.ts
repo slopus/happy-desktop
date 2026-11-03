@@ -842,7 +842,7 @@ export interface HappyAgentWorkspaceSnapshot {
     /** GitHub project being cloned onto a peer Happy Agent, while its dialog is open. */
     readonly projectClone?: HappyAgentProjectCloneSnapshot;
     readonly projectRemote?: {
-        readonly kind: "create" | "import";
+        readonly kind: "import";
         readonly value: string;
         readonly submitting: boolean;
         readonly error?: string;
@@ -1657,9 +1657,8 @@ export interface HappyAgentWorkspaceStore {
      * project never leaves an unwanted session behind.
      */
     projectAdd(): void;
-    projectCreateRemote(name: string): Promise<void>;
     /** Opens the GitHub project dialog for the addressed peer Happy Agent. */
-    projectRemoteOpen(kind: "create" | "import"): void;
+    projectRemoteOpen(kind: "import"): void;
     projectRemoteUpdate(value: string): void;
     projectRemoteCancel(): void;
     projectRemoteSubmit(): void;
@@ -2646,7 +2645,7 @@ export function happyAgentWorkspaceStoreCreate(
     let projectAdd: HappyAgentProjectAddSnapshot = PROJECT_ADD_IDLE;
     let projectClone: HappyAgentProjectCloneSnapshot | undefined;
     let projectRemote: {
-        kind: "create" | "import";
+        kind: "import";
         value: string;
         submitting: boolean;
         error?: string;
@@ -7592,29 +7591,6 @@ export function happyAgentWorkspaceStoreCreate(
                 }
             })();
         },
-        async projectCreateRemote(name) {
-            if (disposed || projectAdd.pending) return;
-
-            projectAdd = { pending: true };
-            recompute();
-
-            try {
-                const projectId = await client.projectCreateRemote(name);
-                if (disposed) return;
-
-                projectAdd = PROJECT_ADD_IDLE;
-                recompute();
-                output({ type: "groupOpenRequested", groupId: projectId });
-            } catch (error) {
-                if (disposed) return;
-                projectAdd = {
-                    pending: false,
-                    error: happyAgentUserError(error).message,
-                };
-                recompute();
-                throw error;
-            }
-        },
         projectRemoteOpen(kind) {
             if (disposed || projectRemote?.submitting) return;
             projectRemote = { kind, value: "", submitting: false };
@@ -7635,16 +7611,12 @@ export function happyAgentWorkspaceStoreCreate(
             if (!draft || draft.submitting) return;
 
             const value = draft.value.trim();
-            const valid = draft.kind === "create"
-                ? /^[\p{L}\p{N}][\p{L}\p{N} _.-]{0,62}$/u.test(value)
-                : /^\/workspace\/[\p{L}\p{N}][\p{L}\p{N} _.-]{0,62}$/u.test(value);
+            const valid = /^\/workspace\/[\p{L}\p{N}][\p{L}\p{N} _.-]{0,62}$/u.test(value);
 
             if (!valid) {
                 projectRemote = {
                     ...draft,
-                    error: draft.kind === "create"
-                        ? "Se permiten letras, números, espacios, puntos, guiones y guiones bajos (máximo 63 caracteres)."
-                        : "Ingresá una ruta existente, por ejemplo /workspace/proyecto.",
+                    error: "Ingresá una ruta existente, por ejemplo /workspace/proyecto.",
                 };
                 recompute();
                 return;
@@ -7653,9 +7625,7 @@ export function happyAgentWorkspaceStoreCreate(
             projectRemote = { ...draft, value, submitting: true };
             recompute();
 
-            const operation = draft.kind === "create"
-                ? client.projectCreateRemote(value)
-                : client.projectAdd(value);
+            const operation = client.projectAdd(value);
 
             void operation.then(
                 (projectId) => {
@@ -8664,18 +8634,13 @@ export function happyAgentWorkspaceStoreCreate(
             recompute();
         },
 
-        async projectDeleteRemote(projectId) {
-            if (disposed) {
-                throw new Error("El workspace está cerrado.");
-            }
-
-            const result = await list.projectArchive(projectId);
-
-            if (result.type !== "archived") {
-                throw new Error(result.error.message);
-            }
-
-            await client.projectRemoveArchivedDirectory(projectId);
+        async projectDeleteRemote(_projectId) {
+            // Disabled until Happy Agent provides a race-safe server-side
+            // directory deletion API. Never archive before rejecting.
+            throw new Error(
+                "La eliminación física está temporalmente deshabilitada por seguridad. " +
+                "Utilizá Archivar proyecto para conservar sus archivos."
+            );
         },
         async projectArchiveSubmit() {
             const pending = projectArchive;
