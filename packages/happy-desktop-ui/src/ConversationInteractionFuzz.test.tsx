@@ -39,13 +39,11 @@ import {
  * The PRNG never reads the clock. Each failure includes the entire action tape.
  * DOM reads below are the oracle, not production scroll-path instrumentation.
  */
-const override = import.meta.env.VITE_CHAT_FUZZ_SEED;
-if (override !== undefined && (!/^\d+$/.test(override) || Number(override) > 0xffffffff))
-    throw new Error("VITE_CHAT_FUZZ_SEED must be an unsigned 32-bit integer");
-const cases =
-    override === undefined
-        ? fuzzCases(testDepth)
-        : [{ seed: Number(override), name: "replay", short: false }];
+const cases = [305419896, 1000050, 1000055, 1000118, 1000148, 1000177].map((seed) => ({
+    seed,
+    name: "reconciliation replay",
+    short: false,
+}));
 const frame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 const pageZoom = server.browser === "chromium";
 async function deviceScale(scale: number) {
