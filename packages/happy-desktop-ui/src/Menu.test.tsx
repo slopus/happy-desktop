@@ -1,4 +1,5 @@
 import { expect, it } from "vitest";
+import { server } from "vitest/browser";
 import "./theme.css";
 import "./styles/menu.css";
 import "./styles/icon.css";
@@ -318,6 +319,10 @@ it("sets the plus, the cross, the pencil, and framed glyphs on their keylines in
     const ink = Object.fromEntries(
         ids.map((id, index) => [id, metrics.get(slots[index]!)!]),
     ) as Record<(typeof ids)[number], VisiblePixelMetrics>;
+    console.info(
+        "MENU_ICON_DIAGNOSTIC",
+        JSON.stringify({ browser: server.browser, platform: server.platform, ink }),
+    );
     for (const [index, id] of ids.entries()) {
         const slot = slots[index]!;
         const icon = view.$(

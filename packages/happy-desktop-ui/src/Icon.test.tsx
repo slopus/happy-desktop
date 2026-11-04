@@ -1,4 +1,5 @@
 import { expect, it } from "vitest";
+import { server } from "vitest/browser";
 import { Icon, iconNames } from "./Icon";
 import { ioniconsGlyphs } from "./vectorIcons/ioniconsGlyphs";
 import { octiconsGlyphs } from "./vectorIcons/octiconsGlyphs";
@@ -139,6 +140,18 @@ it("paints real ink for every curated glyph in its box", async () => {
     expect(iconNames.length).toBe(85);
     const parts = iconNames.map((name) => view.$(`[data-name="${name}"]`));
     const metrics = await view.visibleMetrics(parts);
+    console.info(
+        "ICON_DIAGNOSTIC",
+        JSON.stringify({
+            browser: server.browser,
+            platform: server.platform,
+            items: parts.map((part) => ({
+                name: part.element.getAttribute("data-name"),
+                box: part.bounds(),
+                ink: metrics.get(part),
+            })),
+        }),
+    );
     for (const [index, name] of iconNames.entries()) {
         const part = parts[index]!;
         const visible = metrics.get(part)!;
