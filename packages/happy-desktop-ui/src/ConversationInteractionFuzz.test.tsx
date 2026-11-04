@@ -2355,6 +2355,26 @@ it.each(cases.filter((entry) => !entry.restore || pageZoom))(
     60_000,
 );
 
+it("reports a parked reading position after an activity disclosure", async () => {
+    const h = harnessCreate(5, "disclosure-position");
+    try {
+        await h.view.ready();
+        await settle();
+        await act(h, "shell", () => 0, 0);
+        await settle();
+        const result = await act(h, "disclose", () => 0, 1);
+        await settle();
+        expect(result.readerAction).toBe(true);
+        expect(h.chats[h.active]!.position?.type).toBe("row");
+        const before = snapshot(h);
+        await act(h, "append", () => 0, 2);
+        await settle();
+        stable(before, h);
+    } finally {
+        await h.close();
+    }
+});
+
 it("keeps an expanded trace reader fixed when media arrives below it (seed 1021)", async () => {
     const h = harnessCreate(0);
     try {
