@@ -774,12 +774,22 @@ function snapshot(harness: Harness, explicitTrim = false) {
     else if (!heldRow && anchor && savedPosition?.type === "row")
         harness.anchorSet(anchor.node, undefined, readingOffset, pointKind);
     let glyph:
-        | { row: HTMLElement; range: Range; text: string; top: number; distance: number }
+        | {
+              row: HTMLElement;
+              range: Range;
+              text: string;
+              occurrence: number;
+              top: number;
+              distance: number;
+          }
         | undefined;
     if (anchor) {
         const walker = document.createTreeWalker(anchor.node, NodeFilter.SHOW_TEXT);
+        const occurrences = new Map<string, number>();
         for (let node = walker.nextNode(); node; node = walker.nextNode()) {
             if (!node.textContent?.trim()) continue;
+            const occurrence = occurrences.get(node.textContent) ?? 0;
+            occurrences.set(node.textContent, occurrence + 1);
             const range = document.createRange();
             range.selectNodeContents(node);
             const rect = range.getBoundingClientRect();
@@ -794,6 +804,7 @@ function snapshot(harness: Harness, explicitTrim = false) {
                     row: anchor.node,
                     range,
                     text: node.textContent,
+                    occurrence,
                     top: rect.top,
                     distance,
                 };
@@ -881,9 +892,11 @@ function publishedPointCheck(
 function restoredGlyphTop(row: HTMLElement, previous: ReturnType<typeof snapshot>) {
     if (!previous.glyph) return undefined;
     const text = previous.glyph.text;
+    let occurrence = 0;
     const walker = document.createTreeWalker(row, NodeFilter.SHOW_TEXT);
     for (let node = walker.nextNode(); node; node = walker.nextNode()) {
         if (node.textContent !== text) continue;
+        if (occurrence++ !== previous.glyph.occurrence) continue;
         const range = document.createRange();
         range.selectNodeContents(node);
         return range.getBoundingClientRect().top;
