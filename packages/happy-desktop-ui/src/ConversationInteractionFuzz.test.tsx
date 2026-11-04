@@ -1288,10 +1288,27 @@ async function act(h: Harness, action: Action, pick: ReturnType<typeof random>, 
             chat.draft = "";
             sent = `${id}:${count - 1}`;
             if (chat.state.status === "running") chat.steeringSendId = sent;
+            if (chat.standIn && chat.cached) {
+                // A reopened view shows its frozen snapshot until the leased
+                // chat arrives. The intent is retained while that read is pending.
+                expect(
+                    chat.extras.some((entry) => entry.kind === "message" && entry.message.id === sent),
+                ).toBe(true);
+                expect(
+                    chat.cached.some((entry) => entry.kind === "message" && entry.message.id === sent),
+                ).toBe(false);
+                chat.publish();
+                h.redraw();
+                await frame();
+                chat.standIn = false;
+            }
             changesAnchor = true;
             break;
         }
         case "delivery":
+            // Once the daemon accepts steering it belongs to the ordered
+            // transcript, rather than remaining an appended optimistic row.
+            queuedAccept(chat, id);
             chat.extras = chat.extras.map((entry) =>
                 entry.kind === "message"
                     ? {
