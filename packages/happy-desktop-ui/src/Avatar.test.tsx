@@ -125,7 +125,19 @@ it(
                 if (content.initials === "O")
                     console.info(
                         "AVATAR_O_DIAGNOSTIC",
-                        JSON.stringify({ id, dx, dy, bx, by, baseline, metrics, visible, offsets }),
+                        JSON.stringify({
+                            browser: server.browser,
+                            platform: server.platform,
+                            id,
+                            dx,
+                            dy,
+                            bx,
+                            by,
+                            baseline,
+                            metrics,
+                            visible,
+                            offsets,
+                        }),
                     );
                 baselineBySize.set(size, baselineBySize.get(size) ?? baseline);
                 expect(
