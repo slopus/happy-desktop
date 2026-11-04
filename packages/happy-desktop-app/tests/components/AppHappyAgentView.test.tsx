@@ -252,7 +252,6 @@ it("lists one row per project and its sessions as tabs", () => {
     // rather than depending on which mode the test runner happens to build in.
     expect(rows.map((row) => row.getAttribute("data-item-id"))).toEqual([
         "artifacts",
-        "feed",
         "local/prj_one",
     ]);
     // The row is the project's name alone; its path would crowd the name out,

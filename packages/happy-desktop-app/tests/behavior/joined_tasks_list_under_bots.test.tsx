@@ -284,7 +284,6 @@ it("lists the joined tasks under the bots, in the reader's order, with their sub
     expect(sectionLabels(container)).toEqual(["Bots", "Tasks", "Projects"]);
     expect(rowIds(container)).toEqual([
         "artifacts",
-        "feed",
         "local/ws_helper",
         "local/ws_launch",
         "local/ses_checklist",

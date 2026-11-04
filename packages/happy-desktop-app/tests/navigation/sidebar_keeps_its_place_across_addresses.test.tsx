@@ -208,5 +208,5 @@ it("leaves the sidebar as it was across a click, a hover and an address", async 
     await act(() => window.router.history.push("/surfaces/local/srf_one"));
     await act(() => new Promise((resolve) => setTimeout(resolve, 50)));
 
-    expect(window.rows()).toEqual(["artifacts", "feed", "local/prj_one"]);
+    expect(window.rows()).toEqual(["artifacts", "local/prj_one"]);
 });

@@ -831,23 +831,36 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
             sidebarWidth={props.sidebarVisibility?.get().width}
         >
             {section === "experimental" ? (
-                <HappyAgentExperimentalSettings
-                    features={[
-                        // Voice calls is switched on the Voice page, the one
-                        // place that names what it turns on.
-                        ...EXPERIMENTAL_FEATURES.filter((feature) => feature.id !== "voice").map(
-                            (feature) => ({
+                <>
+                    <HappyAgentExperimentalSettings
+                        features={[
+                            // Voice calls is switched on the Voice page, the one
+                            // place that names what it turns on.
+                            ...EXPERIMENTAL_FEATURES.filter(
+                                (feature) => feature.id !== "voice",
+                            ).map((feature) => ({
                                 ...feature,
                                 enabled: experiments[feature.id],
-                            }),
-                        ),
-                    ]}
-                    onFeatureChange={(id, enabled) => {
-                        const feature = EXPERIMENTAL_FEATURES.find((feature) => feature.id === id);
-                        if (feature)
-                            experimentsStore.featureUpdate(feature.id, enabled, "experiments");
-                    }}
-                />
+                            })),
+                        ]}
+                        onFeatureChange={(id, enabled) => {
+                            const feature = EXPERIMENTAL_FEATURES.find(
+                                (feature) => feature.id === id,
+                            );
+                            if (feature)
+                                experimentsStore.featureUpdate(feature.id, enabled, "experiments");
+                        }}
+                    />
+                    {directory.happyAgents.map((entry) => (
+                        <HappyAgentConnectionSettingsSection
+                            connectionLabel={entry.label}
+                            key={entry.id}
+                            {...entryUnavailable(entry)}
+                        >
+                            <AppHappyAgentAutoJoinSettings entry={entry} entity="stories" />
+                        </HappyAgentConnectionSettingsSection>
+                    ))}
+                </>
             ) : section === "voice" ? (
                 props.gptLive ? (
                     <>
@@ -1159,7 +1172,6 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                     >
                         <AppHappyAgentAutoJoinSettings entry={entry} entity="task" />
                         <AppHappyAgentAutoJoinSettings entry={entry} entity="surface" />
-                        <AppHappyAgentAutoJoinSettings entry={entry} entity="stories" />
                     </HappyAgentConnectionSettingsSection>
                 ))
             ) : section === "account" ? (

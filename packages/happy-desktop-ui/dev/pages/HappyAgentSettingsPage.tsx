@@ -1,6 +1,8 @@
 import { useState } from "react";
 import {
     HappyAgentAccountSettings,
+    HappyAgentAutoJoinSettings,
+    HappyAgentConnectionSettingsSection,
     HappyAgentDebugLogPanel,
     HappyAgentDebugSettings,
     HappyAgentFileTierSettings,
@@ -690,10 +692,26 @@ export function HappyAgentSettingsBlueprintPage() {
                     <HappyAgentExperimentalSettings
                         features={[
                             { id: "inbox", label: "Inbox", enabled: false },
-                            { id: "voice", label: "Voice calls", enabled: false },
+                            { id: "feed", label: "Feed", enabled: false },
+                            {
+                                id: "mobileDirect",
+                                label: "Direct phone connection",
+                                enabled: false,
+                            },
                         ]}
                         onFeatureChange={noop}
                     />
+                    <HappyAgentConnectionSettingsSection connectionLabel="This computer">
+                        <HappyAgentAutoJoinSettings
+                            connectionLabel="This computer"
+                            entity="Stories"
+                            label="Stories"
+                            description="See the stories your agents post, and let them post."
+                            status="ready"
+                            autoJoinEnabled={false}
+                            onAutoJoinChange={noop}
+                        />
+                    </HappyAgentConnectionSettingsSection>
                 </HappyAgentSettingsShell>
             </FullScreenSpecimen>
             <FullScreenSpecimen
