@@ -394,7 +394,7 @@ const SETTINGS_JUMPS: readonly {
         section: "experimental",
         sectionLabel: "Experimental",
         icon: "zap",
-        keywords: "inbox direct phone connection experimental features",
+        keywords: "inbox feed stories direct phone connection experimental features",
     },
     {
         id: "settings:file-tiers",
