@@ -2,10 +2,12 @@
  * P-017 Happy Agent artifacts: the catalog page, the list beside a chat, and
  * the viewer for one artifact.
  *
- * The catalog is read down one column under a surface header, at the same
- * measure as the inbox and the usage screens. A row is one button: the type
- * glyph, then the title over a line of facts. The viewer is a header and the
- * version on screen, with its history beside it when asked for.
+ * The catalog is read down the content column every page of the main lane
+ * shares, under a surface header that stands on the same column. A row is one
+ * button: the type glyph, then the title over a line of facts. The viewer is a
+ * header on that column and the version on screen — a document or a page on
+ * the column too, a picture, a video, or a PDF across the whole pane — with its
+ * history beside it when asked for.
  *
  * Layout is flexbox throughout; colors, radii, and type come only from theme
  * roles.
@@ -29,10 +31,21 @@
 /* ---- Header band -------------------------------------------------------
    The band itself is the shared PanelHeader, so its height, inset, and drag
    contract are a chat header's. These rules only lay out what it carries:
-   the title and its subtitle on one baseline, then the trailing controls. */
+   the title and its subtitle on one baseline, then the trailing controls,
+   standing on the content column's edges. Back docks 4px nearer the column's
+   edge than a title, as an edge control does in any header. */
 
-/* Under a tab strip: a slim toolbar on the content's own 12px inset, with
-   the smaller title a tab's content carries. */
+.happy-agent-artifacts__header,
+.happy-panel-header.happy-agent-artifact-viewer__header {
+    padding-inline: var(--happy-content-inline);
+}
+
+.happy-panel-header.happy-agent-artifact-viewer__header[data-edge-control] {
+    padding-inline: calc(var(--happy-content-inline) - 4px);
+}
+
+/* Under a tab strip: a slim toolbar 4px and 8px short of the column's gutter,
+   with the smaller title a tab's content carries. */
 .happy-agent-artifact-header--compact {
     display: flex;
     flex: none;
@@ -41,7 +54,7 @@
     box-sizing: border-box;
     width: 100%;
     height: 36px;
-    padding: 0 8px 0 12px;
+    padding: 0 calc(var(--happy-content-inline) - 8px) 0 calc(var(--happy-content-inline) - 4px);
 }
 
 .happy-agent-artifact-header--compact .happy-agent-artifact-header__title {
@@ -93,8 +106,8 @@
     gap: 4px;
 }
 
-/* The filters and the rows below them sit on the header's 16px inset, so
-   the title, the filters, and each row's highlight share one leading edge. */
+/* The filters and the rows below them sit on the column's gutter, so the
+   title, the filters, and each row's highlight share one leading edge. */
 .happy-agent-artifacts__filters {
     display: flex;
     flex: 0 0 auto;
@@ -103,8 +116,7 @@
     gap: 8px 12px;
     box-sizing: border-box;
     width: 100%;
-    max-width: 720px;
-    padding: 0 16px 12px;
+    padding: 0 var(--happy-content-inline) 12px;
 }
 
 .happy-agent-artifacts__scroll {
@@ -126,8 +138,9 @@
     gap: 12px;
     box-sizing: border-box;
     width: 100%;
-    max-width: 720px;
-    padding: 4px 16px 48px;
+    max-width: var(--happy-content-measure);
+    margin-inline: auto;
+    padding: 4px var(--happy-content-gutter) 48px;
 }
 
 .happy-agent-artifacts__list {
@@ -349,10 +362,11 @@
     font-synthesis: none;
 }
 
+/* The rule runs across the pane; the banner above it stands on the column. */
 .happy-agent-artifact-viewer__older {
     display: flex;
     flex: 0 0 auto;
-    padding: 12px 24px;
+    padding: 12px var(--happy-content-inline);
     border-bottom: 1px solid var(--divider);
 }
 
@@ -360,7 +374,7 @@
 .happy-agent-artifact-viewer__note {
     display: flex;
     flex: 0 0 auto;
-    padding: 12px 24px;
+    padding: 12px var(--happy-content-inline);
     border-bottom: 1px solid var(--divider);
 }
 
@@ -396,10 +410,11 @@
     display: flex;
     flex-direction: column;
     gap: 16px;
+    align-self: center;
     box-sizing: border-box;
     width: 100%;
-    max-width: 720px;
-    padding: 24px;
+    max-width: var(--happy-content-measure);
+    padding: 24px var(--happy-content-gutter);
 }
 
 .happy-agent-artifact-viewer__file-card {
@@ -459,7 +474,7 @@
 .happy-agent-artifact-html__notice {
     display: flex;
     flex: 0 0 auto;
-    padding: 8px 16px;
+    padding: 8px var(--happy-content-inline);
 }
 
 .happy-agent-artifact-html__frame {

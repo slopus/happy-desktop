@@ -49,6 +49,40 @@ const ARTIFACT_PAGE_FONT_FACES = [
     `@font-face { font-family: "happy Mono"; font-style: normal; font-display: block; font-weight: 100 800; src: url("${monoFont}") format("woff2-variations"); }`,
 ].join("\n");
 
+/**
+ * What a page declares, in its `<head>`, to be laid across the whole width it
+ * is shown at — a dashboard, a wide table, a canvas — instead of on the
+ * centred page measure:
+ *
+ *     <meta name="happy-page-width" content="full">
+ */
+const ARTIFACT_PAGE_FULL_WIDTH = 'meta[name="happy-page-width" i][content="full" i]';
+
+/**
+ * `--happy-document-measure` and `--happy-document-inset` in `theme.css`, for a
+ * page shown where the theme cannot be read from the host: a static preview's
+ * `srcdoc`.
+ */
+export const ARTIFACT_PAGE_MEASURE = "912px";
+export const ARTIFACT_PAGE_INSET = "24px 32px";
+
+/**
+ * Centres an artifact's page on `measure`, the column every page of the main
+ * lane reads down, unless the page declared itself full width.
+ *
+ * It pads the page's root rather than its body, and it is `!important`, so it
+ * survives what pages write for themselves — `body { margin: 0 }`, a universal
+ * reset — and a page needs no help from Happy's standard styles to be centred.
+ * The root keeps the frame's whole width, so the document still scrolls on the
+ * frame's own edges and a background on the root or the body is laid out
+ * across the whole frame, not tiled from the column. A page asks for the whole
+ * width only by declaring it, which it does before any of its content, so
+ * nothing moves once that content arrives.
+ */
+export function artifactPageMeasureStyle(measure: string): string {
+    return `:root:not(:has(${ARTIFACT_PAGE_FULL_WIDTH})) { padding-inline: max(0px, (100% - ${measure}) / 2) !important; }`;
+}
+
 /** The colour scheme the surface around `host` is drawn in. */
 export function artifactPageScheme(host: Element): "light" | "dark" {
     const declared = getComputedStyle(host).colorScheme;
@@ -61,7 +95,7 @@ export function artifactPageScheme(host: Element): "light" | "dark" {
 /**
  * The styles a host gives an artifact's page so it reads as part of the
  * surface around `host`: that surface's resolved colours, typefaces,
- * scrollbar, colour scheme, and the inset `placement` calls for.
+ * scrollbar, colour scheme, and the inset and measure `placement` calls for.
  *
  * Meant for the page's user origin, which every rule the page writes outranks
  * whatever its specificity: these are defaults, never overrides. They are read
@@ -75,6 +109,13 @@ export function artifactPageHostStyle(host: Element, placement: ArtifactPagePlac
         placement === "inline"
             ? "0px"
             : computed.getPropertyValue("--happy-document-inset").trim() || "0px";
+    // Inline, the page is already on the reply's column. The token is read as
+    // written, so its line breaks are folded away.
+    const measure =
+        placement === "inline"
+            ? "none"
+            : computed.getPropertyValue("--happy-document-measure").replace(/\s+/gu, " ").trim() ||
+              "none";
     const declarations: string[] = [];
     for (const [input, token] of ARTIFACT_PAGE_HOST_TOKENS) {
         const value = computed.getPropertyValue(token).trim();
@@ -82,11 +123,13 @@ export function artifactPageHostStyle(host: Element, placement: ArtifactPagePlac
     }
     declarations.push(
         `--happy-host-page-inset: ${inset};`,
+        `--happy-host-page-measure: ${measure};`,
         `--happy-host-color-scheme: ${scheme};`,
         // What standard styles from before host inputs read the inset from.
         `--happy-page-inset: ${inset};`,
     );
     const rules = [ARTIFACT_PAGE_FONT_FACES, `:root { ${declarations.join(" ")} }`];
+    if (measure !== "none") rules.push(artifactPageMeasureStyle(measure));
     // A guest has no backdrop of its own. A page that names no colour scheme
     // is drawn in the light one — black text — which is unreadable on a dark
     // surface, so it gets the paper it was written for; a page that follows

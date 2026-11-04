@@ -34,13 +34,6 @@ export interface HappyAgentSurfaceView {
     readonly members: readonly HappyAgentSurfaceMemberView[];
 }
 
-/**
- * The column a document or chat Surface reads on while it is centred, in CSS
- * pixels. `--happy-agent-surface-column` in `happy-agent-surfaces.css` is the
- * same width; this copy is what a chat measures its rows against.
- */
-export const SURFACE_READING_COLUMN = 1040;
-
 /** The glyph a Surface wears when it has no picture of its own. */
 export function surfaceTypeIcon(type: HappyAgentSurfaceType): IconName {
     switch (type.kind) {

@@ -33,7 +33,7 @@
     flex: 0 0 auto;
     flex-direction: column;
     width: 100%;
-    max-width: 768px;
+    max-width: var(--happy-document-measure);
     margin: 0 auto;
     padding: var(--happy-document-inset);
     padding-bottom: 64px;

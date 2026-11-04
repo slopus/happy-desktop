@@ -316,12 +316,13 @@ export function conversationReferencesSignature(
     return signature;
 }
 /**
- * `--happy-chat-measure`. Both surfaces centre their scrolling column at this
- * readable measure — `.happy-conversation` in `conversation.css`, and
- * `.happy-chat-conversation` in `terminal-panel.css` — so a wide window does
- * not widen a row, and neither does its text measure.
+ * `--happy-content-measure`. Every chat centres its scrolling column at this
+ * readable measure — `.happy-conversation` in `conversation.css`,
+ * `.happy-chat-conversation` in `terminal-panel.css`, and a chat Surface in
+ * `happy-agent-surfaces.css` — so a wide window does not widen a row, and
+ * neither does its text measure.
  */
-export const CHAT_MEASURE = 880;
+export const CONTENT_MEASURE = 880;
 /** Vertical chrome around a message body, by author treatment and grouping. */
 const MESSAGE_CHROME = {
     conversation: { agent: [57, 4], incoming: [77, 28], own: [52, 28] },
@@ -494,7 +495,7 @@ const COMPUTE_DETAIL_TOP = 4;
 
 /** The list's content measure, after the shared readable maximum. */
 export function contentWidth(width: number): number {
-    return Math.min(width, CHAT_MEASURE);
+    return Math.min(width, CONTENT_MEASURE);
 }
 /**
  * Painted height of a message's photos: at most four, in justified rows at

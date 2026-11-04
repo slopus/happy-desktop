@@ -1,4 +1,9 @@
 import { happyAgentArtifactReferenceResolve } from "happy-desktop-state";
+import {
+    ARTIFACT_PAGE_INSET,
+    ARTIFACT_PAGE_MEASURE,
+    artifactPageMeasureStyle,
+} from "../../artifactPageHost";
 
 /**
  * What a static page preview may load: its own files, handed to it as data, and
@@ -178,11 +183,12 @@ export function artifactHtmlDocument(input: {
     // A sidebar widget is part of the window rather than a page in it: it takes
     // the window's scheme, which keeps its canvas transparent, and the row's
     // edges rather than a page's margin. It never scrolls; its row is its height.
+    // A page is inset and centred as a running page is (`artifactPageHost`).
     const canvas = document.createElement("style");
     canvas.textContent =
         input.surface === "sidebar"
             ? ":where(html) { color-scheme: light dark; overflow: hidden; } :where(body) { margin: 0; font: 13px/18px system-ui, sans-serif; }"
-            : ":where(html) { color-scheme: light; }";
+            : `:where(html) { color-scheme: light; } :where(body) { margin: 0; padding: ${ARTIFACT_PAGE_INSET}; } ${artifactPageMeasureStyle(ARTIFACT_PAGE_MEASURE)}`;
     head.prepend(policy, referrer, canvas);
 
     return `<!DOCTYPE html>${document.documentElement.outerHTML}`;

@@ -13,7 +13,10 @@
  * the `--happy-calendar-*` roles in theme.css.
  */
 
+/* A week or a month is a grid of days, which takes the whole pane rather than
+   the content column; its header goes across the pane with it. */
 .happy-agent-calendar-surface {
+    --happy-agent-surface-column: 100%;
     display: flex;
     flex: 1 1 0%;
     flex-direction: column;

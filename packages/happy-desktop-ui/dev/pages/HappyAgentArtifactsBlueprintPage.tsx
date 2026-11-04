@@ -399,6 +399,28 @@ const posterViewer = viewerOf(
     posterFiles.map((entry) => link("landing", 1, entry)),
 );
 
+/**
+ * A dashboard that needs the frame's whole width, and says so in its head
+ * instead of being centred on the page measure.
+ */
+const wideFiles = [file("index.html", "text/html", 640)];
+const wideViewer = viewerOf(
+    landing,
+    [version(landing, 1, wideFiles)],
+    {
+        type: "html",
+        entryPath: "index.html",
+        page: {
+            kind: "static",
+            reason: { type: "no-guest" },
+            text: `<!doctype html><html><head><meta name="happy-page-width" content="full"><style>:root{color-scheme:light dark}body{font-family:sans-serif}.tiles{display:flex;gap:16px}.tile{flex:1 1 0;min-width:0;height:160px;border-radius:8px;background:color-mix(in srgb,currentColor 8%,transparent)}</style></head><body><h1>Release dashboard</h1><div class="tiles"><div class="tile"></div><div class="tile"></div><div class="tile"></div><div class="tile"></div><div class="tile"></div></div></body></html>`,
+            assets: new Map(),
+            omitted: [],
+        },
+    },
+    wideFiles.map((entry) => link("landing", 1, entry)),
+);
+
 const shotFiles = [
     file("01-welcome.svg", "image/svg+xml", 1_400),
     file("02-sign-in.svg", "image/svg+xml", 1_400),
@@ -848,6 +870,16 @@ export function HappyAgentArtifactsBlueprintPage() {
                 number="22"
             >
                 <LiveMarkdownDiffViewer tab />
+            </FullScreenSpecimen>
+
+            <FullScreenSpecimen
+                detail={`A page is centred on the content column unless it declares <meta name="happy-page-width" content="full">, as this dashboard does to take the frame's whole width.`}
+                label="Viewer · web page, full width"
+                screen="23-html-full-width-1100x760"
+                window={{ width: 1100, height: 760 }}
+                number="23"
+            >
+                <HappyAgentArtifactViewer {...viewerHandlers} labels={labels} viewer={wideViewer} />
             </FullScreenSpecimen>
         </ComponentPage>
     );

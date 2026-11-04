@@ -379,7 +379,23 @@
        a strip's +, a row's own control) wears exactly this. */
     --happy-hover-radius: var(--happy-radius-sm);
     --happy-hover-fill: var(--surface-ripple);
-    --happy-chat-measure: 880px;
+    /* The one content column of the main lane. A chat's transcript and
+       composer, and every page that takes the lane — the feed, artifacts and
+       an artifact's page, the inbox, settings, a Surface — read down a column
+       of this width, centred in the lane, so moving between them does not move
+       what is being read. A lane narrower than it is the column. Mirrored as
+       `CONTENT_MEASURE` in `conversationRowHeight.ts`. */
+    --happy-content-measure: 880px;
+    /* How far a page's own content — its cards, rows, and the title of its
+       header — sits inside the column's edges. */
+    --happy-content-gutter: 16px;
+    /* The inline padding that puts a band spanning the whole lane — a header,
+       a bar, a notice with a rule under it — on the column: the column's
+       margin in the lane, plus the gutter. The `100%` is the band's own
+       containing block, resolved where this is used. */
+    --happy-content-inline: calc(
+        max(0px, (100% - var(--happy-content-measure)) / 2) + var(--happy-content-gutter)
+    );
     /* How far a frame in a transcript — a card's border, a code block's
        background — stands out from the text column on the left and on the
        right. What the frame holds stays on the column, so its inset inside the
@@ -395,7 +411,17 @@
        surface's edges: a Markdown document, and an artifact's page shown beside
        the chat or on its own, so the two line up wherever they are opened. A
        padding shorthand, block then inline. Inline in a reply there is none. */
-    --happy-document-inset: 24px 32px;
+    --happy-document-inset-inline: 32px;
+    --happy-document-inset: 24px var(--happy-document-inset-inline);
+    /* The column such a document is laid in: the content column, widened by
+       what its inset takes beyond the gutter, so its text starts where every
+       other page's content does and the extra inset stands out past it, as a
+       frame stands out from the transcript. Handed to an artifact's page as
+       `--happy-host-page-measure` (`artifactPageHost.ts`). */
+    --happy-document-measure: calc(
+        var(--happy-content-measure) + 2 *
+            (var(--happy-document-inset-inline) - var(--happy-content-gutter))
+    );
     /* The heading over a conversation may run wider than the transcript it names
        — it is one line of chrome, not prose — but not to the window's full width,
        where a long name and its path sprawl away from the column beneath them. */

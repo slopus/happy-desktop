@@ -1,4 +1,8 @@
+/* A dashboard of side-by-side panels, so it keeps a column of its own, wider
+   than the content column; its header lines up with that column instead. */
 .system-monitor {
+    --happy-agent-surface-column: 1360px;
+    --happy-agent-surface-column-inset: 24px;
     display: flex;
     flex: 1;
     flex-direction: column;
@@ -23,9 +27,9 @@
     flex-direction: column;
     gap: 16px;
     width: 100%;
-    max-width: 1360px;
+    max-width: var(--happy-agent-surface-column);
     box-sizing: border-box;
-    padding: 24px;
+    padding: var(--happy-agent-surface-column-inset);
     margin-inline: auto;
 }
 .system-monitor__host {

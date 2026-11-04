@@ -9,7 +9,7 @@ import type {
 import { Banner } from "../../Banner";
 import { Button } from "../../Button";
 import { ConversationDock } from "../../ConversationDock";
-import { messageRowHeight } from "../../conversationRowHeight";
+import { CONTENT_MEASURE, messageRowHeight } from "../../conversationRowHeight";
 import { EmptyState } from "../../EmptyState";
 import { Message, MessageList } from "../../Message";
 import {
@@ -24,11 +24,7 @@ import {
     type HappyAgentSurfaceChatToggle,
     type HappyAgentSurfaceWidthToggle,
 } from "./HappyAgentSurfaceHeader";
-import {
-    initialsOf,
-    SURFACE_READING_COLUMN,
-    type HappyAgentSurfaceView,
-} from "./surfacePresentation";
+import { initialsOf, type HappyAgentSurfaceView } from "./surfacePresentation";
 
 /** What a deleted message reads as, in its place in the conversation. */
 const DELETED_TEXT = "This message was deleted";
@@ -147,9 +143,8 @@ export function HappyAgentMessagesSurfacePage(props: HappyAgentMessagesSurfacePa
     const grouped = (index: number) =>
         index > 0 && authorOf(rows[index - 1]!) === authorOf(rows[index]!);
     const expanded = props.width?.expanded === true;
-    // The width a row lays its text out in: the reading column's, or the pane's.
-    const contentWidth = (width: number) =>
-        expanded ? width : Math.min(width, SURFACE_READING_COLUMN);
+    // The width a row lays its text out in: the content column's, or the pane's.
+    const contentWidth = (width: number) => (expanded ? width : Math.min(width, CONTENT_MEASURE));
     const rowHeight = (index: number, width: number) => {
         const row = rows[index];
         if (row === undefined) return undefined;

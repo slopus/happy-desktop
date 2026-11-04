@@ -140,6 +140,7 @@ Current reference dimensions are:
 | Inspector sidebar         | `clamp(250px, 30vw, 360px)`     |
 | Main content shell inset  | none; flat shared surfaces      |
 | Main content shell radius | 0 px; panels meet on hairlines  |
+| Content column            | 880 px, centred; 16 px gutter   |
 | Surface header row        | 56 px high                      |
 | Section toolbar           | 48 px high                      |
 | Small button              | 28 px high                      |
@@ -157,6 +158,27 @@ it so the chat header and its side panels line up on one baseline. The reusable
 composes `Toolbar` for its header passes this height. The bare `Toolbar` default
 (48 px) is the lighter **section toolbar** used inside a page body (admin tables,
 settings sections), not at the top of a surface.
+
+The **content column** is the one width the main lane is read at. A chat's
+transcript and composer, and every page that takes the lane — the feed,
+artifacts and an artifact's page, the inbox, settings, a Surface — read down a
+column `--happy-content-measure` (880 px) wide, centred in the lane, so moving
+between them never moves what is being read. A lane narrower than that is the
+column. A page's own content, and the title and controls of its header, sit
+`--happy-content-gutter` (16 px) inside the column's edges; a band that spans
+the lane, such as a header or a bar with a rule under it, puts its content
+there with `padding-inline: var(--happy-content-inline)`. Never anchor a page's
+column to the lane's leading edge, and never invent a page measure of its own.
+Something deliberately narrower — a form, a card, an empty state — sits inside
+the centred column, not against the lane's edge. A document read on its own
+(`--happy-document-measure`) is the column widened by its larger text inset, so
+its text stands where every other page's content does; an artifact's web page
+is centred on that same measure unless it declares
+`<meta name="happy-page-width" content="full">` (see `artifactPageHost.ts`).
+The exceptions take the whole lane because they are two-dimensional rather than
+read down a column: a calendar's grid of days, a dashboard such as the system
+monitor (which keeps a wider column of its own), pictures, video, PDFs, code
+and diffs, terminals, and web pages that are not artifacts.
 
 These are defaults and existing contracts, not permission to make every layout
 fixed-size. The navigation and inspector use the same `30vw` clamp as the

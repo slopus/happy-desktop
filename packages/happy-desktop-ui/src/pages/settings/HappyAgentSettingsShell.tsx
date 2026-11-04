@@ -75,7 +75,7 @@ export function HappyAgentSettingsShell(props: HappyAgentSettingsShellProps) {
                 />
             }
         >
-            <PanelHeader>
+            <PanelHeader className="happy-agent-settings__header">
                 {props.onBack ? (
                     <button
                         aria-label={`Back to ${categoryLabel(props)}`}

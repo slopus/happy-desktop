@@ -13,7 +13,7 @@
  */
 .happy-chat-conversation .happy-message-list__content {
     width: 100%;
-    max-width: var(--happy-chat-measure);
+    max-width: var(--happy-content-measure);
     margin-inline: auto;
 }
 

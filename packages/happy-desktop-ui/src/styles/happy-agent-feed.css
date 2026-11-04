@@ -4,9 +4,11 @@
  *
  * The page is the inset grouped card list Happy's phones draw: on the grouped
  * background, one card per date under a small heading, each row an avatar,
- * the subject's name, and who did what to it. The cards stand on the header's
- * 16px inset. Every row is one fixed height, so the long list is drawn only
- * where it is on screen and laid out without measuring.
+ * the subject's name, and who did what to it. The cards are read down the
+ * content column every page of the main lane shares, and the header, the
+ * view switch, and the cards stand on its gutter. Every row is one fixed
+ * height, so the long list is drawn only where it is on screen and laid out
+ * without measuring.
  *
  * Layout is flexbox throughout, except the drawn slots and a row's rule (see
  * below); colors, radii, and type come only from theme roles.
@@ -25,7 +27,12 @@
     font-synthesis: none;
 }
 
-/* The view switch sits on the header's 16px inset, so the title, the switch,
+/* The header's title and controls stand on the column's edges. */
+.happy-agent-feed__header {
+    padding-inline: var(--happy-content-inline);
+}
+
+/* The view switch sits on the column's gutter too, so the title, the switch,
    and the cards share one leading edge. */
 .happy-agent-feed__bar {
     display: flex;
@@ -35,7 +42,7 @@
     box-sizing: border-box;
     width: 100%;
     /* The first date heading's slot carries the gap down to its card. */
-    padding: 0 16px;
+    padding: 0 var(--happy-content-inline);
 }
 
 .happy-agent-feed__notice {
@@ -44,9 +51,11 @@
     flex-direction: column;
     box-sizing: border-box;
     width: 100%;
-    padding: 0 16px 12px;
+    padding: 0 var(--happy-content-inline) 12px;
 }
 
+/* Back docks 4px nearer the column's edge than the title, as it does in a
+   header, so its glyph rather than its hover box is on the gutter. */
 .happy-agent-feed__peek {
     display: flex;
     flex: 0 0 auto;
@@ -54,7 +63,7 @@
     gap: 8px;
     box-sizing: border-box;
     width: 100%;
-    padding: 0 16px 8px 12px;
+    padding: 0 var(--happy-content-inline) 8px calc(var(--happy-content-inline) - 4px);
 }
 
 .happy-agent-feed__peek-label {
@@ -90,7 +99,9 @@
     gap: 12px;
     box-sizing: border-box;
     width: 100%;
-    padding: 8px 16px 48px;
+    max-width: var(--happy-content-measure);
+    margin-inline: auto;
+    padding: 8px var(--happy-content-gutter) 48px;
 }
 
 .happy-agent-feed__list {

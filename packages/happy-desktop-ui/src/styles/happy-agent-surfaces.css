@@ -2,10 +2,10 @@
  * P-019 Happy Agent Surfaces: the header every Surface shares, the todo list,
  * the state for a type this build cannot show, and the create dialog.
  *
- * A todo list is one centred column of cards, at the same 720px measure as the
- * artifacts and inbox pages, laid over the list's picture under a one-line
- * header. A todo is a fixed 40px card on 4px gaps, because the reordering list
- * places its rows by slot.
+ * A todo list is one centred column of cards, on the content column every
+ * page of the main lane reads down (`--happy-content-measure`), laid over the
+ * list's picture under a one-line header. A todo is a fixed 40px card on 4px
+ * gaps, because the reordering list places its rows by slot.
  *
  * Layout is flexbox throughout; colors, radii, and type come only from theme
  * roles.
@@ -67,11 +67,12 @@
 /* Measured so a narrow band can drop who made the Surface. Its name and its
    controls stand on the edges of the page's text: the column the page states,
    centred in the band, less how far into it the text starts. A page that states
-   none keeps the band's own 16px. */
+   none is on the content column every page of the main lane shares; one drawn
+   across the whole pane states `100%`. */
 .happy-agent-surface-header {
     --happy-agent-surface-header-inline: calc(
-        max(0px, (100% - var(--happy-agent-surface-column, 100%)) / 2) +
-            var(--happy-agent-surface-column-inset, 16px)
+        max(0px, (100% - var(--happy-agent-surface-column, var(--happy-content-measure))) / 2) +
+            var(--happy-agent-surface-column-inset, var(--happy-content-gutter))
     );
     container-type: inline-size;
     padding-inline: var(--happy-agent-surface-header-inline);
@@ -182,8 +183,8 @@
 
 /* The cards' column, which the header lines up with. */
 .happy-agent-todo-surface {
-    --happy-agent-surface-column: 720px;
-    --happy-agent-surface-column-inset: 16px;
+    --happy-agent-surface-column: var(--happy-content-measure);
+    --happy-agent-surface-column-inset: var(--happy-content-gutter);
 }
 
 .happy-agent-todo-surface__content {
@@ -411,12 +412,16 @@
    across the whole pane; a document only to be read is the shared Markdown
    reader, on the same column. The column's 64px insets are the editor's
    gutters, wide enough for the side menu beside each block, so the text and
-   the header's name start on one line. The column is
-   `SURFACE_READING_COLUMN`. */
+   the header's name start on one line. The column is the content column
+   widened by what those gutters take beyond its own, so the text stands where
+   every other page's content does and the side menu hangs out past it. */
 
 .happy-agent-document-surface {
-    --happy-agent-surface-column: 1040px;
     --happy-agent-surface-column-inset: 64px;
+    --happy-agent-surface-column: calc(
+        var(--happy-content-measure) + 2 *
+            (var(--happy-agent-surface-column-inset) - var(--happy-content-gutter))
+    );
 }
 
 .happy-agent-document-surface[data-width="expanded"],
@@ -494,15 +499,20 @@
 /* ---- Chat page --------------------------------------------------------- */
 
 /*
- * The conversation and its composer are centred on the reading column, wider
- * than a conversation with an agent, or across the whole pane; the scrollport
+ * The conversation and its composer are centred on the content column, as a
+ * conversation with an agent is, or across the whole pane; the scrollport
  * stays full-bleed and only its content column is capped. The header's name
- * starts over the faces, 20px into the column as every message is.
+ * starts over the faces, 20px into the column as every message is. The
+ * column is `CONTENT_MEASURE`, which the rows are laid out against.
  */
 .happy-agent-messages-surface {
-    --happy-agent-surface-column: 1040px;
+    --happy-agent-surface-column: var(--happy-content-measure);
     --happy-agent-surface-column-inset: 20px;
-    --happy-chat-measure: var(--happy-agent-surface-column);
+}
+
+/* Across the whole pane, the composer goes with the transcript. */
+.happy-agent-messages-surface[data-width="expanded"] {
+    --happy-content-measure: 100%;
 }
 
 .happy-agent-messages-surface .happy-message-list__content {

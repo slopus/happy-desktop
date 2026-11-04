@@ -24,7 +24,7 @@
     margin: 0 auto;
     padding: 32px 24px;
     width: 100%;
-    max-width: var(--happy-chat-measure);
+    max-width: var(--happy-content-measure);
     color: var(--text);
     font-family: var(--happy-font-ui);
     font-synthesis: none;

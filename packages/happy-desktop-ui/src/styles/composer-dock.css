@@ -19,7 +19,7 @@
     flex-direction: column;
     gap: 8px;
     width: 100%;
-    max-width: var(--happy-chat-measure);
+    max-width: var(--happy-content-measure);
     margin: 0 auto;
     padding: 0 20px 24px 12px;
 }

@@ -623,15 +623,32 @@
    hidden and the traffic lights plus the floating toggle sit over it. */
 .happy-desktop-app-shell[data-window-controls][data-sidebar-collapsed] .happy-channel-header,
 .happy-desktop-app-shell[data-window-controls][data-sidebar-collapsed]
-    .happy-agent-artifacts__header,
-.happy-desktop-app-shell[data-window-controls][data-sidebar-collapsed] .happy-agent-feed__header,
-.happy-desktop-app-shell[data-window-controls][data-sidebar-collapsed]
-    .happy-agent-artifact-viewer__header,
-.happy-desktop-app-shell[data-window-controls][data-sidebar-collapsed]
     .happy-desktop-app-shell__workspace
     > .happy-tabbed-pane:first-child
     .happy-tabbed-pane__bar {
     padding-left: calc(var(--happy-desktop-app-shell-chrome-inset) + 44px);
+}
+
+/* A page's header keeps its title over the content column, unless that would
+   put it under the lights. */
+.happy-desktop-app-shell[data-window-controls][data-sidebar-collapsed]
+    :is(
+        .happy-agent-artifacts__header,
+        .happy-agent-feed__header,
+        .happy-agent-artifact-viewer__header
+    ) {
+    padding-left: max(
+        calc(var(--happy-desktop-app-shell-chrome-inset) + 44px),
+        var(--happy-content-inline)
+    );
+}
+
+.happy-desktop-app-shell[data-window-controls][data-sidebar-collapsed]
+    .happy-agent-artifact-viewer__header[data-edge-control] {
+    padding-left: max(
+        calc(var(--happy-desktop-app-shell-chrome-inset) + 44px),
+        calc(var(--happy-content-inline) - 4px)
+    );
 }
 
 /* A Surface's header keeps its name over the page's text, unless that would

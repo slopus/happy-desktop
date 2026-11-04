@@ -40,14 +40,16 @@
     min-width: 0;
 }
 
-/* The editable column: the reader's 768px measure, its text on the same 704px
-   line, with the gutters wide enough for the side menu beside each block. */
+/* The editable column: the reader's column, its text on the same line, with
+   the gutters wide enough for the side menu beside each block. */
 .happy-document-editor .bn-editor {
     box-sizing: border-box;
     flex: 1 0 auto;
     align-self: center;
     width: 100%;
-    max-width: 832px;
+    max-width: calc(
+        var(--happy-document-measure) + 2 * (64px - var(--happy-document-inset-inline))
+    );
     padding: 24px 64px 64px;
     border-radius: 0;
     background: transparent;

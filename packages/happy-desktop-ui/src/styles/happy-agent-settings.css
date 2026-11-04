@@ -3,6 +3,11 @@
  * and the provider cards inside the Providers category.
  */
 
+/* The band's title stands on the content column, over the section titles. */
+.happy-agent-settings__header {
+    padding-inline: var(--happy-content-inline);
+}
+
 /* The band is one 20px line. A header never truncates, so when the column is
    too narrow for the description it wraps onto a second line that the band
    clips away whole: the description steps aside and the title stays. */
@@ -85,9 +90,8 @@
     overflow-y: auto;
 }
 
-/* Held to a comfortable measure but anchored to the surface's leading edge,
-   like every other page: a column centred in the window drifts away from the
-   category list beside it on a wide display. */
+/* Read down the content column every page of the main lane shares, centred
+   in the lane, so a category reads where a chat or the feed does. */
 .happy-agent-settings__content {
     box-sizing: border-box;
     display: flex;
@@ -95,8 +99,9 @@
     flex-direction: column;
     gap: 32px;
     width: 100%;
-    max-width: 720px;
-    padding: 8px 24px 48px;
+    max-width: var(--happy-content-measure);
+    margin-inline: auto;
+    padding: 8px var(--happy-content-gutter) 48px;
 }
 
 .happy-agent-settings__section {

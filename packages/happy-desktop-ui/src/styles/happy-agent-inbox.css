@@ -31,10 +31,9 @@
     flex-direction: column;
     box-sizing: border-box;
     width: 100%;
-    max-width: 720px;
-    /* The toolbar insets its own title by 16px, so the strip carries the
-       remaining 8px that puts that title over the column below it. */
-    padding: 0 8px;
+    /* The toolbar insets its own title by 16px, so the strip carries the rest
+       of what puts that title on the column's gutter. */
+    padding: 0 calc(var(--happy-content-inline) - 16px);
 }
 
 /* The scrollport is flush; spacing belongs to the content wrapper inside it. */
@@ -51,20 +50,20 @@
 }
 
 /*
- * A question is read, so the column is held to a comfortable measure rather
- * than stretched across the whole window. It stays anchored to the surface's
- * leading edge, like every other page in the product: a column centred in the
- * window drifts away from the sidebar on a wide display and puts this page's
- * content somewhere else than the page the reader just came from.
+ * A question is read, so it is read down the content column every page of the
+ * main lane shares, centred in the lane, rather than stretched across the
+ * whole window: moving here from a chat or the feed leaves the text where it
+ * was.
  */
 .happy-agent-inbox__content {
     display: flex;
     flex-direction: column;
     gap: 16px;
-    padding: 8px 24px 48px;
+    padding: 8px var(--happy-content-gutter) 48px;
     box-sizing: border-box;
     width: 100%;
-    max-width: 720px;
+    max-width: var(--happy-content-measure);
+    margin-inline: auto;
 }
 
 /* ---- Section label ---------------------------------------------------- */

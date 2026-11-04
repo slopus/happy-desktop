@@ -38,10 +38,11 @@ export interface HappyAgentSurfaceChatToggle {
  * who made it when that is known, and the faces of who is in it. Joining and
  * leaving belong to its row in the sidebar.
  *
- * A page with a reading column states it in `--happy-agent-surface-column`
- * (and how far into it its text starts, `--happy-agent-surface-column-inset`,
- * and the least room kept at the pane's edges, `--happy-agent-surface-gutter`),
- * and the band lines its name and controls up with that column.
+ * The band lines its name and controls up with the page's column: the content
+ * column every page of the main lane shares, unless the page states its own in
+ * `--happy-agent-surface-column` (and how far into it its text starts,
+ * `--happy-agent-surface-column-inset`), or `100%` when it is drawn across the
+ * whole pane.
  *
  * It is the window's shared header band (`PanelHeader`), so it is a chat
  * header's height and the row the window is dragged by. Who made it is

@@ -50,7 +50,7 @@
  */
 .happy-conversation .happy-message-list__content {
     width: 100%;
-    max-width: var(--happy-chat-measure);
+    max-width: var(--happy-content-measure);
     margin-inline: auto;
 }
 
@@ -235,7 +235,7 @@
 
 .happy-conversation__activity-fallback {
     width: 100%;
-    max-width: var(--happy-chat-measure);
+    max-width: var(--happy-content-measure);
     margin-right: auto;
     margin-left: auto;
     margin-top: 12px;
@@ -277,7 +277,7 @@
 
 .happy-conversation__dock > * {
     width: 100%;
-    max-width: var(--happy-chat-measure);
+    max-width: var(--happy-content-measure);
     padding-right: 20px;
     padding-left: 12px;
 }
