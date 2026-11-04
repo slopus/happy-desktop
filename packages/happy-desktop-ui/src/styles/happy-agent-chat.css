@@ -100,10 +100,16 @@
     border: none;
 }
 
+/*
+ * Floated, the legend is not the fieldset's rendered legend but an ordinary
+ * first item of its column. WebKit otherwise counts a rendered legend's height
+ * twice in the fieldset's flex size, so the card grows below its content.
+ */
 .happy-agent-input__legend {
     display: flex;
     flex-direction: column;
     gap: 4px;
+    float: left;
     padding: 0;
     width: 100%;
 }
