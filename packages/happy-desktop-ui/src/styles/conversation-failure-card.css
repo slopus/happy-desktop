@@ -57,10 +57,11 @@
     min-width: 0;
 }
 
-/* The message and its quiet buttons share one baseline. */
+/* The 28px buttons hang 4px above the 20px first line. Align their outer
+   boxes at the start so font baseline rounding cannot enlarge the modeled row. */
 .happy-conversation-failure-card__line {
     display: flex;
-    align-items: baseline;
+    align-items: flex-start;
     gap: 8px;
     min-width: 0;
 }
