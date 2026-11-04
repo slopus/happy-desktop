@@ -1427,20 +1427,18 @@ async function act(h: Harness, action: Action, pick: ReturnType<typeof random>, 
             ];
             break;
         case "shell":
-            chat.extras = [
-                ...chat.extras,
+            chat.elements = [
+                ...chat.elements,
                 {
-                    kind: "agentActivity",
-                    id,
-                    sequence: id,
-                    activity: {
-                        kind: "shell",
-                        command: "cat build.log",
-                        output: "Build passed\n".repeat(80),
-                        exitCode: 0,
-                        running: false,
-                        timedOut: false,
-                    },
+                    ...b,
+                    kind: "tool_call",
+                    toolCallId: id,
+                    name: "exec_command",
+                    arguments: { cmd: "cat build.log" },
+                    argumentsComplete: true,
+                    status: "succeeded",
+                    result: "Build passed\n".repeat(80),
+                    presentation: { kind: "command", command: "cat build.log" },
                 },
             ];
             break;
