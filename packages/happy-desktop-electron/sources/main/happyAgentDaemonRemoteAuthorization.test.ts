@@ -8,6 +8,7 @@ import {
     HappyAgentDaemonClient,
     type HappyAgentRemoteAuthorization,
 } from "./happyAgentDaemonClient";
+import { localAgentSocketPath } from "./localAgentSocketPath";
 
 /*
  * The host Happy Agent holds no team-server token: every request this client
@@ -34,7 +35,8 @@ async function daemonStart(
 ): Promise<{ socketPath: string; seen: Seen[]; roster: { url: string | undefined } }> {
     const roster: { url: string | undefined } = { url: SERVER };
     const directory = await mkdtemp(join(tmpdir(), "happy-remote-auth-"));
-    const socketPath = join(directory, "s.sock");
+    // Windows serves the daemon on a named pipe, never on a file path.
+    const socketPath = localAgentSocketPath(directory);
     const seen: Seen[] = [];
     const server: Server = createServer((request, response) => {
         if (request.url === "/v0/connections") {
@@ -66,7 +68,11 @@ async function daemonStart(
         response.writeHead(status, { "content-type": "application/json" });
         response.end(JSON.stringify(body));
     });
-    await new Promise<void>((resolve) => server.listen(socketPath, resolve));
+    // A failed listen would otherwise leave the test waiting until it times out.
+    await new Promise<void>((resolve, reject) => {
+        server.once("error", reject);
+        server.listen(socketPath, resolve);
+    });
     cleanups.push(async () => {
         await new Promise<void>((resolve) => server.close(() => resolve()));
         await rm(directory, { force: true, recursive: true });
