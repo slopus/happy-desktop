@@ -82,6 +82,7 @@ const pending: readonly HappyAgentInboxItem[] = [
 const answered: readonly HappyAgentInboxItem[] = [
     item("three", {
         sessionTitle: "Add the node status block",
+        context: "Node status is **ready to ship**. It reads the same in either place.",
         status: "answered",
         resolvedAt: 1_700_000_500_000,
         answers: { placement: ["Sidebar"] },
@@ -153,7 +154,7 @@ export function HappyAgentInboxBlueprintPage() {
         <ComponentPage
             contract="Props only"
             number={componentNumber}
-            summary="The queue of questions a Happy Agent's agents are waiting on: pending first in the order they were asked, answered below as a record. A waiting question is one outlined block headed by the session that asked; a settled one drops the outline and keeps only what was decided."
+            summary="The queue of questions a Happy Agent's agents are waiting on: pending first in the order they were asked, answered below as a record. A waiting question is one outlined block headed by the session that asked; a settled one drops the outline and keeps the agent's context with what was decided."
             title="HappyAgentInboxPage"
         >
             <FullScreenSpecimen

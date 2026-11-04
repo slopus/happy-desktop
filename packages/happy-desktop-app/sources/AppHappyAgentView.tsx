@@ -2366,8 +2366,6 @@ function happyAgentSections(
     projectsVisibility: ProjectsVisibilitySnapshot,
     attention: HappyAgentAttentionSnapshot,
     folded?: ReadonlySet<string>,
-    /** The machine Cmd-N makes a task on, whose Tasks heading wears the chord. */
-    shortcutHappyAgentId?: string,
 ): SidebarSection[] {
     return directory.happyAgents.flatMap((happyAgent) => [
         // Keep the heading even with no bots: its action is where the first
@@ -2430,14 +2428,7 @@ function happyAgentSections(
         // A Happy Agent from before tasks has no task list to show, so it
         // offers no heading that could only ever stand empty.
         ...(happyAgentTasksSupported(happyAgent)
-            ? [
-                  happyAgentTasksSection(
-                      happyAgent,
-                      storyOutline,
-                      titleShimmerEnabled,
-                      shortcutHappyAgentId,
-                  ),
-              ]
+            ? [happyAgentTasksSection(happyAgent, storyOutline, titleShimmerEnabled)]
             : []),
         // The reader's own choice in settings for this connection: the
         // section goes entirely, heading and all, rather than folding.
@@ -2450,15 +2441,13 @@ function happyAgentSections(
 /**
  * The reader's joined tasks, under a heading of their own below the bots and
  * in the reader's own order. Each is a bot's row with its owner's face, and its
- * delegated subtasks nest under it exactly as a bot's do. The heading's action
- * is where every other task on the machine is browsed and joined, so it stays
- * even when the list is empty.
+ * delegated subtasks nest under it exactly as a bot's do. The heading stays
+ * even when the list is empty, offering the first task from there.
  */
 function happyAgentTasksSection(
     happyAgent: AppHappyAgentEntry,
     storyOutline: StoryOutline,
     titleShimmerEnabled: boolean,
-    shortcutHappyAgentId?: string,
 ): SidebarSection {
     // The heading keeps its shape once the machine has been seen: an outage,
     // such as an update restarting it, disables its controls rather than
@@ -2481,21 +2470,11 @@ function happyAgentTasksSection(
                 id: happyAgentItemId(happyAgent.id, item.id),
                 ...happyAgentSidebarItemAvailability(item, happyAgent),
             })),
-        // The heading makes a task the way the Bots heading makes a bot.
-        // Task search is available through the global search controls.
+        // A task is made from the New task row under Search, so the heading
+        // carries no + of its own. Task search is available through the
+        // global search controls.
         ...(materialized && happyAgentTaskCreateSupported(happyAgent)
             ? {
-                  action: {
-                      disabled: offline,
-                      icon: "plus" as const,
-                      label: "New task",
-                      reveal: "always" as const,
-                      // The chord answers for the machine on screen, so only
-                      // that machine's heading shows it.
-                      ...(shortcutHappyAgentId === happyAgent.id
-                          ? { shortcut: APP_SHORTCUTS.taskCreate }
-                          : {}),
-                  },
                   // Nothing joined yet says so under the heading, with making
                   // the first one right beside it while it can be made.
                   empty: {
@@ -3343,9 +3322,9 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
         active && shortcutProject?.lifecycle.phase === "ready"
             ? { projectId: shortcutProject.id, happyAgentId: active.id }
             : undefined;
-    // Cmd-N makes a task where the Tasks heading's + would: on the machine on
-    // screen, once it is up and new enough to make them. Anywhere else the
-    // chord is left alone rather than answered with an error.
+    // Cmd-N makes a task where the New task row under Search does: on the
+    // machine on screen, once it is up and new enough to make them. Anywhere
+    // else the chord is left alone rather than answered with an error.
     const taskCreateTarget =
         active?.session?.workspace &&
         activeAvailability?.online === true &&
@@ -3588,6 +3567,14 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
               onOpen: () => commandPaletteStore.paletteOpen(),
           }
         : undefined;
+    // New task sits right under Search. It stays through an outage, where it
+    // leads to settings as the headings do, so the rows below never move.
+    const sidebarTaskCreateHappyAgent =
+        active?.session?.workspace &&
+        props.onTaskCreateOpen &&
+        happyAgentTaskCreateSupported(active)
+            ? active
+            : undefined;
     const sidebarFooter = (
         <SidebarFooter
             voice={
@@ -3639,6 +3626,18 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
         <Sidebar
             actions={pinned}
             {...(sidebarSearchRow ? { searchRow: sidebarSearchRow } : {})}
+            {...(sidebarTaskCreateHappyAgent
+                ? {
+                      composeActive: props.taskCreateOpen === true,
+                      composeLabel: "New task",
+                      composeShortcut: APP_SHORTCUTS.taskCreate,
+                      onCompose: () => {
+                          if (sidebarTaskCreateHappyAgent.status !== "connected")
+                              props.onSettingsOpen();
+                          else props.onTaskCreateOpen?.(sidebarTaskCreateHappyAgent.id);
+                      },
+                  }
+                : {})}
             // A todo list is made from the sidebar's own heading, beside the
             // control that hides it. A Happy Agent without Surfaces offers none.
             {...(surfaceCatalog.availability === "available"
@@ -4198,7 +4197,6 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                                   )
                                 : sidebarCollapse.collapsed
                             : undefined,
-                        taskCreateTarget,
                     ),
                     sidebarCollapse.collapsed,
                     voiceFocus,
@@ -4645,6 +4643,9 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                               },
                           }
                         : {})}
+                    // The open sidebar's New task row is the one Create on
+                    // screen; the header offers it only while the sidebar hides.
+                    sidebarOwnsCreate={sidebarTaskCreateHappyAgent !== undefined}
                 >
                     {routeContent()}
                 </AppShell>
@@ -4682,7 +4683,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                     />
                 ) : null}
                 {/* Cmd-N belongs to the window too: a task is made from wherever
-                the reader is, as the Tasks heading's + makes one. Bound only
+                the reader is, as the New task row under Search makes one. Bound only
                 while the machine on screen can make one, so an older Happy
                 Agent leaves the chord to do nothing at all. */}
                 {taskCreateTarget !== undefined ? (

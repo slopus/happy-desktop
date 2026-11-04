@@ -16,6 +16,7 @@ import {
     HappyAgentUserInputPrompt,
     type HappyAgentUserInputAnswerMap,
 } from "../../HappyAgentUserInputPrompt";
+import { renderMessageMarkdown } from "../../MessageMarkdown";
 import { ScrollArea } from "../../Scrollbar";
 import { Toolbar } from "../../Toolbar";
 
@@ -407,6 +408,16 @@ function InboxAnsweredItem(props: InboxItemHeaderProps) {
                 {...(props.onOpenSession ? { onOpenSession: props.onOpenSession } : {})}
                 {...(props.time === undefined ? {} : { time: props.time })}
             />
+            {/* The background the agent asked against stays with the record:
+                an answer reads only as well as the question it settled. */}
+            {props.item.context ? (
+                <div
+                    className="happy-agent-input__context happy-agent-inbox__context happy-message__body--markdown"
+                    data-happy-desktop-ui="happy-agent-inbox-context"
+                >
+                    {renderMessageMarkdown(props.item.context)}
+                </div>
+            ) : null}
             <dl
                 className="happy-agent-inbox__answers"
                 data-happy-desktop-ui="happy-agent-inbox-answers"
