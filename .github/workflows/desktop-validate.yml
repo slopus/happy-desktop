@@ -28,7 +28,7 @@ permissions:
     contents: read
 
 concurrency:
-    group: desktop-validate-${{ github.ref }}
+    group: desktop-validate-${{ inputs.files != '' && github.run_id || github.ref }}
     cancel-in-progress: true
 
 jobs:
