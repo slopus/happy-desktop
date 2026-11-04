@@ -11,10 +11,13 @@ const execFile = promisify(execFileCallback);
 
 /**
  * The whole app, as one window: the server rail, the sidebar, and the new
- * task. Recorded at HAPPY_DEMO_DEVICE_SCALE=1.6 (see README), so it is tall
- * enough for the sidebar and every frame arrives in time at 60 fps.
+ * task. A small window, so the cut, which draws it at the same size as a
+ * larger one, shows less of the app and every part of it larger. Recorded at
+ * HAPPY_DEMO_DEVICE_SCALE=2.
  */
-const viewport = { width: 1000, height: 700 };
+const viewport = { width: 840, height: 588 };
+/** Kirill keeps his sidebar a tenth narrower than the app's 288 px, dragged there with its handle. */
+const sidebarWidth = 259;
 
 /** Kirill's computer, opened beside the gym; the window runs on it. */
 let personal;
@@ -91,7 +94,7 @@ async function previewBars(page) {
     return 0;
 }
 
-/** Whether the preview's bars are on screen whole, under nothing of the window's. */
+/** Whether a preview's bars are on screen whole, under nothing of the window's. */
 async function previewInView(page) {
     for (const frame of page.frames()) {
         if (!frame.url().includes("/__demo_artifact/")) continue;
@@ -106,7 +109,7 @@ async function previewInView(page) {
             ([x, edges]) => edges.map((y) => document.elementFromPoint(x, y)?.tagName),
             [x, edges],
         );
-        return hits.every((tag) => tag === "IFRAME");
+        if (hits.every((tag) => tag === "IFRAME")) return true;
     }
     return false;
 }
@@ -367,33 +370,111 @@ async function readAll(client) {
     await client.markFeedReadAll?.({}).catch(() => undefined);
 }
 
-/** Releases Steve's subtasks' edits one at a time, so their counts climb while the take runs. */
+/**
+ * Releases a subtask's next edit, if it is waiting for it. Off camera it
+ * takes Steve's finished parts to their end; on camera it releases iOS
+ * server codes' edits one at a time, so its counts climb while the take runs.
+ */
 function liveTicker() {
-    const order = ["agent", "ios", "desktop"];
     const step = { agent: 1, desktop: 1, ios: 1 };
-    let turn = 0;
     let timer;
-    const advance = () => {
-        for (let tries = 0; tries < order.length; tries++) {
-            const key = order[turn++ % order.length];
-            if (step[key] > world.liveSteps) continue;
-            if (!world.hasReached(`live:${key}:${step[key]}`)) continue;
-            world.release(`live:${key}:${step[key]}`);
-            step[key] += 1;
-            return true;
-        }
-        return false;
+    const advance = (key) => {
+        if (step[key] > world.liveSteps[key]) return false;
+        if (!world.hasReached(`live:${key}:${step[key]}`)) return false;
+        world.release(`live:${key}:${step[key]}`);
+        step[key] += 1;
+        return true;
     };
     return {
         step,
         advance,
         start(intervalMs) {
-            timer = setInterval(advance, intervalMs);
+            timer = setInterval(() => advance("ios"), intervalMs);
         },
         stop() {
             clearInterval(timer);
         },
     };
+}
+
+/**
+ * Steve's parts as the take opens: the agent's and the desktop's done, every
+ * edit written and their last word said, so they rest idle with their final
+ * counts; iOS server codes under way and still working. Team Servers itself
+ * keeps working, coordinating.
+ */
+async function livePartsPrepare(steveClient, task, ticker) {
+    const pause = () => new Promise((settle) => setTimeout(settle, 200));
+    for (const key of world.liveIdle) {
+        while (ticker.step[key] <= world.liveSteps[key]) if (!ticker.advance(key)) await pause();
+        await wait(() => world.hasReached(`live:${key}:done`), `${key}'s last edit`, 120000);
+        world.release(`live:${key}:done`);
+    }
+    while (ticker.step.ios <= world.liveStepsBefore) if (!ticker.advance("ios")) await pause();
+    const titles = Object.fromEntries(
+        world.liveTask.subtasks.map((subtask) => [subtask.key, subtask.title]),
+    );
+    return wait(
+        async () => {
+            const { agent } = await steveClient.getAgent(task.agent.id);
+            const status = (key) =>
+                agent.subtasks?.find((subtask) => subtask.title === titles[key])?.status;
+            const parts = Object.fromEntries(Object.keys(titles).map((key) => [key, status(key)]));
+            const ready =
+                agent.status !== "idle" &&
+                parts.ios !== undefined &&
+                parts.ios !== "idle" &&
+                world.liveIdle.every((key) => parts[key] === "idle");
+            return ready && { coordinator: agent.status, parts };
+        },
+        "Steve's finished parts to rest",
+        120000,
+    );
+}
+
+/**
+ * Every sidebar row's name against what stands at its trailing edge: whether
+ * the name is cut short, and the room between its end and the diff stats,
+ * in CSS pixels. Rows scrolled out of view are measured too.
+ */
+async function sidebarFit(page) {
+    return page.evaluate(() => {
+        const rows = [];
+        for (const row of document.querySelectorAll('[data-happy-desktop-ui="sidebar-item"]')) {
+            if (row.getClientRects().length === 0) continue;
+            const label = row.querySelector('[data-happy-desktop-ui="sidebar-item-label"]');
+            if (!label) continue;
+            const stats = row.querySelector('[data-happy-desktop-ui="sidebar-item-change-stats"]');
+            const trailing = row.querySelector('[data-happy-desktop-ui="sidebar-item-trailing"]');
+            const range = document.createRange();
+            range.selectNodeContents(label);
+            const ink = range.getBoundingClientRect();
+            const end = Math.min(ink.right, label.getBoundingClientRect().right);
+            rows.push({
+                name: label.textContent,
+                stats: stats?.textContent ?? null,
+                activity:
+                    row.querySelector('[data-happy-desktop-ui="sidebar-item-activity"]')?.dataset
+                        .activity ?? null,
+                truncated: label.scrollWidth > label.clientWidth + 0.5,
+                room: trailing
+                    ? Math.round((trailing.getBoundingClientRect().left - end) * 10) / 10
+                    : null,
+            });
+        }
+        const sidebar = [
+            ...document.querySelectorAll(
+                '[data-happy-desktop-ui="app-shell-resize-handle"][data-edge="right"]',
+            ),
+        ]
+            .find((handle) => handle.getClientRects().length > 0)
+            ?.getAttribute("aria-valuenow");
+        return {
+            sidebarWidth: Number(sidebar),
+            rows,
+            fits: rows.every((row) => !row.truncated && (row.room === null || row.room >= 0)),
+        };
+    });
 }
 
 /**
@@ -419,12 +500,33 @@ async function pictureRect(locator) {
 
 /**
  * The take has no feed beat: Kirill watches his own task and Steve opens it
- * from his sidebar, so what it posts to their feeds is read as it lands.
+ * from his sidebar, so what it posts to their feeds is read as it lands: the
+ * moment each one's own event stream says something is unread, and every
+ * tenth of a second besides.
  */
 function feedKeptRead(clients) {
     let timer;
+    const stop = new AbortController();
+    const follow = async (client) => {
+        while (!stop.signal.aborted) {
+            try {
+                for await (const frame of client.streamEvents({ signal: stop.signal })) {
+                    if (
+                        frame.kind === "event" &&
+                        frame.event.type === "feed.unread.updated" &&
+                        frame.event.payload.unread > 0
+                    )
+                        void client.markFeedReadAll({}).catch(() => undefined);
+                }
+            } catch {
+                // A dropped stream is followed again; the poll covers the gap.
+            }
+            await new Promise((settle) => setTimeout(settle, 100));
+        }
+    };
     return {
         start() {
+            for (const client of clients) void follow(client);
             timer = setInterval(() => {
                 for (const client of clients)
                     void client.markFeedReadAll({}).catch(() => undefined);
@@ -432,6 +534,7 @@ function feedKeptRead(clients) {
         },
         stop() {
             clearInterval(timer);
+            stop.abort();
         },
     };
 }
@@ -482,10 +585,10 @@ export default {
         const live = await liveTaskPrepare(steve);
         filmed.liveTaskId = live.id;
         await sidebarsArrange({ kirill, steve });
-        // Steve's subtasks are already under way when the take opens.
+        // Steve's agent and desktop parts are done; iOS server codes is
+        // already under way when the take opens.
         const ticker = liveTicker();
-        while (Object.values(ticker.step).some((step) => step <= 2))
-            if (!ticker.advance()) await new Promise((settle) => setTimeout(settle, 200));
+        filmed.liveParts = await livePartsPrepare(steve, live, ticker);
         // Steve's phone, paired once with Happy Core as Steve, once his
         // sidebar has what it shows.
         const phone =
@@ -527,6 +630,26 @@ export default {
             await sidebarRow(page, subtask.title)
                 .filter({ hasText: /\+\d/u })
                 .waitFor({ timeout: 60000 });
+        // Kirill's sidebar, a tenth narrower: dragged by its own handle.
+        const handle = page
+            .locator('[data-happy-desktop-ui="app-shell-resize-handle"][data-edge="right"]:visible')
+            .first();
+        const handleBox = await handle.boundingBox();
+        const handleFrom = Number(await handle.getAttribute("aria-valuenow"));
+        const grip = {
+            x: handleBox.x + handleBox.width / 2,
+            y: handleBox.y + handleBox.height / 2,
+        };
+        await page.mouse.move(grip.x, grip.y);
+        await page.mouse.down();
+        await page.mouse.move(grip.x - (handleFrom - sidebarWidth) / 2, grip.y, { steps: 4 });
+        await page.mouse.move(grip.x - (handleFrom - sidebarWidth), grip.y, { steps: 4 });
+        await page.mouse.up();
+        await page.mouse.move(viewport.width / 2, viewport.height / 2);
+        if (Number(await handle.getAttribute("aria-valuenow")) !== sidebarWidth)
+            throw new Error(
+                `The sidebar is ${await handle.getAttribute("aria-valuenow")} px wide, not ${sidebarWidth}.`,
+            );
         await page.waitForTimeout(1000);
         await page.screenshot({ path: join(output, "prepared-sidebar.png") });
 
@@ -566,6 +689,11 @@ export default {
             "disk-sweeper": await pictureRect(shownRow("Disk Sweeper")),
         });
         filmed.pictures = { opening: await pictures() };
+        filmed.sidebarFit = { opening: await sidebarFit(page) };
+        if (!filmed.sidebarFit.opening.fits)
+            throw new Error(
+                `A sidebar name is cut short: ${JSON.stringify(filmed.sidebarFit.opening.rows)}`,
+            );
         framing = await demo.framingPrepare(composer, { rawWindow: true });
         // The hand rests where it opened the list, on the Model row.
         await demo.pointerPlace({
@@ -716,13 +844,14 @@ export default {
             cue("phone-exit", demo, phone);
             await demo.hold(300);
             // The agent takes Steve's note: it rewrites the page with five
-            // bars and says so.
+            // bars, shows it open again under his note, and says so.
             await beats.beat("feedback");
             world.release("feedback");
             await until(demo, () => world.hasReached("five-bars"), "the five-bar page", 20000, 50);
             filmed.fiveBarsShown = await until(
                 demo,
-                async () => (await previewBars(page)) === world.fiveBars,
+                async () =>
+                    (await previewBars(page)) === world.fiveBars && (await previewInView(page)),
                 "the five-bar preview",
                 10000,
                 50,
@@ -757,6 +886,10 @@ export default {
             feed.stop();
             await demo.finish();
         }
+        // The sidebar at the take's highest counts: every name still whole.
+        await page.waitForTimeout(1000);
+        filmed.sidebarFit.closing = await sidebarFit(page);
+        await page.screenshot({ path: join(output, "closing-sidebar.png") });
         const startedAtEpochMs = performance.timeOrigin + demo.timing.startedAt;
         filmed.startedAtEpochMs = startedAtEpochMs;
         filmed.frames = demo.timing.frames;

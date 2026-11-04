@@ -18,7 +18,8 @@ Owner: Kirill. Script: [SCRIPT.md](./SCRIPT.md).
 2. **This is a busy, real workspace.** Around it: two servers in the rail
    (Kirill's personal one and the team server Happy Core), bots with their
    real faces, tasks owned by Kirill and Steve with subtasks and diff stats.
-   Steve's own task is already running across three repositories at once.
+   Steve's own task spans three repositories: two parts are done, and the
+   iOS part is still running, its diff stats climbing.
 3. **Nothing exists until Send.** On Send the task is created, and at that
    moment it is in Steve's sidebar on his phone, with Kirill's face. Nobody
    forwards it. Steve's sidebar is his own, not a mirror of Kirill's.

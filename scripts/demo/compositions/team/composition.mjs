@@ -11,8 +11,9 @@
  * drawn over the app's lane.
  *
  * Geometry is in output pixels: the homepage player's 1618×1000 golden
- * rectangle. The recorded window is 1000×700 CSS pixels; its corner radius is
- * in those pixels.
+ * rectangle. The recorded window is 840×588 CSS pixels, drawn as large as a
+ * 1000×700 one was, so the app reads about a fifth larger; its corner radius
+ * is in those pixels.
  *
  * The cut drops the moments the desktop capture stalled mid-motion (the
  * take's freezes.json), and is also exported split: the window and the phone
@@ -32,7 +33,7 @@ export default {
         y: 44,
         width: 1150,
         height: 805,
-        cssWidth: 1000,
+        cssWidth: 840,
         cssRadius: 12,
         trafficLights: true,
         // Left, to 34 px from the frame's edge, while the phone is up.

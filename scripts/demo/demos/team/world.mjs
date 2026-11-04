@@ -194,7 +194,11 @@ function change(path, seed, { base, deleted, added, language }) {
 export const voicePath = "sources/components/VoiceAssistantStatusBar.tsx";
 export const barsPath = "sources/components/VoiceBars.tsx";
 
-/** Steve's running work: one file per repository, edited in steps while the take runs. */
+/**
+ * Steve's work: one file per repository, edited in steps. The agent's and the
+ * desktop's parts finish before the take and rest idle; iOS server codes is
+ * the one still editing while the take runs.
+ */
 export const liveChanges = {
     agent: change(
         "packages/happy-agent-modules/sources/connections/impl/ServerSignIn.ts",
@@ -212,9 +216,17 @@ export const liveChanges = {
         { base: 60, deleted: 12, added: 190, language: "swift" },
     ),
 };
-/** How many steps a live subtask takes to write its file, and the share each step writes. */
-export const liveSteps = 7;
-const liveShare = (step) => Math.round((step / liveSteps) ** 0.85 * 1000) / 1000;
+/**
+ * How many steps each subtask takes to write its file, and the share each
+ * step writes. iOS server codes takes one step every three seconds of the
+ * take, so its counts climb from the first frame to the last.
+ */
+export const liveSteps = { agent: 7, desktop: 7, ios: 22 };
+/** The parts that are done before the take: idle, their counts final. */
+export const liveIdle = ["agent", "desktop"];
+/** How far iOS server codes is when the take opens. */
+export const liveStepsBefore = 4;
+const liveShare = (key, step) => Math.round((step / liveSteps[key]) ** 0.85 * 1000) / 1000;
 
 /** Earlier subtasks' finished work: one Write each, read by the sidebar as diff stats. */
 const doneChanges = {
@@ -422,7 +434,10 @@ export const bars = 28;
 /**
  * What the agent answers Steve with once the page has five bars. It is the
  * turn's last word, so the phone, which shows a turn by its last word, says it
- * too; nothing follows it to push the desktop's preview out of view.
+ * too; nothing follows it to push the desktop's preview out of view. The
+ * preview it answers under is the five-bar page shown open again in the same
+ * reply, since the small window has no room for the first one above Steve's
+ * note.
  */
 export const fiveBarsReply = "Five bars it is.";
 export const fiveBars = 5;
@@ -587,6 +602,9 @@ function subtaskCall({ title, project, workspace, text: brief }) {
     });
 }
 
+/** How many finished parts have reported to Steve's coordinator. */
+let coordinatorReports = 0;
+
 export async function reply(payload) {
     if (payload.options?.intent === "compaction") return undefined;
     const sessionId = payload.options?.sessionId ?? "";
@@ -668,7 +686,14 @@ export async function reply(payload) {
             ]);
         // Coordinating: it keeps working for as long as the take runs.
         await gate("live:coordinator");
-        return quick([text("All three are moving; I'll pull them together when they land.")]);
+        return quick([text("Two parts are in; I'll pull them together when iOS lands.")]);
+    }
+    // A finished part's report reaching the coordinator keeps it working on
+    // the part still running.
+    if (textOf(messages.find((message) => message.role === "user")) === liveTask.message) {
+        coordinatorReports += 1;
+        await gate(`live:coordinator:${coordinatorReports}`);
+        return quick([text("Noted.")]);
     }
     const live = turn.text.match(/^LIVE:(agent|desktop|ios) /u);
     if (live) {
@@ -677,7 +702,7 @@ export async function reply(payload) {
         const work = liveChanges[key];
         if (step === 0)
             return quick([tool("exec_command", { cmd: `sed -n '1,80p' '${work.path}'` })]);
-        if (step <= liveSteps) {
+        if (step <= liveSteps[key]) {
             // Each step waits for the director, so the counts climb on camera.
             await gate(`live:${key}:${step}`);
             const added = Math.round(liveShareAdded(key, step));
@@ -691,8 +716,8 @@ export async function reply(payload) {
     // The filmed task: Kirill's message, then Steve's.
     if (turn.text === prompt) return await filmedReply(turn, system);
     if (turn.text === steveFeedback) {
-        // Steve's note: the agent rewrites the page with five bars, both
-        // screens' previews follow, and it says so.
+        // Steve's note: the agent rewrites the page with five bars, shows it
+        // open again in this reply, under Steve's note, and says so.
         if (turn.answered === 0) {
             await gate("feedback");
             if (!filmedArtifactId) throw new Error("The filmed task published no preview.");
@@ -704,6 +729,13 @@ export async function reply(payload) {
                 }),
             ]);
         }
+        if (turn.answered === 1)
+            return paced([
+                tool("update_artifact", {
+                    artifactId: filmedArtifactId,
+                    display: "inline_expanded",
+                }),
+            ]);
         await gate("five-bars");
         return paced([text(fiveBarsReply)]);
     }
@@ -712,7 +744,7 @@ export async function reply(payload) {
 
 function liveShareAdded(key, step) {
     const target = { agent: 412, desktop: 268, ios: 190 }[key];
-    return target * liveShare(step);
+    return target * liveShare(key, step);
 }
 
 /**
