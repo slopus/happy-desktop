@@ -213,7 +213,7 @@
 @supports (background: -webkit-named-image(i)) {
     .happy-avatar[data-size="sm"] .happy-avatar__initials,
     .happy-avatar[data-size="lg"] .happy-avatar__initials {
-        transform: none;
+        transform: translateY(0.5px);
     }
 }
 

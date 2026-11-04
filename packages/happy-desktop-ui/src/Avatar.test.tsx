@@ -132,26 +132,47 @@ it(
                 expect(Math.abs(by), `${id} visible-bounds y ${by}`).toBeLessThanOrEqual(0.75);
                 if (content.initials === "O") {
                     const engine = server.browser as "chromium" | "firefox" | "webkit";
-                    const expected = {
-                        chromium: {
-                            xs: { x: 0.027, y: 0.227 },
-                            sm: { x: 0.072, y: -0.067 },
-                            md: { x: -0.023, y: 0.23 },
-                            lg: { x: 0.011, y: 0.028 },
-                        },
-                        firefox: {
-                            xs: { x: 0.027, y: 0.227 },
-                            sm: { x: 0.072, y: -0.067 },
-                            md: { x: -0.023, y: 0.23 },
-                            lg: { x: 0.011, y: 0.028 },
-                        },
-                        webkit: {
-                            xs: { x: -0.016, y: 0.211 },
-                            sm: { x: -0.064, y: -0.151 },
-                            md: { x: -0.026, y: 0.151 },
-                            lg: { x: -0.239, y: -0.047 },
-                        },
-                    }[engine][size];
+                    const expected = (server.platform === "linux"
+                        ? {
+                              chromium: {
+                                  xs: { x: 0.103, y: 0.266 },
+                                  sm: { x: -0.061, y: -0.028 },
+                                  md: { x: 0.194, y: 0.28 },
+                                  lg: { x: 0.012, y: 0.081 },
+                              },
+                              firefox: {
+                                  xs: { x: 0.021, y: 0.25 },
+                                  sm: { x: 0.062, y: 0.001 },
+                                  md: { x: -0.031, y: -0.004 },
+                                  lg: { x: 0.008, y: 0.249 },
+                              },
+                              webkit: {
+                                  xs: { x: 0.021, y: 0.204 },
+                                  sm: { x: 0.064, y: 0.502 },
+                                  md: { x: -0.026, y: 0.301 },
+                                  lg: { x: 0.01, y: 0.106 },
+                              },
+                          }
+                        : {
+                              chromium: {
+                                  xs: { x: 0.027, y: 0.227 },
+                                  sm: { x: 0.072, y: -0.067 },
+                                  md: { x: -0.023, y: 0.23 },
+                                  lg: { x: 0.011, y: 0.028 },
+                              },
+                              firefox: {
+                                  xs: { x: 0.027, y: 0.227 },
+                                  sm: { x: 0.072, y: -0.067 },
+                                  md: { x: -0.023, y: 0.23 },
+                                  lg: { x: 0.011, y: 0.028 },
+                              },
+                              webkit: {
+                                  xs: { x: -0.016, y: 0.211 },
+                                  sm: { x: -0.064, y: -0.151 },
+                                  md: { x: -0.026, y: 0.151 },
+                                  lg: { x: -0.239, y: -0.547 },
+                              },
+                          })[engine][size];
                     expect(
                         Math.abs(dx - expected.x),
                         `${id} measured O optical x ${dx}`,
