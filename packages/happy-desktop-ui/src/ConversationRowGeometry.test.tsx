@@ -846,6 +846,9 @@ it.skipIf(server.browser === "firefox")(
             }
         }
 
+        // The list mounts offscreen overscan rows one per idle callback. Wait
+        // for those rows before measuring every entry and its successor.
+        await settled();
         for (let width = 1500; width >= 200; width -= 1) {
             flushSync(() => widthUpdate(width));
             await nextFrame();
