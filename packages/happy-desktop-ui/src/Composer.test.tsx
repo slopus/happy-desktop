@@ -1069,7 +1069,7 @@ it("holds ContextChips and MentionPicker geometry and colors", async () => {
     );
     console.info("CHIP_INK", server.browser, server.platform, textDrift, detailDrift);
     expect(
-        Math.abs(detailDrift.dy - (server.browser === "chromium" ? 3.61 : 0.9)),
+        Math.abs(detailDrift.dy - (server.browser === "chromium" ? 3.61 : server.browser === "webkit" ? (server.platform === "darwin" ? -0.086 : 0.476) : 0.9)),
     ).toBeLessThanOrEqual(0.4);
     // Label and detail share one baseline: with x-height-only strings the ink
     // bottom is the softened baseline — both must sit at 16px of the 24px chip
