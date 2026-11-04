@@ -77,6 +77,10 @@ export default {
         "Kirill's and Steve's feeds, and the new subtask, are marked read as they update, so no unread badge interrupts the take.",
     ],
     cutFreezes: true,
+    // A longer stall stays a hold on the window: cutting it skips the phone's
+    // motion, as a 1.1 s stall in take 11's first desktop pass cut Steve's
+    // keyboard rising.
+    cutFreezesLongest: 0.5,
     // Kirill's exports, once they are in the demo's assets, replace the take's
     // placeholders in the cut; the take measured where each one is drawn.
     pictures: {

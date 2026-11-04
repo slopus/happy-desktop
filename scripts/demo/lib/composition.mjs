@@ -716,7 +716,9 @@ async function freezesRead(file, fps) {
  * `cutFreezes` drops the frames the desktop capture held while its
  * screencast stalled mid-motion (the take's `freezes.json`, from the
  * director's `captureFreezes`), so the motion on either side of a stall
- * joins up instead of hanging. Returns which source frames are kept, where a
+ * joins up instead of hanging. A freeze longer than `cutFreezesLongest`
+ * seconds stays as a hold: cutting it would skip that much of the other
+ * screen's motion. Returns which source frames are kept, where a
  * source frame lands on the output timeline, for re-timing the take's sounds
  * and cues, and the same rule as an ffmpeg `select` expression.
  */
@@ -733,7 +735,10 @@ function timelineRead(composition, cues, freezes) {
             throw new Error("A speed-up rate must be a whole number above 1.");
         return { from: at(entry.from), to: at(entry.to), rate: entry.rate };
     });
-    const cuts = composition.cutFreezes ? freezes : [];
+    const longest = Math.round((composition.cutFreezesLongest ?? Infinity) * fps);
+    const cuts = composition.cutFreezes
+        ? freezes.filter((freeze) => freeze.to - freeze.from <= longest)
+        : [];
     const kept = (frame) =>
         windows.every(
             (window) =>
@@ -751,6 +756,7 @@ function timelineRead(composition, cues, freezes) {
     return {
         edited: windows.length > 0 || cuts.length > 0,
         cuts,
+        held: composition.cutFreezes ? freezes.filter((freeze) => !cuts.includes(freeze)) : [],
         kept,
         select: select.length === 0 ? "1" : select.join("*"),
         outputFrame: (frame) => {
@@ -942,6 +948,11 @@ export async function compositionRender({
             count: timeline.cuts.length,
             frames: timeline.cuts.reduce((sum, cut) => sum + cut.to - cut.from, 0),
         },
+        freezesHeld: timeline.held.map((freeze) => ({
+            takeFrames: [freeze.from, freeze.to],
+            cutSeconds: timeline.outputFrame(freeze.from) / output.fps,
+            seconds: (freeze.to - freeze.from) / output.fps,
+        })),
         phoneHolds: phoneHolds.map((hold) => {
             const shown = [];
             for (let frame = hold.from; frame < hold.to; frame += 1)
