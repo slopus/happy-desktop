@@ -77,12 +77,10 @@ export function desktopDebugStoreCreate(bridge: HappyDesktopBridge): AppHappyAge
         run: () => Promise<DesktopDebugSnapshot>,
     ): void => {
         if (targets.some((target) => isPending(snapshot[target].status))) return;
-        // A build-disabled target keeps its reason; main refuses it regardless.
-        const changing = targets.filter((target) => snapshot[target].status !== "disabled");
         snapshot = {
             ...snapshot,
             error: undefined,
-            ...Object.fromEntries(changing.map((target) => [target, { status }])),
+            ...Object.fromEntries(targets.map((target) => [target, { status }])),
         };
         publish();
         void run().then(apply, failure);

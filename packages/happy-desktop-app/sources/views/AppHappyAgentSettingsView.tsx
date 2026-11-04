@@ -151,14 +151,7 @@ export function happyAgentSettingsCategoryExists(section: string): boolean {
 
 export interface AppHappyAgentDebugTargetSnapshot {
     readonly error?: string;
-    readonly status:
-        | "stopped"
-        | "starting"
-        | "running"
-        | "stopping"
-        | "unavailable"
-        | "disabled"
-        | "error";
+    readonly status: "stopped" | "starting" | "running" | "stopping" | "unavailable" | "error";
     readonly url?: string;
 }
 

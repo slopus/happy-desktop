@@ -25,7 +25,7 @@ export interface GymSmokeResult {
  * proven the main process, the preload boundary, and the renderer on this
  * platform.
  *
- * A packaged build accepts no debugger, so the app itself reports what it shows
+ * A packaged build refuses raw debugger switches, so the app reports what it shows
  * (`happy-desktop-electron` `sources/main/desktopSmokeReport.ts`) and quits.
  */
 export async function gymSmokeRun(): Promise<GymSmokeResult> {

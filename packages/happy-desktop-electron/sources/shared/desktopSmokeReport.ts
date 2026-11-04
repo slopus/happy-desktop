@@ -1,7 +1,7 @@
 /**
- * What a hidden first-launch smoke run reports about itself. A packaged build
- * refuses every debugger, so the smoke cannot look inside it; the app writes
- * this file instead and quits.
+ * What a hidden first-launch smoke run reports about itself. Packaged builds
+ * refuse Playwright's raw debugger switches, so the smoke reads this file
+ * instead of attaching a debugger, then the app quits.
  */
 export const desktopSmokeReportEnvironment = "HAPPY_DESKTOP_SMOKE_REPORT";
 /** Where the welcome screen's capture goes; written only while it is on screen. */
