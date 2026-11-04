@@ -1,4 +1,5 @@
 import { expect, it } from "vitest";
+import { page } from "vitest/browser";
 import "./theme.css";
 import "./styles/text-field.css";
 import "./styles/icon.css";
@@ -21,6 +22,34 @@ const GAP = 8;
 const FONT_FAMILY = "happy Figtree, system-ui, sans-serif";
 
 const sizes = ["small", "medium", "large"] as const;
+
+/** WebKit does not expose placeholder pseudo styles through getComputedStyle. */
+async function expectPlaceholderPaint(input: HTMLInputElement) {
+    const value = input.value;
+    try {
+        input.value = "";
+        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+        const capture = await page.screenshot({ element: input, save: false });
+        const image = new Image();
+        image.src = `data:image/png;base64,${capture}`;
+        await image.decode();
+        const canvas = document.createElement("canvas");
+        canvas.width = image.naturalWidth;
+        canvas.height = image.naturalHeight;
+        const context = canvas.getContext("2d", { willReadFrequently: true });
+        if (!context) throw new Error("Canvas pixel analysis is unavailable.");
+        context.drawImage(image, 0, 0);
+        const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+        let darkest = 255;
+        for (let index = 0; index < pixels.length; index += 4)
+            darkest = Math.min(darkest, pixels[index]!, pixels[index + 1]!, pixels[index + 2]!);
+        // Anti-aliasing blends #999 ink with the lighter field background.
+        expect(darkest, "placeholder ink color").toBeGreaterThanOrEqual(150);
+        expect(darkest, "placeholder ink paints").toBeLessThanOrEqual(180);
+    } finally {
+        input.value = value;
+    }
+}
 
 it("holds TextField sizes, typography, label, hint, and leading-icon geometry", async () => {
     const view = createRenderer();
@@ -218,7 +247,7 @@ it("holds TextField sizes, typography, label, hint, and leading-icon geometry", 
     const mediumInput = view.$(
         '[data-testid="tf-medium"] [data-happy-desktop-ui="text-field-input"]',
     );
-    expect(getComputedStyle(mediumInput.element, "::placeholder").color).toBe("rgb(153, 153, 153)");
+    await expectPlaceholderPaint(mediumInput.element as HTMLInputElement);
 
     // Required marker: danger token, actually painted.
     const required = view.$(
@@ -521,7 +550,7 @@ it("holds TextField focus, error, disabled, textarea, width, and placeholder par
     );
     expect(parPh.element.getAttribute("placeholder")).toBe("ORBIT-2048");
     expect((parVal.element as HTMLInputElement).value).toBe("ORBIT-2048");
-    expect(getComputedStyle(parPh.element, "::placeholder").color).toBe("rgb(153, 153, 153)");
+    await expectPlaceholderPaint(parPh.element as HTMLInputElement);
 
     const phInk = await parPh.visibleMetrics();
     const valInk = await parVal.visibleMetrics();
