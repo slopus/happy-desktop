@@ -1,5 +1,5 @@
 import { Avatar } from "./Avatar";
-import { useRef } from "react";
+import { useRef, useSyncExternalStore } from "react";
 import { Ionicon } from "./vectorIcons/VectorIcon";
 import type { StoryFace } from "./StoryViewer";
 
@@ -16,9 +16,16 @@ export type StoriesRowItem = {
     readonly seen?: number;
 };
 
+/** Page zoom and a move to a screen of another scale both fire a resize: the ratio is read again. */
+function pixelRatioSubscribe(change: () => void) {
+    addEventListener("resize", change);
+    return () => removeEventListener("resize", change);
+}
+
 /**
- * A story ring, `size` square with an outer corner `radius`: one round-capped arc per live story,
- * clockwise from the top, the watched first in grey and the rest in the accent unless all are grey.
+ * A story ring around a photo `size` square with corner `radius`, drawn past its box: one
+ * round-capped arc per live story, clockwise from the top, the watched first in grey and the rest
+ * in the accent unless all are grey. Its box is the photo's own, so both land on the same pixels.
  */
 export function StoryRing(props: {
     readonly size: number;
@@ -29,16 +36,20 @@ export function StoryRing(props: {
 }) {
     const { size, radius, total = 1 } = props;
     const seen = props.state === "seen" ? total : (props.seen ?? 0);
-    // Arcs per pixel of the 1px stroke; between round caps half a pixel long, a gap of a 21st the side.
-    const unit = total / (4 * (size - 2 * radius) + 2 * Math.PI * (radius - 0.5));
-    const gap = (size / 21 + 1) * unit;
+    // A 1px stroke 2px off the photo, each a whole number of device pixels at every zoom.
+    const ratio = useSyncExternalStore(pixelRatioSubscribe, () => devicePixelRatio);
+    const stroke = Math.max(1, Math.round(ratio)) / ratio;
+    const inset = Math.max(1, Math.round(2 * ratio)) / ratio + stroke / 2;
+    // Arcs per pixel of stroke; between round caps a stroke long, a gap of a 21st the ring's side.
+    const unit = total / (4 * (size - 2 * radius) + 2 * Math.PI * (radius + inset));
+    const gap = ((size + 2 * inset + stroke) / 21 + stroke) * unit;
     const arcs = (from: number, count: number) =>
         count > 0 && (
             <rect
                 data-seen={from < seen ? "" : undefined}
-                height={size - 1}
+                height={size + 2 * inset}
                 pathLength={total}
-                rx={radius - 0.5}
+                rx={radius + inset}
                 strokeDasharray={
                     total > 1
                         ? Array.from({ length: count }, (_, at) =>
@@ -47,9 +58,10 @@ export function StoryRing(props: {
                         : undefined
                 }
                 strokeDashoffset={-from - (size / 2 - radius) * unit - gap / 2}
-                width={size - 1}
-                x={0.5}
-                y={0.5}
+                strokeWidth={stroke}
+                width={size + 2 * inset}
+                x={-inset}
+                y={-inset}
             />
         );
     return (
@@ -82,8 +94,6 @@ export function StoriesRow(props: {
                             <button
                                 className="happy-stories-row__photo"
                                 aria-label="Your Story"
-                                data-story={own ? "" : undefined}
-                                data-seen={own?.state === "seen" ? "" : undefined}
                                 data-story-ring={own?.id}
                                 type="button"
                                 onClick={() =>
@@ -91,7 +101,7 @@ export function StoriesRow(props: {
                                 }
                             >
                                 <Avatar {...props.create.face} size="md" type="human" />
-                                {own ? <StoryRing {...own} radius={21} size={42} /> : null}
+                                {own ? <StoryRing {...own} radius={18} size={36} /> : null}
                             </button>
                             <button
                                 aria-label="Add a story"
@@ -124,8 +134,6 @@ export function StoriesRow(props: {
                         <button
                             className="happy-stories-row__item"
                             data-happy-desktop-ui="stories-row-item"
-                            data-story=""
-                            data-seen={item.state === "seen" ? "" : undefined}
                             data-story-ring={item.id}
                             key={item.id}
                             onClick={() => props.onOpen(item.id)}
@@ -136,8 +144,8 @@ export function StoriesRow(props: {
                             <Avatar {...item.face} size="md" />
                             <StoryRing
                                 {...item}
-                                radius={item.face.type === "agent" ? 12 : 21}
-                                size={42}
+                                radius={item.face.type === "agent" ? 9 : 18}
+                                size={36}
                             />
                             <span>{item.shortName ?? item.name}</span>
                         </button>

@@ -2178,8 +2178,8 @@ function SidebarRow({
                                 >
                                     <StoryRing
                                         {...item().storyRing}
-                                        radius={item().kind === "person" ? 13 : 9}
-                                        size={26}
+                                        radius={item().kind === "person" ? 10 : 6}
+                                        size={SIDEBAR_AVATAR_SIZE}
                                         state={item().story!}
                                     />
                                 </span>

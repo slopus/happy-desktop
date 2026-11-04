@@ -2,11 +2,13 @@
 .happy-sidebar__item-story {
     position: absolute;
     display: flex;
+    padding: 3px;
     cursor: pointer;
 }
 
 /* One rect per state, dashed into round-capped arcs, so the ends antialias and follow the corners. */
 .happy-story-ring {
+    overflow: visible;
     fill: none;
     stroke: var(--radio-active);
     stroke-linecap: round;
@@ -29,10 +31,9 @@
         );
     font: 400 8px / 10px var(--happy-font-ui);
 }
-/* Around the photo, where it would sit on its own, scrolling with its slot. */
+/* Over the photo, where it would sit on its own, scrolling with its slot. */
 .happy-stories-row .happy-story-ring {
     position: absolute;
-    margin: -3px;
 }
 .happy-stories-scroll {
     display: flex;
