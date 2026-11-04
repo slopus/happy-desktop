@@ -218,6 +218,11 @@ it("holds TextField sizes, typography, label, hint, and leading-icon geometry", 
     const mediumInput = view.$(
         '[data-testid="tf-medium"] [data-happy-desktop-ui="text-field-input"]',
     );
+    console.info(
+        "PLACEHOLDER_STYLE_DIAGNOSTIC",
+        getComputedStyle(mediumInput.element, "::placeholder").color,
+        getComputedStyle(mediumInput.element, "::-webkit-input-placeholder").color,
+    );
     expect(getComputedStyle(mediumInput.element, "::placeholder").color).toBe("rgb(153, 153, 153)");
 
     // Required marker: danger token, actually painted.
