@@ -185,7 +185,10 @@ export interface HappyAgentFeedPageStore {
      * change the entry was showing, so a newer one keeps it open.
      */
     entryOpen(itemId: string): void;
-    /** Marks every entry seen, up to the newest one on screen. */
+    /**
+     * Marks every entry seen up to the newest one on screen, older pages not
+     * read yet included.
+     */
     readAll(): void;
 }
 
@@ -421,6 +424,8 @@ export function happyAgentFeedCreate(deps: HappyAgentFeedDeps): HappyAgentFeed {
         let firstAnswered = false;
         /** The version each pending entry had when it was opened or read. */
         const pending = new Map<string, string>();
+        /** A read-all is on its way; another would ask the same. */
+        let readingAll = false;
         let following: AbortController | undefined;
         let cursor: string | undefined;
         const publish = (next: Partial<HappyAgentFeedPageSnapshot>): void => {
@@ -635,23 +640,29 @@ export function happyAgentFeedCreate(deps: HappyAgentFeedDeps): HappyAgentFeed {
                 },
                 readAll() {
                     const newest = snapshot.items[0];
+                    if (!newest || readingAll) return;
                     const open = snapshot.items.filter(
                         (item) => item.seenAt === null && !pending.has(item.id),
                     );
-                    if (!newest || open.length === 0) return;
+                    // Open entries may lie only on pages not read yet; the count knows of them.
+                    if (open.length === 0 && (unreadStore?.store.get().unread ?? 0) === 0) return;
+                    readingAll = true;
                     for (const item of open) pending.set(item.id, item.version);
                     pendingPublish();
                     const through = newest.cursor;
                     client.markFeedReadAll({ through, mutationId: mutationIdCreate() }).then(
                         (response) => {
+                            readingAll = false;
                             readAllConfirmed(through, Date.now());
                             unreadStore?.unreadReceived(response.unread);
                         },
-                        (error: unknown) =>
+                        (error: unknown) => {
+                            readingAll = false;
                             seenFailed(
                                 open.map((item) => item.id),
                                 error,
-                            ),
+                            );
+                        },
                     );
                 },
             } satisfies HappyAgentFeedPageStore,
