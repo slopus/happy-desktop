@@ -30,12 +30,12 @@ For Agent/native versions, inspect GitHub releases and tags. Renderer previews
 have no release tag: inspect `gh run list --workflow local-web-pages.yml`; run
 names contain their versions and successful deployments identify what shipped.
 
-| Request                  | Dispatch from `main`                                                                  | Delivery                                                                               |
-| ------------------------ | ------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| Happy Agent preview      | Agent repository's `release-happy-agent.yml`: version, release_notes, prerelease=true | Agent binaries for Nightly                                                             |
-| Desktop native preview   | `desktop-release.yml`: version, release_notes, prerelease=true                        | Signed macOS arm64/x64 and Windows x64 standard and Nightly apps and updater manifests |
-| Nightly native preview   | `desktop-release.yml`: as above, plus nightly_only=true                               | Signed macOS and Windows Nightly apps, `nightly-mac.yml` and `nightly.yml` only        |
-| Desktop renderer preview | `local-web-pages.yml`: version, release_notes                                         | Hosted renderer at `https://local.app.happy.engineering` only                          |
+| Request                  | Dispatch from `main`                                                                  | Delivery                                                                                                                        |
+| ------------------------ | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Happy Agent preview      | Agent repository's `release-happy-agent.yml`: version, release_notes, prerelease=true | Agent binaries for Nightly                                                                                                      |
+| Desktop native preview   | `desktop-release.yml`: version, release_notes, prerelease=true                        | Signed macOS arm64/x64 and Windows x64 standard and Nightly apps and updater manifests, plus standard Linux x64/arm64 AppImages |
+| Nightly native preview   | `desktop-release.yml`: as above, plus nightly_only=true                               | Signed macOS and Windows Nightly apps, `nightly-mac.yml` and `nightly.yml` only                                                 |
+| Desktop renderer preview | `local-web-pages.yml`: version, release_notes                                         | Hosted renderer at `https://local.app.happy.engineering` only                                                                   |
 
 Each workflow validates and builds the requested source, then publishes in the same
 run. No prepare/publish coordinator, bump-after-build commit, or artifact promotion
@@ -61,8 +61,8 @@ Use `gh workflow run ... --ref main` with `-f version=<chosen-version>` and
 For Agent/native previews also pass `-F prerelease=true`; renderer has no such input.
 A request for Happy Nightly alone also passes `-F nightly_only=true`: the run then
 builds, signs, notarizes, and publishes only the macOS and Windows Nightly apps and
-their manifests, and refuses to start unless it is a preview. Standard installs skip
-such a release, because their update feed only considers releases carrying their
+their manifests, with no Linux AppImages, and refuses to start unless it is a
+preview. Standard installs skip such a release, because their update feed only considers releases carrying their
 platform's manifest (`latest-mac.yml` on macOS, `latest.yml` on Windows).
 Watch with `gh run watch`, and read back the
 release notes, version, and assets before reporting success. For renderer previews,
@@ -106,13 +106,16 @@ The standard desktop app is also distributed through `slopus/homebrew-tap`:
 brew install --cask slopus/tap/happy
 ```
 
-Stable native releases additionally build standard Linux x64 and arm64 AppImages
-on native Ubuntu runners. `build-linux.yml` boots each actual AppImage with a
-disposable profile and asserts that its packaged Electron renderer reaches the
-welcome screen, saving a screenshot. Publishing is gated on both checks. Linux
-Nightly and native Linux auto-updates are not shipped; use Homebrew to upgrade
-Linux installations. Preview behavior and all macOS signing and Windows checks
-remain unchanged.
+Stable and preview native releases additionally build standard Linux x64 and arm64
+AppImages on native Ubuntu runners, named `Happy-<version>-<arch>.AppImage` with
+the release version embedded, as on Windows. A Nightly-only preview builds none,
+because Linux has no Nightly flavor. `build-linux.yml` boots each actual AppImage
+with a disposable profile and asserts that its packaged Electron renderer reaches
+the welcome screen, saving a screenshot. Publishing is gated on both checks. Linux
+Nightly and native Linux auto-updates are not shipped: the packaged updater only
+checks on macOS and Windows, so a Linux preview is installed by downloading its
+AppImage, and stable installations upgrade through Homebrew. All macOS signing and
+Windows checks remain unchanged.
 
 The tap's scheduled/manual update workflow reads the latest stable GitHub release,
 pins each artifact's SHA-256, and tests Homebrew installation, packaged app boot,

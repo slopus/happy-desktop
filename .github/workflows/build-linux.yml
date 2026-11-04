@@ -3,6 +3,10 @@ name: Build and boot Linux AppImages
 on:
     workflow_call:
         inputs:
+            version:
+                description: Version to embed, X.Y.Z or X.Y.Z-preview.N; empty uses the package version.
+                type: string
+                default: ""
             release_analytics:
                 description: Embed the PostHog key; only release builds send analytics.
                 type: boolean
@@ -49,21 +53,30 @@ jobs:
               env:
                   HAPPY_POSTHOG_API_KEY: ${{ inputs.release_analytics && secrets.HAPPY_POSTHOG_API_KEY || '' }}
                   RELEASE_ARCH: ${{ matrix.arch }}
+                  RELEASE_VERSION: ${{ inputs.version }}
               run: |
-                  VERSION="$(node -p "require('./package.json').version")"
+                  # Previews embed their version in the package without changing the source manifest.
+                  export RELEASE_VERSION="${RELEASE_VERSION:-$(node -p "require('./package.json').version")}"
+                  pattern='^[0-9]+\.[0-9]+\.[0-9]+(-preview\.(0|[1-9][0-9]*))?$'
+                  if [[ ! "$RELEASE_VERSION" =~ $pattern ]]; then
+                    echo "RELEASE_VERSION must be a stable or numbered preview version." >&2
+                    exit 1
+                  fi
                   pnpm --dir packages/happy-desktop-electron build
                   # AppImage normally rewrites x64 to x86_64. Keep the release
                   # filename contract shared with the cask and publish checks.
                   pnpm --dir packages/happy-desktop-electron exec electron-builder --linux AppImage --"$RELEASE_ARCH" --publish never \
-                    --config.linux.artifactName="Happy-${VERSION}-${RELEASE_ARCH}.AppImage"
+                    --config.extraMetadata.version="$RELEASE_VERSION" \
+                    --config.linux.artifactName="Happy-${RELEASE_VERSION}-${RELEASE_ARCH}.AppImage"
             - name: Boot the actual AppImage and verify its welcome screen
               env:
                   HAPPY_DESKTOP_GYM_PACKAGED: "1"
                   HAPPY_DESKTOP_GYM_SCREENSHOT: ${{ runner.temp }}/happy-appimage.png
                   ELECTRON_DISABLE_SANDBOX: "1"
                   RELEASE_ARCH: ${{ matrix.arch }}
+                  RELEASE_VERSION: ${{ inputs.version }}
               run: |
-                  VERSION="$(node -p "require('./package.json').version")"
+                  VERSION="${RELEASE_VERSION:-$(node -p "require('./package.json').version")}"
                   export HAPPY_DESKTOP_ELECTRON_EXECUTABLE="$GITHUB_WORKSPACE/packages/happy-desktop-electron/release/Happy-${VERSION}-${RELEASE_ARCH}.AppImage"
                   chmod +x "$HAPPY_DESKTOP_ELECTRON_EXECUTABLE"
                   xvfb-run --auto-servernum pnpm --dir packages/happy-desktop-gym gym:electron smoke

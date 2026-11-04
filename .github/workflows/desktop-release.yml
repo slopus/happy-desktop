@@ -39,9 +39,11 @@ env:
 jobs:
     linux:
         needs: verify
-        if: ${{ !inputs.prerelease }}
+        # Linux has no Nightly flavor, so a Nightly-only preview builds no AppImage.
+        if: ${{ !inputs.nightly_only }}
         uses: ./.github/workflows/build-linux.yml
         with:
+            version: ${{ inputs.version }}
             release_analytics: true
         secrets:
             HAPPY_POSTHOG_API_KEY: ${{ secrets.HAPPY_POSTHOG_API_KEY }}
@@ -260,7 +262,7 @@ jobs:
 
     publish:
         name: Publish GitHub Release
-        if: ${{ !cancelled() && needs.verify.result == 'success' && needs.build.result == 'success' && needs.windows.result == 'success' && (needs.linux.result == 'success' || (inputs.prerelease && needs.linux.result == 'skipped')) }}
+        if: ${{ !cancelled() && needs.verify.result == 'success' && needs.build.result == 'success' && needs.windows.result == 'success' && (needs.linux.result == 'success' || (inputs.nightly_only && needs.linux.result == 'skipped')) }}
         needs:
             - verify
             - build
@@ -311,7 +313,7 @@ jobs:
                   fi
 
             - name: Download boot-verified Linux AppImages
-              if: ${{ !inputs.prerelease }}
+              if: ${{ !inputs.nightly_only }}
               uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
               with:
                   pattern: happy-desktop-linux-*
@@ -357,7 +359,7 @@ jobs:
                       if (!info.isFile() || info.size === 0) throw new Error(`Missing or empty release asset: ${path}`);
                     }
                   }
-                  if (process.env.RELEASE_PRERELEASE !== 'true') {
+                  if (process.env.RELEASE_NIGHTLY_ONLY !== 'true') {
                     for (const arch of ['x64', 'arm64']) {
                       const path = `packages/happy-desktop-electron/release/linux/Happy-${process.env.RELEASE_VERSION}-${arch}.AppImage`;
                       const info = await stat(path);
@@ -377,7 +379,7 @@ jobs:
                   for channel in "${windowsChannels[@]}"; do
                     assets+=(packages/happy-desktop-electron/release/windows/"$channel".yml)
                   done
-                  if [[ "$RELEASE_PRERELEASE" != true ]]; then
+                  if [[ "$RELEASE_NIGHTLY_ONLY" != true ]]; then
                     assets+=(packages/happy-desktop-electron/release/linux/*.AppImage)
                   fi
                   arguments=("$RELEASE_TAG" --draft --target "$GITHUB_SHA" --title "Happy $RELEASE_TAG" --notes-file .release/notes.md)
