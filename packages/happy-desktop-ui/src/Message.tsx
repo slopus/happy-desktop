@@ -1269,9 +1269,7 @@ export function MessageList(props: MessageListProps) {
         // Following never writes upward; model compensation owns that change.
         const bottom = total - (geometry.height || height) - geometryFollowInset.current;
         const current = element.scrollTop;
-        if (geometryFollowInset.current > 0 || followSentHold.current !== undefined) {
-            console.info("FOLLOW_TRACE", JSON.stringify({ total, height, bottom, current, inset: geometryFollowInset.current, hold: followSentHold.current, items: items.length, footerIndex, scrollHeight: element.scrollHeight }));
-        }
+        if (document.body.dataset.fuzzTrace === "1") console.info("FOLLOW_TRACE", JSON.stringify({ total, height, bottom, current, inset: geometryFollowInset.current, hold: followSentHold.current, items: items.length, footerIndex, scrollHeight: element.scrollHeight, following: following.current }));
         if (bottom > current) scrollTopWrite(element, bottom);
     };
     /**
@@ -3426,6 +3424,7 @@ export function MessageList(props: MessageListProps) {
         const onScroll = () => {
             const currentScrollHeight = element.scrollHeight;
             const expected = expectedScrollTop.current;
+            if (document.body.dataset.fuzzTrace === "1") console.info("SCROLL_TRACE", JSON.stringify({ top: element.scrollTop, expected, reader: readerScrollTop.current, previous: previousScrollTop, scrollHeight: currentScrollHeight, baseline: scrollHeightBaseline.current, wheelPending: wheelScrollPending.current, following: following.current, escaped: escapedFromFollow.current }));
             if (
                 expected !== undefined &&
                 !messageListScrollOffsetMoved(element.scrollTop, expected)

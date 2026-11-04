@@ -2385,12 +2385,15 @@ it("replays the reduced bottom-follow failure", async () => {
         ];
         for (const [index, action] of actions.entries()) {
             const step = index + 21;
+            if (step >= 39) document.body.dataset.fuzzTrace = "1";
+            console.info("TAPE_STEP", step, action);
             await act(h, action, () => (step === 37 || step === 40 ? 1 : 0), step);
             await frame();
             await settle();
         }
         followingCheck(h);
     } finally {
+        delete document.body.dataset.fuzzTrace;
         await h.close();
     }
 }, 60_000);
