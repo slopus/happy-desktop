@@ -6,10 +6,21 @@
     max-width: 560px;
     color: var(--onboarding-foreground);
     font-family: var(--happy-font-ui);
+    /* The bar takes the backdrop's ink, dark on the light gradient and light
+       on the dark one, rather than the primary tint meant for a photograph. */
+    --happy-segmented-progress-inverse-ink: var(--onboarding-foreground);
 }
 
 /* Five steps on one line: the bar is the whole report, so nothing counts them
    in words above it. */
 .happy-onboarding-steps {
     max-width: 640px;
+}
+
+/* A step not yet begun stays plainly behind the live one, but legible over
+   the gradient. */
+.happy-onboarding-steps
+    .happy-segmented-progress__segment[data-state="pending"]
+    .happy-segmented-progress__label {
+    opacity: 0.7;
 }

@@ -187,7 +187,9 @@
 }
 
 /* Overlaid rather than in the flow, so the anchor line is measured from the
-   top of the window whether or not a page shows the step bar. */
+   top of the window whether or not a page shows the step bar. It starts below
+   the window-controls band, clear of the macOS traffic lights and of the
+   caption buttons Windows draws over the top-right corner. */
 .happy-setup-page__steps {
     position: absolute;
     top: 0;
@@ -196,7 +198,7 @@
     z-index: 2;
     display: flex;
     justify-content: center;
-    padding: 32px 32px 8px;
+    padding: calc(var(--happy-window-controls-height) + 16px) 32px 8px;
 }
 
 /* The sky remains one stable full-window layer while a stage changes. Only the
@@ -243,6 +245,18 @@
 .happy-setup-page[data-backdrop="sky"] .happy-local-onboarding__facts,
 .happy-setup-page[data-backdrop="sky"] .happy-text-field__label {
     color: var(--onboarding-foreground);
+}
+
+/* A column that is not ready yet steps back less on the gradient than on a
+   plain surface, where the grain would otherwise swallow it. */
+.happy-setup-page[data-backdrop="sky"]
+    .happy-setup-assistants__item:not([data-status="found"])
+    :is(
+        .happy-setup-assistants__mark,
+        .happy-setup-assistants__name,
+        .happy-setup-assistants__detail
+    ) {
+    opacity: 0.64;
 }
 
 /* Status details use the same native-palette ink as the surrounding copy. */

@@ -74,7 +74,9 @@ const server = await createServer({
     server: { host: "127.0.0.1", port, strictPort: true },
 });
 await server.listen();
-const browser = await chromium.launch();
+// A flow page mounts one WebGL backdrop per screen; Chromium's default of 16
+// live contexts would lose the oldest ones before they are captured.
+const browser = await chromium.launch({ args: ["--max-active-webgl-contexts=64"] });
 try {
     const context = await browser.newContext({
         deviceScaleFactor: Number(values.scale),

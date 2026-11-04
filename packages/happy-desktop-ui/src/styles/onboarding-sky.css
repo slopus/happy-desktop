@@ -35,3 +35,29 @@
     width: 100%;
     height: 100%;
 }
+
+/* A calm field under the words. The grain keeps its corners, and the centre
+   column and the step bar above it never sit on its densest noise. */
+.happy-onboarding-sky::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+        radial-gradient(
+            ellipse 44% 52% at 50% 52%,
+            color-mix(in srgb, var(--onboarding-grain-back) 72%, transparent),
+            color-mix(in srgb, var(--onboarding-grain-back) 40%, transparent) 60%,
+            transparent
+        ),
+        linear-gradient(
+            to bottom,
+            color-mix(in srgb, var(--onboarding-grain-back) 56%, transparent),
+            transparent 128px
+        );
+}
+
+/* Mirrored as one picture, the fallback glows with the canvas, so the dense
+   corners move off the caption buttons' corner. */
+.happy-onboarding-sky[data-mirrored] {
+    transform: scaleX(-1);
+}

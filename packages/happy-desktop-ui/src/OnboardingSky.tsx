@@ -10,6 +10,33 @@ const systemDarkSubscribe = (listener: () => void) => {
     return () => query.removeEventListener("change", listener);
 };
 
+interface WindowControlsOverlay extends EventTarget {
+    readonly visible: boolean;
+    getTitlebarAreaRect(): DOMRect;
+}
+
+const windowControlsOverlay = () =>
+    (navigator as Navigator & { windowControlsOverlay?: WindowControlsOverlay })
+        .windowControlsOverlay;
+
+/**
+ * Whether the window's caption buttons are drawn over its top-right corner, as
+ * Windows draws them. The overlay's title-bar area is the window minus those
+ * buttons, so they sit at whichever end it leaves the wider gap. macOS and
+ * Linux report no visible overlay here.
+ */
+const captionTrailingGet = () => {
+    const overlay = windowControlsOverlay();
+    if (overlay?.visible !== true) return false;
+    const area = overlay.getTitlebarAreaRect();
+    return window.innerWidth - area.right > area.left;
+};
+const captionTrailingSubscribe = (listener: () => void) => {
+    const overlay = windowControlsOverlay();
+    overlay?.addEventListener("geometrychange", listener);
+    return () => overlay?.removeEventListener("geometrychange", listener);
+};
+
 interface OnboardingSkyProps {
     readonly appearance: ThemeMode;
     readonly className?: string;
@@ -17,7 +44,10 @@ interface OnboardingSkyProps {
 
 /**
  * The native iOS/Android Grain Gradient behind first-run onboarding.
- * Its palette, corner shape, procedural grain and animation speed match native.
+ * Its palette, corner shape and procedural grain match native; it moves at a
+ * third of native's speed, and not at all without GPU acceleration.
+ * Where the caption buttons sit top-right, the gradient is mirrored so its
+ * dense corners are top-left and bottom-right, clear of them.
  * The CSS corner glows remain underneath if WebGL is unavailable or lost.
  */
 export function OnboardingSky(props: OnboardingSkyProps) {
@@ -35,6 +65,11 @@ export function OnboardingSky(props: OnboardingSkyProps) {
         reducedMotionGet,
         () => true,
     );
+    const captionTrailing = useSyncExternalStore(
+        captionTrailingSubscribe,
+        captionTrailingGet,
+        () => false,
+    );
     const canvas = useRef<HTMLCanvasElement>(null);
     // Appearance changes update the palette without rewinding the native motion.
     const clock = useRef({ seconds: 0 });
@@ -49,6 +84,7 @@ export function OnboardingSky(props: OnboardingSkyProps) {
             className={["happy-onboarding-sky", props.className].filter(Boolean).join(" ")}
             data-appearance={appearance}
             data-happy-desktop-ui="onboarding-sky"
+            data-mirrored={captionTrailing ? "" : undefined}
         >
             <canvas
                 ref={canvas}
