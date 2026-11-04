@@ -184,8 +184,9 @@ export type MessageProps = Omit<HTMLAttributes<HTMLDivElement>, "style"> & {
     /** What the message answers, such as a story, shown above its body. */
     quote?: ReactNode;
     /**
-     * What the author did, after their name: "replied to your story". An own
-     * message, which has no author line, then opens with one naming "You".
+     * What the author did, after their name: "Replied to your story". The face
+     * then joins the author line, and an own message, which has none, gains
+     * one naming "You".
      */
     authorNote?: string;
     /** Follow-up message: no avatar/author row, time sits in the gutter. */
@@ -677,6 +678,7 @@ export function Message(props: MessageProps) {
         ) : null;
     const incomingMeta = showIncomingMeta() ? (
         <div className="happy-message__meta" data-happy-desktop-ui="message-meta">
+            {local.authorNote ? renderAvatar("xs") : null}
             {!showIncomingIdentity() ? null : local.onAuthorSelect ? (
                 <button
                     aria-label={authorActionLabel()}
@@ -741,7 +743,8 @@ export function Message(props: MessageProps) {
             style={local.style}
         >
             <div className="happy-message__gutter" data-happy-desktop-ui="message-gutter">
-                {showIncomingIdentity() ? renderDanglingAvatar() : null}
+                {/* A noted author line carries the face itself, at the name's size. */}
+                {showIncomingIdentity() && !local.authorNote ? renderDanglingAvatar() : null}
             </div>
             <div className="happy-message__content" data-happy-desktop-ui="message-content">
                 {/* Own messages carry no meta row — the accent bubble on the
@@ -760,7 +763,7 @@ export function Message(props: MessageProps) {
                     </span>
                 ) : null}
                 {local.own && local.authorNote ? (
-                    <div className="happy-message__meta happy-message__meta--own">
+                    <div className="happy-message__meta">
                         {renderAvatar("xs")}
                         <span className="happy-message__author">You</span>
                         <span className="happy-message__author-note">{local.authorNote}</span>

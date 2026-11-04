@@ -1055,11 +1055,6 @@ function botCreatingSidebarItem(
     };
 }
 
-/** A bot's or task's story outline, by its Happy Agent and agent ids. */
-type StoryOutline = (
-    happyAgentId: string,
-    agentId: string,
-) => Pick<SidebarItem, "story" | "storyRing">;
 const STORIES_OFF: HappyAgentStoriesSnapshot = { mode: "off" };
 const storiesNone = { get: () => STORIES_OFF, subscribe: () => () => {} };
 type StoryWho = Pick<HappyAgentStoryTile, "poster" | "agentId" | "userId">;
@@ -2405,7 +2400,6 @@ function voiceFocusInProjects(
 
 function happyAgentSections(
     directory: AppHappyAgentDirectorySnapshot,
-    storyOutline: StoryOutline,
     titleShimmerEnabled: boolean,
     projectsVisibility: ProjectsVisibilitySnapshot,
     attention: HappyAgentAttentionSnapshot,
@@ -2424,11 +2418,9 @@ function happyAgentSections(
                     const botAttention = happyAgentBotAttention(attention, happyAgent.id, bot.id);
                     if (botAttention === "hidden") return [];
                     const muted = botAttention === "muted";
+                    // Rows wear no story ring, whose fold sits on that mark: the stories row has them.
                     return [
-                        {
-                            ...botSidebarItem(bot, titleShimmerEnabled, muted),
-                            ...storyOutline(happyAgent.id, bot.conversation.id),
-                        },
+                        botSidebarItem(bot, titleShimmerEnabled, muted),
                         ...botSubtaskSidebarItems(
                             bot.subtasks,
                             happyAgent.projects,
@@ -2472,7 +2464,7 @@ function happyAgentSections(
         // A Happy Agent from before tasks has no task list to show, so it
         // offers no heading that could only ever stand empty.
         ...(happyAgentTasksSupported(happyAgent)
-            ? [happyAgentTasksSection(happyAgent, storyOutline, titleShimmerEnabled)]
+            ? [happyAgentTasksSection(happyAgent, titleShimmerEnabled)]
             : []),
         // The reader's own choice in settings for this connection: the
         // section goes entirely, heading and all, rather than folding.
@@ -2490,7 +2482,6 @@ function happyAgentSections(
  */
 function happyAgentTasksSection(
     happyAgent: AppHappyAgentEntry,
-    storyOutline: StoryOutline,
     titleShimmerEnabled: boolean,
 ): SidebarSection {
     // The heading keeps its shape once the machine has been seen: an outage,
@@ -2503,10 +2494,7 @@ function happyAgentTasksSection(
         label: "Tasks",
         items: happyAgentSidebarTree(happyAgent)
             .tasks.flatMap((task) => [
-                {
-                    ...taskSidebarItem(task, titleShimmerEnabled),
-                    ...storyOutline(happyAgent.id, task.conversation.id),
-                },
+                taskSidebarItem(task, titleShimmerEnabled),
                 ...botSubtaskSidebarItems(task.subtasks, happyAgent.projects, titleShimmerEnabled),
             ])
             .map((item) => ({
@@ -3439,7 +3427,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
         surfaceSupportStore.get,
         surfaceSupportStore.get,
     );
-    // The addressed Happy Agent's live stories: outlines on its bot and task rows, and the viewer.
+    // The addressed Happy Agent's live stories: the stories row above its list, and the viewer.
     const storiesStore = active?.session?.stories?.();
     const storiesGet = storiesStore ? storiesUnderViewer(storiesStore) : storiesNone.get;
     const stories = useSyncExternalStore(
@@ -3477,15 +3465,6 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
             face: { initials: ownerInitials(name), ...face, type: "agent" },
             ...(owner ? { owner: { ...ownerFace(owner), type: "human" } } : {}),
         };
-    };
-    // Only the addressed Happy Agent's rows, whose stories these are, wear outlines.
-    const storyOutline: StoryOutline = (happyAgentId, agentId) => {
-        const key = `agent:${agentId}`;
-        const ring =
-            stories.mode === "on" && happyAgentId === active?.id
-                ? stories.row.find((tile) => tile.key === key)
-                : undefined;
-        return ring ? { story: ring.state, storyRing: ring } : {};
     };
     /**
      * Opens what an artifact, bot, or task Surface points at, where it always
@@ -4094,14 +4073,6 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                         : workspace.worktreeCreate(owner.project.id)
                 ).catch(() => undefined);
             }}
-            onItemStoryOpen={(id) => {
-                const row = happyAgentItemParse(id);
-                const happyAgent = happyAgentOf(row.happyAgentId);
-                const owner = [...(happyAgent?.bots ?? []), ...(happyAgent?.tasks ?? [])].find(
-                    (entry) => entry.workspaceId === row.id,
-                );
-                if (owner) storiesStore?.agentOpen(owner.conversation.id);
-            }}
             // The cog on a project row. Only project rows carry one, and the
             // settings surface is the same one the row's menu opens.
             onItemSecondaryAction={(id) => {
@@ -4233,7 +4204,6 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                 ...sectionsVoiceFocused(
                     happyAgentSections(
                         directory,
-                        storyOutline,
                         titleShimmerEnabled,
                         projectsVisibility,
                         attention,

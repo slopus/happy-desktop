@@ -13,8 +13,11 @@
     stroke: var(--radio-active);
     stroke-linecap: round;
 }
-.happy-story-ring > [data-seen] {
-    stroke: var(--text-secondary);
+/* Watched: one faint ink for the ring and its poster's label alike. */
+.happy-story-ring > [data-seen],
+.happy-stories-row__item[data-seen] > span:last-child {
+    stroke: var(--input-placeholder);
+    color: var(--input-placeholder);
 }
 
 /* The posters with live stories, across the top of the sidebar. Each 52px slot fits a ten-character
@@ -552,11 +555,12 @@
 .happy-story-quote[data-align="end"] {
     flex-direction: row-reverse;
 }
+/* Text at a low mix, so it reads as faintly on the dark surfaces as on the light ones. */
 .happy-story-quote__bar {
     flex: none;
     width: 3px;
     border-radius: 1.5px;
-    background: var(--divider);
+    background: color-mix(in srgb, var(--text) 14%, transparent);
 }
 /* An attached photo's single 9:16 cell: 202.5 × 360 wherever the column has the room. */
 .happy-story-quote > .happy-message__media-item {

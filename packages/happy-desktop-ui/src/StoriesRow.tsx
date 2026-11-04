@@ -26,8 +26,9 @@ function pixelRatioSubscribe(change: () => void) {
 
 /**
  * A story ring around a photo `size` square with corner `radius`, drawn past its box: one
- * round-capped arc per live story, clockwise from the top, the watched first in grey and the rest
- * in the accent unless all are grey. Its box is the photo's own, so both land on the same pixels.
+ * round-capped arc per live story, clockwise from the top, the watched first, faint and thin, and
+ * the rest in the accent at twice the width, all on one radius. Its box is the photo's own, so
+ * both land on the same pixels.
  */
 export function StoryRing(props: {
     readonly size: number;
@@ -38,13 +39,13 @@ export function StoryRing(props: {
 }) {
     const { size, radius, total = 1 } = props;
     const seen = props.state === "seen" ? total : (props.seen ?? 0);
-    // A 1px stroke 2px off the photo, each a whole number of device pixels at every zoom.
+    // Watched 1px and new 2px, 1px off the photo, in whole device pixels at every zoom.
     const ratio = useSyncExternalStore(pixelRatioSubscribe, () => devicePixelRatio);
     const stroke = Math.max(1, Math.round(ratio)) / ratio;
-    const inset = Math.max(1, Math.round(2 * ratio)) / ratio + stroke / 2;
+    const inset = Math.max(1, Math.round(ratio)) / ratio + stroke;
     // Arcs per pixel of stroke; between round caps a stroke long, a gap of a 21st the ring's side.
     const unit = total / (4 * (size - 2 * radius) + 2 * Math.PI * (radius + inset));
-    const gap = ((size + 2 * inset + stroke) / 21 + stroke) * unit;
+    const gap = ((size + 2 * inset + 2 * stroke) / 21 + 2 * stroke) * unit;
     const arcs = (from: number, count: number) =>
         count > 0 && (
             <rect
@@ -60,7 +61,7 @@ export function StoryRing(props: {
                         : undefined
                 }
                 strokeDashoffset={-from - (size / 2 - radius) * unit - gap / 2}
-                strokeWidth={stroke}
+                strokeWidth={from < seen ? stroke : 2 * stroke}
                 width={size + 2 * inset}
                 x={-inset}
                 y={-inset}
@@ -136,6 +137,7 @@ export function StoriesRow(props: {
                         <button
                             className="happy-stories-row__item"
                             data-happy-desktop-ui="stories-row-item"
+                            data-seen={item.state === "seen" ? "" : undefined}
                             data-story-ring={item.id}
                             key={item.id}
                             onClick={() => props.onOpen(item.id)}

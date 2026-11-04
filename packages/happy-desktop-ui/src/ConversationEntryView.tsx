@@ -642,7 +642,7 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
             own={own}
             {...(quote
                 ? {
-                      authorNote: `replied to ${quote.owner === "yours" ? "your" : `${quote.owner.name}’s`} story`,
+                      authorNote: `Replied to ${quote.owner === "yours" ? "your" : `${quote.owner.name}’s`} story`,
                   }
                 : {})}
             quote={

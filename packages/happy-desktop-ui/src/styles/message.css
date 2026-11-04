@@ -1538,7 +1538,8 @@
     margin-bottom: 4px;
 }
 
-/* "replied to your story": after the name, quieter, and the face the name's size. */
+/* "Replied to your story": after the name, quieter, and the face the name's size, on the
+   bubble's edge. */
 .happy-message__author-note {
     overflow: hidden;
     color: var(--text-secondary);
@@ -1547,11 +1548,13 @@
     text-overflow: ellipsis;
     white-space: nowrap;
 }
-.happy-message__meta--own {
+.happy-message[data-author-note]:not([data-own]) .happy-message__meta {
+    margin-left: 0;
+}
+.happy-message[data-author-note] .happy-message__meta {
     align-items: center;
 }
-.happy-message__meta--own > .happy-avatar,
-.happy-message[data-author-note] .happy-message__avatar-dangling .happy-avatar {
+.happy-message[data-author-note] .happy-message__meta > .happy-avatar {
     width: 16px;
     height: 16px;
 }

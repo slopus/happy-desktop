@@ -547,7 +547,7 @@ export function StoryPage() {
                 >
                     <Message
                         author="Kirill"
-                        authorNote="replied to your story"
+                        authorNote="Replied to your story"
                         body="Love the new welcome screen! Does setup still ask for the camera?"
                         initials="K"
                         own
@@ -562,7 +562,7 @@ export function StoryPage() {
                     />
                     <Message
                         author="Maya Johnson"
-                        authorNote="replied to Desktop onboarding’s story"
+                        authorNote="Replied to Desktop onboarding’s story"
                         body="Can we do the same on the phone?"
                         quote={<StoryQuote frame={{ url: WHITE }} />}
                         time="10:54"
