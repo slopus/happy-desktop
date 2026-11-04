@@ -3090,8 +3090,14 @@ export function MessageList(props: MessageListProps) {
         };
         overscanMountSchedule();
         const element = list.current;
-        if (!element || !modelRendered) return;
-        if (!rowModelCurrent()) return;
+        if (!element || !modelRendered) {
+            if (document.body.dataset.fuzzTrace === "1") console.info("COMMIT_SKIP", "no-element-or-model");
+            return;
+        }
+        if (!rowModelCurrent()) {
+            if (document.body.dataset.fuzzTrace === "1") console.info("COMMIT_SKIP", "model-not-current");
+            return;
+        }
         visibleRowsReport(element);
         endAwayUpdate(element);
         const actualHeight = messageListViewportHeight(element);
