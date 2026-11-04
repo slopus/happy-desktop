@@ -478,6 +478,7 @@
 }
 
 .happy-context-chips__text {
+    align-self: baseline;
     margin-top: var(--happy-chip-text-y, 0px);
     margin-bottom: calc(-1 * var(--happy-chip-text-y, 0px));
     color: var(--text-secondary);
@@ -488,6 +489,7 @@
 }
 
 .happy-context-chips__detail {
+    align-self: baseline;
     margin-top: var(--happy-chip-detail-y, 0px);
     margin-bottom: calc(-1 * var(--happy-chip-detail-y, 0px));
     color: var(--text-secondary);
@@ -677,7 +679,7 @@
  */
 .happy-context-chips {
     --happy-chip-text-y: 0px;
-    --happy-chip-detail-y: 1px;
+    --happy-chip-detail-y: 0px;
     --happy-chips-label-y: 0.75px;
 }
 
@@ -692,7 +694,7 @@
     }
 
     .happy-context-chips {
-        --happy-chip-text-y: -0.5px;
+        --happy-chip-text-y: 0px;
         --happy-chip-detail-y: 0px;
         --happy-chips-label-y: -0.25px;
     }
