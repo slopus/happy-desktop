@@ -338,7 +338,9 @@
 
 /* The row's own × (`.happy-sidebar__item-action`), on the row's trailing edge
    where a task row keeps its Leave control, hung 3px into the padding as the
-   sidebar hangs its controls. On a post it stands on the caption's line. */
+   sidebar hangs its controls. On a post it stands on the caption's line. It
+   is hover-revealed like a row's own action: it keeps its slot while hidden,
+   so showing it moves nothing, and the quick action stands clear of it. */
 .happy-live-feed-item__close {
     display: flex;
     flex: none;

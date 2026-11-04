@@ -251,8 +251,9 @@ function Thumbnail(props: {
 }
 
 /**
- * One item: `[mark] line [hover: one quick action] ×`, as tall as a sidebar
- * row and drawn with the row's own box, type and hover. Clicking it opens what
+ * One item: `[mark] line [hover: one quick action, ×]`, as tall as a sidebar
+ * row and drawn with the row's own box, type and hover. The × is a
+ * hover-revealed row action, shown on hover or its own keyboard focus. Clicking it opens what
  * it is about.
  */
 export function LiveFeedEntry(props: {
@@ -389,7 +390,7 @@ export function LiveFeedEntry(props: {
             {quick?.node}
             <span className="happy-live-feed-item__close">
                 <SidebarRowAction
-                    action={{ icon: "close", label: "Dismiss" }}
+                    action={{ icon: "close", label: "Dismiss", reveal: "hover" }}
                     onAction={() => props.onDismiss(item.id)}
                 />
             </span>
