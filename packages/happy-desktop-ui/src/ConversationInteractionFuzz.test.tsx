@@ -2371,10 +2371,11 @@ it.each(cases.filter((entry) => !entry.restore || pageZoom))(
 );
 
 it.each([
-    ["earlier-middle-removed", [0, 1, 2, 3, 4, 10, 11, 12, 13, 20, 21]],
-    ["later-middle-removed", [0, 1, 2, 3, 4, 14, 15, 16, 17, 18, 20, 21]],
-    ["only-replay", [0, 1, 2, 3, 4, 10, 11, 12, 13, 14, 15, 16, 17, 20, 21]],
-    ["only-compaction", [0, 1, 2, 3, 4, 10, 11, 12, 13, 14, 15, 17, 18, 20, 21]],
+    ["no-helper", [0, 1, 2, 3, 4, 7, 8, 9, 10, 11, 12, 13, 14, 20, 21]],
+    ["no-notice", [0, 1, 2, 3, 4, 7, 8, 9, 10, 11, 12, 13, 15, 20, 21]],
+    ["no-compaction", [0, 1, 2, 3, 4, 7, 8, 9, 10, 11, 12, 13, 16, 20, 21]],
+    ["no-disclose", [0, 1, 2, 3, 4, 7, 8, 9, 10, 11, 12, 13, 17, 20, 21]],
+    ["no-replay", [0, 1, 2, 3, 4, 7, 8, 9, 10, 11, 12, 13, 18, 20, 21]],
 ])("replays reduced bottom-follow %s", async (_label, removed) => {
     const h = harnessCreate(0, "seed:1000050");
     try {
