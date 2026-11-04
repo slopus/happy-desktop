@@ -1368,6 +1368,43 @@ const BOTS_MENU_SHOW_PREFIX = "show:";
 const BOTS_MENU_SHOW_ALL = "show-all";
 const ROW_MENU_SURFACE_ADD = "surface-add";
 const ROW_MENU_SURFACE_REMOVE = "surface-remove";
+/** Puts the agent a row or tab stands for on the clipboard, as its instance link. */
+const MENU_AGENT_ID_COPY = "agent-id-copy";
+
+/**
+ * The link another agent is given to name this one, as iOS's Copy Link writes
+ * it: `happy://<instanceId>/agents/<agentId>`. A daemon that reports no
+ * instance has no link that leaves the app, so it is offered nothing.
+ */
+function agentLink(instanceId: string | undefined, agentId: string): string | undefined {
+    if (instanceId === undefined) return undefined;
+    const link = happyExternalLinkFormat(instanceId, `happy://agents/${agentId}`);
+    return link.startsWith("happy://agents/") ? undefined : link;
+}
+
+function agentIdCopyMenuItem(): MenuItem {
+    return { kind: "item", id: MENU_AGENT_ID_COPY, label: "Copy agent ID", icon: "link" };
+}
+
+/**
+ * The agent a sidebar row stands for: a bot's, a task's, or a subtask's one
+ * conversation, whose id is the daemon's agent id. A project or a workspace
+ * holds any number of them and stands for none.
+ */
+function rowAgentId(
+    bots: readonly HappyAgentBot[],
+    tasks: readonly HappyAgentTask[],
+    rowId: string,
+): string | undefined {
+    const subtask = happyAgentBotSubtasks([...bots, ...tasks]).find(
+        (entry) => entry.conversation.id === rowId,
+    );
+    if (subtask) return subtask.conversation.id;
+    return (
+        tasks.find((entry) => entry.workspaceId === rowId) ??
+        bots.find((entry) => entry.workspaceId === rowId)
+    )?.conversation.id;
+}
 
 /**
  * What a bot row offers about its own news. Both acts are this window's own
@@ -1407,12 +1444,17 @@ function rowMenuItems(
      * the window keeps no such record, and the row offers neither act.
      */
     botAttention: ((bot: HappyAgentBot) => HappyAgentBotAttention) | undefined,
+    /** Whether the row's agent has a link to copy: its daemon names its instance. */
+    agentLinked: boolean,
 ): MenuItem[] {
+    // The agent's link sits in its own section just above archiving.
+    const agentCopy: MenuItem[] = agentLinked ? [agentIdCopyMenuItem(), { kind: "separator" }] : [];
     // A subtask's title is the daemon's to write, so archiving is all its row
     // offers. The task stops and leaves its bot; its history and its worktree
     // stay, and the worktree is listed under its project again.
     if (happyAgentBotSubtasks([...bots, ...tasks]).some((task) => task.conversation.id === item.id))
         return [
+            ...agentCopy,
             {
                 kind: "item",
                 id: ROW_MENU_ARCHIVE,
@@ -1433,6 +1475,7 @@ function rowMenuItems(
                   ] as const)
                 : []),
             { kind: "item", id: ROW_MENU_LEAVE, label: "Leave task", icon: "close" },
+            ...(agentLinked ? ([{ kind: "separator" }, agentIdCopyMenuItem()] as const) : []),
             ...(task.canArchive
                 ? ([
                       { kind: "separator" },
@@ -1464,6 +1507,7 @@ function rowMenuItems(
             ...(botAttention
                 ? [...botAttentionMenuItems(botAttention(bot)), { kind: "separator" } as const]
                 : []),
+            ...agentCopy,
             {
                 kind: "item",
                 id: ROW_MENU_ARCHIVE,
@@ -3765,6 +3809,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                         props.attention
                             ? (bot) => happyAgentBotAttention(attention, happyAgent.id, bot.id)
                             : undefined,
+                        happyAgent.instanceId !== undefined,
                     ),
                 );
             }}
@@ -3851,6 +3896,15 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                     return;
                 }
                 if (happyAgent.status !== "connected") return;
+                if (actionId === MENU_AGENT_ID_COPY) {
+                    const agentId = rowAgentId(happyAgent.bots, happyAgent.tasks ?? [], row.id);
+                    const link =
+                        agentId === undefined
+                            ? undefined
+                            : agentLink(happyAgent.instanceId, agentId);
+                    if (link !== undefined) void navigator.clipboard?.writeText(link);
+                    return;
+                }
                 const surfaceId = surfaceRowParse(row.id);
                 if (surfaceId !== undefined) {
                     if (actionId === ROW_MENU_LEAVE)
@@ -7029,6 +7083,13 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
     // addressed rather than listed, so a sweep over "the tabs beside this one"
     // never reaches it.
     const sweepableTabs = groupTabs.filter((entry) => entry.id !== detachedConversationId);
+    // A tab is an agent when it is one of this group's chats, or the detached
+    // one; a session's id is the daemon's agent id.
+    const tabAgentLink = (tabId: string): string | undefined =>
+        tabId === detachedConversationId ||
+        openGroup?.conversations.some((summary) => summary.id === tabId)
+            ? agentLink(props.instanceId, tabId)
+            : undefined;
     const previewTool = previewToolFind(conversation, panel.previewEntryId);
     const previewMedia = previewMediaFind(conversation, previewTool, panel.previewMediaIndex);
     const desktop = props.platform === "desktop";
@@ -7886,12 +7947,18 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                             }
                             transferTargets={MAIN_TRANSFER_TARGETS}
                             tabMenuItems={(tab) => {
+                                // A chat's tab is its agent, whose link leads the
+                                // menu in a section of its own.
+                                const agentCopy: MenuItem[] =
+                                    tabAgentLink(tab.id) === undefined
+                                        ? []
+                                        : [agentIdCopyMenuItem(), { kind: "separator" }];
                                 const index = sweepableTabs.findIndex(
                                     (entry) => entry.id === tab.id,
                                 );
                                 // The detached subagent's tab is not in the sweepable
-                                // order, so it offers no menu — its runner owns it.
-                                if (index < 0) return [];
+                                // order, so it offers nothing else — its runner owns it.
+                                if (index < 0) return agentCopy.slice(0, 1);
                                 // A session is archived; a file, a terminal, a
                                 // page is closed. The verb has to be the true
                                 // one for the tab it is offered on.
@@ -7900,9 +7967,18 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                                     mainTools.some((entry) => entry.id === tab.id)
                                         ? "Close"
                                         : "Archive";
-                                return tabStripMenu(verb, index, sweepableTabs.length - index - 1);
+                                return [
+                                    ...agentCopy,
+                                    ...tabStripMenu(verb, index, sweepableTabs.length - index - 1),
+                                ];
                             }}
                             onTabMenuSelect={(tab, actionId) => {
+                                if (actionId === MENU_AGENT_ID_COPY) {
+                                    const link = tabAgentLink(tab.id);
+                                    if (link !== undefined)
+                                        void navigator.clipboard?.writeText(link);
+                                    return;
+                                }
                                 const ids = sweepableTabs.map((entry) => entry.id);
                                 const index = ids.indexOf(tab.id);
                                 if (index < 0) return;
