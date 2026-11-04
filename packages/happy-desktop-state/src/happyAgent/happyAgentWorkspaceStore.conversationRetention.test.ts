@@ -1,7 +1,7 @@
 import { expect, it, vi } from "vitest";
 import { entryKey, type ConversationEntry } from "../conversation/conversationEntry.js";
 import { connectHappyAgent } from "../happyAgentConnection/connectHappyAgent.js";
-import { fakeHappyAgentDaemonCreate } from "../testing/fakeHappyAgentDaemon.js";
+import { fakeHappyAgentDaemonCreate, fakeRun, fakeUserMessage } from "../testing/fakeHappyAgentDaemon.js";
 import { happyAgentChatStoreCreate, type HappyAgentChatSnapshot, type HappyAgentChatStore } from "./happyAgentChatStore.js";
 import type { HappyAgentChatHandle, HappyAgentWorkspaceClient } from "./happyAgentClient.js";
 import { happyAgentModelCatalogProject } from "./happyAgentProject.js";
@@ -271,6 +271,18 @@ it("shows a message sent during a stand-in once its transcript arrives", async (
     const daemon = fakeHappyAgentDaemonCreate();
     const project = daemon.projectSeed({ id: PROJECT });
     daemon.agentSeed(project.id, { id: "a" });
+    daemon.historySet("a", [
+        fakeRun({
+            id: "earlier-run",
+            messages: [
+                fakeUserMessage({
+                    id: "earlier-message",
+                    status: "accepted",
+                    content: [{ type: "text", text: "Earlier message" }],
+                }),
+            ],
+        }),
+    ]);
     const connection = connectHappyAgent({
         endpoint: "http://happy-agent.test/",
         token: "token",
@@ -310,10 +322,10 @@ it("shows a message sent during a stand-in once its transcript arrives", async (
             if (shown.type !== "ready") return;
             expect(shown.value.standIn).toBeUndefined();
             expect(
-                shown.value.entries.filter(
-                    (item) => item.kind === "message" && item.message.text === "Sent while reopening",
+                shown.value.entries.flatMap((item) =>
+                    item.kind === "message" ? [item.message.text] : [],
                 ),
-            ).toHaveLength(1);
+            ).toEqual(["Earlier message", "Sent while reopening"]);
         });
     } finally {
         view.unsubscribe();
