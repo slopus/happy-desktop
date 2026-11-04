@@ -1,6 +1,6 @@
 import { createRequire } from "node:module";
 import type { DesktopUpdateSnapshot } from "../shared/desktopContract";
-import { desktopUpdateFeedResolve } from "./desktopUpdateFeed";
+import { desktopUpdateFeedResolve, type DesktopUpdatePlatform } from "./desktopUpdateFeed";
 
 const { autoUpdater } = createRequire(import.meta.url)(
     "electron-updater",
@@ -16,7 +16,8 @@ export interface DesktopUpdater {
 export function desktopUpdaterCreate(input: {
     preview?: boolean;
     flavor: "standard" | "local-web";
-    packaged: boolean;
+    /** Absent for a build that has no published update manifests: unpackaged, or Linux. */
+    platform: DesktopUpdatePlatform | undefined;
     update: (snapshot: DesktopUpdateSnapshot) => void;
 }): DesktopUpdater {
     let availableVersion: string | undefined;
@@ -29,6 +30,8 @@ export function desktopUpdaterCreate(input: {
     // Do not hand a download to Squirrel.Mac until an actual install/quit: once
     // Squirrel has staged it, disabling preview updates cannot revoke it. The
     // host's existing quit path calls install(false) for a still-allowed update.
+    // On Windows the NSIS updater likewise only runs the downloaded installer,
+    // after checking it carries the publisher pinned in app-update.yml.
     autoUpdater.autoDownload = false;
     autoUpdater.autoInstallOnAppQuit = false;
     autoUpdater.allowPrerelease = preview;
@@ -67,22 +70,33 @@ export function desktopUpdaterCreate(input: {
         input.update({ status: "error", message: error.message });
     });
     const check = (): Promise<void> => {
-        if (!input.packaged || updateReady) return Promise.resolve();
+        const platform = input.platform;
+        if (!platform || updateReady) return Promise.resolve();
         if (checking) return checking;
         activeGeneration = generation;
         checking = (async () => {
             try {
                 input.update({ status: "checking" });
-                const url = await desktopUpdateFeedResolve({ preview, flavor: input.flavor });
+                const feed = await desktopUpdateFeedResolve({
+                    preview,
+                    flavor: input.flavor,
+                    platform,
+                });
                 if (activeGeneration !== generation) return;
                 autoUpdater.allowPrerelease = preview;
                 autoUpdater.setFeedURL({
                     provider: "generic",
-                    url,
+                    url: feed.url,
                     channel: input.flavor === "local-web" ? "nightly" : "latest",
                 });
                 const result = await autoUpdater.checkForUpdates();
                 if (activeGeneration !== generation || !result?.isUpdateAvailable) return;
+                // The release was chosen for this channel; a manifest naming any
+                // other version is never installed, whichever way it differs.
+                if (result.updateInfo.version !== feed.version)
+                    throw new Error(
+                        `Release v${feed.version} offers version ${result.updateInfo.version}.`,
+                    );
                 downloadCancel = () => result.cancellationToken?.cancel();
                 await autoUpdater.downloadUpdate(result.cancellationToken);
             } catch (error) {
@@ -118,7 +132,10 @@ export function desktopUpdaterCreate(input: {
             if (!updateReady) return false;
             updateReady = false;
             autoUpdater.autoRunAppAfterInstall = runAfterInstall;
-            autoUpdater.quitAndInstall(false, runAfterInstall);
+            // Windows shows the installer's progress after an explicit restart,
+            // but installs silently when the person is only quitting. macOS
+            // ignores the silent flag.
+            autoUpdater.quitAndInstall(!runAfterInstall, runAfterInstall);
             return true;
         },
     };

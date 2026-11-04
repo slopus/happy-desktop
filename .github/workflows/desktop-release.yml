@@ -18,7 +18,7 @@ on:
                 default: true
                 type: boolean
             nightly_only:
-                description: Preview of Happy Nightly alone, without the standard macOS app; requires prerelease
+                description: Preview of Happy Nightly alone, without the standard macOS and Windows apps; requires prerelease
                 required: false
                 default: false
                 type: boolean
@@ -51,10 +51,13 @@ jobs:
             contents: read
             id-token: write
         needs: verify
-        if: ${{ !inputs.prerelease }}
         uses: ./.github/workflows/build-windows.yml
         with:
-            verify_agent_release: true
+            version: ${{ inputs.version }}
+            nightly_only: ${{ inputs.nightly_only }}
+            # Stable Windows proves onboarding against the published Agent; previews,
+            # like macOS, do not wait for an Agent release.
+            verify_agent_release: ${{ !inputs.prerelease }}
             release_analytics: true
         secrets:
             HAPPY_POSTHOG_API_KEY: ${{ secrets.HAPPY_POSTHOG_API_KEY }}
@@ -255,7 +258,7 @@ jobs:
 
     publish:
         name: Publish GitHub Release
-        if: ${{ !cancelled() && needs.verify.result == 'success' && needs.build.result == 'success' && ((needs.windows.result == 'success' && needs.linux.result == 'success') || (inputs.prerelease && needs.windows.result == 'skipped' && needs.linux.result == 'skipped')) }}
+        if: ${{ !cancelled() && needs.verify.result == 'success' && needs.build.result == 'success' && needs.windows.result == 'success' && (needs.linux.result == 'success' || (inputs.prerelease && needs.linux.result == 'skipped')) }}
         needs:
             - verify
             - build
@@ -280,7 +283,6 @@ jobs:
                   merge-multiple: true
 
             - name: Download signed Windows artifacts
-              if: ${{ !inputs.prerelease }}
               uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
               with:
                   pattern: happy-desktop-windows-installer-*
@@ -331,8 +333,8 @@ jobs:
                   node --input-type=module <<'NODE'
                   import { stat } from 'node:fs/promises';
                   import { desktopFlavorNames, desktopFlavorRead } from './scripts/desktopFlavors.mjs';
-                  const macFlavorNames = process.env.RELEASE_NIGHTLY_ONLY === 'true' ? ['local-web'] : desktopFlavorNames;
-                  for (const name of macFlavorNames) {
+                  const flavorNames = process.env.RELEASE_NIGHTLY_ONLY === 'true' ? ['local-web'] : desktopFlavorNames;
+                  for (const name of flavorNames) {
                     const flavor = desktopFlavorRead(name);
                     const directory = `packages/happy-desktop-electron/release/${flavor.output}`;
                     const files = [`${flavor.channel}-mac.yml`, ...['arm64', 'x64'].flatMap(arch =>
@@ -344,32 +346,36 @@ jobs:
                       if (!info.isFile() || info.size === 0) throw new Error(`Missing or empty release asset: ${path}`);
                     }
                   }
+                  for (const name of flavorNames) {
+                    const flavor = desktopFlavorRead(name);
+                    const installer = `${flavor.artifactPrefix}-${process.env.RELEASE_VERSION}-x64.exe`;
+                    for (const file of [installer, `${installer}.blockmap`, `${flavor.channel}.yml`]) {
+                      const path = `packages/happy-desktop-electron/release/windows/${file}`;
+                      const info = await stat(path);
+                      if (!info.isFile() || info.size === 0) throw new Error(`Missing or empty release asset: ${path}`);
+                    }
+                  }
                   if (process.env.RELEASE_PRERELEASE !== 'true') {
                     for (const arch of ['x64', 'arm64']) {
                       const path = `packages/happy-desktop-electron/release/linux/Happy-${process.env.RELEASE_VERSION}-${arch}.AppImage`;
                       const info = await stat(path);
                       if (!info.isFile() || info.size === 0) throw new Error(`Missing or empty release asset: ${path}`);
                     }
-                    for (const name of desktopFlavorNames) {
-                      const flavor = desktopFlavorRead(name);
-                      const installer = `${flavor.artifactPrefix}-${process.env.RELEASE_VERSION}-x64.exe`;
-                      for (const file of [installer, `${installer}.blockmap`, `${flavor.channel}.yml`]) {
-                        const path = `packages/happy-desktop-electron/release/windows/${file}`;
-                        const info = await stat(path);
-                        if (!info.isFile() || info.size === 0) throw new Error(`Missing or empty release asset: ${path}`);
-                      }
-                    }
                   }
                   NODE
                   shopt -s nullglob
                   macOutputs=(standard local-web)
-                  if [[ "$RELEASE_NIGHTLY_ONLY" == true ]]; then macOutputs=(local-web); fi
+                  windowsChannels=(latest nightly)
+                  if [[ "$RELEASE_NIGHTLY_ONLY" == true ]]; then macOutputs=(local-web); windowsChannels=(nightly); fi
                   assets=()
                   for output in "${macOutputs[@]}"; do
                     assets+=(packages/happy-desktop-electron/release/"$output"/*.{dmg,zip,blockmap} packages/happy-desktop-electron/release/"$output"/*-mac.yml)
                   done
+                  assets+=(packages/happy-desktop-electron/release/windows/*.{exe,blockmap})
+                  for channel in "${windowsChannels[@]}"; do
+                    assets+=(packages/happy-desktop-electron/release/windows/"$channel".yml)
+                  done
                   if [[ "$RELEASE_PRERELEASE" != true ]]; then
-                    assets+=(packages/happy-desktop-electron/release/windows/*.{exe,blockmap} packages/happy-desktop-electron/release/windows/{latest,nightly}.yml)
                     assets+=(packages/happy-desktop-electron/release/linux/*.AppImage)
                   fi
                   arguments=("$RELEASE_TAG" --draft --target "$GITHUB_SHA" --title "Happy $RELEASE_TAG" --notes-file .release/notes.md)

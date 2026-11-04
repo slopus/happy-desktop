@@ -30,12 +30,12 @@ For Agent/native versions, inspect GitHub releases and tags. Renderer previews
 have no release tag: inspect `gh run list --workflow local-web-pages.yml`; run
 names contain their versions and successful deployments identify what shipped.
 
-| Request                  | Dispatch from `main`                                                                  | Delivery                                                         |
-| ------------------------ | ------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| Happy Agent preview      | Agent repository's `release-happy-agent.yml`: version, release_notes, prerelease=true | Agent binaries for Nightly                                       |
-| Desktop native preview   | `desktop-release.yml`: version, release_notes, prerelease=true                        | Signed arm64/x64 standard and Nightly apps and updater manifests |
-| Nightly native preview   | `desktop-release.yml`: as above, plus nightly_only=true                               | Signed arm64/x64 Nightly app and `nightly-mac.yml` only          |
-| Desktop renderer preview | `local-web-pages.yml`: version, release_notes                                         | Hosted renderer at `https://local.app.happy.engineering` only    |
+| Request                  | Dispatch from `main`                                                                  | Delivery                                                                               |
+| ------------------------ | ------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| Happy Agent preview      | Agent repository's `release-happy-agent.yml`: version, release_notes, prerelease=true | Agent binaries for Nightly                                                             |
+| Desktop native preview   | `desktop-release.yml`: version, release_notes, prerelease=true                        | Signed macOS arm64/x64 and Windows x64 standard and Nightly apps and updater manifests |
+| Nightly native preview   | `desktop-release.yml`: as above, plus nightly_only=true                               | Signed macOS and Windows Nightly apps, `nightly-mac.yml` and `nightly.yml` only        |
+| Desktop renderer preview | `local-web-pages.yml`: version, release_notes                                         | Hosted renderer at `https://local.app.happy.engineering` only                          |
 
 Each workflow validates and builds the requested source, then publishes in the same
 run. No prepare/publish coordinator, bump-after-build commit, or artifact promotion
@@ -50,7 +50,7 @@ For combined releases, follow the [cross-project sequence in Happy Agent's relea
 master plan](https://github.com/slopus/happy-agent/blob/main/master-plans/25-releases.md).
 After any required SDK is published and pinned, prepare and dispatch requested
 Agent, native Desktop, and renderer previews independently in parallel. Desktop
-does not bundle the Agent binary, so its macOS preview does not wait for Agent
+does not bundle the Agent binary, so its macOS and Windows previews do not wait for Agent
 publication or artifact verification. Stable Windows retains its published-Agent
 signature and boot check. Report completion of a combined release after each
 requested workflow and any required matching Agent version are verified.
@@ -59,9 +59,10 @@ Use `gh workflow run ... --ref main` with `-f version=<chosen-version>` and
 `-F release_notes=@.context/release-notes.md` (the `@` reads the file contents).
 For Agent/native previews also pass `-F prerelease=true`; renderer has no such input.
 A request for Happy Nightly alone also passes `-F nightly_only=true`: the run then
-builds, signs, notarizes, and publishes only the Nightly app and its manifest, and
-refuses to start unless it is a preview. Standard installs skip such a release,
-because their update feed only considers releases carrying `latest-mac.yml`.
+builds, signs, notarizes, and publishes only the macOS and Windows Nightly apps and
+their manifests, and refuses to start unless it is a preview. Standard installs skip
+such a release, because their update feed only considers releases carrying their
+platform's manifest (`latest-mac.yml` on macOS, `latest.yml` on Windows).
 Watch with `gh run watch`, and read back the
 release notes, version, and assets before reporting success. For renderer previews,
 verify Pages succeeded and the deployed `local-web-version.json` matches the build.
@@ -78,7 +79,7 @@ Immediately before dispatching production, verify both the explicit user request
 and our actual use of this candidate. Native production uses the same workflow with
 `prerelease=false` and stable `X.Y.Z`, shipping both app flavors on macOS and Windows.
 Windows installers are always Azure-signed (see `windows-release-ci.md`) and retain
-their installed-app and Agent checks. Native previews ship both macOS app flavors unless `nightly_only` is set. Preserve the existing
+their installed-app and Agent checks. Native previews ship both app flavors on macOS and Windows unless `nightly_only` is set. Preserve the existing
 requirement that root and Electron manifests match that stable version: update them
 before dispatch under normal Git authorization. Standard bundles its renderer, so
 production renderer delivery requires explicit native-release scope.

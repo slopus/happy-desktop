@@ -1901,9 +1901,12 @@ void app
         const updater = desktopUpdaterCreate({
             preview: desktopConfigStore.get().previewUpdatesEnabled === true,
             flavor: desktopFlavor.kind,
-            // Releases publish macOS update manifests only; a packaged Linux or
-            // Windows build has nothing to check against yet.
-            packaged: app.isPackaged && process.platform === "darwin",
+            // Releases publish macOS and Windows update manifests; a packaged
+            // Linux build has nothing to check against yet.
+            platform:
+                app.isPackaged && (process.platform === "darwin" || process.platform === "win32")
+                    ? process.platform
+                    : undefined,
             update: (snapshot) => runtime.updateSet(snapshot),
         });
         desktopUpdater = updater;
