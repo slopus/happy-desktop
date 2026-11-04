@@ -17,8 +17,8 @@
     stroke: var(--text-secondary);
 }
 
-/* The posters with live stories, across the top of the sidebar. Each slot fits a ten-character
-   label and keeps the ring on whole pixels; the photo lines up with the sidebar's icons. */
+/* The posters with live stories, across the top of the sidebar. Each 52px slot fits a ten-character
+   9px label and keeps the ring on whole pixels; the photo lines up with the sidebar's icons. */
 .happy-stories-row {
     display: flex;
     gap: 4px;
@@ -27,9 +27,9 @@
         8px
         calc(
             var(--happy-panel-inset) + var(--happy-sidebar-row-leading, var(--happy-panel-inset)) -
-                5px
+                8px
         );
-    font: 400 8px / 10px var(--happy-font-ui);
+    font: 400 9px / 11px var(--happy-font-ui);
 }
 /* Over the photo, where it would sit on its own, scrolling with its slot. */
 .happy-stories-row .happy-story-ring {
@@ -48,7 +48,7 @@
     flex-direction: column;
     align-items: center;
     gap: 5px;
-    width: 46px;
+    width: 52px;
     padding: 4px 0 0;
     border: 0;
     background: none;
