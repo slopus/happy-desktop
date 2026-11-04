@@ -423,6 +423,7 @@ it("centers DiffSnippet ink optically in all engines", { timeout: 120_000 }, asy
         const num = row(line, "number");
         expect(num.element.textContent).toBe(digits);
         const ink = await inLine(line, "number");
+        console.info("NUMBER_INK", server.browser, server.platform, digits, ink.y);
         expect(Math.abs(ink.y - 10)).toBeLessThanOrEqual(0.4);
     }
 

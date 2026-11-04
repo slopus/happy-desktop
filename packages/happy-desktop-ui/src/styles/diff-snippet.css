@@ -198,6 +198,6 @@
 @supports (background: -webkit-named-image(i)) {
     .happy-diff-snippet {
         --happy-diff-text-optical-y: 0px;
-        --happy-diff-gutter-optical-y: -0.5px;
+        --happy-diff-gutter-optical-y: -0.25px;
     }
 }
