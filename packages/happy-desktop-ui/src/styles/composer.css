@@ -701,7 +701,7 @@
 /* WebKit — Blink and Gecko do not parse -webkit-named-image(). */
 @supports (background: -webkit-named-image(i)) {
     .happy-context-chips {
-        --happy-chip-detail-y: 0.75px;
+        --happy-chip-detail-y: 0.5px;
         --happy-chips-label-y: 0.25px;
     }
 }
