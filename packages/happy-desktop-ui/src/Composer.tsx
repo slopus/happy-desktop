@@ -22,6 +22,8 @@ import {
     type ComposerAttachmentPreview,
     type ComposerAttachmentPreviewsProps,
 } from "./ComposerAttachmentPreviews";
+import { ComposerMentionLayer } from "./ComposerMentionLayer";
+import { composerMentionRanges } from "./composerMentionRanges";
 import { ConfirmPopover } from "./ConfirmPopover";
 import { EmojiPicker, type EmojiItem } from "./EmojiPicker";
 import { Icon, type IconName } from "./Icon";
@@ -318,6 +320,11 @@ export type ComposerProps = {
     mentionQuery?: string;
     /** Visible heading above the mention candidates (default "Mentions"). */
     mentionPickerLabel?: string;
+    /**
+     * The names, without their `@`, that read as mentions in the draft. Given,
+     * each `@Name` in the text sits on a tint drawn behind the textarea.
+     */
+    mentionHighlights?: readonly string[];
     /** Optional controlled model-selection control, rendered in the composer toolbar. */
     modelControl?: ReactNode;
     /** Optional controlled accessory rendered below the composer card. */
@@ -430,6 +437,19 @@ export function Composer(props: ComposerProps) {
     const inputEl = useRef<HTMLDivElement>(null);
     const textareaEl = useRef<HTMLTextAreaElement>(null);
     const draftScrollbarController = useScrollbarController("vertical");
+    /* With mentions highlighted, the textarea grows to its whole draft and a
+       wrapper scrolls it together with the mention layer behind it: one
+       scroller, so the compositor moves the text and its tints in the same
+       frame. A layer copying the textarea's own scrollTop would trail it by a
+       frame wherever scrolling runs off the main thread. The wrapper is the
+       scrollbar's viewport; its ref runs after the textarea's, so it replaces
+       the textarea there. */
+    const mentionScrollerAttach = useCallback(
+        (element: HTMLDivElement | null) => {
+            if (element) draftScrollbarController.viewportSet(element);
+        },
+        [draftScrollbarController],
+    );
     const draftScrollbarHost = useCallback(
         (element: HTMLDivElement | null) => draftScrollbarController.hostSet(element),
         [draftScrollbarController],
@@ -589,7 +609,7 @@ export function Composer(props: ComposerProps) {
      * committed textarea knows where its own viewport sits, and a scroll gesture
      * must not re-render the composer on every frame to say so.
      */
-    const draftFadeSync = (el: HTMLTextAreaElement) => {
+    const draftFadeSync = (el: HTMLElement) => {
         const wrapper = inputEl.current;
         if (!wrapper) return;
         // How much of the first visible line the top edge has taken, and how
@@ -1006,6 +1026,44 @@ export function Composer(props: ComposerProps) {
         event.preventDefault();
         textarea.focus();
     };
+    // Only the draft through the paragraph of its last mention can move a
+    // tint. Not just through the mention: how that line wraps, and how its
+    // directions resolve, can depend on what follows it on the same line.
+    const mentionLayerEnd =
+        props.mentionHighlights === undefined
+            ? 0
+            : (composerMentionRanges(props.value, props.mentionHighlights).at(-1)?.end ?? 0);
+    const mentionLayerBreak = props.value.indexOf("\n", mentionLayerEnd);
+    const mentionLayerText =
+        mentionLayerEnd === 0
+            ? ""
+            : props.value.slice(
+                  0,
+                  mentionLayerBreak === -1 ? props.value.length : mentionLayerBreak,
+              );
+    const draftTextarea = (
+        <textarea
+            className="happy-composer__textarea"
+            data-happy-desktop-ui="composer-textarea"
+            disabled={props.disabled}
+            readOnly={props.pending}
+            onBlur={() => {
+                rememberSelection();
+                props.onFocusChange?.(false);
+            }}
+            onClick={rememberSelection}
+            onFocus={() => props.onFocusChange?.(true)}
+            onInput={onInput}
+            onKeyDown={onKeyDown}
+            onPaste={onPaste}
+            onScroll={(event) => draftFadeSync(event.currentTarget)}
+            onSelect={rememberSelection}
+            placeholder={props.placeholder}
+            ref={textareaAttach}
+            rows={MIN_LINES}
+            value={props.value}
+        />
+    );
     return (
         <div
             className={["happy-composer", props.className].filter(Boolean).join(" ")}
@@ -1069,27 +1127,21 @@ export function Composer(props: ComposerProps) {
                         data-scrollbar-placement="stable-gutter"
                         ref={draftScrollbarHost}
                     >
-                        <textarea
-                            className="happy-composer__textarea"
-                            data-happy-desktop-ui="composer-textarea"
-                            disabled={props.disabled}
-                            readOnly={props.pending}
-                            onBlur={() => {
-                                rememberSelection();
-                                props.onFocusChange?.(false);
-                            }}
-                            onClick={rememberSelection}
-                            onFocus={() => props.onFocusChange?.(true)}
-                            onInput={onInput}
-                            onKeyDown={onKeyDown}
-                            onPaste={onPaste}
-                            onScroll={(event) => draftFadeSync(event.currentTarget)}
-                            onSelect={rememberSelection}
-                            placeholder={props.placeholder}
-                            ref={textareaAttach}
-                            rows={MIN_LINES}
-                            value={props.value}
-                        />
+                        {props.mentionHighlights === undefined ? (
+                            draftTextarea
+                        ) : (
+                            <div
+                                className="happy-composer__mention-scroller"
+                                onScroll={(event) => draftFadeSync(event.currentTarget)}
+                                ref={mentionScrollerAttach}
+                            >
+                                <ComposerMentionLayer
+                                    names={props.mentionHighlights}
+                                    text={mentionLayerText}
+                                />
+                                {draftTextarea}
+                            </div>
+                        )}
                         <ScrollbarTracks controller={draftScrollbarController} />
                     </div>
                     {/* Decorative edge fades: the draft dissolves into the card

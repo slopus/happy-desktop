@@ -238,6 +238,7 @@
     /* The unread count a sidebar row wears: a white pill with dark figures,
        ringed so it still reads against a selected row's grey. */
     --happy-unread-pill-background: #ffffff;
+    --happy-mention-tint: rgb(26 127 153 / 0.16);
     --happy-unread-pill-text: #1c1c1e;
     --happy-unread-pill-ring: rgb(0 0 0 / 0.14);
 
@@ -672,6 +673,7 @@
         --happy-tile-teal: #40c8e0;
         --happy-tile-teal-fill: rgb(64 200 224 / 0.2);
         --happy-unread-pill-background: #f2f2f7;
+        --happy-mention-tint: rgb(92 200 226 / 0.24);
         --happy-unread-pill-text: #1c1c1e;
         --happy-unread-pill-ring: transparent;
         /* Declared again here, so they resolve against the dark palette. */
@@ -894,6 +896,7 @@
     --happy-tile-teal: #40c8e0;
     --happy-tile-teal-fill: rgb(64 200 224 / 0.2);
     --happy-unread-pill-background: #f2f2f7;
+    --happy-mention-tint: rgb(92 200 226 / 0.24);
     --happy-unread-pill-text: #1c1c1e;
     --happy-unread-pill-ring: transparent;
     /* Declared again here, so they resolve against the dark palette. */

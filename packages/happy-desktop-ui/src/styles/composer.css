@@ -247,6 +247,61 @@
     transform: translateY(var(--happy-composer-textarea-y, 0px));
 }
 
+/*
+ * Mentions on a tint behind the draft (ComposerMentionLayer). The layer lays
+ * the same text out in the same box: it repeats the textarea's font shorthand
+ * (which resets the same font sub-properties the UA's own shorthand does), its
+ * wrapping, and the inherited text properties the UA resets on a textarea, so
+ * every line breaks where the textarea's does. Its glyphs stay transparent.
+ */
+/* One scroller for the draft and its tints: the textarea grows to the whole
+   draft inside it, at the textarea's own eight-line cap, so the compositor
+   moves both together. */
+.happy-composer__mention-scroller {
+    position: relative;
+    min-width: 0;
+    max-block-size: 176px;
+    overflow-y: auto;
+}
+
+.happy-composer__mention-scroller > .happy-composer__textarea {
+    max-block-size: none;
+    overflow: hidden;
+}
+
+.happy-composer__mention-layer {
+    position: absolute;
+    top: 0;
+    right: 0;
+    left: 0;
+    pointer-events: none;
+}
+
+.happy-composer__mention-layer-text {
+    font: 400 16px / 22px var(--happy-font-ui);
+    font-synthesis: none;
+    letter-spacing: normal;
+    word-spacing: normal;
+    text-align: start;
+    text-indent: 0;
+    text-transform: none;
+    text-rendering: auto;
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+    word-break: normal;
+    tab-size: 8;
+    color: transparent;
+    transform: translateY(var(--happy-composer-textarea-y, 0px));
+}
+
+.happy-composer__mention {
+    color: transparent;
+    background: var(--happy-mention-tint);
+    border-radius: 4px;
+    box-shadow: 0 0 0 1px var(--happy-mention-tint);
+    box-decoration-break: clone;
+}
+
 .happy-composer__textarea::placeholder {
     color: var(--input-placeholder);
     opacity: 1;
