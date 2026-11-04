@@ -38,12 +38,17 @@ const composer: ComposerSnapshot = {
     submission: { status: "idle" },
     text: "",
 };
-it.skipIf(server.browser !== "chromium").each([0, 2])(
-    "models cold history prepended above a sparse delegation at page zoom 0.67 (seed7; history %i)",
-    async (historyCount) => {
+it.skipIf(server.browser !== "chromium").each([
+    { zoom: 0.67, historyCount: 0, pointSide: "above" },
+    { zoom: 0.67, historyCount: 2, pointSide: "above" },
+    { zoom: 0.67, historyCount: 5, pointSide: "below" },
+    { zoom: 1, historyCount: 0, pointSide: "below" },
+    { zoom: 1, historyCount: 5, pointSide: "above" },
+] as const)(
+    "models cold history prepended above a sparse delegation at page zoom $zoom (seed7; history $historyCount, point $pointSide)",
+    async ({ zoom, historyCount, pointSide }) => {
         const initialDpr = devicePixelRatio;
         const view = createRenderer();
-        const zoom = 0.67;
         let state: SessionState = {
             activity: { kind: "generating_message", label: "Working", since: 0 },
             status: "running",
@@ -243,15 +248,25 @@ it.skipIf(server.browser !== "chromium").each([0, 2])(
                 ).toBeLessThanOrEqual(1);
             }
             expect(visible).toBeGreaterThan(0);
-            // With two initial replies, the 32px reading point falls in the
-            // notice. The summary enters below it and above the delegation.
-            const summaryAnchor =
-                historyCount === 0
-                    ? held
-                    : rows.find(
-                          (row) => Number(row.dataset.index) === Number(held.dataset.index) - 1,
-                      )!;
-            expect(summaryAnchor).toBeDefined();
+            // The reader's saved point sits 32px above the viewport's bottom
+            // edge. The summary enters below the notice and above the
+            // delegation, so the point is on one side of the insertion or the
+            // other; each case keeps it on a known side. A point in the live
+            // status footer is held by the end of the row above it.
+            const point = bounds.top + viewport.clientHeight - 32;
+            const pointRow = rows.find((row) => {
+                const rect = row.getBoundingClientRect();
+                return rect.top <= point && rect.bottom > point;
+            });
+            expect(pointRow, "no row under the reading point").toBeDefined();
+            const pointHeld =
+                pointRow === held ||
+                Number(pointRow!.dataset.index) === Number(held.dataset.index) + 1;
+            expect(
+                pointHeld ? "below" : "above",
+                `reading point side of the insertion (row ${pointRow!.dataset.index})`,
+            ).toBe(pointSide);
+            const summaryAnchor = pointHeld ? held : pointRow!;
             const summaryAnchorTop = summaryAnchor.getBoundingClientRect().top;
             // When the point is above the insertion, visible rows above it
             // also stay fixed. A point below it instead carries those rows up.
@@ -260,7 +275,7 @@ it.skipIf(server.browser !== "chromium").each([0, 2])(
                     const rect = row.getBoundingClientRect();
                     return (
                         Number(row.dataset.index) < Number(held.dataset.index) &&
-                        historyCount > 0 &&
+                        !pointHeld &&
                         rect.bottom > bounds.top &&
                         rect.top < bounds.bottom
                     );
