@@ -1673,18 +1673,6 @@ async function act(h: Harness, action: Action, pick: ReturnType<typeof random>, 
             );
             changesAnchor = true;
             break;
-        case "summary":
-            chat.extras = [
-                ...chat.extras,
-                {
-                    kind: "summary",
-                    id,
-                    sequence: id,
-                    label: "Reorganized the sidebar",
-                    details: ["Moved one task", "Kept its identity"],
-                },
-            ];
-            break;
         case "table":
             chat.elements = [
                 ...chat.elements,

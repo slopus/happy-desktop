@@ -84,7 +84,6 @@ export function fuzzActions(pageZoom: boolean) {
         "question",
         "questionInline",
         "answer",
-        "summary",
         "table",
         "media",
         "mediaDimensions",
