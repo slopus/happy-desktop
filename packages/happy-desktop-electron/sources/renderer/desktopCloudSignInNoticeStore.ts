@@ -137,7 +137,7 @@ export function desktopCloudSignInNoticeStoreCreate(input: {
         )
             return { status: "available" };
         return {
-            reason: "This Mac's Happy Agent isn't running a Chief of Staff.",
+            reason: "This computer's Happy Agent isn't running a Chief of Staff.",
             status: "unavailable",
         };
     };

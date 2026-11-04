@@ -3,7 +3,7 @@ import { Banner } from "../../Banner";
 import { HappyAgentSettingsSection } from "./HappyAgentSettingsShell";
 
 export interface HappyAgentConnectionSettingsSectionProps {
-    /** The connection the rows below belong to, such as "This Mac". */
+    /** The connection the rows below belong to, such as "This computer". */
     readonly connectionLabel: string;
     /** Why the connection cannot be reached, said once for every row under it. */
     readonly unavailable?: string;

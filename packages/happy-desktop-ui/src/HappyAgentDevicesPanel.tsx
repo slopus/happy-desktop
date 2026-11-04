@@ -140,7 +140,7 @@ function bridgeRow(
             bridge.heldInterfaces.length === 0
                 ? []
                 : [
-                      `This Mac kept interface${bridge.heldInterfaces.length === 1 ? "" : "s"} ${bridge.heldInterfaces.join(", ")}`,
+                      `This computer kept interface${bridge.heldInterfaces.length === 1 ? "" : "s"} ${bridge.heldInterfaces.join(", ")}`,
                   ];
         return (
             <Row
@@ -161,7 +161,7 @@ function bridgeRow(
     if (bridge.kind === "workspaceToLocal") {
         const workspacePort = bridge.workspacePort === null ? "…" : String(bridge.workspacePort);
         // Where another device sends it is that device's to know.
-        const local = bridge.localPort === null ? "" : ` → Mac :${String(bridge.localPort)}`;
+        const local = bridge.localPort === null ? "" : ` → Computer :${String(bridge.localPort)}`;
         return (
             <Row
                 detail={[status, ...connections, ...elsewhere]}
@@ -180,7 +180,7 @@ function bridgeRow(
             error={bridge.error}
             icon="arrow-forward-outline"
             key={bridge.id}
-            title={`Mac :${String(bridge.localPort)} → Workspace :${String(bridge.workspacePort)}`}
+            title={`Computer :${String(bridge.localPort)} → Workspace :${String(bridge.workspacePort)}`}
             tone={bridge.status === "failed" ? "failed" : undefined}
             trailing={close}
         />
@@ -351,7 +351,7 @@ export function HappyAgentDevicesPanel(props: HappyAgentDevicesPanelProps) {
                                 />
                                 <Capability
                                     capability={capabilities.localToWorkspace}
-                                    label="This Mac can reach the workspace"
+                                    label="This computer can reach the workspace"
                                 />
                             </ul>
                         ) : (
@@ -386,14 +386,14 @@ export function HappyAgentDevicesPanel(props: HappyAgentDevicesPanelProps) {
                                         capabilities?.workspaceToLocal.available !== true
                                     }
                                     error={devices.workspaceToLocal.error}
-                                    firstLabel="This Mac"
+                                    firstLabel="This computer"
                                     id="happy-agent-devices-workspace-to-local"
                                     onSubmit={props.onWorkspaceToLocalOpen}
                                     pending={devices.workspaceToLocal.pending}
                                     secondLabel="Workspace"
                                 />
                             </Section>
-                            <Section title="This Mac to the workspace">
+                            <Section title="This computer to the workspace">
                                 <PortForm
                                     description={(workspace, local) =>
                                         `Open localhost:${local} on this computer to reach port ${workspace} in the workspace.`
@@ -407,7 +407,7 @@ export function HappyAgentDevicesPanel(props: HappyAgentDevicesPanelProps) {
                                     id="happy-agent-devices-local-to-workspace"
                                     onSubmit={props.onLocalToWorkspaceOpen}
                                     pending={devices.localToWorkspace.pending}
-                                    secondLabel="This Mac"
+                                    secondLabel="This computer"
                                 />
                             </Section>
                         </>
