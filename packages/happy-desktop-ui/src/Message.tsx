@@ -1269,6 +1269,9 @@ export function MessageList(props: MessageListProps) {
         // Following never writes upward; model compensation owns that change.
         const bottom = total - (geometry.height || height) - geometryFollowInset.current;
         const current = element.scrollTop;
+        if (geometryFollowInset.current > 0 || followSentHold.current !== undefined) {
+            console.info("FOLLOW_TRACE", JSON.stringify({ total, height, bottom, current, inset: geometryFollowInset.current, hold: followSentHold.current, items: items.length, footerIndex, scrollHeight: element.scrollHeight }));
+        }
         if (bottom > current) scrollTopWrite(element, bottom);
     };
     /**
