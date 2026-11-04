@@ -13,7 +13,7 @@ Status: **r6**, Kirill's take 11 changes to r5:
   teammate jumps in."
 - Take 9's ending is back: the first preview turns to five bars in view.
 
-Take 11's cut runs 50.9 s.
+Take 11's cut runs 52.0 s.
 
 r5, Kirill's take 10 changes to r4: a smaller window (840×588), a sidebar a
 tenth narrower, and only one of Steve's subtasks working, _iOS server codes_,
@@ -122,21 +122,21 @@ not in the split tracks. The cut loops on the homepage.
 | 0    | `open`                          | The poster: new-task screen, the model list open (Claude, Codex, Grok, Antigravity, each under Current CLI), Kirill's pointer on the Model row that opened it. No phone. In the sidebar Steve's _Team servers_ and _iOS server codes_ spin, its diff stats climbing; the other two rest. | Pick any model from any provider.           |
 | 1.8  | `model-scan`                    | The pointer glides into the list at Gemini 3.8 Flash and goes up it, past Grok 4.7 and Codex's models, to **Opus 5.5** under Claude.                                                                                                                                                     |                                             |
 | 4.2  | `model-chosen`                  | He clicks Opus 5.5; the menu closes and the chip reads Opus 5.5.                                                                                                                                                                                                                         |                                             |
-| 5.4  | `typing-started`                | He types _"Add an animated waveform to the voice agent."_ No task row exists anywhere yet.                                                                                                                                                                                               | Describe the work and send.                 |
+| 5.3  | `typing-started`                | He types _"Add an animated waveform to the voice agent."_ No task row exists anywhere yet.                                                                                                                                                                                               | Describe the work and send.                 |
 | 9.5  | `phone-enter`                   | **Forward.** _Your teammate's phone_ rises beside the window, which steps back: Steve's own sidebar, which has no such task.                                                                                                                                                             |                                             |
-| 10.5 | `sent` / `task-created`         | Enter. Now the task exists: its row arrives at the top of Kirill's Tasks and, at once, at the top of Steve's, with Kirill's face, and names itself **Voice waveform**.                                                                                                                   | Your teammate sees the new task right away. |
-| 12.1 | `working`                       | Opus reads the voice files, `VoiceBars.tsx` and `VoiceAssistantStatusBar.tsx`.                                                                                                                                                                                                           |                                             |
-| 12.9 | `phone-tuck`                    | **Tucked.** 1.6 s (1.35 s in the cut) after the task reached Steve's sidebar, the phone shrinks into the frame's right margin, partly past its edge, its label gone; the window comes back to full size.                                                                                 |                                             |
-| 16.3 | `subtask`                       | Opus starts _Waveform bars_ in a worktree of happy: _"Waveform bars is writing the code; I'll put up a preview when it's in."_ The subtask's row appears under _Voice waveform_, its counts climbing edit by edit, from `+2 −2` at 19.7 s to `+87 −76` at 27.1 s.                        |                                             |
-| 31.0 | `preview`                       | The subtask reports; Opus publishes an inline live preview, the waveform speaking (animated bars) and silent, and asks _"**@Steve**, how does it look?"_, a real mention of Steve.                                                                                                       |                                             |
-| 33.8 | `phone-forward`                 | **Forward.** His phone comes forward again, and the window steps back. Steve taps the task in his sidebar: its conversation, the preview and the question.                                                                                                                               | A teammate jumps in.                        |
-| 40.6 | `phone-typing`                  | On the iOS keyboard Steve types _"Love it. Narrower though, five bars max."_ (a word at a time, played 2×, both screens).                                                                                                                                                                | They review the preview and reply.          |
-| 42.4 | `phone-sent` / `steve-feedback` | He sends; his message lands in Kirill's conversation with Steve's face.                                                                                                                                                                                                                  |                                             |
-| 45.5 | `phone-home`                    | Steve goes back to his sidebar.                                                                                                                                                                                                                                                          |                                             |
-| 46.1 | `phone-tuck` (2nd)              | **Tucked** again, for the rest of the take; the window comes back to full size.                                                                                                                                                                                                          | The agent picks up the feedback.            |
-| 47.0 | `five-bars`                     | Opus rewrites the page: the first preview, still in view above Steve's note, turns to five bars.                                                                                                                                                                                         |                                             |
-| 48.0 | `outro`                         | Opus: _"Five bars it is."_ The result rests.                                                                                                                                                                                                                                             |                                             |
-| 50.2 | `settled`                       | The narration has gone; the last 0.6 s dissolve into the first frame, the tucked phone fading out with it.                                                                                                                                                                               |                                             |
+| 10.4 | `sent` / `task-created`         | Enter. Now the task exists: its row arrives at the top of Kirill's Tasks and, at once, at the top of Steve's, with Kirill's face, and names itself **Voice waveform**.                                                                                                                   | Your teammate sees the new task right away. |
+| 12.3 | `working`                       | Opus reads the voice files, `VoiceBars.tsx` and `VoiceAssistantStatusBar.tsx`.                                                                                                                                                                                                           |                                             |
+| 13.0 | `phone-tuck`                    | **Tucked.** 1.6 s (1.4 s in the cut) after the task reached Steve's sidebar, the phone shrinks into the frame's right margin, partly past its edge, its label gone; the window comes back to full size.                                                                                  |                                             |
+| 16.4 | `subtask`                       | Opus starts _Waveform bars_ in a worktree of happy: _"Waveform bars is writing the code; I'll put up a preview when it's in."_ The subtask's row appears under _Voice waveform_, its counts climbing edit by edit, from `+2 −2` at 19.6 s to `+87 −76` at 27.0 s.                        |                                             |
+| 30.9 | `preview`                       | The subtask reports; Opus publishes an inline live preview, the waveform speaking (animated bars) and silent, and asks _"**@Steve**, how does it look?"_, a real mention of Steve.                                                                                                       |                                             |
+| 33.7 | `phone-forward`                 | **Forward.** His phone comes forward again, and the window steps back. Steve taps the task in his sidebar: its conversation, the preview and the question.                                                                                                                               | A teammate jumps in.                        |
+| 41.7 | `phone-typing`                  | On the iOS keyboard Steve types _"Love it. Narrower though, five bars max."_ (a word at a time, played 2×, both screens).                                                                                                                                                                | They review the preview and reply.          |
+| 43.3 | `phone-sent` / `steve-feedback` | He sends; his message lands in Kirill's conversation with Steve's face.                                                                                                                                                                                                                  |                                             |
+| 46.6 | `phone-home`                    | Steve goes back to his sidebar.                                                                                                                                                                                                                                                          |                                             |
+| 47.2 | `phone-tuck` (2nd)              | **Tucked** again, for the rest of the take; the window comes back to full size.                                                                                                                                                                                                          | The agent picks up the feedback.            |
+| 48.1 | `five-bars`                     | Opus rewrites the page: the first preview, still in view above Steve's note, turns to five bars.                                                                                                                                                                                         |                                             |
+| 49.2 | `outro`                         | Opus: _"Five bars it is."_ The result rests.                                                                                                                                                                                                                                             |                                             |
+| 51.3 | `settled`                       | The narration has gone; the last 0.6 s dissolve into the first frame, the tucked phone fading out with it.                                                                                                                                                                               |                                             |
 
 Throughout, Steve's _Team servers_ keeps working in both sidebars: the
 several repositories at once are his, two parts already done and _iOS server
@@ -152,8 +152,8 @@ tracks' `take.json` as `phoneStates`, in cut seconds: forward from
 `phone-enter`, tucked from `phone-tuck`, forward from `phone-forward`, and
 tucked from the second `phone-tuck` to the end. Steve's part (`phonePart`)
 runs from `phone-enter` to the second `phone-tuck`. In take 11: forward
-9.5–12.9 s, tucked 12.9–33.8 s, forward 33.8–46.1 s, tucked 46.1–50.9 s, and
-`phonePart` 9.5–46.1 s.
+9.45–12.95 s, tucked 12.95–33.72 s, forward 33.72–47.22 s, tucked
+47.22–52.0 s, and `phonePart` 9.45–47.22 s.
 
 ## What is real and what is a fixture
 
@@ -225,11 +225,13 @@ Disclosed in `team.evidence.json` beside every take.
   phone moved, and how late its first frame came.
 - **Edits.** Steve's typing plays at 2×, and his phone's driver types it a
   word at a time, the keyboard still pressing each key. The desktop is
-  captured from Chromium's
-  screencast, which on the Mac mini sometimes holds one picture for about a
-  quarter second in the middle of motion; the take lists every such freeze
-  (`freezes.json`) and the cut drops those frames from both screens, so motion
-  joins up instead of hanging. The cut's last 0.6 s dissolve into its first
+  captured from Chromium's screencast, which on the Mac mini sometimes holds
+  one picture for about a quarter second in the middle of motion; the take
+  lists every such freeze (`freezes.json`) and the cut drops those frames
+  from both screens, so motion joins up instead of hanging. A stall longer
+  than half a second stays as a hold on the window instead
+  (`cutFreezesLongest`, listed as `freezesHeld`): cutting it would skip that
+  much of the phone's motion. The cut's last 0.6 s dissolve into its first
   frame, and each split track's into its own, so the homepage loop has no
   seam. Every edit is listed under `edits` in the cut's `team.json`, its
   `team.evidence.json` and the split tracks' `take.json`. Kirill's feed is
