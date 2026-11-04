@@ -2390,6 +2390,7 @@ it("replays the reduced bottom-follow failure", async () => {
             await act(h, action, () => (step === 37 || step === 40 ? 1 : 0), step);
             await frame();
             await settle();
+            if (step >= 39) console.info("TAPE_STATE", JSON.stringify({ step, entries: h.chats[h.active]!.store.get().entries.map((entry) => entry.kind === "message" ? entry.message.text.slice(0, 30) : entry.kind), extras: h.chats[h.active]!.extras.length, position: h.chats[h.active]!.position, scrollTop: h.viewport().scrollTop, scrollHeight: h.viewport().scrollHeight, clientHeight: h.viewport().clientHeight }));
         }
         followingCheck(h);
     } finally {
