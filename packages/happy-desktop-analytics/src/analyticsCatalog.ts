@@ -127,7 +127,7 @@ export interface AnalyticsSetupDownloadFailure {
     readonly transfer_percent_bucket: AnalyticsTransferPercentBucket;
 }
 
-/** How a phone pairs: through the Happy relay, or directly over Tailcat (an experiment). */
+/** How a phone pairs: through the Happy server (relay), or a direct connection over Tailcat. */
 export type AnalyticsMobilePairingMethod = "relay" | "direct";
 
 /** Which pairing page: first-run onboarding, or Settings → Mobile Access. */
@@ -189,7 +189,7 @@ export interface AnalyticsEvents {
     /** A phone pairing page showed its Relay | Direct choice. */
     readonly mobile_pairing_options_shown: {
         readonly options: "relay_direct";
-        /** The method selected as it showed: Direct while its experiment is on. */
+        /** The method selected as it showed: the person's choice, else the rollout's default. */
         readonly default_method: AnalyticsMobilePairingMethod;
         readonly surface: AnalyticsMobilePairingSurface;
     };
@@ -204,11 +204,6 @@ export interface AnalyticsEvents {
     readonly mobile_pairing_failed: { readonly method: AnalyticsMobilePairingMethod };
     /** A pairing in progress was left: its page closed or skipped, or the other method chosen. */
     readonly mobile_pairing_cancelled: { readonly method: AnalyticsMobilePairingMethod };
-    readonly direct_phone_experiment_toggled: {
-        readonly enabled: boolean;
-        /** Settings → Experiments, or a pairing page's Relay | Direct choice. */
-        readonly where: "experiments" | AnalyticsMobilePairingSurface;
-    };
     readonly conversation_created: AnalyticsModelProperties & {
         readonly source: "workspace" | "command_palette" | "shortcut" | "voice";
     };
@@ -232,6 +227,40 @@ export type AnalyticsEventName = keyof AnalyticsEvents;
 /** What one `track` call sends: the common fields and that event's own. */
 export type AnalyticsEventProperties<E extends AnalyticsEventName> = AnalyticsCommonProperties &
     AnalyticsEvents[E];
+
+/** Every event name the catalog allows; `before_send` drops any other, including PostHog's own. */
+export const ANALYTICS_EVENT_NAMES: ReadonlySet<string> = new Set(
+    Object.keys({
+        app_opened: true,
+        onboarding_step_viewed: true,
+        onboarding_setup_result: true,
+        onboarding_assistant_status: true,
+        onboarding_command_copied: true,
+        onboarding_local_apps: true,
+        onboarding_subscriptions_exit: true,
+        onboarding_mobile: true,
+        onboarding_completed: true,
+        mobile_pairing_options_shown: true,
+        mobile_pairing_option_selected: true,
+        mobile_pairing_completed: true,
+        mobile_pairing_failed: true,
+        mobile_pairing_cancelled: true,
+        conversation_created: true,
+        project_added: true,
+        workspace_created: true,
+        bot_created: true,
+        subtask_created: true,
+        message_sent: true,
+    } satisfies Record<AnalyticsEventName, true>),
+);
+
+/**
+ * The PostHog feature flags this desktop reads, by their exact keys. The phone
+ * apps read the same keys, so a flag is renamed in all of them or none.
+ */
+export type AnalyticsFlag =
+    /** On: pairing pages select Direct first for people who have not chosen. */
+    "direct-connection-migration-new-users";
 
 /** Every property name the catalog allows, the allowlist `before_send` enforces. */
 export const ANALYTICS_PROPERTY_NAMES: ReadonlySet<string> = new Set([
@@ -281,8 +310,6 @@ export const ANALYTICS_PROPERTY_NAMES: ReadonlySet<string> = new Set([
     "from",
     "to",
     "method",
-    "enabled",
-    "where",
 ] satisfies readonly (
     | keyof AnalyticsCommonProperties
     | { [E in AnalyticsEventName]: keyof AnalyticsEvents[E] }[AnalyticsEventName]

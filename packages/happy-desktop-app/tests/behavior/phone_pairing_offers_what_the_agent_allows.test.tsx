@@ -114,7 +114,7 @@ it("leaves Connect a phone and the relay's status out when no way is left", () =
     on.unmount();
     const off = render(<HappyAgentMobileSettings {...base} pairingOff status="disabled" />);
     expect(off.queryByRole("button", { name: "Connect phone" })).toBeNull();
-    expect(off.queryByText("Happy relay")).toBeNull();
+    expect(off.queryByText("Happy server")).toBeNull();
     expect(off.getByTestId("happy-mobile-settings-pairing-off").textContent).toBe(
         "Phone pairing is turned off on this Happy Agent.",
     );

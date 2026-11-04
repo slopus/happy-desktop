@@ -15,7 +15,7 @@ import {
     type AnalyticsMobilePairingMethod,
 } from "happy-desktop-analytics";
 import {
-    experimentsStoreCreate,
+    mobilePairingMethodStoreCreate,
     type HappyAgentIntegrationSnapshot,
     type HappyAgentIntegrationStore,
     type HappyAgentMobileConnectorSnapshot,
@@ -66,16 +66,16 @@ function fakeCreate<T>(initial: T): Fake<T> {
 
 type Reported = { readonly event: string; readonly properties: Record<string, unknown> };
 
-/** The observers, with the method each page shows: Direct while the experiment is on. */
+/** The observers, with the method each page shows. */
 function observeCreate(method: AnalyticsMobilePairingMethod = "relay") {
     const reported: Reported[] = [];
     const report: MobilePairingReport = (event, properties) =>
         reported.push({ event, properties: { ...properties } });
-    const experiments = experimentsStoreCreate();
-    experiments.featureUpdate("mobileDirect", method === "direct", "experiments");
+    const methods = mobilePairingMethodStoreCreate();
+    methods.methodSelect(method, "mobile_access");
     const choose = (next: AnalyticsMobilePairingMethod) =>
-        experiments.featureUpdate("mobileDirect", next === "direct", "mobile_access");
-    return { reported, choose, observe: mobilePairingObserveCreate(experiments, report) };
+        methods.methodSelect(next, "mobile_access");
+    return { reported, choose, observe: mobilePairingObserveCreate(methods, report) };
 }
 
 /** Lets a failure queued behind its store's call stand or pass. */
@@ -346,11 +346,12 @@ it("reports a direct pairing cancelled when its page closes or Relay is chosen",
     ]);
 });
 
-it("reports the experiment turned on or off, and a pairing page's choice of method", () => {
+it("reports a pairing page's choice of method", () => {
     const captured: { event: string; properties: Record<string, unknown> }[] = [];
     const client: AnalyticsClient = {
         preload: () => undefined,
         track: (event, properties) => void captured.push({ event, properties: { ...properties } }),
+        flagFollow: () => () => undefined,
     };
     const directory = {
         get: () => ({
@@ -364,35 +365,24 @@ it("reports the experiment turned on or off, and a pairing page's choice of meth
         happyAgents: directory as never,
         client,
     });
-    const experiments = experimentsStoreCreate(undefined, analytics.experimentUpdated);
-    experiments.featureUpdate("mobileDirect", true, "onboarding");
-    experiments.featureUpdate("mobileDirect", false, "mobile_access");
-    experiments.featureUpdate("mobileDirect", true, "experiments");
-    // Other experiments are not this one.
-    experiments.featureUpdate("voice", true, "experiments");
+    const methods = mobilePairingMethodStoreCreate({
+        onOutput: analytics.mobilePairingMethodSelected,
+    });
+    methods.methodSelect("direct", "onboarding");
+    methods.methodSelect("relay", "mobile_access");
+    // Choosing what is already chosen is no choice.
+    methods.methodSelect("relay", "mobile_access");
     expect(captured.map(({ event, properties }) => ({ event, properties }))).toMatchObject([
-        {
-            event: "direct_phone_experiment_toggled",
-            properties: { enabled: true, where: "onboarding" },
-        },
         {
             event: "mobile_pairing_option_selected",
             properties: { from: "relay", to: "direct", surface: "onboarding" },
         },
         {
-            event: "direct_phone_experiment_toggled",
-            properties: { enabled: false, where: "mobile_access" },
-        },
-        {
             event: "mobile_pairing_option_selected",
             properties: { from: "direct", to: "relay", surface: "mobile_access" },
         },
-        {
-            event: "direct_phone_experiment_toggled",
-            properties: { enabled: true, where: "experiments" },
-        },
     ]);
-    expect(captured).toHaveLength(5);
+    expect(captured).toHaveLength(2);
     analytics.dispose();
 });
 
@@ -401,6 +391,7 @@ it("sends pairing events with catalog fields only: no code, address, emoji, or d
     const client: AnalyticsClient = {
         preload: () => undefined,
         track: (event, properties) => void captured.push({ event, properties: { ...properties } }),
+        flagFollow: () => () => undefined,
     };
     const directory = {
         get: () => ({
@@ -414,12 +405,9 @@ it("sends pairing events with catalog fields only: no code, address, emoji, or d
         happyAgents: directory as never,
         client,
     });
-    const experiments = experimentsStoreCreate();
-    experiments.featureUpdate("mobileDirect", true, "experiments");
-    const observe = mobilePairingObserveCreate(
-        experiments,
-        analytics.mobilePairingReport("remote"),
-    );
+    const methods = mobilePairingMethodStoreCreate();
+    methods.methodSelect("direct", "mobile_access");
+    const observe = mobilePairingObserveCreate(methods, analytics.mobilePairingReport("remote"));
     const relay = fakeCreate(integration({}));
     const direct = fakeCreate(connector(null));
     const relayStore = observe.integration(relay as unknown as HappyAgentIntegrationStore);

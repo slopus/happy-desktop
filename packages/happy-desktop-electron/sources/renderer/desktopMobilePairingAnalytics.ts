@@ -4,8 +4,6 @@ import type {
     AnalyticsMobilePairingSurface,
 } from "happy-desktop-analytics";
 import type {
-    ExperimentsOutput,
-    ExperimentsStore,
     HappyAgentIntegrationSnapshot,
     HappyAgentIntegrationStore,
     HappyAgentMobileConnectorSnapshot,
@@ -13,6 +11,8 @@ import type {
     HappyDesktopMobileStep,
     HappyMobileOnboardingSnapshot,
     HappyMobileOnboardingStore,
+    MobilePairingMethodOutput,
+    MobilePairingMethodStore,
 } from "happy-desktop-state";
 
 /** The pairing events, each carrying only methods and pages: never a code, address, emoji, or name. */
@@ -21,11 +21,10 @@ export type MobilePairingEventName =
     | "mobile_pairing_option_selected"
     | "mobile_pairing_completed"
     | "mobile_pairing_failed"
-    | "mobile_pairing_cancelled"
-    | "direct_phone_experiment_toggled";
+    | "mobile_pairing_cancelled";
 
-/** The direct phone connection's experiment, which is the method a pairing page shows. */
-export type MobilePairingExperiments = Pick<ExperimentsStore, "get" | "subscribe">;
+/** The method a pairing page shows. */
+export type MobilePairingMethods = Pick<MobilePairingMethodStore, "get" | "subscribe">;
 
 export type MobilePairingReport = <E extends MobilePairingEventName>(
     event: E,
@@ -229,7 +228,7 @@ function directFollow(
  */
 function observed<S extends { get(): unknown; subscribe(listener: () => void): () => void }>(
     store: S,
-    experiments: MobilePairingExperiments,
+    methods: MobilePairingMethods,
     observe: (snapshot: ReturnType<S["get"]>, open: boolean) => void,
 ): S {
     const read = () => store.get() as ReturnType<S["get"]>;
@@ -243,7 +242,7 @@ function observed<S extends { get(): unknown; subscribe(listener: () => void): (
                 observe(read(), true);
                 listener();
             });
-            methodUnsubscribe ??= experiments.subscribe(() => observe(read(), true));
+            methodUnsubscribe ??= methods.subscribe(() => observe(read(), true));
             observe(read(), true);
             let released = false;
             return () => {
@@ -262,43 +261,35 @@ function observed<S extends { get(): unknown; subscribe(listener: () => void): (
 
 /** The pairing observers for one Happy Agent, with the method each page shows. */
 export function mobilePairingObserveCreate(
-    experiments: MobilePairingExperiments,
+    methods: MobilePairingMethods,
     report: MobilePairingReport,
 ): HappyAgentMobilePairingObserve {
-    const method = (): AnalyticsMobilePairingMethod =>
-        experiments.get().mobileDirect ? "direct" : "relay";
+    const method = (): AnalyticsMobilePairingMethod => methods.get().method;
     return {
-        connector: (store) => observed(store, experiments, directFollow(report)),
+        connector: (store) => observed(store, methods, directFollow(report)),
         onboarding: (store) => {
             const follow = relayFollow("onboarding", method, report);
-            return observed(store, experiments, (snapshot, open) =>
+            return observed(store, methods, (snapshot, open) =>
                 follow(open ? relayPageOfOnboarding(snapshot) : RELAY_CLOSED),
             );
         },
         integration: (store) => {
             const follow = relayFollow("mobile_access", method, report);
-            return observed(store, experiments, (snapshot, open) =>
+            return observed(store, methods, (snapshot, open) =>
                 follow(open ? relayPageOfIntegration(snapshot) : RELAY_CLOSED),
             );
         },
     };
 }
 
-/**
- * The direct phone connection's experiment turned on or off: from Settings →
- * Experiments, or by a pairing page's Relay | Direct choice, which is also
- * that page's method selection.
- */
-export function mobilePairingExperimentReport(
-    output: ExperimentsOutput,
+/** The person picked a method on a pairing page's Relay | Direct choice. */
+export function mobilePairingMethodReport(
+    output: MobilePairingMethodOutput,
     report: MobilePairingReport,
 ): void {
-    if (output.feature !== "mobileDirect") return;
-    report("direct_phone_experiment_toggled", { enabled: output.enabled, where: output.source });
-    if (output.source === "experiments") return;
     report("mobile_pairing_option_selected", {
-        from: output.enabled ? "relay" : "direct",
-        to: output.enabled ? "direct" : "relay",
-        surface: output.source,
+        from: output.from,
+        to: output.to,
+        surface: output.surface,
     });
 }

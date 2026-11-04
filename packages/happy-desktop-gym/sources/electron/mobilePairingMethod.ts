@@ -5,21 +5,19 @@ import type { Page } from "playwright";
 import { gymElectronVideoRecord } from "./launch.js";
 
 /*
- * Pairing a phone directly is an experiment. Mobile Access's pairing page
- * shows a Relay | Direct control, on Relay for every installation that has
- * not chosen Direct: the relay's code alone, and no Direct connection
- * section. Choosing Direct swaps in the direct code in the same place and
- * turns on Settings › Experimental's "Direct phone connection"; turning that
- * off brings the page back to Relay.
+ * Mobile Access's pairing page shows a Relay | Direct control. A gym window
+ * reads no rollout flag, so it opens on Relay: the relay's code alone.
+ * Choosing Direct swaps in the direct code in the same place, the choice is
+ * kept when the page opens again, and "Use Relay" under the direct code goes
+ * back. The Direct connection section is on Mobile Access either way.
  */
 
 const ROWS = '[data-happy-desktop-ui="sidebar-item"]';
 const SLOTS = '[data-happy-desktop-ui="mobile-pairing-options-slot"]';
 const CONTROL = '[data-testid="mobile-pairing-method"]';
 const SLOTS_BOX = ".happy-mobile-pairing-options__slots";
-const SWITCH_LABEL = "Direct phone connection";
 
-export interface MobileDirectExperimentState {
+export interface MobilePairingMethodState {
     /** The method the Relay | Direct control shows as chosen. */
     readonly method: string;
     /** Pairing methods the page shows, in order. */
@@ -29,17 +27,16 @@ export interface MobileDirectExperimentState {
     readonly slotsTop: number;
 }
 
-export interface MobileDirectExperimentResult {
+export interface MobilePairingMethodResult {
     /** Mobile Access before anything is chosen, then after choosing Direct on the page. */
-    readonly relay: MobileDirectExperimentState;
-    readonly direct: MobileDirectExperimentState;
-    /** Whether Mobile Access has its Direct connection section, off and then on. */
-    readonly directSectionOff: boolean;
-    readonly directSectionOn: boolean;
-    /** The Experimental switch after Direct was chosen on the page. */
-    readonly switchAfterDirect: boolean;
-    /** The page's method after the switch was turned off again. */
-    readonly methodAfterSwitchOff: string;
+    readonly relay: MobilePairingMethodState;
+    readonly direct: MobilePairingMethodState;
+    /** Whether Mobile Access has its Direct connection section before anything is chosen. */
+    readonly directSection: boolean;
+    /** The page's method when opened again after choosing Direct. */
+    readonly methodAfterReopen: string;
+    /** The page's method after "Use Relay". */
+    readonly methodAfterUseRelay: string;
     readonly video: string;
 }
 
@@ -76,7 +73,7 @@ async function pairingLeave(page: Page): Promise<void> {
     await page.waitForTimeout(600);
 }
 
-async function pageRead(page: Page): Promise<MobileDirectExperimentState> {
+async function pageRead(page: Page): Promise<MobilePairingMethodState> {
     const method =
         (await page.locator(`${CONTROL} [aria-pressed="true"]`).getAttribute("data-value")) ?? "";
     const slots = await page
@@ -87,11 +84,11 @@ async function pageRead(page: Page): Promise<MobileDirectExperimentState> {
     return { method, slots, controlTop, slotsTop };
 }
 
-export async function mobileDirectExperimentRun(
+export async function mobilePairingMethodRun(
     page: Page,
     artifacts: string,
-): Promise<MobileDirectExperimentResult> {
-    const videoPath = join(artifacts, "mobile-direct-experiment.webm");
+): Promise<MobilePairingMethodResult> {
+    const videoPath = join(artifacts, "mobile-pairing-method.webm");
     const video = await gymElectronVideoRecord(page, { path: videoPath, scale: 2 });
     try {
         await page.waitForTimeout(500);
@@ -104,16 +101,15 @@ export async function mobileDirectExperimentRun(
             timeout: 30_000,
         });
 
-        // Nothing chosen yet: Relay, its code alone, no direct section.
         await categoryOpen(page, "mobile-access");
-        const directSectionOff = await directSection(page);
+        const section = await directSection(page);
+        if (!section) throw new Error("Mobile Access has no Direct connection section.");
         await pairingOpen(page);
         const relay = await pageRead(page);
         await page.screenshot({ path: join(artifacts, "mobile-pairing-relay.png") });
-        if (directSectionOff || relay.method !== "relay" || relay.slots.join() !== "relay")
+        if (relay.method !== "relay" || relay.slots.join() !== "relay")
             throw new Error(`Before choosing, Mobile Access showed ${JSON.stringify(relay)}.`);
 
-        // Choosing Direct swaps the code in place.
         await page.locator(`${CONTROL} [data-value="direct"]`).click();
         await page.locator(`${SLOTS}[data-method="direct"]`).waitFor({ timeout: 10_000 });
         await page.waitForTimeout(1_500);
@@ -127,40 +123,28 @@ export async function mobileDirectExperimentRun(
             );
         await pairingLeave(page);
 
-        // It is the same choice as the Experimental switch.
-        await categoryOpen(page, "experimental");
-        const toggle = page.getByRole("switch", { name: SWITCH_LABEL });
-        await toggle.waitFor({ state: "visible", timeout: 10_000 });
-        const switchAfterDirect = (await toggle.getAttribute("aria-checked")) === "true";
-        if (!switchAfterDirect) throw new Error("Choosing Direct left the experiment off.");
-
-        await categoryOpen(page, "mobile-access");
-        const directSectionOn = await directSection(page);
-        if (!directSectionOn) throw new Error("Direct on, but no Direct connection section.");
-
-        // Turning the experiment off brings the page back to Relay.
-        await categoryOpen(page, "experimental");
-        await page.waitForTimeout(400);
-        await toggle.click();
-        await page.waitForTimeout(800);
-        await categoryOpen(page, "mobile-access");
         await pairingOpen(page);
-        const afterOff = await pageRead(page);
-        await pairingLeave(page);
-        if (afterOff.method !== "relay" || (await directSection(page)))
-            throw new Error(`After turning it off the page showed ${JSON.stringify(afterOff)}.`);
+        const reopened = await pageRead(page);
+        if (reopened.method !== "direct")
+            throw new Error(`Reopened after choosing Direct, the page showed ${reopened.method}.`);
 
-        const result: MobileDirectExperimentResult = {
+        await page.getByTestId("mobile-pairing-use-relay").click();
+        await page.locator(`${SLOTS}[data-method="relay"]`).waitFor({ timeout: 10_000 });
+        const afterUseRelay = await pageRead(page);
+        await pairingLeave(page);
+        if (afterUseRelay.method !== "relay")
+            throw new Error(`After Use Relay the page showed ${JSON.stringify(afterUseRelay)}.`);
+
+        const result: MobilePairingMethodResult = {
             relay,
             direct,
-            directSectionOff,
-            directSectionOn,
-            switchAfterDirect,
-            methodAfterSwitchOff: afterOff.method,
+            directSection: section,
+            methodAfterReopen: reopened.method,
+            methodAfterUseRelay: afterUseRelay.method,
             video: videoPath,
         };
         await writeFile(
-            join(artifacts, "mobile-direct-experiment.json"),
+            join(artifacts, "mobile-pairing-method.json"),
             JSON.stringify(result, null, 2),
         );
         return result;

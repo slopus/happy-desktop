@@ -130,7 +130,7 @@ const states: readonly {
     {
         id: "13",
         label: "Direct chosen",
-        detail: "Direct selected, tagged Experimental: the direct code in the same place the relay code was",
+        detail: "Direct selected: the direct code in the same place the relay code was, with Use Relay for older phone apps",
         variant: { direct: direct.waiting, relay: relayWaiting, method: "direct" },
     },
     {

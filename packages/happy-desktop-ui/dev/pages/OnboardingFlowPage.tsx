@@ -6,6 +6,8 @@ import type { WelcomeSlide } from "../../src/WelcomeDeck";
 import { WelcomeScreen } from "../../src/WelcomeScreen";
 import { SplashCover } from "../../src/SplashCover";
 import { ComponentPage, FullScreenSpecimen } from "../kit";
+import type { DesktopMobilePairingOptions } from "../../src/DesktopMobileSetup";
+import { direct, relayWaiting } from "./mobilePairingFixtures";
 import { setupPairingOptions } from "./mobilePairingSpecimens";
 
 /** The page plan this page documents. The selector and the page header read the same value. */
@@ -34,10 +36,11 @@ function onboarding(
     reachedStage?: OnboardingStage,
     agentPromptsOpen = false,
     appearance: "dark" | "light" = "dark",
+    pairingOptions: DesktopMobilePairingOptions = setupPairingOptions(),
 ) {
     return (
         <LocalOnboardingScreen
-            happyMobilePairingOptions={setupPairingOptions()}
+            happyMobilePairingOptions={pairingOptions}
             agentPromptsOpen={agentPromptsOpen}
             appearance={appearance}
             onAssistantsContinue={noop}
@@ -303,6 +306,60 @@ const screens: readonly {
                     },
                 },
                 "connect-phone",
+            ),
+    },
+    {
+        id: "connect-phone-direct",
+        label: "Link Mobile App · Direct first (rollout flag on), Relay one tap away",
+        render: () =>
+            onboarding(
+                {
+                    kind: "happy-mobile-desktop",
+                    step: {
+                        kind: "link",
+                        phase: {
+                            data: "happy://terminal?AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                            expiresAt: 1924992000000,
+                            kind: "pairing",
+                        },
+                    },
+                },
+                "connect-phone",
+                false,
+                "dark",
+                setupPairingOptions({
+                    direct: direct.waiting,
+                    relay: relayWaiting,
+                    method: "direct",
+                    onMethodSelect: noop,
+                }),
+            ),
+    },
+    {
+        id: "connect-phone-relay",
+        label: "Link Mobile App · Relay first (rollout flag off)",
+        render: () =>
+            onboarding(
+                {
+                    kind: "happy-mobile-desktop",
+                    step: {
+                        kind: "link",
+                        phase: {
+                            data: "happy://terminal?AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                            expiresAt: 1924992000000,
+                            kind: "pairing",
+                        },
+                    },
+                },
+                "connect-phone",
+                false,
+                "dark",
+                setupPairingOptions({
+                    direct: direct.waiting,
+                    relay: relayWaiting,
+                    method: "relay",
+                    onMethodSelect: noop,
+                }),
             ),
     },
     {

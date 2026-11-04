@@ -21,7 +21,7 @@ export type GymWorkloadName =
     | "window-edge-resize"
     | "archive-reconcile"
     | "stop-shimmer"
-    | "mobile-direct-experiment"
+    | "mobile-pairing-method"
     | "jump-shimmer"
     | "window-zoom"
     | "all";

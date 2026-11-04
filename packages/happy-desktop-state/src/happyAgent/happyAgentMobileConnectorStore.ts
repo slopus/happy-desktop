@@ -146,7 +146,7 @@ export function happyAgentMobileConnectorStoreCreate(
     /**
      * Keeps a code on an open surface: the first one, and a new one when it
      * expires unused. Only while something shows the connector: a pairing
-     * opened with nothing on screen (the direct connection's experiment off)
+     * opened with nothing on screen (a pairing page showing Relay)
      * makes no code until a surface follows it.
      */
     function refresh(): void {

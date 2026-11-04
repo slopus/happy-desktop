@@ -7,6 +7,7 @@ import {
     type AnalyticsCommonProperties,
     type AnalyticsEventName,
     type AnalyticsEvents,
+    type AnalyticsFlag,
     type AnalyticsOs,
     type AnalyticsOutcome,
     type AnalyticsSetupDownloadFailure,
@@ -18,7 +19,7 @@ import {
     happyAgentBotSubtasks,
     happyAgentTaskDepths,
     usageAnalyticsStoreCreate,
-    type ExperimentsOutput,
+    type MobilePairingMethodOutput,
     type HappyAgentActionResult,
     type HappyAgentActivity,
     type HappyAgentActivityModel,
@@ -41,7 +42,7 @@ import {
 } from "./localOnboardingStore";
 import { LOCAL_HAPPY_AGENT_ID, type HappyAgentDirectoryStore } from "./happyAgentDirectoryStore";
 import {
-    mobilePairingExperimentReport,
+    mobilePairingMethodReport,
     type MobilePairingReport,
 } from "./desktopMobilePairingAnalytics";
 import type { DesktopSystem } from "../shared/desktopContract";
@@ -74,8 +75,10 @@ export interface DesktopAnalytics {
     onboardingObserve(store: LocalOnboardingStore, welcome: WelcomeStore): LocalOnboardingStore;
     /** Phone pairing events, reported on the Happy Agent the pairing is with. */
     mobilePairingReport(happyAgentId: string): MobilePairingReport;
-    /** What the experiments store reports turning on or off. */
-    experimentUpdated(output: ExperimentsOutput): void;
+    /** The person picked a pairing method. */
+    mobilePairingMethodSelected(output: MobilePairingMethodOutput): void;
+    /** Follows one PostHog feature flag; silent while analytics is off or unavailable. */
+    flagFollow(flag: AnalyticsFlag, listener: (enabled: boolean) => void): () => void;
     /** Stops following the directory and the window's closing. */
     dispose(): void;
 }
@@ -405,8 +408,9 @@ export function desktopAnalyticsCreate(options: {
     return {
         preference,
         mobilePairingReport: pairingReport,
-        experimentUpdated: (output) =>
-            mobilePairingExperimentReport(
+        flagFollow: (flag, listener) => client.flagFollow(flag, listener),
+        mobilePairingMethodSelected: (output) =>
+            mobilePairingMethodReport(
                 output,
                 // A device-wide choice, reported on the Happy Agent the window is using.
                 pairingReport(options.happyAgents.get().activeHappyAgentId ?? LOCAL_HAPPY_AGENT_ID),

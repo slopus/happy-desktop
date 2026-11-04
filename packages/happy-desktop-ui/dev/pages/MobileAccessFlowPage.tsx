@@ -47,6 +47,7 @@ const handlers = {
 const paired = {
     ...handlers,
     configured: true,
+    pairingDirectOnly: true,
     status: "connected",
     updatedAt,
 } satisfies HappyAgentMobileSettingsProps;
@@ -78,7 +79,21 @@ const screens: readonly {
             }),
         },
     },
-    { id: "ready", label: "Ready · phone connected", props: paired },
+    { id: "ready", label: "Ready · linked through the Happy server", props: paired },
+    {
+        id: "direct",
+        label: "Linked · direct code",
+        props: {
+            ...paired,
+            direct: directSectionSpecimen(direct.waiting),
+            pairingOptions: pairingOptionsSpecimen("settings", {
+                direct: direct.waiting,
+                relay: { kind: "connected" },
+                method: "direct",
+                methodFixed: true,
+            }),
+        },
+    },
     {
         id: "offline",
         label: "Offline · pairing saved",

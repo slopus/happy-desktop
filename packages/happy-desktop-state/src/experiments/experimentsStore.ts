@@ -2,7 +2,6 @@
 export const EXPERIMENTAL_FEATURES = [
     { id: "inbox", label: "Inbox" },
     { id: "voice", label: "Voice calls" },
-    { id: "mobileDirect", label: "Direct phone connection" },
 ] as const;
 
 export type ExperimentalFeature = (typeof EXPERIMENTAL_FEATURES)[number]["id"];
@@ -14,11 +13,8 @@ export interface ExperimentsPersistence {
     write(document: ExperimentsDocument): void;
 }
 
-/**
- * Where a feature was turned on or off: its switch in Settings → Experiments,
- * or a phone pairing surface choosing the method an experiment offers.
- */
-export type ExperimentsUpdateSource = "experiments" | "onboarding" | "mobile_access";
+/** Where a feature was turned on or off: its switch in Settings → Experiments. */
+export type ExperimentsUpdateSource = "experiments";
 
 export type ExperimentsOutput = {
     readonly type: "featureUpdated";
@@ -40,7 +36,6 @@ export interface ExperimentsStore {
 const DISABLED: ExperimentsSnapshot = {
     inbox: false,
     voice: false,
-    mobileDirect: false,
 };
 
 /**
@@ -59,7 +54,6 @@ function documentParse(value: unknown): ExperimentsSnapshot {
     return {
         inbox: enabled("inbox"),
         voice: enabled("voice"),
-        mobileDirect: enabled("mobileDirect"),
     };
 }
 

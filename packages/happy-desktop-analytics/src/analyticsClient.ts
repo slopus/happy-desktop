@@ -1,7 +1,9 @@
 import type { CaptureResult, PostHog } from "posthog-js";
 import {
+    ANALYTICS_EVENT_NAMES,
     ANALYTICS_PROPERTY_NAMES,
     type AnalyticsEventName,
+    type AnalyticsFlag,
     type AnalyticsEventProperties,
 } from "./analyticsCatalog";
 
@@ -40,6 +42,12 @@ export interface AnalyticsClient {
         properties: AnalyticsEventProperties<E>,
         options?: AnalyticsTrackOptions,
     ): void;
+    /**
+     * Follows one feature flag for this installation: `listener` hears whether
+     * it is on each time PostHog answers, and false when it could not. With no
+     * key or analytics off it never hears anything, so the caller's default stands.
+     */
+    flagFollow(flag: AnalyticsFlag, listener: (enabled: boolean) => void): () => void;
 }
 
 export interface AnalyticsClientOptions {
@@ -55,10 +63,11 @@ export interface AnalyticsClientOptions {
  * Rebuilds an outgoing event from the allowlists, so nothing PostHog adds on
  * its own — the page URL, which in a packaged app is a file path under the
  * person's home directory, the referrer, screen, browser, or session — and no
- * person property ever leaves the window.
+ * person property ever leaves the window. An event the catalog does not name,
+ * such as `$feature_flag_called`, does not leave at all.
  */
 export function analyticsBeforeSend(capture: CaptureResult | null): CaptureResult | null {
-    if (capture === null) return null;
+    if (capture === null || !ANALYTICS_EVENT_NAMES.has(capture.event)) return null;
     const properties: Record<string, unknown> = {};
     for (const [name, value] of Object.entries(capture.properties)) {
         if (POSTHOG_PROPERTY_NAMES.has(name) || ANALYTICS_PROPERTY_NAMES.has(name))
@@ -106,7 +115,10 @@ export function analyticsClientCreate(options: AnalyticsClientOptions): Analytic
                     disable_conversations: true,
                     disable_web_experiments: true,
                     disable_external_dependency_loading: true,
-                    advanced_disable_flags: true,
+                    // Flags are read for the rollouts in `AnalyticsFlag`;
+                    // `save_referrer` and `save_campaign_params` being off keeps
+                    // the page URL out of the flags request's person properties.
+                    advanced_disable_flags: false,
                     save_referrer: false,
                     save_campaign_params: false,
                     before_send: analyticsBeforeSend,
@@ -136,6 +148,25 @@ export function analyticsClientCreate(options: AnalyticsClientOptions): Analytic
                 if (!options.enabled()) return;
                 posthog?.capture(event, { ...properties });
             });
+        },
+        flagFollow(flag, listener) {
+            if (apiKey === undefined || apiKey.length === 0 || !options.enabled())
+                return () => undefined;
+            let stopped = false;
+            let stop = (): void => undefined;
+            void load(apiKey).then((posthog) => {
+                if (stopped || !posthog) return;
+                stop = posthog.onFeatureFlags((_flags, _variants, context) => {
+                    listener(
+                        context?.errorsLoading !== true &&
+                            posthog.isFeatureEnabled(flag, { send_event: false }) === true,
+                    );
+                });
+            });
+            return () => {
+                stopped = true;
+                stop();
+            };
         },
     };
 }

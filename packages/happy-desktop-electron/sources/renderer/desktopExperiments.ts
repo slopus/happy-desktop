@@ -1,6 +1,6 @@
 import type { ExperimentsDocument, ExperimentsPersistence } from "happy-desktop-state";
 
-const EXPERIMENTS_KEY = "happy.experiments.v1";
+export const EXPERIMENTS_KEY = "happy.experiments.v1";
 
 /**
  * Where this machine remembers whether the reader asked for the unfinished

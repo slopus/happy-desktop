@@ -63,6 +63,7 @@ function clientCreate(): AnalyticsClient & { readonly captured: Captured[] } {
     return {
         captured,
         preload: () => undefined,
+        flagFollow: () => () => undefined,
         track(event, properties, options) {
             captured.push({
                 event,

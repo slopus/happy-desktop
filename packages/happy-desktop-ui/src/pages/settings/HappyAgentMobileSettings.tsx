@@ -59,8 +59,14 @@ export interface HappyAgentMobileSettingsProps {
     onReconnect?(): void;
     onManagementCancel?(): void;
     onManagementConfirm?(): void;
-    /** Opens pairing: the relay, or the direct connection while its experiment is on. */
+    /** Opens pairing: Relay or Direct, or only Direct with `pairingDirectOnly`. */
     onPairingOptionsOpen(): void;
+    /**
+     * This computer is already linked through the Happy server, so phones on
+     * the account already see it: connecting offers only the direct code, and
+     * the link stays as it is.
+     */
+    readonly pairingDirectOnly?: boolean;
     /**
      * This Happy Agent reports every way of pairing a phone this window offers
      * turned off, so Connect a phone is left out.
@@ -70,7 +76,7 @@ export interface HappyAgentMobileSettingsProps {
     readonly pairingOptions?: ReactNode;
     /**
      * The direct connection's section body (MobileDirectConnectionSection);
-     * absent while that experiment is off, which leaves the section out.
+     * absent leaves the section out.
      */
     readonly direct?: ReactNode;
 }
@@ -111,16 +117,24 @@ export function HappyAgentMobileSettings(props: HappyAgentMobileSettingsProps) {
                             control={
                                 <Button
                                     disabled={blocked}
-                                    icon="link"
+                                    icon={props.pairingDirectOnly ? "mobile" : "link"}
                                     onClick={props.onPairingOptionsOpen}
                                     size="small"
                                     variant="primary"
                                 >
-                                    Connect phone
+                                    {props.pairingDirectOnly ? "Show QR code" : "Connect phone"}
                                 </Button>
                             }
-                            description="Shows the relay code, or the direct one as an experiment"
-                            label="Connect a phone"
+                            description={
+                                props.pairingDirectOnly
+                                    ? "For the latest Happy phone app. Your Happy server link stays."
+                                    : "Scan a code with Happy on your phone"
+                            }
+                            label={
+                                props.pairingDirectOnly
+                                    ? "Connect a phone directly"
+                                    : "Connect a phone"
+                            }
                         />
                     ))
                 )}
@@ -175,7 +189,7 @@ export function HappyAgentMobileSettings(props: HappyAgentMobileSettingsProps) {
                                 ? "Phones on your Happy account reach this computer from anywhere"
                                 : statusDetail(mobile.description, props)
                         }
-                        label="Happy relay"
+                        label="Happy server"
                     />
                 ) : null}
                 {props.direct}

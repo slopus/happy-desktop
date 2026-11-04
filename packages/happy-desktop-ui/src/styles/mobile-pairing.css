@@ -460,6 +460,24 @@
     align-self: center;
 }
 
+/* "Older phone app? Use Relay": its row is held under Relay too, so the code never moves. */
+.happy-mobile-pairing-options__fallback {
+    display: flex;
+    align-items: center;
+    align-self: center;
+    gap: 4px;
+}
+
+.happy-mobile-pairing-options__fallback[data-hidden] {
+    visibility: hidden;
+}
+
+.happy-mobile-pairing-options__fallback-text {
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+}
+
 .happy-mobile-pairing-options__slot {
     display: flex;
     flex: 1 1 0;

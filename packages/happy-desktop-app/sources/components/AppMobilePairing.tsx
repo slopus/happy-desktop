@@ -105,12 +105,13 @@ export function appMobileRelayFromIntegration(
 export interface AppMobilePairingProps {
     readonly layout: MobilePairingOptionsLayout;
     /**
-     * The method shown under the Relay | Direct control. Direct is the direct
-     * phone connection's experiment; while it is off, the page shows Relay and
-     * the direct connector is not followed. Phones already paired directly
-     * keep working either way.
+     * The method shown under the Relay | Direct control: the person's choice,
+     * else the rollout's default. With Relay shown the direct connector is not
+     * followed. Phones already paired directly keep working either way.
      */
     readonly method: MobilePairingMethod;
+    /** The computer is already linked through the Happy server: only the direct code is offered. */
+    readonly directOnly?: boolean;
     onMethodSelect(method: MobilePairingMethod): void;
     readonly relay: MobileRelayPairingState;
     readonly relayStarting?: boolean;
@@ -139,8 +140,13 @@ export function appMobilePairingOptions(
     const { connector } = props.snapshot;
     const relayOff = props.relay.kind === "disabled";
     const directOff = appMobileDirectOff(connector);
-    const method: MobilePairingMethod = relayOff ? "direct" : directOff ? "relay" : props.method;
-    const shown = { ...props, method, methodFixed: relayOff || directOff };
+    const method: MobilePairingMethod =
+        relayOff || props.directOnly ? "direct" : directOff ? "relay" : props.method;
+    const shown = {
+        ...props,
+        method,
+        methodFixed: relayOff || directOff || props.directOnly === true,
+    };
     if (method === "relay")
         return {
             view: <AppMobilePairingOptions {...shown} />,

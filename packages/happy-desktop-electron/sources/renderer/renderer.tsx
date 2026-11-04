@@ -33,6 +33,7 @@ import {
     type KeepAwakeStore,
     commandPaletteStoreCreate,
     experimentsStoreCreate,
+    mobilePairingMethodStoreOwnedCreate,
     projectsVisibilityStoreOwnedCreate,
     statusBarStoreCreate,
     gptLiveStoreCreate,
@@ -60,6 +61,7 @@ import {
     type HappyAgentCompletionSound,
     type CommandPaletteStore,
     type ExperimentsStore,
+    type MobilePairingMethodStore,
     type ProjectsVisibilityStore,
     type StatusBarStore,
     type UsageAnalyticsStore,
@@ -150,6 +152,7 @@ import { desktopMetricsStoreCreate } from "./desktopMetricsStore";
 import { desktopDaemonStoreCreate } from "./desktopDaemonStore";
 import { desktopAgentReleaseNotesStoreCreate } from "./desktopAgentReleaseNotesStore";
 import { desktopExperimentsPersistence } from "./desktopExperiments";
+import { desktopMobilePairingMethodPersistence } from "./desktopMobilePairingMethod";
 import {
     desktopProjectsVisibilityPersistence,
     desktopProjectsVisibilityLegacyConsume,
@@ -410,6 +413,7 @@ function HappyAgentBoundary(props: {
     artifactPage?: HtmlPreviewRenderer;
     mediaWindow?: MediaWindowOpener;
     experiments: ExperimentsStore;
+    mobilePairingMethod: MobilePairingMethodStore;
     projectsVisibility: ProjectsVisibilityStore;
     statusBar: StatusBarStore;
     keepAwake: KeepAwakeStore;
@@ -465,6 +469,7 @@ function HappyAgentBoundary(props: {
                       }
                     : {}),
                 experiments: props.experiments,
+                mobilePairingMethod: props.mobilePairingMethod,
                 projectsVisibility: props.projectsVisibility,
                 statusBar: props.statusBar,
                 gptLive: props.gptLive,
@@ -501,7 +506,7 @@ function DesktopOnboardingGate(props: {
     bridge: HappyDesktopBridge;
     children: ReactNode;
     clock: HappyAgentClockStore;
-    experiments: ExperimentsStore;
+    mobilePairingMethod: MobilePairingMethodStore;
     platform: "desktop" | "web";
     store: LocalOnboardingStore;
 }) {
@@ -511,10 +516,10 @@ function DesktopOnboardingGate(props: {
         props.appearance.get,
         props.appearance.get,
     );
-    const experiments = useSyncExternalStore(
-        props.experiments.subscribe,
-        props.experiments.get,
-        props.experiments.get,
+    const { method } = useSyncExternalStore(
+        props.mobilePairingMethod.subscribe,
+        props.mobilePairingMethod.get,
+        props.mobilePairingMethod.get,
     );
     const view = snapshot.onboarding ? localOnboardingView(snapshot) : undefined;
     const linkPhase =
@@ -522,16 +527,14 @@ function DesktopOnboardingGate(props: {
             ? view.step.phase
             : undefined;
     // Linking offers both methods; the direct connector is read only while Direct shows.
-    // Direct is an experiment: off, linking shows Relay.
-    const mobileDirect = experiments.mobileDirect;
     const linking = linkPhase !== undefined || view?.kind === "happy-mobile-pairing";
     const pairingOptions = useAppMobilePairingOptions({
         layout: "setup",
-        method: mobileDirect ? "direct" : "relay",
-        // Choosing Direct turns its experiment on, and asks for a direct code.
-        onMethodSelect: (method) => {
-            if (method === "direct") props.store.happyMobileDirect().pairingOpen();
-            props.experiments.featureUpdate("mobileDirect", method === "direct", "onboarding");
+        method,
+        // Choosing Direct asks for a direct code.
+        onMethodSelect: (next) => {
+            if (next === "direct") props.store.happyMobileDirect().pairingOpen();
+            props.mobilePairingMethod.methodSelect(next, "onboarding");
         },
         relay: linkPhase
             ? appMobileRelayFromLink(linkPhase)
@@ -540,7 +543,7 @@ function DesktopOnboardingGate(props: {
               : { kind: "starting" },
         onRelayRetry: () => props.store.happyMobileConnect(),
         direct:
-            linking && mobileDirect
+            linking && method === "direct"
                 ? props.store.happyMobileDirect()
                 : happyAgentMobileConnectorStoreNoop,
         clock: props.clock,
@@ -632,6 +635,7 @@ interface DesktopRendererProps {
     mediaWindow?: MediaWindowOpener;
     bridge: HappyDesktopBridge;
     experiments: ExperimentsStore;
+    mobilePairingMethod: MobilePairingMethodStore;
     projectsVisibility: ProjectsVisibilityStore;
     statusBar: StatusBarStore;
     gptLive: GptLiveStore;
@@ -834,6 +838,7 @@ function DesktopScreens(props: DesktopRendererProps) {
                                     commandPalette={ui.commandPalette}
                                     connectionOnboarding
                                     experiments={props.experiments}
+                                    mobilePairingMethod={props.mobilePairingMethod}
                                     projectsVisibility={props.projectsVisibility}
                                     statusBar={props.statusBar}
                                     gptLive={props.gptLive}
@@ -892,7 +897,7 @@ function DesktopLocalScreens(props: DesktopRendererProps) {
                 appearance={props.appearance}
                 bridge={props.bridge}
                 clock={onboardingClock}
-                experiments={props.experiments}
+                mobilePairingMethod={props.mobilePairingMethod}
                 platform={props.platform}
                 store={props.onboarding}
             >
@@ -1068,6 +1073,7 @@ function DesktopRuntimeContent(
             artifactPage={props.artifactPage}
             mediaWindow={props.mediaWindow}
             experiments={props.experiments}
+            mobilePairingMethod={props.mobilePairingMethod}
             projectsVisibility={props.projectsVisibility}
             statusBar={props.statusBar}
             keepAwake={props.keepAwake}
@@ -1370,9 +1376,14 @@ if (mediaPreviewBridge) {
         // Whether this window offers the features that are not finished yet. It
         // is kept beside the arrangement above and for the same reason: it says
         // what this installation shows, so no machine has a say in it.
-        const experiments = experimentsStoreCreate(desktopExperimentsPersistence(), (output) =>
-            analytics.experimentUpdated(output),
-        );
+        const experiments = experimentsStoreCreate(desktopExperimentsPersistence());
+        // Which way a phone pairs first: the person's pick, else what the
+        // direct-connection rollout says once PostHog answers (Relay until then).
+        const { store: mobilePairingMethod, defaultMethodReceived: mobilePairingDefaultReceived } =
+            mobilePairingMethodStoreOwnedCreate({
+                persistence: desktopMobilePairingMethodPersistence(),
+                onOutput: (output) => analytics.mobilePairingMethodSelected(output),
+            });
         // Each authenticated daemon owns project visibility, like bot attention.
         const { store: projectsVisibility, connectionFollow: projectsVisibilityFollow } =
             projectsVisibilityStoreOwnedCreate({
@@ -1490,7 +1501,7 @@ if (mediaPreviewBridge) {
             activity: (happyAgentId, activity) => analytics.activity(happyAgentId, activity),
             // Reported through `analytics`, which is made once the directory exists.
             mobilePairingObserve: (happyAgentId) =>
-                mobilePairingObserveCreate(experiments, (event, properties) =>
+                mobilePairingObserveCreate(mobilePairingMethod, (event, properties) =>
                     analytics.mobilePairingReport(happyAgentId)(event, properties),
                 ),
             subtasksForget: (happyAgentId, removed, open) =>
@@ -1560,6 +1571,11 @@ if (mediaPreviewBridge) {
             ...(desktopBridge.system ? { system: desktopBridge.system } : {}),
         });
         appDisposers.push(analytics.dispose);
+        appDisposers.push(
+            analytics.flagFollow("direct-connection-migration-new-users", (enabled) =>
+                mobilePairingDefaultReceived(enabled ? "direct" : "relay"),
+            ),
+        );
         analytics.appOpened();
         const windowState = windowStateStoreCreate(desktopBridge);
         const gptLive = gptLiveStoreCreate(
@@ -1838,6 +1854,7 @@ if (mediaPreviewBridge) {
                             browserLocal ? undefined : desktopMediaWindowOpen(desktopBridge)
                         }
                         experiments={experiments}
+                        mobilePairingMethod={mobilePairingMethod}
                         projectsVisibility={projectsVisibility}
                         statusBar={statusBar}
                         gptLive={gptLive}

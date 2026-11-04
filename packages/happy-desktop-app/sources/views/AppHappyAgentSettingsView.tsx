@@ -6,6 +6,7 @@ import type {
     HappyAgentChangeTiersSnapshot,
     HappyAgentChangeTiersStore,
     ExperimentsStore,
+    MobilePairingMethodStore,
     ProjectsVisibilityStore,
     GptLiveStore,
     HappyAgentInstructionsSnapshot,
@@ -35,6 +36,7 @@ import {
     happyAgentServiceName,
     happyAgentThinkingLabel,
     experimentsStoreNoop,
+    mobilePairingMethodStoreNoop,
     projectsVisibilityStoreNoop,
     projectsVisibilityConnection,
     gptLiveStoreNoop,
@@ -456,6 +458,8 @@ export interface AppHappyAgentSettingsViewProps {
      * in a host that remembers no such choice, which withholds them.
      */
     experiments?: ExperimentsStore;
+    /** Which way Mobile Access offers a phone first; absent, Relay. */
+    mobilePairingMethod?: MobilePairingMethodStore;
     /**
      * Whether the primary connection hides its Projects section. Absent in a
      * host that remembers no such choice, which offers no control for it.
@@ -513,6 +517,12 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
         experimentsStore.subscribe,
         experimentsStore.get,
         experimentsStore.get,
+    );
+    const methodStore = props.mobilePairingMethod ?? mobilePairingMethodStoreNoop;
+    const { method: pairingMethod } = useSyncExternalStore(
+        methodStore.subscribe,
+        methodStore.get,
+        methodStore.get,
     );
     const projectsVisibilityStore = props.projectsVisibility ?? projectsVisibilityStoreNoop;
     const projectsVisibility = useSyncExternalStore(
@@ -632,35 +642,44 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
         happyIntegrationStore.get,
         happyIntegrationStore.get,
     );
+    // A computer linked through the Happy server already reaches every phone
+    // on the account, so it offers only the direct code, and its link stays.
+    const relayLinked = happyIntegration.configured === true;
     // Phones paired directly, and the direct half of every pairing this
     // category opens. Its pairing code is secret, so Dev Tools never prints it.
-    // It is an experiment: until the person turns it on, Mobile Access shows
-    // Relay and does not follow the direct connector at all.
-    const mobileDirect = experiments.mobileDirect;
+    // While a pairing page shows Relay the connector is not followed, so no
+    // direct code is made behind it.
+    const relayPageShown =
+        pairingMethod === "relay" &&
+        !relayLinked &&
+        (happyIntegration.pairingOpen || happyIntegration.setup !== undefined);
     const mobileConnectorOwned =
         section === "mobile-access" ? host?.session?.mobileConnector?.() : undefined;
     const mobileConnectorStore =
-        (mobileDirect ? mobileConnectorOwned : undefined) ?? happyAgentMobileConnectorStoreNoop;
-    const pairingMethod = mobileDirect ? "direct" : "relay";
-    // Choosing Direct is turning its experiment on, and Relay turning it off.
+        (relayPageShown ? undefined : mobileConnectorOwned) ?? happyAgentMobileConnectorStoreNoop;
     // A page that opened on Relay asks for a direct code as Direct shows.
     const pairingMethodSelect = (method: "relay" | "direct") => {
         if (method === "direct") mobileConnectorOwned?.pairingOpen();
-        experimentsStore.featureUpdate("mobileDirect", method === "direct", "mobile_access");
+        methodStore.methodSelect(method, "mobile_access");
     };
     const mobileConnector = useSyncExternalStore(
         mobileConnectorStore.subscribe,
         mobileConnectorStore.get,
         mobileConnectorStore.get,
     );
-    // A way of pairing this Happy Agent reports off is not offered, and Direct
-    // also waits for its experiment. The local desktop pairs through the
-    // guided setup, which goes through the relay, so with the relay off it has
-    // no way left. With none, Connect a phone is left out.
+    // A way of pairing this Happy Agent reports off is not offered. The local
+    // desktop pairs through the guided setup, which goes through the relay, so
+    // with the relay off it has no way left. With none, Connect a phone is left out.
     const relayOff = happyIntegration.status === "disabled";
     const directOff = appMobileDirectOff(mobileConnector.connector);
-    const pairingOff =
-        relayOff && (!mobileDirect || directOff || happyIntegrationStore.mobileSetup !== undefined);
+    const pairingOff = relayOff && (directOff || happyIntegrationStore.mobileSetup !== undefined);
+    // Connect a phone directly: only the direct code, for a linked computer.
+    const directOnly = relayLinked && !directOff;
+    const directOnlyOpen =
+        directOnly &&
+        mobileConnector.pairingOpen &&
+        !happyIntegration.pairingOpen &&
+        happyIntegration.setup === undefined;
     // Subscribing is what starts the read, so the instructions are asked for
     // only while this window is open, and only once however often it is.
     const instructionsStore = host?.session?.instructions;
@@ -1037,12 +1056,32 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                         if (happyAgentOnline())
                             happyIntegrationStore.happyIntegrationDisconnectRequest();
                     }}
+                    pairingDirectOnly={directOnly}
                     onPairingOptionsOpen={() => {
                         if (!happyAgentOnline() || pairingOff) return;
+                        // A linked computer's relay link is left exactly as it is.
+                        if (directOnly) mobileConnectorOwned?.pairingOpen();
                         // The local desktop walks through getting the app first.
-                        if (mobileSetup) mobileSetup.start();
+                        else if (mobileSetup) mobileSetup.start();
                         else happyIntegrationStore.happyIntegrationPairingOpen();
                     }}
+                    {...(directOnlyOpen && sessionClock
+                        ? {
+                              pairingOptions: appMobilePairingOptions({
+                                  layout: "settings",
+                                  method: "direct",
+                                  directOnly: true,
+                                  onMethodSelect: pairingMethodSelect,
+                                  relay: { kind: "connected" },
+                                  direct: mobileConnectorStore,
+                                  snapshot: mobileConnector,
+                                  clock: sessionClock,
+                                  online: happyAgentOnline,
+                                  onClose: () => mobileConnectorOwned?.pairingClose(),
+                                  ...(unavailable === undefined ? {} : { unavailable }),
+                              }).view,
+                          }
+                        : {})}
                     {...(happyIntegration.pairingOpen && sessionClock
                         ? {
                               pairingOptions: appMobilePairingOptions({
@@ -1062,9 +1101,9 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                           }
                         : {})}
                     pairingOff={pairingOff}
-                    // The direct connection is an experiment: off, or reported
-                    // off by the Happy Agent, its section is left out.
-                    {...(mobileDirect && !directOff
+                    // Reported off by the Happy Agent, or not followed behind a
+                    // Relay page, the direct section is left out.
+                    {...(!directOff && !relayPageShown
                         ? {
                               direct: sessionClock ? (
                                   <AppMobileDirectSection

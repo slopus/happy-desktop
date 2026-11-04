@@ -716,6 +716,7 @@ export function HappyAgentSettingsBlueprintPage() {
                         direct={directSectionSpecimen(direct.paired)}
                         onDisconnect={noop}
                         onPairingOptionsOpen={noop}
+                        pairingDirectOnly
                         status="connected"
                     />
                 </HappyAgentSettingsShell>

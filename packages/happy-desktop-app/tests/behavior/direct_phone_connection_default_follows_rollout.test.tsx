@@ -2,13 +2,14 @@ import { act, fireEvent, render } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
 import {
     EXPERIMENTAL_FEATURES,
-    experimentsStoreCreate,
     happyAgentMobileConnectorStoreCreate,
     happyAgentMobileConnectorStoreNoop,
-    type ExperimentsOutput,
+    mobilePairingMethodStoreOwnedCreate,
     type HappyAgentClockStore,
     type HappyAgentMobileConnectorSnapshot,
     type HappyAgentMobileConnectorStoreDeps,
+    type MobilePairingMethodDocument,
+    type MobilePairingMethodOutput,
 } from "happy-desktop-state";
 import {
     desktopMobilePairingOptionsCopy,
@@ -18,13 +19,13 @@ import {
 import { appMobilePairingOptions } from "../../sources/components/AppMobilePairing";
 
 /*
- * Pairing a phone directly is an experiment. Onboarding and Mobile Access show
- * a Relay | Direct control at the top, with Direct tagged Experimental; it
- * shows Relay until the person chooses Direct, which is the same switch as
- * "Direct phone connection" in Settings › Experiments. Relay shows only the
- * relay code and nothing asks the daemon for a direct pairing; Direct shows
- * the direct code and emoji step in the same place. Off, Mobile Access also
- * leaves out the paired-phones section.
+ * Onboarding and Mobile Access show a Relay | Direct control at the top. Which
+ * one is selected first is the person's own choice, else the direct-connection
+ * rollout's default, which is Relay until it says Direct. Relay shows only the
+ * relay code and nothing asks the daemon for a direct pairing; Direct shows the
+ * direct code and emoji step in the same place, with a way back to Relay for
+ * older phone apps. A computer already linked through the Happy server offers
+ * only the direct code.
  */
 
 const clock: HappyAgentClockStore = {
@@ -95,34 +96,43 @@ function options(
     });
 }
 
-it("is a device experiment, off until the person turns it on, and says where it changed", () => {
-    expect(EXPERIMENTAL_FEATURES).toContainEqual({
-        id: "mobileDirect",
-        label: "Direct phone connection",
+it("selects Relay until the rollout says Direct, and a choice the person made wins", () => {
+    expect(EXPERIMENTAL_FEATURES.map((feature) => feature.id)).not.toContain("mobileDirect");
+    let saved: unknown;
+    const outputs: MobilePairingMethodOutput[] = [];
+    const persistence = {
+        read: () => saved,
+        write: (document: MobilePairingMethodDocument) => {
+            saved = document;
+        },
+    };
+    const fresh = mobilePairingMethodStoreOwnedCreate({
+        persistence,
+        onOutput: (output) => outputs.push(output),
     });
-    const written: unknown[] = [];
-    const outputs: ExperimentsOutput[] = [];
-    const store = experimentsStoreCreate(
-        { read: () => undefined, write: (d) => written.push(d) },
-        (output) => outputs.push(output),
-    );
-    expect(store.get().mobileDirect).toBe(false);
-    // An old single switch never turns it on.
-    expect(
-        experimentsStoreCreate({
-            read: () => ({ experimentalFeaturesEnabled: true }),
-            write() {},
-        }).get().mobileDirect,
-    ).toBe(false);
-    store.featureUpdate("mobileDirect", true, "onboarding");
-    expect(store.get().mobileDirect).toBe(true);
-    expect(written.at(-1)).toMatchObject({ mobileDirect: true });
-    // Choosing what is already chosen changes and reports nothing.
-    store.featureUpdate("mobileDirect", true, "mobile_access");
-    store.featureUpdate("mobileDirect", false, "experiments");
+    expect(fresh.store.get().method).toBe("relay");
+    fresh.defaultMethodReceived("direct");
+    expect(fresh.store.get().method).toBe("direct");
+    fresh.defaultMethodReceived("relay");
+    expect(fresh.store.get().method).toBe("relay");
+    expect(saved).toBeUndefined();
+    fresh.store.methodSelect("relay", "onboarding");
+    expect(saved).toEqual({ chosen: "relay" });
+    // The choice matched what showed, so nothing changed for the page.
+    expect(outputs).toEqual([]);
+    fresh.defaultMethodReceived("direct");
+    expect(fresh.store.get().method).toBe("relay");
+
+    const later = mobilePairingMethodStoreOwnedCreate({
+        persistence,
+        onOutput: (output) => outputs.push(output),
+    });
+    later.defaultMethodReceived("direct");
+    expect(later.store.get().method).toBe("relay");
+    later.store.methodSelect("direct", "mobile_access");
+    expect(later.store.get().method).toBe("direct");
     expect(outputs).toEqual([
-        { type: "featureUpdated", feature: "mobileDirect", enabled: true, source: "onboarding" },
-        { type: "featureUpdated", feature: "mobileDirect", enabled: false, source: "experiments" },
+        { type: "methodSelected", from: "relay", to: "direct", surface: "mobile_access" },
     ]);
 });
 
@@ -140,7 +150,12 @@ it.each(["setup", "settings"] as const)(
         expect(slots(view.container)).toEqual(["relay"]);
         expect(segment(view.container, "relay").getAttribute("aria-pressed")).toBe("true");
         expect(segment(view.container, "direct").getAttribute("aria-pressed")).toBe("false");
-        expect(segment(view.container, "direct").textContent).toBe("DirectExperimental");
+        expect(segment(view.container, "direct").textContent).toBe("Direct");
+        expect(
+            view.container
+                .querySelector('[data-happy-desktop-ui="mobile-pairing-options-fallback"]')
+                ?.hasAttribute("data-hidden"),
+        ).toBe(true);
         expect(view.getByLabelText("QR code to pair through Happy relay")).toBeTruthy();
         expect(view.queryByLabelText("QR code to connect a phone directly")).toBeNull();
         // The chosen method again is no choice; Direct is.
@@ -171,26 +186,54 @@ it.each(["setup", "settings"] as const)(
         expect(view.getByTestId("mobile-pairing-method")).toBe(control);
         expect(view.container.querySelector(".happy-mobile-pairing-options__slots")).toBe(slotsBox);
         expect(view.queryByLabelText("QR code to pair through Happy relay")).toBeNull();
+        expect(view.getByText("Older phone app?")).toBeTruthy();
         fireEvent.click(segment(view.container, "relay"));
-        expect(selected).toEqual(["relay"]);
+        fireEvent.click(view.getByTestId("mobile-pairing-use-relay"));
+        expect(selected).toEqual(["relay", "relay"]);
         view.unmount();
     },
 );
 
-it("leaves the direct section out of Mobile Access while the experiment is off", () => {
-    const base = {
-        configured: false,
-        onDisconnect: () => undefined,
-        onPairingOptionsOpen: () => undefined,
-        status: "disconnected",
-    } as const;
-    const off = render(<HappyAgentMobileSettings {...base} />);
-    expect(off.getByText("Shows the relay code, or the direct one as an experiment")).toBeTruthy();
-    expect(off.container.textContent).not.toContain("Paired phones");
-    off.unmount();
-    const on = render(<HappyAgentMobileSettings {...base} direct={<p>Paired phones</p>} />);
-    expect(on.getByText("Paired phones")).toBeTruthy();
-    on.unmount();
+it("offers a linked computer only the direct code, without touching its Happy server link", () => {
+    const opened = vi.fn();
+    const linked = render(
+        <HappyAgentMobileSettings
+            configured
+            onDisconnect={() => undefined}
+            onPairingOptionsOpen={opened}
+            pairingDirectOnly
+            status="connected"
+        />,
+    );
+    expect(linked.getByText("Connect a phone directly")).toBeTruthy();
+    expect(linked.getByText("Happy server")).toBeTruthy();
+    fireEvent.click(linked.getByRole("button", { name: "Show QR code" }));
+    expect(opened).toHaveBeenCalledTimes(1);
+    linked.unmount();
+
+    const card = render(
+        <>
+            {
+                appMobilePairingOptions({
+                    layout: "settings",
+                    method: "relay",
+                    directOnly: true,
+                    onMethodSelect: () => undefined,
+                    relay: { kind: "connected" },
+                    direct: happyAgentMobileConnectorStoreNoop,
+                    snapshot: waiting,
+                    clock,
+                    online: () => true,
+                    onClose: () => undefined,
+                }).view
+            }
+        </>,
+    );
+    expect(slots(card.container)).toEqual(["direct"]);
+    expect(card.queryByTestId("mobile-pairing-method")).toBeNull();
+    expect(card.queryByText("Older phone app?")).toBeNull();
+    expect(card.getByLabelText("QR code to connect a phone directly")).toBeTruthy();
+    card.unmount();
 });
 
 it("makes no direct code for a pairing opened while nothing shows the connector", async () => {
@@ -238,7 +281,7 @@ it("makes no direct code for a pairing opened while nothing shows the connector"
         expect(store.get().connector.kind).toBe("ready");
         leave();
         // A pairing opened with no surface on screen, as Mobile Access opens
-        // one with the experiment off, asks the daemon for nothing.
+        // one behind Relay, asks the daemon for nothing.
         store.pairingOpen();
         await act(async () => {
             await new Promise((resolve) => setTimeout(resolve, 10));
