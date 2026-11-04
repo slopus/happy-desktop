@@ -3120,6 +3120,7 @@ export function MessageList(props: MessageListProps) {
                     geometryFollowInset.current,
             );
         }
+        if (document.body.dataset.fuzzTrace === "1") console.info("COMMIT_TRACE", JSON.stringify({ following: following.current, escaped: escapedFromFollow.current, items: items.length, top: element.scrollTop, reader: readerScrollTop.current, height: element.scrollHeight, inset: geometryFollowInset.current, hold: followSentHold.current }));
         if (!following.current) pendingFollowerTop.current = undefined;
         if (!initialPositionApplied.current) {
             initialPositionApplied.current = true;

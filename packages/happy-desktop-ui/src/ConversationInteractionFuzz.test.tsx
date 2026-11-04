@@ -2375,6 +2375,7 @@ it("replays the reduced bottom-follow failure", async () => {
     try {
         await h.view.ready();
         await settle();
+        document.body.dataset.fuzzTrace = "1";
         h.switch(2);
         await settle();
         const actions: Action[] = [
