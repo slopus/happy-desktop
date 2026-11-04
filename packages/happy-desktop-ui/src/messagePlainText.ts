@@ -19,3 +19,6 @@ export function messageBodyFormat(sender: ConversationAuthor | undefined): Messa
 export function messagePlainTextNormalize(text: string): string {
     return text.replace(/\r\n?/gu, "\n");
 }
+
+/** The labels of a compact plain body's fold control, shared with the row-height model. */
+export const MESSAGE_PLAIN_FOLD_LABELS = { closed: "Show full", open: "Show less" } as const;

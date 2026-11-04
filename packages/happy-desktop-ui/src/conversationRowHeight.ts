@@ -45,7 +45,11 @@ import {
     messageReferencesSignature,
     type MessageReferences,
 } from "./messageReferences";
-import { messageBodyFormat, type MessageBodyFormat } from "./messagePlainText";
+import {
+    MESSAGE_PLAIN_FOLD_LABELS,
+    messageBodyFormat,
+    type MessageBodyFormat,
+} from "./messagePlainText";
 import {
     INLINE_PAGE_TITLE_HEIGHT,
     inlinePageHeight,
@@ -712,6 +716,21 @@ function messagePlainBodyHeight(input: MessageRowHeightInput): number {
         input.trailingExtraWidth,
     );
 }
+/**
+ * The measure a folded plain body wraps at. Its fold control is a no-wrap mono
+ * link inside the bubble, so a bubble narrower than the link widens to it, up
+ * to the bubble cap, and the text wraps at that width.
+ */
+function messageFoldedBodyMeasure(input: MessageRowHeightInput): number {
+    const measure = messageBodyMeasure(input.width, input.treatment, input.time, input.textCache);
+    if (input.treatment === "agent") return measure;
+    const control = Math.max(
+        monoTextNaturalWidth(MESSAGE_PLAIN_FOLD_LABELS.closed, 11, input.textCache),
+        monoTextNaturalWidth(MESSAGE_PLAIN_FOLD_LABELS.open, 11, input.textCache),
+    );
+    const cap = messageContentMeasure(input.width, input.treatment) * BUBBLE_CAP - BUBBLE_PADDING;
+    return Math.max(measure, Math.min(control, cap));
+}
 export function messageRowHeight(input: MessageRowHeightInput): number {
     const [leading, tight] = MESSAGE_CHROME[input.surface][input.treatment];
     const chrome = input.grouped ? tight : leading;
@@ -719,11 +738,18 @@ export function messageRowHeight(input: MessageRowHeightInput): number {
     const measure = messageBodyMeasure(input.width, input.treatment, input.time, input.textCache);
     if (input.bodyFormat === "plain") {
         const full = messagePlainBodyHeight(input);
+        if (input.bodyExpanded === undefined || full <= MESSAGE_PREVIEW_HEIGHT)
+            return chrome + full;
+        const folded = plainTextHeight(
+            messageReferencesPlainText(input.body, input.references),
+            messageFoldedBodyMeasure(input),
+            input.textCache,
+            input.trailingExtraWidth,
+        );
         return (
             chrome +
-            (input.bodyExpanded !== undefined && full > MESSAGE_PREVIEW_HEIGHT
-                ? (input.bodyExpanded ? full : MESSAGE_PREVIEW_HEIGHT) + MESSAGE_FOLD_CONTROL_HEIGHT
-                : full)
+            (input.bodyExpanded ? folded : Math.min(folded, MESSAGE_PREVIEW_HEIGHT)) +
+            MESSAGE_FOLD_CONTROL_HEIGHT
         );
     }
     /* Grouped incoming/agent rows glue their hover time to the final word with
