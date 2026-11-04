@@ -1135,9 +1135,8 @@ it("centers painted ink optically in every Message text-in-a-box part", async ()
     const authorInk = await author.visibleMetrics();
     expect(authorInk.pixelCount, "author pixels").toBeGreaterThan(0);
     const authorRowY = author.element.getBoundingClientRect().y - metaRect.y + authorInk.center.y;
-    expect(Math.abs(authorRowY - metaRect.height / 2), "author optical y").toBeLessThanOrEqual(
-        0.75,
-    );
+    const authorDrift = authorRowY - metaRect.height / 2;
+    expect(Math.abs(authorDrift), `author optical y drift ${String(authorDrift)}`).toBeLessThanOrEqual(0.75);
     /* The separator is independently measurable, so this probe isolates the
        timestamp's glyph ink. */
     const hoverMeta = view.$('[data-testid="o1"] [data-happy-desktop-ui="message-hover-meta"]');
