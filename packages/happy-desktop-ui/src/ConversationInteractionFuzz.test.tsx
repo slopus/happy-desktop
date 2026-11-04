@@ -1275,7 +1275,7 @@ async function act(h: Harness, action: Action, pick: ReturnType<typeof random>, 
             );
             break;
         case "send": {
-            h.anchorSet();
+            // Sending from history does not move the reader's selected point.
             const count = 1 + pick(3);
             for (let i = 0; i < count; i++)
                 chat.extras = [...chat.extras, own(`${id}:${i}`, "sending")];
