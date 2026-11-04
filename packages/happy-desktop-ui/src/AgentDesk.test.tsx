@@ -442,7 +442,7 @@ it("holds AgentDesk geometry, colors, and typography in the 340px shell panel", 
         expect(runTitlePart.computedStyle("translate")).toBe("none");
         expect(rowTitlePart.computedStyle("margin-top")).toBe("-1px");
     } else {
-        expect(runTitlePart.computedStyle("margin-top")).toBe("-1px");
+        expect(runTitlePart.computedStyle("margin-top")).toBe("-0.75px");
         expect(rowTitlePart.computedStyle("margin-top")).toBe("-0.5px");
     }
 
