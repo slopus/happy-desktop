@@ -171,6 +171,25 @@ async function memberPrepare(client, member) {
     return (await client.getProfile()).profile;
 }
 
+/**
+ * Every project wears its icon from the world's definition, also on a world
+ * seeded before that icon changed.
+ */
+async function projectPicturesSet(client, projectIds) {
+    for (const repository of [world.repository, ...world.backgroundRepositories]) {
+        const id = projectIds[repository.name];
+        const { project } = await client.getProject(id);
+        await client.setProjectAvatar(
+            id,
+            {
+                contentType: "image/png",
+                data: await readFile(join(import.meta.dirname, "../..", repository.avatar)),
+            },
+            { ifMatch: project.version },
+        );
+    }
+}
+
 /** The team's bots, made once with their real IDs; faces from the real installation where they have one. */
 async function botsPrepare(client) {
     for (const entry of world.bots) {
@@ -280,6 +299,44 @@ async function liveTaskPrepare(steveClient) {
         180000,
     );
     return task;
+}
+
+/**
+ * Each member's sidebar as world.sidebars has it, through their own client:
+ * the tasks they left, their order, and the bots they hid, with the same
+ * setting the apps write when a person hides a bot. Steve's live task is new
+ * each take, so the order is set again each take.
+ */
+async function sidebarsArrange(clients) {
+    for (const [key, sidebar] of Object.entries(world.sidebars)) {
+        const client = clients[key];
+        const { tasks, memberships } = await client.listTasks();
+        const named = (name) => {
+            const task = tasks.find((entry) => entry.name === name && entry.status === "active");
+            if (!task) throw new Error(`${key}'s sidebar names no active task ${name}.`);
+            return task;
+        };
+        for (const name of sidebar.left ?? []) {
+            const task = named(name);
+            if (memberships.some((membership) => membership.taskId === task.id))
+                await client.leaveTask(task.id, { mutationId: randomUUID() });
+        }
+        let afterId = null;
+        for (const name of sidebar.order ?? []) {
+            const task = named(name);
+            await client.reorderTask(task.id, { afterId, mutationId: randomUUID() });
+            afterId = task.id;
+        }
+        const { bots } = await client.listBots();
+        for (const username of sidebar.hiddenBots ?? []) {
+            const bot = bots.find((entry) => entry.username === username);
+            if (!bot) throw new Error(`${key}'s sidebar hides no bot ${username}.`);
+            await client.saveUserSetting(`happy-desktop.bot.${bot.id}`, {
+                value: { muted: false, hidden: true },
+                mutationId: randomUUID(),
+            });
+        }
+    }
 }
 
 /** Earlier takes' filmed tasks leave the sidebar before the next one. */
@@ -417,13 +474,14 @@ export default {
             await memberPrepare(steve, world.team.members[1]),
         ];
         filmed.profiles = { kirill: kirillProfile, steve: steveProfile };
-        if (await exists(world.assetPath("happy-core.png")))
-            await nodeAvatarSet(kirill, "happy-core.png", world.seedMode);
+        await nodeAvatarSet(kirill, world.team.picture, world.seedMode);
+        await projectPicturesSet(kirill, gym.world.projectIds);
         await botsPrepare(kirill);
         await doneTasksPrepare({ kirill, steve });
         await rehearsalsArchive(kirill);
         const live = await liveTaskPrepare(steve);
         filmed.liveTaskId = live.id;
+        await sidebarsArrange({ kirill, steve });
         // Steve's subtasks are already under way when the take opens.
         const ticker = liveTicker();
         while (Object.values(ticker.step).some((step) => step <= 2))
@@ -504,7 +562,6 @@ export default {
                 .filter({ hasText: label })
                 .first();
         const pictures = async () => ({
-            "happy-core": await pictureRect(core),
             "chief-of-staff": await pictureRect(shownRow("Chief of Staff")),
             "disk-sweeper": await pictureRect(shownRow("Disk Sweeper")),
         });
@@ -580,7 +637,12 @@ export default {
             await beats.beat("typing");
             cue("typing-started", demo, phone);
             await demo.type(world.prompt, { perKey: 52, after: 0 });
-            await demo.hold(450);
+            // Steve's phone rises beside the window on his own sidebar before
+            // Kirill sends, so the task is seen arriving there.
+            await demo.hold(150);
+            await beats.beat("phone-enter");
+            cue("phone-enter", demo, phone);
+            await demo.hold(900);
             await beats.beat("sent");
             await demo.press("Enter", { badge: 0, before: 0, after: 150 });
             cue("sent", demo, phone);
@@ -589,9 +651,6 @@ export default {
             const row = sidebarRow(page, world.taskTitle);
             await until(demo, () => row.isVisible(), "the new task's row", 20000, 50);
             cue("task-created", demo, phone, { rect: await row.boundingBox() });
-            await demo.hold(350);
-            await beats.beat("phone-enter");
-            cue("phone-enter", demo, phone);
             await until(demo, () => world.hasReached("read-bars"), "the first read", 20000);
             await demo.hold(1400);
             await beats.beat("read-bars");
@@ -616,12 +675,16 @@ export default {
                 "the reply",
                 20000,
             );
-            // Steve reads it on his phone and answers there. Without the phone
-            // his words go through his own client: in the desktop's pass so
-            // they land when they landed in the phone's, in a rehearsal a
-            // little after the reply.
+            // The first version is ready: only now does Steve open the task
+            // from his sidebar, check the preview and answer there. Without
+            // the phone his words go through his own client: in the desktop's
+            // pass so they land when they landed in the phone's, in a
+            // rehearsal about when he would have typed them.
+            await demo.hold(500);
+            await beats.beat("steve-open");
+            if (phone) await phone.signal("open");
             if (!phone) {
-                if (!schedule) await demo.hold(4000);
+                if (!schedule) await demo.hold(14000);
                 await beats.beat("steve-send");
                 const task = await taskFind(steve, world.taskTitle);
                 const { mode } = await steve.getAgentMode(task.agent.id);
@@ -637,9 +700,23 @@ export default {
             // The desktop's pass sends his words this long before they should
             // land, about what the trip from his client to the window takes.
             if (phone) beats.record("steve-send", cues.at(-1).seconds - steveTripSeconds);
-            await demo.hold(1200);
+            // Steve goes back to his sidebar, and his phone steps aside while
+            // the agent takes his note.
+            if (phone) {
+                await until(
+                    demo,
+                    () => phone.marks.some((mark) => mark.name === "home"),
+                    "Steve's sidebar again",
+                    30000,
+                    50,
+                );
+                await demo.hold(500);
+            } else if (!schedule) await demo.hold(1500);
+            await beats.beat("phone-exit");
+            cue("phone-exit", demo, phone);
+            await demo.hold(300);
             // The agent takes Steve's note: it rewrites the page with five
-            // bars, both screens' previews follow, and it says so.
+            // bars and says so.
             await beats.beat("feedback");
             world.release("feedback");
             await until(demo, () => world.hasReached("five-bars"), "the five-bar page", 20000, 50);
@@ -664,14 +741,10 @@ export default {
             cue("outro", demo, phone);
             // The desktop's preview, five bars, still in view above the answer.
             filmed.fiveBarsInView = await previewInView(page);
-            // The result rests on both screens, then the phone steps away.
-            await demo.hold(2600);
-            await beats.beat("phone-exit");
-            cue("phone-exit", demo, phone);
             filmed.pictures.closing = await pictures();
-            // The phone is away and the window back; the cut's loop dissolves
-            // from here into its first frame, its caption already gone.
-            await demo.hold(750);
+            // The result rests; the cut's loop dissolves from here into its
+            // first frame, its narration already gone.
+            await demo.hold(2400);
             cue("settled", demo, phone);
             await demo.hold(650);
             await beats.beat("end");
@@ -701,6 +774,7 @@ export default {
                 ["task-opened", "phone-open"],
                 ["typing", "phone-typing"],
                 ["sent", "phone-sent"],
+                ["home", "phone-home"],
             ])
                 if (at(mark) !== undefined) phoneCues.push({ name, seconds: at(mark) });
             // The phone's movie, on the desktop's clock, and how smoothly the
@@ -711,13 +785,17 @@ export default {
                 frames: demo.timing.frames,
                 windows: [
                     {
-                        name: "task arrives and opens",
+                        name: "task arrives",
                         from: at("task-arrived"),
+                        to: at("task-arrived") + 1.5,
+                    },
+                    {
+                        name: "Steve opens it",
+                        from: at("task-opened"),
                         to: at("task-opened") + 1.5,
                     },
                     { name: "Steve types", from: at("typing"), to: at("typed") },
-                    { name: "Steve sends", from: at("typed"), to: at("sent") + 1.5 },
-                    { name: "the five-bar page", from: at("sent") + 1.5, to: at("sent") + 5 },
+                    { name: "Steve sends and goes back", from: at("typed"), to: at("home") + 1 },
                 ].filter((window) => window.from !== undefined && window.to > window.from),
             });
             filmed.phoneCapture = report;

@@ -64,13 +64,15 @@ final class TeamDemoUITests: XCTestCase {
         capture("paired")
     }
 
-    /// The take. Steve's sidebar rests until Kirill's task arrives; he opens
-    /// it, watches the preview land, and answers.
+    /// The take. Steve's sidebar rests while Kirill's task arrives in it and
+    /// works; when the recorder says its first version is ready he opens it,
+    /// checks the preview, answers, and goes back to his sidebar.
     func testTake() throws {
         let environment = ProcessInfo.processInfo.environment
         let task = environment["TEAM_TASK"] ?? "Voice waveform"
         let question = environment["TEAM_QUESTION"] ?? "how does it look?"
         let answer = environment["TEAM_ANSWER"] ?? "Love it. Narrower though, five bars max."
+        let signals = try XCTUnwrap(environment["TEAM_SIGNALS"], "the recorder named no signals folder")
         app.launch()
         XCTAssertTrue(row("Team Servers").waitForExistence(timeout: 60), "Steve's sidebar never arrived")
         pause(1)
@@ -78,14 +80,14 @@ final class TeamDemoUITests: XCTestCase {
         let arrived = row(task)
         XCTAssertTrue(arrived.waitForExistence(timeout: 900), "Kirill's task never reached the phone")
         mark("task-arrived")
-        pause(2.6)
+        XCTAssertTrue(signal("open", in: signals, timeout: 300), "the recorder never said the preview was ready")
         arrived.tap()
         mark("task-opened")
         let reply = app.descendants(matching: .any)
             .matching(NSPredicate(format: "label CONTAINS %@", question)).firstMatch
-        XCTAssertTrue(reply.waitForExistence(timeout: 300), "the preview never reached the phone")
+        XCTAssertTrue(reply.waitForExistence(timeout: 30), "the preview never reached the phone")
         mark("preview-seen")
-        pause(3)
+        pause(2)
         let composer = app.textViews["composer"]
         XCTAssertTrue(composer.waitForExistence(timeout: 10))
         composer.tap()
@@ -97,25 +99,35 @@ final class TeamDemoUITests: XCTestCase {
         }
         mark("typed")
         pause(0.6)
-        // Steve puts the keyboard away the way a thumb does: a short drag
-        // down from just above the composer, which the transcript hands to
-        // the keyboard (interactive dismissal), so the answer that follows
-        // has the whole screen. Where it starts is measured before Send, so
-        // the drag follows the send at once.
-        let origin = app.coordinate(withNormalizedOffset: .zero)
-        let start = origin.withOffset(CGVector(dx: app.frame.midX, dy: composer.frame.minY - 44))
-        let end = origin.withOffset(CGVector(dx: app.frame.midX, dy: app.frame.maxY - 6))
         app.buttons["Send"].tap()
         mark("sent")
         if app.buttons["Continue"].exists { app.buttons["Continue"].tap() }
-        pause(0.3)
-        for attempt in 0..<2 where attempt == 0 || app.keyboards.count > 0 {
-            start.press(forDuration: 0.05, thenDragTo: end, withVelocity: 700, thenHoldForDuration: 0.05)
-            pause(0.6)
-        }
-        mark(app.keyboards.count == 0 ? "keyboard-down" : "keyboard-stayed")
+        pause(0.5)
+        // Back to his sidebar with the chat's back button, UIKit's own,
+        // leading its navigation bar; the keyboard leaves with the chat.
+        let bar = app.navigationBars.firstMatch
+        let named = bar.buttons["BackButton"]
+        let back = named.exists ? named : bar.buttons.element(boundBy: 0)
+        XCTAssertTrue(back.waitForExistence(timeout: 5), "the chat has no back button")
+        back.tap()
+        XCTAssertTrue(row(task).waitForExistence(timeout: 10), "Steve's sidebar never came back")
+        let home = Date().addingTimeInterval(10)
+        while Date() < home, !row(task).isHittable { pause(0.05) }
+        mark("home")
         pause(Double(environment["TEAM_TAIL_SECONDS"] ?? "8") ?? 8)
         mark("done")
+    }
+
+    /// Waits for the recorder to say the moment `name` has come: a file it
+    /// writes in `folder`, on the Mac the Simulator shares.
+    private func signal(_ name: String, in folder: String, timeout: TimeInterval) -> Bool {
+        let path = (folder as NSString).appendingPathComponent(name)
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if FileManager.default.fileExists(atPath: path) { return true }
+            pause(0.05)
+        }
+        return false
     }
 
     private func row(_ label: String) -> XCUIElement {

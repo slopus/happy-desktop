@@ -1,5 +1,5 @@
 import { execFile as execFileCallback, spawn } from "node:child_process";
-import { access, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -17,10 +17,11 @@ const execFile = promisify(execFileCallback);
  * The recording and the desktop take share the Mac's wall clock: every
  * moment the driver acts on is printed as `TEAM_PHONE <mark> <epoch seconds>`,
  * and the phone's movie is placed on the take's timeline by time. The
- * recording's own clock starts at its first frame, which a Simulator that has
- * just booted may write seconds after it says it started; so before the take
- * the status bar reads 9:42 for a moment at a noted time, and the movie's
- * clock is read from where that moment falls in it.
+ * recording's own clock starts at its first frame, which a busy or just
+ * booted Simulator may write many seconds after it says it started; so once
+ * Steve's sidebar is up, just before the take, the status bar reads 9:42 for
+ * a moment at a noted time, and the movie's clock is read from where that
+ * moment falls in it.
  */
 
 const testId = (name) => `HappyDirectUITests/TeamDemoUITests/${name}`;
@@ -89,6 +90,11 @@ export async function phoneOpen({ output, work }) {
     if (!runFile) throw new Error(`No built phone driver in ${products}; run phone/build.sh.`);
     const directory = join(work, "phone");
     await mkdir(directory, { recursive: true });
+    // Where the recorder tells Steve's driver a moment has come: a file the
+    // driver, on the same Mac, waits to see. A take starts with none.
+    const signals = join(directory, "signals");
+    await rm(signals, { force: true, recursive: true });
+    await mkdir(signals, { recursive: true });
     const marks = [];
     let take;
     let recording;
@@ -304,26 +310,23 @@ export async function phoneOpen({ output, work }) {
                 child.stdout.on("data", receive);
                 child.stderr.on("data", receive);
             });
-            // The clock mark: 9:42 for a moment, at a noted time, well after
-            // the recording's first frame and long before the take begins.
-            await sleep(4000);
-            await statusBar("9:42");
-            const clockMarkEpochMs = Date.now();
-            await sleep(800);
-            await statusBar("9:41");
-            const clockRestoreEpochMs = Date.now();
-            recording = {
-                child,
-                exit,
-                source,
-                requestedAtEpochMs,
-                startedAtEpochMs,
-                clockMarkEpochMs,
-                clockRestoreEpochMs,
-            };
-            take = test("testTake", environment);
+            recording = { child, exit, source, requestedAtEpochMs, startedAtEpochMs };
+            take = test("testTake", { ...environment, TEAM_SIGNALS: signals });
             take.exit.catch(() => undefined);
             await Promise.race([take.mark("ready", 180_000), take.exit]);
+            // The clock mark: 9:42 for a moment, at a noted time. Steve's
+            // sidebar is up, so the recording has been writing frames for a
+            // while, however late its first one came, and from here nothing
+            // else touches the clock until the take ends.
+            await statusBar("9:42");
+            recording.clockMarkEpochMs = Date.now();
+            await sleep(800);
+            await statusBar("9:41");
+            recording.clockRestoreEpochMs = Date.now();
+        },
+        /** Tells Steve's driver that the moment `name` has come. */
+        async signal(name) {
+            await writeFile(join(signals, name), String(Date.now()));
         },
         /** Resolves when the phone has reached a mark of the running take. */
         reached(name, timeout = 600_000) {
@@ -369,14 +372,15 @@ export async function phoneOpen({ output, work }) {
             );
             const times = probe.frames.map((frame) => Number(frame.best_effort_timestamp_time));
             // The movie's clock: where the 9:42 moment and its end fall in it,
-            // the two changes the right time apart.
+            // the last two changes the right time apart (the app's launch
+            // before them may also change the clock's corner).
             const markSeconds = (recording.clockRestoreEpochMs - recording.clockMarkEpochMs) / 1000;
             const changes = await clockChanges(
                 recording.source,
                 times,
                 (recording.clockRestoreEpochMs - recording.startedAtEpochMs) / 1000 + 2,
             );
-            const markAt = changes.find((change) =>
+            const markAt = changes.findLast((change) =>
                 changes.some((later) => Math.abs(later - change - markSeconds) < 0.25),
             );
             if (markAt === undefined)
