@@ -478,6 +478,7 @@
 }
 
 .happy-context-chips__text {
+    align-self: baseline;
     margin-top: var(--happy-chip-text-y, 0px);
     margin-bottom: calc(-1 * var(--happy-chip-text-y, 0px));
     color: var(--text-secondary);
@@ -488,6 +489,7 @@
 }
 
 .happy-context-chips__detail {
+    align-self: baseline;
     margin-top: var(--happy-chip-detail-y, 0px);
     margin-bottom: calc(-1 * var(--happy-chip-detail-y, 0px));
     color: var(--text-secondary);
@@ -670,14 +672,14 @@
  * Raw baselines ("xxxx" ink bottom): textarea 15px/22px — Blink 16 / WebKit 16
  * / Gecko 16.5 (Gecko rounds the half-leading down, placing the line 0.5px
  * low). Chip label 12px/22px — Blink 16 / WebKit 16 / Gecko 16.5 (same 0.5px).
- * Chip detail 11px/22px — Blink 15 (a full pixel above the neighbouring
- * label's baseline) / WebKit 16 / Gecko 16. Chips label 10px mono uppercase in
+ * Chip text and detail use flex baseline alignment so different font sizes
+ * share their baseline. Chips label 10px mono uppercase in
  * the 24px lane — cap-block centroid Blink -0.75 / WebKit -0.25 / Gecko +0.25.
  * Each correction pins every engine to the shared consensus placement.
  */
 .happy-context-chips {
     --happy-chip-text-y: 0px;
-    --happy-chip-detail-y: 1px;
+    --happy-chip-detail-y: 0px;
     --happy-chips-label-y: 0.75px;
 }
 
@@ -692,7 +694,7 @@
     }
 
     .happy-context-chips {
-        --happy-chip-text-y: -0.5px;
+        --happy-chip-text-y: 0px;
         --happy-chip-detail-y: 0px;
         --happy-chips-label-y: -0.25px;
     }
