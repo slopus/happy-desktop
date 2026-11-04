@@ -197,7 +197,14 @@ const glyphs: Record<IconName, IconGlyph> = {
     // the house mark for trouble; `shield` says the opposite and is never it.
     // 9px of ink at 16, a little short of the plus: a cross's diagonals
     // already reach further than its square (Lucide's 12-of-24 x).
-    close: { set: "ionicons", name: "close-outline", opticalScale: 1.1, minimumSize: 16 },
+    close: {
+        set: "ionicons",
+        name: "close-outline",
+        opticalScale: 1.1,
+        minimumSize: 16,
+        // Keep the painted cross centered when WebKit rounds its baseline on macOS.
+        opticalOffset: { x: 0, y: -0.25 },
+    },
     // The whole change read as one thing, rather than one file's diff: the mark
     // for the review stream and nothing else.
     "file-diff": { set: "octicons", name: "file-diff" },
