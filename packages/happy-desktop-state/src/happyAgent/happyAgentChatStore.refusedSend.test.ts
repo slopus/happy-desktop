@@ -2,7 +2,7 @@ import { HappyAgentApiError } from "@slopus/happy-agent-client";
 import { afterEach, expect, it, vi } from "vitest";
 import { connectHappyAgent } from "../happyAgentConnection/connectHappyAgent.js";
 import type { HappyAgentConnection } from "../happyAgentConnection/types.js";
-import { fakeHappyAgentDaemonCreate } from "../testing/fakeHappyAgentDaemon.js";
+import { fakeHappyAgentDaemonCreate, fakeRun } from "../testing/fakeHappyAgentDaemon.js";
 import type { UserError } from "../types.js";
 import { happyAgentChatStoreCreate, type HappyAgentChatStore } from "./happyAgentChatStore.js";
 import { happyAgentModelCatalogProject } from "./happyAgentProject.js";
@@ -72,6 +72,32 @@ it("keeps one row for one message through its event, a reconnect, and its respon
     respond();
     await new Promise((resolve) => setTimeout(resolve, 10));
     expect(rows(store, "Exactly once")).toHaveLength(1);
+});
+
+it("publishes a steering send ID together with its optimistic row", async () => {
+    const { daemon, store } = await chatOpen();
+    daemon.eventEmit("run.started", {
+        agentId: "agent-a",
+        run: fakeRun({ id: "running-turn", status: "running", startedAt: 3, messages: [] }),
+        acceptedMessageIds: [],
+    });
+    await vi.waitFor(() => expect(store.get().runStatus).toBe("running"));
+    const respond = daemon.pause("sendMessage:respond");
+    const snapshots: ReturnType<HappyAgentChatStore["get"]>[] = [];
+    const unsubscribe = store.subscribe(() => snapshots.push(store.get()));
+    await store.messageSend("Steer the turn");
+    const first = snapshots.find((snapshot) => snapshot.steeringSendId !== undefined);
+    expect(first).toBeDefined();
+    expect(
+        first!.entries.some(
+            (entry) =>
+                entry.kind === "message" &&
+                entry.message.id === first!.steeringSendId &&
+                entry.message.text === "Steer the turn",
+        ),
+    ).toBe(true);
+    unsubscribe();
+    respond();
 });
 
 it("removes a send a draining daemon refused, hands it back, and keeps a resend to one row", async () => {
