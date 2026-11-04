@@ -1,0 +1,630 @@
+/*
+ * LiveFeedPanel and LiveFeedToggle. The panel stands where the update card
+ * stands: on the footer row, exactly as wide as it, 8px above the footer's
+ * divider (`.happy-sidebar-footer` is the containing block; see
+ * `.happy-sidebar-agent-update__panel`).
+ *
+ *   panel     footer row width × 440, the same box in both modes
+ *   column    bottom-anchored, 6px insets, 6px between items
+ *   line      28px, 4px inset round a 20px face, pill radius
+ *   card      44px, 8px inset round a 28px tile, 10px radius
+ *   post      8px inset, 12px radius, media radius 4 (12 − 8)
+ *
+ * Stream: no frame, the top 45% washes out. Stack: the same box gets a card
+ * behind it and a header over its top, the wash lifts, and the column scrolls.
+ */
+@property --happy-live-feed-wash {
+    syntax: "<percentage>";
+    inherits: false;
+    initial-value: 45%;
+}
+
+.happy-sidebar-feed {
+    display: flex;
+    flex: none;
+}
+
+.happy-live-feed {
+    --happy-live-feed-inset: 6px;
+    --happy-live-feed-header: 40px;
+    /* Overlay above the footer; the column inside it is an ordinary flex stack. */
+    position: absolute;
+    right: 0;
+    bottom: calc((100% + var(--happy-surface-footer-height)) / 2 + 8px);
+    left: 0;
+    z-index: 30;
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+    height: 440px;
+    border: 1px solid transparent;
+    border-radius: 14px;
+    background: transparent;
+    box-shadow: none;
+    color: var(--text);
+    font-family: var(--happy-font-ui);
+    font-synthesis: none;
+    /* The empty part of the stream is not there: the rows under it stay clickable. */
+    pointer-events: none;
+    user-select: none;
+    transition:
+        background-color 200ms ease,
+        border-color 200ms ease,
+        box-shadow 200ms ease;
+}
+
+.happy-live-feed[data-mode="stack"] {
+    border-color: var(--modal-border);
+    background: var(--surface);
+    box-shadow: 0 4px 16px var(--shadow-color);
+    pointer-events: auto;
+}
+
+/* Behind the items, reaching the sidebar's edges and down to the footer's
+   divider: the sidebar's own background, rising from opaque at the footer to
+   nothing 48px above the topmost item. Only its height follows the content. */
+.happy-live-feed__scrim {
+    position: absolute;
+    right: -12px;
+    bottom: -8px;
+    left: -12px;
+    height: calc(min(var(--happy-live-feed-content, 0px), 100%) + 56px);
+    background: linear-gradient(
+        to bottom,
+        transparent 0,
+        color-mix(in srgb, var(--groupped-background) 88%, transparent) 64px,
+        var(--groupped-background) 100%
+    );
+    pointer-events: none;
+    transition:
+        height 320ms cubic-bezier(0.2, 0.8, 0.2, 1),
+        opacity 200ms ease;
+}
+
+.happy-live-feed[data-mode="stack"] .happy-live-feed__scrim {
+    opacity: 0;
+}
+
+/* Over the top of the box rather than above the column, so it appearing
+   leaves every item where it is. */
+.happy-live-feed__header {
+    position: absolute;
+    top: 0;
+    right: 0;
+    left: 0;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-sizing: border-box;
+    height: var(--happy-live-feed-header);
+    padding: 0 6px 0 14px;
+    border-radius: 13px 13px 0 0;
+    background: linear-gradient(var(--surface) 70%, transparent);
+    opacity: 0;
+    transition: opacity 200ms ease;
+}
+
+.happy-live-feed[data-mode="stack"] .happy-live-feed__header {
+    opacity: 1;
+}
+
+.happy-live-feed__heading {
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 20px;
+}
+
+.happy-live-feed__count {
+    flex: 1 1 auto;
+    color: var(--text-secondary);
+    font-family: var(--happy-font-mono);
+    font-size: 11px;
+    font-variant-numeric: lining-nums tabular-nums;
+    line-height: 20px;
+}
+
+/* Full-bleed scrollport; column-reverse with one child starts it at the
+   bottom and keeps it there as items come in, in every engine. */
+.happy-live-feed__scroller {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column-reverse;
+    min-height: 0;
+    overflow: hidden;
+    border-radius: 13px;
+    mask-image: linear-gradient(to bottom, transparent 0, var(--text) var(--happy-live-feed-wash));
+    transition: --happy-live-feed-wash 320ms ease;
+}
+
+.happy-live-feed[data-mode="stack"] .happy-live-feed__scroller {
+    --happy-live-feed-wash: 0%;
+    overflow-y: auto;
+}
+
+.happy-live-feed__column {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    gap: 6px;
+    box-sizing: border-box;
+    padding: var(--happy-live-feed-inset);
+    pointer-events: auto;
+}
+
+.happy-live-feed[data-mode="stack"] .happy-live-feed__column {
+    padding-top: var(--happy-live-feed-header);
+}
+
+/* ---- Paused pill -------------------------------------------------------- */
+
+/* In the middle of the footer's status line, between the feed control and the
+   trailing controls, out of every flow, so it appearing moves nothing. */
+.happy-live-feed__paused {
+    position: absolute;
+    bottom: calc(-8px - var(--happy-surface-footer-height) / 2 - 10px);
+    left: 50%;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    height: 20px;
+    padding: 0 8px 0 6px;
+    border-radius: var(--happy-radius-pill);
+    background: var(--surface-inverse);
+    color: var(--text-inverse);
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 20px;
+    white-space: nowrap;
+    opacity: 0;
+    transform: translate(-50%, 4px);
+    transition:
+        opacity 160ms ease,
+        transform 160ms ease;
+    pointer-events: none;
+}
+
+.happy-live-feed__paused[data-shown] {
+    opacity: 1;
+    transform: translate(-50%, 0);
+}
+
+/* ---- Items -------------------------------------------------------------- */
+
+.happy-live-feed-item {
+    position: relative;
+    display: flex;
+    flex: none;
+    min-width: 0;
+    overflow: hidden;
+    border: 1px solid var(--modal-border);
+    background: var(--surface);
+    box-shadow: 0 1px 4px var(--shadow-color);
+    color: var(--text);
+    transition:
+        opacity 600ms ease,
+        filter 600ms ease,
+        box-shadow 200ms ease;
+}
+
+.happy-live-feed[data-mode="stack"] .happy-live-feed-item {
+    background: var(--surface);
+    box-shadow: none;
+}
+
+.happy-live-feed-item[data-leaving] {
+    opacity: 0;
+    filter: blur(2px);
+}
+
+.happy-live-feed-item:hover {
+    box-shadow: 0 2px 8px var(--shadow-color);
+}
+
+.happy-live-feed-item__body {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    box-sizing: border-box;
+    min-width: 0;
+    margin: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    appearance: none;
+}
+
+.happy-live-feed-item__body:focus-visible {
+    outline: 2px solid var(--radio-active);
+    outline-offset: -2px;
+}
+
+.happy-live-feed-item[data-tier="line"] {
+    height: 28px;
+    border-radius: 14px;
+}
+
+.happy-live-feed-item[data-tier="line"] .happy-live-feed-item__body {
+    gap: 6px;
+    padding: 0 10px 0 3px;
+}
+
+.happy-live-feed-item__line {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-live-feed-item__actor {
+    color: var(--text);
+    font-weight: 600;
+}
+
+.happy-live-feed-item__line .happy-live-feed-item__title {
+    color: var(--text);
+}
+
+.happy-live-feed-item[data-tier="card"] {
+    height: 46px;
+    border-radius: 10px;
+}
+
+.happy-live-feed-item[data-tier="card"] .happy-live-feed-item__body {
+    gap: 8px;
+    padding: 0 8px;
+}
+
+.happy-live-feed-item__text {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.happy-live-feed-item__byline {
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--text-secondary);
+    font-size: 11px;
+    line-height: 14px;
+    white-space: nowrap;
+}
+
+.happy-live-feed-item__byline .happy-live-feed-item__actor {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.happy-live-feed-item__verb,
+.happy-live-feed-item__age {
+    flex: none;
+}
+
+.happy-live-feed-item__age {
+    font-variant-numeric: tabular-nums;
+}
+
+.happy-live-feed-item__age::before {
+    content: "· ";
+}
+
+.happy-live-feed-item[data-tier="card"] .happy-live-feed-item__title {
+    overflow: hidden;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 16px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-live-feed-item[data-tier="post"] {
+    border-radius: 12px;
+}
+
+.happy-live-feed-item[data-tier="post"] .happy-live-feed-item__body {
+    align-items: stretch;
+    padding: 8px;
+}
+
+.happy-live-feed-item[data-tier="post"] .happy-live-feed-item__text {
+    gap: 6px;
+}
+
+.happy-live-feed-item__header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    height: 20px;
+}
+
+.happy-live-feed-item__media {
+    position: relative;
+    display: flex;
+    flex: none;
+    overflow: hidden;
+    border-radius: 4px;
+    background: var(--surface-ripple);
+}
+
+.happy-live-feed-item__media[data-shape="landscape"] {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+}
+
+.happy-live-feed-item__media[data-shape="square"] {
+    width: 88px;
+    height: 88px;
+}
+
+.happy-live-feed-item__beside {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    min-width: 0;
+}
+
+.happy-live-feed-item__media > img,
+.happy-live-feed-item__media > video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.happy-live-feed-item__caption {
+    display: -webkit-box;
+    overflow: hidden;
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 17px;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+}
+
+.happy-live-feed-item[data-shape="square"] .happy-live-feed-item__caption {
+    -webkit-line-clamp: 4;
+}
+
+/* ---- Follow ------------------------------------------------------------- */
+
+/* Its box is always there, over the item's trailing edge; hover fades it in
+   over the text it covers, which moves nothing. */
+.happy-live-feed-follow {
+    position: absolute;
+    top: 3px;
+    right: 3px;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    box-sizing: border-box;
+    height: 20px;
+    margin: 0;
+    padding: 0 8px 0 5px;
+    border: 0;
+    border-radius: var(--happy-radius-pill);
+    background: var(--button-primary-background);
+    box-shadow: -12px 0 8px 2px var(--surface);
+    color: var(--button-primary-tint);
+    font: inherit;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 20px;
+    opacity: 0;
+    cursor: pointer;
+    appearance: none;
+    transition: opacity 140ms ease;
+}
+
+.happy-live-feed-item[data-tier="card"] .happy-live-feed-follow {
+    top: 12px;
+    right: 8px;
+}
+
+.happy-live-feed-item[data-tier="post"] .happy-live-feed-follow {
+    top: 8px;
+    right: 8px;
+}
+
+.happy-live-feed-follow[data-following] {
+    background: color-mix(in srgb, var(--text) 14%, var(--surface));
+    color: var(--text);
+}
+
+.happy-live-feed-item:hover .happy-live-feed-follow,
+.happy-live-feed-follow:focus-visible {
+    opacity: 1;
+}
+
+.happy-live-feed-follow:focus-visible {
+    outline: 2px solid var(--radio-active);
+    outline-offset: 1px;
+}
+
+/* ---- Footer toggle ------------------------------------------------------ */
+
+.happy-live-feed-toggle {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    box-sizing: border-box;
+    min-width: 28px;
+    height: 28px;
+    margin: 0;
+    padding: 0 7px;
+    border: 0;
+    border-radius: var(--happy-hover-radius);
+    background: transparent;
+    color: var(--text-secondary);
+    font-family: var(--happy-font-mono);
+    font-size: 11px;
+    font-weight: 700;
+    font-variant-numeric: lining-nums tabular-nums;
+    line-height: 14px;
+    cursor: pointer;
+    appearance: none;
+}
+
+.happy-live-feed-toggle:hover {
+    background: var(--happy-hover-fill);
+    color: var(--text);
+}
+
+.happy-live-feed-toggle[aria-pressed="true"] {
+    background: var(--surface-ripple);
+    color: var(--text);
+}
+
+.happy-live-feed-toggle[data-unread] {
+    color: var(--text-link);
+}
+
+.happy-live-feed-toggle:focus-visible {
+    outline: 2px solid var(--radio-active);
+    outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .happy-live-feed-item,
+    .happy-live-feed__scroller {
+        transition: none;
+    }
+}
+
+/* ---- Video still -------------------------------------------------------- */
+
+.happy-live-feed-item__media[role="button"] {
+    cursor: pointer;
+}
+
+/* The play mark and length sit over the still, out of its flow. */
+.happy-live-feed-item__play {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: var(--happy-radius-pill);
+    background: var(--overlay-backdrop);
+    color: var(--button-primary-tint);
+    transform: translate(-50%, -50%);
+    transition: transform 140ms ease;
+}
+
+.happy-live-feed-item__media:hover .happy-live-feed-item__play {
+    transform: translate(-50%, -50%) scale(1.08);
+}
+
+.happy-live-feed-item__media[data-shape="square"] .happy-live-feed-item__play {
+    width: 28px;
+    height: 28px;
+}
+
+.happy-live-feed-item__duration {
+    position: absolute;
+    right: 4px;
+    bottom: 4px;
+    height: 16px;
+    padding: 0 5px;
+    border-radius: 4px;
+    background: var(--overlay-backdrop);
+    color: var(--button-primary-tint);
+    font-family: var(--happy-font-mono);
+    font-size: 10px;
+    font-weight: 700;
+    font-variant-numeric: lining-nums tabular-nums;
+    line-height: 16px;
+}
+
+/* ---- Mention ------------------------------------------------------------ */
+
+.happy-live-feed-item[data-tier="mention"] {
+    border-color: color-mix(in srgb, var(--text-link) 55%, var(--modal-border));
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--text-link) 9%, var(--surface));
+}
+
+/* The accent edge, inside the border so it moves nothing. */
+.happy-live-feed-item[data-tier="mention"]::before {
+    position: absolute;
+    top: 8px;
+    bottom: 8px;
+    left: 0;
+    width: 3px;
+    border-radius: 0 3px 3px 0;
+    background: var(--text-link);
+    content: "";
+}
+
+.happy-live-feed-item[data-tier="mention"] .happy-live-feed-item__body {
+    align-items: stretch;
+    padding: 8px 8px 8px 11px;
+}
+
+.happy-live-feed-item[data-tier="mention"] .happy-live-feed-item__text {
+    gap: 4px;
+}
+
+.happy-live-feed-item__at-you {
+    flex: none;
+    padding: 0 4px;
+    border-radius: 4px;
+    background: var(--text-link);
+    color: var(--button-primary-tint);
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 14px;
+}
+
+.happy-live-feed-item__quote {
+    display: -webkit-box;
+    overflow: hidden;
+    color: var(--text);
+    font-size: 13px;
+    line-height: 17px;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+}
+
+.happy-live-feed-item__quote::before {
+    content: "“";
+}
+
+.happy-live-feed-item__quote::after {
+    content: "”";
+}
+
+.happy-live-feed-item__place {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--text-secondary);
+    font-size: 11px;
+    line-height: 14px;
+    white-space: nowrap;
+}
+
+.happy-live-feed-item__place > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}

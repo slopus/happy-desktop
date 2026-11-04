@@ -162,6 +162,7 @@
 @import "./styles/happy-agent-inbox.css";
 @import "./styles/happy-agent-artifacts.css";
 @import "./styles/happy-agent-feed.css";
+@import "./styles/live-feed.css";
 @import "./styles/happy-agent-project-settings.css";
 @import "./styles/happy-agent-create-bot.css";
 @import "./styles/happy-agent-create-task.css";

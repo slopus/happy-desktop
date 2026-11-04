@@ -874,6 +874,18 @@ export {
     type HappyAgentFeedPageProps,
     type HappyAgentFeedView,
 } from "./pages/feed/HappyAgentFeedPage";
+export {
+    liveFeedAgeText,
+    LiveFeedEntry,
+    LiveFeedPanel,
+    LiveFeedToggle,
+    type LiveFeedFollowTarget,
+    type LiveFeedItem,
+    type LiveFeedMedia,
+    type LiveFeedMode,
+    type LiveFeedPanelProps,
+    type LiveFeedTier,
+} from "./LiveFeed";
 export { REORDERING_LIST_STATIC, ReorderingList, type ReorderingListProps } from "./ReorderingList";
 export {
     SurfaceAvatar,
