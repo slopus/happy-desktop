@@ -1114,11 +1114,25 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         return true;
     };
 
-    const adoptWorkspace = (workspace: Workspace, deltas: readonly GroupDelta[] = []): boolean => {
-        if (!shouldAdoptVersion(workspaceOf(workspace.id), workspace)) return false;
+    /**
+     * Replaces one held workspace. One that becomes watchable, usually by finishing its
+     * initialization, is watched now rather than at the next renewal.
+     */
+    const workspaceReplace = (workspace: Workspace): void => {
+        const previous = workspaceOf(workspace.id);
         groupsStore.setState((state) => ({
             workspaces: ownerResourceReplace(state.workspaces, workspace),
         }));
+        if (
+            workspaceGitWatchable(workspace) &&
+            (previous === undefined || !workspaceGitWatchable(previous))
+        )
+            background(renewGitWatch());
+    };
+
+    const adoptWorkspace = (workspace: Workspace, deltas: readonly GroupDelta[] = []): boolean => {
+        if (!shouldAdoptVersion(workspaceOf(workspace.id), workspace)) return false;
+        workspaceReplace(workspace);
         publishGroups(deltas);
         return true;
     };
@@ -2213,7 +2227,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                               },
                           ],
                 );
-                background(renewGitWatch());
+                if (workspaceGitWatchable(created)) background(renewGitWatch());
                 return;
             }
             case "bot.created":
@@ -2308,9 +2322,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                                 signal: rootController.signal,
                             })
                             .then(({ workspace }) => {
-                                groupsStore.setState((state) => ({
-                                    workspaces: ownerResourceReplace(state.workspaces, workspace),
-                                }));
+                                workspaceReplace(workspace);
                                 publishGroups();
                             }),
                     );
@@ -2328,24 +2340,17 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                                     latest === undefined ||
                                     latest.version.localeCompare(workspace.version) <= 0
                                 ) {
-                                    groupsStore.setState((state) => ({
-                                        workspaces: ownerResourceReplace(
-                                            state.workspaces,
-                                            workspace,
-                                        ),
-                                    }));
+                                    workspaceReplace(workspace);
                                     publishGroups();
                                 }
                             }),
                     );
                     return;
                 }
-                groupsStore.setState((state) => ({
-                    workspaces: ownerResourceReplace(state.workspaces, {
-                        ...applyChanges(current, event.payload.changes),
-                        version: event.payload.version,
-                    }),
-                }));
+                workspaceReplace({
+                    ...applyChanges(current, event.payload.changes),
+                    version: event.payload.version,
+                });
                 publishGroups();
                 return;
             }
@@ -5892,13 +5897,22 @@ function activeGitWorkspaceIds(
             ...projects
                 .filter((project) => project.archivedAt === null && project.status === "active")
                 .map((project) => project.id),
-            ...workspaces
-                .filter(
-                    (workspace) => workspace.archivedAt === null && workspace.status === "active",
-                )
-                .map((workspace) => workspace.id),
+            ...workspaces.filter(workspaceGitWatchable).map((workspace) => workspace.id),
         ]),
     ];
+}
+
+/**
+ * Whether the daemon's Git watcher accepts this workspace. It refuses one whose initialization
+ * is not ready — `not_initialized` while it is still being made, `conflict` once it failed —
+ * and a daemon may refuse the whole watch request for it, so it stays out until it is ready.
+ */
+function workspaceGitWatchable(workspace: Workspace): boolean {
+    return (
+        workspace.archivedAt === null &&
+        workspace.status === "active" &&
+        workspace.initialization.status === "ready"
+    );
 }
 
 /**

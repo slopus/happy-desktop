@@ -34,6 +34,7 @@ import {
     type TaskMembership,
     type User,
     type UserMessage,
+    type WatchGitRequest,
     type Workspace,
 } from "@slopus/happy-agent-client";
 import { MINIMUM_HAPPY_AGENT_VERSION } from "../happyAgentConnection/compatibility.js";
@@ -66,6 +67,8 @@ export interface FakeHappyAgentDaemon {
     projectSeed(overrides?: Partial<Project> & { id?: string }): Project;
     /** Seed one child workspace under a project. */
     workspaceSeed(projectId: string, overrides?: Partial<Workspace>): Workspace;
+    /** Change one held workspace under a new version and announce it with `workspace.updated`. */
+    workspaceUpdate(workspaceId: string, changes: Partial<Workspace>): Workspace;
     /** Seed one agent inside a workspace (or a project's root workspace). */
     agentSeed(workspaceId: string, overrides?: Partial<Agent>): Agent;
     agentGet(agentId: string): Agent;
@@ -971,8 +974,27 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
             await record("unarchiveTask", [taskId, options]);
             return taskArchivalSet(taskId, options.ifMatch, false);
         },
-        async watchGit(...args: unknown[]) {
-            await record("watchGit", args);
+        async watchGit(request: WatchGitRequest, ...rest: unknown[]) {
+            await record("watchGit", [request, ...rest]);
+            // As the daemon does, one workspace that is not ready refuses the whole request.
+            for (const workspaceId of request.workspaceIds) {
+                const status = workspaces.find((workspace) => workspace.id === workspaceId)
+                    ?.initialization.status;
+                if (status === "initializing")
+                    throw new HappyAgentApiError(
+                        409,
+                        "The workspace is still initializing.",
+                        "not_initialized",
+                        null,
+                    );
+                if (status === "failed")
+                    throw new HappyAgentApiError(
+                        409,
+                        "The workspace is not available.",
+                        "conflict",
+                        null,
+                    );
+            }
             return { snapshots: {} };
         },
         async *streamEvents(options: EventStreamOptions = {}): AsyncGenerator<EventStreamFrame> {
@@ -1449,6 +1471,21 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
         },
         projectSeed: seedProject,
         workspaceSeed: seedWorkspace,
+        workspaceUpdate(workspaceId, changes) {
+            const index = workspaces.findIndex((workspace) => workspace.id === workspaceId);
+            const current = workspaces[index];
+            if (current === undefined) throw new Error(`Unknown workspace ${workspaceId}.`);
+            const version = versionOf((versionCounter += 1));
+            const workspace: Workspace = { ...current, ...changes, version };
+            workspaces[index] = workspace;
+            emit("workspace.updated", {
+                workspaceId,
+                previousVersion: current.version,
+                version,
+                changes,
+            });
+            return workspace;
+        },
         agentSeed: seedAgent,
         agentGet: agentRequired,
         taskSeed: seedTask,
