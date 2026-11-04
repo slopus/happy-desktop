@@ -1,7 +1,10 @@
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import { entryKey, type ConversationEntry } from "../conversation/conversationEntry.js";
-import type { HappyAgentChatSnapshot, HappyAgentChatStore } from "./happyAgentChatStore.js";
+import { connectHappyAgent } from "../happyAgentConnection/connectHappyAgent.js";
+import { fakeHappyAgentDaemonCreate } from "../testing/fakeHappyAgentDaemon.js";
+import { happyAgentChatStoreCreate, type HappyAgentChatSnapshot, type HappyAgentChatStore } from "./happyAgentChatStore.js";
 import type { HappyAgentChatHandle, HappyAgentWorkspaceClient } from "./happyAgentClient.js";
+import { happyAgentModelCatalogProject } from "./happyAgentProject.js";
 import {
     happyAgentConversationRetentionFor,
     type HappyAgentConversationRetention,
@@ -262,6 +265,61 @@ it("shows a kept conversation as it was left until it is read again", async () =
     expect(read.type === "ready" && read.value.entries.map(entryKey)).toEqual(["a:1", "a:2"]);
     expect(view.leased()).toEqual(["a"]);
     view.unsubscribe();
+});
+
+it("shows a message sent during a stand-in once its transcript arrives", async () => {
+    const daemon = fakeHappyAgentDaemonCreate();
+    const project = daemon.projectSeed({ id: PROJECT });
+    daemon.agentSeed(project.id, { id: "a" });
+    const connection = connectHappyAgent({
+        endpoint: "http://happy-agent.test/",
+        token: "token",
+        client: daemon.client,
+        wait: () => new Promise((resolve) => setTimeout(resolve, 0)),
+    });
+    connection.connectGroups({ onChange: () => undefined, onError: () => undefined });
+    const chat = happyAgentChatStoreCreate("a" as HappyAgentSessionId, {
+        catalog: happyAgentModelCatalogProject(daemon.configGet()),
+        transcriptConnect: (options) => {
+            const session = connection.connectSession({
+                sessionId: options.sessionId,
+                onChange: (elements, state) => options.onChange(elements, state, []),
+                onError: options.onError,
+            });
+            return { close: () => session.close(), loadMore: (token) => session.loadMore(token) };
+        },
+        connectActions: connection,
+        connectMutationSubscribe: () => () => undefined,
+    });
+    const view = workspaceCreate({ count: 2, size: 1_000 });
+    view.chats.get("a")!.store = chat;
+    try {
+        await view.open("a");
+        await vi.waitFor(() => expect(chat.get().ready).toBe(true));
+        await view.open("b");
+        view.hold();
+        await view.open("a");
+        const standIn = view.workspace.get().conversation;
+        expect(standIn.type === "ready" && standIn.value.standIn).toBe(true);
+        view.workspace.composerTextUpdate("Sent while reopening");
+        view.workspace.composerTextSubmit();
+        await view.arrive();
+        await vi.waitFor(() => {
+            const shown = view.workspace.get().conversation;
+            expect(shown.type).toBe("ready");
+            if (shown.type !== "ready") return;
+            expect(shown.value.standIn).toBeUndefined();
+            expect(
+                shown.value.entries.filter(
+                    (item) => item.kind === "message" && item.message.text === "Sent while reopening",
+                ),
+            ).toHaveLength(1);
+        });
+    } finally {
+        view.unsubscribe();
+        chat[Symbol.dispose]();
+        connection.close();
+    }
 });
 
 it("shows the oldest kept conversation as it was left even when keeping the one left pushes it out", async () => {
