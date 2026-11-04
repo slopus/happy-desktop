@@ -244,6 +244,12 @@
  * under it both start where the title starts and the whole item reads as one
  * left-aligned block.
  */
+/* The background the question was asked against starts where the title does,
+   set as it was while the question waited. */
+.happy-agent-inbox__context {
+    padding-left: 28px;
+}
+
 .happy-agent-inbox__answers {
     display: flex;
     flex-direction: column;

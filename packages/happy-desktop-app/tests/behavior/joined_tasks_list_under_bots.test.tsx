@@ -459,16 +459,23 @@ it("leaves the Tasks section out entirely on a Happy Agent from before tasks", (
 /** A Happy Agent that makes and renames tasks, not only lists them. */
 const CREATES = "0.4.87-preview.6";
 
-it("makes a task from the + on the Tasks heading", () => {
+/** The New task row directly under Search, the sidebar's one way to make a task. */
+const NEW_TASK_ROW = '[data-happy-desktop-ui="sidebar-item"][data-item-id="new-chat"]';
+
+it("makes a task from the New task row under Search, not from the Tasks heading", () => {
     const onTaskCreateOpen = vi.fn();
     const { container, actions } = view({
         onTaskCreateOpen,
         entries: (actions) => [entry("local", actions, { version: CREATES })],
     });
-    const create = container.querySelector<HTMLButtonElement>(
-        '[aria-label="New task"][data-happy-desktop-ui="sidebar-section-action"]',
-    )!;
+    const create = container.querySelector<HTMLButtonElement>(NEW_TASK_ROW)!;
     expect(create).not.toBeNull();
+    expect(create.textContent).toContain("New task");
+    expect(
+        container.querySelector(
+            '[aria-label="New task"][data-happy-desktop-ui="sidebar-section-action"]',
+        ),
+    ).toBeNull();
     expect(container.querySelector('[aria-label="Browse tasks"]')).toBeNull();
 
     fireEvent.click(create);
@@ -518,15 +525,13 @@ const commandHeld =
 const commandN = (target: Element | Window = window) =>
     fireEvent.keyDown(target, { key: "n", code: "KeyN", ...commandHeld });
 
-it("opens New task on the machine on screen with Command-N, and shows the chord on its +", () => {
+it("opens New task on the machine on screen with Command-N, and shows the chord on its row", () => {
     const onTaskCreateOpen = vi.fn();
     const { container } = view({
         onTaskCreateOpen,
         entries: (actions) => [entry("local", actions, { version: CREATES })],
     });
-    const create = container.querySelector<HTMLButtonElement>(
-        '[aria-label="New task"][data-happy-desktop-ui="sidebar-section-action"]',
-    )!;
+    const create = container.querySelector<HTMLButtonElement>(NEW_TASK_ROW)!;
     expect(create.getAttribute("aria-keyshortcuts")).toBe(APP_SHORTCUTS.taskCreate.aria);
     expect(create.querySelector('[data-happy-desktop-ui="key-cap"]')).not.toBeNull();
 

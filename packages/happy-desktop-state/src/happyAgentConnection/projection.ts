@@ -1000,6 +1000,7 @@ function answeredQuestionsProject(
             : [
                   {
                       requestId: question.id,
+                      ...(question.context === undefined ? {} : { context: question.context }),
                       questions: question.questions.map((prompt) => ({
                           id: prompt.id,
                           header: prompt.header,

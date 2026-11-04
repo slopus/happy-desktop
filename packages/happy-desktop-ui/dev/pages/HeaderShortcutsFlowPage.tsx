@@ -80,9 +80,14 @@ export function HeaderShortcutsFlowPage() {
                                                 onClick: noop,
                                                 shortcut: commandShortcut("n"),
                                             }}
+                                            sidebarOwnsCreate
                                             sidebar={
                                                 <Sidebar
                                                     activeItemId=""
+                                                    composeActive={screen === "task"}
+                                                    composeLabel="New task"
+                                                    composeShortcut={commandShortcut("n")}
+                                                    onCompose={noop}
                                                     onItemSelect={noop}
                                                     searchRow={{
                                                         label: "Search",
