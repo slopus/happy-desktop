@@ -89,9 +89,9 @@
  * stretch apply and the options run the full width of the column.
  */
 .happy-agent-input__question {
-    display: flex;
-    flex-direction: column;
-    gap: 0;
+    /* Block, not flex: WebKit sizes a flex fieldset as a flex item with its
+       legend's height counted twice, so the card grew 48px below its content. */
+    display: block;
     margin: 0;
     padding: 0;
     box-sizing: border-box;
@@ -100,10 +100,15 @@
     border: none;
 }
 
+/*
+ * Floated across the full width, the legend is not the fieldset's rendered
+ * legend but an ordinary first block above the options, in every engine.
+ */
 .happy-agent-input__legend {
     display: flex;
     flex-direction: column;
     gap: 4px;
+    float: left;
     padding: 0;
     width: 100%;
 }
