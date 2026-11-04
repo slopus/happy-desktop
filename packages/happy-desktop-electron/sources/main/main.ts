@@ -24,6 +24,8 @@ import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { DesktopRuntime } from "./desktopRuntime";
+import { desktopQuitListen } from "./desktopQuit";
+import { happyAgentDaemonPathsResolve } from "./happyAgentDaemonClient";
 import { HappyAgentDaemonClient } from "./happyAgentDaemonClient";
 import { ServerSessionError, serverSessionsCreate } from "./serverSessions";
 import { browserPermissionsInstall } from "./browserPermissions";
@@ -1714,6 +1716,17 @@ function applicationMenuInstall(snapshot: ReturnType<DesktopRuntime["get"]>): vo
 void app
     .whenReady()
     .then(async () => {
+        if (process.platform !== "darwin") {
+            try {
+                const closeQuit = await desktopQuitListen(
+                    happyAgentDaemonPathsResolve().tokenPath,
+                    () => app.quit(),
+                );
+                app.once("will-quit", closeQuit);
+            } catch (error) {
+                console.error("Happy Desktop quit control could not start:", error);
+            }
+        }
         if (!desktopWindowsHidden && !app.isPackaged && applicationIconPath)
             app.dock?.setIcon(applicationIconPath);
         happyAgentRendererSession = await happyAgentRendererSessionCreate(
