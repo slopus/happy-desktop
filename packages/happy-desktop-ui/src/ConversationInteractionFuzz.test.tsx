@@ -303,17 +303,8 @@ function harnessCreate(count = 65, namespace = "") {
             chat.standIn && chat.cached
                 ? chat.cached
                 : [...chat.store.get().entries, ...chat.extras];
-        return (
-            entries.filter(
-                (entry) =>
-                    !(
-                        chat.docked &&
-                        entry.kind === "request" &&
-                        entry.request.kind === "userInput" &&
-                        entry.request.status !== "answered"
-                    ),
-            ).length + 1
-        );
+        // Questions are transcript rows, with or without a dock.
+        return entries.length + 1;
     }
     const shellSnapshot = () => ({
         active,
@@ -706,17 +697,8 @@ function snapshot(harness: Harness, explicitTrim = false) {
             queuedFrom--;
         }
     }
-    const transcript = source
-        .slice(0, queuedFrom)
-        .filter(
-            (entry) =>
-                !(
-                    chat.docked &&
-                    entry.kind === "request" &&
-                    entry.request.kind === "userInput" &&
-                    entry.request.status !== "answered"
-                ),
-        );
+    // Questions are transcript rows, with or without a dock.
+    const transcript = source.slice(0, queuedFrom);
     const entries = [...transcript, ...source.slice(queuedFrom)];
     const keys = Children.toArray(
         entries.map((entry) => (
@@ -2923,20 +2905,33 @@ it("publishes a reader scroll followed by a chat switch in the same task", async
         wheel(h.viewport(), -250);
         await settle();
         const previousTop = h.viewport().scrollTop;
+        // The wheel can mount overscan rows above whose measured heights
+        // replace their estimates, so the native offset is no measure of
+        // the reader's movement. A row under the reading point is.
+        const point = h.viewport().getBoundingClientRect().bottom - 32;
+        const pointRow = [
+            ...h.viewport().querySelectorAll<HTMLElement>(".happy-message-list__virtual-row"),
+        ].find((row) => {
+            const rect = row.getBoundingClientRect();
+            return rect.top <= point && rect.bottom > point;
+        })!;
+        const pointRowTop = pointRow.getBoundingClientRect().top;
         h.anchorSet();
         wheel(h.viewport(), -73);
         const scrolled = snapshot(h);
         const nativeTop = h.viewport().scrollTop;
+        const moved = pointRow.getBoundingClientRect().top - pointRowTop;
         h.switch(1);
         details = {
             previousTop,
             nativeTop,
+            moved,
             point: scrolled.readingPoint,
             bounds: scrolled.bounds.toJSON(),
             position: h.chats[0]!.position,
         };
         console.info("EDGE_SCROLL_HIDE", JSON.stringify(details));
-        expect(previousTop - nativeTop, "fixture did not move the reader").toBeGreaterThan(1);
+        expect(moved, "fixture did not move the reader").toBeGreaterThan(1);
         publishedPointCheck(scrolled, h, 0);
         await settle();
         h.switch(0);
