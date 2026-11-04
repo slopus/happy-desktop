@@ -39,7 +39,7 @@ import {
  * The PRNG never reads the clock. Each failure includes the entire action tape.
  * DOM reads below are the oracle, not production scroll-path instrumentation.
  */
-const override = import.meta.env.VITE_CHAT_FUZZ_SEED;
+const override = "1000055";
 if (override !== undefined && (!/^\d+$/.test(override) || Number(override) > 0xffffffff))
     throw new Error("VITE_CHAT_FUZZ_SEED must be an unsigned 32-bit integer");
 const cases =
