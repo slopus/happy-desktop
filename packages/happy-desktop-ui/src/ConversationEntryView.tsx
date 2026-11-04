@@ -643,6 +643,7 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
             quote={
                 quote ? (
                     <StoryQuote
+                        align={own ? "end" : "start"}
                         author={{
                             name: quote.author.name,
                             face: {
@@ -653,7 +654,6 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
                                     : { placeholderSeed: quote.author.face.seed }),
                             },
                         }}
-                        {...(quote.caption === undefined ? {} : { caption: quote.caption })}
                         frame={
                             quote.frame && {
                                 url: quote.frame.url,

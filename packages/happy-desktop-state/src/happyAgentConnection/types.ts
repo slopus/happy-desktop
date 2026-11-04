@@ -156,7 +156,6 @@ export interface UserMessageElement extends BaseChatElement {
     quote?: {
         readonly storyId: string;
         readonly expiresAt: number;
-        readonly caption: string | null;
         readonly frame: { readonly url: string; readonly thumbhash?: string } | null;
         readonly author:
             | { readonly kind: "agent"; readonly agentId: string }

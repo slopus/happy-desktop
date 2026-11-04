@@ -94,7 +94,7 @@ export type MessageImage = {
  * which reserves the row from the same plan, agrees with it. Without an open
  * action it remains media, not a fake button.
  */
-function MessageMediaItem(props: {
+export function MessageMediaItem(props: {
     image: MessageImage;
     style: CSSProperties;
     onOpen?: (id: string) => void;

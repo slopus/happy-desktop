@@ -1142,7 +1142,6 @@ function storyQuoteProject(
     return {
         storyId: quote.storyId,
         expiresAt: quote.expiresAt,
-        caption: quote.caption,
         frame: frame && {
             url: reader.quoteFrameUrl(reader.agentId, messageId),
             ...(frame.thumbhash === undefined ? {} : { thumbhash: frame.thumbhash }),

@@ -130,6 +130,14 @@ export const MESSAGE_MEDIA_LIMITS: MediaFlowLimits = {
 export const MESSAGE_MEDIA_MAX = 4;
 /** A message's photos stay a bubble's width, not the transcript's. */
 export const MESSAGE_MEDIA_MAX_WIDTH = 560;
+/**
+ * A story's first frame, quoted above a reply at the size one attached photo of its shape takes:
+ * the daemon's 540px-wide 9:16 still.
+ */
+export const STORY_QUOTE_PLAN = mediaJustifiedPlan(
+    [{ width: 540, height: 960 }],
+    MESSAGE_MEDIA_LIMITS,
+);
 
 /** A picture's width-to-height ratio: its stated size, else its ThumbHash, else 4:3. */
 export function mediaFlowRatio(image: MediaFlowImage): number {

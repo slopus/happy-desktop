@@ -538,7 +538,7 @@ export function StoryPage() {
             <Specimen
                 number="15"
                 label="Reply quote"
-                detail="A reply quotes its story above the bubble: paused first frame, author, one-line caption · a live story opens, an ended one only shows"
+                detail="The story a reply answers, above its bubble at an attached photo’s size: its first frame, then its author · a live story opens, an ended one only shows"
                 stage="app"
             >
                 <div
@@ -551,11 +551,11 @@ export function StoryPage() {
                         own
                         quote={
                             <StoryQuote
+                                align="end"
                                 author={{
                                     name: "Desktop onboarding",
                                     face: { initials: "DO", type: "agent" },
                                 }}
-                                caption="Onboarding now opens on the welcome screen, with setup one click away."
                                 frame={{ url: FRAME }}
                                 onOpen={() => undefined}
                             />
@@ -564,13 +564,10 @@ export function StoryPage() {
                     />
                     <Message
                         author="Maya Johnson"
-                        body="Ship it"
+                        body="Can we do the same on the phone?"
                         quote={
                             <StoryQuote
-                                author={{
-                                    name: "Release bot",
-                                    face: { initials: "RB", type: "agent" },
-                                }}
+                                author={{ name: "Steve", face: { initials: "S", type: "human" } }}
                                 frame={{ url: WHITE }}
                             />
                         }

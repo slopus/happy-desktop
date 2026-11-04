@@ -98,7 +98,6 @@ export interface ConversationStoryQuote {
     readonly storyId: string;
     /** After this it cannot be opened, though its quote stays. */
     readonly expiresAt: number;
-    readonly caption?: string;
     readonly frame: { readonly url: string; readonly thumbhash?: string } | null;
     readonly author: {
         readonly kind: "agent" | "human";

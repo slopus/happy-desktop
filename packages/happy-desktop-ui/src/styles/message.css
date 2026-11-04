@@ -1533,7 +1533,7 @@
     }
 }
 
-/* The quote sits 4px above the body it is answered by. */
+/* A quote sits above the body that answers it, as far as a photo sits below one. */
 .happy-message__content > .happy-story-quote {
-    margin-bottom: 4px;
+    margin-bottom: 8px;
 }

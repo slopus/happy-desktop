@@ -1295,7 +1295,6 @@ function storyQuoteProject(
     return {
         storyId: quote.storyId,
         expiresAt: quote.expiresAt,
-        ...(quote.caption === null ? {} : { caption: quote.caption }),
         frame: quote.frame,
         author:
             author.kind === "agent"
