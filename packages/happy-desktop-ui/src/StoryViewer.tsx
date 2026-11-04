@@ -310,6 +310,7 @@ function useLayerTransform<Layer extends StoryLayerTransform>(
 export function StoryViewer(props: StoryViewerProps) {
     const hidden = useSyncExternalStore(visibilitySubscribe, () => document.hidden);
     const [text, setText] = useState("");
+    const [replyFocused, setReplyFocused] = useState(false);
     const [caption, setCaption] = useState("");
     const [posting, setPosting] = useState(false);
     const inFlight = useRef(false);
@@ -367,7 +368,7 @@ export function StoryViewer(props: StoryViewerProps) {
     const swipeFree = !composing && !repliesOpen && !posting && !menuOpen && mode !== "delete";
     const recording = round.phase === "recording";
     // Every reason the story holds still, round included: replies, a hold, ⋯ or its delete confirm.
-    const halted = repliesOpen || held || menuOpen || mode === "delete";
+    const halted = replyFocused || repliesOpen || held || menuOpen || mode === "delete";
     const paused = (composing && round.phase !== "done" && !recording) || halted || hidden;
     const stream = round.phase === "preview" || recording ? round.stream : null;
     // What paces the story: its own video, else its first video layer, else five seconds.
@@ -1180,13 +1181,16 @@ export function StoryViewer(props: StoryViewerProps) {
                             <form
                                 onSubmit={(event) => {
                                     event.preventDefault();
+                                    event.currentTarget.querySelector("input")?.blur();
                                     void submit();
                                 }}
                             >
                                 <input
                                     aria-label="Reply"
                                     data-happy-desktop-ui="story-viewer-input"
+                                    onBlur={() => setReplyFocused(false)}
                                     onChange={(event) => setText(event.currentTarget.value)}
+                                    onFocus={() => setReplyFocused(true)}
                                     placeholder={`Reply to ${props.poster.name}…`}
                                     value={text}
                                 />
