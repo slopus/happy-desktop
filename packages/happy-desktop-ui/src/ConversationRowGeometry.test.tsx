@@ -612,7 +612,9 @@ const settled = async () => {
     let since = performance.now();
     for (let index = 0; index < 400; index += 1) {
         await new Promise<void>((resolve) =>
-            requestIdleCallback(() => resolve(), { timeout: 100 }),
+            typeof requestIdleCallback === "function"
+                ? requestIdleCallback(() => resolve(), { timeout: 100 })
+                : setTimeout(resolve, 16),
         );
         await nextFrame();
         const rows = [
