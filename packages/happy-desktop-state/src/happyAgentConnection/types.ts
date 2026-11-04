@@ -655,7 +655,11 @@ export interface GroupSession {
     /** The start of an unsent composer draft, on one line; absent while there is none. */
     draftPreview?: string;
     trackUnread: boolean;
-    unread?: { reason: "attention_needed" | "turn_finished"; since: number };
+    /**
+     * What the reader has not looked at. `count` is how many messages, as the
+     * daemon derives it and stops at 100; absent on a daemon too old to count.
+     */
+    unread?: { reason: "attention_needed" | "turn_finished"; since: number; count?: number };
     wait?: { startedAt: number; dueAt: number };
     updatedAt: number;
 }
@@ -1079,9 +1083,24 @@ export function sidebarReadAheadOrder(rows: SidebarReadAheadRows): readonly stri
     return order;
 }
 
+/** Someone on the team the reader can `@`-mention. */
+export interface HappyAgentTeammate {
+    readonly id: string;
+    readonly name: string;
+    /** What they do, when they said. */
+    readonly role?: string;
+}
+
 export interface HappyAgentConnection {
     /** Shared authoritative transport input for this connection's feature stores. */
     readonly sync: HappyAgentSync;
+    /**
+     * The other people on the team, in name order, as the latest bootstrap
+     * listed them with the names their profile updates carried since. Held
+     * here so `@` offers them without a request; empty outside team mode and
+     * on a daemon too old to list them.
+     */
+    teammates: () => readonly HappyAgentTeammate[];
     compatibility: () => ServerCompatibility;
     /**
      * The daemon configuration this connection holds, from its bootstrap or the read that

@@ -118,7 +118,7 @@ function attachmentSizeFormat(bytes: number): string {
 
 /** The glyph and the words beside a candidate's name, for what it names. */
 function mentionSubjectOf(subject: ComposerMentionSubject): {
-    icon: IconName;
+    icon?: IconName;
     description?: string;
 } {
     switch (subject.kind) {
@@ -138,6 +138,9 @@ function mentionSubjectOf(subject: ComposerMentionSubject): {
                 case "conversation":
                     return { icon: "chat" };
             }
+        case "person":
+            // A person wears their initials, as they do everywhere else.
+            return { description: "Teammate" };
     }
 }
 
@@ -149,7 +152,7 @@ function mentionsOf(composer: ComposerSnapshot): Mentionable[] {
             id: candidate.id,
             name: candidate.label,
             initials: candidate.label.slice(0, 1).toUpperCase(),
-            icon: subject.icon,
+            ...(subject.icon ? { icon: subject.icon } : {}),
             insertion: candidate.insertion,
             ...(description ? { description } : {}),
         };

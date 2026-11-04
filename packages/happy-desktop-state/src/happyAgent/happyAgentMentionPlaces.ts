@@ -1,16 +1,17 @@
 import { formatHappyMarkdownLink, isKnownHappyReferenceKind } from "@slopus/happy-agent-client";
+import type { HappyAgentTeammate } from "../happyAgentConnection/types.js";
 import type { ComposerMention } from "../modules/composer/composerState.js";
 import type { HappyAgentSurfaceCatalogSnapshot } from "../surfaces/surfaceCatalogStore.js";
 import type { HappyAgentSessionListSnapshot } from "./happyAgentSessionListStore.js";
 import type { HappyAgentSessionId } from "./happyAgentTypes.js";
 
-/** How many Surfaces, and how many chats, one `@` token offers at most. */
+/** How many people, how many Surfaces, and how many chats one `@` token offers at most. */
 const MENTION_PLACES_LIMIT = 5;
 
 /**
- * The Surfaces and chats an `@` token names, before the files it does: the
- * reader's own Surfaces, then the bots, tasks, and project chats in their
- * list, each written as the `happy://` link that names it, labelled with its
+ * The people, Surfaces, and chats an `@` token names, before the files it
+ * does: the reader's teammates, then their own Surfaces, then the bots, tasks,
+ * and project chats in their list, each written as the `happy://` link that names it, labelled with its
  * name so the words read on any surface that cannot look it up. The chat the draft
  * is written in is not offered to itself.
  *
@@ -23,9 +24,24 @@ export function happyAgentMentionPlaces(input: {
     readonly list: HappyAgentSessionListSnapshot;
     readonly catalog: HappyAgentSurfaceCatalogSnapshot | undefined;
     readonly conversationId: HappyAgentSessionId;
+    /** The other people on the team, held by the connection from its bootstrap. */
+    readonly teammates: readonly HappyAgentTeammate[];
 }): readonly ComposerMention[] {
     const needle = input.query.trim().toLowerCase();
     const matches = (name: string) => name.toLowerCase().includes(needle);
+    const people: ComposerMention[] = input.teammates
+        .filter((teammate) => matches(teammate.name))
+        .slice(0, MENTION_PLACES_LIMIT)
+        .map((teammate) => ({
+            id: `user:${teammate.id}`,
+            label: teammate.name,
+            ...(teammate.role === undefined ? {} : { detail: teammate.role }),
+            subject: { kind: "person" },
+            insertion: formatHappyMarkdownLink(
+                { type: "reference", reference: { kind: "user", id: teammate.id } },
+                teammate.name,
+            ),
+        }));
     const surfaceKind = "surface";
     const surfaces: ComposerMention[] =
         input.catalog === undefined || !isKnownHappyReferenceKind(surfaceKind)
@@ -74,5 +90,5 @@ export function happyAgentMentionPlaces(input: {
                 for (const conversation of worktree.conversations)
                     chatAdd(conversation.id, conversation.title, "conversation", worktree.name);
         }
-    return [...surfaces, ...chats];
+    return [...people, ...surfaces, ...chats];
 }

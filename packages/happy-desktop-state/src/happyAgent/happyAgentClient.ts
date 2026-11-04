@@ -13,7 +13,11 @@ import {
     type HappyAgentAgentIdentitySource,
 } from "./happyAgentAgentIdentities.js";
 import type { MutationRejectedDelta } from "../happyAgentConnection/index.js";
-import type { HappyAgentConnection, SidebarReadAheadRows } from "../happyAgentConnection/index.js";
+import type {
+    HappyAgentConnection,
+    HappyAgentTeammate,
+    SidebarReadAheadRows,
+} from "../happyAgentConnection/index.js";
 import {
     happyAgentTerminalOpen,
     type HappyAgentTerminalHandle,
@@ -253,6 +257,8 @@ export interface HappyAgentWorkspaceClient {
      * Surfaces says so through the catalog's availability.
      */
     surfaces(): HappyAgentSurfaces;
+    /** The other people on the team `@` offers, held since the connection's bootstrap. */
+    teammates(): readonly HappyAgentTeammate[];
     /**
      * What this Happy Agent's search finds for the command palette's
      * query. Materialized on first access; a daemon without search
@@ -825,6 +831,7 @@ export function happyAgentWorkspaceClientCreate(
             if (disposed) throw new Error("The Happy Agent client is disposed.");
             return feedOf();
         },
+        teammates: () => deps.connection.teammates(),
         surfaces() {
             if (disposed) throw new Error("The Happy Agent client is disposed.");
             surfaces ??= happyAgentSurfacesCreate({

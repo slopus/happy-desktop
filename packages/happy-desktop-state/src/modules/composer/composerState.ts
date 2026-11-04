@@ -19,7 +19,9 @@ export type ComposerMentionSubject =
     /** A Surface: a document, todo list, calendar, chat among people, and so on. */
     | { readonly kind: "surface"; readonly type: HappyAgentSurfaceType }
     /** A chat with an agent: a bot's, a task's, or a project's conversation. */
-    | { readonly kind: "agent"; readonly owner: "bot" | "task" | "conversation" };
+    | { readonly kind: "agent"; readonly owner: "bot" | "task" | "conversation" }
+    /** Someone on the team; mentioning them in a task's chat brings them into it. */
+    | { readonly kind: "person" };
 
 /** One `@`-mention candidate offered for the active mention token. */
 export interface ComposerMention {

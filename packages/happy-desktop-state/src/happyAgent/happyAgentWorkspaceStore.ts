@@ -5365,6 +5365,7 @@ export function happyAgentWorkspaceStoreCreate(
                             list: list.get(),
                             catalog: client.surfaces().catalog().get(),
                             conversationId,
+                            teammates: client.teammates(),
                         });
                         const needle = query.toLowerCase();
                         const filesStanding = target

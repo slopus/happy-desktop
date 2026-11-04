@@ -728,13 +728,16 @@ export function projectTasks(
                           },
                       }),
                 owner: ownerOf(task),
-                session: projectAgent(
-                    task.agent,
-                    workspaceById.get(task.workspaceId),
-                    endpoint,
-                    config,
-                    drafts.get(task.agent.id),
-                    modes.get(task.agent.id),
+                session: taskSessionUnread(
+                    projectAgent(
+                        task.agent,
+                        workspaceById.get(task.workspaceId),
+                        endpoint,
+                        config,
+                        drafts.get(task.agent.id),
+                        modes.get(task.agent.id),
+                    ),
+                    membership?.unread ?? null,
                 ),
                 subtasks: agentSubtasksProject(
                     task.agent,
@@ -748,6 +751,35 @@ export function projectTasks(
                 unread: unreadOf([task.agent]),
             };
         });
+}
+
+const taskSessionCache = new WeakMap<
+    GroupSession,
+    { readonly unread: NonNullable<TaskMembership["unread"]>; readonly session: GroupSession }
+>();
+
+/**
+ * A task's chat as its reader sees it: what is unread is their own membership's
+ * mark when it has one, since the agent's mark is shared by everyone in the
+ * task. The same pair always gives back the same session.
+ */
+function taskSessionUnread(
+    session: GroupSession,
+    unread: TaskMembership["unread"],
+): GroupSession {
+    if (unread == null) return session;
+    const cached = taskSessionCache.get(session);
+    if (cached?.unread === unread) return cached.session;
+    const value: GroupSession = {
+        ...session,
+        unread: {
+            reason: "turn_finished",
+            since: unread.since,
+            ...(unread.count === undefined ? {} : { count: unread.count }),
+        },
+    };
+    taskSessionCache.set(session, { unread, session: value });
+    return value;
 }
 
 function projectWorkspace(
@@ -960,6 +992,7 @@ function projectAgent(
                           ? ("attention_needed" as const)
                           : ("turn_finished" as const),
                       since: agent.unread.since,
+                      ...(agent.unread.count === undefined ? {} : { count: agent.unread.count }),
                   },
               }),
         updatedAt: agent.updatedAt,

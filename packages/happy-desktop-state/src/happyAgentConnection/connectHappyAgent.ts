@@ -74,6 +74,7 @@ import type {
     HappyAgentDrain,
     HappyAgentGroupsSubscriptionOptions,
     HappyAgentSessionSubscriptionOptions,
+    HappyAgentTeammate,
     ServerCompatibility,
     TaskOwner,
 } from "./types.js";
@@ -412,6 +413,8 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
     const processOwners = new Map<string, string>();
     let config: DaemonConfig | undefined;
     let currentUserId: string | undefined;
+    /** Everyone the latest bootstrap listed as signing in to the team. */
+    let teammates: readonly HappyAgentTeammate[] = [];
     let viewerProfileLoading: Promise<void> | undefined;
     let cursor: string | undefined;
     // Notification effects belong to live delivery, never to history replay.
@@ -1756,6 +1759,11 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
             // A current daemon's bootstrap is its health as well, and the freshest one.
             if (bootstrap.health !== undefined) sync.writer.healthReceived(bootstrap.health);
             viewerIdentityUpdate(bootstrap.profile);
+            teammates = (bootstrap.teammates ?? []).map((user) => ({
+                id: user.id,
+                name: user.name,
+                ...(user.role == null ? {} : { role: user.role }),
+            }));
             if (reconcileSessions) await users.refresh();
             config = bootstrap.config;
             sync.writer.bootstrapReceived(bootstrap);
@@ -2534,7 +2542,15 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
             }
             case "profile.updated":
                 if (event.payload.userId !== undefined) {
-                    background(users.refresh([event.payload.userId]));
+                    const userId = event.payload.userId;
+                    background(users.refresh([userId]));
+                    // A teammate nothing on screen has read yet is read now, so
+                    // `@` offers the name they just chose.
+                    if (
+                        !users.profiles.has(userId) &&
+                        teammates.some((teammate) => teammate.id === userId)
+                    )
+                        background(users.ensure([userId]));
                     if (currentUserId === undefined || event.payload.userId === currentUserId) {
                         background(reloadViewerProfile());
                     }
@@ -4135,6 +4151,12 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
 
     return {
         compatibility: () => compatibility,
+        teammates: () =>
+            teammates.flatMap((teammate) =>
+                teammate.id === currentUserId
+                    ? []
+                    : [{ ...teammate, name: users.profiles.get(teammate.id)?.name ?? teammate.name }],
+            ),
         config: () => (configReloads === 0 ? config : undefined),
         sync: sync.source,
         retry: retryUpdates,

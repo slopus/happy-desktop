@@ -7,6 +7,7 @@ import {
     happyAgentTasksBrowsable,
     happyAgentTasksJoined,
 } from "./happyAgentTasks.js";
+import type { ConversationSummary } from "../conversation/conversationSummary.js";
 import type { Loadable } from "../conversation/loadable.js";
 import { UserError } from "../types.js";
 import {
@@ -2401,9 +2402,7 @@ export function happyAgentSessionListStoreCreate(
             if (session?.unreadReason !== undefined) {
                 internal.setState({
                     sessions: sessions.map((candidate) =>
-                        candidate.id === sessionId
-                            ? { ...candidate, unreadReason: undefined }
-                            : candidate,
+                        candidate.id === sessionId ? sessionReadLocally(candidate) : candidate,
                     ),
                 });
                 publish();
@@ -2426,7 +2425,7 @@ export function happyAgentSessionListStoreCreate(
                             subtasks: children,
                             conversation:
                                 task.conversation.id === sessionId
-                                    ? { ...task.conversation, unread: false }
+                                    ? conversationReadLocally(task.conversation)
                                     : task.conversation,
                         };
                     });
@@ -2446,7 +2445,7 @@ export function happyAgentSessionListStoreCreate(
                         ...candidate,
                         subtasks,
                         conversation: own
-                            ? { ...candidate.conversation, unread: false }
+                            ? conversationReadLocally(candidate.conversation)
                             : candidate.conversation,
                     };
                 };
@@ -3156,4 +3155,16 @@ function sessionLocationOf(
                     : session.scope.projectId
                 : happyAgentSessionGroupIdOf(session),
     };
+}
+
+/** A session the reader just opened: nothing in it is unread any more. */
+function sessionReadLocally(session: HappyAgentSessionSummary): HappyAgentSessionSummary {
+    const { unreadReason: _reason, unreadCount: _count, ...read } = session;
+    return read;
+}
+
+/** A bot's or task's chat the reader just opened: nothing in it is unread any more. */
+function conversationReadLocally(conversation: ConversationSummary): ConversationSummary {
+    const { unreadCount: _count, ...read } = conversation;
+    return { ...read, unread: false };
 }

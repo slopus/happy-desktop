@@ -27,6 +27,8 @@ export interface ConversationSummary {
      */
     readonly lastActivityAt?: number;
     readonly unread?: boolean;
+    /** How many messages are unread, when known; 100 means "99+". */
+    readonly unreadCount?: number;
     readonly mentions?: number;
     readonly avatarFileId?: string;
     readonly participants: readonly ConversationAuthor[];

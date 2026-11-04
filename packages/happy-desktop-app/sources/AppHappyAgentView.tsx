@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useSyncExternalStore, type ReactNode } from "react";
-import type { HappyAgentSystemMonitorStore } from "happy-desktop-state";
+import type { ConversationSummary, HappyAgentSystemMonitorStore } from "happy-desktop-state";
 import {
     HappyAgentSystemMonitorSurfacePage,
     LinkCopyContext,
@@ -1040,9 +1040,23 @@ function botSidebarItem(
         initials: ownerInitials(bot.name),
         ...botFace(bot),
         ...sidebarActivity(bot.conversation.activity),
-        ...(bot.conversation.unread ? { unread: true } : {}),
+        ...sidebarUnread([bot.conversation]),
         ...(muted ? { muted: true } : {}),
     };
+}
+
+/**
+ * What a row says is unread across the conversations it holds: the mark, and
+ * how many messages when the host counted any of them. The sum stops where the
+ * host's own counts do, at 100, which the row reads as "99+".
+ */
+function sidebarUnread(
+    conversations: readonly Pick<ConversationSummary, "unread" | "unreadCount">[],
+): Pick<SidebarItem, "unread" | "unreadCount"> {
+    const unread = conversations.filter((conversation) => conversation.unread === true);
+    if (unread.length === 0) return {};
+    const count = unread.reduce((sum, conversation) => sum + (conversation.unreadCount ?? 0), 0);
+    return count > 0 ? { unread: true, unreadCount: Math.min(count, 100) } : { unread: true };
 }
 
 /**
@@ -1163,7 +1177,7 @@ function taskSidebarItem(task: HappyAgentTask, titleShimmerEnabled: boolean): Si
             reveal: "hover" as const,
         },
         ...sidebarActivity(task.conversation.activity),
-        ...(task.conversation.unread ? { unread: true } : {}),
+        ...sidebarUnread([task.conversation]),
     };
 }
 
@@ -1205,7 +1219,7 @@ function botSubtaskSidebarItems(
                     : {}),
                 ...(worktree ? sidebarLifecycle(worktree.lifecycle) : {}),
                 ...sidebarActivity(task.conversation.activity),
-                ...(task.conversation.unread ? { unread: true } : {}),
+                ...sidebarUnread([task.conversation]),
                 ...((worktree?.addedLines ?? 0) > 0 || (worktree?.deletedLines ?? 0) > 0
                     ? {
                           changeStats: {
@@ -1265,9 +1279,7 @@ function sidebarItems(
             // Waiting is the low-priority modifier: any session doing real work
             // makes the row spin, and only an all-waiting row wears the clock.
             ...sidebarActivity(project.activity),
-            ...(project.conversations.some((conversation) => conversation.unread)
-                ? { unread: true }
-                : {}),
+            ...sidebarUnread(project.conversations),
             ...(projectHasLineChanges
                 ? {
                       changeStats: {
@@ -1295,9 +1307,7 @@ function sidebarItems(
             // a place they may be about to send work into.
             ...sidebarLifecycle(worktree.lifecycle),
             ...sidebarActivity(worktree.activity),
-            ...(worktree.conversations.some((conversation) => conversation.unread)
-                ? { unread: true }
-                : {}),
+            ...sidebarUnread(worktree.conversations),
             ...((worktree.addedLines ?? 0) > 0 || (worktree.deletedLines ?? 0) > 0
                 ? {
                       changeStats: {
