@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { flushSync } from "react-dom";
 import { expect, it } from "vitest";
+import { server } from "vitest/browser";
 import {
     agentAuthor,
     happyAgentOwnerAuthor,
@@ -242,6 +243,7 @@ it.each(boundaries)(
                 viewerId: happyAgentOwnerAuthor.id,
                 messageExpanded: false,
             });
+            console.info("COMPACT_METRICS", JSON.stringify({ browser: server.browser, platform: server.platform, textLines: text.split("\n").length, folded, width, zoom, row: row.getBoundingClientRect().height / zoom, body: body.getBoundingClientRect().height / zoom, paragraph: paragraph.getBoundingClientRect().height / zoom, lineHeight: getComputedStyle(paragraph).lineHeight, expected }));
             expect(
                 Math.abs(row.getBoundingClientRect().height / zoom - expected!),
             ).toBeLessThanOrEqual(1);
