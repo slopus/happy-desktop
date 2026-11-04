@@ -73,7 +73,7 @@ function settings(props: {
                 onPairingOptionsOpen={noop}
                 {...(props.pairing
                     ? {
-                          pairingOptions: pairingOptionsSpecimen("settings", {
+                          pairingOptions: pairingOptionsSpecimen("dialog", {
                               ...props.pairing,
                               ...(props.unavailable ? { unavailable: props.unavailable } : {}),
                           }),

@@ -14,12 +14,12 @@ const noop = () => undefined;
 type Variant = Pick<MobilePairingOptionsProps, "direct" | "relay"> &
     Partial<MobilePairingOptionsProps>;
 
-function options(variant: Variant) {
+function options(variant: Variant, layout: "settings" | "dialog" = "settings") {
     return (
         <MobilePairingOptions
-            layout="settings"
+            layout={layout}
             now={now}
-            onClose={noop}
+            {...(layout === "settings" ? { onClose: noop } : {})}
             onDirectConfirm={noop}
             onDirectErrorAssist={noop}
             onDirectReject={noop}
@@ -157,6 +157,48 @@ const states: readonly {
     },
 ];
 
+/** In a dialog the dialog draws the title and close; the body is 480px less its 20px gutters. */
+const dialogs: readonly {
+    readonly id: string;
+    readonly label: string;
+    readonly detail: string;
+    readonly variant: Variant;
+}[] = [
+    {
+        id: "d1",
+        label: "Dialog · Direct chosen",
+        detail: "Settings opens pairing in a dialog: a 240px code, with Older phone app? Use Relay beside it",
+        variant: { direct: direct.waiting, relay: relayWaiting, method: "direct" },
+    },
+    {
+        id: "d2",
+        label: "Dialog · direct only",
+        detail: "A computer already linked through the Happy server: the direct code alone",
+        variant: {
+            direct: direct.waiting,
+            relay: { kind: "connected" },
+            method: "direct",
+            methodFixed: true,
+        },
+    },
+];
+
+function dialogColumn(children: ReactNode, screen: string) {
+    return (
+        <div
+            data-screen={screen}
+            style={{
+                background: "var(--surface-high)",
+                boxSizing: "border-box",
+                padding: "4px 20px 20px",
+                width: "480px",
+            }}
+        >
+            {children}
+        </div>
+    );
+}
+
 export function MobilePairingOptionsPage() {
     return (
         <ComponentPage
@@ -174,6 +216,17 @@ export function MobilePairingOptionsPage() {
                     stage="surface"
                 >
                     {column(options(state.variant), `settings-${state.id}`)}
+                </Specimen>
+            ))}
+            {dialogs.map((state) => (
+                <Specimen
+                    detail={state.detail}
+                    key={state.id}
+                    label={state.label}
+                    number={state.id}
+                    stage="surface"
+                >
+                    {dialogColumn(options(state.variant, "dialog"), `dialog-${state.id}`)}
                 </Specimen>
             ))}
         </ComponentPage>

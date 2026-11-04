@@ -5,11 +5,16 @@
     flex: none;
     max-width: 100%;
     overflow: hidden;
+    /*
+     * Paper inside the tile on top of the symbol's own four-module quiet zone,
+     * so a dense code's finder eyes clear the rounded corners at any size.
+     */
+    padding: 10px;
     border-radius: var(--happy-radius-shell);
     background: var(--page-canvas);
     box-shadow: 0 12px 36px var(--shadow-floating);
     color: var(--button-primary-background);
-    /* The mark is measured against the code's own box. */
+    /* The mark is measured against the symbol, inside the padding. */
     container-type: size;
 }
 

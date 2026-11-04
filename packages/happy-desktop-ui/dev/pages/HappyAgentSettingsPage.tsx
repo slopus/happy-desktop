@@ -767,7 +767,7 @@ export function HappyAgentSettingsBlueprintPage() {
                         direct={directSectionSpecimen(direct.waiting)}
                         onDisconnect={noop}
                         onPairingOptionsOpen={noop}
-                        pairingOptions={pairingOptionsSpecimen("settings", {
+                        pairingOptions={pairingOptionsSpecimen("dialog", {
                             direct: direct.waiting,
                             relay: relayWaiting,
                         })}

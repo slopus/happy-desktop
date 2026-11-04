@@ -79,7 +79,7 @@ function segment(container: HTMLElement, method: MobilePairingMethod): HTMLButto
 }
 
 function options(
-    layout: "setup" | "settings",
+    layout: "setup" | "dialog",
     method: MobilePairingMethod,
     onMethodSelect: (method: MobilePairingMethod) => void = () => undefined,
 ) {
@@ -136,7 +136,7 @@ it("selects Relay until the rollout says Direct, and a choice the person made wi
     ]);
 });
 
-it.each(["setup", "settings"] as const)(
+it.each(["setup", "dialog"] as const)(
     "shows Relay with the relay code alone until Direct is chosen (%s)",
     (layout) => {
         const selected: MobilePairingMethod[] = [];
@@ -151,11 +151,7 @@ it.each(["setup", "settings"] as const)(
         expect(segment(view.container, "relay").getAttribute("aria-pressed")).toBe("true");
         expect(segment(view.container, "direct").getAttribute("aria-pressed")).toBe("false");
         expect(segment(view.container, "direct").textContent).toBe("Direct");
-        expect(
-            view.container
-                .querySelector('[data-happy-desktop-ui="mobile-pairing-options-fallback"]')
-                ?.hasAttribute("data-hidden"),
-        ).toBe(true);
+        expect(view.queryByText("Older phone app?")).toBeNull();
         expect(view.getByLabelText("QR code to pair through Happy relay")).toBeTruthy();
         expect(view.queryByLabelText("QR code to connect a phone directly")).toBeNull();
         // The chosen method again is no choice; Direct is.
@@ -166,7 +162,7 @@ it.each(["setup", "settings"] as const)(
     },
 );
 
-it.each(["setup", "settings"] as const)(
+it.each(["setup", "dialog"] as const)(
     "shows the direct code in the relay code's place once Direct is chosen (%s)",
     (layout) => {
         const selected: MobilePairingMethod[] = [];
@@ -209,13 +205,19 @@ it("offers a linked computer only the direct code, without touching its Happy se
     expect(linked.getByText("Happy server")).toBeTruthy();
     fireEvent.click(linked.getByRole("button", { name: "Show QR code" }));
     expect(opened).toHaveBeenCalledTimes(1);
-    linked.unmount();
 
-    const card = render(
-        <>
-            {
+    // The code opens in a dialog over the rows, which stay as they were.
+    const closed = vi.fn();
+    linked.rerender(
+        <HappyAgentMobileSettings
+            configured
+            onDisconnect={() => undefined}
+            onPairingOptionsClose={closed}
+            onPairingOptionsOpen={opened}
+            pairingDirectOnly
+            pairingOptions={
                 appMobilePairingOptions({
-                    layout: "settings",
+                    layout: "dialog",
                     method: "relay",
                     directOnly: true,
                     onMethodSelect: () => undefined,
@@ -224,16 +226,20 @@ it("offers a linked computer only the direct code, without touching its Happy se
                     snapshot: waiting,
                     clock,
                     online: () => true,
-                    onClose: () => undefined,
                 }).view
             }
-        </>,
+            status="connected"
+        />,
     );
-    expect(slots(card.container)).toEqual(["direct"]);
-    expect(card.queryByTestId("mobile-pairing-method")).toBeNull();
-    expect(card.queryByText("Older phone app?")).toBeNull();
-    expect(card.getByLabelText("QR code to connect a phone directly")).toBeTruthy();
-    card.unmount();
+    const dialog = linked.getByRole("dialog", { name: "Connect a phone directly" });
+    expect(linked.getByRole("button", { name: "Show QR code" })).toBeTruthy();
+    expect(slots(dialog)).toEqual(["direct"]);
+    expect(linked.queryByTestId("mobile-pairing-method")).toBeNull();
+    expect(linked.queryByText("Older phone app?")).toBeNull();
+    expect(linked.getByLabelText("QR code to connect a phone directly")).toBeTruthy();
+    fireEvent.click(linked.getByRole("button", { name: "Close" }));
+    expect(closed).toHaveBeenCalledTimes(1);
+    linked.unmount();
 });
 
 it("makes no direct code for a pairing opened while nothing shows the connector", async () => {

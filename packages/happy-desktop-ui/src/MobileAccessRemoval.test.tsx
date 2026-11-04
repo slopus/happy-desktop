@@ -104,7 +104,7 @@ it("shows a refused removal once, with Try again and Keep linked", async () => {
     expect(page).toContain("Removal incomplete");
     expect(page).not.toContain("Can't connect");
     expect(page).not.toContain("Pairing could not be removed");
-    expect(page).toContain("Remove this computer and the chats it published");
+    expect(page).toContain("Removes this computer and its chats from the Happy server");
 
     const removal = view.$('[data-testid="happy-mobile-settings-removal-incomplete"]').element;
     const buttons = [...removal.querySelectorAll("button")];

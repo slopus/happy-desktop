@@ -122,7 +122,6 @@ export interface AppMobilePairingProps {
     readonly unavailable?: string;
     /** Read when an action fires, so a stale render cannot act on a lost connection. */
     online(): boolean;
-    onClose?(): void;
 }
 
 /**
@@ -230,7 +229,6 @@ function AppMobilePairingOptions(
             onDirectStart={guarded(props.direct.pairingStart)}
             onDirectConfirm={guarded(props.direct.pairingConfirm)}
             onDirectReject={guarded(props.direct.pairingReject)}
-            {...(props.onClose ? { onClose: props.onClose } : {})}
             {...(props.unavailable === undefined ? {} : { unavailable: props.unavailable })}
         />
     );

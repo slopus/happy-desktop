@@ -28,13 +28,16 @@ export type MobileRelayPairingState =
     | { readonly kind: "unavailable" }
     | { readonly kind: "failed"; readonly message: string };
 
-export type MobilePairingOptionsLayout = "settings" | "setup";
+/**
+ * A card with its own heading in a Settings page, bare columns in setup, or
+ * the body of a dialog that draws the title and close.
+ */
+export type MobilePairingOptionsLayout = "settings" | "setup" | "dialog";
 
 /** Through the Happy server (relay), or a direct connection to this computer over Tailcat. */
 export type MobilePairingMethod = "relay" | "direct";
 
 export interface MobilePairingOptionsProps {
-    /** A card with its own heading and close in Settings; bare columns in setup. */
     readonly layout: MobilePairingOptionsLayout;
     /**
      * Shows one method at a time, chosen with a Relay | Direct control at the
@@ -78,6 +81,13 @@ const DIRECT_TITLE = "Direct connection";
 const DIRECT_DETAIL =
     "Straight to this computer over Tailcat. Needs the latest phone app; you check emoji.";
 
+/** The code's edge in px. Setup may shrink it to fit a short window (`--happy-qr-code-size`). */
+const CODE_SIZE: Record<MobilePairingOptionsLayout, number> = {
+    settings: 216,
+    setup: 168,
+    dialog: 240,
+};
+
 const METHOD_SEGMENTS: SegmentedControlSegment[] = [
     { value: "relay", label: "Relay", title: RELAY_DETAIL },
     { value: "direct", label: "Direct", title: DIRECT_DETAIL },
@@ -106,14 +116,37 @@ export function MobilePairingOptions(props: MobilePairingOptionsProps) {
             : undefined;
     const relayExpiry =
         headed && props.relay.kind === "waiting" ? props.relay.expiresAt : undefined;
-    const codeSize = props.layout === "settings" ? 184 : 136;
+    const codeSize = CODE_SIZE[props.layout];
+    const switchable = method !== undefined && !props.methodFixed;
     const direct = (
         <MobileDirectPairingPanel
             {...(props.directActionError ? { actionError: props.directActionError } : {})}
             cancelling={props.directCancelling}
             codeCountdown={!headed}
+            {...(switchable
+                ? {
+                      codeAside: (
+                          <Box
+                              className="happy-mobile-pairing-options__fallback"
+                              data-happy-desktop-ui="mobile-pairing-options-fallback"
+                          >
+                              <span className="happy-mobile-pairing-options__fallback-text">
+                                  Older phone app?
+                              </span>
+                              <Button
+                                  data-testid="mobile-pairing-use-relay"
+                                  onClick={() => props.onMethodSelect?.("relay")}
+                                  size="small"
+                                  variant="ghost"
+                              >
+                                  Use Relay
+                              </Button>
+                          </Box>
+                      ),
+                  }
+                : {})}
             codeSize={codeSize}
-            density={props.layout === "setup" ? "compact" : "regular"}
+            density={setup ? "compact" : "regular"}
             confirming={props.directConfirming}
             connector={props.direct}
             now={props.now}
@@ -129,7 +162,6 @@ export function MobilePairingOptions(props: MobilePairingOptionsProps) {
         method !== "relay" &&
         props.direct.kind === "ready" &&
         props.direct.connector.pairing?.status === "completed";
-    const switchable = method !== undefined && !props.methodFixed;
     return (
         <Box
             className="happy-mobile-pairing-options"
@@ -151,7 +183,7 @@ export function MobilePairingOptions(props: MobilePairingOptionsProps) {
                     </Button>
                 </Box>
             ) : null}
-            {props.layout === "settings" && props.unavailable ? (
+            {props.layout !== "setup" && props.unavailable ? (
                 <Banner tone="warning" title="Happy Agent unavailable">
                     {props.unavailable}
                 </Banner>
@@ -197,26 +229,6 @@ export function MobilePairingOptions(props: MobilePairingOptionsProps) {
                     </PairingSlot>
                 )}
             </Box>
-            {switchable ? (
-                // Kept in the flow under Relay too, so switching methods moves nothing below the code.
-                <Box
-                    className="happy-mobile-pairing-options__fallback"
-                    data-hidden={method === "direct" && !engaged ? undefined : ""}
-                    data-happy-desktop-ui="mobile-pairing-options-fallback"
-                >
-                    <span className="happy-mobile-pairing-options__fallback-text">
-                        Older phone app?
-                    </span>
-                    <Button
-                        data-testid="mobile-pairing-use-relay"
-                        onClick={() => props.onMethodSelect?.("relay")}
-                        size="small"
-                        variant="ghost"
-                    >
-                        Use Relay
-                    </Button>
-                </Box>
-            ) : null}
         </Box>
     );
 }

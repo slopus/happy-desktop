@@ -460,16 +460,26 @@
     align-self: center;
 }
 
-/* "Older phone app? Use Relay": its row is held under Relay too, so the code never moves. */
+/*
+ * "Older phone app? Use Relay", under the direct code's countdown, so it costs
+ * the page no height. Stacked, it is no wider than the copy link above it.
+ */
 .happy-mobile-pairing-options__fallback {
     display: flex;
-    align-items: center;
-    align-self: center;
-    gap: 4px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0;
+    margin-top: 12px;
 }
 
-.happy-mobile-pairing-options__fallback[data-hidden] {
-    visibility: hidden;
+/* The button's label, not its hover face, lines up with the words above it. */
+.happy-mobile-pairing-options__fallback > .happy-button {
+    margin-inline-start: -10px;
+}
+
+/* Either method's side column is as wide, so switching moves neither code. */
+.happy-mobile-pairing-options[data-method] .happy-mobile-pairing__code-side {
+    width: 128px;
 }
 
 .happy-mobile-pairing-options__fallback-text {
@@ -493,6 +503,16 @@
     border: 1px solid var(--divider);
     /* 10px card, 16px inset: the slot sits beyond the card's corner field. */
     border-radius: 8px;
+}
+
+/* In a dialog the dialog is the only box: the methods sit straight on it. */
+.happy-mobile-pairing-options[data-layout="dialog"] {
+    container: happy-mobile-pairing-options / inline-size;
+}
+
+/* The dialog already floats; its scrolling body would clip a floating code's shadow. */
+.happy-mobile-pairing-options[data-layout="dialog"] .happy-qr-code {
+    box-shadow: 0 0 0 1px var(--divider);
 }
 
 /* A narrow Settings column stacks the slots, so each code keeps its full size. */
@@ -540,6 +560,11 @@
  */
 .happy-mobile-pairing-options[data-layout="setup"] {
     --happy-qr-code-size: var(--happy-setup-pairing-qr-size, 136px);
+}
+
+/* One method's code has its copy link beside it, so it takes that height too. */
+.happy-mobile-pairing-options[data-layout="setup"][data-method] {
+    --happy-qr-code-size: var(--happy-setup-pairing-single-qr-size, 168px);
 }
 
 .happy-mobile-pairing-options[data-layout="setup"] .happy-mobile-pairing-options__slots {

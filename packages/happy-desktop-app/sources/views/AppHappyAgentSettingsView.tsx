@@ -1065,10 +1065,12 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                         else if (mobileSetup) mobileSetup.start();
                         else happyIntegrationStore.happyIntegrationPairingOpen();
                     }}
+                    // Pairing opens in a dialog over the rows: only the direct
+                    // code for a linked computer, else Relay | Direct.
                     {...(directOnlyOpen && sessionClock
                         ? {
                               pairingOptions: appMobilePairingOptions({
-                                  layout: "settings",
+                                  layout: "dialog",
                                   method: "direct",
                                   directOnly: true,
                                   onMethodSelect: pairingMethodSelect,
@@ -1077,15 +1079,15 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                                   snapshot: mobileConnector,
                                   clock: sessionClock,
                                   online: happyAgentOnline,
-                                  onClose: () => mobileConnectorOwned?.pairingClose(),
                                   ...(unavailable === undefined ? {} : { unavailable }),
                               }).view,
+                              onPairingOptionsClose: () => mobileConnectorOwned?.pairingClose(),
                           }
                         : {})}
                     {...(happyIntegration.pairingOpen && sessionClock
                         ? {
                               pairingOptions: appMobilePairingOptions({
-                                  layout: "settings",
+                                  layout: "dialog",
                                   method: pairingMethod,
                                   onMethodSelect: pairingMethodSelect,
                                   relay: appMobileRelayFromIntegration(happyIntegration),
@@ -1095,9 +1097,10 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                                   snapshot: mobileConnector,
                                   clock: sessionClock,
                                   online: happyAgentOnline,
-                                  onClose: happyIntegrationStore.happyIntegrationPairingClose,
                                   ...(unavailable === undefined ? {} : { unavailable }),
                               }).view,
+                              onPairingOptionsClose:
+                                  happyIntegrationStore.happyIntegrationPairingClose,
                           }
                         : {})}
                     pairingOff={pairingOff}

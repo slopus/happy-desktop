@@ -1,4 +1,4 @@
-import { useId } from "react";
+import { useId, type ReactNode } from "react";
 import type { BadgeVariant } from "./Badge";
 import { Banner } from "./Banner";
 import { HappyAgentSettingsStatus } from "./pages/settings/HappyAgentSettingsStatus";
@@ -146,6 +146,8 @@ export interface MobileDirectPairingPanelProps {
     readonly codeSize?: number;
     /** False where the code's countdown is drawn beside it rather than under it. */
     readonly codeCountdown?: boolean;
+    /** Drawn beside the code, under its countdown, while the code is on screen. */
+    readonly codeAside?: ReactNode;
     /** `compact` fits the emoji step under a setup page's title line. */
     readonly density?: "regular" | "compact";
     readonly "data-testid"?: string;
@@ -282,6 +284,7 @@ function DirectPairingBody(props: MobileDirectPairingPanelProps & { readonly blo
                     now={props.now}
                     size={props.codeSize ?? 200}
                     testId="happy-mobile-direct"
+                    {...(props.codeAside ? { aside: props.codeAside } : {})}
                 />
             );
         case "verifying":

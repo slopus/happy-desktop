@@ -28,6 +28,8 @@ export function PairingCode(props: {
     readonly testId: string;
     /** False where the countdown is drawn beside the code instead of under it. */
     readonly countdown?: boolean;
+    /** Drawn last beside the code, under the copy link and countdown. */
+    readonly aside?: ReactNode;
 }) {
     return (
         <Box className="happy-mobile-pairing__code" data-happy-desktop-ui="mobile-pairing-code">
@@ -49,6 +51,7 @@ export function PairingCode(props: {
                 {props.countdown === false ? null : (
                     <PairingExpiry expiresAt={props.expiresAt} now={props.now} />
                 )}
+                {props.aside}
             </Box>
         </Box>
     );

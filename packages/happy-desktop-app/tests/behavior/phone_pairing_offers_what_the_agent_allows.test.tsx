@@ -60,7 +60,7 @@ function shown(
     snapshot: HappyAgentMobileConnectorSnapshot,
 ) {
     const options = appMobilePairingOptions({
-        layout: "settings",
+        layout: "dialog",
         method,
         onMethodSelect: () => undefined,
         relay,
