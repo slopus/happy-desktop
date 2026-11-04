@@ -424,17 +424,12 @@ export interface DesktopGuestKeyEvent {
     readonly type: "keydown" | "keyup";
 }
 
-/**
- * `disabled` is the build's permanent refusal, with its reason in `error`: a
- * packaged Happy never opens a debugger into a process that can reach its secrets.
- */
 export type DesktopDebugTargetStatus =
     | "stopped"
     | "starting"
     | "running"
     | "stopping"
     | "unavailable"
-    | "disabled"
     | "error";
 
 /** One live debugger attachment point owned by the native shell. */

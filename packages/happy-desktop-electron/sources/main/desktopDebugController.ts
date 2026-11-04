@@ -18,12 +18,6 @@ export interface DesktopDebugControllerOptions {
     readonly daemon: () => DaemonDebugger | undefined;
     readonly renderer: () => WebContents | undefined;
     readonly changed: (snapshot: DesktopDebugSnapshot) => void;
-    /**
-     * When set, the main and renderer debuggers are disabled for this process's
-     * lifetime with this reason. Both run inside Happy's own processes, where an
-     * attached client can reach the saved browser logins Happy unlocks.
-     */
-    readonly inProcessDisabledReason?: string;
 }
 
 const stopped: DesktopDebugTargetSnapshot = { status: "stopped" };
@@ -54,13 +48,6 @@ export class DesktopDebugController {
 
     constructor(options: DesktopDebugControllerOptions) {
         this.#options = options;
-        if (options.inProcessDisabledReason !== undefined) {
-            const disabled: DesktopDebugTargetSnapshot = {
-                error: options.inProcessDisabledReason,
-                status: "disabled",
-            };
-            this.#targets = { ...this.#targets, main: disabled, renderer: disabled };
-        }
     }
 
     get(): DesktopDebugSnapshot {
@@ -113,7 +100,6 @@ export class DesktopDebugController {
     }
 
     start(target: DebugTarget): Promise<DesktopDebugSnapshot> {
-        if (this.#disabled(target)) return Promise.resolve(this.get());
         return this.#operate(target, "starting", async () => {
             if (target === "main") {
                 const url = desktopMainInspectorStart();
@@ -182,7 +168,6 @@ export class DesktopDebugController {
     }
 
     stop(target: DebugTarget): Promise<DesktopDebugSnapshot> {
-        if (this.#disabled(target)) return Promise.resolve(this.get());
         return this.#operate(target, "stopping", async () => {
             if (target === "main") {
                 desktopMainInspectorStop();
@@ -261,10 +246,6 @@ export class DesktopDebugController {
         });
         this.#operations[target] = queued.catch(() => undefined);
         return queued.then(() => this.get());
-    }
-
-    #disabled(target: DebugTarget): boolean {
-        return target !== "daemon" && this.#options.inProcessDisabledReason !== undefined;
     }
 
     #targetSet(target: DebugTarget, value: DesktopDebugTargetSnapshot): void {

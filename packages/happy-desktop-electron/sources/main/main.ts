@@ -130,11 +130,9 @@ if (process.platform !== "darwin" && process.platform !== "linux" && process.pla
     app.exit(1);
 }
 /*
- * A signed release unlocks the person's saved browser logins through their Keychain
- * and holds a picked password while it fills it, so no other process may attach a
- * debugger to it. The fuses already refuse Node's
- * own inspector flags; Chromium's remote debugging has no fuse and is refused here,
- * before the DevTools endpoint opens.
+ * Installed builds use Settings → Dev Tools or --debug for explicit, loopback-only
+ * debugger attachment. Keep refusing raw runtime switches: Node's inspector flags
+ * are also disabled by the fuses, and Chromium's switches bypass our listener setup.
  */
 const packagedDebugSwitches = [
     "inspect",
@@ -234,8 +232,7 @@ const windowTitle =
         ? `${applicationName} — ${buildIdentity.label}`
         : applicationName;
 const desktopDebugEnabled =
-    !app.isPackaged &&
-    (process.env.HAPPY_DESKTOP_DEBUG === "1" || process.argv.includes("--debug"));
+    process.env.HAPPY_DESKTOP_DEBUG === "1" || process.argv.includes("--debug");
 
 function desktopDebugRendererDefaultPort(): number {
     if (!buildIdentity || buildIdentity.label === "dev") return 9222;
@@ -401,9 +398,8 @@ protocol.registerSchemesAsPrivileged([
     },
 ]);
 if (desktopDebugEnabled) {
-    // This branch is unavailable in packaged builds. Chromium's raw CDP server
-    // has no authentication, so even an explicit flag must remain development
-    // tooling bound to loopback.
+    // Explicit startup opt-in is available in every build. Chromium's raw CDP
+    // server has no authentication, so keep its listener bound to loopback.
     app.commandLine.appendSwitch("remote-debugging-address", "127.0.0.1");
     app.commandLine.appendSwitch("remote-debugging-port", String(desktopDebugRendererPort));
     try {
@@ -1831,16 +1827,6 @@ void app
         );
         const debugController = new DesktopDebugController({
             changed: desktopDebugPublish,
-            // The node:inspector API and the renderer's CDP relay are not covered
-            // by the fuses or the switch refusal above, so a packaged build turns
-            // them off here, where every IPC request is decided. A checkout's
-            // own code is already writable by any local process.
-            ...(app.isPackaged
-                ? {
-                      inProcessDisabledReason:
-                          "Off in installed Happy: it can unlock your saved browser logins.",
-                  }
-                : {}),
             daemon: () => {
                 const snapshot = runtime.get();
                 if (snapshot.phase !== "ready" || snapshot.mode !== "local") return undefined;
