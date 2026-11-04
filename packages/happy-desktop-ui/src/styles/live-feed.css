@@ -1,285 +1,231 @@
 /*
  * LiveFeedPanel and LiveFeedToggle. The panel stands where the update card
- * stands: on the footer row, exactly as wide as it, 8px above the footer's
- * divider (`.happy-sidebar-footer` is the containing block; see
- * `.happy-sidebar-agent-update__panel`).
+ * stands, over the bottom of the sidebar's rows (`.happy-sidebar-footer` is
+ * the containing block; see `.happy-sidebar-agent-update__panel`), and its
+ * items are sidebar rows: `.happy-sidebar__item` itself, with its height,
+ * padding, type, hover fill, and its own × control.
  *
- *   panel     footer row width × 440, the same box in both modes
- *   column    bottom-anchored, 6px insets, 6px between items
- *   line      28px, 4px inset round a 20px face, pill radius
- *   card      44px, 8px inset round a 28px tile, 10px radius
- *   post      8px inset, 12px radius, media radius 4 (12 − 8)
+ *   panel     the rows' width (the footer row plus the 6px the body insets
+ *             less), its bottom one panel inset above the footer's divider
+ *   stream    a fifth of the sidebar's height, top 35% washed out
+ *   row       32px, 2px between rows, 20px mark, 13/16 label
+ *   media     2 rows (66px): a 54px square or 96 × 54 thumbnail, caption,
+ *             and a 12/16 meta line; the × stands on the caption's line
+ *   stack     the same rows on the sidebar's background under a section
+ *             heading, at most half the sidebar, scrolling
  *
- * Stream: no frame, the top 45% washes out. Stack: the same box gets a card
- * behind it and a header over its top, the wash lifts, and the column scrolls.
+ * No frames: nothing here draws a border, a card, or a shadow.
  */
-@property --happy-live-feed-wash {
-    syntax: "<percentage>";
-    inherits: false;
-    initial-value: 45%;
-}
-
 .happy-sidebar-feed {
     display: flex;
     flex: none;
 }
 
 .happy-live-feed {
-    --happy-live-feed-inset: 6px;
-    --happy-live-feed-header: 40px;
+    --happy-live-feed-band: calc(var(--happy-live-feed-sidebar, 760px) * 0.2);
+    --happy-live-feed-heading: 28px;
     /* Overlay above the footer; the column inside it is an ordinary flex stack. */
     position: absolute;
-    right: 0;
-    bottom: calc((100% + var(--happy-surface-footer-height)) / 2 + 8px);
-    left: 0;
+    /* Out from the footer's 12px padding to the body's 6px inset, so every
+       item is exactly as wide as the rows it floats over. */
+    right: calc(var(--happy-panel-inset) - 12px);
+    bottom: calc((100% + var(--happy-surface-footer-height)) / 2 + var(--happy-panel-inset));
+    left: calc(var(--happy-panel-inset) - 12px);
     z-index: 30;
     display: flex;
     flex-direction: column;
     box-sizing: border-box;
-    height: 440px;
-    border: 1px solid transparent;
-    border-radius: 14px;
-    background: transparent;
-    box-shadow: none;
+    height: var(--happy-live-feed-band);
     color: var(--text);
     font-family: var(--happy-font-ui);
     font-synthesis: none;
     /* The empty part of the stream is not there: the rows under it stay clickable. */
     pointer-events: none;
     user-select: none;
-    transition:
-        background-color 200ms ease,
-        border-color 200ms ease,
-        box-shadow 200ms ease;
 }
 
 .happy-live-feed[data-mode="stack"] {
-    border-color: var(--modal-border);
-    background: var(--surface);
-    box-shadow: 0 4px 16px var(--shadow-color);
+    height: auto;
+    max-height: calc(var(--happy-live-feed-sidebar, 760px) * 0.5);
     pointer-events: auto;
 }
 
-/* Behind the items, reaching the sidebar's edges and down to the footer's
-   divider: the sidebar's own background, rising from opaque at the footer to
-   nothing 48px above the topmost item. Only its height follows the content. */
+/*
+ * Behind the items, out to the sidebar's edges and down to the footer's
+ * divider: the sidebar's own background, with a 16px fade above what the
+ * stream holds instead of an edge. It hides the rows the band stands on, so
+ * the stream's own wash is the only thing that reads as fading; an empty
+ * stream covers nothing.
+ */
 .happy-live-feed__scrim {
     position: absolute;
-    right: -12px;
-    bottom: -8px;
-    left: -12px;
-    height: calc(min(var(--happy-live-feed-content, 0px), 100%) + 56px);
+    right: calc(-1 * var(--happy-panel-inset));
+    bottom: calc(-1 * var(--happy-panel-inset));
+    left: calc(-1 * var(--happy-panel-inset));
+    height: calc(min(var(--happy-live-feed-content, 0px) + 16px, 100%) + var(--happy-panel-inset));
     background: linear-gradient(
         to bottom,
         transparent 0,
-        color-mix(in srgb, var(--groupped-background) 88%, transparent) 64px,
+        var(--groupped-background) 16px,
         var(--groupped-background) 100%
     );
     pointer-events: none;
-    transition:
-        height 320ms cubic-bezier(0.2, 0.8, 0.2, 1),
-        opacity 200ms ease;
+    transition: height 280ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
+/* The stack may stand taller than the band, so its fade sits above it. */
 .happy-live-feed[data-mode="stack"] .happy-live-feed__scrim {
-    opacity: 0;
+    height: calc(100% + var(--happy-panel-inset) + 16px);
 }
 
-/* Over the top of the box rather than above the column, so it appearing
-   leaves every item where it is. */
+/* The stack's heading, a sidebar section heading in the column's flow. */
 .happy-live-feed__header {
-    position: absolute;
-    top: 0;
-    right: 0;
-    left: 0;
-    z-index: 1;
-    display: flex;
+    position: relative;
+    display: none;
+    flex: none;
     align-items: center;
     gap: 8px;
     box-sizing: border-box;
-    height: var(--happy-live-feed-header);
-    padding: 0 6px 0 14px;
-    border-radius: 13px 13px 0 0;
-    background: linear-gradient(var(--surface) 70%, transparent);
-    opacity: 0;
-    transition: opacity 200ms ease;
+    height: var(--happy-live-feed-heading);
+    padding: 0 var(--happy-sidebar-fold-inset) 0 var(--happy-panel-row-padding);
 }
 
 .happy-live-feed[data-mode="stack"] .happy-live-feed__header {
-    opacity: 1;
+    display: flex;
 }
 
-.happy-live-feed__heading {
-    font-size: 14px;
-    font-weight: 700;
-    line-height: 20px;
+.happy-live-feed__view-all {
+    flex: none;
+    height: 18px;
+    margin: 0;
+    padding: 0 4px;
+    border: 0;
+    border-radius: var(--happy-hover-radius);
+    background: transparent;
+    color: var(--text-link);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 18px;
+    cursor: pointer;
+    appearance: none;
 }
 
-.happy-live-feed__count {
-    flex: 1 1 auto;
-    color: var(--text-secondary);
-    font-family: var(--happy-font-mono);
-    font-size: 11px;
-    font-variant-numeric: lining-nums tabular-nums;
-    line-height: 20px;
+.happy-live-feed__view-all:hover {
+    background: var(--happy-hover-fill);
+}
+
+.happy-live-feed__view-all:focus-visible {
+    outline: 2px solid var(--surface-selected);
+    outline-offset: 1px;
 }
 
 /* Full-bleed scrollport; column-reverse with one child starts it at the
    bottom and keeps it there as items come in, in every engine. */
 .happy-live-feed__scroller {
+    position: relative;
     display: flex;
     flex: 1 1 auto;
     flex-direction: column-reverse;
     min-height: 0;
     overflow: hidden;
-    border-radius: 13px;
-    mask-image: linear-gradient(to bottom, transparent 0, var(--text) var(--happy-live-feed-wash));
-    transition: --happy-live-feed-wash 320ms ease;
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0, black 35%);
+    mask-image: linear-gradient(to bottom, transparent 0, black 35%);
 }
 
 .happy-live-feed[data-mode="stack"] .happy-live-feed__scroller {
-    --happy-live-feed-wash: 0%;
     overflow-y: auto;
+    -webkit-mask-image: none;
+    mask-image: none;
 }
 
+/* The sidebar's own row rhythm: 2px between rows. */
 .happy-live-feed__column {
     display: flex;
     flex: none;
     flex-direction: column;
-    gap: 6px;
-    box-sizing: border-box;
-    padding: var(--happy-live-feed-inset);
+    gap: 2px;
     pointer-events: auto;
 }
 
-.happy-live-feed[data-mode="stack"] .happy-live-feed__column {
-    padding-top: var(--happy-live-feed-header);
-}
+/* ---- Paused ------------------------------------------------------------- */
 
-/* ---- Paused pill -------------------------------------------------------- */
-
-/* In the middle of the footer's status line, between the feed control and the
-   trailing controls, out of every flow, so it appearing moves nothing. */
+/* On the footer's status line just after the feed control and its count, in
+   the free space before the trailing controls, out of every flow, so it
+   appearing moves nothing. */
 .happy-live-feed__paused {
     position: absolute;
-    bottom: calc(-8px - var(--happy-surface-footer-height) / 2 - 10px);
-    left: 50%;
+    bottom: calc(-1 * var(--happy-panel-inset) - var(--happy-surface-footer-height) / 2 - 8px);
+    left: 54px;
     display: flex;
     align-items: center;
     gap: 4px;
-    height: 20px;
-    padding: 0 8px 0 6px;
-    border-radius: var(--happy-radius-pill);
-    background: var(--surface-inverse);
-    color: var(--text-inverse);
+    height: 16px;
+    color: var(--text-secondary);
     font-size: 11px;
     font-weight: 600;
-    line-height: 20px;
+    line-height: 16px;
     white-space: nowrap;
     opacity: 0;
-    transform: translate(-50%, 4px);
-    transition:
-        opacity 160ms ease,
-        transform 160ms ease;
+    transition: opacity 160ms ease;
     pointer-events: none;
 }
 
 .happy-live-feed__paused[data-shown] {
     opacity: 1;
-    transform: translate(-50%, 0);
 }
 
-/* ---- Items -------------------------------------------------------------- */
+/* ---- Items: sidebar rows ------------------------------------------------ */
 
 .happy-live-feed-item {
-    position: relative;
-    display: flex;
+    /* The quick action's width, which the line clears under it on hover. */
+    --happy-live-feed-quick: 0px;
     flex: none;
     min-width: 0;
-    overflow: hidden;
-    border: 1px solid var(--modal-border);
-    background: var(--surface);
-    box-shadow: 0 1px 4px var(--shadow-color);
-    color: var(--text);
-    transition:
-        opacity 600ms ease,
-        filter 600ms ease,
-        box-shadow 200ms ease;
 }
 
-.happy-live-feed[data-mode="stack"] .happy-live-feed-item {
-    background: var(--surface);
-    box-shadow: none;
-}
-
+/* A leaving item fades where it stands, then closes its slot, so whatever
+   stood above it glides down once into the gap rather than stepping. */
 .happy-live-feed-item[data-leaving] {
+    height: 0;
+    margin-top: -2px;
+    padding-top: 0;
+    overflow: hidden;
     opacity: 0;
     filter: blur(2px);
+    transition:
+        opacity 320ms ease,
+        filter 320ms ease,
+        height 280ms cubic-bezier(0.2, 0.8, 0.2, 1) 320ms,
+        margin-top 280ms cubic-bezier(0.2, 0.8, 0.2, 1) 320ms,
+        padding-top 280ms cubic-bezier(0.2, 0.8, 0.2, 1) 320ms;
 }
 
-.happy-live-feed-item:hover {
-    box-shadow: 0 2px 8px var(--shadow-color);
-}
-
-.happy-live-feed-item__body {
-    display: flex;
-    flex: 1 1 auto;
-    align-items: center;
-    box-sizing: border-box;
-    min-width: 0;
-    margin: 0;
-    border: 0;
-    background: transparent;
-    color: inherit;
-    font: inherit;
-    text-align: left;
-    cursor: pointer;
-    appearance: none;
-}
-
-.happy-live-feed-item__body:focus-visible {
-    outline: 2px solid var(--radio-active);
+.happy-live-feed-item:focus-visible {
+    outline: 2px solid var(--surface-selected);
     outline-offset: -2px;
 }
 
-.happy-live-feed-item[data-tier="line"] {
-    height: 28px;
-    border-radius: 14px;
+/* Two rows and the gap between them, for a post's thumbnail. */
+.happy-live-feed-item[data-rows="2"] {
+    align-items: flex-start;
+    height: calc(2 * 32px + 2px);
+    padding-top: var(--happy-panel-inset);
 }
 
-.happy-live-feed-item[data-tier="line"] .happy-live-feed-item__body {
-    gap: 6px;
-    padding: 0 10px 0 3px;
-}
-
-.happy-live-feed-item__line {
-    flex: 1 1 auto;
-    min-width: 0;
-    overflow: hidden;
+/* The row's leading lane: a 20px face, glyph, or "@". */
+.happy-live-feed-item__lead {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
     color: var(--text-secondary);
-    font-size: 12px;
-    line-height: 16px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
 }
 
-.happy-live-feed-item__actor {
-    color: var(--text);
-    font-weight: 600;
-}
-
-.happy-live-feed-item__line .happy-live-feed-item__title {
-    color: var(--text);
-}
-
-.happy-live-feed-item[data-tier="card"] {
-    height: 46px;
-    border-radius: 10px;
-}
-
-.happy-live-feed-item[data-tier="card"] .happy-live-feed-item__body {
-    gap: 8px;
-    padding: 0 8px;
+.happy-live-feed-item__at {
+    display: flex;
+    color: var(--text-link);
 }
 
 .happy-live-feed-item__text {
@@ -290,168 +236,195 @@
     min-width: 0;
 }
 
-.happy-live-feed-item__byline {
+/* Centred on the 54px thumbnail: two 16px lines and the 2px between. */
+.happy-live-feed-item[data-rows="2"] .happy-live-feed-item__text {
+    margin-top: 10px;
+}
+
+.happy-live-feed-item__strong {
+    color: var(--text);
+}
+
+/* Name, then what they said, each truncating on its own so a long name never
+   hides the words. */
+.happy-live-feed-item[data-tier="mention"] .happy-live-feed-item__line {
     display: flex;
-    align-items: baseline;
-    gap: 4px;
+    text-overflow: clip;
+}
+
+.happy-live-feed-item__who {
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 40%;
+    overflow: hidden;
+    color: var(--text);
+    text-overflow: ellipsis;
+}
+
+.happy-live-feed-item__colon {
+    flex: none;
+    color: var(--text);
+    white-space: pre;
+}
+
+.happy-live-feed-item__said {
+    flex: 1 1 0;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* The sidebar's meta type, under a post's caption. */
+.happy-live-feed-item__meta {
+    display: block;
     min-width: 0;
     overflow: hidden;
     color: var(--text-secondary);
-    font-size: 11px;
-    line-height: 14px;
-    white-space: nowrap;
-}
-
-.happy-live-feed-item__byline .happy-live-feed-item__actor {
-    flex: 0 1 auto;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.happy-live-feed-item__verb,
-.happy-live-feed-item__age {
-    flex: none;
-}
-
-.happy-live-feed-item__age {
-    font-variant-numeric: tabular-nums;
-}
-
-.happy-live-feed-item__age::before {
-    content: "· ";
-}
-
-.happy-live-feed-item[data-tier="card"] .happy-live-feed-item__title {
-    overflow: hidden;
-    font-size: 13px;
-    font-weight: 600;
+    font-size: 12px;
+    font-weight: 500;
     line-height: 16px;
     text-overflow: ellipsis;
     white-space: nowrap;
+    transform: translateY(var(--happy-sidebar-meta-optical-y, 0px));
 }
 
-.happy-live-feed-item[data-tier="post"] {
-    border-radius: 12px;
-}
+/* ---- Thumbnail ---------------------------------------------------------- */
 
-.happy-live-feed-item[data-tier="post"] .happy-live-feed-item__body {
-    align-items: stretch;
-    padding: 8px;
-}
-
-.happy-live-feed-item[data-tier="post"] .happy-live-feed-item__text {
-    gap: 6px;
-}
-
-.happy-live-feed-item__header {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    min-width: 0;
-    height: 20px;
-}
-
-.happy-live-feed-item__media {
+.happy-live-feed-item__thumb {
     position: relative;
     display: flex;
     flex: none;
     overflow: hidden;
-    border-radius: 4px;
+    height: 54px;
+    border-radius: var(--happy-radius-sm);
     background: var(--surface-ripple);
 }
 
-.happy-live-feed-item__media[data-shape="landscape"] {
-    width: 100%;
-    aspect-ratio: 16 / 9;
+.happy-live-feed-item__thumb[data-shape="square"] {
+    width: 54px;
 }
 
-.happy-live-feed-item__media[data-shape="square"] {
-    width: 88px;
-    height: 88px;
+.happy-live-feed-item__thumb[data-shape="landscape"] {
+    width: 96px;
 }
 
-.happy-live-feed-item__beside {
-    display: flex;
-    align-items: flex-start;
-    gap: 8px;
-    min-width: 0;
+.happy-live-feed-item__thumb[role="button"] {
+    cursor: pointer;
 }
 
-.happy-live-feed-item__media > img,
-.happy-live-feed-item__media > video {
+.happy-live-feed-item__thumb > img,
+.happy-live-feed-item__thumb > video {
     width: 100%;
     height: 100%;
     object-fit: cover;
 }
 
-.happy-live-feed-item__caption {
-    display: -webkit-box;
-    overflow: hidden;
-    font-size: 13px;
-    font-weight: 500;
-    line-height: 17px;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-}
-
-.happy-live-feed-item[data-shape="square"] .happy-live-feed-item__caption {
-    -webkit-line-clamp: 4;
-}
-
-/* ---- Follow ------------------------------------------------------------- */
-
-/* Its box is always there, over the item's trailing edge; hover fades it in
-   over the text it covers, which moves nothing. */
-.happy-live-feed-follow {
+.happy-live-feed-item__thumb-play {
     position: absolute;
-    top: 3px;
-    right: 3px;
+    top: 50%;
+    left: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: var(--happy-radius-pill);
+    background: var(--overlay-backdrop);
+    color: var(--button-primary-tint);
+    transform: translate(-50%, -50%);
+}
+
+/* ---- × and the quick action --------------------------------------------- */
+
+/* The row's own × (`.happy-sidebar__item-action`), on the row's trailing edge
+   where a task row keeps its Leave control, hung 3px into the padding as the
+   sidebar hangs its controls. On a post it stands on the caption's line. */
+.happy-live-feed-item__close {
+    display: flex;
+    flex: none;
+    margin-right: -3px;
+}
+
+.happy-live-feed-item[data-rows="2"] .happy-live-feed-item__close {
+    margin-top: 9px;
+}
+
+/* Laid over the end of the line, just before the ×, so it coming moves nothing;
+   the line fades out under it the way a heading's title clears its control. */
+.happy-live-feed-item__quick {
+    position: absolute;
+    top: 7px;
+    right: calc(var(--happy-panel-row-padding) - 3px + 18px + 4px);
     display: flex;
     align-items: center;
     gap: 3px;
     box-sizing: border-box;
-    height: 20px;
-    margin: 0;
-    padding: 0 8px 0 5px;
-    border: 0;
-    border-radius: var(--happy-radius-pill);
-    background: var(--button-primary-background);
-    box-shadow: -12px 0 8px 2px var(--surface);
-    color: var(--button-primary-tint);
-    font: inherit;
-    font-size: 11px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: var(--happy-hover-radius);
+    color: var(--text-link);
+    font-size: 12px;
     font-weight: 600;
-    line-height: 20px;
+    line-height: 16px;
+    white-space: nowrap;
     opacity: 0;
     cursor: pointer;
-    appearance: none;
-    transition: opacity 140ms ease;
+    transition: opacity 120ms ease;
 }
 
-.happy-live-feed-item[data-tier="card"] .happy-live-feed-follow {
-    top: 12px;
-    right: 8px;
+.happy-live-feed-item[data-rows="2"] .happy-live-feed-item__quick {
+    top: calc(var(--happy-panel-inset) + 9px);
 }
 
-.happy-live-feed-item[data-tier="post"] .happy-live-feed-follow {
-    top: 8px;
-    right: 8px;
+.happy-live-feed-item__quick[data-kind="following"] {
+    color: var(--text-secondary);
 }
 
-.happy-live-feed-follow[data-following] {
-    background: color-mix(in srgb, var(--text) 14%, var(--surface));
-    color: var(--text);
+.happy-live-feed-item__quick[data-kind="play"] {
+    font-variant-numeric: tabular-nums;
 }
 
-.happy-live-feed-item:hover .happy-live-feed-follow,
-.happy-live-feed-follow:focus-visible {
+.happy-live-feed-item[data-quick="follow"] {
+    --happy-live-feed-quick: 46px;
+}
+
+.happy-live-feed-item[data-quick="following"] {
+    --happy-live-feed-quick: 76px;
+}
+
+.happy-live-feed-item[data-quick="reply"] {
+    --happy-live-feed-quick: 40px;
+}
+
+.happy-live-feed-item[data-quick="play"] {
+    --happy-live-feed-quick: 44px;
+}
+
+.happy-live-feed-item:hover .happy-live-feed-item__quick,
+.happy-live-feed-item__quick:focus-visible {
     opacity: 1;
 }
 
-.happy-live-feed-follow:focus-visible {
-    outline: 2px solid var(--radio-active);
+.happy-live-feed-item__quick:hover {
+    background: var(--happy-hover-fill);
+}
+
+.happy-live-feed-item__quick:focus-visible {
+    outline: 2px solid var(--surface-selected);
     outline-offset: 1px;
+}
+
+.happy-live-feed-item[data-quick]:is(:hover, :focus-within) .happy-live-feed-item__line {
+    -webkit-mask-image: linear-gradient(
+        to left,
+        transparent var(--happy-live-feed-quick),
+        black calc(var(--happy-live-feed-quick) + 16px)
+    );
+    mask-image: linear-gradient(
+        to left,
+        transparent var(--happy-live-feed-quick),
+        black calc(var(--happy-live-feed-quick) + 16px)
+    );
 }
 
 /* ---- Footer toggle ------------------------------------------------------ */
@@ -501,130 +474,7 @@
 
 @media (prefers-reduced-motion: reduce) {
     .happy-live-feed-item,
-    .happy-live-feed__scroller {
+    .happy-live-feed__scrim {
         transition: none;
     }
-}
-
-/* ---- Video still -------------------------------------------------------- */
-
-.happy-live-feed-item__media[role="button"] {
-    cursor: pointer;
-}
-
-/* The play mark and length sit over the still, out of its flow. */
-.happy-live-feed-item__play {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 32px;
-    height: 32px;
-    border-radius: var(--happy-radius-pill);
-    background: var(--overlay-backdrop);
-    color: var(--button-primary-tint);
-    transform: translate(-50%, -50%);
-    transition: transform 140ms ease;
-}
-
-.happy-live-feed-item__media:hover .happy-live-feed-item__play {
-    transform: translate(-50%, -50%) scale(1.08);
-}
-
-.happy-live-feed-item__media[data-shape="square"] .happy-live-feed-item__play {
-    width: 28px;
-    height: 28px;
-}
-
-.happy-live-feed-item__duration {
-    position: absolute;
-    right: 4px;
-    bottom: 4px;
-    height: 16px;
-    padding: 0 5px;
-    border-radius: 4px;
-    background: var(--overlay-backdrop);
-    color: var(--button-primary-tint);
-    font-family: var(--happy-font-mono);
-    font-size: 10px;
-    font-weight: 700;
-    font-variant-numeric: lining-nums tabular-nums;
-    line-height: 16px;
-}
-
-/* ---- Mention ------------------------------------------------------------ */
-
-.happy-live-feed-item[data-tier="mention"] {
-    border-color: color-mix(in srgb, var(--text-link) 55%, var(--modal-border));
-    border-radius: 12px;
-    background: color-mix(in srgb, var(--text-link) 9%, var(--surface));
-}
-
-/* The accent edge, inside the border so it moves nothing. */
-.happy-live-feed-item[data-tier="mention"]::before {
-    position: absolute;
-    top: 8px;
-    bottom: 8px;
-    left: 0;
-    width: 3px;
-    border-radius: 0 3px 3px 0;
-    background: var(--text-link);
-    content: "";
-}
-
-.happy-live-feed-item[data-tier="mention"] .happy-live-feed-item__body {
-    align-items: stretch;
-    padding: 8px 8px 8px 11px;
-}
-
-.happy-live-feed-item[data-tier="mention"] .happy-live-feed-item__text {
-    gap: 4px;
-}
-
-.happy-live-feed-item__at-you {
-    flex: none;
-    padding: 0 4px;
-    border-radius: 4px;
-    background: var(--text-link);
-    color: var(--button-primary-tint);
-    font-size: 10px;
-    font-weight: 700;
-    line-height: 14px;
-}
-
-.happy-live-feed-item__quote {
-    display: -webkit-box;
-    overflow: hidden;
-    color: var(--text);
-    font-size: 13px;
-    line-height: 17px;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-}
-
-.happy-live-feed-item__quote::before {
-    content: "“";
-}
-
-.happy-live-feed-item__quote::after {
-    content: "”";
-}
-
-.happy-live-feed-item__place {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    min-width: 0;
-    overflow: hidden;
-    color: var(--text-secondary);
-    font-size: 11px;
-    line-height: 14px;
-    white-space: nowrap;
-}
-
-.happy-live-feed-item__place > span {
-    overflow: hidden;
-    text-overflow: ellipsis;
 }

@@ -34,6 +34,11 @@ const ZONE = { locale: "en-US", timeZone: "UTC" } as const;
 /** One demo per page load; it starts no timer until Play. */
 const demo = new LiveFeedDemo();
 
+/** A task row's Leave control, as the app gives every task row: the × the feed's rows reuse. */
+const leave = (name: string) => ({
+    action: { icon: "close" as const, label: `Leave ${name}`, reveal: "hover" as const },
+});
+
 /** Steve's sidebar, as a static mock: his bots, the tasks he is in, the projects. */
 const SECTIONS: SidebarSection[] = [
     {
@@ -52,10 +57,26 @@ const SECTIONS: SidebarSection[] = [
     {
         id: "tasks",
         items: [
-            { id: "t1", kind: "agent", label: "Android files parity", status: "working" },
-            { id: "t2", kind: "agent", label: "Mobile release & direct connection" },
-            { id: "t3", kind: "agent", label: "Stories fixes" },
-            { id: "t4", kind: "agent", label: "Happy Native Android" },
+            {
+                id: "t1",
+                kind: "agent",
+                label: "Android files parity",
+                ...leave("Android files parity"),
+                status: "working",
+            },
+            {
+                id: "t2",
+                kind: "agent",
+                label: "Mobile release & direct connection",
+                ...leave("Mobile release & direct connection"),
+            },
+            { id: "t3", kind: "agent", label: "Stories fixes", ...leave("Stories fixes") },
+            {
+                id: "t4",
+                kind: "agent",
+                label: "Happy Native Android",
+                ...leave("Happy Native Android"),
+            },
         ],
         label: "Tasks",
     },
@@ -274,6 +295,7 @@ function DemoWindow(props: { readonly snapshot: LiveFeedDemoSnapshot }) {
                                 now={snapshot.now}
                                 onFollowToggle={(id, following) => demo.followUpdate(id, following)}
                                 onHoverChange={(hovering) => demo.hoverUpdate(hovering)}
+                                onItemDismiss={(id) => demo.itemDismiss(id)}
                                 onItemOpen={(id) => demo.itemOpen(id)}
                                 onViewAll={() => demo.viewAllOpen()}
                                 paused={snapshot.hovering}
@@ -288,6 +310,7 @@ function DemoWindow(props: { readonly snapshot: LiveFeedDemoSnapshot }) {
                         </div>
                     }
                     onCompose={noop}
+                    onItemAction={noop}
                     onItemSelect={(id) => {
                         if (id === "t1") demo.chatHome();
                     }}
@@ -389,7 +412,7 @@ export function LiveFeedPage() {
     return (
         <ComponentPage
             number={componentNumber}
-            summary={`The feed as a live stream rising from the sidebar footer, where the update card stands. Items pop in at the bottom and wash out at the top; a line stays ${String(LIVE_FEED_STREAM_TTL.line / 1000)}s, a card ${String(LIVE_FEED_STREAM_TTL.card / 1000)}s, a post ${String(LIVE_FEED_STREAM_TTL.post / 1000)}s. Hovering holds the stream still and queues arrivals. Artifacts and posts reach you only for tasks you follow; new work a teammate starts reaches everyone, with Follow on hover. The footer's feed control toggles the stream and the stack, and the stack's View all opens the whole Feed. Prototype: driven by a script of this installation's real recent work.`}
+            summary={`The feed as a live stream rising from the sidebar footer, where the update card stands, in a band at most a fifth of the sidebar tall. Every item is an ordinary sidebar row — mark, one line, one quick action on hover, × — and a post with media is two rows. Items pop in at the bottom and wash out at the top; a line stays ${String(LIVE_FEED_STREAM_TTL.line / 1000)}s, a card ${String(LIVE_FEED_STREAM_TTL.card / 1000)}s, a post ${String(LIVE_FEED_STREAM_TTL.post / 1000)}s. Hovering holds the stream still and queues arrivals. Artifacts and posts reach you only for tasks you follow; new work a teammate starts reaches everyone, with Follow on hover. The footer's feed control toggles the stream and the stack, and the stack's View all opens the whole Feed. Prototype: driven by a script of this installation's real recent work.`}
             title="Live feed"
         >
             <DemoControls snapshot={snapshot} />
@@ -403,22 +426,22 @@ export function LiveFeedPage() {
                 <DemoWindow snapshot={snapshot} />
             </FullScreenSpecimen>
             <Specimen
-                detail="Line: someone started something, added a todo, edited a document · card: an artifact published or a new version · post: media and a caption, what a story was — square beside its text, 16:9 across the item. Follow sits over the trailing edge and fades in on hover."
-                label="Tiers"
+                detail="Every item is one sidebar row — the row's own 32px box, 20px mark, 13/16 label, hover fill and × — except a post, which is two rows (66px) with a 54px square or 96 × 54 thumbnail and a meta line. Hover shows at most one quick action over the end of the line: Follow on a task, Reply on a mention, Play on a clip."
+                label="Items"
                 number="02"
                 stage="app"
             >
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "32px" }}>
-                    {[264, 196].map((width) => (
+                    {[276, 238].map((width) => (
                         <div
-                            data-screen={`02-tiers-${String(width)}`}
+                            className="happy-sidebar"
+                            data-screen={`02-items-${String(width)}`}
                             key={width}
                             style={{
-                                display: "flex",
-                                flexDirection: "column",
-                                gap: "6px",
+                                gap: "2px",
+                                height: "auto",
                                 padding: "6px",
-                                width: `${String(width)}px`,
+                                width: `${String(width + 12)}px`,
                             }}
                         >
                             {SAMPLES.map((item) => (
@@ -426,11 +449,12 @@ export function LiveFeedPage() {
                                     item={item}
                                     key={item.id}
                                     now={SAMPLE_NOW}
+                                    onDismiss={noop}
                                     onFollowToggle={noop}
                                     onOpen={noop}
                                 />
                             ))}
-                            <DimensionRule label={`${String(width)}px footer row`} />
+                            <DimensionRule label={`${String(width)}px rows`} />
                         </div>
                     ))}
                 </div>

@@ -1382,7 +1382,8 @@ function SidebarDragSurface(props: { readonly drag: SidebarDrag; readonly carrie
     );
 }
 
-function SidebarRowAction(props: { action: SidebarItemAction; onAction: () => void }) {
+/** One trailing control of a row; the live feed's rows reuse it for their ×. */
+export function SidebarRowAction(props: { action: SidebarItemAction; onAction: () => void }) {
     return (
         /* A `span` because the row itself is the button: nesting one button
            inside another is invalid, and this control must sit inside the row

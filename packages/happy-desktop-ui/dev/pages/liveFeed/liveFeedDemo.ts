@@ -21,8 +21,12 @@ export const LIVE_FEED_STREAM_TTL: Record<LiveFeedTier, number> = {
     post: 16_000,
     mention: 30_000,
 };
-/** The most the stream shows at once; a further arrival lets the oldest go early. */
-export const LIVE_FEED_STREAM_MAX = 6;
+/**
+ * The most the stream holds at once; a further arrival lets the oldest go
+ * early. The band is a fifth of the sidebar, about four rows, so the fifth is
+ * the one washing out at its top.
+ */
+export const LIVE_FEED_STREAM_MAX = 5;
 /** How long a leaving item takes to fade before it is dropped. */
 const LEAVE_MS = 650;
 /** Items that waited while paused come in one after another, this far apart. */
@@ -162,6 +166,22 @@ export class LiveFeedDemo {
                 this.events.set(item.id, event);
                 this.stackIds.push(item.id);
             }
+        }
+        this.publish();
+    }
+
+    /** The item's ×: in the stream it leaves now; in the stack it is put away. */
+    itemDismiss(itemId: string): void {
+        this.unreadIds.delete(itemId);
+        if (this.mode === "stack") {
+            this.stackIds = this.stackIds.filter((id) => id !== itemId);
+            this.stream = this.stream.filter((entry) => entry.id !== itemId);
+        } else {
+            this.stream = this.stream.map((entry) =>
+                entry.id === itemId && entry.leavingSince === null
+                    ? { ...entry, leavingSince: this.streamClock }
+                    : entry,
+            );
         }
         this.publish();
     }

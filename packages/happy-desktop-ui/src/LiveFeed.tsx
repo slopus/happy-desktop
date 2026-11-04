@@ -1,29 +1,27 @@
 import type { HappyAgentArtifactType } from "happy-desktop-state";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Avatar } from "./Avatar";
-import { Button } from "./Button";
 import { Icon } from "./Icon";
 import {
-    FeedSubjectAvatar,
     FeedSubjectGlyph,
     type HappyAgentFeedActor,
     type HappyAgentFeedSubjectKind,
 } from "./pages/feed/feedPresentation";
+import { SidebarRowAction } from "./Sidebar";
 
 /**
- * How much room an item takes in the stream, chosen by what it carries rather
- * than by who sent it:
+ * What an item is, which decides its leading mark, its one line, and the one
+ * quick action hovering it offers. Every item is one sidebar row tall, except a
+ * post, which carries an image or a clip and is exactly two rows tall.
  *
- * - `line`: one 28px line — someone started a task, added a todo, edited a
- *   document. Ambient awareness; read in a glance or not at all.
- * - `card`: two lines on a tile — an artifact was published or got a new
- *   version. Something to open, named by its title.
- * - `post`: a post with media — what a story used to be. An image, or a
- *   video's still frame with its length, square or 16:9, with a caption. A
- *   video plays only when the reader presses it.
- * - `mention`: someone named the reader in a chat, looped them into a task, or
- *   replied to their post. Always delivered, whatever the reader follows,
- *   marked with an accent edge and "@ you", quoting the line that named them.
+ * - `line`: a teammate started a task — their face, "Kirill started …";
+ *   hover offers Follow.
+ * - `card`: an artifact was published — its type glyph and its title.
+ * - `post`: what a story used to be — a small thumbnail, the caption, and
+ *   under it who posted and when. A clip never plays by itself; hover offers
+ *   Play.
+ * - `mention`: someone named the reader, looped them in, or replied to them —
+ *   an "@" in the mark's place and "Name: what they said"; hover offers Reply.
  */
 export type LiveFeedTier = "line" | "card" | "post" | "mention";
 
@@ -33,7 +31,7 @@ export interface LiveFeedMedia {
     readonly url: string;
     /** A video's still frame, painted until the reader plays it. */
     readonly posterUrl?: string;
-    /** A video's length, for the badge on its still. */
+    /** A video's length, told on its still and on Play. */
     readonly durationMs?: number;
     readonly shape: "square" | "landscape";
 }
@@ -57,7 +55,7 @@ export interface LiveFeedItem {
     readonly title: string;
     readonly subject: HappyAgentFeedSubjectKind;
     readonly artifactType?: HappyAgentArtifactType;
-    /** A card's second thought, a post's caption, or the line that mentioned the reader. */
+    /** A post's caption, or the line that mentioned the reader. */
     readonly detail?: string;
     /** Where a mention happened: the chat or task it was said in. */
     readonly place?: string;
@@ -84,12 +82,14 @@ export interface LiveFeedPanelProps {
     readonly queued: number;
     readonly onHoverChange: (hovering: boolean) => void;
     readonly onItemOpen: (itemId: string) => void;
+    /** The item's ×: out of the stream now, or out of the stack. */
+    readonly onItemDismiss: (itemId: string) => void;
     readonly onFollowToggle: (targetId: string, following: boolean) => void;
     /** Opens the whole Feed. */
     readonly onViewAll: () => void;
 }
 
-/** "now", "40s", "3m", "2h": how long ago, in the width of a stream line. */
+/** "now", "40s", "3m", "2h": how long ago, in the width of a row's meta. */
 export function liveFeedAgeText(at: number, now: number): string {
     const seconds = Math.max(0, Math.round((now - at) / 1000));
     if (seconds < 10) return "now";
@@ -99,15 +99,21 @@ export function liveFeedAgeText(at: number, now: number): string {
     return `${String(Math.floor(minutes / 60))}h`;
 }
 
+/** "0:09", "1:24": a clip's length. */
+export function liveFeedDurationText(ms: number): string {
+    const seconds = Math.max(0, Math.round(ms / 1000));
+    return `${String(Math.floor(seconds / 60))}:${String(seconds % 60).padStart(2, "0")}`;
+}
+
 /*
- * An item comes in by growing from nothing at the bottom while it rises into
- * place, so the items above it glide up by exactly its height, once, instead
- * of stepping. Run from a ref callback on the item's first attachment only: an
- * item that is already on screen when the panel turns into the stack keeps its
- * node and does not play again, and one shown first in the stack just appears.
+ * An item comes in by growing from nothing at the bottom, so the items above it
+ * glide up by exactly its height, once, instead of stepping. Run from a ref
+ * callback on the item's first attachment only: an item already on screen when
+ * the panel turns into the stack keeps its node and does not play again, and
+ * one shown first in the stack just appears.
  */
 const entered = new WeakSet<Element>();
-function liveFeedItemAttach(element: HTMLDivElement | null) {
+function liveFeedItemAttach(element: HTMLElement | null) {
     if (element === null || entered.has(element)) return;
     entered.add(element);
     if (element.closest('[data-mode="stack"]') !== null) return;
@@ -115,276 +121,299 @@ function liveFeedItemAttach(element: HTMLDivElement | null) {
     const height = element.getBoundingClientRect().height;
     element.animate(
         [
-            {
-                height: "0px",
-                marginTop: "-6px",
-                opacity: 0,
-                transform: "translateY(12px) scale(0.96)",
-            },
-            { height: `${String(height)}px`, marginTop: "0px", opacity: 1, transform: "none" },
+            { height: "0px", marginTop: "-2px", opacity: 0 },
+            { height: `${String(height)}px`, marginTop: "0px", opacity: 1 },
         ],
-        { duration: 320, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)" },
+        { duration: 280, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)" },
     );
 }
 
 /*
- * The scrim behind the stream washes out the sidebar rows beneath it, the way
- * a live stream darkens the bottom of the video under its comments. It is as
- * tall as what the stream holds, so one item washes out one item's worth of
- * sidebar: the column's height is measured onto the panel as a custom
- * property, which only the scrim reads.
+ * The band the stream may take is a fifth of the sidebar's height, which is
+ * not the panel's containing block (the footer is), so the sidebar's height is
+ * measured onto the panel as a custom property that only the band reads. The
+ * column's height is measured too, for the scrim: it washes out only as much
+ * of the sidebar as the stream holds, so an empty stream covers nothing.
  */
-function liveFeedColumnAttach(element: HTMLDivElement | null) {
+function liveFeedPanelAttach(element: HTMLDivElement | null) {
     if (element === null) return;
-    const panel = element.closest<HTMLElement>(".happy-live-feed");
-    if (panel === null) return;
+    const sidebar = element.closest<HTMLElement>(".happy-sidebar");
+    const column = element.querySelector<HTMLElement>(".happy-live-feed__column");
+    if (sidebar === null || column === null) return;
     const observer = new ResizeObserver(() => {
-        panel.style.setProperty(
+        element.style.setProperty(
+            "--happy-live-feed-sidebar",
+            `${String(sidebar.getBoundingClientRect().height)}px`,
+        );
+        element.style.setProperty(
             "--happy-live-feed-content",
-            `${String(element.getBoundingClientRect().height)}px`,
+            `${String(column.getBoundingClientRect().height)}px`,
         );
     });
-    observer.observe(element);
+    observer.observe(sidebar);
+    observer.observe(column);
     return () => observer.disconnect();
 }
 
-function FollowControl(props: {
-    readonly target: LiveFeedFollowTarget;
-    readonly onToggle: (targetId: string, following: boolean) => void;
+/** The one thing hovering an item offers; each has its own width to clear. */
+type LiveFeedQuickKind = "follow" | "following" | "reply" | "play";
+
+/** The one thing hovering an item offers, laid over the end of its line. */
+function QuickAction(props: {
+    readonly label: string;
+    readonly title: string;
+    readonly kind: LiveFeedQuickKind;
+    readonly onAction: () => void;
 }) {
-    const following = props.target.following;
     return (
-        <button
-            aria-label={
-                following
-                    ? `Unfollow ${props.target.label}`
-                    : `Follow ${props.target.label} for its updates`
-            }
-            aria-pressed={following}
-            className="happy-live-feed-follow"
-            data-following={following ? "" : undefined}
-            onClick={(event) => {
-                event.stopPropagation();
-                props.onToggle(props.target.id, !following);
-            }}
-            title={following ? `Following ${props.target.label}` : `Follow ${props.target.label}`}
-            type="button"
-        >
-            <Icon name={following ? "check" : "plus"} size={12} />
-            <span>{following ? "Following" : "Follow"}</span>
-        </button>
-    );
-}
-
-function ItemByline(props: { readonly item: LiveFeedItem; readonly now: number }) {
-    return (
-        <span className="happy-live-feed-item__byline">
-            <span className="happy-live-feed-item__actor">{props.item.actor.name}</span>
-            <span className="happy-live-feed-item__verb">{props.item.verb}</span>
-            <span className="happy-live-feed-item__age">
-                {liveFeedAgeText(props.item.at, props.now)}
-            </span>
-        </span>
-    );
-}
-
-/** "0:09", "1:24": a clip's length on its still. */
-export function liveFeedDurationText(ms: number): string {
-    const seconds = Math.max(0, Math.round(ms / 1000));
-    return `${String(Math.floor(seconds / 60))}:${String(seconds % 60).padStart(2, "0")}`;
-}
-
-/*
- * A video never plays by itself: the stream shows its still with a play mark
- * and its length, and pressing the still plays it in the same box, so
- * starting it moves nothing. It goes back to its still when it ends.
- */
-function ItemMedia(props: { readonly media: LiveFeedMedia }) {
-    const media = props.media;
-    const [playing, playingSet] = useState(false);
-    if (media.kind === "image")
-        return (
-            <span className="happy-live-feed-item__media" data-shape={media.shape}>
-                <img alt="" draggable={false} src={media.url} />
-            </span>
-        );
-    return (
+        /* A `span`, as the sidebar's row controls are: the row is the button. */
         <span
-            aria-label={playing ? "Playing" : "Play video"}
-            className="happy-live-feed-item__media"
-            data-playing={playing ? "" : undefined}
-            data-shape={media.shape}
+            aria-label={props.title}
+            className="happy-live-feed-item__quick"
+            data-happy-desktop-ui="live-feed-item-quick"
+            data-kind={props.kind}
             onClick={(event) => {
                 event.stopPropagation();
-                playingSet(true);
+                props.onAction();
             }}
             onKeyDown={(event) => {
                 if (event.key !== "Enter" && event.key !== " ") return;
                 event.preventDefault();
                 event.stopPropagation();
-                playingSet(true);
+                props.onAction();
             }}
+            onPointerDown={(event) => event.stopPropagation()}
             role="button"
             tabIndex={0}
+            title={props.title}
         >
-            {playing ? (
+            {props.kind === "following" ? <Icon name="check" size={12} /> : null}
+            {props.kind === "play" ? <Icon name="play" size={12} /> : null}
+            <span>{props.label}</span>
+        </span>
+    );
+}
+
+/** A post's thumbnail: two rows tall, square or 16:9. A clip plays in it only when asked. */
+function Thumbnail(props: {
+    readonly media: LiveFeedMedia;
+    readonly playing: boolean;
+    readonly onPlay: () => void;
+    readonly onEnded: () => void;
+}) {
+    const media = props.media;
+    if (media.kind === "image")
+        return (
+            <span className="happy-live-feed-item__thumb" data-shape={media.shape}>
+                <img alt="" draggable={false} src={media.url} />
+            </span>
+        );
+    return (
+        /* Pressing the still plays it, as Play does; the rest of the row opens the post. */
+        <span
+            aria-label={props.playing ? "Playing" : "Play video"}
+            className="happy-live-feed-item__thumb"
+            data-playing={props.playing ? "" : undefined}
+            data-shape={media.shape}
+            onClick={(event) => {
+                event.stopPropagation();
+                props.onPlay();
+            }}
+            onKeyDown={(event) => {
+                if (event.key !== "Enter" && event.key !== " ") return;
+                event.preventDefault();
+                event.stopPropagation();
+                props.onPlay();
+            }}
+            onPointerDown={(event) => event.stopPropagation()}
+            role="button"
+            tabIndex={-1}
+        >
+            {props.playing ? (
                 <video
                     autoPlay
                     muted
-                    onEnded={() => playingSet(false)}
+                    onEnded={props.onEnded}
                     playsInline
                     poster={media.posterUrl}
                     src={media.url}
                 />
             ) : (
-                <>
-                    <img alt="" draggable={false} src={media.posterUrl} />
-                    <span aria-hidden="true" className="happy-live-feed-item__play">
-                        <Icon name="play" size={14} />
-                    </span>
-                    {media.durationMs === undefined ? null : (
-                        <span className="happy-live-feed-item__duration">
-                            {liveFeedDurationText(media.durationMs)}
-                        </span>
-                    )}
-                </>
+                <img alt="" draggable={false} src={media.posterUrl} />
+            )}
+            {props.playing ? null : (
+                <span aria-hidden="true" className="happy-live-feed-item__thumb-play">
+                    <Icon name="play" size={12} />
+                </span>
             )}
         </span>
     );
 }
 
-/** One item, drawn by its tier. The whole item opens what it is about. */
+/**
+ * One item: `[mark] line [hover: one quick action] ×`, as tall as a sidebar
+ * row and drawn with the row's own box, type and hover. Clicking it opens what
+ * it is about.
+ */
 export function LiveFeedEntry(props: {
     readonly item: LiveFeedItem;
     readonly now: number;
     readonly onOpen: (itemId: string) => void;
+    readonly onDismiss: (itemId: string) => void;
     readonly onFollowToggle: (targetId: string, following: boolean) => void;
 }) {
     const item = props.item;
-    const follow =
-        item.follow === undefined ? null : (
-            <FollowControl onToggle={props.onFollowToggle} target={item.follow} />
+    const [playing, playingSet] = useState(false);
+    const media = item.tier === "post" ? item.media : undefined;
+
+    let lead;
+    let line;
+    if (media !== undefined) {
+        lead = (
+            <Thumbnail
+                media={media}
+                onEnded={() => playingSet(false)}
+                onPlay={() => playingSet(true)}
+                playing={playing}
+            />
         );
-    let body;
-    if (item.tier === "line") {
-        body = (
-            <>
-                <Avatar {...item.actor.face} size="xs" />
-                <span className="happy-live-feed-item__line">
-                    <span className="happy-live-feed-item__actor">{item.actor.name}</span>{" "}
-                    <span className="happy-live-feed-item__verb">{item.verb}</span>{" "}
-                    <span className="happy-live-feed-item__title">{item.title}</span>
-                </span>
-            </>
-        );
+        line = <span className="happy-live-feed-item__strong">{item.detail ?? item.title}</span>;
     } else if (item.tier === "mention") {
-        body = (
-            <span className="happy-live-feed-item__text">
-                <span className="happy-live-feed-item__header">
-                    <Avatar {...item.actor.face} size="xs" />
-                    <span className="happy-live-feed-item__byline">
-                        <span className="happy-live-feed-item__actor">{item.actor.name}</span>
-                        <span className="happy-live-feed-item__verb">{item.verb}</span>
-                        <span className="happy-live-feed-item__at-you">@ you</span>
-                        <span className="happy-live-feed-item__age">
-                            {liveFeedAgeText(item.at, props.now)}
-                        </span>
-                    </span>
-                </span>
-                {item.detail ? (
-                    <span className="happy-live-feed-item__quote">{item.detail}</span>
-                ) : null}
-                <span className="happy-live-feed-item__place">
-                    <Icon name="chat" size={12} />
-                    <span>{item.place ?? item.title}</span>
-                </span>
+        lead = (
+            <span className="happy-live-feed-item__at">
+                <Icon name="at" size={16} />
             </span>
         );
-    } else if (item.tier === "card") {
-        body = (
+        line = (
             <>
-                <FeedSubjectAvatar face={undefined} size="sm">
-                    <FeedSubjectGlyph
-                        size={16}
-                        subject={item.subject}
-                        {...(item.artifactType === undefined
-                            ? {}
-                            : { artifactType: item.artifactType })}
-                    />
-                </FeedSubjectAvatar>
-                <span className="happy-live-feed-item__text">
-                    <ItemByline item={item} now={props.now} />
-                    <span className="happy-live-feed-item__title">{item.title}</span>
-                </span>
+                <span className="happy-live-feed-item__who">{item.actor.name}</span>
+                <span className="happy-live-feed-item__colon">: </span>
+                <span className="happy-live-feed-item__said">{item.detail}</span>
+            </>
+        );
+    } else if (item.tier === "card") {
+        lead = (
+            <FeedSubjectGlyph
+                size={16}
+                subject={item.subject}
+                {...(item.artifactType === undefined ? {} : { artifactType: item.artifactType })}
+            />
+        );
+        line = (
+            <>
+                <span className="happy-live-feed-item__strong">{item.title}</span>
+                {` · ${item.actor.name}`}
             </>
         );
     } else {
-        const header = (
-            <span className="happy-live-feed-item__header">
-                <Avatar {...item.actor.face} size="xs" />
-                <ItemByline item={item} now={props.now} />
-            </span>
+        lead = <Avatar {...item.actor.face} size="xs" />;
+        line = (
+            <>
+                <span className="happy-live-feed-item__strong">{item.actor.name}</span>
+                {` ${item.verb} `}
+                <span className="happy-live-feed-item__strong">{item.title}</span>
+            </>
         );
-        const caption = item.detail ? (
-            <span className="happy-live-feed-item__caption">{item.detail}</span>
-        ) : null;
-        body =
-            item.media?.shape === "square" ? (
-                <span className="happy-live-feed-item__text">
-                    {header}
-                    <span className="happy-live-feed-item__beside">
-                        <ItemMedia media={item.media} />
-                        {caption}
-                    </span>
-                </span>
-            ) : (
-                <span className="happy-live-feed-item__text">
-                    {header}
-                    {item.media ? <ItemMedia media={item.media} /> : null}
-                    {caption}
-                </span>
-            );
     }
+
+    let quick: { readonly kind: LiveFeedQuickKind; readonly node: ReactNode } | null = null;
+    if (media?.kind === "video") {
+        if (!playing)
+            quick = {
+                kind: "play",
+                node: (
+                    <QuickAction
+                        kind="play"
+                        label={
+                            media.durationMs === undefined
+                                ? "Play"
+                                : liveFeedDurationText(media.durationMs)
+                        }
+                        onAction={() => playingSet(true)}
+                        title="Play video"
+                    />
+                ),
+            };
+    } else if (item.tier === "mention") {
+        quick = {
+            kind: "reply",
+            node: (
+                <QuickAction
+                    kind="reply"
+                    label="Reply"
+                    onAction={() => props.onOpen(item.id)}
+                    title={`Reply in ${item.place ?? item.title}`}
+                />
+            ),
+        };
+    } else if (item.follow !== undefined && item.tier === "line") {
+        const target = item.follow;
+        const kind = target.following ? "following" : "follow";
+        quick = {
+            kind,
+            node: (
+                <QuickAction
+                    kind={kind}
+                    label={target.following ? "Following" : "Follow"}
+                    onAction={() => props.onFollowToggle(target.id, !target.following)}
+                    title={target.following ? `Unfollow ${target.label}` : `Follow ${target.label}`}
+                />
+            ),
+        };
+    }
+
     return (
-        <div
-            className="happy-live-feed-item"
+        <button
+            className="happy-sidebar__item happy-live-feed-item"
             data-entry-id={item.id}
             data-happy-desktop-ui="live-feed-item"
             data-leaving={item.leaving ? "" : undefined}
-            data-shape={item.media?.shape}
+            data-quick={quick?.kind}
+            data-rows={media === undefined ? "1" : "2"}
             data-tier={item.tier}
-            data-unread={item.unread ? "" : undefined}
+            data-feed-unread={item.unread ? "" : undefined}
+            onClick={() => props.onOpen(item.id)}
             ref={liveFeedItemAttach}
+            title={item.tier === "mention" ? `${item.actor.name}: ${item.detail ?? ""}` : undefined}
+            type="button"
         >
-            <button
-                className="happy-live-feed-item__body"
-                onClick={() => props.onOpen(item.id)}
-                type="button"
-            >
-                {body}
-            </button>
-            {follow}
-        </div>
+            <span className="happy-live-feed-item__lead">{lead}</span>
+            <span className="happy-live-feed-item__text">
+                <span className="happy-sidebar__item-label happy-live-feed-item__line">{line}</span>
+                {media === undefined ? null : (
+                    <span className="happy-live-feed-item__meta">
+                        {`${item.actor.name} · ${liveFeedAgeText(item.at, props.now)}`}
+                    </span>
+                )}
+            </span>
+            {quick?.node}
+            <span className="happy-live-feed-item__close">
+                <SidebarRowAction
+                    action={{ icon: "close", label: "Dismiss" }}
+                    onAction={() => props.onDismiss(item.id)}
+                />
+            </span>
+        </button>
     );
 }
 
 /**
  * LiveFeedPanel — the feed as a live stream rising from the sidebar footer.
  *
- * It stands where the update card stands: on the footer row, as wide as it,
- * inside the sidebar column. In `stream` mode new items come in at the bottom
- * and the older ones drift up and wash out under a fade at the top; each
- * leaves on its own after a while, fading where it stands. The column is
- * anchored to the bottom, so an item leaving from the top moves nothing.
+ * It stands where the update card stands, over the bottom of the sidebar's
+ * rows and exactly as wide as them, and takes at most a fifth of the sidebar's
+ * height. In `stream` mode new items come in at the bottom and the older ones
+ * drift up and wash out at the top of that band; each leaves on its own after
+ * a while, fading where it stands. The column is anchored to the bottom, so an
+ * item leaving from the top moves nothing.
  *
  * While the pointer is over the items the stream holds still — nothing new
  * pushes in under the cursor and nothing times out — and what arrives in the
- * meantime waits, counted on a pill.
+ * meantime waits, counted in the footer.
  *
- * In `stack` mode the same box, with the same item nodes, becomes a card that
- * holds everything still collected: the wash lifts, older items come back, the
- * column scrolls, and "View all" opens the whole Feed. Nothing an item draws
- * moves between the two modes.
+ * In `stack` mode the same rows, with the same nodes, hold everything still
+ * collected under a "Feed" heading with View all, on the sidebar's own
+ * background: the wash lifts and the column scrolls.
  */
 export function LiveFeedPanel(props: LiveFeedPanelProps) {
     const stack = props.mode === "stack";
@@ -395,20 +424,27 @@ export function LiveFeedPanel(props: LiveFeedPanelProps) {
             data-happy-desktop-ui="live-feed"
             data-mode={props.mode}
             data-paused={props.paused ? "" : undefined}
+            ref={liveFeedPanelAttach}
             role="log"
         >
             <span aria-hidden="true" className="happy-live-feed__scrim" />
+            {/* The stack's heading is a sidebar section heading: its label, its
+                count, and View all where a heading keeps its control. */}
             <div aria-hidden={!stack} className="happy-live-feed__header" inert={!stack}>
-                <span className="happy-live-feed__heading">Feed</span>
-                <span className="happy-live-feed__count">{props.items.length}</span>
-                <Button onClick={props.onViewAll} size="small" variant="ghost">
+                <span className="happy-sidebar__section-item-label happy-live-feed__heading">
+                    {`Feed · ${String(props.items.length)}`}
+                </span>
+                <button
+                    className="happy-live-feed__view-all"
+                    onClick={props.onViewAll}
+                    type="button"
+                >
                     View all
-                </Button>
+                </button>
             </div>
             <div className="happy-live-feed__scroller">
                 <div
                     className="happy-live-feed__column"
-                    ref={liveFeedColumnAttach}
                     onPointerEnter={() => props.onHoverChange(true)}
                     onPointerLeave={() => props.onHoverChange(false)}
                 >
@@ -417,6 +453,7 @@ export function LiveFeedPanel(props: LiveFeedPanelProps) {
                             item={item}
                             key={item.id}
                             now={props.now}
+                            onDismiss={props.onItemDismiss}
                             onFollowToggle={props.onFollowToggle}
                             onOpen={props.onItemOpen}
                         />
@@ -429,7 +466,7 @@ export function LiveFeedPanel(props: LiveFeedPanelProps) {
                 data-shown={props.paused && !stack ? "" : undefined}
             >
                 <Icon name="pause" size={12} />
-                {props.queued > 0 ? `Paused · ${String(props.queued)} new` : "Paused"}
+                {props.queued > 0 ? `${String(props.queued)} new` : "Paused"}
             </span>
         </div>
     );
