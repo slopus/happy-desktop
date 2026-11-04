@@ -9,9 +9,9 @@
     text-underline-offset: 3px;
 }
 
-/* On the setup wallpaper the link reads in the primary tint instead. */
-.happy-setup-page .happy-desktop-mobile-setup__link {
-    color: var(--button-primary-tint);
+/* On the onboarding gradient the link reads in the backdrop's own ink. */
+.happy-setup-page[data-backdrop="sky"] .happy-desktop-mobile-setup__link {
+    color: var(--onboarding-foreground);
 }
 
 /* The store code beside its platform pick, at 176px: large enough for its

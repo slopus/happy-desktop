@@ -15,7 +15,39 @@ function compile(gl: WebGLRenderingContext, type: number, source: string) {
     return null;
 }
 
-/** One canvas owns all GPU resources and observers; disposing it releases all of them. */
+/** A third of native's speed: at native speed a desktop window reads as lagging. */
+const SPEED = 1 / 3;
+
+const contextAttributes: WebGLContextAttributes = {
+    alpha: true,
+    antialias: false,
+    depth: false,
+    stencil: false,
+    powerPreference: "low-power",
+};
+
+/**
+ * Whether WebGL is being rasterized on the CPU. Chromium answers most of this
+ * by refusing a context with a major performance caveat; the renderer string
+ * covers the software drivers it does not flag. Both are the GPU stack's own
+ * report, which Happy does not own and cannot ask any other way.
+ */
+function softwareRendered(gl: WebGLRenderingContext): boolean {
+    const info = gl.getExtension("WEBGL_debug_renderer_info");
+    const renderer: unknown = gl.getParameter(
+        info === null ? gl.RENDERER : info.UNMASKED_RENDERER_WEBGL,
+    );
+    return (
+        typeof renderer === "string" &&
+        /swiftshader|llvmpipe|softpipe|software|basic render/iu.test(renderer)
+    );
+}
+
+/**
+ * One canvas owns all GPU resources and observers; disposing it releases all of
+ * them. Without GPU acceleration the gradient is drawn once and holds still: a
+ * software rasterizer spends the whole main thread on it and still stutters.
+ */
 export function onboardingGrainRenderer(
     canvas: HTMLCanvasElement,
     moving: boolean,
@@ -24,20 +56,19 @@ export function onboardingGrainRenderer(
     const document = canvas.ownerDocument;
     const view = document.defaultView;
     if (view === null) return;
-    const gl = canvas.getContext("webgl", {
-        alpha: true,
-        antialias: false,
-        depth: false,
-        stencil: false,
-        powerPreference: "low-power",
+    const accelerated = canvas.getContext("webgl", {
+        ...contextAttributes,
+        failIfMajorPerformanceCaveat: true,
     });
+    const gl = accelerated ?? canvas.getContext("webgl", contextAttributes);
     if (gl === null) return;
+    const animated = moving && accelerated !== null && !softwareRendered(gl);
 
     let releaseProgram: (() => void) | undefined;
     let render: (() => void) | undefined;
     let frame: number | undefined;
     let visible = false;
-    if (!moving) clock.seconds = 0;
+    if (!animated) clock.seconds = 0;
     let last: number | undefined;
 
     const initialize = () => {
@@ -118,14 +149,14 @@ export function onboardingGrainRenderer(
         if (last === undefined) last = now;
         // Match the native 33ms cadence and pause the clock while out of view.
         if (now - last >= 33) {
-            clock.seconds += (now - last) / 1000;
+            clock.seconds += ((now - last) / 1000) * SPEED;
             last = now;
             render?.();
         }
         frame = view.requestAnimationFrame(loop);
     };
     const settle = () => {
-        if (!moving || !visible || document.hidden || render === undefined) stop();
+        if (!animated || !visible || document.hidden || render === undefined) stop();
         else if (frame === undefined) frame = view.requestAnimationFrame(loop);
     };
     const resize = () => {

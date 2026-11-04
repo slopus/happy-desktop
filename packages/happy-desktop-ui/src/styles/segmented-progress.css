@@ -162,41 +162,50 @@
     border-radius: var(--happy-radius-sm);
 }
 
+/* Inverse ink is the primary tint, unless the backdrop it sits on names its
+   own through `--happy-segmented-progress-inverse-ink` on an ancestor. */
+.happy-segmented-progress[data-tone="inverse"] {
+    --happy-segmented-progress-ink: var(
+        --happy-segmented-progress-inverse-ink,
+        var(--button-primary-tint)
+    );
+}
+
 .happy-segmented-progress[data-tone="inverse"] .happy-segmented-progress__track {
-    background: color-mix(in srgb, var(--button-primary-tint) 20%, transparent);
+    background: color-mix(in srgb, var(--happy-segmented-progress-ink) 20%, transparent);
 }
 
 .happy-segmented-progress[data-tone="inverse"] .happy-segmented-progress__fill {
-    background: var(--button-primary-tint);
+    background: var(--happy-segmented-progress-ink);
 }
 
-/* A user-paced current step occupies the whole track, but its rendered white
+/* A user-paced current step occupies the whole track, but its rendered ink
    strength sits exactly midway between an untouched 20% track and a completed
    100% fill. The 50% fill paints over the 20% track beneath it, producing 60%
-   effective white: the midpoint between those two endpoint states. */
+   effective ink: the midpoint between those two endpoint states. */
 .happy-segmented-progress[data-mode="steps"][data-tone="inverse"]
     .happy-segmented-progress__segment[data-state="running"]
     .happy-segmented-progress__fill {
-    background: color-mix(in srgb, var(--button-primary-tint) 50%, transparent);
+    background: color-mix(in srgb, var(--happy-segmented-progress-ink) 50%, transparent);
 }
 
 .happy-segmented-progress[data-tone="inverse"] .happy-segmented-progress__track::after {
-    background: var(--button-primary-tint);
+    background: var(--happy-segmented-progress-ink);
 }
 
 .happy-segmented-progress[data-tone="inverse"] .happy-segmented-progress__label {
-    color: var(--button-primary-tint);
+    color: var(--happy-segmented-progress-ink);
 }
 
 .happy-segmented-progress[data-tone="inverse"]
     .happy-segmented-progress__segment[data-selectable]:hover
     .happy-segmented-progress__label {
-    color: var(--button-primary-tint);
+    color: var(--happy-segmented-progress-ink);
 }
 
 .happy-segmented-progress[data-tone="inverse"]
     .happy-segmented-progress__segment[data-selectable]:focus-visible {
-    outline-color: var(--button-primary-tint);
+    outline-color: var(--happy-segmented-progress-ink);
 }
 
 .happy-segmented-progress[data-tone="inverse"]
