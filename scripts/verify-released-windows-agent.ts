@@ -13,6 +13,14 @@ import {
 } from "../packages/happy-desktop-electron/sources/main/happyAgentRelease.js";
 
 if (process.platform !== "win32") throw new Error("This release check requires Windows.");
+// The update channel whose newest Agent onboarding would install: `stable` for a
+// stable Desktop, `preview` for a preview Desktop, whose Preview updates setting
+// also offers Agent previews. The preview channel always includes stable
+// releases, and skips any release without a published Windows archive, so a
+// Desktop preview never waits for an Agent preview that does not exist.
+const channel = process.argv[2];
+if (channel !== "stable" && channel !== "preview")
+    throw new Error("Usage: verify-released-windows-agent.ts stable|preview");
 const run = promisify(execFile);
 const temporaryRoot = resolve(tmpdir());
 const root = await mkdtemp(join(temporaryRoot, "happy-published-agent-"));
@@ -24,6 +32,21 @@ const environment: NodeJS.ProcessEnv = {
 delete environment.HAPPY_AGENT_SERVER_SOCKET_PATH;
 delete environment.HAPPY_AGENT_SERVER_TOKEN_PATH;
 const paths = happyDaemonPaths(environment);
+const githubToken = process.env.GITHUB_TOKEN;
+
+/**
+ * Desktop's release lookup goes through this fetch, authenticated with the run's
+ * token when there is one: a hosted runner shares its address with other jobs, and the anonymous
+ * GitHub API budget it would otherwise spend is per address. Only the API host
+ * sees the token; archive downloads go out exactly as an installed Desktop's do.
+ */
+const releaseLookupFetch: typeof globalThis.fetch = (input, init) => {
+    const url = new URL(input instanceof Request ? input.url : input);
+    if (!githubToken || url.origin !== "https://api.github.com") return fetch(input, init);
+    const headers = new Headers(init?.headers);
+    headers.set("authorization", `Bearer ${githubToken}`);
+    return fetch(input, { ...init, headers });
+};
 
 /**
  * Onboarding downloads this executable and runs it, so an unsigned one is both an
@@ -78,7 +101,8 @@ async function releasedAgentSignatureVerify(binary: string): Promise<void> {
 
 let executable: string | undefined;
 try {
-    const release = await happyAgentReleaseLatest();
+    const release = await happyAgentReleaseLatest({ channel, fetch: releaseLookupFetch });
+    console.log(`Verifying Happy Agent ${release.version}, the newest on the ${channel} channel.`);
     const installed = await happyAgentReleaseInstall(release, paths, { onStatus: console.log });
     executable = installed.path;
     assert.deepEqual(await happyAgentBinarySelected(paths), installed);
@@ -103,6 +127,7 @@ try {
     assert.equal(health.version.daemon, release.version);
     console.log(
         JSON.stringify({
+            channel,
             version: release.version,
             downloadedFromGitHub: true,
             selected: true,

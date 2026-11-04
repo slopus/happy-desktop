@@ -11,9 +11,18 @@ on:
                 description: Build only Happy Nightly, for a Nightly-only preview.
                 type: boolean
                 default: false
-            verify_agent_release:
-                type: boolean
-                default: false
+            test_scope:
+                description: >-
+                    full runs every package's tests; preview runs only the Electron host's,
+                    for a preview whose macOS verify job already ran the full set on this commit.
+                type: string
+                default: full
+            agent_channel:
+                description: >-
+                    none, or the update channel (stable or preview) whose newest published
+                    Agent to download, install, and boot through Desktop.
+                type: string
+                default: none
             release_analytics:
                 description: Embed the PostHog key; only release builds send analytics.
                 type: boolean
@@ -56,6 +65,19 @@ jobs:
               run: |
                   echo "Windows builds are always signed, and Azure signing trusts only main. Run this from main." >&2
                   exit 1
+            - name: Check inputs
+              env:
+                  TEST_SCOPE: ${{ inputs.test_scope }}
+                  AGENT_CHANNEL: ${{ inputs.agent_channel }}
+              run: |
+                  if [[ "$TEST_SCOPE" != full && "$TEST_SCOPE" != preview ]]; then
+                    echo "test_scope must be full or preview, not '$TEST_SCOPE'." >&2
+                    exit 1
+                  fi
+                  if [[ "$AGENT_CHANNEL" != none && "$AGENT_CHANNEL" != stable && "$AGENT_CHANNEL" != preview ]]; then
+                    echo "agent_channel must be none, stable, or preview, not '$AGENT_CHANNEL'." >&2
+                    exit 1
+                  fi
             - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
             - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
             - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
@@ -72,10 +94,23 @@ jobs:
                   pnpm --dir packages/happy-desktop-app typecheck
                   pnpm --dir packages/happy-desktop-gym typecheck
             - name: Test application
+              if: inputs.test_scope == 'full'
               run: pnpm test
+            # A preview tests what is Windows-specific: the Electron host process, with
+            # its updater, update feed, and Agent download, install, versioning, daemon
+            # paths, and named-pipe transport. The app, state, UI, and gym product suites
+            # are platform-independent, and desktop-release.yml's macOS verify job, which
+            # this build needs, has already passed the full `pnpm test` on this commit.
+            - name: Test the Electron host
+              if: inputs.test_scope == 'preview'
+              run: pnpm --dir packages/happy-desktop-electron test
+            # Once per run, on whichever flavor the run builds first.
             - name: Download and boot the published Windows Agent through Desktop's installer
-              if: inputs.verify_agent_release && matrix.flavor == 'standard'
-              run: pnpm exec tsx scripts/verify-released-windows-agent.ts
+              if: inputs.agent_channel != 'none' && matrix.flavor == (inputs.nightly_only && 'local-web' || 'standard')
+              env:
+                  AGENT_CHANNEL: ${{ inputs.agent_channel }}
+                  GITHUB_TOKEN: ${{ github.token }}
+              run: pnpm exec tsx scripts/verify-released-windows-agent.ts "$AGENT_CHANNEL"
             - name: Authenticate signing with GitHub OIDC
               uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3
               with:
