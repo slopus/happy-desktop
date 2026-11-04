@@ -2371,11 +2371,11 @@ it.each(cases.filter((entry) => !entry.restore || pageZoom))(
 );
 
 it.each([
-    ["first-turn-removed", [0, 1, 2, 3, 4]],
-    ["second-turn-removed", [5, 6, 7, 8, 9]],
-    ["middle-removed", [10, 11, 12, 13, 14, 15, 16, 17, 18]],
-    ["just-send", Array.from({ length: 19 }, (_, index) => index)],
-    ["deliveries-removed", [20, 21]],
+    ["both-turns-removed", [...Array.from({ length: 10 }, (_, index) => index), 20, 21]],
+    ["first-middle-removed", [...Array.from({ length: 14 }, (_, index) => index), 20, 21]],
+    ["second-middle-removed", [...Array.from({ length: 10 }, (_, index) => index), 14, 15, 16, 17, 18, 20, 21]],
+    ["only-replay", [...Array.from({ length: 18 }, (_, index) => index), 20, 21]],
+    ["only-compaction", [...Array.from({ length: 16 }, (_, index) => index), 17, 18, 20, 21]],
 ])("replays reduced bottom-follow %s", async (_label, removed) => {
     const h = harnessCreate(0, "seed:1000050");
     try {
