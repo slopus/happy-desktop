@@ -279,8 +279,18 @@ export async function splitEncode({
     });
     const seconds = frames / fps;
     await writeFile(join(out, "captions.vtt"), captionsVtt(composition, cues, seconds));
-    const cueAt = (name) => cues.find((cue) => cue.name === name)?.seconds;
+    // `name`, or `name#2` for its second occurrence.
+    const cueAt = (reference) => {
+        const [name, occurrence = "1"] = reference.split("#");
+        return cues.filter((cue) => cue.name === name)[Number(occurrence) - 1]?.seconds;
+    };
     const [focusFrom, focusTo] = composition.split.phonePart ?? [];
+    // Where the phone is from its first state on, on the cut's clock.
+    const phoneStates = composition.phoneStates?.map((entry, index, list) => ({
+        state: entry.state,
+        from: cueAt(entry.from),
+        to: index + 1 < list.length ? cueAt(list[index + 1].from) : seconds,
+    }));
     await writeFile(
         join(out, "take.json"),
         JSON.stringify(
@@ -294,6 +304,7 @@ export async function splitEncode({
                     height: composition.phone.screen.height,
                 },
                 phonePart: focusFrom && focusTo ? [cueAt(focusFrom), cueAt(focusTo)] : undefined,
+                phoneStates,
                 cues,
                 edits,
                 files: [...desktopFiles, ...phoneFiles],

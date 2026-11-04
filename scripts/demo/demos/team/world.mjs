@@ -68,7 +68,12 @@ export const defaults = { providerId: "codex", modelId: "openai/gpt-6.1-terra", 
  * past every provider's to Opus. Each service keeps its built-in account,
  * named as the daemon names it, Current CLI; no account is picked.
  */
-export const onCamera = { scanFrom: "Gemini 3.8 Flash", model: "Opus 5.5 1M" };
+export const onCamera = {
+    scanFrom: "Gemini 3.8 Flash",
+    model: "Opus 5.5 1M",
+    providerId: "claude",
+    modelId: "anthropic/opus-5-5",
+};
 /** Every scripted background agent's mode. */
 export const terraMode = {
     effort: "medium",
@@ -193,6 +198,189 @@ function change(path, seed, { base, deleted, added, language }) {
 // components live at the repository's root, so its reads name short paths.
 export const voicePath = "sources/components/VoiceAssistantStatusBar.tsx";
 export const barsPath = "sources/components/VoiceBars.tsx";
+const voiceSource = await coreAsset("VoiceAssistantStatusBar.tsx.txt");
+const barsSource = await coreAsset("VoiceBars.tsx.txt");
+/** Lines `from` to `to` of a fixture file as the repository holds it, numbered from 1. */
+const linesOf = (source, from, to) =>
+    source
+        .split("\n")
+        .slice(from - 1, to)
+        .join("\n");
+
+/**
+ * The new task's code, written by its subtask in the happy repository's own
+ * worktree, one real Edit at a time, so the subtask's row counts the lines as
+ * they land. Each edit replaces lines of the file as the repository holds
+ * them, and no two touch the same lines.
+ */
+export const voiceEdits = [
+    {
+        path: barsPath,
+        old: linesOf(barsSource, 1, 2),
+        new: [
+            "import React, { useEffect, useMemo, useRef } from 'react';",
+            "import { View, Animated, Easing } from 'react-native';",
+        ].join("\n"),
+    },
+    {
+        path: barsPath,
+        old: linesOf(barsSource, 7, 8),
+        new: [
+            "    size?: 'small' | 'medium';",
+            "    /** How many bars the waveform draws. */",
+            "    bars?: number;",
+            "}",
+            "",
+            "// Each bar's peak, as a share of its full height: a waveform's outline,",
+            "// tallest in the middle and lower toward either end.",
+            "function barPeaks(count: number): number[] {",
+            "    const middle = (count - 1) / 2;",
+            "    return Array.from({ length: count }, (_, index) => {",
+            "        const envelope = 1 - Math.abs(index - middle) / Math.max(1, middle + 1);",
+            "        const ripple = Math.abs(Math.sin(index * 0.9 + 0.6) * Math.cos(index * 0.37));",
+            "        return 0.35 + 0.65 * Math.max(envelope * 0.6, ripple);",
+            "    });",
+            "}",
+        ].join("\n"),
+    },
+    {
+        path: barsPath,
+        old: linesOf(barsSource, 13, 17),
+        new: [
+            "    size = 'small',",
+            "    bars = 28,",
+            "}) => {",
+            "    const peaks = useMemo(() => barPeaks(bars), [bars]);",
+            "    // One value per bar, kept across renders; a longer waveform starts its",
+            "    // new bars at rest.",
+            "    const values = useRef<Animated.Value[]>([]).current;",
+            "    while (values.length < bars) values.push(new Animated.Value(0.3));",
+            "    values.length = bars;",
+        ].join("\n"),
+    },
+    {
+        path: barsPath,
+        old: linesOf(barsSource, 19, 56),
+        new: [
+            "    useEffect(() => {",
+            "        if (!isActive) {",
+            "            // Quiet: every bar settles flat together.",
+            "            values.forEach((value) => value.stopAnimation());",
+            "            Animated.parallel(",
+            "                values.map((value) =>",
+            "                    Animated.timing(value, { toValue: 0.3, duration: 200, useNativeDriver: true }),",
+            "                ),",
+            "            ).start();",
+            "            return;",
+            "        }",
+            "        // Speaking: each bar rises to its own peak and falls a little after",
+            "        // the bar before it, so the wave travels along the row.",
+            "        const loops = values.map((value, index) =>",
+            "            Animated.loop(",
+            "                Animated.sequence([",
+            "                    Animated.delay((index * 83) % 1000),",
+            "                    Animated.timing(value, {",
+            "                        toValue: peaks[index],",
+            "                        duration: 420,",
+            "                        easing: Easing.inOut(Easing.sin),",
+            "                        useNativeDriver: true,",
+            "                    }),",
+            "                    Animated.timing(value, {",
+            "                        toValue: 0.3,",
+            "                        duration: 420,",
+            "                        easing: Easing.inOut(Easing.sin),",
+            "                        useNativeDriver: true,",
+            "                    }),",
+            "                ]),",
+            "            ),",
+            "        );",
+            "        loops.forEach((loop) => loop.start());",
+            "        return () => loops.forEach((loop) => loop.stop());",
+            "    }, [isActive, peaks, values]);",
+        ].join("\n"),
+    },
+    {
+        path: barsPath,
+        old: linesOf(barsSource, 69, 92),
+        new: [
+            "            {values.map((value, index) => (",
+            "                <Animated.View",
+            "                    key={index}",
+            "                    style={{",
+            "                        width: barWidth,",
+            "                        height: barHeight,",
+            "                        backgroundColor: color,",
+            "                        borderRadius: barWidth,",
+            "                        transform: [{ scaleY: value }],",
+            "                        overflow: 'hidden',",
+            "                    }}",
+            "                />",
+            "            ))}",
+        ].join("\n"),
+    },
+    {
+        path: voicePath,
+        old: linesOf(voiceSource, 176, 182),
+        new: [
+            "                    {/* The bars rest flat while it's quiet instead of leaving. */}",
+            "                    <VoiceBars",
+            "                        isActive={isVoiceSpeaking}",
+            "                        color={theme.colors.text}",
+            '                        size="small"',
+            "                        bars={5}",
+            "                    />",
+        ].join("\n"),
+    },
+    {
+        path: voicePath,
+        old: linesOf(voiceSource, 188, 188),
+        new: "                        style={styles.closeIcon}",
+    },
+    {
+        path: voicePath,
+        old: linesOf(voiceSource, 115, 115),
+        new: [
+            "                            <View style={styles.endControl}>",
+            "                                <VoiceBars",
+            "                                    isActive={isVoiceSpeaking}",
+            "                                    color={theme.colors.header.tint}",
+            '                                    size="medium"',
+            "                                    bars={12}",
+            "                                />",
+        ].join("\n"),
+    },
+    {
+        path: voicePath,
+        old: linesOf(voiceSource, 238, 242),
+        new: [
+            "    endControl: {",
+            "        height: MOBILE_GLASS_CONTROL_SIZE,",
+            "        flexDirection: 'row',",
+            "        alignItems: 'center',",
+            "        gap: 10,",
+            "        paddingHorizontal: 16,",
+            "    },",
+        ].join("\n"),
+    },
+    {
+        path: voicePath,
+        old: linesOf(voiceSource, 284, 286),
+        new: ["    closeIcon: {", "        marginLeft: 4,", "    },"].join("\n"),
+    },
+];
+/**
+ * The subtask the new task gives its code to: a worktree of the happy
+ * repository, where its lines are counted, on the model Kirill picked.
+ */
+export const voiceSubtask = {
+    title: "Waveform bars",
+    workspace: "waveform-bars",
+    brief: "Build the voice waveform in VoiceBars.tsx and show it in VoiceAssistantStatusBar.tsx: bars that move while either side is speaking and rest flat when it's quiet.",
+    /** What the task says once the subtask has the work. */
+    handoff: "Waveform bars is writing the code; I'll put up a preview when it's in.",
+    /** The subtask's last word, which reaches the task as its report. */
+    report: "The waveform is in VoiceBars.tsx, and the status bar shows it while either side speaks.",
+};
 
 /**
  * Steve's work: one file per repository, edited in steps. The agent's and the
@@ -254,8 +442,8 @@ export const repository = {
     avatar: asset("happy.png"),
     files: {
         "README.md": "# Happy\n\nRemote access to your coding agents.\n",
-        [voicePath]: await coreAsset("VoiceAssistantStatusBar.tsx.txt"),
-        [barsPath]: await coreAsset("VoiceBars.tsx.txt"),
+        [voicePath]: voiceSource,
+        [barsPath]: barsSource,
         [liveChanges.ios.path]: liveChanges.ios.before,
         [doneChanges.sendFixes.path]: doneChanges.sendFixes.before,
         [doneChanges.mobileVoice.path]: doneChanges.mobileVoice.before,
@@ -426,20 +614,37 @@ export const prompt = "Add an animated waveform to the voice agent.";
 /** The name the task gives itself from that message. */
 export const taskTitle = "Voice waveform";
 export const artifactTitle = "Voice waveform";
-export const previewReply =
-    "Here’s the waveform: the bars move while either side is speaking and rest flat when it’s quiet. Steve, how does it look?";
+/** Steve's user ID on Happy Core, for the agent to mention him by; the take fills it in. */
+let steveUserId;
+export function steveUserIdSet(id) {
+    steveUserId = id;
+}
+/**
+ * The agent's word once the preview is up: it mentions Steve by his real
+ * user link, so his name in the log is the app's own mention of him.
+ */
+export const previewReplyLead =
+    "Here’s the waveform: the bars move while either side is speaking and rest flat when it’s quiet.";
+export const previewQuestion = "how does it look?";
+const previewMention = () => {
+    if (!steveUserId) throw new Error("The take named no user for Steve.");
+    return `${previewReplyLead} [Steve](happy://users/${steveUserId}), ${previewQuestion}`;
+};
 /** What Steve types on his phone, word for word. */
 export const steveFeedback = "Love it. Narrower though, five bars max.";
 export const bars = 28;
 /**
  * What the agent answers Steve with once the page has five bars. It is the
  * turn's last word, so the phone, which shows a turn by its last word, says it
- * too; nothing follows it to push the desktop's preview out of view. The
- * preview it answers under is the five-bar page shown open again in the same
- * reply, since the small window has no room for the first one above Steve's
- * note.
+ * too; nothing follows it to push the desktop's preview out of view.
  */
 export const fiveBarsReply = "Five bars it is.";
+/**
+ * Whether the five-bar page is shown open again under Steve's note. The
+ * 700-px-tall window keeps the first preview in view above his note, so the
+ * preview itself turns to five bars, and no second copy is shown.
+ */
+export const fiveBarsShownAgain = false;
 export const fiveBars = 5;
 
 /** The page the agent publishes: the waveform speaking, and silent. */
@@ -713,11 +918,39 @@ export async function reply(payload) {
         return quick([text("Done.")]);
     }
 
-    // The filmed task: Kirill's message, then Steve's.
+    // The filmed task's subtask: it reads both files, then writes the code one
+    // edit at a time, each when the director says, so its counts climb on
+    // camera, and reports to the task, which then shows the preview.
+    if (turn.text === voiceSubtask.brief) {
+        const step = turn.answered;
+        if (step === 0)
+            return quick([
+                tool("Read", { file_path: barsPath }),
+                tool("Read", { file_path: voicePath }),
+            ]);
+        if (step <= voiceEdits.length) {
+            await gate(`voice:${step}`);
+            const edit = voiceEdits[step - 1];
+            return quick([
+                tool("Edit", { file_path: edit.path, old_string: edit.old, new_string: edit.new }),
+            ]);
+        }
+        await gate("voice:done");
+        return quick([text(voiceSubtask.report)]);
+    }
+
+    // The filmed task: Kirill's message, its subtask's report, then Steve's.
     if (turn.text === prompt) return await filmedReply(turn, system);
+    if (
+        turn.text !== steveFeedback &&
+        textOf(messages.find((message) => message.role === "user")) === prompt
+    )
+        return await previewReply(turn);
     if (turn.text === steveFeedback) {
-        // Steve's note: the agent rewrites the page with five bars, shows it
-        // open again in this reply, under Steve's note, and says so.
+        // Steve's note: the agent rewrites the page with five bars, so the
+        // preview above his note turns to five bars, and says so. A window
+        // too short to keep that preview in view shows it open again in this
+        // reply instead, under his note.
         if (turn.answered === 0) {
             await gate("feedback");
             if (!filmedArtifactId) throw new Error("The filmed task published no preview.");
@@ -729,7 +962,7 @@ export async function reply(payload) {
                 }),
             ]);
         }
-        if (turn.answered === 1)
+        if (turn.answered === 1 && fiveBarsShownAgain)
             return paced([
                 tool("update_artifact", {
                     artifactId: filmedArtifactId,
@@ -792,7 +1025,30 @@ async function filmedReply(turn, system) {
         await gate("read-voice");
         return paced([tool("Read", { file_path: files(voicePath) })]);
     }
+    // The code goes in a worktree of the happy repository, where its lines
+    // are counted; the preview stays in this conversation.
     if (turn.answered === 2) {
+        await gate("subtask");
+        return paced([
+            tool("create_subtask", {
+                title: voiceSubtask.title,
+                text: voiceSubtask.brief,
+                model: onCamera.modelId,
+                provider: onCamera.providerId,
+                effort: "medium",
+                workspace: { projectId: projectIds.get("happy"), name: voiceSubtask.workspace },
+            }),
+        ]);
+    }
+    return paced([text(voiceSubtask.handoff)], { textDeltaDelayMs: 500 });
+}
+
+/**
+ * Once the subtask reports, the task publishes the live preview and asks
+ * Steve about it.
+ */
+async function previewReply(turn) {
+    if (turn.answered === 0) {
         await gate("artifact");
         return paced([
             tool("create_artifact", {
@@ -802,7 +1058,7 @@ async function filmedReply(turn, system) {
             }),
         ]);
     }
-    if (turn.answered === 3) {
+    if (turn.answered === 1) {
         const found = resultsOf(turn.after).match(
             /(?:\bid |artifactId"?\s*[:=]\s*"?|happy-artifact id=")([a-z0-9]{20,32})\b/u,
         );
@@ -817,5 +1073,5 @@ async function filmedReply(turn, system) {
         ]);
     }
     await gate("reply");
-    return paced([text(previewReply)], { textDeltaDelayMs: 600, completionDelayMs: 400 });
+    return paced([text(previewMention())], { textDeltaDelayMs: 600, completionDelayMs: 400 });
 }
