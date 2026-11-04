@@ -10,7 +10,7 @@ import { BuildProgressPanel } from "./BuildProgressPanel";
 import { createRenderer, type RenderedElement } from "./testing";
 
 const monoFamily = () =>
-    server.browser === "webkit"
+    server.browser === "webkit" && server.platform !== "darwin"
         ? "happy Mono, ui-monospace, monospace"
         : '"happy Mono", ui-monospace, monospace';
 
@@ -164,7 +164,7 @@ it("holds BuildProgressPanel layout, progress geometry, typography, log, and fai
         display: "flex",
         "flex-direction": "column",
         "font-family":
-            server.browser === "webkit"
+            server.browser === "webkit" && server.platform !== "darwin"
                 ? "happy Figtree, system-ui, sans-serif"
                 : '"happy Figtree", system-ui, sans-serif',
         "padding-bottom": "0px",

@@ -11,7 +11,7 @@ type Renderer = ReturnType<typeof createRenderer>;
 
 /* WebKit reports the family unquoted; textMetrics() strips quotes for both. */
 const fontFamily = () =>
-    server.browser === "webkit"
+    server.browser === "webkit" && server.platform !== "darwin"
         ? "happy Figtree, system-ui, sans-serif"
         : '"happy Figtree", system-ui, sans-serif';
 

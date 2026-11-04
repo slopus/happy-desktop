@@ -10,7 +10,7 @@ import { createRenderer, type RenderedElement } from "./testing";
 type Renderer = ReturnType<typeof createRenderer>;
 
 const fontFamily = () =>
-    server.browser === "webkit"
+    server.browser === "webkit" && server.platform !== "darwin"
         ? "happy Figtree, system-ui, sans-serif"
         : '"happy Figtree", system-ui, sans-serif';
 
