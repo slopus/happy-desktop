@@ -10,6 +10,11 @@ on:
                 type: choice
                 options: [all, windows, linux]
                 default: all
+            depth:
+                description: Browser stability test depth
+                type: choice
+                options: [cheap, full]
+                default: cheap
 
 permissions:
     contents: read
@@ -23,7 +28,7 @@ jobs:
         if: ${{ inputs.platform != 'windows' }}
         name: Linux build, tests, and gym
         runs-on: ubuntu-latest
-        timeout-minutes: 60
+        timeout-minutes: 120
 
         steps:
             - name: Check out source
@@ -54,6 +59,16 @@ jobs:
 
             - name: Test application
               run: pnpm test
+
+            - name: Run full-depth browser stability suites
+              if: ${{ inputs.depth == 'full' }}
+              env:
+                  CI: ""
+                  HAPPY_TEST_DEPTH: full
+              run: |
+                  pnpm exec playwright install --with-deps chromium firefox webkit
+                  pnpm --dir packages/happy-desktop-ui test --depth=full
+                  pnpm --dir packages/happy-desktop-gym test:playwright --depth=full
 
             - name: Install the matching released Happy Agent preview
               env:
