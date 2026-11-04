@@ -132,12 +132,12 @@ export {
     type AvatarType,
     type ToneName,
 } from "./Avatar";
-export { AvatarPlaceholder, type AvatarPlaceholderProps } from "./AvatarPlaceholder";
-export { AVATAR_PLACEHOLDER_COUNT, avatarPlaceholderIndex } from "./avatarShader/avatarShader";
 export {
-    avatarShaderRendererStats,
-    type AvatarShaderRendererStats,
-} from "./avatarShader/avatarShaderRenderer";
+    AVATAR_PLACEHOLDER_COUNT,
+    AvatarPlaceholder,
+    avatarPlaceholderIndex,
+    type AvatarPlaceholderProps,
+} from "./AvatarPlaceholder";
 export { type ImageMark } from "./imageMark";
 export {
     BotFace,

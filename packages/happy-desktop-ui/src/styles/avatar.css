@@ -166,13 +166,27 @@
     background: transparent;
 }
 
-/* The live placeholder is drawn as a picture is: it fills the mark and takes
- * its corners, a circle for a person and the rounded square for an agent. */
+/* The placeholder is drawn as a picture is: it fills the mark and takes its
+ * corners, a circle for a person and the rounded square for an agent. */
 .happy-avatar__placeholder {
+    display: block;
+    object-fit: cover;
+    width: 100%;
+    height: 100%;
+    border-radius: inherit;
+}
+
+/* A working placeholder's loop lies exactly over its still, whose first
+ * frame it is, so it can start and stop without anything moving. */
+.happy-avatar-placeholder-loop {
+    position: absolute;
+    inset: 0;
     display: block;
     width: 100%;
     height: 100%;
     border-radius: inherit;
+    object-fit: cover;
+    pointer-events: none;
 }
 
 .happy-avatar__initials {

@@ -1,8 +1,5 @@
 import { Avatar, type AvatarSize } from "../../src/Avatar";
-import {
-    AVATAR_PLACEHOLDER_COUNT,
-    avatarPlaceholderIndex,
-} from "../../src/avatarShader/avatarShader";
+import { AVATAR_PLACEHOLDER_COUNT, avatarPlaceholderIndex } from "../../src/AvatarPlaceholder";
 import { Sidebar, type SidebarItem } from "../../src/Sidebar";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
@@ -93,11 +90,11 @@ export function AvatarPlaceholderPage() {
         <ComponentPage
             contract="Props only"
             number={componentNumber}
-            summary="The picture a person, bot, task, or project without one of its own wears: one of the 200 shader avatars from shaders.craftedstudios.co, picked by a hash of its ID exactly as the phone picks it, and drawn live by that package's shader. Every placeholder on the page shares one WebGL context and one compiled program, in a worker; only those on screen move, at most 32, at 20 frames a second, and nothing runs while the window is hidden. Reduced motion, or WebGL drawn in software, holds each on its first frame, the still the phone ships. Until that frame arrives a placeholder shows a gradient of its own colours."
+            summary="The picture a person, bot, task, or project without one of its own wears: one of the 200 shader avatars from shaders.craftedstudios.co, picked by a hash of its ID exactly as the phone picks it, shown as the still the phone ships. While what it stands for is working, a six-second loop of that shader moving plays over the still, whose first frame it is: only while on screen, the window is shown, motion is allowed, and the machine is not on battery. Until the still is decoded a placeholder shows a gradient of its own colours."
             title="AvatarPlaceholder"
         >
             <Specimen
-                detail="Avatar with placeholderSeed and no picture · circle for a person, rounded square for an agent · rows run at twice the package's speed, larger ones at one and a half"
+                detail="Avatar with placeholderSeed and no picture · circle for a person, rounded square for an agent"
                 label="Sizes"
                 number="01"
                 stage="app"
@@ -133,9 +130,29 @@ export function AvatarPlaceholderPage() {
             </Specimen>
 
             <Specimen
+                detail="placeholderMoving: the loop plays over the still while what the avatar stands for is working"
+                label="Working"
+                number="02"
+                stage="app"
+            >
+                <div style={{ display: "flex", alignItems: "center", gap: "24px" }}>
+                    {(["human", "agent"] as const).map((type) => (
+                        <Avatar
+                            initials="AI"
+                            key={type}
+                            placeholderMoving
+                            placeholderSeed={`${type}-xs`}
+                            size="xs"
+                            type={type}
+                        />
+                    ))}
+                </div>
+            </Specimen>
+
+            <Specimen
                 detail="A picture or a glyph outranks the placeholder; the placeholder outranks initials"
                 label="Precedence"
-                number="02"
+                number="03"
                 stage="app"
             >
                 <div style={{ display: "flex", alignItems: "center", gap: "24px" }}>
@@ -153,9 +170,9 @@ export function AvatarPlaceholderPage() {
             </Specimen>
 
             <Specimen
-                detail="Bots and projects without pictures, and a subtask's project mark, as the sidebar draws them"
+                detail="Bots and projects without pictures, and a subtask's project mark, as the sidebar draws them · the working bot's face moves"
                 label="In the sidebar"
-                number="03"
+                number="04"
                 stage="chrome"
             >
                 <div style={{ display: "flex", height: 600, width: 280 }}>
@@ -172,9 +189,9 @@ export function AvatarPlaceholderPage() {
             </Specimen>
 
             <Specimen
-                detail="All 200, five effects of 40 in the site's order: linear, radial, thermal, topography, plasma · past 32 on screen the largest keep moving and the rest hold"
+                detail="All 200, five effects of 40 in the site's order: linear, radial, thermal, topography, plasma"
                 label="The wall"
-                number="04"
+                number="05"
                 stage="app"
             >
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", width: 20 * 36 - 8 }}>

@@ -1,6 +1,7 @@
 import { expect, it } from "vitest";
 import { server } from "vitest/browser";
 import { Avatar, type AvatarSize, type AvatarType, type ToneName } from "./Avatar";
+import { avatarPlaceholderHash, avatarPlaceholderIndex } from "./AvatarPlaceholder";
 import { createRenderer } from "./testing";
 import "./theme.css";
 import "./styles/avatar.css";
@@ -424,4 +425,90 @@ it("renders the image variant, tones, defaults, and keeps size in tight flex row
     });
 
     await view.screenshot("Avatar.image.test");
+});
+
+it("picks the phone's placeholder still for a seed, and plays its loop over it only while moving", async () => {
+    // Pinned to happy-ios's AvatarPlaceholderTests, so a seed wears the same picture everywhere.
+    expect(avatarPlaceholderHash("")).toBe(2_872_998_923);
+    expect(avatarPlaceholderHash("abc")).toBe(482_950_588);
+    expect(avatarPlaceholderIndex("")).toBe(123);
+    expect(avatarPlaceholderIndex("abc")).toBe(188);
+    expect(avatarPlaceholderIndex("account-1")).toBe(180);
+    expect(avatarPlaceholderIndex("account-2")).toBe(16);
+    expect(avatarPlaceholderIndex("\u{1F600}x")).toBe(38);
+    expect(avatarPlaceholderIndex("person:ada@example.com")).toBe(15);
+
+    const view = createRenderer();
+    view.render(
+        () => (
+            <div style={{ display: "flex", gap: `${GAP}px` }}>
+                <Avatar
+                    data-testid="placeholder-human"
+                    initials="AD"
+                    placeholderSeed="person:ada@example.com"
+                    size="md"
+                />
+                <Avatar
+                    data-testid="placeholder-agent"
+                    initials="AI"
+                    placeholderSeed="abc"
+                    size="lg"
+                    type="agent"
+                />
+                <Avatar
+                    data-testid="placeholder-moving"
+                    initials="AN"
+                    placeholderMoving
+                    placeholderSeed="abc"
+                    size="xs"
+                    type="agent"
+                />
+            </div>
+        ),
+        SURFACE,
+    );
+    await view.ready();
+
+    for (const [id, file, dimension] of [
+        ["placeholder-human", "avatar-placeholder-016.webp", 36],
+        ["placeholder-agent", "avatar-placeholder-189.webp", 44],
+    ] as const) {
+        const avatar = view.$(`[data-testid="${id}"]`).element;
+        expect(avatar.querySelector("canvas"), `${id} canvas`).toBeNull();
+        const still = avatar.querySelector('[data-happy-desktop-ui="avatar-placeholder"]');
+        expect(still, `${id} still`).toBeInstanceOf(HTMLImageElement);
+        const image = still as HTMLImageElement;
+        expect(image.src, `${id} src`).toContain(file);
+        await image.decode();
+        expect(image.naturalWidth, `${id} decoded`).toBe(128);
+        expect(
+            view.$(`[data-testid="${id}"] [data-happy-desktop-ui="avatar-placeholder"]`).bounds(),
+        ).toMatchObject({ width: dimension, height: dimension });
+    }
+
+    // Still ones carry no loop.
+    for (const id of ["placeholder-human", "placeholder-agent"])
+        expect(view.$(`[data-testid="${id}"]`).element.querySelector("video"), id).toBeNull();
+
+    // A moving one lays its loop over the same still, which is also its poster.
+    const moving = view.$('[data-testid="placeholder-moving"]').element;
+    const still = moving.querySelector('[data-happy-desktop-ui="avatar-placeholder"]');
+    const loop = moving.querySelector('[data-happy-desktop-ui="avatar-placeholder-loop"]');
+    expect(still).toBeInstanceOf(HTMLImageElement);
+    expect(loop).toBeInstanceOf(HTMLVideoElement);
+    const video = loop as HTMLVideoElement;
+    expect(video.src).toContain("avatar-loop-189.mp4");
+    expect(video.poster).toContain("avatar-placeholder-189.webp");
+    expect(video.muted && video.loop).toBe(true);
+    expect(
+        view
+            .$(
+                '[data-testid="placeholder-moving"] [data-happy-desktop-ui="avatar-placeholder-loop"]',
+            )
+            .bounds(),
+    ).toEqual(
+        view
+            .$('[data-testid="placeholder-moving"] [data-happy-desktop-ui="avatar-placeholder"]')
+            .bounds(),
+    );
 });

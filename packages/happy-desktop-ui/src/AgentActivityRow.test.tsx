@@ -9,7 +9,7 @@ import "./styles/agent-activity-row.css";
 import "./styles/avatar.css";
 import "./styles/typed-text.css";
 import { AgentActivityRow } from "./AgentActivityRow";
-import { avatarPlaceholderIndex } from "./avatarShader/avatarShader";
+import { avatarPlaceholderIndex } from "./AvatarPlaceholder";
 import { createRenderer } from "./testing";
 
 const fileDiffTool: ConversationToolCall = {
