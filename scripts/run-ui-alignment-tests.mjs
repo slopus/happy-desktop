@@ -82,6 +82,7 @@ const includesFuzz =
 if (
     depth === "full" &&
     watchIndex === -1 &&
+    !vitestArgs.some((arg) => arg.startsWith("--testNamePattern=")) &&
     basename(process.cwd()) === "happy-desktop-ui" &&
     includesFuzz
 ) {
