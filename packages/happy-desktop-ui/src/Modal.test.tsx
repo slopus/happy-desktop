@@ -11,7 +11,7 @@ import { Modal } from "./Modal";
 import { createRenderer } from "./testing";
 
 const fontFamily = () =>
-    server.browser === "webkit"
+    server.browser === "webkit" && server.platform !== "darwin"
         ? "happy Figtree, system-ui, sans-serif"
         : '"happy Figtree", system-ui, sans-serif';
 

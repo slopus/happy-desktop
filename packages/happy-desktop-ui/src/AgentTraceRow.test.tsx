@@ -12,12 +12,12 @@ type View = ReturnType<typeof createRenderer>;
 const engine = () => server.browser as Engine;
 
 const uiFamily = () =>
-    engine() === "webkit"
+    engine() === "webkit" && server.platform !== "darwin"
         ? "happy Figtree, system-ui, sans-serif"
         : '"happy Figtree", system-ui, sans-serif';
 
 const monoFamily = () =>
-    engine() === "webkit"
+    engine() === "webkit" && server.platform !== "darwin"
         ? "happy Mono, ui-monospace, monospace"
         : '"happy Mono", ui-monospace, monospace';
 

@@ -103,7 +103,7 @@ it("holds DiffSnippet geometry, colors, typography, and scrolling", async () => 
     await view.ready();
 
     const monoFamily =
-        server.browser === "webkit"
+        server.browser === "webkit" && server.platform !== "darwin"
             ? "happy Mono, ui-monospace, monospace"
             : '"happy Mono", ui-monospace, monospace';
 
