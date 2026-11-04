@@ -202,6 +202,7 @@ function chatCreate(id: string, count: number) {
         elements: history(id, count),
         state: session(id),
         extras: [] as ConversationEntry[],
+        steeringSendId: undefined as string | undefined,
         draft: "",
         docked: true,
         runningGroup: id,
@@ -368,6 +369,7 @@ function harnessCreate(count = 65, namespace = "") {
                 onTraceToggle={chat.store.turnTraceToggle}
                 onStartReached={chat.store.historyLoadMore}
                 running={chat.state.status === "running"}
+                steeringSendId={chat.steeringSendId}
                 failureSwitch={failureSource}
                 failureActions={{
                     onSwitch: (entryId, target) =>
@@ -1285,6 +1287,7 @@ async function act(h: Harness, action: Action, pick: ReturnType<typeof random>, 
                 chat.extras = [...chat.extras, own(`${id}:${i}`, "sending")];
             chat.draft = "";
             sent = `${id}:${count - 1}`;
+            if (chat.state.status === "running") chat.steeringSendId = sent;
             changesAnchor = true;
             break;
         }

@@ -9741,6 +9741,7 @@ function HappyAgentConversationSurface(props: {
             }
             conversationId={conversation.conversationId}
             entries={conversation.entries}
+            steeringSendId={conversation.steeringSendId}
             errorAssistance={conversation.errorAssistance}
             errorAssistanceUnavailable={props.unavailable}
             onErrorAssistanceRequest={(entryId) => {
@@ -11380,6 +11381,7 @@ function HappyAgentPanelChatSurface(props: {
         <ConversationView
             {...(chatSnapshot ? { conversationId: chatSnapshot.sessionId } : {})}
             entries={chatSnapshot?.entries ?? []}
+            steeringSendId={chatSnapshot?.steeringSendId}
             {...(chatSnapshot ? { expandedTurnIds: chatSnapshot.expandedTurnIds } : {})}
             {...(chatSnapshot ? { expandedMessageIds: chatSnapshot.expandedMessageIds } : {})}
             onMessageExpandedChange={chat.messageExpandedSet}

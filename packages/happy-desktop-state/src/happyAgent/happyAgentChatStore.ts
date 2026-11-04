@@ -634,6 +634,8 @@ export interface HappyAgentChatSnapshot {
     readonly session: Loadable<HappyAgentSession>;
     readonly entries: readonly ConversationEntry[];
     readonly runStatus: "idle" | "running";
+    /** The latest message this client started during a running turn. */
+    readonly steeringSendId?: string;
     /**
      * Whether agents this conversation delegated to are still working, which
      * can outlast its own turn. `subagentsAbort` stops them.
@@ -901,6 +903,7 @@ export function happyAgentChatStoreCreate(
     }));
 
     const listeners = new Set<() => void>();
+    let steeringSendId: string | undefined;
     /* The connection's current model catalog; the daemon can change what it
        offers while this conversation is open. */
     let catalog = deps.catalog;
@@ -1173,6 +1176,7 @@ export function happyAgentChatStoreCreate(
             session: sessionLoadable(),
             entries,
             runStatus,
+            ...(steeringSendId === undefined ? {} : { steeringSendId }),
             subagentsRunning: connected?.subagentsRunning ?? false,
             workingPhase: workingPhaseProject(connected, waitingForModel),
             ...(workingLabel === undefined ? {} : { workingLabel }),
@@ -1530,7 +1534,9 @@ export function happyAgentChatStoreCreate(
                 if (current.session.value.permissionMode !== permissionMode)
                     throw new Error("The access mode changed. Review the message again.");
                 const steered = runStatus === "running";
-                await deps.connectActions.sendMessageConfirmed(sessionId, text);
+                await deps.connectActions.sendMessageConfirmed(sessionId, text, (id) => {
+                    if (steered) steeringSendId = id;
+                });
                 output({ type: "messageSent", sessionId, steered });
             }),
         messageSend: (text, images, refused) =>
@@ -1553,6 +1559,9 @@ export function happyAgentChatStoreCreate(
                               ],
                           }
                         : text,
+                    (id) => {
+                        if (steered) steeringSendId = id;
+                    },
                 );
                 if (images && images.length > 0) sentImagesRemember(mutationId, images);
                 sentMessageIds = new Set([...sentMessageIds, mutationId]);
@@ -1616,17 +1625,23 @@ export function happyAgentChatStoreCreate(
                             ? `/${name}`
                             : `/${name} ${argumentsValue}`;
                     connectMutationTrack(
-                        deps.connectActions.sendMessage(sessionId, {
-                            text,
-                            content: [
-                                { type: "text", text },
-                                {
-                                    type: "tool_call_request",
-                                    name: "read_skill",
-                                    arguments: { name },
-                                },
-                            ],
-                        }),
+                        deps.connectActions.sendMessage(
+                            sessionId,
+                            {
+                                text,
+                                content: [
+                                    { type: "text", text },
+                                    {
+                                        type: "tool_call_request",
+                                        name: "read_skill",
+                                        arguments: { name },
+                                    },
+                                ],
+                            },
+                            (id) => {
+                                if (steered) steeringSendId = id;
+                            },
+                        ),
                     );
                     output({ type: "messageSent", sessionId, steered });
                     return;

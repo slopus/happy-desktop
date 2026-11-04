@@ -183,6 +183,7 @@ function renderConversation(
         });
         const [height, setHeight] = useState(700);
         const [running, setRunning] = useState(false);
+        const [steeringSendId, setSteeringSendId] = useState<string>();
         finish = () => flushSync(() => setRunning(false));
         start = () => flushSync(() => setRunning(true));
         limit = () =>
@@ -230,6 +231,7 @@ function renderConversation(
             flushSync(() => {
                 setRunning(true);
                 sent += 1;
+                setSteeringSendId(`queued-${String(sent)}`);
                 const entry = message(
                     `queued-${String(sent)}`,
                     `Queued instruction ${String(sent)}`,
@@ -241,6 +243,7 @@ function renderConversation(
         send = (text) =>
             flushSync(() => {
                 sent += 1;
+                if (running) setSteeringSendId(`sent-message-${String(sent)}`);
                 setEntries((previous) => [
                     ...previous,
                     message(
@@ -320,6 +323,7 @@ function renderConversation(
                     failureSwitch={limitSwitchSource}
                     motion="calm"
                     running={running}
+                    steeringSendId={steeringSendId}
                     title={withTitle ? "Conversation" : undefined}
                     viewerId={reader.id}
                 />

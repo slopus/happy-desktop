@@ -4570,7 +4570,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         markSessionRead(sessionId) {
             return sessionReadMark(sessionId);
         },
-        sendMessage(sessionId, message) {
+        sendMessage(sessionId, message, prepared) {
             const mutationId = nextId();
             const acceptance = sendAcceptanceCreate(mutationId);
             const created = sessionCreations.get(sessionId);
@@ -4627,6 +4627,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
             rememberUserMessageId(mutationId);
             const entry = sessions.get(sessionId);
             if (entry !== undefined) {
+                prepared?.(mutationId);
                 entry.messages.set(mutationId, {
                     message: {
                         id: mutationId,
@@ -4702,8 +4703,8 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                 // retries. Its mode is captured above and retries reuse its ID.
             );
         },
-        sendMessageConfirmed(sessionId, message) {
-            const id = this.sendMessage(sessionId, message);
+        sendMessageConfirmed(sessionId, message, prepared) {
+            const id = this.sendMessage(sessionId, message, prepared);
             return this.sendAcceptanceWait(id);
         },
         sendAcceptanceWait(mutationId) {

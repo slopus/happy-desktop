@@ -1133,9 +1133,17 @@ export interface HappyAgentConnection {
     /** Waits for the host to take a task or group rename, rejecting when it refuses. */
     renameWait(mutationId: MutationId): Promise<void>;
     markSessionRead(sessionId: string): MutationId;
-    sendMessage(sessionId: string, message: string | SendMessageInput): MutationId;
+    sendMessage(
+        sessionId: string,
+        message: string | SendMessageInput,
+        prepared?: (id: MutationId) => void,
+    ): MutationId;
     /** Same send/idempotency path, resolving only after authoritative acceptance. */
-    sendMessageConfirmed(sessionId: string, message: string | SendMessageInput): Promise<void>;
+    sendMessageConfirmed(
+        sessionId: string,
+        message: string | SendMessageInput,
+        prepared?: (id: MutationId) => void,
+    ): Promise<void>;
     /**
      * Waits for the host to accept a send `sendMessage` just started, rejecting
      * when it refused it. Ask in the same call stack the send started in.
