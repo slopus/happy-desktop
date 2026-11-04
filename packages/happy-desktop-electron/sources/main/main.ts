@@ -125,6 +125,7 @@ import { desktopBuildIdentityRead } from "./buildIdentity";
 import { DesktopDaemonController } from "./desktopDaemonController";
 import { desktopSmokeReportStart } from "./desktopSmokeReport";
 import { cloudAuthProductionRedirectUri, serverOAuthRedirectUri } from "../shared/cloudAuthConfig";
+import { cloudAuthCallbackRead } from "./cloudAuthCallback";
 import { happyExternalLinkUrl } from "./happyLink";
 
 if (process.platform !== "darwin" && process.platform !== "linux" && process.platform !== "win32") {
@@ -466,17 +467,6 @@ const cloudAuthProtocol = new URL(cloudAuthConfiguration.redirectUri).protocol.s
 const cloudAuthCallbacks: string[] = [];
 const CLOUD_AUTH_CALLBACKS_MAX = 8;
 
-function cloudAuthCallbackRead(candidate: string): string | undefined {
-    try {
-        const parsed = new URL(candidate);
-        return parsed.protocol === `${cloudAuthProtocol}:` && parsed.hostname === "callback"
-            ? parsed.href
-            : undefined;
-    } catch {
-        return undefined;
-    }
-}
-
 const serverOAuthRedirect = new URL(serverOAuthRedirectUri);
 /**
  * Team-server sign-ins, in this process's memory only. The window never holds
@@ -558,7 +548,7 @@ callbackProtocolRegister(serverOAuthRedirect.protocol.slice(0, -1));
  * whether it was one of them.
  */
 function systemUrlDeliver(candidate: string): boolean {
-    const cloud = cloudAuthCallbackRead(candidate);
+    const cloud = cloudAuthCallbackRead(candidate, cloudAuthConfiguration.redirectUri);
     const server = cloud ? undefined : serverOAuthCallbackRead(candidate);
     const link = cloud || server ? undefined : happyExternalLinkUrl(candidate);
     if (server) serverSessions.callbackReceive(server);
