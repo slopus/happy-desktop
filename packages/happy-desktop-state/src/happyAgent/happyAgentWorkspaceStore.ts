@@ -268,6 +268,7 @@ export interface HappyAgentConversationSnapshot {
      */
     readonly composer: ComposerSource;
     readonly running: boolean;
+    readonly steeringSendId?: string;
     /**
      * Agents this conversation delegated to are still working. With `running`
      * false, it is only their work that is going.
@@ -3000,6 +3001,7 @@ export function happyAgentWorkspaceStoreCreate(
             errorAssistance: errorAssistanceProject(chat),
             composer: draft,
             running: chat.runStatus === "running",
+            ...(chat.steeringSendId === undefined ? {} : { steeringSendId: chat.steeringSendId }),
             subagentsRunning: chat.subagentsRunning,
             workingPhase: chat.workingPhase,
             ...(chat.workingLabel !== undefined ? { workingLabel: chat.workingLabel } : {}),

@@ -124,6 +124,8 @@ export type ConversationViewProps = {
     subtitle?: string;
     /** True while the agent is working; drives the live activity line. */
     running?: boolean;
+    /** The message this client most recently sent during a running turn. */
+    steeringSendId?: string;
     /** True while the addressed conversation is hydrating its transcript. */
     loading?: boolean;
     /** Elapsed run time in ms, supplied by the owner (no timers live in the UI). */
@@ -590,18 +592,6 @@ function conversationCurrentFailure(transcript: readonly ConversationEntry[]): s
     return undefined;
 }
 
-/** The reader's newest send from this view, while it is still the newest message. */
-function conversationSentHereKey(entries: readonly ConversationEntry[]): string | undefined {
-    for (let index = entries.length - 1; index >= 0; index -= 1) {
-        const entry = entries[index]!;
-        if (entry.kind !== "message") continue;
-        return entry.sentHere === true && entry.delivery !== "failed"
-            ? entry.message.id
-            : undefined;
-    }
-    return undefined;
-}
-
 /** The geometry-relevant part of a failure row's props, for the row-height model. */
 function failureRowContext(failure: ConversationEntryFailureProps): ConversationFailureRowContext {
     return {
@@ -832,7 +822,7 @@ export function ConversationView(props: ConversationViewProps) {
        moves nothing: a reader following the bottom keeps following it, and
        one scrolled into history stays put. A send already present when the
        view opens is history. */
-    const sentKey = conversationSentHereKey(props.entries);
+    const sentKey = props.steeringSendId;
     const [sendFollow, setSendFollow] = useState(() => ({
         conversationId: props.conversationId,
         sentKey,
@@ -844,8 +834,7 @@ export function ConversationView(props: ConversationViewProps) {
         setSendFollow({
             conversationId: props.conversationId,
             sentKey,
-            followKey:
-                sentKey !== undefined && props.running === true ? sentKey : sendFollow.followKey,
+            followKey: sentKey ?? sendFollow.followKey,
         });
     /*
      * The turn ended and the agents it delegated to did not. That is a state of
