@@ -402,6 +402,7 @@ it("centers DiffSnippet ink optically in all engines", { timeout: 120_000 }, asy
         expect(gutter.element.textContent).toBe(glyph);
         const cellCenterX = gutter.bounds().x - rowLine(line).bounds().x + 12;
         const ink = await inLine(line, "gutter");
+        console.info("DIFF_GUTTER", server.browser, server.platform, glyph, ink);
         expect(Math.abs(ink.x - cellCenterX)).toBeLessThanOrEqual(0.4);
         expect(Math.abs(ink.y - 10)).toBeLessThanOrEqual(0.4);
     }

@@ -1067,6 +1067,7 @@ it("holds ContextChips and MentionPicker geometry and colors", async () => {
         fileChip,
         `${fileChip} [data-happy-desktop-ui="context-chips-detail"]`,
     );
+    console.info("CHIP_INK", server.browser, server.platform, textDrift, detailDrift);
     expect(
         Math.abs(detailDrift.dy - (server.browser === "chromium" ? 3.61 : 0.9)),
     ).toBeLessThanOrEqual(0.4);

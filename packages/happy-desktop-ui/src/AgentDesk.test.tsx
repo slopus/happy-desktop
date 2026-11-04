@@ -40,6 +40,7 @@ async function ink(view: View, selector: string, laneCenterY: number) {
     const el = view.$(selector);
     const vis = await el.visibleMetrics();
     expect(vis.pixelCount, `${selector} paints no pixels`).toBeGreaterThan(0);
+    console.info("DESK_INK", server.browser, server.platform, selector, el.offsets().top + vis.center.y - laneCenterY);
     return {
         bounds: vis.bounds,
         dx: vis.center.x - el.width() / 2,
