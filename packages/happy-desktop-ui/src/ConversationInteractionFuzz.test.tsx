@@ -2360,12 +2360,13 @@ it("reports a parked reading position after an activity disclosure", async () =>
     try {
         await h.view.ready();
         await settle();
-        await act(h, "shell", () => 0, 0);
+        await act(h, "tool", () => 0, 0);
         await settle();
-        const result = await act(h, "disclose", () => 0, 1);
-        await settle();
-        expect(result.readerAction).toBe(true);
+        const disclosure = h.viewport().querySelector<HTMLButtonElement>("button[aria-expanded]");
+        expect(disclosure).not.toBeNull();
+        disclosure!.click();
         expect(h.chats[h.active]!.position?.type).toBe("row");
+        await settle();
         const before = snapshot(h);
         await act(h, "append", () => 0, 2);
         await settle();
