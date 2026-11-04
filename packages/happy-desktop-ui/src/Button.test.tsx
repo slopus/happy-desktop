@@ -232,9 +232,10 @@ it("holds Button dimensions, typography, and optical label centering for every s
             // Optical vertical centering at backing-pixel precision; see the
             // labelTolerances comment for why skewed words get the ceiling.
             const drift = await labelDrift(view, id);
-            expect(Math.abs(drift.dy), `${id} vertical centroid`).toBeLessThanOrEqual(
-                labelTolerances[variant],
-            );
+            expect(
+                Math.abs(drift.dy),
+                `${id} vertical centroid drift ${String(drift.dy)}`,
+            ).toBeLessThanOrEqual(labelTolerances[variant]);
 
             // A word's ink centroid is horizontally asymmetric by nature
             // (heavy capitals, ascender clusters), so horizontal centering is
@@ -466,7 +467,10 @@ it("holds Button icon forms and disabled state with correctly boxed glyphs", asy
     expect((disabled.element as HTMLButtonElement).disabled).toBe(true);
     // "Disabled" is balanced ink: held to the tuned 0.4px even at 0.48 alpha.
     const disabledDrift = await labelDrift(view, "button-disabled");
-    expect(Math.abs(disabledDrift.dy)).toBeLessThanOrEqual(0.4);
+    expect(
+        Math.abs(disabledDrift.dy),
+        `disabled vertical centroid drift ${String(disabledDrift.dy)}`,
+    ).toBeLessThanOrEqual(0.4);
 
     await view.screenshot("Button.variants.test");
 }, 120_000);
