@@ -2370,7 +2370,13 @@ it.each(cases.filter((entry) => !entry.restore || pageZoom))(
     60_000,
 );
 
-it("replays the reduced bottom-follow failure", async () => {
+it.each([
+    ["first-turn-removed", [0, 1, 2, 3, 4]],
+    ["second-turn-removed", [5, 6, 7, 8, 9]],
+    ["middle-removed", [10, 11, 12, 13, 14, 15, 16, 17, 18]],
+    ["just-send", Array.from({ length: 19 }, (_, index) => index)],
+    ["deliveries-removed", [20, 21]],
+])("replays reduced bottom-follow $label", async (_label, removed) => {
     const h = harnessCreate(0, "seed:1000050");
     try {
         await h.view.ready();
@@ -2384,6 +2390,7 @@ it("replays the reduced bottom-follow failure", async () => {
             "compaction", "disclose", "replay", "send", "delivery", "delivery", "append",
         ];
         for (const [index, action] of actions.entries()) {
+            if ((removed as number[]).includes(index)) continue;
             const step = index + 21;
             await act(h, action, () => (step === 37 || step === 40 ? 1 : 0), step);
             await frame();
