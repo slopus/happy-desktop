@@ -69,7 +69,11 @@ export function MentionLayerBenchPage() {
     const mentions = Number(params.get("mentions") ?? "5");
     const width = Number(params.get("width") ?? "640");
     const [value, setValue] = useState(() =>
-        params.get("fixture") === "align" ? ALIGN : benchText(chars, mentions),
+        params.get("fixture") === "align"
+            ? ALIGN
+            : params.get("fixture") === "grow"
+              ? "Hi @Bob Martin and @Carol Diaz,\nplease look at the refund path."
+              : benchText(chars, mentions),
     );
     return (
         <div data-mention-bench="" style={{ padding: 24, width }}>
@@ -99,5 +103,5 @@ const BENCH_CSS = `
 [data-mention-bench][data-align="layer"] .happy-composer__mention { color: #000 !important; }
 [data-mention-bench][data-align="both"] .happy-composer__textarea { color: #000 !important; }
 [data-mention-bench][data-align="both"] .happy-composer__mention-layer-text,
-[data-mention-bench][data-align="both"] .happy-composer__mention { color: #f00 !important; }
+[data-mention-bench][data-align="both"] .happy-composer__mention { color: #f0f !important; }
 `;

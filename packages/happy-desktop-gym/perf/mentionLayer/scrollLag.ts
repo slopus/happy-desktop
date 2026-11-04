@@ -1,6 +1,6 @@
 /**
  * Mention-layer scroll lag: the textarea's ink in black over the layer's in
- * red, recorded frame by frame from the compositor (CDP screencast) while a
+ * magenta, recorded frame by frame from the compositor (CDP screencast) while a
  * wheel scrolls a long draft. Aligned, the black covers the red except for
  * antialiased edges; a frame where the layer trails the textarea's scroll shows
  * whole red glyphs. Each frame's red-pixel count is compared with a still frame.
@@ -39,7 +39,7 @@ async function redPixels(
             const data = context.getImageData(0, 0, width, height).data;
             let red = 0;
             for (let i = 0; i < data.length; i += 4)
-                if (data[i]! > 170 && data[i + 1]! < 90 && data[i + 2]! < 90) red++;
+                if (data[i]! > 190 && data[i + 1]! < 90 && data[i + 2]! > 190) red++;
             return red;
         },
         [png, clip] as const,
