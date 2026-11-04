@@ -605,8 +605,8 @@ it.skipIf(!CSS.supports("field-sizing", "content")).each([false, true])(
     },
 );
 
-// Firefox CSS zoom changes native scrollTop: happy-file://agents/ebzk9bggqj0qt6wts9jv0tgh/.context/fuzz-plainzoom24.log
-it.skipIf(server.browser === "firefox").each([false, true])(
+// Page zoom is emulated through CDP, which only Chromium has.
+it.skipIf(server.browser !== "chromium").each([false, true])(
     "keeps a sent message and an inline question in view while zooming and answering it, with header: %s",
     async (withTitle) => {
         const { view, send, question } = renderConversation(60, false, withTitle);
