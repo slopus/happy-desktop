@@ -1,11 +1,13 @@
 # Windows sandbox permission explanation
 
 The UI review is in Blueprint → Onboarding flow (`#onboarding-flow`), under
-`windows-sandbox-explain`, `windows-sandbox-waiting`, `windows-sandbox-declined`,
-and `windows-sandbox-failed`. `WindowsSandboxSetup` is a reusable modal with
-explicit props and callbacks. It does not invoke setup on mount.
+`windows-sandbox-before`, `windows-sandbox-waiting`, and
+`windows-sandbox-unfinished`, immediately after Subscriptions.
+`WindowsSandboxSetup` reuses the same `SetupPage` as the other onboarding steps.
+It does not invoke setup on mount. Its flat illustration has one sandbox outline,
+with the rest of the PC outside it.
 
-**The modal is not connected to live onboarding yet.** Correct integration needs
+**The step is not connected to live onboarding yet.** Correct integration needs
 Electron host changes, which require two human confirmations under `AGENTS.md`.
 This change prepares the UI for review without changing host behavior.
 
@@ -53,6 +55,11 @@ Onboarding may reach a connected daemon without the sandbox, because provisionin
 is lazy, but restricted command execution still fails closed. Proceeding past
 onboarding would therefore not establish a working sandbox.
 
+The page offers no skip: without setup, restricted agent commands cannot work.
+Cancellation and failure share the calm “That didn’t finish. Try again?” line.
+The benefit copy stays visible while the Windows prompt is open or setup needs
+another attempt. It explains autonomous work and automatic checks in plain words.
+
 ## Required integration
 
 1. Add a narrow typed native status/setup capability. The native helper already
@@ -62,11 +69,16 @@ onboarding would therefore not establish a working sandbox.
 2. Check readiness before any managed startup path can trigger provisioning.
    Prevent automatic provisioning until the person presses Continue. A renderer
    flag alone cannot control main's independent startup path.
-3. Show the modal only on Windows when native setup is required. Continue invokes
-   explicit setup; Try again invokes explicit retry. Serialize attempts and retain
+3. Place the step after Subscriptions, only on Windows when native setup is
+   required; skip it on other platforms and when readiness is already confirmed.
+   Show Sandbox in the stepper only for that flow (`OnboardingSteps.sandbox`).
+   Set up invokes explicit setup, then explicit retry after an unfinished attempt.
+   Serialize attempts and retain
    the native pending-attempt guard so a second click cannot launch duplicate UAC.
-4. Project cancellation and other failures separately into the UI's declined and
-   failed states. Never infer cancellation by searching arbitrary error text.
+4. Project cancellation and other failures into the UI's `unfinished` state.
+   Keep native results typed; never infer cancellation by searching arbitrary
+   error text. Use `waiting` while the Windows prompt is open and `before`
+   before the first attempt.
 5. On confirmed readiness, resume normal onboarding. If adding Learn more,
    connect it to a real host callback opening the sandbox documentation, for example
    `https://github.com/slopus/happy-agent/blob/main/docs/permissions-and-sandbox.md`.

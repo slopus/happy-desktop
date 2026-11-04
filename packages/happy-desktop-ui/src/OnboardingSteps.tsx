@@ -12,7 +12,9 @@ export type MobileOnboardingStage = "get-app" | "connect-phone" | "complete";
 export type OnboardingStepsProps =
     | {
           readonly scope: "desktop";
-          readonly stage: OnboardingStage;
+          readonly stage: OnboardingStage | "sandbox";
+          /** Native readiness decides whether this Windows-only step is in the flow. */
+          readonly sandbox?: boolean;
           /**
            * The furthest step setup actually reached. Going back to an earlier
            * step lights that step without unwinding what is already done.
@@ -31,9 +33,13 @@ export type OnboardingStepsProps =
 const desktopStages = [
     { id: "setup", label: "Setup" },
     { id: "subscriptions", label: "Subscriptions" },
+    { id: "sandbox", label: "Sandbox" },
     { id: "get-app", label: "Get Mobile App" },
     { id: "connect-phone", label: "Link Mobile App" },
-] as const satisfies readonly { readonly id: OnboardingStage; readonly label: string }[];
+] as const satisfies readonly {
+    readonly id: OnboardingStage | "sandbox";
+    readonly label: string;
+}[];
 const mobileStages = [
     { id: "get-app", label: "Get Mobile App" },
     { id: "connect-phone", label: "Link Mobile App" },
@@ -72,7 +78,8 @@ function segments(
             ...(state === "running" ? { fraction: 1 } : {}),
             // Only a step already passed can be returned to, and only when the flow
             // says it has somewhere to send you.
-            ...(onStageSelect && index < currentIndex
+            // Native sandbox setup is completed once, not a revisitable form.
+            ...(onStageSelect && stage.id !== "sandbox" && index < currentIndex
                 ? { onSelect: () => onStageSelect(stage.id) }
                 : {}),
         };
@@ -85,7 +92,10 @@ export function OnboardingSteps(props: OnboardingStepsProps) {
     const primary =
         props.scope === "desktop"
             ? segments(
-                  desktopStages,
+                  desktopStages.filter(
+                      (stage) =>
+                          stage.id !== "sandbox" || props.sandbox || props.stage === "sandbox",
+                  ),
                   props.stage,
                   props.reached ?? props.stage,
                   false,

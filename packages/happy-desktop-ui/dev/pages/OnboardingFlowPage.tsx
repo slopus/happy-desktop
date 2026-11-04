@@ -145,32 +145,6 @@ const screens: readonly {
         label: "Setup · starting Happy Agent",
         render: () => onboarding({ kind: "agent-setup", phase: { kind: "starting" } }),
     },
-    ...(["explain", "waiting", "declined", "failed"] as const).map((state) => ({
-        id: `windows-sandbox-${state}`,
-        label: `Setup · Windows sandbox · ${state}`,
-        render: () => (
-            <>
-                {onboarding({ kind: "agent-setup", phase: { kind: "starting" } })}
-                <WindowsSandboxSetup state={state} onContinue={noop} />
-            </>
-        ),
-    })),
-    {
-        appearance: "light",
-        id: "windows-sandbox-explain-light",
-        label: "Setup · Windows sandbox · light appearance",
-        render: () => (
-            <>
-                {onboarding(
-                    { kind: "agent-setup", phase: { kind: "starting" } },
-                    undefined,
-                    false,
-                    "light",
-                )}
-                <WindowsSandboxSetup state="explain" onContinue={noop} />
-            </>
-        ),
-    },
     {
         id: "subscriptions-checking",
         label: "Subscriptions · checking",
@@ -285,6 +259,17 @@ const screens: readonly {
         id: "subscriptions-mixed-light",
         label: "Subscriptions · every card state, light appearance",
         render: () => onboarding(mixedSubscriptions, undefined, false, "light"),
+    },
+    ...(["before", "waiting", "unfinished"] as const).map((state) => ({
+        id: `windows-sandbox-${state}`,
+        label: `Sandbox · Windows · ${state}`,
+        render: () => <WindowsSandboxSetup appearance="dark" state={state} onContinue={noop} />,
+    })),
+    {
+        appearance: "light",
+        id: "windows-sandbox-before-light",
+        label: "Sandbox · Windows · light appearance",
+        render: () => <WindowsSandboxSetup appearance="light" state="before" onContinue={noop} />,
     },
     {
         id: "mobile",

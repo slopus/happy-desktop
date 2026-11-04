@@ -1,77 +1,43 @@
-.happy-windows-sandbox__content,
-.happy-windows-sandbox__pc,
-.happy-windows-sandbox__boundary,
-.happy-windows-sandbox__private,
-.happy-windows-sandbox__expect {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
+.happy-windows-sandbox .happy-setup-page__body {
+    max-width: 880px;
 }
 
-.happy-windows-sandbox__content {
-    gap: 12px;
-}
-
-.happy-windows-sandbox__content p {
-    margin: 0;
-}
-
-.happy-windows-sandbox__copy {
-    min-height: 60px;
-    font-size: 15px;
-    line-height: 20px;
-}
-
-.happy-windows-sandbox__pc {
-    padding: 16px;
-    border: 1px solid var(--divider);
-    border-radius: var(--happy-radius-md);
-    background: var(--surface);
-}
-
-.happy-windows-sandbox__label {
-    color: var(--text);
-    font-weight: 600;
-}
-
-.happy-windows-sandbox__diagram,
-.happy-windows-sandbox__item {
-    display: flex;
-    align-items: center;
-    gap: 12px;
+.happy-windows-sandbox .happy-setup-page__copy {
+    max-width: 600px;
 }
 
 .happy-windows-sandbox__diagram {
-    align-items: stretch;
-    gap: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 32px;
+    width: 100%;
+    color: var(--onboarding-foreground);
+    font-size: 14px;
+    line-height: 20px;
 }
 
 .happy-windows-sandbox__boundary {
-    flex: 1 1 0;
-    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
     gap: 8px;
     padding: 12px;
-    border: 1px solid var(--text-link);
+    border: 1px solid currentColor;
     border-radius: var(--happy-radius-window);
-    background: color-mix(in srgb, var(--text-link) 8%, var(--surface));
-    color: var(--text);
+}
+
+.happy-windows-sandbox__label {
+    font-weight: 600;
+}
+
+.happy-windows-sandbox__item,
+.happy-windows-sandbox__private {
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
 .happy-windows-sandbox__private {
-    flex: 1 1 0;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    min-width: 0;
-    text-align: center;
-}
-
-.happy-windows-sandbox__blocked {
-    color: var(--text-secondary);
-    font-size: 12px;
-}
-
-.happy-windows-sandbox__expect {
-    gap: 8px;
-    min-height: 96px;
+    flex-direction: column;
 }
