@@ -10,6 +10,7 @@ import "./styles/button.css";
 import "./styles/composer.css";
 import "./styles/emoji-picker.css";
 import "./styles/icon.css";
+import "./styles/vector-icon.css";
 /* The house scrollbar, exactly as the product loads it: it replaces the
    platform's invisible overlay bar with a classic 10px one, which is what makes
    a scrolling control's own bar cost its text real width. */
@@ -1185,6 +1186,7 @@ it("holds ContextChips and MentionPicker geometry and colors", async () => {
         '[data-testid="picker"] [data-happy-desktop-ui="mention-picker-header"]',
         '[data-testid="picker"] [data-happy-desktop-ui="mention-picker-header"]',
     );
+    console.info("MENTION_HEADER", server.browser, server.platform, headerDrift.dy, JSON.stringify(await header.visibleMetrics()));
     // Blink paints this 13px/16px lane 0.5px above the Gecko/WebKit consensus
     // (0.02 vs 0.52) and snaps half-pixel nudges to whole pixels, so a
     // correction would overshoot — the same split the name lane below accepts.
