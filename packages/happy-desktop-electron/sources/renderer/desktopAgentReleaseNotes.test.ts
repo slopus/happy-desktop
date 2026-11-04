@@ -83,6 +83,7 @@ describe("releaseNotesParse", () => {
         expect(releaseNotesParse(FILES["0.4.106"]!)).toEqual({
             features: ["Sidebar sorts work by topic", "New work appears instantly"],
             fixes: ["Reliable task and bot names"],
+            thanks: [],
         });
     });
 
@@ -90,6 +91,7 @@ describe("releaseNotesParse", () => {
         expect(releaseNotesParse(FILES["0.4.105-preview.2"]!)).toEqual({
             features: [],
             fixes: ["Updated bundled Bun runtime"],
+            thanks: [],
         });
     });
 
@@ -112,6 +114,7 @@ describe("releaseNotesParse", () => {
         expect(releaseNotesParse(text)).toEqual({
             features: ["Real feature with spaces", "Star bullet"],
             fixes: ["Plus bullet", "Controlcharacter"],
+            thanks: [],
         });
     });
 
@@ -125,10 +128,11 @@ describe("releaseNotesParse", () => {
     });
 
     it("reads nothing from an empty or unrelated file", () => {
-        expect(releaseNotesParse("")).toEqual({ features: [], fixes: [] });
+        expect(releaseNotesParse("")).toEqual({ features: [], fixes: [], thanks: [] });
         expect(releaseNotesParse("<html>404: Not Found</html>")).toEqual({
             features: [],
             fixes: [],
+            thanks: [],
         });
     });
 });
@@ -274,7 +278,7 @@ describe("releaseNotesProject", () => {
         const files = new Map(
             versions(RELEASE_NOTES_OVERFLOW_THRESHOLD + 1).map((version) => [
                 version,
-                { features: [`Feature ${version}`], fixes: [] },
+                { features: [`Feature ${version}`], fixes: [], thanks: [] },
             ]),
         );
         const at = releaseNotesProject({

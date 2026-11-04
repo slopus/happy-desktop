@@ -415,6 +415,8 @@ export {
 export {
     SidebarUpdateAction,
     type SidebarUpdateActionProps,
+    type SidebarUpdateContributor,
+    type SidebarUpdateContributors,
     type SidebarUpdateNotes,
     type SidebarUpdateNotesList,
 } from "./SidebarUpdateAction";

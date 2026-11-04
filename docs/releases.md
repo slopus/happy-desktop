@@ -56,6 +56,12 @@ boots the newest Agent on the release's channel: stable for a stable Desktop, th
 newest stable or preview for a preview. Report completion of a combined release after each
 requested workflow and any required matching Agent version are verified.
 
+When a fix in the release came from someone outside the team, end the notes with a
+`## Thanks` section: one line per person, their linked `@login`, what they gave, and the
+issue or pull request. GitHub notifies everyone a release mentions, so include it only when
+the person who asked for the release has approved those names. Happy Agent's short notes files
+carry the same people for the update card; see its release-agent skill.
+
 Use `gh workflow run ... --ref main` with `-f version=<chosen-version>` and
 `-F release_notes=@.context/release-notes.md` (the `@` reads the file contents).
 For Agent/native previews also pass `-F prerelease=true`; renderer has no such input.

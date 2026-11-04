@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { Button } from "./Button";
+import { Icon } from "./Icon";
 import { Ionicon } from "./vectorIcons/VectorIcon";
 
 /** One kind of bullet across every release in range, newest release first. */
@@ -7,6 +8,22 @@ export interface SidebarUpdateNotesList {
     /** The head of the list the card shows, already capped by the host. */
     readonly items: readonly string[];
     /** Every distinct bullet of this kind in range; the rest is "+N more". */
+    readonly total: number;
+}
+
+/** A person the releases in range thank, with links the host has already built. */
+export interface SidebarUpdateContributor {
+    readonly login: string;
+    readonly profileUrl: string;
+    readonly avatarUrl: string;
+    /** The issues and pull requests the release notes credit them for. */
+    readonly references: readonly { readonly label: string; readonly url: string }[];
+}
+
+/** Everyone the releases in range thank, newest release first. */
+export interface SidebarUpdateContributors {
+    readonly items: readonly SidebarUpdateContributor[];
+    /** Every distinct person thanked in range. */
     readonly total: number;
 }
 
@@ -27,6 +44,8 @@ export type SidebarUpdateNotes = {
           readonly kind: "list";
           readonly features: SidebarUpdateNotesList;
           readonly fixes: SidebarUpdateNotesList;
+          /** Absent when no release in range thanks anyone. */
+          readonly contributors?: SidebarUpdateContributors;
       }
     /** Too many releases to list: the card points at the changelog instead. */
     | { readonly kind: "overflow" }
@@ -37,6 +56,8 @@ export interface SidebarUpdateActionProps {
     action: "refresh" | "restart" | "install";
     /** Opens the panel on the first render, for blueprint fixtures and tests. */
     defaultOpen?: boolean;
+    /** Opens the notes' contributors on the first render, for blueprint fixtures and tests. */
+    defaultContributorsOpen?: boolean;
     /** Detail shown while the update is arriving, such as download progress. */
     detail?: string;
     /**
@@ -173,7 +194,13 @@ export function SidebarUpdateAction(props: SidebarUpdateActionProps) {
                     data-happy-desktop-ui="sidebar-update-action-panel"
                     role="dialog"
                 >
-                    {notes ? <UpdateNotes applying={applying} notes={notes} /> : null}
+                    {notes ? (
+                        <UpdateNotes
+                            applying={applying}
+                            contributorsOpen={props.defaultContributorsOpen ?? false}
+                            notes={notes}
+                        />
+                    ) : null}
                     <div className="happy-sidebar-update__main">
                         <span className="happy-sidebar-update__copy">
                             <span
@@ -260,7 +287,11 @@ function releasesLabel(count: number): string {
  * tabs, Features first. When one kind is empty there is nothing to switch to, so
  * the other is named as a plain label instead of a lone tab.
  */
-function UpdateNotes(props: { readonly applying: boolean; readonly notes: SidebarUpdateNotes }) {
+function UpdateNotes(props: {
+    readonly applying: boolean;
+    readonly contributorsOpen: boolean;
+    readonly notes: SidebarUpdateNotes;
+}) {
     const { notes } = props;
     const [tab, setTab] = useState<"features" | "fixes">(
         notes.kind === "list" && notes.features.total === 0 ? "fixes" : "features",
@@ -316,7 +347,18 @@ function UpdateNotes(props: { readonly applying: boolean; readonly notes: Sideba
                         {range}
                     </span>
                     {notes.kind === "list" ? (
-                        <NotesList changelogUrl={notes.changelogUrl} list={notes[selectedTab]} />
+                        <>
+                            <NotesList
+                                changelogUrl={notes.changelogUrl}
+                                list={notes[selectedTab]}
+                            />
+                            {notes.contributors ? (
+                                <NotesContributors
+                                    contributors={notes.contributors}
+                                    defaultOpen={props.contributorsOpen}
+                                />
+                            ) : null}
+                        </>
                     ) : (
                         <div className="happy-sidebar-update__notes-overflow">
                             <span className="happy-sidebar-update__notes-headline">
@@ -339,6 +381,102 @@ function UpdateNotes(props: { readonly applying: boolean; readonly notes: Sideba
                     )}
                 </div>
             </div>
+        </div>
+    );
+}
+
+/** How many faces the closed row stacks before the count says the rest. */
+const CONTRIBUTOR_FACES = 4;
+
+/**
+ * The people whose reports or changes went into the update. Closed, it is one
+ * quiet row of stacked faces and a count, so it never competes with the notes;
+ * opened, it lists each person with what they are credited for, every name and
+ * reference a link to GitHub. Like the notes, it exists only while the update
+ * panel is open, so avatars are asked of GitHub only when someone looks.
+ */
+function NotesContributors(props: {
+    readonly contributors: SidebarUpdateContributors;
+    readonly defaultOpen: boolean;
+}) {
+    const { contributors } = props;
+    const [open, setOpen] = useState(props.defaultOpen);
+    const rest = contributors.total - contributors.items.length;
+    return (
+        <div
+            className="happy-sidebar-update__contributors"
+            data-happy-desktop-ui="sidebar-update-action-contributors"
+            data-open={open ? "" : undefined}
+        >
+            <button
+                aria-expanded={open}
+                className="happy-sidebar-update__contributors-toggle"
+                onClick={() => setOpen((current) => !current)}
+                type="button"
+            >
+                <span aria-hidden className="happy-sidebar-update__contributors-faces">
+                    {contributors.items.slice(0, CONTRIBUTOR_FACES).map((person) => (
+                        <img
+                            alt=""
+                            className="happy-sidebar-update__contributors-face"
+                            height={16}
+                            key={person.login}
+                            src={person.avatarUrl}
+                            width={16}
+                        />
+                    ))}
+                </span>
+                <span className="happy-sidebar-update__contributors-label">Happy contributors</span>
+                <span className="happy-sidebar-update__tab-count">{contributors.total}</span>
+                <span aria-hidden className="happy-sidebar-update__contributors-chevron">
+                    <Icon name={open ? "chevron-down" : "chevron-right"} size={12} />
+                </span>
+            </button>
+            {open ? (
+                <div className="happy-sidebar-update__contributors-body">
+                    <span className="happy-sidebar-update__notes-line">
+                        Thanks to the people whose reports shaped this update.
+                    </span>
+                    <ul className="happy-sidebar-update__contributors-list">
+                        {contributors.items.map((person) => (
+                            <li className="happy-sidebar-update__contributor" key={person.login}>
+                                <img
+                                    alt=""
+                                    className="happy-sidebar-update__contributor-avatar"
+                                    height={16}
+                                    src={person.avatarUrl}
+                                    width={16}
+                                />
+                                <a
+                                    className="happy-sidebar-update__notes-link happy-sidebar-update__contributor-name"
+                                    href={person.profileUrl}
+                                    rel="noreferrer"
+                                    target="_blank"
+                                    title={`@${person.login}`}
+                                >
+                                    {`@${person.login}`}
+                                </a>
+                                <span className="happy-sidebar-update__contributor-references">
+                                    {person.references.map((reference) => (
+                                        <a
+                                            className="happy-sidebar-update__contributor-reference"
+                                            href={reference.url}
+                                            key={reference.url}
+                                            rel="noreferrer"
+                                            target="_blank"
+                                        >
+                                            {reference.label}
+                                        </a>
+                                    ))}
+                                </span>
+                            </li>
+                        ))}
+                    </ul>
+                    {rest > 0 ? (
+                        <span className="happy-sidebar-update__notes-line">{`+${rest} more`}</span>
+                    ) : null}
+                </div>
+            ) : null}
         </div>
     );
 }

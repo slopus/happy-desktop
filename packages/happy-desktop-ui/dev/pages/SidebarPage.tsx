@@ -1331,12 +1331,68 @@ const CHANGELOG_URL = "https://happy.engineering/changelog/";
  * Real Happy Agent notes, merged the way the desktop host merges them: every
  * release in range, newest first, each bullet kept where it first appears.
  */
+function contributor(login: string, ...references: readonly string[]) {
+    return {
+        avatarUrl: `https://github.com/${login}.png?size=48`,
+        login,
+        profileUrl: `https://github.com/${login}`,
+        references: references.map((reference) => {
+            const [repository, number] = reference.split("#") as [string, string];
+            return {
+                label: `${repository.slice("slopus/".length)}#${number}`,
+                url: `https://github.com/${repository}/issues/${number}`,
+            };
+        }),
+    };
+}
+
+/* Happy Agent 0.4.114-preview.1's notes with the people they thank, as the file lists them. */
+const CONTRIBUTOR_NOTES: SidebarUpdateNotes = {
+    changelogUrl: CHANGELOG_URL,
+    contributors: {
+        items: [
+            contributor("shellus", "slopus/happy-agent#73"),
+            contributor("acidsatan", "slopus/happy-agent#74"),
+            contributor("SteaveRayvon", "slopus/happy#1950"),
+            contributor("chegoapp1-bit", "slopus/happy-agent#75"),
+        ],
+        total: 4,
+    },
+    features: { items: [], total: 0 },
+    fixes: {
+        items: [
+            "No more Windows idle freezes",
+            "Windows sandbox commands work",
+            "Custom gateway onboarding works",
+        ],
+        total: 3,
+    },
+    from: "0.4.113",
+    kind: "list",
+    releaseCount: 1,
+    to: "0.4.114-preview.1",
+};
+
 const UPDATE_NOTES: readonly {
     readonly label: string;
     readonly detail: string;
     readonly version: string;
     readonly notes?: SidebarUpdateNotes;
+    readonly contributorsOpen?: boolean;
 }[] = [
+    {
+        detail: "preview 0.4.113 → 0.4.114-preview.1 · contributors closed",
+        label: "Contributors",
+        notes: CONTRIBUTOR_NOTES,
+        version: "0.4.114-preview.1",
+    },
+    {
+        contributorsOpen: true,
+        detail: "preview 0.4.113 → 0.4.114-preview.1 · contributors open",
+        label: "Contributors open",
+        notes: CONTRIBUTOR_NOTES,
+        version: "0.4.114-preview.1",
+    },
     {
         detail: "stable 0.4.105 → 0.4.106",
         label: "One release",
@@ -1636,19 +1692,19 @@ export function SidebarPage() {
             </Specimen>
 
             <Specimen
-                detail="A ready Happy Agent update lists what is new since the installed version above the panel, inside the same 236px card: Features and Fixes tabs with counts, the range, at most five bullets, then the changelog. Past 20 releases it lists nothing and points at the changelog. Install folds the notes away first."
+                detail="A ready Happy Agent update lists what is new since the installed version above the panel, inside the same 236px card: Features and Fixes tabs with counts, the range, at most five bullets, then the changelog. Past 20 releases it lists nothing and points at the changelog. When the releases thank people, a closed Happy contributors row under the notes opens to each person and what they are credited for. Install folds the notes away first."
                 label="Update notes"
                 number="01f"
                 stage="app"
             >
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "16px" }}>
-                    {UPDATE_NOTES.map(({ detail, label, notes, version }) => (
+                    {UPDATE_NOTES.map(({ contributorsOpen, detail, label, notes, version }) => (
                         <div
                             key={label}
                             data-happy-desktop-ui-blueprint-update-notes={label}
                             style={{ display: "flex", flexDirection: "column", gap: "8px" }}
                         >
-                            <Frame height={440}>
+                            <Frame height={contributorsOpen ? 560 : 440}>
                                 <Sidebar
                                     activeItemId=""
                                     footer={
@@ -1656,6 +1712,9 @@ export function SidebarPage() {
                                             actions={
                                                 <SidebarUpdateAction
                                                     action="install"
+                                                    defaultContributorsOpen={
+                                                        contributorsOpen ?? false
+                                                    }
                                                     defaultOpen
                                                     {...(notes ? { notes } : {})}
                                                     onAction={() => {}}

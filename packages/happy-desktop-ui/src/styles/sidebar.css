@@ -2169,6 +2169,156 @@
     outline-offset: 1px;
 }
 
+/* Who the update thanks: a quiet row under the notes that opens in place. The
+   hairline above it separates people from changes. */
+.happy-sidebar-update__contributors {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 4px;
+    padding-top: 8px;
+    border-top: 1px solid var(--divider);
+}
+
+.happy-sidebar-update__contributors-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    margin: -2px -4px;
+    padding: 2px 4px;
+    border: 0;
+    border-radius: var(--happy-hover-radius);
+    background: transparent;
+    color: var(--text-secondary);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 17px;
+    text-align: left;
+    cursor: pointer;
+    appearance: none;
+}
+
+.happy-sidebar-update__contributors-toggle:hover,
+.happy-sidebar-update__contributors[data-open] .happy-sidebar-update__contributors-toggle {
+    color: var(--text);
+}
+
+.happy-sidebar-update__contributors-toggle:hover {
+    background: var(--happy-hover-fill);
+}
+
+.happy-sidebar-update__contributors-toggle:focus-visible {
+    outline: 2px solid var(--radio-active);
+    outline-offset: 1px;
+}
+
+/* Faces overlap by a third, each ringed in the card's own surface so the
+   stack reads as separate people. */
+.happy-sidebar-update__contributors-faces {
+    display: flex;
+    flex: none;
+}
+
+.happy-sidebar-update__contributors-face,
+.happy-sidebar-update__contributor-avatar {
+    flex: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--happy-hover-fill);
+    object-fit: cover;
+}
+
+.happy-sidebar-update__contributors-face {
+    box-shadow: 0 0 0 1.5px var(--surface);
+}
+
+.happy-sidebar-update__contributors-face + .happy-sidebar-update__contributors-face {
+    margin-left: -5px;
+}
+
+.happy-sidebar-update__contributors-label {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-sidebar-update__contributors-chevron {
+    display: flex;
+    flex: none;
+    color: var(--text-secondary);
+}
+
+.happy-sidebar-update__contributors-body {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+/* At most four people show before the list scrolls, so a long thank-you never
+   pushes the Install button off the top of the window. */
+.happy-sidebar-update__contributors-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 84px;
+    margin: 0;
+    padding: 0;
+    overflow-y: auto;
+    list-style: none;
+}
+
+.happy-sidebar-update__contributor {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    font-size: 12px;
+    line-height: 17px;
+}
+
+.happy-sidebar-update__contributor-name {
+    flex: none;
+    max-width: 50%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-sidebar-update__contributor-references {
+    display: flex;
+    flex: 1;
+    justify-content: flex-end;
+    gap: 6px;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.happy-sidebar-update__contributor-reference {
+    flex: none;
+    color: var(--text-secondary);
+    font-family: var(--happy-font-mono);
+    font-size: 10.5px;
+    line-height: 14px;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.happy-sidebar-update__contributor-reference:hover {
+    color: var(--text);
+    text-decoration: underline;
+}
+
+.happy-sidebar-update__contributor-reference:focus-visible {
+    border-radius: 2px;
+    outline: 2px solid var(--radio-active);
+    outline-offset: 1px;
+}
+
 .happy-sidebar-update__copy {
     display: flex;
     flex: none;
