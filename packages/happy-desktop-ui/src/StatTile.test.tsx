@@ -22,7 +22,7 @@ const engine = () => server.browser as Engine;
 const GLYPH_TOL = 0.4;
 
 const fontFamily = () =>
-    engine() === "webkit"
+    engine() === "webkit" && server.platform !== "darwin"
         ? "happy Figtree, system-ui, sans-serif"
         : '"happy Figtree", system-ui, sans-serif';
 

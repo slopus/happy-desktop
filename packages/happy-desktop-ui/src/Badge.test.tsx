@@ -603,7 +603,7 @@ it("holds Badge family geometry, colors, and behavior", async () => {
     );
     await view.ready();
     const mono =
-        server.browser === "webkit"
+        server.browser === "webkit" && server.platform !== "darwin"
             ? "happy Mono, ui-monospace, monospace"
             : '"happy Mono", ui-monospace, monospace';
     /* Badge: 18px mono uppercase pill; each variant maps to its tokens. */

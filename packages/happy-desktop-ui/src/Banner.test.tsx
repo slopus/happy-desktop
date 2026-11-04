@@ -21,11 +21,11 @@ import { createRenderer } from "./testing";
  * visible-pixel presence — never a forced centroid.
  */
 
-/* textMetrics() strips the family quotes; getComputedStyle keeps them except
- * on WebKit (same quirk asserted in Button.test.tsx). */
+/* textMetrics() strips family quotes; WebKit's computed serialization varies
+ * by platform. Both forms name the same font. */
 const fontFamily = "happy Figtree, system-ui, sans-serif";
 const computedFontFamily =
-    server.browser === "webkit"
+    server.browser === "webkit" && server.platform !== "darwin"
         ? "happy Figtree, system-ui, sans-serif"
         : `"happy Figtree", system-ui, sans-serif`;
 

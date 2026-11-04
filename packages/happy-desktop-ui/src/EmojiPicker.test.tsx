@@ -18,7 +18,7 @@ const CUSTOM_IMAGE =
  * Chromium/Firefox but not WebKit (see Button.test.tsx). */
 const MONO = "happy Mono, ui-monospace, monospace";
 const figtreeComputed =
-    server.browser === "webkit"
+    server.browser === "webkit" && server.platform !== "darwin"
         ? "happy Figtree, system-ui, sans-serif"
         : '"happy Figtree", system-ui, sans-serif';
 

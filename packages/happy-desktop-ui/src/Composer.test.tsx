@@ -36,7 +36,7 @@ const growsDraft = () => CSS.supports("field-sizing", "content");
 /* Height of a draft `lines` tall, in the engine under test. */
 const draftHeight = (lines: number) => (growsDraft() ? 22 * lines : 22);
 const uiFont = () =>
-    server.browser === "webkit"
+    server.browser === "webkit" && server.platform !== "darwin"
         ? "happy Figtree, system-ui, sans-serif"
         : '"happy Figtree", system-ui, sans-serif';
 /* The Gecko textarea correction (translateY(-0.5px)) moves the painted box. */

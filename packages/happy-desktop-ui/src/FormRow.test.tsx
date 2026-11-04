@@ -128,7 +128,7 @@ it("holds FormRow layout, typography, colors, divider, and control alignment", a
     );
     await view.ready();
     const fontFamily =
-        (server.browser as Engine) === "webkit"
+        (server.browser as Engine) === "webkit" && server.platform !== "darwin"
             ? "happy Figtree, system-ui, sans-serif"
             : '"happy Figtree", system-ui, sans-serif';
     // ---- Inline row contract ------------------------------------------------

@@ -89,7 +89,7 @@ it("holds DataTable geometry, alignment, selection, and header typography", asyn
     await view.ready();
 
     const fontFamily =
-        engine() === "webkit"
+        engine() === "webkit" && server.platform !== "darwin"
             ? "happy Figtree, system-ui, sans-serif"
             : '"happy Figtree", system-ui, sans-serif';
 

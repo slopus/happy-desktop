@@ -145,7 +145,7 @@ it(
             `[data-testid="${s}"] [data-happy-desktop-ui="toolbar-${name}"]`;
         const part = (s: string, name: string) => view.$(sel(s, name));
         const fontFamily =
-            server.browser === "webkit"
+            server.browser === "webkit" && server.platform !== "darwin"
                 ? "happy Figtree, system-ui, sans-serif"
                 : '"happy Figtree", system-ui, sans-serif';
         /* Text ink: reject blank or clipped captures, then return centroid drift.
