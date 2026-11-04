@@ -101,6 +101,18 @@ const frames = async () => {
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 };
+/** The inline question's transcript row. */
+function questionRow(viewport: HTMLElement) {
+    return [...viewport.querySelectorAll<HTMLElement>(".happy-message-list__virtual-row")].find(
+        (row) => row.textContent?.includes("Keep this layout?"),
+    )!;
+}
+/** How tall the rows after `row` are, down to the transcript's last row. */
+function rowsBelow(viewport: HTMLElement, row: HTMLElement) {
+    const rows = [...viewport.querySelectorAll<HTMLElement>(".happy-message-list__virtual-row")];
+    const end = Math.max(...rows.map((item) => item.getBoundingClientRect().bottom));
+    return end - row.closest(".happy-message-list__virtual-row")!.getBoundingClientRect().bottom;
+}
 async function pageZoomMetrics(baseScale: number, zoom: number) {
     await cdp().send("Emulation.setDeviceMetricsOverride", {
         ...pageViewport(),
@@ -516,7 +528,7 @@ it.skipIf(server.browser === "firefox").each(["send", "draft"] as const)(
 );
 
 it.each(["parked"] as const)(
-    "lets a docked question use send space and returns it on answer for a %s reader",
+    "keeps a %s reader in place while an inline question arrives and is answered",
     async (mode) => {
         const { view, send, question } = renderConversation(60);
         await view.ready();
@@ -542,8 +554,9 @@ it.each(["parked"] as const)(
     },
 );
 
-it.each([false, true])(
-    "uses draft slack before a taller question, including a multiline draft: %s",
+// Without `field-sizing` (Gecko) the draft never grows, so it leaves no slack.
+it.skipIf(!CSS.supports("field-sizing", "content")).each([false, true])(
+    "lets an inline question take draft slack before carrying the transcript up, including a multiline draft: %s",
     async (multiline) => {
         const { view, question } = renderConversation(60);
         await view.ready();
@@ -569,13 +582,22 @@ it.each([false, true])(
             0,
             content.getBoundingClientRect().bottom - row.getBoundingClientRect().bottom - 24,
         );
+        // The cleared draft left blank space under the newest row.
+        expect(blank).toBeGreaterThan(0);
         question(false);
         await frames();
-        const shrink = height - viewport.clientHeight;
-        expect(shrink).toBeGreaterThan(blank);
+        // The question is a transcript row: the viewport keeps its height,
+        // the question fills the held blank first, and only the rest of its
+        // height carries the transcript up, so all of it is in view.
+        expect(viewport.clientHeight).toBe(height);
+        const added = rowsBelow(viewport, row);
+        expect(added).toBeGreaterThan(blank);
         const carried = top - row.getBoundingClientRect().top;
-        expect(carried).toBeGreaterThan(0);
-        expect(carried).toBeLessThanOrEqual(shrink - blank + 1);
+        expect(Math.abs(carried - (added - blank))).toBeLessThanOrEqual(1);
+        const card = questionRow(viewport).getBoundingClientRect();
+        const bounds = viewport.getBoundingClientRect();
+        expect(card.top).toBeGreaterThanOrEqual(bounds.top);
+        expect(card.bottom).toBeLessThanOrEqual(bounds.bottom);
         const held = row.getBoundingClientRect().top;
         question(true);
         await frames();
@@ -585,7 +607,7 @@ it.each([false, true])(
 
 // Firefox CSS zoom changes native scrollTop: happy-file://agents/ebzk9bggqj0qt6wts9jv0tgh/.context/fuzz-plainzoom24.log
 it.skipIf(server.browser === "firefox").each([false, true])(
-    "keeps a sent message visible while zooming a docked question and answering it, with header: %s",
+    "keeps a sent message and an inline question in view while zooming and answering it, with header: %s",
     async (withTitle) => {
         const { view, send, question } = renderConversation(60, false, withTitle);
         const baseScale = devicePixelRatio;
@@ -599,29 +621,49 @@ it.skipIf(server.browser === "firefox").each([false, true])(
             const viewport = view.container.querySelector<HTMLElement>(
                 ".happy-message-list__viewport",
             )!;
+            const sent = () =>
+                [...viewport.querySelectorAll<HTMLElement>(".happy-message")].find((item) =>
+                    item.textContent?.includes("The newly sent message"),
+                )!;
+            const placed = () => ({
+                sent: sent().getBoundingClientRect().top,
+                question: questionRow(viewport).getBoundingClientRect().top,
+            });
+            const before = placed();
             const panel =
                 view.container.querySelector<HTMLElement>(".happy-conversation")!.parentElement!;
             for (const zoom of [1.5, 0.67, 2, 1]) {
                 await pageZoomSet(panel, baseScale, zoom);
                 await frames();
-                const row = [...viewport.querySelectorAll<HTMLElement>(".happy-message")].find(
-                    (item) => item.textContent?.includes("The newly sent message"),
-                )!;
                 expect(viewport.clientHeight).toBeGreaterThanOrEqual(48);
-                expect(row.getBoundingClientRect().bottom).toBeGreaterThan(
-                    viewport.getBoundingClientRect().top,
+                // The reader followed the end, so the question's end stays in
+                // view; the sent message above it does whenever both fit.
+                const bounds = viewport.getBoundingClientRect();
+                const card = questionRow(viewport).getBoundingClientRect();
+                const message = sent().getBoundingClientRect();
+                expect(card.bottom, `question end at zoom ${zoom}`).toBeLessThanOrEqual(
+                    bounds.bottom,
                 );
-                expect(row.getBoundingClientRect().top).toBeLessThan(
-                    viewport.getBoundingClientRect().bottom,
-                );
+                expect(card.bottom).toBeGreaterThan(bounds.top);
+                if (rowsBelow(viewport, sent()) + message.height <= bounds.height - 24) {
+                    expect(message.top, `sent message at zoom ${zoom}`).toBeGreaterThanOrEqual(
+                        bounds.top,
+                    );
+                    expect(card.top).toBeGreaterThanOrEqual(bounds.top);
+                }
             }
-            const row = [...viewport.querySelectorAll<HTMLElement>(".happy-message")].find((item) =>
-                item.textContent?.includes("The newly sent message"),
-            )!;
-            const top = row.getBoundingClientRect().top;
+            // Back at 100%, both are where they were before zooming.
+            const after = placed();
+            expect(Math.abs(after.sent - before.sent)).toBeLessThanOrEqual(1);
+            expect(Math.abs(after.question - before.question)).toBeLessThanOrEqual(1);
+            const message = sent().getBoundingClientRect();
+            expect(message.top).toBeGreaterThanOrEqual(viewport.getBoundingClientRect().top);
+            const top = message.top;
+            const card = questionRow(viewport).getBoundingClientRect().top;
             question(true);
             await frames();
-            expect(row.getBoundingClientRect().top).toBe(top);
+            expect(sent().getBoundingClientRect().top).toBe(top);
+            expect(questionRow(viewport).getBoundingClientRect().top).toBe(card);
         } finally {
             view.destroy();
             await pageZoomMetrics(baseScale, 1);
@@ -1003,7 +1045,7 @@ it.each([2, 40])(
 );
 
 it.each([40, 640])(
-    "keeps %i transcript rows above a docked question, and fixed once it is answered history",
+    "carries %i transcript rows up above an inline question, and keeps them fixed once it is answered history",
     async (count) => {
         const { view, question } = renderConversation(count, count > 100);
         await view.ready();
@@ -1012,14 +1054,22 @@ it.each([40, 640])(
         const viewport = view.container.querySelector<HTMLElement>(
             ".happy-message-list__viewport",
         )!;
-        const above = () =>
-            viewport.getBoundingClientRect().bottom - anchor.getBoundingClientRect().bottom;
-        const gap = above();
-        // The question docks at the input and carries the newest lines up with
-        // it, as a growing draft does, rather than covering them.
+        const end = () => viewport.getBoundingClientRect().bottom;
+        const gap = end() - anchor.getBoundingClientRect().bottom;
+        const before = anchor.getBoundingClientRect().top;
+        // The question arrives below the newest row and the followed end
+        // carries every row above it up by its height, rather than covering
+        // them or leaving the question below the fold.
         question(false);
         await frames();
-        expect(above()).toBe(gap);
+        const added = rowsBelow(viewport, anchor);
+        expect(added).toBeGreaterThan(0);
+        expect(Math.abs(before - anchor.getBoundingClientRect().top - added)).toBeLessThanOrEqual(
+            1,
+        );
+        expect(
+            Math.abs(end() - anchor.getBoundingClientRect().bottom - added - gap),
+        ).toBeLessThanOrEqual(1);
         const top = anchor.getBoundingClientRect().top;
         question(true);
         await frames();
