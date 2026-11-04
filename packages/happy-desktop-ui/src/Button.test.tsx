@@ -21,7 +21,7 @@ const engine = () => server.browser as Engine;
 const labelOffsets: Record<Engine, Record<ButtonSize, string>> = {
     chromium: { small: "-0.5px", medium: "0px", large: "0px" },
     firefox: { small: "-1px", medium: "-0.5px", large: "-1px" },
-    webkit: { small: "-0.5px", medium: "0px", large: "-1px" },
+    webkit: { small: "-0.5px", medium: "0px", large: "0px" },
 };
 
 /*
