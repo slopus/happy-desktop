@@ -193,6 +193,22 @@ const bridge: HappyDesktopBridge = {
             ipcRenderer.off(desktopIpc.zoomChanged, relay);
         };
     },
+    /* The current state first, then every change; a change that lands while
+       the first answer is on its way supersedes it. */
+    powerSavingSubscribe: (listener: (saving: boolean) => void) => {
+        let changed = false;
+        const relay = (_event: unknown, saving: boolean) => {
+            changed = true;
+            listener(saving);
+        };
+        ipcRenderer.on(desktopIpc.powerSavingChanged, relay);
+        void ipcRenderer.invoke(desktopIpc.powerSavingGet).then((saving: boolean) => {
+            if (!changed) listener(saving);
+        });
+        return () => {
+            ipcRenderer.off(desktopIpc.powerSavingChanged, relay);
+        };
+    },
     mediaPreviewOpen: (url: string) => ipcRenderer.invoke(desktopIpc.mediaPreviewOpen, url),
     directoryPick: () => ipcRenderer.invoke(desktopIpc.directoryPick),
     desktopConfigGet: () => ipcRenderer.invoke(desktopIpc.desktopConfigGet),

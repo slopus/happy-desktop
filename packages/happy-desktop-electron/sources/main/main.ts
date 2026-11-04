@@ -124,6 +124,7 @@ import { DesktopWindowStateStore } from "./windowState";
 import { desktopBuildIdentityRead } from "./buildIdentity";
 import { DesktopDaemonController } from "./desktopDaemonController";
 import { desktopSmokeReportStart } from "./desktopSmokeReport";
+import { powerSavingInstall } from "./powerSaving";
 import { cloudAuthProductionRedirectUri, serverOAuthRedirectUri } from "../shared/cloudAuthConfig";
 import { cloudAuthCallbackRead } from "./cloudAuthCallback";
 import { happyExternalLinkUrl } from "./happyLink";
@@ -2284,6 +2285,7 @@ void app
         ipcMain.handle(desktopIpc.updateInstall, () => {
             updater.install();
         });
+        powerSavingInstall();
         ipcMain.handle(desktopIpc.windowStateGet, (event) => ({
             fullScreen: BrowserWindow.fromWebContents(event.sender)?.isFullScreen() ?? false,
         }));

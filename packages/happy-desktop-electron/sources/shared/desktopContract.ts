@@ -1113,6 +1113,9 @@ export const desktopIpc = {
     keepAwakeSet: "happy:keep-awake:set",
     /** Main → renderer only: the window's zoom, every time the View menu is used. */
     zoomChanged: "happy:zoom:changed",
+    powerSavingGet: "happy:power-saving:get",
+    /** Main → renderer only: whether the system saves power, every time that changes. */
+    powerSavingChanged: "happy:power-saving:changed",
     desktopConfigGet: "happy:desktop-config:get",
     desktopConfigWrite: "happy:desktop-config:write",
     desktopConfigUpdate: "happy:desktop-config:update",
