@@ -349,6 +349,7 @@ it("lists a subtask's worktree once, under its bot, with the worktree's line del
     // worktree no bot owns, so the subtask's checkout is not listed twice.
     expect(rowIds(container)).toEqual([
         "artifacts",
+        "feed",
         "local/ws_debugger",
         "local/ses_flicker",
         "local/ses_notes",
@@ -423,6 +424,7 @@ it("hides and shows the whole Projects list from its heading, kept in the foldin
     // The heading stays with its controls; only the project rows go.
     expect(rowIds(container)).toEqual([
         "artifacts",
+        "feed",
         "local/ws_debugger",
         "local/ses_flicker",
         "local/ses_notes",

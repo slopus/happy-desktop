@@ -284,6 +284,7 @@ it("lists the joined tasks under the bots, in the reader's order, with their sub
     expect(sectionLabels(container)).toEqual(["Bots", "Tasks", "Projects"]);
     expect(rowIds(container)).toEqual([
         "artifacts",
+        "feed",
         "local/ws_helper",
         "local/ws_launch",
         "local/ses_checklist",
@@ -349,13 +350,9 @@ it("moves a task within the reader's own list with Alt+Arrow", () => {
     vi.unstubAllGlobals();
 });
 
-it("opens the task browser from the Tasks heading", () => {
-    const { container, actions } = view();
-    const browse = container.querySelector<HTMLButtonElement>(
-        '[aria-label="Browse tasks"][data-happy-desktop-ui="sidebar-section-action"]',
-    )!;
-    fireEvent.click(browse);
-    expect(actions.taskBrowseOpen).toHaveBeenCalledTimes(1);
+it("leaves browsing tasks off the Tasks heading", () => {
+    const { container } = view();
+    expect(container.querySelector('[aria-label="Browse tasks"]')).toBeNull();
 });
 
 it("hides each connection's Projects section the moment its setting changes", () => {
@@ -462,7 +459,7 @@ it("leaves the Tasks section out entirely on a Happy Agent from before tasks", (
 /** A Happy Agent that makes and renames tasks, not only lists them. */
 const CREATES = "0.4.87-preview.6";
 
-it("makes a task from the + on the Tasks heading, with Browse beside it", () => {
+it("makes a task from the + on the Tasks heading", () => {
     const onTaskCreateOpen = vi.fn();
     const { container, actions } = view({
         onTaskCreateOpen,
@@ -471,19 +468,12 @@ it("makes a task from the + on the Tasks heading, with Browse beside it", () => 
     const create = container.querySelector<HTMLButtonElement>(
         '[aria-label="New task"][data-happy-desktop-ui="sidebar-section-action"]',
     )!;
-    const browse = container.querySelector<HTMLButtonElement>(
-        '[aria-label="Browse tasks"][data-happy-desktop-ui="sidebar-section-secondary-action"]',
-    )!;
     expect(create).not.toBeNull();
-    expect(browse).not.toBeNull();
+    expect(container.querySelector('[aria-label="Browse tasks"]')).toBeNull();
 
     fireEvent.click(create);
     expect(onTaskCreateOpen).toHaveBeenCalledWith("local");
     expect(actions.taskBrowseOpen).not.toHaveBeenCalled();
-
-    fireEvent.click(browse);
-    expect(actions.taskBrowseOpen).toHaveBeenCalledTimes(1);
-    expect(onTaskCreateOpen).toHaveBeenCalledTimes(1);
 });
 
 it("offers New task in the empty Tasks section on a Happy Agent that makes them", () => {
