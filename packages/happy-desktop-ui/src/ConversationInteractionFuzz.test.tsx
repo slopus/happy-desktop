@@ -2088,6 +2088,23 @@ it.each(cases.filter((entry) => !entry.restore || pageZoom))(
                         h,
                         result.readerAction && ["disclose", "trace", "send"].includes(action),
                     );
+                    if (seed === 305419896 && step >= 67 && step <= 83) {
+                        console.info(
+                            "COMPARE_POINT",
+                            JSON.stringify({
+                                step,
+                                action,
+                                beforePosition: before.position,
+                                beforeAnchor: before.anchor?.key,
+                                beforeTop: before.anchor?.top,
+                                beforeParked: before.parked,
+                                afterPosition: first.position,
+                                afterTop: before.anchor?.node.getBoundingClientRect().top,
+                                afterAnchor: first.anchor?.key,
+                                afterParked: first.parked,
+                            }),
+                        );
+                    }
                     if (first.bounds.height < before.bounds.height - 1 || action === "zoom")
                         expect(
                             first.held * h.scale,
