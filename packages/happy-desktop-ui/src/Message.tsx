@@ -32,7 +32,11 @@ import {
     mediaJustifiedPlan,
 } from "./mediaLayout";
 import { MediaFlow } from "./MediaFlow";
-import { messagePlainTextNormalize, type MessageBodyFormat } from "./messagePlainText";
+import {
+    MESSAGE_PLAIN_FOLD_LABELS,
+    messagePlainTextNormalize,
+    type MessageBodyFormat,
+} from "./messagePlainText";
 import { messagePlainTextSegments, type MessageReferences } from "./messageReferences";
 import {
     MessageListDisclosureAnchorProvider,
@@ -611,7 +615,7 @@ export function Message(props: MessageProps) {
                         variant="meta"
                         toggles
                         open={local.bodyFold.expanded}
-                        toggleLabels={{ closed: "Show full", open: "Show less" }}
+                        toggleLabels={MESSAGE_PLAIN_FOLD_LABELS}
                         disclosureHold={
                             local.bodyFold.expanded ? "row-start-or-control" : "row-start"
                         }
@@ -1241,7 +1245,13 @@ export function MessageList(props: MessageListProps) {
             viewportGeometryCommitCurrent.current(geometry.width, height);
             return;
         }
-        const reserve = props.footerReserveHeight ?? 0;
+        /* The status room is held blank, so like any held blank it leaves the
+           newest rows in view: it and the end padding take at most the share
+           of the viewport a zoom leaves held blank space. */
+        const reserve = Math.min(
+            props.footerReserveHeight ?? 0,
+            Math.max(0, height * (1 - LEADING_HEADER_REST_TOP) - paddingEnd),
+        );
         if (following.current && virtualized && reserve > 0) {
             geometryFollowInset.current = 0;
             geometryExtentRequire(
@@ -2259,7 +2269,10 @@ export function MessageList(props: MessageListProps) {
         const index = row ? Number(row.dataset.index) : Number.NaN;
         if (!row || !Number.isInteger(index) || index < 0 || index >= items.length)
             return undefined;
-        const viewportHeight = messageListViewportHeight(element);
+        /* In the model's own basis: computed style rounds the height, and a
+           point held at the top edge must stay within the model's viewport. */
+        const viewportHeight =
+            viewportGeometry.current.height || messageListViewportHeight(element);
         const viewportTop = element.getBoundingClientRect().top;
         const rowBounds = row.getBoundingClientRect();
         const collapseControl = hold === "row-start-or-control" && rowBounds.top < viewportTop;
@@ -3253,6 +3266,15 @@ export function MessageList(props: MessageListProps) {
             )
                 from = index;
         }
+        /* Every row between the footer's old and new places moves one slot and
+           crosses the live status it reads, even when no entry changed, such
+           as queued steering that stops trailing once a row lands after it. */
+        if (previous.footerIndex !== footerIndex)
+            from = Math.min(
+                from,
+                previous.footerIndex ?? items.length,
+                footerIndex ?? items.length,
+            );
         /* The footer reads state outside the rows, so it is asked on every
            commit, and so is the row above it, which reads the footer's state as
            its successor: a live turn starting or ending changes those two rows,
