@@ -3,6 +3,7 @@ import { server } from "vitest/browser";
 import "./theme.css";
 import "./styles/scrollbar.css";
 import "./styles/icon.css";
+import "./styles/vector-icon.css";
 import "./styles/avatar.css";
 import "./styles/badge.css";
 import "./styles/agent-desk.css";
