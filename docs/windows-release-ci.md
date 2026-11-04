@@ -4,7 +4,7 @@ The shared `build-windows.yml` workflow produces Windows x64 NSIS installers for
 Happy and Happy Nightly, their blockmaps, and `latest.yml` / `nightly.yml` for
 Electron's updater. Both distributions use `scripts/desktopFlavors.mjs` so their
 application identities, updater caches, and channels agree. It runs typechecks and the
-application tests, installs the actual `.exe` on a disposable hosted Windows
+tests its `test_scope` asks for, installs the actual `.exe` on a disposable hosted Windows
 runner, then launches that installed `Happy.exe` through Playwright and verifies
 the welcome screen. The screenshot is uploaded with the run.
 
@@ -25,13 +25,27 @@ The existing manual `desktop-release.yml` workflow still publishes from `main`
 after validating the release version and notes. It now waits for this Windows
 build and includes its installer and updater files beside the signed macOS
 artifacts. The release additionally exercises Desktop's real GitHub release
-lookup, checksum-verified Agent installation, saved binary selection, daemon
-startup, and authenticated named-pipe health with a fresh Happy home. Publish
-the Windows Agent before dispatching a stable Desktop release; previews skip that
-Agent check, like macOS. Previews build, sign, install-test, and publish Windows too,
-with the preview version embedded in the installer and its manifest, and a
-Nightly-only preview builds the Nightly installer alone. Apple signing and
-notarization remain unchanged.
+lookup, checksum-verified Agent installation, saved binary selection, the Agent's
+signature and version, daemon startup, and authenticated named-pipe health with a
+fresh Happy home. It installs the newest Agent on the release's update channel:
+stable for a stable Desktop, and for a preview the newest stable or preview release
+that has a Windows archive, so a preview never waits for a new Agent. Publish the
+Windows Agent before dispatching a stable Desktop release. Previews build, sign,
+install-test, and publish Windows too, with the preview version embedded in the
+installer and its manifest, and a Nightly-only preview builds the Nightly installer
+alone. Apple signing and notarization remain unchanged.
+
+| Windows check                                      | Stable (`test_scope: full`) | Preview (`test_scope: preview`) |
+| -------------------------------------------------- | --------------------------- | ------------------------------- |
+| Electron, app, and gym typechecks                  | Yes                         | Yes                             |
+| `happy-desktop-electron` tests                     | Yes                         | Yes                             |
+| App, state, UI, and gym tests (`pnpm test`)        | Yes                         | No; macOS verify runs them      |
+| Agent download, install, signature, and boot       | Stable channel              | Preview channel                 |
+| Signed installer, install verification, and launch | Yes                         | Yes                             |
+
+Previews skip only the platform-independent product suites: `desktop-release.yml`'s
+macOS verify job runs the full `pnpm test` on the same commit, and the Windows build
+starts only after it passes. `desktop-validate.yml` keeps the full set.
 
 Installed Windows apps update themselves as macOS does: Desktop picks the newest
 release allowed by the Preview updates setting that carries `latest.yml` (or

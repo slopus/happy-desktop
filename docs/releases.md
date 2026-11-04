@@ -51,8 +51,9 @@ master plan](https://github.com/slopus/happy-agent/blob/main/master-plans/25-rel
 After any required SDK is published and pinned, prepare and dispatch requested
 Agent, native Desktop, and renderer previews independently in parallel. Desktop
 does not bundle the Agent binary, so its macOS and Windows previews do not wait for Agent
-publication or artifact verification. Stable Windows retains its published-Agent
-signature and boot check. Report completion of a combined release after each
+publication or artifact verification. Windows still installs, signature-checks, and
+boots the newest Agent on the release's channel: stable for a stable Desktop, the
+newest stable or preview for a preview. Report completion of a combined release after each
 requested workflow and any required matching Agent version are verified.
 
 Use `gh workflow run ... --ref main` with `-f version=<chosen-version>` and
@@ -79,7 +80,9 @@ Immediately before dispatching production, verify both the explicit user request
 and our actual use of this candidate. Native production uses the same workflow with
 `prerelease=false` and stable `X.Y.Z`, shipping both app flavors on macOS and Windows.
 Windows installers are always Azure-signed (see `windows-release-ci.md`) and retain
-their installed-app and Agent checks. Native previews ship both app flavors on macOS and Windows unless `nightly_only` is set. Preserve the existing
+their installed-app and Agent checks. Windows previews run only the Electron host's
+tests, since the macOS verify job runs the full suite on the same commit first; stable
+Windows runs the full suite. Native previews ship both app flavors on macOS and Windows unless `nightly_only` is set. Preserve the existing
 requirement that root and Electron manifests match that stable version: update them
 before dispatch under normal Git authorization. Standard bundles its renderer, so
 production renderer delivery requires explicit native-release scope.

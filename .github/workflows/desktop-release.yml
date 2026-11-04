@@ -55,9 +55,11 @@ jobs:
         with:
             version: ${{ inputs.version }}
             nightly_only: ${{ inputs.nightly_only }}
-            # Stable Windows proves onboarding against the published Agent; previews,
-            # like macOS, do not wait for an Agent release.
-            verify_agent_release: ${{ !inputs.prerelease }}
+            # A preview runs the Windows-specific tests only; the verify job it needs has
+            # already run the full `pnpm test` on this commit. Both prove onboarding
+            # against the newest Agent their channel offers, without waiting for a new one.
+            test_scope: ${{ inputs.prerelease && 'preview' || 'full' }}
+            agent_channel: ${{ inputs.prerelease && 'preview' || 'stable' }}
             release_analytics: true
         secrets:
             HAPPY_POSTHOG_API_KEY: ${{ secrets.HAPPY_POSTHOG_API_KEY }}
