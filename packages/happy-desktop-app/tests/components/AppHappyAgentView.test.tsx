@@ -256,8 +256,8 @@ it("lists one row per project and its sessions as tabs", () => {
     ]);
     // The row is the project's name alone; its path would crowd the name out,
     // and the heading over the open project states it in full.
-    expect(rows[2]?.textContent).toContain("happy");
-    expect(rows[2]?.textContent).not.toContain("~/happy");
+    expect(rows[1]?.textContent).toContain("happy");
+    expect(rows[1]?.textContent).not.toContain("~/happy");
 
     // The sessions inside the addressed project are its tabs.
     const tabs = [...container.querySelectorAll('[data-happy-desktop-ui="tab"]')];
