@@ -887,7 +887,8 @@ it.skipIf(server.browser === "firefox")(
             }
         }
     },
-    60_000,
+    // The 1,301-width sweep checks every specimen after idle mounting.
+    180_000,
 );
 
 it.skipIf(server.browser === "firefox")(
