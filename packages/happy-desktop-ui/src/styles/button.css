@@ -209,7 +209,7 @@
     }
 
     .happy-button[data-size="medium"] {
-        --happy-button-label-y: -0.5px;
+        --happy-button-label-y: 0px;
     }
 
     .happy-button[data-size="large"] {
