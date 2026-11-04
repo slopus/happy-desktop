@@ -237,7 +237,18 @@ export function messageReferencesCreate(input: {
         ...(input.instanceId === undefined ? {} : { instanceId: input.instanceId }),
         view(reference) {
             if (reference.kind === "user") {
-                // A person is named, not opened.
+                // A person is named, not opened: a teammate as their tag, in
+                // the name their profile carries now.
+                const person = input.people?.person(reference.id);
+                if (person !== undefined)
+                    return {
+                        type: "person",
+                        label: `@${person.name}`,
+                        name: person.name,
+                        ...(person.imageUrl === undefined ? {} : { imageUrl: person.imageUrl }),
+                        ...(person.role === undefined ? {} : { role: person.role }),
+                        self: person.self,
+                    };
                 const name = peopleNames?.get(reference.id);
                 if (name === undefined) input.people?.userNameRequest(reference.id);
                 return { type: "text", label: name === undefined ? "@…" : `@${name}` };

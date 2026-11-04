@@ -22,8 +22,17 @@ import {
     type ComposerAttachmentPreview,
     type ComposerAttachmentPreviewsProps,
 } from "./ComposerAttachmentPreviews";
+import {
+    composerDraftEdit,
+    composerDraftMarkdown,
+    composerDraftParse,
+    composerDraftReplace,
+    composerTagAfter,
+    composerTagBefore,
+    composerTagsCovered,
+    type ComposerDraft,
+} from "./composerDraft";
 import { ComposerMentionLayer } from "./ComposerMentionLayer";
-import { composerMentionRanges } from "./composerMentionRanges";
 import { ConfirmPopover } from "./ConfirmPopover";
 import { EmojiPicker, type EmojiItem } from "./EmojiPicker";
 import { Icon, type IconName } from "./Icon";
@@ -116,10 +125,17 @@ export type Mentionable = {
     /** A glyph for what it is, in place of the initials. */
     icon?: IconName;
     id: string;
+    /** Their profile photo, for a person who has one. */
+    imageUrl?: string;
     initials: string;
-    /** What choosing it writes in place of the `@` token; `@` and its name when absent. */
+    /**
+     * The Markdown choosing it stands for, such as `[Name](happy://users/…)`,
+     * shown in the draft as `@Name`; `@` and its name when absent.
+     */
     insertion?: string;
     name: string;
+    /** A person rather than an agent, a chat, or a file: pictured round. */
+    person?: boolean;
     status?: "ready" | "working";
     tone?: ToneName;
 };
@@ -172,7 +188,13 @@ export function MentionPicker(props: MentionPickerProps) {
                     <Icon name={mention.icon} size={16} />
                 </span>
             ) : (
-                <Avatar initials={mention.initials} size="xs" tone={mention.tone} type="agent" />
+                <Avatar
+                    imageUrl={mention.imageUrl}
+                    initials={mention.initials}
+                    size="xs"
+                    tone={mention.tone}
+                    type={mention.person ? "human" : "agent"}
+                />
             )}
             <span
                 className="happy-mention-picker__meta"
@@ -320,11 +342,6 @@ export type ComposerProps = {
     mentionQuery?: string;
     /** Visible heading above the mention candidates (default "Mentions"). */
     mentionPickerLabel?: string;
-    /**
-     * The names, without their `@`, that read as mentions in the draft. Given,
-     * each `@Name` in the text sits on a tint drawn behind the textarea.
-     */
-    mentionHighlights?: readonly string[];
     /** Optional controlled model-selection control, rendered in the composer toolbar. */
     modelControl?: ReactNode;
     /** Optional controlled accessory rendered below the composer card. */
@@ -344,6 +361,11 @@ export type ComposerProps = {
      * calling this. While `running`, Stop is `onStop` exactly as before.
      */
     onSubagentsStop?: () => void;
+    /**
+     * The draft as Markdown. In a mentioning composer each mention in it, a
+     * `[Name](happy://…)` link, reads `@Name` in the textarea on a tint, and
+     * goes back to its link in every value handed out.
+     */
     onValueChange: (value: string) => void;
     placeholder?: string;
     /** Keeps the composer geometry stable while the current send is being acknowledged. */
@@ -368,6 +390,26 @@ export type ComposerProps = {
 };
 const LINE_HEIGHT = 22;
 const MIN_LINES = 1;
+
+/** A draft with no mentions in it. */
+const NO_TAGS: ComposerDraft["tags"] = [];
+
+/**
+ * How many deleted mentions undo can still bring back as mentions. Past this
+ * the oldest come back as their words.
+ */
+const TAG_MEMORY = 32;
+
+/**
+ * The edits that put back words the draft held before, rather than typing new
+ * ones: an `@Name` they bring back is the mention it was, not text.
+ */
+const RECALLING_INPUT = new Set([
+    "historyUndo",
+    "historyRedo",
+    "insertFromPaste",
+    "insertFromDrop",
+]);
 
 /**
  * How far an edge fade may reach into the draft. It is a ceiling, never a fixed
@@ -437,7 +479,7 @@ export function Composer(props: ComposerProps) {
     const inputEl = useRef<HTMLDivElement>(null);
     const textareaEl = useRef<HTMLTextAreaElement>(null);
     const draftScrollbarController = useScrollbarController("vertical");
-    /* With mentions highlighted, the textarea grows to its whole draft and a
+    /* In a mentioning composer the textarea grows to its whole draft and a
        wrapper scrolls it together with the mention layer behind it: one
        scroller, so the compositor moves the text and its tints in the same
        frame. A layer copying the textarea's own scrollTop would trail it by a
@@ -520,6 +562,45 @@ export function Composer(props: ComposerProps) {
     const busy = Boolean(props.disabled || props.pending);
     const mentionsSupported = () => props.mentions !== undefined;
     const mentions = () => props.mentions ?? [];
+    /*
+     * The draft as the textarea shows it. A mentioning composer reads each
+     * mention link in the Markdown value as `@Name`, and keeps the draft it
+     * last handed out, so a mention with no link of its own — a file, written
+     * as its path — keeps its tint while it is being written. A value from
+     * anywhere else, a send clearing it or a saved draft arriving, is read
+     * afresh.
+     */
+    const [draftHeld, setDraftHeld] = useState<{
+        readonly markdown: string;
+        readonly draft: ComposerDraft;
+    }>({ markdown: "", draft: { text: "", tags: NO_TAGS } });
+    const draft: ComposerDraft = !mentionsSupported()
+        ? { text: props.value, tags: NO_TAGS }
+        : draftHeld.markdown === props.value
+          ? draftHeld.draft
+          : composerDraftParse(props.value);
+    /* The mentions deleted lately, by the words they read as, so undo can
+       bring each back as the mention it was. Newest last. */
+    const tagMemory = useRef(new Map<string, string>());
+    /* The draft the composer is writing itself through the native editing
+       commands, so the input event they raise takes it as it is. */
+    const pendingDraft = useRef<ComposerDraft | null>(null);
+    const tagRemember = (shown: string, source: string) => {
+        const memory = tagMemory.current;
+        memory.delete(shown);
+        memory.set(shown, source);
+        if (memory.size > TAG_MEMORY) memory.delete(memory.keys().next().value!);
+    };
+    const tagRecall = () => {
+        const recall = new Map(tagMemory.current);
+        for (const tag of draft.tags) recall.set(draft.text.slice(tag.start, tag.end), tag.source);
+        return recall;
+    };
+    const draftCommit = (next: ComposerDraft) => {
+        const markdown = composerDraftMarkdown(next);
+        if (mentionsSupported()) setDraftHeld({ markdown, draft: next });
+        props.onValueChange(markdown);
+    };
     const mentionQuery = () => props.mentionQuery ?? typedMentionQuery;
     const filtered = () =>
         props.mentionQuery === undefined
@@ -667,8 +748,8 @@ export function Composer(props: ComposerProps) {
         const el = textareaEl.current;
         if (!el) return;
         setSelection({
-            start: el.selectionStart ?? props.value.length,
-            end: el.selectionEnd ?? props.value.length,
+            start: el.selectionStart ?? draft.text.length,
+            end: el.selectionEnd ?? draft.text.length,
         });
     };
     const focusAt = (position: number) => {
@@ -682,12 +763,62 @@ export function Composer(props: ComposerProps) {
     };
     const replaceSelection = (text: string) => {
         const current = selection;
-        const next = props.value.slice(0, current.start) + text + props.value.slice(current.end);
-        const nextCaret = current.start + text.length;
-        props.onValueChange(next);
-        focusAt(nextCaret);
+        draftCommit(composerDraftReplace(draft, current.start, current.end, text));
+        focusAt(current.start + text.length);
     };
-    const detectMention = (el: HTMLTextAreaElement) => {
+    /*
+     * Writes `next` through the textarea's own editing command, so the edit
+     * joins the undo history like typing does; replacing the value from here
+     * would wipe that history. Where the command is unavailable the value is
+     * replaced after all.
+     */
+    const draftEditNatively = (
+        el: HTMLTextAreaElement,
+        next: ComposerDraft,
+        command: "insertText" | "delete",
+        range: { readonly start: number; readonly end: number },
+        insert = "",
+    ) => {
+        el.focus();
+        el.setSelectionRange(range.start, range.end);
+        pendingDraft.current = next;
+        const applied =
+            command === "insertText"
+                ? el.ownerDocument.execCommand("insertText", false, insert)
+                : el.ownerDocument.execCommand("delete");
+        pendingDraft.current = null;
+        if (applied && el.value === next.text) return;
+        draftCommit(next);
+        focusAt(range.start + insert.length);
+    };
+    /*
+     * Backspace and Delete take a mention whole. A caret at its edge, or a
+     * selection cutting into it, deletes all of it, which undo puts back as
+     * the mention it was. A selection that cuts into no mention is left to the
+     * textarea.
+     */
+    const tagDelete = (el: HTMLTextAreaElement, backward: boolean): boolean => {
+        const start = el.selectionStart;
+        const end = el.selectionEnd;
+        const range =
+            start === end
+                ? backward
+                    ? composerTagBefore(draft, start)
+                    : composerTagAfter(draft, start)
+                : composerTagsCovered(draft, start, end);
+        if (range === undefined || (range.start === start && range.end === end)) return false;
+        for (const tag of draft.tags)
+            if (tag.start >= range.start && tag.end <= range.end)
+                tagRemember(draft.text.slice(tag.start, tag.end), tag.source);
+        draftEditNatively(
+            el,
+            composerDraftReplace(draft, range.start, range.end, ""),
+            "delete",
+            range,
+        );
+        return true;
+    };
+    const detectMention = (el: HTMLTextAreaElement, current: ComposerDraft) => {
         // Tracked whenever this composer mentions at all, not only while it has
         // candidates in hand: the first `@` of a searched list is typed before
         // any result exists, and the token it opened is what the picker needs
@@ -704,6 +835,11 @@ export function Composer(props: ComposerProps) {
         }
         const query = match[2] ?? "";
         const start = caret - query.length - 1;
+        // A mention already made is not a token to complete.
+        if (current.tags.some((tag) => tag.start === start)) {
+            closeMention();
+            return;
+        }
         if (mentionStart !== start || typedMentionQuery !== query) setActiveIndex(0);
         setMentionStart(start);
         setTypedMentionQuery(query);
@@ -713,25 +849,36 @@ export function Composer(props: ComposerProps) {
         const start = mentionStart;
         if (!el || start === null) return;
         const caret = el.selectionStart ?? el.value.length;
-        const insertion = `${mention.insertion ?? `@${mention.name}`} `;
-        const next = el.value.slice(0, start) + insertion + el.value.slice(caret);
+        // A link reads as its `@label`; anything else, a file's `@path`, is
+        // already the words it shows.
+        const source = mention.insertion ?? `@${mention.name}`;
+        const linked = composerDraftParse(source);
+        const shown =
+            linked.tags.length === 1 && linked.tags[0]!.end === linked.text.length
+                ? linked.text
+                : source;
+        const insertion = `${shown} `;
         closeMention();
-        props.onValueChange(next);
+        tagRemember(shown, source);
+        draftEditNatively(
+            el,
+            composerDraftReplace(draft, start, caret, insertion, { length: shown.length, source }),
+            "insertText",
+            { start, end: caret },
+            insertion,
+        );
         props.onMentionSelect?.(mention);
-        const nextCaret = start + insertion.length;
-        focusAt(nextCaret);
     };
     const triggerMention = () => {
         const el = textareaEl.current;
         if (!el || busy || !mentionsSupported()) return;
         closeEmoji();
         el.focus();
-        const caret = el.selectionStart ?? props.value.length;
-        const before = props.value.slice(0, caret);
+        const caret = el.selectionStart ?? draft.text.length;
+        const before = draft.text.slice(0, caret);
         const needsSpace = before.length > 0 && !/[\s([{]$/.test(before);
         const insertion = `${needsSpace ? " " : ""}@`;
-        const next = before + insertion + props.value.slice(el.selectionEnd ?? caret);
-        props.onValueChange(next);
+        draftCommit(composerDraftReplace(draft, caret, el.selectionEnd ?? caret, insertion));
         setMentionStart(caret + insertion.length - 1);
         setTypedMentionQuery("");
         setActiveIndex(0);
@@ -794,6 +941,17 @@ export function Composer(props: ComposerProps) {
         ) {
             event.preventDefault();
             audienceToggle();
+            return;
+        }
+        if (
+            (event.key === "Backspace" || event.key === "Delete") &&
+            // Cmd+Backspace takes the whole line, mentions and all.
+            !event.metaKey &&
+            !event.nativeEvent.isComposing &&
+            draft.tags.length > 0 &&
+            tagDelete(event.currentTarget, event.key === "Backspace")
+        ) {
+            event.preventDefault();
             return;
         }
         if (commandOpen()) {
@@ -884,9 +1042,23 @@ export function Composer(props: ComposerProps) {
     const onInput = (event: FormEvent<HTMLTextAreaElement>) => {
         // A new query is a new list; start its highlight at the top.
         setCommandIndex(0);
-        props.onValueChange(event.currentTarget.value);
+        const el = event.currentTarget;
+        const pending = pendingDraft.current;
+        let next = pending;
+        if (next === null || next.text !== el.value) {
+            const native = event.nativeEvent;
+            const recalling = native instanceof InputEvent && RECALLING_INPUT.has(native.inputType);
+            const edit = composerDraftEdit(draft, el.value, {
+                caret: el.selectionEnd,
+                ...(recalling && mentionsSupported() ? { recall: tagRecall() } : {}),
+            });
+            for (const tag of edit.dropped)
+                tagRemember(draft.text.slice(tag.start, tag.end), tag.source);
+            next = edit.draft;
+        }
+        draftCommit(next);
         rememberSelection();
-        detectMention(event.currentTarget);
+        detectMention(el, next);
     };
     const onPaste = (event: ReactClipboardEvent<HTMLTextAreaElement>) => {
         if (event.currentTarget.closest("[inert]")) {
@@ -1029,18 +1201,12 @@ export function Composer(props: ComposerProps) {
     // Only the draft through the paragraph of its last mention can move a
     // tint. Not just through the mention: how that line wraps, and how its
     // directions resolve, can depend on what follows it on the same line.
-    const mentionLayerEnd =
-        props.mentionHighlights === undefined
-            ? 0
-            : (composerMentionRanges(props.value, props.mentionHighlights).at(-1)?.end ?? 0);
-    const mentionLayerBreak = props.value.indexOf("\n", mentionLayerEnd);
+    const mentionLayerEnd = draft.tags.at(-1)?.end ?? 0;
+    const mentionLayerBreak = draft.text.indexOf("\n", mentionLayerEnd);
     const mentionLayerText =
         mentionLayerEnd === 0
             ? ""
-            : props.value.slice(
-                  0,
-                  mentionLayerBreak === -1 ? props.value.length : mentionLayerBreak,
-              );
+            : draft.text.slice(0, mentionLayerBreak === -1 ? draft.text.length : mentionLayerBreak);
     const draftTextarea = (
         <textarea
             className="happy-composer__textarea"
@@ -1061,7 +1227,7 @@ export function Composer(props: ComposerProps) {
             placeholder={props.placeholder}
             ref={textareaAttach}
             rows={MIN_LINES}
-            value={props.value}
+            value={draft.text}
         />
     );
     return (
@@ -1127,7 +1293,7 @@ export function Composer(props: ComposerProps) {
                         data-scrollbar-placement="stable-gutter"
                         ref={draftScrollbarHost}
                     >
-                        {props.mentionHighlights === undefined ? (
+                        {!mentionsSupported() ? (
                             draftTextarea
                         ) : (
                             <div
@@ -1135,10 +1301,7 @@ export function Composer(props: ComposerProps) {
                                 onScroll={(event) => draftFadeSync(event.currentTarget)}
                                 ref={mentionScrollerAttach}
                             >
-                                <ComposerMentionLayer
-                                    names={props.mentionHighlights}
-                                    text={mentionLayerText}
-                                />
+                                <ComposerMentionLayer tags={draft.tags} text={mentionLayerText} />
                                 {draftTextarea}
                             </div>
                         )}

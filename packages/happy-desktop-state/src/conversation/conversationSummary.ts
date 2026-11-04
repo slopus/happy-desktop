@@ -29,6 +29,8 @@ export interface ConversationSummary {
     readonly unread?: boolean;
     /** How many messages are unread, when known; 100 means "99+". */
     readonly unreadCount?: number;
+    /** A teammate's message named the reader in what is unread. */
+    readonly unreadMentioned?: true;
     readonly mentions?: number;
     readonly avatarFileId?: string;
     readonly participants: readonly ConversationAuthor[];

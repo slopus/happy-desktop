@@ -21,7 +21,7 @@ export type ComposerMentionSubject =
     /** A chat with an agent: a bot's, a task's, or a project's conversation. */
     | { readonly kind: "agent"; readonly owner: "bot" | "task" | "conversation" }
     /** Someone on the team; mentioning them in a task's chat brings them into it. */
-    | { readonly kind: "person" };
+    | { readonly kind: "person"; readonly imageUrl?: string };
 
 /** One `@`-mention candidate offered for the active mention token. */
 export interface ComposerMention {

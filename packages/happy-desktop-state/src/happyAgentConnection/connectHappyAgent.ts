@@ -32,7 +32,8 @@ import {
 import { createStore } from "zustand/vanilla";
 import { happyAgentServiceTierToWire } from "../happyAgentServiceTier.js";
 import { ChatStore } from "./ChatStore.js";
-import { userProfilesCreate } from "./userProfiles.js";
+import { userProfilesCreate, type UserProfile } from "./userProfiles.js";
+import { happyAgentImageUrl } from "../utils/happyAgentImageUrl.js";
 import { happyAgentSyncCreate, type HappyAgentHealth } from "./happyAgentSync.js";
 import { happyAgentSyncRead } from "./happyAgentSyncRead.js";
 import { gitSnapshotStateUpdate, type GitSnapshotState } from "./gitSnapshotState.js";
@@ -1763,6 +1764,15 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                 id: user.id,
                 name: user.name,
                 ...(user.role == null ? {} : { role: user.role }),
+                ...(user.photo === null
+                    ? {}
+                    : {
+                          imageUrl: happyAgentImageUrl(
+                              endpoint,
+                              `/v0/users/${encodeURIComponent(user.id)}/photo`,
+                              user.photo.thumbhash,
+                          ),
+                      }),
             }));
             if (reconcileSessions) await users.refresh();
             config = bootstrap.config;
@@ -4155,13 +4165,14 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
             teammates.flatMap((teammate) =>
                 teammate.id === currentUserId
                     ? []
-                    : [
-                          {
-                              ...teammate,
-                              name: users.profiles.get(teammate.id)?.name ?? teammate.name,
-                          },
-                      ],
+                    : [teammateCurrent(teammate, users.profiles.get(teammate.id))],
             ),
+        team: () => ({
+            ...(currentUserId === undefined ? {} : { viewerId: currentUserId }),
+            members: teammates.map((teammate) =>
+                teammateCurrent(teammate, users.profiles.get(teammate.id)),
+            ),
+        }),
         config: () => (configReloads === 0 ? config : undefined),
         sync: sync.source,
         retry: retryUpdates,
@@ -5993,4 +6004,21 @@ function abortableWait(milliseconds: number, signal: AbortSignal): Promise<void>
             reject(signal.reason);
         }
     });
+}
+
+/**
+ * A teammate as the bootstrap listed them, with the name and photo their
+ * profile has carried since, once something has read it.
+ */
+function teammateCurrent(
+    teammate: HappyAgentTeammate,
+    profile: UserProfile | undefined,
+): HappyAgentTeammate {
+    if (profile === undefined) return teammate;
+    const { imageUrl: _listed, ...rest } = teammate;
+    return {
+        ...rest,
+        name: profile.name,
+        ...(profile.avatar === null ? {} : { imageUrl: profile.avatar.url }),
+    };
 }

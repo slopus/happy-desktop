@@ -1,4 +1,5 @@
 import type { HappyAgentClient } from "@slopus/happy-agent-client";
+import type { HappyAgentTeamRoster } from "../happyAgentConnection/types.js";
 import type { HappyAgentArtifact, HappyAgentArtifactAuthor } from "./artifactTypes.js";
 
 /** The daemon's bound on one user lookup. */
@@ -15,6 +16,21 @@ export interface HappyAgentArtifactPeopleStore {
     subscribe(listener: () => void): () => void;
     /** Reads one person's name if it is not known yet, such as one a message mentions. */
     userNameRequest(userId: string): void;
+    /**
+     * Who one teammate is, for a mention of them: their current name, photo,
+     * and role, and whether they are the reader. Nothing for anyone the team
+     * does not list, such as everyone in standalone mode.
+     */
+    person(userId: string): HappyAgentPerson | undefined;
+}
+
+/** Someone on the team, as a mention of them shows them. */
+export interface HappyAgentPerson {
+    readonly name: string;
+    readonly imageUrl?: string;
+    readonly role?: string;
+    /** The reader themselves. */
+    readonly self: boolean;
 }
 
 export interface HappyAgentArtifactPeople {
@@ -37,6 +53,8 @@ export function happyAgentArtifactAuthors(
 
 export function happyAgentArtifactPeopleCreate(
     client: Pick<HappyAgentClient, "getUsers">,
+    /** The team the connection holds, current with every profile change it has read. */
+    team?: () => HappyAgentTeamRoster,
 ): HappyAgentArtifactPeople {
     const listeners = new Set<() => void>();
     const controller = new AbortController();
@@ -78,6 +96,17 @@ export function happyAgentArtifactPeopleCreate(
             userNameRequest(userId) {
                 // Asked while a transcript renders; the read starts after it.
                 queueMicrotask(() => namesRead([userId]));
+            },
+            person(userId) {
+                const current = team?.();
+                const member = current?.members.find((candidate) => candidate.id === userId);
+                if (member === undefined) return undefined;
+                return {
+                    name: member.name,
+                    ...(member.imageUrl === undefined ? {} : { imageUrl: member.imageUrl }),
+                    ...(member.role === undefined ? {} : { role: member.role }),
+                    self: current?.viewerId === userId,
+                };
             },
         },
         request(authors) {

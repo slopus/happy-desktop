@@ -43,7 +43,12 @@ interface Case {
     readonly fixture: "align" | "grow";
     /** Records caret offset and scroll position after each step, in both variants. */
     readonly behaviour?: boolean;
-    run(page: Page, cdp: CDPSession, context: BrowserContext, log: (step: string) => Promise<void>): Promise<void>;
+    run(
+        page: Page,
+        cdp: CDPSession,
+        context: BrowserContext,
+        log: (step: string) => Promise<void>,
+    ): Promise<void>;
 }
 
 /** Positive controls: the layer deliberately moved, which both checks must report. */
@@ -55,7 +60,9 @@ const control = (px: number): Case => ({
         await page.keyboard.type("w");
         await pause(page, 100);
         await page.evaluate((shift) => {
-            const layer = document.querySelector<HTMLElement>(".happy-composer__mention-layer-text")!;
+            const layer = document.querySelector<HTMLElement>(
+                ".happy-composer__mention-layer-text",
+            )!;
             layer.style.transform = `translateY(${String(shift)}px)`;
         }, px);
         await pause(page, 150);
@@ -188,7 +195,11 @@ const cases: Case[] = [
                 await pause(page, 80);
             }
             // Cancelled: the preedit goes away again.
-            await cdp.send("Input.imeSetComposition", { text: "", selectionStart: 0, selectionEnd: 0 });
+            await cdp.send("Input.imeSetComposition", {
+                text: "",
+                selectionStart: 0,
+                selectionEnd: 0,
+            });
             await pause(page, 150);
         },
     },
@@ -197,7 +208,9 @@ const cases: Case[] = [
         fixture: "align",
         async run(page) {
             await caretAt(page, "Can @Bob");
-            await page.keyboard.type("quick brown fox jumps over the lazy dog again ", { delay: 66 });
+            await page.keyboard.type("quick brown fox jumps over the lazy dog again ", {
+                delay: 66,
+            });
         },
     },
     {
@@ -267,7 +280,17 @@ const cases: Case[] = [
         async run(page, _cdp, _context, log) {
             await caretAt(page, "Can @Bob");
             await log("start");
-            for (const key of ["PageDown", "PageDown", "PageDown", "PageUp", "PageUp", "Control+End", "Control+Home", "ArrowDown", "ArrowDown"]) {
+            for (const key of [
+                "PageDown",
+                "PageDown",
+                "PageDown",
+                "PageUp",
+                "PageUp",
+                "Control+End",
+                "Control+Home",
+                "ArrowDown",
+                "ArrowDown",
+            ]) {
                 await page.keyboard.press(key);
                 await pause(page, 150);
                 await log(key);
@@ -280,7 +303,9 @@ const cases: Case[] = [
         behaviour: true,
         async run(page, _cdp, _context, log) {
             await caretAt(page, "Can @Bob");
-            const box = (await page.evaluate(`(() => { const r = ${scrollerOf}.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height }; })()`)) as {
+            const box = (await page.evaluate(
+                `(() => { const r = ${scrollerOf}.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height }; })()`,
+            )) as {
                 x: number;
                 y: number;
                 width: number;
@@ -307,7 +332,9 @@ const cases: Case[] = [
         name: "7c-wheel-momentum",
         fixture: "align",
         async run(page) {
-            const box = (await page.evaluate(`(() => { const r = ${scrollerOf}.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height }; })()`)) as {
+            const box = (await page.evaluate(
+                `(() => { const r = ${scrollerOf}.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height }; })()`,
+            )) as {
                 x: number;
                 y: number;
                 width: number;
@@ -330,17 +357,28 @@ interface FrameStat {
 }
 
 /** Red ink lying farther than one pixel from any black ink, per frame. */
-async function analyse(lab: Page, frames: readonly string[], clip: { x: number; y: number; width: number; height: number }) {
+async function analyse(
+    lab: Page,
+    frames: readonly string[],
+    clip: { x: number; y: number; width: number; height: number },
+) {
     return (await lab.evaluate(
         async ([list, box]) => {
             const results: { maxOffset: number; misplaced: number }[] = [];
-            const { x, y, width, height } = box as { x: number; y: number; width: number; height: number };
+            const { x, y, width, height } = box as {
+                x: number;
+                y: number;
+                width: number;
+                height: number;
+            };
             for (const base64 of list as string[]) {
                 const image = new Image();
                 image.src = `data:image/png;base64,${base64}`;
                 await image.decode();
                 const ratio = image.width / 900;
-                const [cx, cy, cw, ch] = [x, y, width, height].map((v) => Math.round(v * ratio)) as [number, number, number, number];
+                const [cx, cy, cw, ch] = [x, y, width, height].map((v) =>
+                    Math.round(v * ratio),
+                ) as [number, number, number, number];
                 const canvas = document.createElement("canvas");
                 canvas.width = cw;
                 canvas.height = ch;
@@ -399,7 +437,9 @@ for (const testCase of cases) {
                 viewport: { width: 900, height: 600 },
             });
             const page = await context.newPage();
-            await page.goto(`${url}?variant=${variant}&fixture=${testCase.fixture}&width=640#mention-layer-bench`);
+            await page.goto(
+                `${url}?variant=${variant}&fixture=${testCase.fixture}&width=640#mention-layer-bench`,
+            );
             await page.locator("textarea").waitFor();
             await page.evaluate(() => document.fonts.ready);
             await page.evaluate("window.__name = (f) => f");
@@ -410,17 +450,25 @@ for (const testCase of cases) {
                 const check = () => {
                     state.frames++;
                     const textarea = document.querySelector("textarea")!;
-                    const layer = document.querySelector<HTMLElement>(".happy-composer__mention-layer-text");
+                    const layer = document.querySelector<HTMLElement>(
+                        ".happy-composer__mention-layer-text",
+                    );
                     if (layer) {
-                        const text = [...layer.children].map((paragraph) => paragraph.textContent).join("\n");
+                        const text = [...layer.children]
+                            .map((paragraph) => paragraph.textContent)
+                            .join("\n");
                         const value = textarea.value;
                         const a = textarea.getBoundingClientRect();
                         const b = layer.getBoundingClientRect();
                         const problems = [
                             value.startsWith(text) ? "" : "text is not the draft's start",
-                            value.length === text.length || value[text.length] === "\n" ? "" : "text stops inside a paragraph",
+                            value.length === text.length || value[text.length] === "\n"
+                                ? ""
+                                : "text stops inside a paragraph",
                             Math.abs(a.top - b.top) < 0.01 ? "" : `top ${String(a.top - b.top)}`,
-                            Math.abs(a.width - b.width) < 0.01 ? "" : `width ${String(a.width - b.width)}`,
+                            Math.abs(a.width - b.width) < 0.01
+                                ? ""
+                                : `width ${String(a.width - b.width)}`,
                         ].filter(Boolean);
                         if (problems.length > 0) {
                             state.bad++;
@@ -460,20 +508,38 @@ for (const testCase of cases) {
                 await context.close();
                 continue;
             }
-            const dom = (await page.evaluate("window.__sync")) as { frames: number; bad: number; worst: string };
+            const dom = (await page.evaluate("window.__sync")) as {
+                frames: number;
+                bad: number;
+                worst: string;
+            };
             // The scroller's box at the end; a resize case is analysed over the whole composer column.
             const clip = (await page.evaluate(
                 `(() => { const r = ${testCase.name.startsWith("6") ? 'document.querySelector("[data-mention-bench]")' : scrollerOf}.getBoundingClientRect(); return { x: r.x, y: r.y, width: Math.max(r.width, 660), height: r.height }; })()`,
             )) as { x: number; y: number; width: number; height: number };
             const stats = await analyse(lab, frames, clip);
-            const worst = stats.reduce((best, stat, index) => (stat.maxOffset > (stats[best]?.maxOffset ?? -1) ? index : best), 0);
+            const worst = stats.reduce(
+                (best, stat, index) =>
+                    stat.maxOffset > (stats[best]?.maxOffset ?? -1) ? index : best,
+                0,
+            );
             const outOfStep = stats.filter((stat) => stat.maxOffset > 1).length;
             if (process.env.SYNC_DUMP && frames.length > 0) {
-                writeFileSync(join(out, `${testCase.name}-${String(scale * 100)}pct-first.png`), Buffer.from(frames[0]!, "base64"));
-                writeFileSync(join(out, `${testCase.name}-${String(scale * 100)}pct-last.png`), Buffer.from(frames.at(-1)!, "base64"));
+                writeFileSync(
+                    join(out, `${testCase.name}-${String(scale * 100)}pct-first.png`),
+                    Buffer.from(frames[0]!, "base64"),
+                );
+                writeFileSync(
+                    join(out, `${testCase.name}-${String(scale * 100)}pct-last.png`),
+                    Buffer.from(frames.at(-1)!, "base64"),
+                );
                 console.log(JSON.stringify(stats));
             }
-            if (frames[worst]) writeFileSync(join(out, `${testCase.name}-${String(scale * 100)}pct-worst.png`), Buffer.from(frames[worst]!, "base64"));
+            if (frames[worst])
+                writeFileSync(
+                    join(out, `${testCase.name}-${String(scale * 100)}pct-worst.png`),
+                    Buffer.from(frames[worst]!, "base64"),
+                );
             const row = {
                 case: testCase.name,
                 zoom: `${String(scale * 100)}%`,

@@ -773,6 +773,7 @@ function taskSessionUnread(session: GroupSession, unread: TaskMembership["unread
             reason: "turn_finished",
             since: unread.since,
             ...(unread.count === undefined ? {} : { count: unread.count }),
+            ...(unread.reason === "mentioned" ? { mentioned: true as const } : {}),
         },
     };
     taskSessionCache.set(session, { unread, session: value });

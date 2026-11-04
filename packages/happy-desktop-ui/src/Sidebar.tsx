@@ -205,6 +205,11 @@ export type SidebarItem = {
      */
     unreadCount?: number;
     /**
+     * Someone mentioned the reader in what is unread. The pill then leads with
+     * `@` on the mention's own colour, and shows even without a count.
+     */
+    unreadMentioned?: boolean;
+    /**
      * The reader silenced this row's news. An unread row keeps its heavier,
      * darker name, so it still reads as unread where it stands, but draws no
      * dot: the dot is what calls from across the window, and a muted row has
@@ -1630,21 +1635,30 @@ function SidebarRow({
     // A counted row says how much in one place, the trailing edge, whatever it is.
     const unreadCount = () =>
         unreadDot() && (item().unreadCount ?? 0) > 0 ? item().unreadCount : undefined;
+    const unreadMention = () => unreadDot() && item().unreadMentioned === true;
+    const unreadPillShown = () => unreadCount() !== undefined || unreadMention();
     const unreadOnLeading = () =>
         unreadDot() &&
-        unreadCount() === undefined &&
+        !unreadPillShown() &&
         (item().kind === "project" || item().kind === "workspace");
     const unreadPill = () =>
-        ((count) =>
-            count === undefined ? null : (
+        ((count, mention) =>
+            count === undefined && !mention ? null : (
                 <span
-                    aria-label={`${String(count)} unread`}
+                    aria-label={[
+                        count === undefined ? "Unread" : `${String(count)} unread`,
+                        mention ? "you were mentioned" : undefined,
+                    ]
+                        .filter(Boolean)
+                        .join(", ")}
                     className="happy-sidebar__item-unread-count"
                     data-happy-desktop-ui="sidebar-item-unread-count"
+                    data-mentioned={mention ? "" : undefined}
                 >
-                    {count >= 100 ? "99+" : String(count)}
+                    {mention ? "@" : null}
+                    {count === undefined ? null : count >= 100 ? "99+" : String(count)}
                 </span>
-            ))(unreadCount());
+            ))(unreadCount(), unreadMention());
     const mentioned = () => (item().badge ?? 0) > 0;
     const hasChangeStats = () =>
         (item().changeStats?.added ?? 0) > 0 || (item().changeStats?.deleted ?? 0) > 0;
@@ -2367,10 +2381,7 @@ function SidebarRow({
                                 keys={props.shortcut.caps}
                             />
                         ) : null}
-                        {unreadDot() &&
-                        !unreadOnLeading() &&
-                        unreadCount() === undefined &&
-                        !mentioned() ? (
+                        {unreadDot() && !unreadOnLeading() && !unreadPillShown() && !mentioned() ? (
                             <span
                                 aria-label="Unread"
                                 className="happy-sidebar__item-unread"
@@ -2501,7 +2512,7 @@ function SidebarRow({
                     // nothing a row reports is covered while the pointer is on it.
                     !lanes && swapsTrailing(),
                     !lanes && showCount() ? item().count : undefined,
-                    !lanes && !mentioned() && unreadCount() !== undefined,
+                    !lanes && !mentioned() && unreadPillShown(),
                 )}
                 {/* Only a row that folds has a fold at its edge. Revealed on hover, it
                 is laid over the trailing lane and takes the delta's place while

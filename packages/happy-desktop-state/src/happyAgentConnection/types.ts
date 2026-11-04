@@ -658,8 +658,14 @@ export interface GroupSession {
     /**
      * What the reader has not looked at. `count` is how many messages, as the
      * daemon derives it and stops at 100; absent on a daemon too old to count.
+     * `mentioned` when a teammate's message named the reader.
      */
-    unread?: { reason: "attention_needed" | "turn_finished"; since: number; count?: number };
+    unread?: {
+        reason: "attention_needed" | "turn_finished";
+        since: number;
+        count?: number;
+        mentioned?: true;
+    };
     wait?: { startedAt: number; dueAt: number };
     updatedAt: number;
 }
@@ -1089,6 +1095,16 @@ export interface HappyAgentTeammate {
     readonly name: string;
     /** What they do, when they said. */
     readonly role?: string;
+    /** Their profile photo, when they have one. */
+    readonly imageUrl?: string;
+}
+
+/** Everyone on the team who signs in, and which of them the reader is. */
+export interface HappyAgentTeamRoster {
+    /** The reader's own user id; absent in standalone mode. */
+    readonly viewerId?: string;
+    /** In name order, the reader included. */
+    readonly members: readonly HappyAgentTeammate[];
 }
 
 export interface HappyAgentConnection {
@@ -1101,6 +1117,11 @@ export interface HappyAgentConnection {
      * on a daemon too old to list them.
      */
     teammates: () => readonly HappyAgentTeammate[];
+    /**
+     * The same people with the reader among them, and which one the reader
+     * is, for showing who a message names.
+     */
+    team: () => HappyAgentTeamRoster;
     compatibility: () => ServerCompatibility;
     /**
      * The daemon configuration this connection holds, from its bootstrap or the read that

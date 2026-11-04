@@ -239,6 +239,14 @@
        ringed so it still reads against a selected row's grey. */
     --happy-unread-pill-background: #ffffff;
     --happy-mention-tint: rgb(26 127 153 / 0.16);
+    /* A mention of the reader themselves, and the words of a mention in a
+       sent message, which are not drawn by a textarea and can take a colour. */
+    --happy-mention-tint-self: rgb(26 127 153 / 0.32);
+    --happy-mention-text: #12657a;
+    /* The unread pill of a row the reader was mentioned in: the mention's own
+       hue, filled, so it outranks a plain count at a glance. */
+    --happy-unread-pill-mention-background: #1a7f99;
+    --happy-unread-pill-mention-text: #ffffff;
     --happy-unread-pill-text: #1c1c1e;
     --happy-unread-pill-ring: rgb(0 0 0 / 0.14);
 
@@ -674,6 +682,10 @@
         --happy-tile-teal-fill: rgb(64 200 224 / 0.2);
         --happy-unread-pill-background: #f2f2f7;
         --happy-mention-tint: rgb(92 200 226 / 0.24);
+        --happy-mention-tint-self: rgb(92 200 226 / 0.42);
+        --happy-mention-text: #9be0f0;
+        --happy-unread-pill-mention-background: #5cc8e2;
+        --happy-unread-pill-mention-text: #0b2a33;
         --happy-unread-pill-text: #1c1c1e;
         --happy-unread-pill-ring: transparent;
         /* Declared again here, so they resolve against the dark palette. */
@@ -897,6 +909,10 @@
     --happy-tile-teal-fill: rgb(64 200 224 / 0.2);
     --happy-unread-pill-background: #f2f2f7;
     --happy-mention-tint: rgb(92 200 226 / 0.24);
+    --happy-mention-tint-self: rgb(92 200 226 / 0.42);
+    --happy-mention-text: #9be0f0;
+    --happy-unread-pill-mention-background: #5cc8e2;
+    --happy-unread-pill-mention-text: #0b2a33;
     --happy-unread-pill-text: #1c1c1e;
     --happy-unread-pill-ring: transparent;
     /* Declared again here, so they resolve against the dark palette. */

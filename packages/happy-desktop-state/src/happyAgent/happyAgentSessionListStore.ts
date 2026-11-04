@@ -3159,12 +3159,17 @@ function sessionLocationOf(
 
 /** A session the reader just opened: nothing in it is unread any more. */
 function sessionReadLocally(session: HappyAgentSessionSummary): HappyAgentSessionSummary {
-    const { unreadReason: _reason, unreadCount: _count, ...read } = session;
+    const {
+        unreadReason: _reason,
+        unreadCount: _count,
+        unreadMentioned: _mentioned,
+        ...read
+    } = session;
     return read;
 }
 
 /** A bot's or task's chat the reader just opened: nothing in it is unread any more. */
 function conversationReadLocally(conversation: ConversationSummary): ConversationSummary {
-    const { unreadCount: _count, ...read } = conversation;
+    const { unreadCount: _count, unreadMentioned: _mentioned, ...read } = conversation;
     return { ...read, unread: false };
 }

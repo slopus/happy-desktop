@@ -800,6 +800,8 @@ export interface HappyAgentSessionSummary {
     readonly unreadReason?: "attention_needed" | "turn_finished";
     /** How many messages are unread, when the daemon counts them; capped at 100. */
     readonly unreadCount?: number;
+    /** A teammate's message named the reader in what is unread. */
+    readonly unreadMentioned?: true;
     /** The line the agent last wrote about where its work stands, with `set_status`. */
     readonly statusLine?: HappyAgentStatusLine;
     /** The start of an unsent composer draft, on one line; absent while there is none. */

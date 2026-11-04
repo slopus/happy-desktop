@@ -19,6 +19,8 @@ import {
  *   thing is busy (an agent working, a service running) so the link can say so.
  * - `text` — something that cannot be opened: deleted, unknown, not visible to
  *   this reader, or a kind this build does not know. It reads as plain words.
+ * - `person` — someone on the team: a tag in their current name, with their
+ *   photo and role behind it, set apart further when it is the reader.
  */
 export type MessageReferenceView =
     | {
@@ -32,7 +34,18 @@ export type MessageReferenceView =
            */
           readonly reading?: boolean;
       }
-    | { readonly type: "text"; readonly label: string };
+    | { readonly type: "text"; readonly label: string }
+    | {
+          readonly type: "person";
+          /** `@` and their current name. */
+          readonly label: string;
+          /** The name alone, as the card behind the tag shows it. */
+          readonly name: string;
+          readonly imageUrl?: string;
+          readonly role?: string;
+          /** The reader themselves. */
+          readonly self: boolean;
+      };
 
 /**
  * The live side of the references a transcript shows, supplied by the surface
@@ -103,6 +116,8 @@ function referenceWords(
     written: string,
 ): { readonly link: boolean; readonly label: string; readonly written: boolean } {
     const writtenUsable = written.trim().length > 0;
+    // A person is always named as they are called now.
+    if (view.type === "person") return { link: true, label: view.label, written: false };
     if (view.type === "link")
         return view.reading === true && writtenUsable
             ? { link: true, label: written, written: true }
@@ -110,6 +125,11 @@ function referenceWords(
     return view.label === happyReferencePlaceholder(reference) && writtenUsable
         ? { link: false, label: written, written: true }
         : { link: false, label: view.label, written: false };
+}
+
+/** Whether a reference reads as something in the body, a link or a person's tag, not as words. */
+export function messageReferenceShown(view: MessageReferenceView | undefined): boolean {
+    return view?.type === "link" || view?.type === "person";
 }
 
 /** Whether a link is for the instance these references read, or names none. */
@@ -190,8 +210,9 @@ export function messageReferencesResolve(
                 labelEscape(happyReferencePlaceholder(reference));
             const href = words.link ? referenceHref(reference) : undefined;
             const shown = href === undefined ? label : `[${label}](${href})`;
-            // A person a message mentions stands out from the words around them.
-            return reference.kind === "user" ? `**${shown}**` : shown;
+            // A person a message mentions stands out from the words around them:
+            // a tag where the team knows them, their name in bold where not.
+            return reference.kind === "user" && href === undefined ? `**${shown}**` : shown;
         },
         { streaming },
     );
@@ -277,7 +298,7 @@ export function messagePlainTextSegments(
         const href =
             link?.type === "reference" &&
             linkHere(link, references) &&
-            references?.view(link.reference).type === "link"
+            messageReferenceShown(references?.view(link.reference))
                 ? referenceHref(link.reference)
                 : undefined;
         if (link?.type === "reference" && href !== undefined)

@@ -1589,6 +1589,14 @@
     white-space: nowrap;
 }
 
+/* Someone mentioned the reader here: the same pill, filled with the mention's
+   own hue and led by an `@`, so it outranks a plain count at a glance. */
+.happy-sidebar__item-unread-count[data-mentioned] {
+    background: var(--happy-unread-pill-mention-background);
+    box-shadow: none;
+    color: var(--happy-unread-pill-mention-text);
+}
+
 .happy-sidebar__item:hover
     .happy-sidebar__item-trailing[data-swaps]
     .happy-sidebar__item-unread-count,

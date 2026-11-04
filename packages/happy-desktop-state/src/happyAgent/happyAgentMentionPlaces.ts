@@ -10,10 +10,11 @@ const MENTION_PLACES_LIMIT = 5;
 
 /**
  * The people, Surfaces, and chats an `@` token names, before the files it
- * does: the reader's teammates, then their own Surfaces, then the bots, tasks,
- * and project chats in their list, each written as the `happy://` link that names it, labelled with its
- * name so the words read on any surface that cannot look it up. The chat the draft
- * is written in is not offered to itself.
+ * does: the reader's teammates, those already in this chat first, then their
+ * own Surfaces, then the bots, tasks, and project chats in their list, each
+ * written as the `happy://` link that names it, labelled with its name so the
+ * words read on any surface that cannot look it up. The chat the draft is
+ * written in is not offered to itself.
  *
  * Surfaces are offered once the reference grammar knows them; until then a
  * reference to one would read as unavailable everywhere it was shown, so
@@ -26,17 +27,25 @@ export function happyAgentMentionPlaces(input: {
     readonly conversationId: HappyAgentSessionId;
     /** The other people on the team, held by the connection from its bootstrap. */
     readonly teammates: readonly HappyAgentTeammate[];
+    /** The people already in this chat: its owner and whoever has written in it. */
+    readonly present?: ReadonlySet<string>;
 }): readonly ComposerMention[] {
     const needle = input.query.trim().toLowerCase();
     const matches = (name: string) => name.toLowerCase().includes(needle);
+    const present = input.present ?? new Set<string>();
     const people: ComposerMention[] = input.teammates
         .filter((teammate) => matches(teammate.name))
+        // Stable, so each group keeps the team's name order.
+        .sort((a, b) => Number(present.has(b.id)) - Number(present.has(a.id)))
         .slice(0, MENTION_PLACES_LIMIT)
         .map((teammate) => ({
             id: `user:${teammate.id}`,
             label: teammate.name,
             ...(teammate.role === undefined ? {} : { detail: teammate.role }),
-            subject: { kind: "person" },
+            subject: {
+                kind: "person",
+                ...(teammate.imageUrl === undefined ? {} : { imageUrl: teammate.imageUrl }),
+            },
             insertion: formatHappyMarkdownLink(
                 { type: "reference", reference: { kind: "user", id: teammate.id } },
                 teammate.name,

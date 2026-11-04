@@ -824,6 +824,7 @@ export function happyAgentWorkspaceClientCreate(
                 artifactOpened: (artifactId) => {
                     if (!disposed) feedOf().subjectSeen({ type: "artifact", id: artifactId });
                 },
+                team: () => deps.connection.team(),
             });
             return artifacts;
         },

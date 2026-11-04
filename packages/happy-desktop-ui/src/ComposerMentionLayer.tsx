@@ -1,4 +1,5 @@
-import { composerMentionRanges } from "./composerMentionRanges";
+import { memo } from "react";
+import type { ComposerTag } from "./composerDraft";
 
 /**
  * The draft again, behind the composer's textarea, with each mention on a
@@ -17,12 +18,13 @@ import { composerMentionRanges } from "./composerMentionRanges";
  * the layer's input unchanged and it does not render at all. With no mention
  * there is no layer.
  */
-export function ComposerMentionLayer(props: {
+export const ComposerMentionLayer = memo(function ComposerMentionLayer(props: {
     /** The draft through the end of its last mention's paragraph. */
     readonly text: string;
-    readonly names: readonly string[];
+    /** The draft's mentions, all of them inside `text`. */
+    readonly tags: readonly ComposerTag[];
 }) {
-    const ranges = composerMentionRanges(props.text, props.names);
+    const ranges = props.tags;
     if (ranges.length === 0) return null;
     // One block per paragraph: an edit lays out only its own paragraph again,
     // not every line above the last mention. Lines are a fixed height and a
@@ -67,4 +69,4 @@ export function ComposerMentionLayer(props: {
             <div className="happy-composer__mention-layer-text">{paragraphs}</div>
         </div>
     );
-}
+});

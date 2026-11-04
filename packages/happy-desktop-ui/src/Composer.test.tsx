@@ -366,7 +366,9 @@ it("holds Composer geometry, colors, and typography", async () => {
         "font-weight": "400",
         height: "22px",
         "line-height": "22px",
-        "overflow-y": "auto",
+        // A mentioning composer scrolls the draft in a wrapper, together with
+        // the tints behind it, so the textarea itself never scrolls.
+        "overflow-y": "hidden",
         padding: "0px",
         resize: "none",
     });

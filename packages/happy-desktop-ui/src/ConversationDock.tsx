@@ -130,7 +130,7 @@ function mentionSubjectOf(subject: ComposerMentionSubject): {
                 description: surfaceTypeLabel(subject.type),
             };
         case "person":
-            // A person wears their initials, as they do everywhere else.
+            // A person wears their photo, or their initials, as everywhere else.
             return { description: "Teammate" };
         case "agent":
             switch (subject.owner) {
@@ -153,6 +153,14 @@ function mentionsOf(composer: ComposerSnapshot): Mentionable[] {
             name: candidate.label,
             initials: candidate.label.slice(0, 1).toUpperCase(),
             ...(subject.icon ? { icon: subject.icon } : {}),
+            ...(candidate.subject.kind === "person"
+                ? {
+                      person: true,
+                      ...(candidate.subject.imageUrl === undefined
+                          ? {}
+                          : { imageUrl: candidate.subject.imageUrl }),
+                  }
+                : {}),
             insertion: candidate.insertion,
             ...(description ? { description } : {}),
         };

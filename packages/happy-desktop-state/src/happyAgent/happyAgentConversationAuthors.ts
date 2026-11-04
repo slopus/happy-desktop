@@ -99,6 +99,9 @@ export function happyAgentConversationSummaryProject(
         ...(session.unreadReason === undefined || session.unreadCount === undefined
             ? {}
             : { unreadCount: session.unreadCount }),
+        ...(session.unreadReason === undefined || session.unreadMentioned === undefined
+            ? {}
+            : { unreadMentioned: true }),
         ...(session.statusLine === undefined ? {} : { statusLine: session.statusLine }),
         ...(session.draftPreview === undefined ? {} : { draftPreview: session.draftPreview }),
         participants: [happyAgentOwnerAuthor, agentAuthor],

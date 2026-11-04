@@ -1046,17 +1046,26 @@ function botSidebarItem(
 }
 
 /**
- * What a row says is unread across the conversations it holds: the mark, and
- * how many messages when the host counted any of them. The sum stops where the
- * host's own counts do, at 100, which the row reads as "99+".
+ * What a row says is unread across the conversations it holds: the mark, how
+ * many messages when the host counted any of them, and whether the reader was
+ * mentioned in any. The sum stops where the host's own counts do, at 100,
+ * which the row reads as "99+".
  */
 function sidebarUnread(
-    conversations: readonly Pick<ConversationSummary, "unread" | "unreadCount">[],
-): Pick<SidebarItem, "unread" | "unreadCount"> {
+    conversations: readonly Pick<
+        ConversationSummary,
+        "unread" | "unreadCount" | "unreadMentioned"
+    >[],
+): Pick<SidebarItem, "unread" | "unreadCount" | "unreadMentioned"> {
     const unread = conversations.filter((conversation) => conversation.unread === true);
     if (unread.length === 0) return {};
     const count = unread.reduce((sum, conversation) => sum + (conversation.unreadCount ?? 0), 0);
-    return count > 0 ? { unread: true, unreadCount: Math.min(count, 100) } : { unread: true };
+    const mentioned = unread.some((conversation) => conversation.unreadMentioned === true);
+    return {
+        unread: true,
+        ...(count > 0 ? { unreadCount: Math.min(count, 100) } : {}),
+        ...(mentioned ? { unreadMentioned: true } : {}),
+    };
 }
 
 /**

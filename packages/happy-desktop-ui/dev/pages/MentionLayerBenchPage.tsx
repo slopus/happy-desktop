@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Composer } from "../../src/Composer";
-import { composerMentionRanges } from "../../src/composerMentionRanges";
+import { composerDraftParse } from "../../src/composerDraft";
 
 /**
  * A bench, not a specimen: the real Composer with the mention layer, driven
@@ -59,8 +59,18 @@ function benchText(chars: number, mentions: number): string {
     return parts.join(" ").slice(0, chars);
 }
 
-/** The bench text and the scan alone, for the harness to time without a render. */
-Object.assign(window, { __mentionBench: { benchText, composerMentionRanges, names: NAMES } });
+const NAMED = new RegExp(`@(${NAMES.join("|")})`, "gu");
+
+/** The text as the composer stores it: each `@Name` as the link to that person. */
+function linked(text: string): string {
+    return text.replace(
+        NAMED,
+        (_, name: string) => `[${name}](happy://users/u_${String(NAMES.indexOf(name))})`,
+    );
+}
+
+/** The bench text and the parse alone, for the harness to time without a render. */
+Object.assign(window, { __mentionBench: { benchText, composerDraftParse, linked } });
 
 export function MentionLayerBenchPage() {
     const params = new URLSearchParams(window.location.search);
@@ -68,18 +78,21 @@ export function MentionLayerBenchPage() {
     const chars = Number(params.get("chars") ?? "2000");
     const mentions = Number(params.get("mentions") ?? "5");
     const width = Number(params.get("width") ?? "640");
+    // The plain textarea shows the same words, with no links behind them.
     const [value, setValue] = useState(() =>
-        params.get("fixture") === "align"
-            ? ALIGN
-            : params.get("fixture") === "grow"
-              ? "Hi @Bob Martin and @Carol Diaz,\nplease look at the refund path."
-              : benchText(chars, mentions),
+        (variant === "plain" ? (text: string) => text : linked)(
+            params.get("fixture") === "align"
+                ? ALIGN
+                : params.get("fixture") === "grow"
+                  ? "Hi @Bob Martin and @Carol Diaz,\nplease look at the refund path."
+                  : benchText(chars, mentions),
+        ),
     );
     return (
         <div data-mention-bench="" style={{ padding: 24, width }}>
             <style>{BENCH_CSS}</style>
             <Composer
-                {...(variant === "plain" ? {} : { mentionHighlights: NAMES })}
+                {...(variant === "plain" ? {} : { mentions: [] })}
                 onSend={() => setValue("")}
                 onValueChange={setValue}
                 placeholder="Message Happy…"

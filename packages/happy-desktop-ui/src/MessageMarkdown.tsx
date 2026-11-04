@@ -23,9 +23,11 @@ import { MermaidDiagram } from "./MermaidDiagram";
 import { FILE_REFERENCE_LINK_ATTRIBUTE } from "./messageFileReferences";
 import { MESSAGE_MARKDOWN_REMARK_PLUGINS, type MessageMarkdownAst } from "./messageMarkdownAst";
 import { messageInlineLayoutKey } from "./conversationInlineLayouts";
+import { MessageMention } from "./MessageMention";
 import {
     messageFileLinkFromHref,
     messageReferenceFromHref,
+    messageReferenceShown,
     messageReferencesResolve,
     type MessageReferences,
 } from "./messageReferences";
@@ -147,6 +149,12 @@ export const MessageReferenceLink = ({
     reference: HappyReference;
 }) => {
     const view = references.view(reference);
+    if (view.type === "person")
+        return (
+            <MessageMention href={href} person={view}>
+                {children}
+            </MessageMention>
+        );
     const busy = view.type === "link" && view.busy;
     return (
         <a
@@ -293,9 +301,13 @@ const MarkdownLink = ({
     // The link's own context menu, while it is up: where the pointer asked
     // for it. Local to the link because nothing else in the message reads it.
     const [menuAt, setMenuAt] = useState<{ x: number; y: number }>();
-    // Only something this reader can open is offered as a click; anything
-    // else is its words, below.
-    if (reference !== undefined && references?.view(reference).type === "link")
+    // Only something this reader can open is offered as a click, and a
+    // teammate as their tag; anything else is its words, below.
+    if (
+        reference !== undefined &&
+        references !== undefined &&
+        messageReferenceShown(references.view(reference))
+    )
         return (
             <MessageReferenceLink href={href!} reference={reference} references={references}>
                 {children}

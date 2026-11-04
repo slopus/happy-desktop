@@ -1564,3 +1564,102 @@
     width: 16px;
     height: 16px;
 }
+
+/*
+ * A teammate a message names (MessageMention): a tag on the mention tint the
+ * composer draws behind `@Name`, in the mention's own ink, stronger when it is
+ * the reader. It is the link the message was written with and lays out as one:
+ * no padding, no weight, the link's own wrapping, so the row measures what it
+ * shows. The tint reaches past the glyphs with a ring, not with padding.
+ */
+.happy-message__body--markdown a.happy-message__person,
+.happy-message__person {
+    color: var(--happy-mention-text);
+    text-decoration: none;
+    background: var(--happy-mention-tint);
+    border-radius: 4px;
+    box-shadow: 0 0 0 1px var(--happy-mention-tint);
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
+    cursor: default;
+    overflow-wrap: anywhere;
+}
+
+.happy-message__body--markdown a.happy-message__person[data-self],
+.happy-message__person[data-self] {
+    background: var(--happy-mention-tint-self);
+    box-shadow: 0 0 0 1px var(--happy-mention-tint-self);
+}
+
+.happy-message__body--markdown a.happy-message__person:hover,
+.happy-message__person:hover {
+    opacity: 1;
+}
+
+.happy-message[data-own] .happy-message__body--markdown a.happy-message__person,
+.happy-message[data-own] .happy-message__person {
+    color: var(--user-message-text);
+    background: color-mix(in srgb, var(--user-message-text) 18%, transparent);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--user-message-text) 18%, transparent);
+}
+
+.happy-message[data-own] .happy-message__person[data-self] {
+    background: color-mix(in srgb, var(--user-message-text) 30%, transparent);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--user-message-text) 30%, transparent);
+}
+
+/* The card behind a mention: the teammate's photo, name, and role, in the
+   tooltip's popover language. It floats over the window and takes no pointer,
+   so moving off the tag closes it at once. */
+.happy-mention-card {
+    position: fixed;
+    z-index: var(--happy-z-overlay);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    box-sizing: border-box;
+    max-width: 280px;
+    padding: 10px 14px 10px 10px;
+    background: var(--surface);
+    border: 1px solid var(--modal-border);
+    border-radius: var(--happy-radius-md);
+    box-shadow: 0 4px 16px var(--shadow-color);
+    color: var(--text);
+    font-family: var(--happy-font-ui);
+    font-synthesis: none;
+    pointer-events: none;
+    transform: translateY(-100%);
+}
+
+.happy-mention-card[data-below] {
+    transform: none;
+}
+
+.happy-mention-card__text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.happy-mention-card__name {
+    overflow: hidden;
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 20px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-mention-card__you {
+    color: var(--text-secondary);
+    font-weight: 400;
+}
+
+.happy-mention-card__role {
+    overflow: hidden;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}

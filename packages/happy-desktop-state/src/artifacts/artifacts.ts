@@ -1,5 +1,6 @@
 import type { HappyAgentClient } from "@slopus/happy-agent-client";
 import type { HappyAgentSync } from "../happyAgentConnection/happyAgentSync.js";
+import type { HappyAgentTeamRoster } from "../happyAgentConnection/types.js";
 import type { HappyAgentArtifactSiteOpening } from "../happyAgent/happyAgentHostServices.js";
 import type { HappyAgentSessionId } from "../happyAgent/happyAgentTypes.js";
 import { happyAgentUserError } from "../happyAgent/happyAgentSupport.js";
@@ -95,6 +96,8 @@ export interface HappyAgentArtifactsDeps {
     ) => Promise<HappyAgentArtifactSiteOpening>;
     /** A viewer opened an artifact. */
     readonly artifactOpened?: (artifactId: HappyAgentArtifactId) => void;
+    /** The team, for who a mention names. */
+    readonly team?: () => HappyAgentTeamRoster;
 }
 
 export function happyAgentArtifactsCreate(deps: HappyAgentArtifactsDeps): HappyAgentArtifacts {
@@ -130,7 +133,7 @@ export function happyAgentArtifactsCreate(deps: HappyAgentArtifactsDeps): HappyA
             }),
         );
     const peopleOf = (): HappyAgentArtifactPeople =>
-        (people ??= inert(happyAgentArtifactPeopleCreate(deps.client)));
+        (people ??= inert(happyAgentArtifactPeopleCreate(deps.client, deps.team)));
     return {
         catalog() {
             return (catalog ??= inert(

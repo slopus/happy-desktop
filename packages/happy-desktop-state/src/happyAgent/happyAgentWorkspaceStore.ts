@@ -5366,6 +5366,13 @@ export function happyAgentWorkspaceStoreCreate(
                             catalog: client.surfaces().catalog().get(),
                             conversationId,
                             teammates: client.teammates(),
+                            present: conversationPeople(
+                                list.get(),
+                                conversationId,
+                                chatStore?.get().sessionId === conversationId
+                                    ? chatStore.get().entries
+                                    : [],
+                            ),
                         });
                         const needle = query.toLowerCase();
                         const filesStanding = target
@@ -9066,4 +9073,24 @@ function conversationEqual(
     const keys = Object.keys(left) as (keyof HappyAgentConversationSnapshot)[];
     if (keys.length !== Object.keys(right).length) return false;
     return keys.every((key) => left[key] === right[key]);
+}
+
+/**
+ * The people already in a chat, as far as the window can tell: the owner of
+ * the task it belongs to, and everyone whose message is in the loaded part of
+ * its transcript.
+ */
+function conversationPeople(
+    list: HappyAgentSessionListSnapshot,
+    conversationId: HappyAgentSessionId,
+    entries: readonly ConversationEntry[],
+): ReadonlySet<string> {
+    const people = new Set<string>();
+    const owner = list.tasks.find((task) => task.conversation.id === conversationId)?.owner;
+    if (owner?.userId !== undefined) people.add(owner.userId);
+    for (const entry of entries) {
+        const userId = entry.kind === "message" ? entry.message.sender?.userId : undefined;
+        if (userId !== undefined) people.add(userId);
+    }
+    return people;
 }

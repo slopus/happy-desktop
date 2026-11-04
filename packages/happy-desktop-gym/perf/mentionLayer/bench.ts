@@ -176,7 +176,7 @@ for (const chars of sizes)
         }
     }
 
-// The scan alone: every size and mention count, many calls, no render.
+// The parse alone: every size and mention count, many calls, no render.
 const scanPage = await (await browser.newContext()).newPage();
 await scanPage.goto(`${url}?variant=plain&chars=50&mentions=0#mention-layer-bench`);
 await scanPage.locator("textarea").waitFor();
@@ -185,26 +185,22 @@ const scan = await scanPage.evaluate(() => {
         window as unknown as {
             __mentionBench: {
                 benchText: (chars: number, mentions: number) => string;
-                composerMentionRanges: (
-                    text: string,
-                    names: readonly string[],
-                ) => readonly unknown[];
-                names: readonly string[];
+                composerDraftParse: (markdown: string) => { tags: readonly unknown[] };
+                linked: (text: string) => string;
             };
         }
     ).__mentionBench;
     const results: Record<string, number | string>[] = [];
     for (const chars of [50, 2000, 20_000])
         for (const mentions of [0, 5, 50]) {
-            const text = bench.benchText(chars, mentions);
+            const text = bench.linked(bench.benchText(chars, mentions));
             // performance.now() is clamped to 0.1 ms here, so each sample is
             // the mean of a batch of 100 scans.
             const samples: number[] = [];
             let found = 0;
             for (let batch = 0; batch < 60; batch++) {
                 const start = performance.now();
-                for (let i = 0; i < 100; i++)
-                    found = bench.composerMentionRanges(text, bench.names).length;
+                for (let i = 0; i < 100; i++) found = bench.composerDraftParse(text).tags.length;
                 samples.push((performance.now() - start) / 100);
             }
             samples.sort((a, b) => a - b);
