@@ -870,7 +870,11 @@
     top: 6px;
     right: 6px;
     background: var(--surface-pressed);
-    /* Follow the code frame's 8px corner at the 6px inset. */
+}
+
+/* Follow the code frame's 8px corner at the 6px inset. The compound selector
+   overrides the shared copy button's own radius. */
+.happy-message__code-block > .happy-message__code-copy {
     border-top-right-radius: 2px;
 }
 
