@@ -959,6 +959,12 @@ export interface HappyDesktopBridge {
      */
     zoomSubscribe(listener: (percent: number) => void): () => void;
     /**
+     * Whether the system is saving power — macOS Low Power Mode — first as it
+     * is and then whenever it changes. The window stops anything it animates
+     * only for show while it is. Absent from shells older than this member.
+     */
+    powerSavingSubscribe?(listener: (saving: boolean) => void): () => void;
+    /**
      * Shows the file at one address in a window outside this one, reusing the
      * preview window if it is already open. Rejected unless the address is the
      * media route of a Happy Agent proxy this process is currently running.

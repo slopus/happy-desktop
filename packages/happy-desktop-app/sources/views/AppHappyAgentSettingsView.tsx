@@ -1442,6 +1442,10 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                         if (happyAgentOnline()) props.settings.defaultPermissionModeUpdate(mode);
                     }}
                     scrollbarVisibility={appearance.scrollbarVisibility}
+                    avatarsAnimated={appearance.avatarsAnimated}
+                    onAvatarsAnimatedChange={(animated) =>
+                        props.appearance.avatarsAnimatedUpdate(animated)
+                    }
                     titleShimmerEnabled={titleShimmer.titleShimmerEnabled}
                     {...(unavailable === undefined ? {} : { unavailable })}
                 />

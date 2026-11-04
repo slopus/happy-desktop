@@ -47,6 +47,13 @@ export type HappyAgentGeneralSettingsProps = {
     /** Whether active session, project, and workspace titles shimmer. */
     titleShimmerEnabled: boolean;
     /**
+     * Animated avatars: placeholders move as their shaders instead of showing
+     * their stills. Absent where the host keeps no such choice, which offers
+     * no control.
+     */
+    avatarsAnimated?: boolean;
+    onAvatarsAnimatedChange?: (animated: boolean) => void;
+    /**
      * Whether the sidebar leaves out every connection's Projects section. Absent
      * where the host keeps no such choice, which offers no control.
      */
@@ -237,6 +244,22 @@ export function HappyAgentGeneralSettings(props: HappyAgentGeneralSettingsProps)
                     htmlFor="happy-agent-settings-title-shimmer"
                     label="Shimmer active titles"
                 />
+                {props.onAvatarsAnimatedChange ? (
+                    <FormRow
+                        control={
+                            <Switch
+                                aria-label="Animated avatars"
+                                checked={props.avatarsAnimated === true}
+                                id="happy-agent-settings-avatars-animated"
+                                onChange={props.onAvatarsAnimatedChange}
+                                size="small"
+                            />
+                        }
+                        description="Avatars without a picture move. Uses more CPU, GPU, and battery."
+                        htmlFor="happy-agent-settings-avatars-animated"
+                        label="Animated avatars"
+                    />
+                ) : null}
                 {props.onProjectsHiddenChange ? (
                     <FormRow
                         control={

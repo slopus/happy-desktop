@@ -26,12 +26,11 @@ export type AvatarProps = Omit<HTMLAttributes<HTMLSpanElement>, "style"> & {
     /**
      * The ID of whatever this avatar stands for, when it has no picture of its
      * own: it then wears the placeholder that ID picks, the same one the phone
-     * shows for it, instead of initials. An `imageUrl` or an `icon` still wins
-     * over it.
+     * shows for it, instead of initials: its still, or its live shader under
+     * Animated avatars (`AvatarsAnimatedContext`). An `imageUrl` or an `icon`
+     * still wins over it.
      */
     placeholderSeed?: string;
-    /** Whether what it stands for is working: its placeholder then plays its loop. */
-    placeholderMoving?: boolean;
     size?: AvatarSize;
     style?: CSSProperties;
     /**
@@ -44,6 +43,8 @@ export type AvatarProps = Omit<HTMLAttributes<HTMLSpanElement>, "style"> & {
 };
 /** Glyph size per avatar box, leaving the tile's ink inset on every size. */
 const iconSize = { xs: 12, sm: 16, md: 18, lg: 20 } as const satisfies Record<AvatarSize, number>;
+/** Each size's box in CSS pixels, as avatar.css draws it. */
+const boxSize = { xs: 20, sm: 28, md: 36, lg: 44 } as const satisfies Record<AvatarSize, number>;
 export function Avatar(props: AvatarProps) {
     const [local, rest] = partitionComponentProps(props, [
         "children",
@@ -53,7 +54,6 @@ export function Avatar(props: AvatarProps) {
         "imageUrl",
         "initials",
         "online",
-        "placeholderMoving",
         "placeholderSeed",
         "size",
         "style",
@@ -104,8 +104,8 @@ export function Avatar(props: AvatarProps) {
             ) : placeholder !== undefined ? (
                 <AvatarPlaceholder
                     className="happy-avatar__placeholder"
-                    moving={local.placeholderMoving === true}
                     seed={placeholder}
+                    side={boxSize[size()]}
                 />
             ) : (
                 <span className="happy-avatar__initials" data-happy-desktop-ui="avatar-initials">

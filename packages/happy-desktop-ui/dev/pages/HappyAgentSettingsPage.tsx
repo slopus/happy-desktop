@@ -668,6 +668,8 @@ export function HappyAgentSettingsBlueprintPage() {
                             defaultAccessMenus={settingsMenus("claude", "anthropic/opus-5-5")}
                             projectsHidden
                             scrollbarVisibility="automatic"
+                            avatarsAnimated={false}
+                            onAvatarsAnimatedChange={noop}
                             titleShimmerEnabled={false}
                         />
                     </HappyAgentSettingsShell>
@@ -1222,6 +1224,8 @@ export function HappyAgentSettingsBlueprintPage() {
                         onTitleShimmerChange={noop}
                         defaultAccessMenus={settingsMenus("claude", "anthropic/opus-5-5")}
                         scrollbarVisibility="automatic"
+                        avatarsAnimated={false}
+                        onAvatarsAnimatedChange={noop}
                         titleShimmerEnabled={false}
                         unavailable="Happy Agent is offline. Showing the last synced defaults."
                         onPreviewUpdatesChange={noop}

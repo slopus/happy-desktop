@@ -151,6 +151,8 @@ function General(props: { pickerOpen?: boolean }) {
             onProjectsHiddenChange={noop}
             projectsHidden={false}
             scrollbarVisibility="automatic"
+            avatarsAnimated={false}
+            onAvatarsAnimatedChange={noop}
             titleShimmerEnabled
         />
     );

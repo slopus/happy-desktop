@@ -1799,9 +1799,7 @@ function SidebarRow({
      * with neither that reaches for it — a bot, say — because an initials plaque
      * gives every such row the same grey square, and a column of faces is picked
      * out by shape and color long before it is read by name. Both marks are the
-     * same box, so which one a row wears never moves its name. While the row
-     * is working its placeholder plays its loop, so the face moves only for
-     * as long as what it stands for does.
+     * same box, so which one a row wears never moves its name.
      */
     const identityMark = () => {
         return (
@@ -1810,7 +1808,6 @@ function SidebarRow({
                 imageUrl={item().imageUrl}
                 initials={item().initials ?? item().label.slice(0, 1).toUpperCase()}
                 online={item().kind === "person" ? item().online : undefined}
-                placeholderMoving={item().status === "working"}
                 placeholderSeed={item().placeholderSeed}
                 size="xs"
                 tint={item().tint}

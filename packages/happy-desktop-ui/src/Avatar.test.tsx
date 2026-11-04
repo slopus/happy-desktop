@@ -427,7 +427,7 @@ it("renders the image variant, tones, defaults, and keeps size in tight flex row
     await view.screenshot("Avatar.image.test");
 });
 
-it("picks the phone's placeholder still for a seed, and plays its loop over it only while moving", async () => {
+it("picks the phone's placeholder still for a seed", async () => {
     // Pinned to happy-ios's AvatarPlaceholderTests, so a seed wears the same picture everywhere.
     expect(avatarPlaceholderHash("")).toBe(2_872_998_923);
     expect(avatarPlaceholderHash("abc")).toBe(482_950_588);
@@ -455,14 +455,6 @@ it("picks the phone's placeholder still for a seed, and plays its loop over it o
                     size="lg"
                     type="agent"
                 />
-                <Avatar
-                    data-testid="placeholder-moving"
-                    initials="AN"
-                    placeholderMoving
-                    placeholderSeed="abc"
-                    size="xs"
-                    type="agent"
-                />
             </div>
         ),
         SURFACE,
@@ -485,30 +477,4 @@ it("picks the phone's placeholder still for a seed, and plays its loop over it o
             view.$(`[data-testid="${id}"] [data-happy-desktop-ui="avatar-placeholder"]`).bounds(),
         ).toMatchObject({ width: dimension, height: dimension });
     }
-
-    // Still ones carry no loop.
-    for (const id of ["placeholder-human", "placeholder-agent"])
-        expect(view.$(`[data-testid="${id}"]`).element.querySelector("video"), id).toBeNull();
-
-    // A moving one lays its loop over the same still, which is also its poster.
-    const moving = view.$('[data-testid="placeholder-moving"]').element;
-    const still = moving.querySelector('[data-happy-desktop-ui="avatar-placeholder"]');
-    const loop = moving.querySelector('[data-happy-desktop-ui="avatar-placeholder-loop"]');
-    expect(still).toBeInstanceOf(HTMLImageElement);
-    expect(loop).toBeInstanceOf(HTMLVideoElement);
-    const video = loop as HTMLVideoElement;
-    expect(video.src).toContain("avatar-loop-189.mp4");
-    expect(video.poster).toContain("avatar-placeholder-189.webp");
-    expect(video.muted && video.loop).toBe(true);
-    expect(
-        view
-            .$(
-                '[data-testid="placeholder-moving"] [data-happy-desktop-ui="avatar-placeholder-loop"]',
-            )
-            .bounds(),
-    ).toEqual(
-        view
-            .$('[data-testid="placeholder-moving"] [data-happy-desktop-ui="avatar-placeholder"]')
-            .bounds(),
-    );
 });

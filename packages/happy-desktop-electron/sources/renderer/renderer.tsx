@@ -155,6 +155,8 @@ import {
     desktopProjectsVisibilityLegacyConsume,
 } from "./desktopProjectsVisibility";
 import { desktopStatusBarPersistence } from "./desktopStatusBar";
+import { desktopAvatarsAnimated } from "./desktopAvatarsAnimated";
+import { desktopPowerSavingCreate, type DesktopPowerSaving } from "./desktopPowerSaving";
 import { desktopGptLivePersistence } from "./desktopGptLive";
 import { desktopGptLiveRuntimeCreate } from "./desktopGptLiveRuntime";
 import { desktopWelcomePersistence } from "./desktopWelcome";
@@ -351,14 +353,25 @@ function ChoosingScreen(props: {
  * every daemon connection and every startup phase, so the startup screens and the
  * workspace are one themed subtree rather than two.
  */
-function DesktopAppearance(props: { appearance: AppearanceStore; children: ReactNode }) {
+function DesktopAppearance(props: {
+    appearance: AppearanceStore;
+    /** The machine's power saving, which holds animated avatars still while it lasts. */
+    powerSaving?: DesktopPowerSaving;
+    children: ReactNode;
+}) {
     const appearance = useSyncExternalStore(
         props.appearance.subscribe,
         props.appearance.get,
         props.appearance.get,
     );
+    const powerSaving = useSyncExternalStore(
+        props.powerSaving?.subscribe ?? powerSavingNever.subscribe,
+        props.powerSaving?.get ?? powerSavingNever.get,
+        props.powerSaving?.get ?? powerSavingNever.get,
+    );
     return (
         <ThemeScope
+            avatarsAnimated={appearance.avatarsAnimated && !powerSaving}
             customTheme={appearance.customTheme}
             mode={appearance.mode}
             scrollbarVisibility={appearance.scrollbarVisibility}
@@ -367,6 +380,9 @@ function DesktopAppearance(props: { appearance: AppearanceStore; children: React
         </ThemeScope>
     );
 }
+
+/** A window without a shell to ask is never saving power. */
+const powerSavingNever: DesktopPowerSaving = { get: () => false, subscribe: () => () => {} };
 
 /**
  * Mounts the workspace router as soon as this window has a Happy Agent directory to
@@ -1221,6 +1237,7 @@ if (mediaPreviewBridge) {
     /** Window-owned stores shared by every independently retained connection UI. */
     interface DesktopShellStores {
         readonly appearance: AppearanceStore;
+        readonly powerSaving: DesktopPowerSaving;
         readonly daemon?: AppHappyAgentDaemonStore;
     }
     let shell: DesktopShellStores | undefined;
@@ -1291,6 +1308,7 @@ if (mediaPreviewBridge) {
                         ? ["system", "dark", "light", "midnight", "custom"]
                         : ["system", "dark", "light"],
                 scrollbarVisibility: preferences.initialScrollbarVisibility,
+                avatarsAnimated: desktopAvatarsAnimated.read(),
             });
             appearanceReceive = (next) =>
                 writer.configReceived({
@@ -1302,11 +1320,17 @@ if (mediaPreviewBridge) {
             created.subscribe(() => {
                 const snapshot = created.get();
                 preferences.appearanceChanged(snapshot.mode, snapshot.scrollbarVisibility);
+                if (snapshot.avatarsAnimated !== desktopAvatarsAnimated.read())
+                    desktopAvatarsAnimated.write(snapshot.avatarsAnimated);
             });
             const store = browserLocal ? undefined : desktopDaemonStoreCreate(desktopBridge);
-            return { appearance: created, ...(store ? { daemon: store } : {}) };
+            return {
+                appearance: created,
+                powerSaving: desktopPowerSavingCreate(desktopBridge),
+                ...(store ? { daemon: store } : {}),
+            };
         })();
-        const { appearance, daemon } = shell;
+        const { appearance, daemon, powerSaving } = shell;
         const debug = desktopDebugStoreCreate(desktopBridge);
         const livePerformance = desktopBridge.debugMetricsEnabled
             ? desktopMetricsStoreCreate()
@@ -1778,7 +1802,7 @@ if (mediaPreviewBridge) {
         // viewer and every diff in the primary desktop surface tokenize on the
         // main thread, which is exactly where a large file must not be parsed.
         root.render(
-            <DesktopAppearance appearance={appearance}>
+            <DesktopAppearance appearance={appearance} powerSaving={powerSaving}>
                 <DesktopZoomIndicator />
                 <DesktopCloudSignInNotice store={notices} />
                 <DesktopHappyLinkNotice

@@ -35,6 +35,7 @@ describe("appearance store", () => {
             palette: "light",
             customTheme: customThemeEmpty,
             scrollbarVisibility: "automatic",
+            avatarsAnimated: false,
         });
 
         system.set("dark");
@@ -44,6 +45,7 @@ describe("appearance store", () => {
             palette: "dark",
             customTheme: customThemeEmpty,
             scrollbarVisibility: "automatic",
+            avatarsAnimated: false,
         });
         expect(seen).toEqual(["dark"]);
 
@@ -65,6 +67,7 @@ describe("appearance store", () => {
             palette: "light",
             customTheme: customThemeEmpty,
             scrollbarVisibility: "automatic",
+            avatarsAnimated: false,
         });
 
         store.appearanceToggle();
@@ -74,6 +77,7 @@ describe("appearance store", () => {
             palette: "dark",
             customTheme: customThemeEmpty,
             scrollbarVisibility: "automatic",
+            avatarsAnimated: false,
         });
 
         unsubscribe();
@@ -99,6 +103,7 @@ describe("appearance store", () => {
             palette: "dark",
             customTheme: customThemeEmpty,
             scrollbarVisibility: "automatic",
+            avatarsAnimated: false,
         });
         expect(seen).toEqual(["dark"]);
 
@@ -110,6 +115,7 @@ describe("appearance store", () => {
             palette: "light",
             customTheme: customThemeEmpty,
             scrollbarVisibility: "automatic",
+            avatarsAnimated: false,
         });
 
         unsubscribe();
@@ -149,6 +155,7 @@ describe("appearance store", () => {
             palette: "dark",
             customTheme: customThemeEmpty,
             scrollbarVisibility: "automatic",
+            avatarsAnimated: false,
         });
         // Re-selecting the current mode is not a change.
         store.appearanceSelect("dark");

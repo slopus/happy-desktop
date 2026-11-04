@@ -1,5 +1,9 @@
 import { Avatar, type AvatarSize } from "../../src/Avatar";
-import { AVATAR_PLACEHOLDER_COUNT, avatarPlaceholderIndex } from "../../src/AvatarPlaceholder";
+import {
+    AVATAR_PLACEHOLDER_COUNT,
+    avatarPlaceholderIndex,
+    AvatarsAnimatedContext,
+} from "../../src/AvatarPlaceholder";
 import { Sidebar, type SidebarItem } from "../../src/Sidebar";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
@@ -53,7 +57,6 @@ const BOT_ITEMS: SidebarItem[] = [
             label,
             initials: label.slice(0, 1),
             placeholderSeed: `bot-${index}`,
-            ...(index === 2 ? { status: "working" as const } : {}),
             ...(index === 4 ? { unread: true } : {}),
         }),
     ),
@@ -90,7 +93,7 @@ export function AvatarPlaceholderPage() {
         <ComponentPage
             contract="Props only"
             number={componentNumber}
-            summary="The picture a person, bot, task, or project without one of its own wears: one of the 200 shader avatars from shaders.craftedstudios.co, picked by a hash of its ID exactly as the phone picks it, shown as the still the phone ships. While what it stands for is working, a ten-second loop of that shader moving, there and back, plays over the still, whose first frame it is: only while on screen, the window is shown, motion is allowed, and the machine is not on battery. Until the still is decoded a placeholder shows a gradient of its own colours."
+            summary="The picture a person, bot, task, or project without one of its own wears: one of the 200 shader avatars from shaders.craftedstudios.co, picked by a hash of its ID exactly as the phone picks it, shown as the still the phone ships. Under Animated avatars (Settings › General › Appearance, off by default) it is drawn live by its shader instead, calmly, with its grain frozen: only while on screen, the window is shown, motion is allowed, and the machine is neither on battery nor saving power; otherwise it holds the still. Until the still is decoded or the first frame arrives a placeholder shows a gradient of its own colours."
             title="AvatarPlaceholder"
         >
             <Specimen
@@ -130,23 +133,26 @@ export function AvatarPlaceholderPage() {
             </Specimen>
 
             <Specimen
-                detail="placeholderMoving: the loop plays over the still while what the avatar stands for is working"
-                label="Working"
+                detail="AvatarsAnimatedContext: the same placeholders drawn live by their shaders, at every size"
+                label="Animated"
                 number="02"
                 stage="app"
             >
-                <div style={{ display: "flex", alignItems: "center", gap: "24px" }}>
-                    {(["human", "agent"] as const).map((type) => (
-                        <Avatar
-                            initials="AI"
-                            key={type}
-                            placeholderMoving
-                            placeholderSeed={`${type}-xs`}
-                            size="xs"
-                            type={type}
-                        />
-                    ))}
-                </div>
+                <AvatarsAnimatedContext value>
+                    <div style={{ display: "flex", alignItems: "flex-end", gap: "24px" }}>
+                        {(["human", "agent"] as const).flatMap((type) =>
+                            SIZES.map((entry) => (
+                                <Avatar
+                                    initials="AI"
+                                    key={`${type}-${entry.size}`}
+                                    placeholderSeed={`${type}-${entry.size}`}
+                                    size={entry.size}
+                                    type={type}
+                                />
+                            )),
+                        )}
+                    </div>
+                </AvatarsAnimatedContext>
             </Specimen>
 
             <Specimen
@@ -170,7 +176,7 @@ export function AvatarPlaceholderPage() {
             </Specimen>
 
             <Specimen
-                detail="Bots and projects without pictures, and a subtask's project mark, as the sidebar draws them · the working bot's face moves"
+                detail="Bots and projects without pictures, and a subtask's project mark, as the sidebar draws them"
                 label="In the sidebar"
                 number="04"
                 stage="chrome"

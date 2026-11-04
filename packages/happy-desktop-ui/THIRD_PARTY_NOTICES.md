@@ -30,15 +30,16 @@ in `slopus/happy` (`packages/happy-ios/Sources/HappyUI/Resources/AvatarPlacehold
 rendered by the site's still exporter, scaled from 384px to 128px by
 `scripts/generate-avatar-placeholders.mjs`.
 
-`src/assets/avatar-loops/` holds a ten-second loop of each, drawn by
-`scripts/generate-avatar-loops.mjs` with `scripts/avatarShader/shaderSource.mjs`:
+Under Animated avatars they are drawn live by `src/avatarShader/shaderSource.ts`:
 the package's avatar shader (`src/shader.js`), the avatar half only, ported
 back to GLSL ES 3.00 from happy-ios's Metal port
 (`HappyUI/Components/AvatarShaderSource.swift`) in `slopus/happy`. Like that
 port it keeps only the five effects a seed can pick, with no outlines, goo,
 pointer interaction, entrance, or ring; it writes GLSL's smoothstep out, and
 computes the noise hash's dot product and sine to the bit so every GPU draws
-the noise the site's stills and the phone do. Its parameters, and
+the noise the site's stills and the phone do. Desktop also freezes its grain
+at each avatar's phase and widens topography's contours to the pixel. Its
+parameters (`src/avatarShader/avatarShaderTable.ts`), and
 `src/avatarPlaceholderBackdrops.ts`, come from happy-ios's
 `AvatarShaderTable.swift`, which that app makes with the package's own
 `resolve` and `angleOf` for each picture's seed.

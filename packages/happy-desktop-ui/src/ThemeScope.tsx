@@ -1,5 +1,6 @@
 import { createContext, type CSSProperties, type ReactNode } from "react";
 import type { CustomTheme, ThemeColorRole, ThemeMode } from "happy-desktop-state";
+import { AvatarsAnimatedContext } from "./AvatarPlaceholder";
 
 export type { ThemeMode };
 export type ScrollbarVisibility = "always" | "automatic";
@@ -15,6 +16,8 @@ export type ThemeScopeProps = {
     /** The hand-made theme `custom` renders; an untouched midnight when absent. */
     customTheme?: CustomTheme;
     scrollbarVisibility?: ScrollbarVisibility;
+    /** Animated avatars: placeholders move as their shaders instead of showing their stills. */
+    avatarsAnimated?: boolean;
 };
 
 /**
@@ -28,18 +31,20 @@ export function ThemeScope(props: ThemeScopeProps) {
     const colors = props.mode === "custom" ? props.customTheme?.colors : undefined;
     return (
         <ThemeAppearanceContext value={palette === "midnight" ? "dark" : palette}>
-            <div
-                className={
-                    palette === "system"
-                        ? "happy-theme-scope"
-                        : `happy-theme-scope happy-theme-${palette}`
-                }
-                data-happy-desktop-ui="theme-scope"
-                data-scrollbar-visibility={props.scrollbarVisibility ?? "automatic"}
-                style={colors ? themeColorsStyle(colors) : undefined}
-            >
-                {props.children}
-            </div>
+            <AvatarsAnimatedContext value={props.avatarsAnimated ?? false}>
+                <div
+                    className={
+                        palette === "system"
+                            ? "happy-theme-scope"
+                            : `happy-theme-scope happy-theme-${palette}`
+                    }
+                    data-happy-desktop-ui="theme-scope"
+                    data-scrollbar-visibility={props.scrollbarVisibility ?? "automatic"}
+                    style={colors ? themeColorsStyle(colors) : undefined}
+                >
+                    {props.children}
+                </div>
+            </AvatarsAnimatedContext>
         </ThemeAppearanceContext>
     );
 }

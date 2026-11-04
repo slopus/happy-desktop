@@ -6,8 +6,8 @@ import {
 } from "./customTheme.js";
 
 /**
- * The appearance surface: the selected and resolved theme plus the window's
- * scrollbar visibility behavior.
+ * The appearance surface: the selected and resolved theme, the window's
+ * scrollbar visibility behavior, and whether avatar placeholders move.
  *
  * It exists because appearance is product state, not React state: every
  * workspace renders one `ThemeScope` from it instead of carrying a separate
@@ -32,6 +32,12 @@ export interface AppearanceSnapshot {
     readonly customTheme: CustomTheme;
     /** Whether overflowing surfaces keep their scrollbar visible at rest. */
     readonly scrollbarVisibility: ScrollbarVisibility;
+    /**
+     * Animated avatars, as on the phone: placeholders are drawn live by their
+     * shader rather than shown as their stills. Kept by this window, off unless
+     * turned on.
+     */
+    readonly avatarsAnimated: boolean;
 }
 
 export interface AppearanceStore {
@@ -48,6 +54,7 @@ export interface AppearanceStore {
     /** Selects a mode directly, including returning to `system`. */
     appearanceSelect(mode: ThemeMode): void;
     scrollbarVisibilitySelect(visibility: ScrollbarVisibility): void;
+    avatarsAnimatedUpdate(animated: boolean): void;
     [Symbol.dispose](): void;
 }
 
@@ -71,6 +78,8 @@ export interface AppearanceStoreOptions {
     readonly customTheme?: CustomTheme;
     /** Initial scrollbar behavior; defaults to automatic. */
     readonly scrollbarVisibility?: ScrollbarVisibility;
+    /** Initial Animated avatars; defaults to off. */
+    readonly avatarsAnimated?: boolean;
     /**
      * Injected platform appearance source. Supplying it keeps this store free of
      * a `window` dependency in tests and in any non-browser host.
@@ -123,6 +132,7 @@ export function appearanceStoreOwnedCreate(options: AppearanceStoreOptions = {})
     let toggleReturn: ThemeMode | undefined;
     let customTheme = options.customTheme ?? customThemeEmpty;
     let scrollbarVisibility: ScrollbarVisibility = options.scrollbarVisibility ?? "automatic";
+    let avatarsAnimated = options.avatarsAnimated ?? false;
     const paletteResolve = (): ThemePalette =>
         mode === "system" ? systemAppearance() : mode === "custom" ? customTheme.base : mode;
     const resolve = (): AppearanceSnapshot => {
@@ -133,6 +143,7 @@ export function appearanceStoreOwnedCreate(options: AppearanceStoreOptions = {})
             palette,
             customTheme,
             scrollbarVisibility,
+            avatarsAnimated,
         };
     };
     let snapshot = resolve();
@@ -145,7 +156,8 @@ export function appearanceStoreOwnedCreate(options: AppearanceStoreOptions = {})
             snapshot.mode === next.mode &&
             snapshot.palette === next.palette &&
             snapshot.customTheme === next.customTheme &&
-            snapshot.scrollbarVisibility === next.scrollbarVisibility
+            snapshot.scrollbarVisibility === next.scrollbarVisibility &&
+            snapshot.avatarsAnimated === next.avatarsAnimated
         )
             return;
         snapshot = next;
@@ -204,6 +216,11 @@ export function appearanceStoreOwnedCreate(options: AppearanceStoreOptions = {})
         scrollbarVisibilitySelect(next) {
             if (scrollbarVisibility === next) return;
             scrollbarVisibility = next;
+            publish();
+        },
+        avatarsAnimatedUpdate(animated) {
+            if (avatarsAnimated === animated) return;
+            avatarsAnimated = animated;
             publish();
         },
         [Symbol.dispose]() {

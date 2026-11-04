@@ -136,8 +136,13 @@ export {
     AVATAR_PLACEHOLDER_COUNT,
     AvatarPlaceholder,
     avatarPlaceholderIndex,
+    AvatarsAnimatedContext,
     type AvatarPlaceholderProps,
 } from "./AvatarPlaceholder";
+export {
+    avatarShaderRendererStats,
+    type AvatarShaderRendererStats,
+} from "./avatarShader/avatarShaderRenderer";
 export { type ImageMark } from "./imageMark";
 export {
     BotFace,
