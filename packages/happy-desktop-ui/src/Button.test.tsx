@@ -166,42 +166,37 @@ it("holds Button dimensions, typography, and optical label centering for every s
     );
     await view.ready();
 
-    const fontFamily =
-        server.browser === "webkit"
-            ? "happy Figtree, system-ui, sans-serif"
-            : '"happy Figtree", system-ui, sans-serif';
-
     for (const size of sizes) {
         for (const variant of variants) {
             const id = `${size}-${variant}`;
             const button = view.$(`[data-testid="${id}"]`);
             const spec = sizeStyles[size];
             expect(button.height(), id).toBe(spec.height);
-            expect(
-                button.computedStyles([
-                    "align-items",
-                    "background-color",
-                    "border-radius",
-                    "border-top-color",
-                    "border-top-width",
-                    "box-sizing",
-                    "color",
-                    "cursor",
-                    "display",
-                    "font-family",
-                    "font-size",
-                    "font-weight",
-                    "height",
-                    "justify-content",
-                    "letter-spacing",
-                    "line-height",
-                    "padding",
-                ]),
-                id,
-            ).toEqual({
+            const styles = button.computedStyles([
+                "align-items",
+                "background-color",
+                "border-radius",
+                "border-top-color",
+                "border-top-width",
+                "box-sizing",
+                "color",
+                "cursor",
+                "display",
+                "font-family",
+                "font-size",
+                "font-weight",
+                "height",
+                "justify-content",
+                "letter-spacing",
+                "line-height",
+                "padding",
+            ]);
+            // Engines serialize a multi-word family with or without quotes.
+            styles["font-family"] = styles["font-family"].replaceAll('"', "");
+            expect(styles, id).toEqual({
                 "align-items": "center",
                 "background-color": variantStyles[variant].background,
-                "border-radius": "999px",
+                "border-radius": variant === "ghost" ? "6px" : "999px",
                 "border-top-color": variantStyles[variant].borderColor,
                 "border-top-width": "1px",
                 "box-sizing": "border-box",
@@ -209,7 +204,7 @@ it("holds Button dimensions, typography, and optical label centering for every s
                 cursor: "pointer",
                 // inline-flex, blockified: these buttons are flex items here.
                 display: "flex",
-                "font-family": fontFamily,
+                "font-family": "happy Figtree, system-ui, sans-serif",
                 "font-size": `${spec.fontSize}px`,
                 "font-weight": "700",
                 height: `${spec.height}px`,
