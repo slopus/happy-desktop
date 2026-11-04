@@ -2376,7 +2376,7 @@ it.each([
     ["middle-removed", [10, 11, 12, 13, 14, 15, 16, 17, 18]],
     ["just-send", Array.from({ length: 19 }, (_, index) => index)],
     ["deliveries-removed", [20, 21]],
-])("replays reduced bottom-follow $label", async (_label, removed) => {
+])("replays reduced bottom-follow %s", async (_label, removed) => {
     const h = harnessCreate(0, "seed:1000050");
     try {
         await h.view.ready();
