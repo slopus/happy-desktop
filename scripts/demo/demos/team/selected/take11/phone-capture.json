@@ -1,0 +1,42 @@
+{
+    "source": "iPhone 17 Pro Simulator (iOS 26.5) on the Mac mini, native happy-ios from happy main, recorded with simctl io recordVideo",
+    "bundleId": "com.slopus.happy.teamdemo",
+    "udid": "88F9F92C-8645-4557-B066-F572C025D4E3",
+    "size": {
+        "width": 1206,
+        "height": 2622
+    },
+    "trimSeconds": 14.292854736328126,
+    "firstFrameLateSeconds": -0.0553330078125,
+    "recordedFrames": 3978,
+    "cadence": [
+        {
+            "name": "task arrives",
+            "from": 11.784478271484375,
+            "to": 13.284478271484375,
+            "frames": 90,
+            "fps": 60
+        },
+        {
+            "name": "Steve opens it",
+            "from": 37.14247827148437,
+            "to": 38.64247827148437,
+            "frames": 70,
+            "fps": 46.666666666666664
+        },
+        {
+            "name": "Steve types",
+            "from": 43.92047827148438,
+            "to": 46.61247827148438,
+            "frames": 149,
+            "fps": 55.34918276374442
+        },
+        {
+            "name": "Steve sends and goes back",
+            "from": 46.61247827148438,
+            "to": 51.79747827148437,
+            "frames": 377,
+            "fps": 72.70973963355841
+        }
+    ]
+}

@@ -1,0 +1,102 @@
+[
+    {
+        "name": "open",
+        "seconds": 0
+    },
+    {
+        "name": "model-scan",
+        "seconds": 1.8
+    },
+    {
+        "name": "model-chosen",
+        "seconds": 4.216666666666667
+    },
+    {
+        "name": "typing-started",
+        "seconds": 5.316666666666666
+    },
+    {
+        "name": "phone-enter",
+        "seconds": 9.516666666666667
+    },
+    {
+        "name": "sent",
+        "seconds": 10.616666666666667
+    },
+    {
+        "name": "task-created",
+        "seconds": 10.616666666666667,
+        "rect": {
+            "x": 62,
+            "y": 390,
+            "width": 276,
+            "height": 32
+        }
+    },
+    {
+        "name": "phone-task",
+        "seconds": 11.784478271484375
+    },
+    {
+        "name": "working",
+        "seconds": 12.466666666666667
+    },
+    {
+        "name": "phone-tuck",
+        "seconds": 13.384478271484374
+    },
+    {
+        "name": "subtask",
+        "seconds": 17.2
+    },
+    {
+        "name": "preview",
+        "seconds": 32.46666666666667
+    },
+    {
+        "name": "phone-forward",
+        "seconds": 35.483333333333334
+    },
+    {
+        "name": "phone-open",
+        "seconds": 37.14247827148437
+    },
+    {
+        "name": "phone-typing",
+        "seconds": 43.92047827148438
+    },
+    {
+        "name": "steve-feedback",
+        "seconds": 47.35,
+        "rect": {
+            "x": 374,
+            "y": 403,
+            "width": 282.609375,
+            "height": 24
+        }
+    },
+    {
+        "name": "phone-sent",
+        "seconds": 47.59347827148437
+    },
+    {
+        "name": "phone-home",
+        "seconds": 50.79747827148437
+    },
+    {
+        "name": "phone-tuck",
+        "seconds": 51.4
+    },
+    {
+        "name": "five-bars",
+        "seconds": 52.266666666666666
+    },
+    {
+        "name": "outro",
+        "seconds": 53.56666666666667
+    },
+    {
+        "name": "settled",
+        "seconds": 55.983333333333334
+    }
+]

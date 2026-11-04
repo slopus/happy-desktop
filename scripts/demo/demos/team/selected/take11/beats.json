@@ -1,0 +1,52 @@
+{
+    "fps": 60,
+    "frames": 3399,
+    "beats": {
+        "scan": 1.0166666666666666,
+        "model": 3.316666666666667,
+        "composer": 4.2,
+        "typing": 5.3,
+        "phone-enter": 9.5,
+        "sent": 10.416666666666666,
+        "read-bars": 12.3,
+        "read-voice": 15.533333333333333,
+        "subtask": 17.1,
+        "voice-done": 29.983333333333334,
+        "artifact": 31.366666666666667,
+        "reply": 34.916666666666664,
+        "phone-forward": 35.46666666666667,
+        "steve-open": 36.38333333333333,
+        "steve-send": 47.25,
+        "phone-back": 51.38333333333333,
+        "feedback": 51.7,
+        "five-bars": 53.483333333333334,
+        "end": 56.65
+    },
+    "phoneCues": [
+        {
+            "name": "phone-task",
+            "seconds": 11.784478271484375
+        },
+        {
+            "name": "phone-open",
+            "seconds": 37.14247827148437
+        },
+        {
+            "name": "phone-typing",
+            "seconds": 43.92047827148438
+        },
+        {
+            "name": "phone-sent",
+            "seconds": 47.59347827148437
+        },
+        {
+            "name": "phone-home",
+            "seconds": 50.79747827148437
+        },
+        {
+            "name": "phone-tuck",
+            "seconds": 13.384478271484374
+        }
+    ],
+    "steveLandedSeconds": 47.55
+}

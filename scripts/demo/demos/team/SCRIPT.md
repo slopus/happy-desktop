@@ -274,6 +274,12 @@ the phone screen alone on the cut's clock for the homepage hero: AV1 and H.264
 (level 5.1) at 60 fps, 80% 30 fps cuts, posters, `captions.vtt`, and
 `take.json` with every cue and Steve's part in the cut's seconds.
 
+The selected take is take 11. Its media went to the slopus.github.io homepage
+and are not kept here; its records are in [`selected/take11/`](./selected/take11/):
+the cut's `team.json` and `team.evidence.json`, the split tracks' `take.json`
+and `captions.vtt`, the phone pass's `beats.json` and `phone-capture.json`,
+both passes' `filmed.json`, and the desktop pass's cues and freezes.
+
 ## Still open
 
 1. The uploaded faces of Chief of Staff and Disk Sweeper are exports pending

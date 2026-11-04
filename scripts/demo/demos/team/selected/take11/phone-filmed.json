@@ -1,0 +1,1918 @@
+{
+    "profiles": {
+        "kirill": {
+            "userId": "mmcgkybioeklasdt7b0gbq2r",
+            "name": "Kirill",
+            "email": "kirill@happy.example",
+            "role": "Founder",
+            "follows": null,
+            "photo": {
+                "thumbhash": "oTgGBwScu7WvxmZ5rLN5WTmEuj/5RpAK"
+            },
+            "version": "01a1a332-462f-7b95-acf1-17ebe5e7246c",
+            "updatedAt": 1793739343407
+        },
+        "steve": {
+            "userId": "n3oy5664sbtzvzynpe5mah33",
+            "name": "Steve",
+            "email": "steve@happy.example",
+            "role": "Founder",
+            "follows": null,
+            "photo": {
+                "thumbhash": "E2kGRxI3p4iAqFiFemeHhYmJeQSHZ4AI"
+            },
+            "version": "01a1a332-464a-744c-b2c1-852bddec75a5",
+            "updatedAt": 1793739343434
+        }
+    },
+    "liveTaskId": "yjblkfm721i9xgrq7dousjpi",
+    "liveParts": {
+        "coordinator": "working",
+        "parts": {
+            "agent": "idle",
+            "desktop": "idle",
+            "ios": "working"
+        }
+    },
+    "phonePairing": {
+        "paired": "earlier"
+    },
+    "pictures": {
+        "opening": {
+            "chief-of-staff": {
+                "x": 68,
+                "y": 190,
+                "width": 20,
+                "height": 20,
+                "radius": "6px"
+            },
+            "disk-sweeper": {
+                "x": 68,
+                "y": 224,
+                "width": 20,
+                "height": 20,
+                "radius": "6px"
+            }
+        },
+        "closing": {
+            "chief-of-staff": {
+                "x": 68,
+                "y": 190,
+                "width": 20,
+                "height": 20,
+                "radius": "6px"
+            },
+            "disk-sweeper": {
+                "x": 68,
+                "y": 224,
+                "width": 20,
+                "height": 20,
+                "radius": "6px"
+            }
+        }
+    },
+    "sidebarFit": {
+        "opening": {
+            "sidebarWidth": 288,
+            "rows": [
+                {
+                    "name": "Search",
+                    "stats": null,
+                    "activity": null,
+                    "truncated": false,
+                    "room": null
+                },
+                {
+                    "name": "Artifacts",
+                    "stats": null,
+                    "activity": null,
+                    "truncated": false,
+                    "room": null
+                },
+                {
+                    "name": "Feed",
+                    "stats": null,
+                    "activity": null,
+                    "truncated": false,
+                    "room": null
+                },
+                {
+                    "name": "Chief of Staff",
+                    "stats": null,
+                    "activity": null,
+                    "truncated": false,
+                    "room": null
+                },
+                {
+                    "name": "Disk Sweeper",
+                    "stats": null,
+                    "activity": null,
+                    "truncated": false,
+                    "room": null
+                },
+                {
+                    "name": "iOS Production Train",
+                    "stats": null,
+                    "activity": null,
+                    "truncated": false,
+                    "room": null
+                },
+                {
+                    "name": "Product Health",
+                    "stats": null,
+                    "activity": null,
+                    "truncated": false,
+                    "room": null
+                },
+                {
+                    "name": "Docs rage clicks",
+                    "stats": null,
+                    "activity": null,
+                    "truncated": false,
+                    "room": null
+                },
+                {
+                    "name": "Team Servers",
+                    "stats": null,
+                    "activity": "spinner",
+                    "truncated": false,
+                    "room": 135.3
+                },
+                {
+                    "name": "iOS server codes",
+                    "stats": "+41−841 lines added, 8 lines deleted",
+                    "activity": "spinner",
+                    "truncated": false,
+                    "room": 44.9
+                },
+                {
+                    "name": "Desktop sign-in",
+                    "stats": "+251−34251 lines added, 34 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 59.8
+                },
+                {
+                    "name": "Agent sign-in",
+                    "stats": "+398−24398 lines added, 24 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 72.7
+                },
+                {
+                    "name": "iOS Overlay Layout",
+                    "stats": null,
+                    "activity": null,
+                    "truncated": false,
+                    "room": 101.3
+                },
+                {
+                    "name": "iOS Send Fixes",
+                    "stats": "+879−80879 lines added, 80 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 64.5
+                },
+                {
+                    "name": "Activity Feed Design",
+                    "stats": null,
+                    "activity": null,
+                    "truncated": false,
+                    "room": 92.4
+                },
+                {
+                    "name": "11labs Mobile",
+                    "stats": null,
+                    "activity": null,
+                    "truncated": false,
+                    "room": 137.2
+                },
+                {
+                    "name": "Mobile Voice",
+                    "stats": "+8k−88036 lines added, 8 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 88.9
+                },
+                {
+                    "name": "Landing Page Rebrand",
+                    "stats": null,
+                    "activity": null,
+                    "truncated": false,
+                    "room": 82.9
+                },
+                {
+                    "name": "Landing Rebrand",
+                    "stats": "+1.3k−881266 lines added, 88 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 46.3
+                },
+                {
+                    "name": "happy",
+                    "stats": null,
+                    "activity": null,
+                    "truncated": false,
+                    "room": 155.7
+                },
+                {
+                    "name": "waveform-bars (4)",
+                    "stats": "+87−7687 lines added, 76 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 76.7
+                },
+                {
+                    "name": "ios-server-codes (27)",
+                    "stats": "+186−8186 lines added, 8 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 60.4
+                },
+                {
+                    "name": "waveform-bars (3)",
+                    "stats": "+87−7687 lines added, 76 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 77.7
+                },
+                {
+                    "name": "ios-server-codes (26)",
+                    "stats": "+186−8186 lines added, 8 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 60
+                },
+                {
+                    "name": "waveform-bars (2)",
+                    "stats": "+87−7687 lines added, 76 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 77.5
+                },
+                {
+                    "name": "ios-server-codes (25)",
+                    "stats": "+186−8186 lines added, 8 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 60
+                },
+                {
+                    "name": "waveform-bars",
+                    "stats": "+87−7687 lines added, 76 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 97.3
+                },
+                {
+                    "name": "ios-server-codes (24)",
+                    "stats": "+171−8171 lines added, 8 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 59.3
+                },
+                {
+                    "name": "ios-server-codes (23)",
+                    "stats": "+186−8186 lines added, 8 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 60.3
+                },
+                {
+                    "name": "ios-server-codes (22)",
+                    "stats": "+186−8186 lines added, 8 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 60.1
+                },
+                {
+                    "name": "ios-server-codes (21)",
+                    "stats": "+164−8164 lines added, 8 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 62
+                },
+                {
+                    "name": "ios-server-codes (20)",
+                    "stats": "+178−8178 lines added, 8 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 59.1
+                },
+                {
+                    "name": "ios-server-codes (19)",
+                    "stats": "+186−8186 lines added, 8 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 62
+                },
+                {
+                    "name": "ios-server-codes (18)",
+                    "stats": "+186−8186 lines added, 8 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 61.4
+                },
+                {
+                    "name": "ios-server-codes (17)",
+                    "stats": "+186−8186 lines added, 8 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 62.3
+                },
+                {
+                    "name": "ios-server-codes (16)",
+                    "stats": "+64−864 lines added, 8 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 68.6
+                },
+                {
+                    "name": "ios-server-codes (15)",
+                    "stats": "+64−864 lines added, 8 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 68.5
+                },
+                {
+                    "name": "ios-server-codes (14)",
+                    "stats": "+186−8186 lines added, 8 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 61.3
+                },
+                {
+                    "name": "ios-server-codes (13)",
+                    "stats": "+186−8186 lines added, 8 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 62.3
+                },
+                {
+                    "name": "ios-server-codes (12)",
+                    "stats": "+186−8186 lines added, 8 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 62
+                },
+                {
+                    "name": "ios-server-codes (11)",
+                    "stats": "+186−8186 lines added, 8 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 64
+                },
+                {
+                    "name": "ios-server-codes (10)",
+                    "stats": "+186−8186 lines added, 8 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 61
+                },
+                {
+                    "name": "ios-server-codes (9)",
+                    "stats": "+186−8186 lines added, 8 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 67.4
+                },
+                {
+                    "name": "ios-server-codes (8)",
+                    "stats": "+186−8186 lines added, 8 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 66.8
+                },
+                {
+                    "name": "ios-server-codes (7)",
+                    "stats": "+114−8114 lines added, 8 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 67.7
+                },
+                {
+                    "name": "ios-server-codes (6)",
+                    "stats": "+186−8186 lines added, 8 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 67.4
+                },
+                {
+                    "name": "ios-server-codes (5)",
+                    "stats": "+186−8186 lines added, 8 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 67.3
+                },
+                {
+                    "name": "ios-server-codes (4)",
+                    "stats": "+186−8186 lines added, 8 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 66.7
+                },
+                {
+                    "name": "ios-server-codes (3)",
+                    "stats": "+186−8186 lines added, 8 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 67.7
+                },
+                {
+                    "name": "ios-server-codes (2)",
+                    "stats": "+186−8186 lines added, 8 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 67.5
+                },
+                {
+                    "name": "ios-server-codes",
+                    "stats": "+186−8186 lines added, 8 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 87.3
+                },
+                {
+                    "name": "happy-desktop",
+                    "stats": null,
+                    "activity": null,
+                    "truncated": false,
+                    "room": 102.8
+                },
+                {
+                    "name": "desktop-sign-in (27)",
+                    "stats": "+251−34251 lines added, 34 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 60
+                },
+                {
+                    "name": "desktop-sign-in (26)",
+                    "stats": "+251−34251 lines added, 34 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 59.6
+                },
+                {
+                    "name": "desktop-sign-in (25)",
+                    "stats": "+251−34251 lines added, 34 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 59.5
+                },
+                {
+                    "name": "desktop-sign-in (24)",
+                    "stats": "+251−34251 lines added, 34 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 58.9
+                },
+                {
+                    "name": "desktop-sign-in (23)",
+                    "stats": "+251−34251 lines added, 34 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 59.9
+                },
+                {
+                    "name": "desktop-sign-in (22)",
+                    "stats": "+251−34251 lines added, 34 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 59.7
+                },
+                {
+                    "name": "desktop-sign-in (21)",
+                    "stats": "+251−34251 lines added, 34 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 61.6
+                },
+                {
+                    "name": "desktop-sign-in (20)",
+                    "stats": "+251−34251 lines added, 34 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 58.7
+                },
+                {
+                    "name": "desktop-sign-in (19)",
+                    "stats": "+251−34251 lines added, 34 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 61.5
+                },
+                {
+                    "name": "desktop-sign-in (18)",
+                    "stats": "+251−34251 lines added, 34 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 61
+                },
+                {
+                    "name": "desktop-sign-in (17)",
+                    "stats": "+251−34251 lines added, 34 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 61.9
+                },
+                {
+                    "name": "desktop-sign-in (16)",
+                    "stats": "+251−34251 lines added, 34 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 61.5
+                },
+                {
+                    "name": "desktop-sign-in (15)",
+                    "stats": "+251−34251 lines added, 34 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 61.5
+                },
+                {
+                    "name": "desktop-sign-in (14)",
+                    "stats": "+251−34251 lines added, 34 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 60.8
+                },
+                {
+                    "name": "desktop-sign-in (13)",
+                    "stats": "+251−34251 lines added, 34 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 61.8
+                },
+                {
+                    "name": "desktop-sign-in (12)",
+                    "stats": "+251−34251 lines added, 34 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 61.6
+                },
+                {
+                    "name": "desktop-sign-in (11)",
+                    "stats": "+251−34251 lines added, 34 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 63.5
+                },
+                {
+                    "name": "desktop-sign-in (10)",
+                    "stats": "+251−34251 lines added, 34 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 60.6
+                },
+                {
+                    "name": "desktop-sign-in (9)",
+                    "stats": "+251−34251 lines added, 34 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 67
+                },
+                {
+                    "name": "desktop-sign-in (8)",
+                    "stats": "+251−34251 lines added, 34 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 66.4
+                },
+                {
+                    "name": "desktop-sign-in (7)",
+                    "stats": "+149−34149 lines added, 34 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 67.3
+                },
+                {
+                    "name": "desktop-sign-in (6)",
+                    "stats": "+251−34251 lines added, 34 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 67
+                },
+                {
+                    "name": "desktop-sign-in (5)",
+                    "stats": "+251−34251 lines added, 34 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 66.9
+                },
+                {
+                    "name": "desktop-sign-in (4)",
+                    "stats": "+251−34251 lines added, 34 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 66.2
+                },
+                {
+                    "name": "desktop-sign-in (3)",
+                    "stats": "+251−34251 lines added, 34 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 67.2
+                },
+                {
+                    "name": "desktop-sign-in (2)",
+                    "stats": "+251−34251 lines added, 34 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 67
+                },
+                {
+                    "name": "desktop-sign-in",
+                    "stats": "+251−34251 lines added, 34 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 86.9
+                },
+                {
+                    "name": "happy-agent",
+                    "stats": null,
+                    "activity": null,
+                    "truncated": false,
+                    "room": 116.5
+                },
+                {
+                    "name": "agent-sign-in (27)",
+                    "stats": "+398−24398 lines added, 24 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 73.7
+                },
+                {
+                    "name": "agent-sign-in (26)",
+                    "stats": "+398−24398 lines added, 24 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 73.3
+                },
+                {
+                    "name": "agent-sign-in (25)",
+                    "stats": "+398−24398 lines added, 24 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 73.3
+                },
+                {
+                    "name": "agent-sign-in (24)",
+                    "stats": "+398−24398 lines added, 24 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 72.6
+                },
+                {
+                    "name": "agent-sign-in (23)",
+                    "stats": "+398−24398 lines added, 24 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 73.6
+                },
+                {
+                    "name": "agent-sign-in (22)",
+                    "stats": "+398−24398 lines added, 24 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 73.4
+                },
+                {
+                    "name": "agent-sign-in (21)",
+                    "stats": "+398−24398 lines added, 24 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 75.3
+                },
+                {
+                    "name": "agent-sign-in (20)",
+                    "stats": "+398−24398 lines added, 24 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 72.4
+                },
+                {
+                    "name": "agent-sign-in (19)",
+                    "stats": "+398−24398 lines added, 24 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 75.3
+                },
+                {
+                    "name": "agent-sign-in (18)",
+                    "stats": "+398−24398 lines added, 24 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 74.7
+                },
+                {
+                    "name": "agent-sign-in (17)",
+                    "stats": "+398−24398 lines added, 24 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 75.6
+                },
+                {
+                    "name": "agent-sign-in (16)",
+                    "stats": "+398−24398 lines added, 24 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 75.3
+                },
+                {
+                    "name": "agent-sign-in (15)",
+                    "stats": "+398−24398 lines added, 24 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 75.2
+                },
+                {
+                    "name": "agent-sign-in (14)",
+                    "stats": "+398−24398 lines added, 24 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 74.5
+                },
+                {
+                    "name": "agent-sign-in (13)",
+                    "stats": "+398−24398 lines added, 24 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 75.5
+                },
+                {
+                    "name": "agent-sign-in (12)",
+                    "stats": "+398−24398 lines added, 24 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 75.3
+                },
+                {
+                    "name": "agent-sign-in (11)",
+                    "stats": "+398−24398 lines added, 24 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 77.3
+                },
+                {
+                    "name": "agent-sign-in (10)",
+                    "stats": "+398−24398 lines added, 24 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 74.3
+                },
+                {
+                    "name": "agent-sign-in (9)",
+                    "stats": "+398−24398 lines added, 24 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 80.7
+                },
+                {
+                    "name": "agent-sign-in (8)",
+                    "stats": "+398−24398 lines added, 24 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 80.1
+                },
+                {
+                    "name": "agent-sign-in (7)",
+                    "stats": "+242−24242 lines added, 24 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 81
+                },
+                {
+                    "name": "agent-sign-in (6)",
+                    "stats": "+398−24398 lines added, 24 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 80.7
+                },
+                {
+                    "name": "agent-sign-in (5)",
+                    "stats": "+398−24398 lines added, 24 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 80.6
+                },
+                {
+                    "name": "agent-sign-in (4)",
+                    "stats": "+398−24398 lines added, 24 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 80
+                },
+                {
+                    "name": "agent-sign-in (3)",
+                    "stats": "+398−24398 lines added, 24 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 81
+                },
+                {
+                    "name": "agent-sign-in (2)",
+                    "stats": "+398−24398 lines added, 24 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 80.7
+                },
+                {
+                    "name": "agent-sign-in",
+                    "stats": "+398−24398 lines added, 24 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 100.6
+                },
+                {
+                    "name": "slopus.github.io",
+                    "stats": null,
+                    "activity": null,
+                    "truncated": false,
+                    "room": 100
+                }
+            ],
+            "fits": true
+        },
+        "closing": {
+            "sidebarWidth": 288,
+            "rows": [
+                {
+                    "name": "Search",
+                    "stats": null,
+                    "activity": null,
+                    "truncated": false,
+                    "room": null
+                },
+                {
+                    "name": "Artifacts",
+                    "stats": null,
+                    "activity": null,
+                    "truncated": false,
+                    "room": null
+                },
+                {
+                    "name": "Feed",
+                    "stats": null,
+                    "activity": null,
+                    "truncated": false,
+                    "room": null
+                },
+                {
+                    "name": "Chief of Staff",
+                    "stats": null,
+                    "activity": null,
+                    "truncated": false,
+                    "room": null
+                },
+                {
+                    "name": "Disk Sweeper",
+                    "stats": null,
+                    "activity": null,
+                    "truncated": false,
+                    "room": null
+                },
+                {
+                    "name": "iOS Production Train",
+                    "stats": null,
+                    "activity": null,
+                    "truncated": false,
+                    "room": null
+                },
+                {
+                    "name": "Product Health",
+                    "stats": null,
+                    "activity": null,
+                    "truncated": false,
+                    "room": null
+                },
+                {
+                    "name": "Docs rage clicks",
+                    "stats": null,
+                    "activity": null,
+                    "truncated": false,
+                    "room": null
+                },
+                {
+                    "name": "Voice waveform",
+                    "stats": null,
+                    "activity": null,
+                    "truncated": false,
+                    "room": 117.6
+                },
+                {
+                    "name": "Waveform bars",
+                    "stats": "+87−7687 lines added, 76 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 69.7
+                },
+                {
+                    "name": "Team Servers",
+                    "stats": null,
+                    "activity": "spinner",
+                    "truncated": false,
+                    "room": 135.3
+                },
+                {
+                    "name": "iOS server codes",
+                    "stats": "+186−8186 lines added, 8 lines deleted",
+                    "activity": "spinner",
+                    "truncated": false,
+                    "room": 38.3
+                },
+                {
+                    "name": "Desktop sign-in",
+                    "stats": "+251−34251 lines added, 34 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 59.8
+                },
+                {
+                    "name": "Agent sign-in",
+                    "stats": "+398−24398 lines added, 24 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 72.7
+                },
+                {
+                    "name": "iOS Overlay Layout",
+                    "stats": null,
+                    "activity": null,
+                    "truncated": false,
+                    "room": 101.3
+                },
+                {
+                    "name": "iOS Send Fixes",
+                    "stats": "+879−80879 lines added, 80 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 64.5
+                },
+                {
+                    "name": "Activity Feed Design",
+                    "stats": null,
+                    "activity": null,
+                    "truncated": false,
+                    "room": 92.4
+                },
+                {
+                    "name": "11labs Mobile",
+                    "stats": null,
+                    "activity": null,
+                    "truncated": false,
+                    "room": 137.2
+                },
+                {
+                    "name": "Mobile Voice",
+                    "stats": "+8k−88036 lines added, 8 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 88.9
+                },
+                {
+                    "name": "Landing Page Rebrand",
+                    "stats": null,
+                    "activity": null,
+                    "truncated": false,
+                    "room": 82.9
+                },
+                {
+                    "name": "Landing Rebrand",
+                    "stats": "+1.3k−881266 lines added, 88 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 46.3
+                },
+                {
+                    "name": "happy",
+                    "stats": null,
+                    "activity": null,
+                    "truncated": false,
+                    "room": 155.7
+                },
+                {
+                    "name": "waveform-bars (4)",
+                    "stats": "+87−7687 lines added, 76 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 76.7
+                },
+                {
+                    "name": "ios-server-codes (27)",
+                    "stats": "+186−8186 lines added, 8 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 60.4
+                },
+                {
+                    "name": "waveform-bars (3)",
+                    "stats": "+87−7687 lines added, 76 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 77.7
+                },
+                {
+                    "name": "ios-server-codes (26)",
+                    "stats": "+186−8186 lines added, 8 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 60
+                },
+                {
+                    "name": "waveform-bars (2)",
+                    "stats": "+87−7687 lines added, 76 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 77.5
+                },
+                {
+                    "name": "ios-server-codes (25)",
+                    "stats": "+186−8186 lines added, 8 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 60
+                },
+                {
+                    "name": "waveform-bars",
+                    "stats": "+87−7687 lines added, 76 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 97.3
+                },
+                {
+                    "name": "ios-server-codes (24)",
+                    "stats": "+171−8171 lines added, 8 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 59.3
+                },
+                {
+                    "name": "ios-server-codes (23)",
+                    "stats": "+186−8186 lines added, 8 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 60.3
+                },
+                {
+                    "name": "ios-server-codes (22)",
+                    "stats": "+186−8186 lines added, 8 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 60.1
+                },
+                {
+                    "name": "ios-server-codes (21)",
+                    "stats": "+164−8164 lines added, 8 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 62
+                },
+                {
+                    "name": "ios-server-codes (20)",
+                    "stats": "+178−8178 lines added, 8 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 59.1
+                },
+                {
+                    "name": "ios-server-codes (19)",
+                    "stats": "+186−8186 lines added, 8 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 62
+                },
+                {
+                    "name": "ios-server-codes (18)",
+                    "stats": "+186−8186 lines added, 8 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 61.4
+                },
+                {
+                    "name": "ios-server-codes (17)",
+                    "stats": "+186−8186 lines added, 8 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 62.3
+                },
+                {
+                    "name": "ios-server-codes (16)",
+                    "stats": "+64−864 lines added, 8 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 68.6
+                },
+                {
+                    "name": "ios-server-codes (15)",
+                    "stats": "+64−864 lines added, 8 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 68.5
+                },
+                {
+                    "name": "ios-server-codes (14)",
+                    "stats": "+186−8186 lines added, 8 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 61.3
+                },
+                {
+                    "name": "ios-server-codes (13)",
+                    "stats": "+186−8186 lines added, 8 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 62.3
+                },
+                {
+                    "name": "ios-server-codes (12)",
+                    "stats": "+186−8186 lines added, 8 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 62
+                },
+                {
+                    "name": "ios-server-codes (11)",
+                    "stats": "+186−8186 lines added, 8 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 64
+                },
+                {
+                    "name": "ios-server-codes (10)",
+                    "stats": "+186−8186 lines added, 8 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 61
+                },
+                {
+                    "name": "ios-server-codes (9)",
+                    "stats": "+186−8186 lines added, 8 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 67.4
+                },
+                {
+                    "name": "ios-server-codes (8)",
+                    "stats": "+186−8186 lines added, 8 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 66.8
+                },
+                {
+                    "name": "ios-server-codes (7)",
+                    "stats": "+114−8114 lines added, 8 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 67.7
+                },
+                {
+                    "name": "ios-server-codes (6)",
+                    "stats": "+186−8186 lines added, 8 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 67.4
+                },
+                {
+                    "name": "ios-server-codes (5)",
+                    "stats": "+186−8186 lines added, 8 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 67.3
+                },
+                {
+                    "name": "ios-server-codes (4)",
+                    "stats": "+186−8186 lines added, 8 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 66.7
+                },
+                {
+                    "name": "ios-server-codes (3)",
+                    "stats": "+186−8186 lines added, 8 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 67.7
+                },
+                {
+                    "name": "ios-server-codes (2)",
+                    "stats": "+186−8186 lines added, 8 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 67.5
+                },
+                {
+                    "name": "ios-server-codes",
+                    "stats": "+186−8186 lines added, 8 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 87.3
+                },
+                {
+                    "name": "happy-desktop",
+                    "stats": null,
+                    "activity": null,
+                    "truncated": false,
+                    "room": 102.8
+                },
+                {
+                    "name": "desktop-sign-in (27)",
+                    "stats": "+251−34251 lines added, 34 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 60
+                },
+                {
+                    "name": "desktop-sign-in (26)",
+                    "stats": "+251−34251 lines added, 34 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 59.6
+                },
+                {
+                    "name": "desktop-sign-in (25)",
+                    "stats": "+251−34251 lines added, 34 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 59.5
+                },
+                {
+                    "name": "desktop-sign-in (24)",
+                    "stats": "+251−34251 lines added, 34 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 58.9
+                },
+                {
+                    "name": "desktop-sign-in (23)",
+                    "stats": "+251−34251 lines added, 34 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 59.9
+                },
+                {
+                    "name": "desktop-sign-in (22)",
+                    "stats": "+251−34251 lines added, 34 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 59.7
+                },
+                {
+                    "name": "desktop-sign-in (21)",
+                    "stats": "+251−34251 lines added, 34 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 61.6
+                },
+                {
+                    "name": "desktop-sign-in (20)",
+                    "stats": "+251−34251 lines added, 34 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 58.7
+                },
+                {
+                    "name": "desktop-sign-in (19)",
+                    "stats": "+251−34251 lines added, 34 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 61.5
+                },
+                {
+                    "name": "desktop-sign-in (18)",
+                    "stats": "+251−34251 lines added, 34 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 61
+                },
+                {
+                    "name": "desktop-sign-in (17)",
+                    "stats": "+251−34251 lines added, 34 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 61.9
+                },
+                {
+                    "name": "desktop-sign-in (16)",
+                    "stats": "+251−34251 lines added, 34 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 61.5
+                },
+                {
+                    "name": "desktop-sign-in (15)",
+                    "stats": "+251−34251 lines added, 34 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 61.5
+                },
+                {
+                    "name": "desktop-sign-in (14)",
+                    "stats": "+251−34251 lines added, 34 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 60.8
+                },
+                {
+                    "name": "desktop-sign-in (13)",
+                    "stats": "+251−34251 lines added, 34 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 61.8
+                },
+                {
+                    "name": "desktop-sign-in (12)",
+                    "stats": "+251−34251 lines added, 34 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 61.6
+                },
+                {
+                    "name": "desktop-sign-in (11)",
+                    "stats": "+251−34251 lines added, 34 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 63.5
+                },
+                {
+                    "name": "desktop-sign-in (10)",
+                    "stats": "+251−34251 lines added, 34 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 60.6
+                },
+                {
+                    "name": "desktop-sign-in (9)",
+                    "stats": "+251−34251 lines added, 34 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 67
+                },
+                {
+                    "name": "desktop-sign-in (8)",
+                    "stats": "+251−34251 lines added, 34 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 66.4
+                },
+                {
+                    "name": "desktop-sign-in (7)",
+                    "stats": "+149−34149 lines added, 34 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 67.3
+                },
+                {
+                    "name": "desktop-sign-in (6)",
+                    "stats": "+251−34251 lines added, 34 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 67
+                },
+                {
+                    "name": "desktop-sign-in (5)",
+                    "stats": "+251−34251 lines added, 34 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 66.9
+                },
+                {
+                    "name": "desktop-sign-in (4)",
+                    "stats": "+251−34251 lines added, 34 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 66.2
+                },
+                {
+                    "name": "desktop-sign-in (3)",
+                    "stats": "+251−34251 lines added, 34 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 67.2
+                },
+                {
+                    "name": "desktop-sign-in (2)",
+                    "stats": "+251−34251 lines added, 34 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 67
+                },
+                {
+                    "name": "desktop-sign-in",
+                    "stats": "+251−34251 lines added, 34 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 86.9
+                },
+                {
+                    "name": "happy-agent",
+                    "stats": null,
+                    "activity": null,
+                    "truncated": false,
+                    "room": 116.5
+                },
+                {
+                    "name": "agent-sign-in (27)",
+                    "stats": "+398−24398 lines added, 24 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 73.7
+                },
+                {
+                    "name": "agent-sign-in (26)",
+                    "stats": "+398−24398 lines added, 24 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 73.3
+                },
+                {
+                    "name": "agent-sign-in (25)",
+                    "stats": "+398−24398 lines added, 24 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 73.3
+                },
+                {
+                    "name": "agent-sign-in (24)",
+                    "stats": "+398−24398 lines added, 24 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 72.6
+                },
+                {
+                    "name": "agent-sign-in (23)",
+                    "stats": "+398−24398 lines added, 24 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 73.6
+                },
+                {
+                    "name": "agent-sign-in (22)",
+                    "stats": "+398−24398 lines added, 24 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 73.4
+                },
+                {
+                    "name": "agent-sign-in (21)",
+                    "stats": "+398−24398 lines added, 24 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 75.3
+                },
+                {
+                    "name": "agent-sign-in (20)",
+                    "stats": "+398−24398 lines added, 24 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 72.4
+                },
+                {
+                    "name": "agent-sign-in (19)",
+                    "stats": "+398−24398 lines added, 24 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 75.3
+                },
+                {
+                    "name": "agent-sign-in (18)",
+                    "stats": "+398−24398 lines added, 24 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 74.7
+                },
+                {
+                    "name": "agent-sign-in (17)",
+                    "stats": "+398−24398 lines added, 24 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 75.6
+                },
+                {
+                    "name": "agent-sign-in (16)",
+                    "stats": "+398−24398 lines added, 24 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 75.3
+                },
+                {
+                    "name": "agent-sign-in (15)",
+                    "stats": "+398−24398 lines added, 24 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 75.2
+                },
+                {
+                    "name": "agent-sign-in (14)",
+                    "stats": "+398−24398 lines added, 24 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 74.5
+                },
+                {
+                    "name": "agent-sign-in (13)",
+                    "stats": "+398−24398 lines added, 24 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 75.5
+                },
+                {
+                    "name": "agent-sign-in (12)",
+                    "stats": "+398−24398 lines added, 24 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 75.3
+                },
+                {
+                    "name": "agent-sign-in (11)",
+                    "stats": "+398−24398 lines added, 24 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 77.3
+                },
+                {
+                    "name": "agent-sign-in (10)",
+                    "stats": "+398−24398 lines added, 24 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 74.3
+                },
+                {
+                    "name": "agent-sign-in (9)",
+                    "stats": "+398−24398 lines added, 24 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 80.7
+                },
+                {
+                    "name": "agent-sign-in (8)",
+                    "stats": "+398−24398 lines added, 24 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 80.1
+                },
+                {
+                    "name": "agent-sign-in (7)",
+                    "stats": "+242−24242 lines added, 24 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 81
+                },
+                {
+                    "name": "agent-sign-in (6)",
+                    "stats": "+398−24398 lines added, 24 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 80.7
+                },
+                {
+                    "name": "agent-sign-in (5)",
+                    "stats": "+398−24398 lines added, 24 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 80.6
+                },
+                {
+                    "name": "agent-sign-in (4)",
+                    "stats": "+398−24398 lines added, 24 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 80
+                },
+                {
+                    "name": "agent-sign-in (3)",
+                    "stats": "+398−24398 lines added, 24 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 81
+                },
+                {
+                    "name": "agent-sign-in (2)",
+                    "stats": "+398−24398 lines added, 24 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 80.7
+                },
+                {
+                    "name": "agent-sign-in",
+                    "stats": "+398−24398 lines added, 24 lines deleted",
+                    "activity": null,
+                    "truncated": false,
+                    "room": 100.6
+                },
+                {
+                    "name": "slopus.github.io",
+                    "stats": null,
+                    "activity": null,
+                    "truncated": false,
+                    "room": 100
+                }
+            ],
+            "fits": true
+        }
+    },
+    "gitWatchRenewed": {
+        "seconds": 18.583333333333332,
+        "workspaceId": "gb7aq37s7e9bsacxh9m3a85r",
+        "workspaces": 96,
+        "snapshots": 95
+    },
+    "mention": {
+        "text": "Here’s the waveform: the bars move while either side is speaking and rest flat when it’s quiet. @Steve, how does it look? 2:31 AM",
+        "bold": ["@Steve"]
+    },
+    "fiveBarsShown": true,
+    "fiveBarsInView": true,
+    "voiceCounts": [
+        {
+            "seconds": 21.167,
+            "stats": "+2−22 lines added, 2 lines deleted"
+        },
+        {
+            "seconds": 22.383,
+            "stats": "+15−215 lines added, 2 lines deleted"
+        },
+        {
+            "seconds": 22.783,
+            "stats": "+23−623 lines added, 6 lines deleted"
+        },
+        {
+            "seconds": 23.983,
+            "stats": "+56−4256 lines added, 42 lines deleted"
+        },
+        {
+            "seconds": 24.767,
+            "stats": "+69−6669 lines added, 66 lines deleted"
+        },
+        {
+            "seconds": 25.583,
+            "stats": "+76−7376 lines added, 73 lines deleted"
+        },
+        {
+            "seconds": 26.383,
+            "stats": "+77−7477 lines added, 74 lines deleted"
+        },
+        {
+            "seconds": 27.583,
+            "stats": "+83−7483 lines added, 74 lines deleted"
+        },
+        {
+            "seconds": 28.817,
+            "stats": "+86−7586 lines added, 75 lines deleted"
+        },
+        {
+            "seconds": 30.5,
+            "stats": "+87−7687 lines added, 76 lines deleted"
+        }
+    ],
+    "voiceWorktree": {
+        "workspaceId": "gb7aq37s7e9bsacxh9m3a85r",
+        "insertions": 87,
+        "deletions": 76
+    },
+    "startedAtEpochMs": 1793788252784.5217,
+    "frames": 3399,
+    "capture": {
+        "frames": 3399,
+        "freshFrames": 2273,
+        "freshFramesPerSecond": 40.12356575463372,
+        "maxRepeatedFrames": 74,
+        "frameAgeP95Ms": 212.77645833333372,
+        "speedBadgeFrames": 0
+    },
+    "phoneMarks": [
+        {
+            "test": "testTake",
+            "name": "ready",
+            "epochMs": 1793788251447,
+            "seconds": -1.337521728515625
+        },
+        {
+            "test": "testTake",
+            "name": "task-arrived",
+            "epochMs": 1793788264569,
+            "seconds": 11.784478271484375
+        },
+        {
+            "test": "testTake",
+            "name": "task-opened",
+            "epochMs": 1793788289927,
+            "seconds": 37.14247827148437
+        },
+        {
+            "test": "testTake",
+            "name": "preview-seen",
+            "epochMs": 1793788291237,
+            "seconds": 38.452478271484374
+        },
+        {
+            "test": "testTake",
+            "name": "typing",
+            "epochMs": 1793788296705,
+            "seconds": 43.92047827148438
+        },
+        {
+            "test": "testTake",
+            "name": "typed",
+            "epochMs": 1793788299397,
+            "seconds": 46.61247827148438
+        },
+        {
+            "test": "testTake",
+            "name": "sent",
+            "epochMs": 1793788300378,
+            "seconds": 47.59347827148437
+        },
+        {
+            "test": "testTake",
+            "name": "home",
+            "epochMs": 1793788303582,
+            "seconds": 50.79747827148437
+        }
+    ],
+    "phoneCapture": {
+        "source": "iPhone 17 Pro Simulator (iOS 26.5) on the Mac mini, native happy-ios from happy main, recorded with simctl io recordVideo",
+        "bundleId": "com.slopus.happy.teamdemo",
+        "udid": "88F9F92C-8645-4557-B066-F572C025D4E3",
+        "size": {
+            "width": 1206,
+            "height": 2622
+        },
+        "trimSeconds": 14.292854736328126,
+        "firstFrameLateSeconds": -0.0553330078125,
+        "recordedFrames": 3978,
+        "cadence": [
+            {
+                "name": "task arrives",
+                "from": 11.784478271484375,
+                "to": 13.284478271484375,
+                "frames": 90,
+                "fps": 60
+            },
+            {
+                "name": "Steve opens it",
+                "from": 37.14247827148437,
+                "to": 38.64247827148437,
+                "frames": 70,
+                "fps": 46.666666666666664
+            },
+            {
+                "name": "Steve types",
+                "from": 43.92047827148438,
+                "to": 46.61247827148438,
+                "frames": 149,
+                "fps": 55.34918276374442
+            },
+            {
+                "name": "Steve sends and goes back",
+                "from": 46.61247827148438,
+                "to": 51.79747827148437,
+                "frames": 377,
+                "fps": 72.70973963355841
+            }
+        ]
+    },
+    "kirillFeed": {
+        "items": [
+            {
+                "id": "01a1a61d-5f89-7066-b519-8f9818974239",
+                "version": "01a1a61d-5f8d-77bc-ac4b-73edc29438a2",
+                "cursor": "01a1a61d-5f85-7766-997b-d8adbf7628f8",
+                "subject": {
+                    "type": "artifact",
+                    "id": "k2z052dxdfit36h7egiz9wf8"
+                },
+                "cluster": "task:vmw1z7u3q001j971fooar191",
+                "created": false,
+                "updates": 1,
+                "actors": [
+                    {
+                        "userId": null,
+                        "agentId": "hmw1z7u3q00343x0mc72rxr5"
+                    }
+                ],
+                "actorCount": 1,
+                "snapshot": {
+                    "title": "Voice waveform",
+                    "agentId": "hmw1z7u3q00343x0mc72rxr5",
+                    "artifactType": "html",
+                    "artifactVersion": 3
+                },
+                "firstAt": 1793788305284,
+                "lastAt": 1793788305284,
+                "seenAt": 1793788305293
+            },
+            {
+                "id": "01a1a61d-11fc-78c5-8288-86064cfe399c",
+                "version": "01a1a61d-11ff-7593-8411-68e36ac69f91",
+                "cursor": "01a1a61d-11f5-7b88-be11-e5e5ae87089e",
+                "subject": {
+                    "type": "artifact",
+                    "id": "k2z052dxdfit36h7egiz9wf8"
+                },
+                "cluster": "task:vmw1z7u3q001j971fooar191",
+                "created": false,
+                "updates": 1,
+                "actors": [
+                    {
+                        "userId": null,
+                        "agentId": "hmw1z7u3q00343x0mc72rxr5"
+                    }
+                ],
+                "actorCount": 1,
+                "snapshot": {
+                    "title": "Voice waveform",
+                    "agentId": "hmw1z7u3q00343x0mc72rxr5",
+                    "artifactType": "html",
+                    "artifactVersion": 2
+                },
+                "firstAt": 1793788285428,
+                "lastAt": 1793788285428,
+                "seenAt": 1793788285439
+            },
+            {
+                "id": "01a1a61d-0f3f-7a84-8802-6abd1b50a0ab",
+                "version": "01a1a61d-0f43-75b6-8376-b45ff72fd1c2",
+                "cursor": "01a1a61d-0f34-7b9d-b21c-e509ad5219f8",
+                "subject": {
+                    "type": "artifact",
+                    "id": "k2z052dxdfit36h7egiz9wf8"
+                },
+                "cluster": "task:vmw1z7u3q001j971fooar191",
+                "created": true,
+                "updates": 0,
+                "actors": [
+                    {
+                        "userId": null,
+                        "agentId": "hmw1z7u3q00343x0mc72rxr5"
+                    }
+                ],
+                "actorCount": 1,
+                "snapshot": {
+                    "title": "Voice waveform",
+                    "agentId": "hmw1z7u3q00343x0mc72rxr5",
+                    "artifactType": "html",
+                    "artifactVersion": 1
+                },
+                "firstAt": 1793788284722,
+                "lastAt": 1793788284722,
+                "seenAt": 1793788284739
+            },
+            {
+                "id": "01a1a61c-bb51-7ac5-a6f0-9638b450ec83",
+                "version": "01a1a61c-bb51-7ac5-a6f0-9638b450ec83",
+                "cursor": "01a1a61c-bb46-7efa-9ffb-e6124b4a093d",
+                "subject": {
+                    "type": "task",
+                    "id": "vmw1z7u3q001j971fooar191"
+                },
+                "cluster": "task:vmw1z7u3q001j971fooar191",
+                "created": true,
+                "updates": 0,
+                "actors": [
+                    {
+                        "userId": "mmcgkybioeklasdt7b0gbq2r",
+                        "agentId": null
+                    }
+                ],
+                "actorCount": 1,
+                "snapshot": {
+                    "title": "New Task",
+                    "agentId": "hmw1z7u3q00343x0mc72rxr5"
+                },
+                "firstAt": 1793788263230,
+                "lastAt": 1793788263230,
+                "seenAt": 1793788263249
+            },
+            {
+                "id": "01a1a61b-f543-710c-86e0-1ec1beefd165",
+                "version": "01a1a61c-471f-7255-bc6d-35020bc6594e",
+                "cursor": "01a1a61b-f53d-73d0-83c7-9b7d96cc8abd",
+                "subject": {
+                    "type": "task",
+                    "id": "yjblkfm721i9xgrq7dousjpi"
+                },
+                "cluster": "task:yjblkfm721i9xgrq7dousjpi",
+                "created": true,
+                "updates": 0,
+                "actors": [
+                    {
+                        "userId": "n3oy5664sbtzvzynpe5mah33",
+                        "agentId": null
+                    }
+                ],
+                "actorCount": 1,
+                "snapshot": {
+                    "title": "Team Servers",
+                    "agentId": "s6wr391jmdtu2kpb7nr6trer"
+                },
+                "firstAt": 1793788212535,
+                "lastAt": 1793788212535,
+                "seenAt": 1793788233503
+            }
+        ],
+        "unread": 0,
+        "hasMore": true,
+        "cursor": "01a1a61d-6f79-7b88-8877-ff99e18c852e"
+    }
+}

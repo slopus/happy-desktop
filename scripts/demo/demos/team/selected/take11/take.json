@@ -1,0 +1,249 @@
+{
+    "fps": 60,
+    "frames": 3120,
+    "seconds": 52,
+    "desktop": {
+        "width": 2266,
+        "height": 1400
+    },
+    "phone": {
+        "width": 1206,
+        "height": 2622
+    },
+    "phonePart": [9.45, 47.21666666666667],
+    "phoneStates": [
+        {
+            "state": "forward",
+            "from": 9.45,
+            "to": 12.95
+        },
+        {
+            "state": "tucked",
+            "from": 12.95,
+            "to": 33.71666666666667
+        },
+        {
+            "state": "forward",
+            "from": 33.71666666666667,
+            "to": 47.21666666666667
+        },
+        {
+            "state": "tucked",
+            "from": 47.21666666666667,
+            "to": 52
+        }
+    ],
+    "cues": [
+        {
+            "name": "open",
+            "seconds": 0
+        },
+        {
+            "name": "model-scan",
+            "seconds": 1.8
+        },
+        {
+            "name": "model-chosen",
+            "seconds": 4.216666666666667
+        },
+        {
+            "name": "typing-started",
+            "seconds": 5.316666666666666
+        },
+        {
+            "name": "phone-enter",
+            "seconds": 9.45
+        },
+        {
+            "name": "sent",
+            "seconds": 10.416666666666666
+        },
+        {
+            "name": "task-created",
+            "seconds": 10.416666666666666,
+            "rect": {
+                "x": 62,
+                "y": 390,
+                "width": 276,
+                "height": 32
+            }
+        },
+        {
+            "name": "phone-task",
+            "seconds": 11.583333333333334
+        },
+        {
+            "name": "working",
+            "seconds": 12.266666666666667
+        },
+        {
+            "name": "phone-tuck",
+            "seconds": 12.95
+        },
+        {
+            "name": "subtask",
+            "seconds": 16.433333333333334
+        },
+        {
+            "name": "preview",
+            "seconds": 30.933333333333334
+        },
+        {
+            "name": "phone-forward",
+            "seconds": 33.71666666666667
+        },
+        {
+            "name": "phone-open",
+            "seconds": 34.916666666666664
+        },
+        {
+            "name": "phone-typing",
+            "seconds": 41.68333333333333
+        },
+        {
+            "name": "steve-feedback",
+            "seconds": 43.28333333333333,
+            "rect": {
+                "x": 374,
+                "y": 403,
+                "width": 282.609375,
+                "height": 24
+            }
+        },
+        {
+            "name": "phone-sent",
+            "seconds": 43.416666666666664
+        },
+        {
+            "name": "phone-home",
+            "seconds": 46.61666666666667
+        },
+        {
+            "name": "phone-tuck",
+            "seconds": 47.21666666666667
+        },
+        {
+            "name": "five-bars",
+            "seconds": 48.05
+        },
+        {
+            "name": "outro",
+            "seconds": 49.15
+        },
+        {
+            "name": "settled",
+            "seconds": 51.333333333333336
+        }
+    ],
+    "edits": {
+        "speedUps": [
+            {
+                "from": "phone-typing",
+                "to": "phone-sent",
+                "rate": 2
+            }
+        ],
+        "freezesCut": {
+            "count": 17,
+            "frames": 175
+        },
+        "freezesHeld": [],
+        "phoneHolds": [],
+        "loopSeconds": 0.6,
+        "staging": [
+            "Steve's typing: his phone's UI-test driver types his reply a word at a time (the keyboard still presses each key), and the cut plays it at 2× on both screens.",
+            "Waveform bars' worktree: the desktop asks Happy Core to watch a new worktree's Git state while it is still initializing, Happy Agent v0.4.111 refuses that whole request, and the desktop asks again only on its two-minute renewal. Once the worktree is ready, the director sends the same watch request the renewal sends (every active project and workspace) early, through Kirill's own client. The subtask's ten edits are real Edit calls, and every count on its row is the daemon's own Git scan.",
+            "Kirill's and Steve's feeds, and the new subtask, are marked read as they update, so no unread badge interrupts the take."
+        ]
+    },
+    "files": [
+        {
+            "file": "desktop.webm",
+            "codec": "av1",
+            "rate": 60,
+            "size": {
+                "width": 2266,
+                "height": 1400
+            },
+            "bytes": 4919048
+        },
+        {
+            "file": "desktop.mp4",
+            "codec": "h264",
+            "rate": 60,
+            "size": {
+                "width": 2266,
+                "height": 1400
+            },
+            "bytes": 5866070
+        },
+        {
+            "file": "desktop-30.webm",
+            "codec": "av1",
+            "rate": 30,
+            "size": {
+                "width": 1812,
+                "height": 1120
+            },
+            "bytes": 2044892
+        },
+        {
+            "file": "desktop-30.mp4",
+            "codec": "h264",
+            "rate": 30,
+            "size": {
+                "width": 1812,
+                "height": 1120
+            },
+            "bytes": 3342521
+        },
+        {
+            "file": "desktop-poster.webp",
+            "bytes": 112996
+        },
+        {
+            "file": "phone.webm",
+            "codec": "av1",
+            "rate": 60,
+            "size": {
+                "width": 1206,
+                "height": 2622
+            },
+            "bytes": 4986139
+        },
+        {
+            "file": "phone.mp4",
+            "codec": "h264",
+            "rate": 60,
+            "size": {
+                "width": 1206,
+                "height": 2622
+            },
+            "bytes": 7342738
+        },
+        {
+            "file": "phone-30.webm",
+            "codec": "av1",
+            "rate": 30,
+            "size": {
+                "width": 964,
+                "height": 2098
+            },
+            "bytes": 2372987
+        },
+        {
+            "file": "phone-30.mp4",
+            "codec": "h264",
+            "rate": 30,
+            "size": {
+                "width": 964,
+                "height": 2098
+            },
+            "bytes": 4174951
+        },
+        {
+            "file": "phone-poster.webp",
+            "bytes": 107798
+        }
+    ]
+}

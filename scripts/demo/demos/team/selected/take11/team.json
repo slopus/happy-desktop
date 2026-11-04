@@ -1,0 +1,219 @@
+{
+    "desktop": "/Users/kirilldubovitskiy/team-demo-takes/take11/desktop2/team.mp4",
+    "phone": "/Users/kirilldubovitskiy/team-demo-takes/take11/desktop2/phone-screen.mp4",
+    "cues": "/Users/kirilldubovitskiy/team-demo-takes/take11/desktop2/cues.json",
+    "stages": [
+        {
+            "seconds": 9.516666666666667,
+            "state": "forward"
+        },
+        {
+            "seconds": 13.384478271484374,
+            "state": "tucked"
+        },
+        {
+            "seconds": 35.483333333333334,
+            "state": "forward"
+        },
+        {
+            "seconds": 51.4,
+            "state": "tucked"
+        }
+    ],
+    "frames": 3120,
+    "seconds": 52,
+    "bytes": 5909999,
+    "freezes": [
+        {
+            "from": 343,
+            "to": 347
+        },
+        {
+            "from": 629,
+            "to": 637
+        },
+        {
+            "from": 750,
+            "to": 764
+        },
+        {
+            "from": 935,
+            "to": 950
+        },
+        {
+            "from": 958,
+            "to": 963
+        },
+        {
+            "from": 1066,
+            "to": 1070
+        },
+        {
+            "from": 1571,
+            "to": 1576
+        },
+        {
+            "from": 1577,
+            "to": 1584
+        },
+        {
+            "from": 1715,
+            "to": 1730
+        },
+        {
+            "from": 1804,
+            "to": 1819
+        },
+        {
+            "from": 2005,
+            "to": 2019
+        },
+        {
+            "from": 2160,
+            "to": 2174
+        },
+        {
+            "from": 2188,
+            "to": 2194
+        },
+        {
+            "from": 2195,
+            "to": 2203
+        },
+        {
+            "from": 2805,
+            "to": 2818
+        },
+        {
+            "from": 3134,
+            "to": 3148
+        },
+        {
+            "from": 3238,
+            "to": 3252
+        }
+    ],
+    "edits": {
+        "speedUps": [
+            {
+                "from": "phone-typing",
+                "to": "phone-sent",
+                "rate": 2
+            }
+        ],
+        "freezesCut": {
+            "count": 17,
+            "frames": 175
+        },
+        "freezesHeld": [],
+        "phoneHolds": [],
+        "loopSeconds": 0.6,
+        "staging": [
+            "Steve's typing: his phone's UI-test driver types his reply a word at a time (the keyboard still presses each key), and the cut plays it at 2× on both screens.",
+            "Waveform bars' worktree: the desktop asks Happy Core to watch a new worktree's Git state while it is still initializing, Happy Agent v0.4.111 refuses that whole request, and the desktop asks again only on its two-minute renewal. Once the worktree is ready, the director sends the same watch request the renewal sends (every active project and workspace) early, through Kirill's own client. The subtask's ten edits are real Edit calls, and every count on its row is the daemon's own Git scan.",
+            "Kirill's and Steve's feeds, and the new subtask, are marked read as they update, so no unread badge interrupts the take."
+        ]
+    },
+    "cutCues": [
+        {
+            "name": "open",
+            "seconds": 0
+        },
+        {
+            "name": "model-scan",
+            "seconds": 1.8
+        },
+        {
+            "name": "model-chosen",
+            "seconds": 4.216666666666667
+        },
+        {
+            "name": "typing-started",
+            "seconds": 5.316666666666666
+        },
+        {
+            "name": "phone-enter",
+            "seconds": 9.45
+        },
+        {
+            "name": "sent",
+            "seconds": 10.416666666666666
+        },
+        {
+            "name": "task-created",
+            "seconds": 10.416666666666666,
+            "rect": {
+                "x": 62,
+                "y": 390,
+                "width": 276,
+                "height": 32
+            }
+        },
+        {
+            "name": "phone-task",
+            "seconds": 11.583333333333334
+        },
+        {
+            "name": "working",
+            "seconds": 12.266666666666667
+        },
+        {
+            "name": "phone-tuck",
+            "seconds": 12.95
+        },
+        {
+            "name": "subtask",
+            "seconds": 16.433333333333334
+        },
+        {
+            "name": "preview",
+            "seconds": 30.933333333333334
+        },
+        {
+            "name": "phone-forward",
+            "seconds": 33.71666666666667
+        },
+        {
+            "name": "phone-open",
+            "seconds": 34.916666666666664
+        },
+        {
+            "name": "phone-typing",
+            "seconds": 41.68333333333333
+        },
+        {
+            "name": "steve-feedback",
+            "seconds": 43.28333333333333,
+            "rect": {
+                "x": 374,
+                "y": 403,
+                "width": 282.609375,
+                "height": 24
+            }
+        },
+        {
+            "name": "phone-sent",
+            "seconds": 43.416666666666664
+        },
+        {
+            "name": "phone-home",
+            "seconds": 46.61666666666667
+        },
+        {
+            "name": "phone-tuck",
+            "seconds": 47.21666666666667
+        },
+        {
+            "name": "five-bars",
+            "seconds": 48.05
+        },
+        {
+            "name": "outro",
+            "seconds": 49.15
+        },
+        {
+            "name": "settled",
+            "seconds": 51.333333333333336
+        }
+    ]
+}
