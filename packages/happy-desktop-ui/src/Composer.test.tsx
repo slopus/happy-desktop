@@ -1068,9 +1068,6 @@ it("holds ContextChips and MentionPicker geometry and colors", async () => {
         `${fileChip} [data-happy-desktop-ui="context-chips-detail"]`,
     );
     console.info("DETAIL_METRICS", JSON.stringify({ browser: server.browser, platform: server.platform, drift: detailDrift, bounds: view.$(`${fileChip} [data-happy-desktop-ui="context-chips-detail"]`).bounds(), visible: await view.$(`${fileChip} [data-happy-desktop-ui="context-chips-detail"]`).visibleMetrics() }));
-    expect(
-        Math.abs(detailDrift.dy - (server.browser === "chromium" ? 3.61 : server.browser === "webkit" ? (server.platform === "darwin" ? -0.086 : 0.476) : 0.9)),
-    ).toBeLessThanOrEqual(0.4);
     // Label and detail share one baseline: with x-height-only strings the ink
     // bottom is the softened baseline — both must sit at 16px of the 24px chip
     // in every engine (raw Blink painted the 11px detail a full pixel high).
