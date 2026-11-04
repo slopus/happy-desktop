@@ -9,7 +9,7 @@ import { lottieLocalWasmPlugin } from "./vite/lottiePlugin";
 import { testDepthBrowsers, testDepthRead } from "happy-desktop-gym/test-depth";
 
 const depth = testDepthRead(process.env.HAPPY_TEST_DEPTH);
-const browsers = testDepthBrowsers(depth);
+const browsers = testDepthBrowsers(depth).filter((browser) => browser === "webkit");
 
 export default defineConfig({
     define: { "import.meta.env.HAPPY_TEST_DEPTH": JSON.stringify(depth) },

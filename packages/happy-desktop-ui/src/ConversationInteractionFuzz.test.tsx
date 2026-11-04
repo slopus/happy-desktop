@@ -40,10 +40,17 @@ import {
  * DOM reads below are the oracle, not production scroll-path instrumentation.
  */
 const override = import.meta.env.VITE_CHAT_FUZZ_SEED;
+const batchStart = import.meta.env.VITE_CHAT_FUZZ_START;
 if (override !== undefined && (!/^\d+$/.test(override) || Number(override) > 0xffffffff))
     throw new Error("VITE_CHAT_FUZZ_SEED must be an unsigned 32-bit integer");
 const cases =
-    override === undefined
+    batchStart !== undefined
+        ? Array.from({ length: 10 }, (_, index) => ({
+              seed: Number(batchStart) + index,
+              name: "generated replay",
+              short: false,
+          }))
+        : override === undefined
         ? fuzzCases(testDepth)
         : [{ seed: Number(override), name: "replay", short: false }];
 const frame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));

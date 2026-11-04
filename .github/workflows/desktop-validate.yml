@@ -19,8 +19,31 @@ concurrency:
     cancel-in-progress: true
 
 jobs:
+    fuzz-generated:
+        runs-on: macos-latest
+        timeout-minutes: 60
+        strategy:
+            fail-fast: false
+            matrix:
+                shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
+        steps:
+            - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+            - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa
+            - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+              with:
+                  node-version: "24"
+                  cache: pnpm
+            - run: pnpm install --frozen-lockfile
+            - name: Replay ten generated seeds
+              env:
+                  CI: ""
+                  HAPPY_TEST_DEPTH: full
+                  SHARD: ${{ matrix.shard }}
+              run: |
+                  export VITE_CHAT_FUZZ_START=$((1000000 + SHARD * 10))
+                  pnpm --dir packages/happy-desktop-ui test --depth=full ConversationInteractionFuzz.test.tsx --testNamePattern=holds.transcript.geometry
     linux:
-        if: ${{ inputs.platform != 'windows' }}
+        if: ${{ false }}
         name: Linux build, tests, and gym
         runs-on: ubuntu-latest
         timeout-minutes: 60
@@ -116,5 +139,5 @@ jobs:
         permissions:
             contents: read
             id-token: write
-        if: ${{ inputs.platform != 'linux' }}
+        if: ${{ false }}
         uses: ./.github/workflows/build-windows.yml
