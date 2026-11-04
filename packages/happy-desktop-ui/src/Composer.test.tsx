@@ -1098,6 +1098,7 @@ it("holds ContextChips and MentionPicker geometry and colors", async () => {
         '[data-testid="chips"]',
         '[data-testid="chips"] [data-happy-desktop-ui="context-chips-label"]',
     );
+    console.info("CHIP_LABEL_DRIFT", server.browser, server.platform, labelDrift.dy);
     expect(Math.abs(labelDrift.dy)).toBeLessThanOrEqual(0.4);
     // Removal: 14px hit area, hidden when readOnly, reports the item id.
     const removeButtons = Array.from(
