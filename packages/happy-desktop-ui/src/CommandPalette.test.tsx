@@ -769,7 +769,9 @@ it("draws command rows as one compact 40px line — title, then its muted second
     const title = part("task", "title");
     const meta = part("task", "meta");
     expect(Math.abs(meta.bounds().y - title.bounds().y)).toBeLessThan(1);
-    expect(meta.bounds().x - (title.bounds().x + title.bounds().width)).toBe(8);
+    // DOM positions are fractional doubles; subtracting them can leave a
+    // floating-point remainder even when the layout gap is exactly 8px.
+    expect(meta.bounds().x - (title.bounds().x + title.bounds().width)).toBeCloseTo(8, 10);
     expect(meta.element.textContent).toBe("Task");
     expect(title.computedStyles(["font-size", "font-weight"])).toEqual({
         "font-size": "14px",
