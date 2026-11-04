@@ -73,6 +73,97 @@
 }
 
 /*
+ * The compositor sweep. Moving `background-position` repaints and rasterises
+ * the text on every frame; this draws the same pixels with one transform.
+ *
+ * The ramp becomes a box of its own, three run widths wide, that slides
+ * exactly as the background would. The run masks itself, and everything in
+ * it, to its own glyphs with `mask-clip: text`, so the sliding ramp shows only
+ * through the letters, at their own antialiased coverage, as the clipped
+ * background did. The glyphs and the mask are rasterised once and never move;
+ * only the ramp's layer does, and the compositor moves it.
+ *
+ * Only a single line of plain text takes this path. A wrapping inline run
+ * keeps the painted gradient, since its background is sliced across line
+ * fragments, which one box cannot follow; so does anything that is not text,
+ * whose ink may reach the edges of its box.
+ */
+.happy-shimmer-text__ramp {
+    display: none;
+}
+
+@supports (mask-clip: text) {
+    .happy-shimmer-text[data-layered] {
+        position: relative;
+        background-image: none;
+        animation-name: none;
+        mask-image: linear-gradient(black, black);
+        mask-clip: text;
+    }
+
+    .happy-shimmer-text[data-layered] > .happy-shimmer-text__ramp {
+        position: absolute;
+        /*
+         * Half a pixel short of the run's top and bottom. A run that sits on a
+         * fractional pixel has a partly covered first or last row, and the
+         * glyph mask is cut at the run's rounded edge, so that row would show
+         * the ramp unmasked as a faint line. No glyph reaches into it at an
+         * ordinary line height.
+         */
+        inset: 0.5px 0;
+        display: block;
+        /* The ramp overhangs the run by two widths; it must not widen a scroll
+           container, and nothing outside the run was ever painted. */
+        overflow: clip;
+        pointer-events: none;
+    }
+
+    .happy-shimmer-text__ramp::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        /* A pixel of resting colour past each end, so neither end of the ramp
+           ever stops on a glyph that sits on a fractional pixel: the ramp
+           repeats under its clear borders, and both its ends are at rest. */
+        left: -1px;
+        box-sizing: content-box;
+        width: 300%;
+        border-inline: 1px solid transparent;
+        background-image: linear-gradient(
+            90deg,
+            var(--happy-shimmer-rest) 0%,
+            var(--happy-shimmer-rest) 40%,
+            var(--happy-shimmer-highlight) 50%,
+            var(--happy-shimmer-rest) 60%,
+            var(--happy-shimmer-rest) 100%
+        );
+        animation-name: happy-shimmer-text-slide;
+        animation-duration: var(--happy-shimmer-duration);
+        animation-timing-function: linear;
+        animation-iteration-count: infinite;
+        animation-delay: calc(-1 * var(--happy-shimmer-offset) * var(--happy-shimmer-duration));
+    }
+
+    .happy-shimmer-text[data-paused] > .happy-shimmer-text__ramp::before {
+        animation-play-state: paused;
+    }
+}
+
+/* `background-position` 100% to 0% across a ramp three runs wide is two run
+   widths of travel: two thirds of the ramp's own width, less the two thirds
+   of its two end pixels that the percentage counts. */
+@keyframes happy-shimmer-text-slide {
+    from {
+        transform: translateX(calc(-200% / 3 + 4px / 3));
+    }
+
+    to {
+        transform: translateX(0);
+    }
+}
+
+/*
  * An inline run breaks wherever the words around it would. Its background is
  * sliced across the line fragments as if they were laid end to end, so the
  * ramp — and the band in it — still spans the whole run once rather than
@@ -162,5 +253,13 @@
            had if the shimmer had never been swapped in. */
         -webkit-text-fill-color: currentColor;
         animation: none;
+    }
+
+    .happy-shimmer-text[data-layered] {
+        mask-image: none;
+    }
+
+    .happy-shimmer-text[data-layered] > .happy-shimmer-text__ramp {
+        display: none;
     }
 }

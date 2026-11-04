@@ -69,6 +69,11 @@ export type ShimmerTextProps = {
  * nothing else, and a reader who has asked for reduced motion gets the resting
  * colour with no sweep at all. Props only, desktop-only: no timers, no store,
  * no elapsed time.
+ *
+ * A single-line run of text sweeps on the compositor: the ramp is a box of
+ * its own that slides behind the run's glyphs, which mask it, so a frame of
+ * the loop repaints and rasterises nothing. A wrapping inline run, or one that
+ * is not plain text, such as an icon, keeps the painted gradient.
  */
 export function ShimmerText(props: ShimmerTextProps) {
     const [local] = partitionComponentProps(props, [
@@ -90,11 +95,14 @@ export function ShimmerText(props: ShimmerTextProps) {
         const phase = local.phase ?? 0;
         return ((phase % 1) + 1) % 1;
     };
+    const layered = () =>
+        !local.inline && (typeof local.children === "string" || typeof local.children === "number");
     return (
         <span
             className={["happy-shimmer-text", local.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui={local["data-happy-desktop-ui"] ?? "shimmer-text"}
             data-inline={local.inline ? "" : undefined}
+            data-layered={layered() ? "" : undefined}
             data-paused={paused() ? "" : undefined}
             data-sweep={local.sweep ?? "lift"}
             data-testid={local["data-testid"]}
@@ -110,6 +118,7 @@ export function ShimmerText(props: ShimmerTextProps) {
             }
         >
             {local.children}
+            {layered() ? <span aria-hidden="true" className="happy-shimmer-text__ramp" /> : null}
         </span>
     );
 }

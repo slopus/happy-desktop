@@ -166,7 +166,16 @@ it("shimmers on Submit without moving the button, choices, or following content"
         await vi.waitFor(() => expect(submit.getAttribute("aria-busy")).toBe("true"));
         const shimmer = root.querySelector<HTMLElement>('[data-happy-desktop-ui="shimmer-text"]')!;
         expect(shimmer.textContent).toBe("Submit");
-        expect(getComputedStyle(shimmer).animationName).toBe("happy-shimmer-text-sweep");
+        // The compositor slide where the engine can mask by glyphs, otherwise the painted sweep.
+        expect(
+            shimmer
+                .getAnimations({ subtree: true })
+                .map((animation) => (animation as CSSAnimation).animationName),
+        ).toEqual([
+            CSS.supports("mask-clip", "text")
+                ? "happy-shimmer-text-slide"
+                : "happy-shimmer-text-sweep",
+        ]);
         expect(getComputedStyle(submit).opacity).toBe("1");
         expect(submit.disabled).toBe(true);
         expect(checkbox.disabled).toBe(true);
@@ -180,7 +189,7 @@ it("shimmers on Submit without moving the button, choices, or following content"
         // Sample the actual sweep at its start, middle, and end. Freezing also
         // makes the stored Retina fixture deterministic in every browser.
         for (const time of [0, 800, 1599]) {
-            for (const animation of shimmer.getAnimations()) {
+            for (const animation of shimmer.getAnimations({ subtree: true })) {
                 animation.pause();
                 animation.currentTime = time;
             }

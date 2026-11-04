@@ -1,7 +1,7 @@
 /*
  * Spinner — CSS reproductions of the cli-spinners braille loaders that still
  * use layout shapes: `dots9`, `dots10`, `dots11`, `dots13`, and `sand`.
- * Production `dots2` is instead drawn by `spinnerBrailleCanvas.ts`, where all
+ * Production `dots2` is instead stamped by `spinnerBraille.ts`, where all
  * eight dots can share one exact device-pixel stamp. The library's six-dot
  * loaders — `dots`, `dots3` through `dots8` — are deliberately not included:
  * they never light dot7 or dot8, so beside these they read as a differently

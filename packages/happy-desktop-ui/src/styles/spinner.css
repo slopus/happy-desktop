@@ -2,15 +2,16 @@
  * Spinner — ASCII terminal loaders redrawn as compact geometric shapes.
  *
  * CSS draws every variant except `braille-2`, whose 2x4 cell is too small for
- * independent antialiased circles: one canvas stamps it onto the final device
- * pixels. All geometry derives from `--happy-spinner-size` (the line height of
- * the box), so a variant keeps its proportions at 12px and at 48px.
+ * independent antialiased circles: script stamps it onto the final device
+ * pixels once, and CSS only fades the stamps. All geometry derives from
+ * `--happy-spinner-size` (the line height of the box), so a variant keeps its
+ * proportions at 12px and at 48px.
  *
  * CSS frame parking: each animated part offsets its `animation-delay` by
  * `--happy-spinner-offset` (frame ÷ frame count, set by the component) plus
  * its own `--happy-spinner-phase`. With `[data-paused]` also freezing
  * `animation-play-state`, a fixture renders any CSS variant on an exact cell.
- * The Braille canvas reads the component's explicit `data-frame` instead.
+ * The Braille stamps read the same `data-frame` and park on it.
  *
  * Declared widths: braille is twice its snapped dot pitch (8px at the 14px and
  * 16px production sizes); blocks are size * 1.125, bounce size * 2.625, bar
@@ -110,8 +111,8 @@
  * Shared outer geometry for every braille-cell variant. Every variant is the
  * same full 2x4 cell — two columns of four dots in one compact box — so the
  * family shares one silhouette even when a spinner never lights its bottom
- * row. CSS lays out every family member except `braille-2`; its canvas uses the
- * same box and resolves the inner grid in physical pixels.
+ * row. CSS lays out every family member except `braille-2`; its stamps use the
+ * same box and resolve the inner grid in physical pixels.
  *
  * Dot diameter and dot pitch are independent: the pitch is the centre-to-centre
  * distance the cell is laid out on, and the column height and column gap are
@@ -159,15 +160,25 @@
     animation-timing-function: linear;
 }
 
-/* `braille-2` alone owns final physical pixels. The backing bitmap is resized
-   to the browser-reported device-pixel content box, so nearest-neighbour is a
-   safeguard rather than an ordinary scale operation. */
-.happy-spinner[data-variant="braille-2"] .happy-spinner__braille-canvas {
+/* `braille-2` alone owns final physical pixels: its stamps are laid out from
+   the browser-reported device-pixel content box. */
+.happy-spinner[data-variant="braille-2"] .happy-spinner__braille-stamps {
+    position: relative;
     display: block;
     flex: none;
     width: 100%;
     height: 100%;
-    image-rendering: pixelated;
+}
+
+/* Each stamp fades on the compositor, run by `spinnerBraille.ts` on its own
+   fixed 800ms loop, so reduced motion leaves it as it is. */
+.happy-spinner[data-variant="braille-2"] .happy-spinner__braille-dot {
+    position: absolute;
+}
+
+.happy-spinner[data-variant="braille-2"] .happy-spinner__braille-run {
+    position: absolute;
+    background: currentcolor;
 }
 
 /* ---- line — |/-\ ------------------------------------------------------ */

@@ -1,5 +1,5 @@
 import { type CSSProperties, type ReactNode } from "react";
-import { brailleSpinnerCanvasAttach } from "./spinnerBrailleCanvas";
+import { brailleSpinnerAttach } from "./spinnerBraille";
 
 export type SpinnerVariant =
     | "braille-2"
@@ -129,11 +129,11 @@ function bracketed(track: ReactNode) {
 function variantParts(variant: SpinnerVariant) {
     if (variant === "braille-2") {
         return (
-            <canvas
+            <span
                 aria-hidden="true"
-                className="happy-spinner__braille-canvas"
-                data-happy-desktop-ui="spinner-braille-canvas"
-                ref={brailleSpinnerCanvasAttach}
+                className="happy-spinner__braille-stamps"
+                data-happy-desktop-ui="spinner-braille-stamps"
+                ref={brailleSpinnerAttach}
             />
         );
     }
@@ -182,7 +182,8 @@ function variantParts(variant: SpinnerVariant) {
  * ▁▃▅▇, [####  ], [ =  ], …, ▮▯, .oO@, ▁▄▆█, ▏▍▊█, ◢◣◤◥, ◰◳◲◱, ▖▘▝▗, ☱☲☴,
  * ▓▒░, ←↖↑↗) redrawn as CSS shapes. The production `braille-2` loop is the
  * exception: its tiny dots are stamped onto the actual device-pixel grid so
- * all eight retain one identical mask through their shared opacity cycle.
+ * all eight retain one identical mask through their shared opacity cycle,
+ * which the compositor runs.
  */
 export function Spinner(props: SpinnerProps) {
     const variant = props.variant ?? "braille-2";
