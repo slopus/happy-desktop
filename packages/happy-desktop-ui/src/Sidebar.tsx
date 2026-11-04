@@ -34,7 +34,7 @@ import { Spinner } from "./Spinner";
 import { Tooltip } from "./Tooltip";
 import { type ImageMark } from "./imageMark";
 import { ScrollArea } from "./Scrollbar";
-import { storyRing } from "./StoriesRow";
+import { StoryRing } from "./StoriesRow";
 import { SidebarSectionContext, SidebarSectionTail } from "./SidebarSectionDetails";
 import { sidebarSectionsReuser } from "./sidebarSectionsReuser";
 /** One control on a row: its glyph, what it does, and when it shows. */
@@ -2169,18 +2169,20 @@ function SidebarRow({
                                     className="happy-sidebar__item-story"
                                     data-happy-desktop-ui="sidebar-item-story"
                                     data-seen={item().story === "seen" ? "" : undefined}
-                                    {...(item().storyRing &&
-                                        storyRing(
-                                            item().storyRing!.key,
-                                            item().story!,
-                                            item().storyRing,
-                                        ))}
+                                    data-story-ring={item().storyRing?.key}
                                     onClick={(event) => {
                                         event.stopPropagation();
                                         props.onStoryOpen?.();
                                     }}
                                     onPointerDown={(event) => event.stopPropagation()}
-                                />
+                                >
+                                    <StoryRing
+                                        {...item().storyRing}
+                                        radius={item().kind === "person" ? 13 : 9}
+                                        size={26}
+                                        state={item().story!}
+                                    />
+                                </span>
                             ) : null}
                         </>
                     ) : item().emoji !== undefined ? (

@@ -1,22 +1,22 @@
-/* A row's live story: the tile's own outline, concentric with its corners; the square over it opens it. */
+/* A row's live story: its ring, concentric with the tile's corners; the square over it opens it. */
 .happy-sidebar__item-story {
     position: absolute;
-    width: 26px;
-    height: 26px;
+    display: flex;
     cursor: pointer;
 }
 
-.happy-sidebar__item-leading:has(> .happy-sidebar__item-story) > .happy-avatar {
-    outline: 1.5px solid var(--radio-active);
-    outline-offset: 1.5px;
+/* One rect per state, dashed into round-capped arcs, so the ends antialias and follow the corners. */
+.happy-story-ring {
+    fill: none;
+    stroke: var(--radio-active);
+    stroke-linecap: round;
+}
+.happy-story-ring > [data-seen] {
+    stroke: var(--text-secondary);
 }
 
-.happy-sidebar__item-leading:has(> [data-seen]) > .happy-avatar {
-    outline-color: var(--text-secondary);
-}
-
-/* The posters with live stories, across the top of the sidebar. Each slot fits a
-   ten-character label; the photo, the size of the rail's tiles, lines up with the sidebar's icons. */
+/* The posters with live stories, across the top of the sidebar. Each slot fits a ten-character
+   label and keeps the ring on whole pixels; the photo lines up with the sidebar's icons. */
 .happy-stories-row {
     display: flex;
     gap: 4px;
@@ -25,53 +25,14 @@
         8px
         calc(
             var(--happy-panel-inset) + var(--happy-sidebar-row-leading, var(--happy-panel-inset)) -
-                (9ch - 36px) / 2
+                5px
         );
-    font: 400 10px / 13px var(--happy-font-ui);
+    font: 400 8px / 10px var(--happy-font-ui);
 }
-.happy-stories-row [data-story] > .happy-avatar {
-    outline: 2px solid var(--radio-active);
-    outline-offset: 2px;
-}
-.happy-stories-row [data-seen] > .happy-avatar {
-    outline-color: var(--text-secondary);
-}
-/* Two or more live stories split the ring Telegram's way, one arc each with a small gap:
-   the first `--story-seen` grey, the rest in the accent. One conic fill, cut by one mask. */
-:is(.happy-stories-row [data-arcs], .happy-sidebar__item-leading:has(> [data-arcs]))
-    > .happy-avatar {
-    outline-color: transparent;
-}
-.happy-stories-row [data-arcs] > .happy-avatar::after,
-.happy-sidebar__item-story[data-arcs] {
-    --arc: calc(1turn / var(--story-total));
-    content: "";
+/* Around the photo, where it would sit on its own, scrolling with its slot. */
+.happy-stories-row .happy-story-ring {
     position: absolute;
-    inset: -4px;
-    padding: 2px;
-    border-radius: var(--happy-radius-pill);
-    background-image: conic-gradient(
-        var(--text-secondary) calc(var(--arc) * var(--story-seen)),
-        var(--radio-active) 0
-    );
-    /* Only the mask's alpha counts: the arcs with their gaps, cut to a band around the photo. */
-    mask:
-        repeating-conic-gradient(
-            from 6deg,
-            black 0 calc(var(--arc) - 12deg),
-            transparent 0 var(--arc)
-        ),
-        linear-gradient(black 0 0) content-box,
-        linear-gradient(black 0 0);
-    mask-composite: intersect, exclude;
-}
-.happy-stories-row [data-arcs] > .happy-avatar[data-type="agent"]::after {
-    border-radius: 13px;
-}
-.happy-sidebar__item-story[data-arcs] {
-    inset: auto;
-    padding: 1.5px;
-    border-radius: 9px;
+    margin: -3px;
 }
 .happy-stories-scroll {
     display: flex;
@@ -80,12 +41,13 @@
 }
 
 .happy-stories-row__item {
+    position: relative;
     display: flex;
     flex: none;
     flex-direction: column;
     align-items: center;
     gap: 5px;
-    width: 9ch;
+    width: 46px;
     padding: 4px 0 0;
     border: 0;
     background: none;

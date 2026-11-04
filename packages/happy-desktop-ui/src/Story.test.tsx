@@ -95,27 +95,22 @@ it("outlines the tile in the accent while unseen and in grey once seen", async (
     const probe = document.createElement("span");
     probe.style.color = accent;
     root.append(probe);
-    const unseenTile = getComputedStyle(tileOf(unseen!));
-    expect(unseenTile.outlineColor).toBe(getComputedStyle(probe).color);
+    const ringOf = (hit: HTMLElement) => getComputedStyle(hit.querySelector("rect")!);
+    expect(ringOf(unseen!).stroke).toBe(getComputedStyle(probe).color);
     probe.remove();
-    expect(unseenTile.outlineStyle).toBe("solid");
-    // 1.5px each, which an engine at 1x may snap to a whole pixel.
-    expect(parseFloat(unseenTile.outlineWidth)).toBeGreaterThanOrEqual(1);
-    expect(parseFloat(unseenTile.outlineOffset)).toBeGreaterThanOrEqual(1);
-    const seenTile = getComputedStyle(tileOf(seen!));
-    expect(seenTile.outlineStyle).toBe("solid");
-    expect(seenTile.outlineColor).not.toBe(unseenTile.outlineColor);
-    // The tile's own rounded square, so the outline follows its corners.
-    expect(unseenTile.borderTopLeftRadius).toBe("6px");
+    expect(ringOf(unseen!).strokeWidth).toBe("1px");
+    expect(ringOf(seen!).stroke).not.toBe(ringOf(unseen!).stroke);
+    // Around the tile's own rounded square, concentric with its corners.
+    expect(getComputedStyle(tileOf(unseen!)).borderTopLeftRadius).toBe("6px");
+    expect(unseen!.querySelector("rect")!.getAttribute("rx")).toBe("8.5");
     // The hit area is a 26px square on the tile's centre.
     const tile = tileOf(unseen!).getBoundingClientRect();
     const hit = unseen!.getBoundingClientRect();
     expect(hit.width).toBeCloseTo(26, 1);
     expect(hit.x + hit.width / 2).toBeCloseTo(tile.x + tile.width / 2, 1);
     expect(hit.y + hit.height / 2).toBeCloseTo(tile.y + tile.height / 2, 1);
-    // A row without a story wears no outline.
-    const plain = root.querySelector('[data-item-id="c"] .happy-avatar')!;
-    expect(getComputedStyle(plain).outlineStyle).toBe("none");
+    // A row without a story wears no ring.
+    expect(root.querySelector('[data-item-id="c"] .happy-story-ring')).toBeNull();
     view.destroy();
 });
 
@@ -1190,7 +1185,7 @@ it("uses your circular avatar with a separate add badge, then opens your live st
         before = main.getBoundingClientRect().toJSON();
     expect(avatar.querySelector("img")!.src).toBe(PIXEL);
     expect(getComputedStyle(avatar).borderRadius).toBe("999px");
-    expect(getComputedStyle(avatar).outlineStyle).toBe("none");
+    expect(main.querySelector(".happy-story-ring")).toBeNull();
     const badge = view.$('[aria-label="Add a story"]').element;
     const avatarBox = avatar.getBoundingClientRect(),
         badgeBox = badge.getBoundingClientRect();
@@ -1211,15 +1206,15 @@ it("uses your circular avatar with a separate add badge, then opens your live st
     expect(
         main.closest(".happy-stories-row__item")!.querySelector(":scope > span")!.textContent,
     ).toBe("Your Story");
-    expect(getComputedStyle(avatar).outlineStyle).toBe("solid");
-    const unseen = getComputedStyle(avatar).outlineColor;
+    const ring = () => getComputedStyle(main.querySelector(".happy-story-ring rect")!).stroke;
+    const unseen = ring();
     await userEvent.click(main);
     expect(open).toHaveBeenCalledWith("me");
     await userEvent.click(badge);
     expect(open).toHaveBeenCalledOnce();
     expect(picker).toHaveBeenCalledTimes(2);
     flushSync(() => phaseSet("seen"));
-    expect(getComputedStyle(avatar).outlineColor).not.toBe(unseen);
+    expect(ring()).not.toBe(unseen);
     expect(main.getBoundingClientRect().toJSON()).toEqual(before);
     picker.mockRestore();
     view.destroy();
@@ -1249,11 +1244,13 @@ it("lays agents out as rounded tiles and people as circles, ringed accent or gre
     const [agent, person] = ui(view.container, "stories-row-item").map((item) =>
         getComputedStyle(item.querySelector(".happy-avatar")!),
     );
+    const [agentRing, personRing] = ui(view.container, "stories-row-item").map((item) =>
+        getComputedStyle(item.querySelector(".happy-story-ring rect")!),
+    );
     // A 36px tile: the agent's corners are rounded, the person's meet in a circle.
     expect(parseFloat(agent!.borderTopLeftRadius)).toBeLessThan(18);
     expect(parseFloat(person!.borderTopLeftRadius)).toBeGreaterThanOrEqual(18);
-    expect(agent!.outlineStyle).toBe("solid");
-    expect(person!.outlineColor).not.toBe(agent!.outlineColor);
+    expect(personRing!.stroke).not.toBe(agentRing!.stroke);
     await userEvent.click(ui(view.container, "stories-row-item")[1]!);
     expect(log).toEqual(["p"]);
     view.destroy();

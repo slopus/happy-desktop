@@ -1,5 +1,5 @@
 import { Avatar } from "./Avatar";
-import { useRef, type CSSProperties } from "react";
+import { useRef } from "react";
 import { Ionicon } from "./vectorIcons/VectorIcon";
 import type { StoryFace } from "./StoryViewer";
 
@@ -17,19 +17,47 @@ export type StoriesRowItem = {
 };
 
 /**
- * A ring's address, which the viewer grows out of and shrinks back to, and its split into an arc
- * per story once there are two: the watched grey, the rest in the accent unless all are grey.
+ * A story ring, `size` square with an outer corner `radius`: one round-capped arc per live story,
+ * clockwise from the top, the watched first in grey and the rest in the accent unless all are grey.
  */
-export function storyRing(
-    key: string,
-    state: "unseen" | "seen",
-    { seen = 0, total = 1 }: { readonly seen?: number; readonly total?: number } = {},
-) {
-    const arcs = { "--story-seen": state === "seen" ? total : seen, "--story-total": total };
-    return {
-        "data-story-ring": key,
-        ...(total > 1 ? { "data-arcs": "", style: arcs as CSSProperties } : {}),
-    };
+export function StoryRing(props: {
+    readonly size: number;
+    readonly radius: number;
+    readonly state: "unseen" | "seen";
+    readonly seen?: number;
+    readonly total?: number;
+}) {
+    const { size, radius, total = 1 } = props;
+    const seen = props.state === "seen" ? total : (props.seen ?? 0);
+    // Arcs per pixel of the 1px stroke; between round caps half a pixel long, a gap of a 21st the side.
+    const unit = total / (4 * (size - 2 * radius) + 2 * Math.PI * (radius - 0.5));
+    const gap = (size / 21 + 1) * unit;
+    const arcs = (from: number, count: number) =>
+        count > 0 && (
+            <rect
+                data-seen={from < seen ? "" : undefined}
+                height={size - 1}
+                pathLength={total}
+                rx={radius - 0.5}
+                strokeDasharray={
+                    total > 1
+                        ? Array.from({ length: count }, (_, at) =>
+                              [1 - gap, gap + (at === count - 1 ? total - count : 0)].join(" "),
+                          ).join(" ")
+                        : undefined
+                }
+                strokeDashoffset={-from - (size / 2 - radius) * unit - gap / 2}
+                width={size - 1}
+                x={0.5}
+                y={0.5}
+            />
+        );
+    return (
+        <svg aria-hidden="true" className="happy-story-ring" height={size} width={size}>
+            {arcs(0, seen)}
+            {arcs(seen, total - seen)}
+        </svg>
+    );
 }
 
 /** StoriesRow — posters with live stories atop the sidebar, ringed accent unseen, grey seen. */
@@ -56,13 +84,14 @@ export function StoriesRow(props: {
                                 aria-label="Your Story"
                                 data-story={own ? "" : undefined}
                                 data-seen={own?.state === "seen" ? "" : undefined}
-                                {...(own && storyRing(own.id, own.state, own))}
+                                data-story-ring={own?.id}
                                 type="button"
                                 onClick={() =>
                                     own ? props.onOpen(own.id) : picker.current?.click()
                                 }
                             >
                                 <Avatar {...props.create.face} size="md" type="human" />
+                                {own ? <StoryRing {...own} radius={21} size={42} /> : null}
                             </button>
                             <button
                                 aria-label="Add a story"
@@ -97,7 +126,7 @@ export function StoriesRow(props: {
                             data-happy-desktop-ui="stories-row-item"
                             data-story=""
                             data-seen={item.state === "seen" ? "" : undefined}
-                            {...storyRing(item.id, item.state, item)}
+                            data-story-ring={item.id}
                             key={item.id}
                             onClick={() => props.onOpen(item.id)}
                             title={item.name}
@@ -105,6 +134,11 @@ export function StoriesRow(props: {
                             type="button"
                         >
                             <Avatar {...item.face} size="md" />
+                            <StoryRing
+                                {...item}
+                                radius={item.face.type === "agent" ? 12 : 21}
+                                size={42}
+                            />
                             <span>{item.shortName ?? item.name}</span>
                         </button>
                     ))}
