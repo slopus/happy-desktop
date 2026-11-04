@@ -4155,7 +4155,12 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
             teammates.flatMap((teammate) =>
                 teammate.id === currentUserId
                     ? []
-                    : [{ ...teammate, name: users.profiles.get(teammate.id)?.name ?? teammate.name }],
+                    : [
+                          {
+                              ...teammate,
+                              name: users.profiles.get(teammate.id)?.name ?? teammate.name,
+                          },
+                      ],
             ),
         config: () => (configReloads === 0 ? config : undefined),
         sync: sync.source,

@@ -763,10 +763,7 @@ const taskSessionCache = new WeakMap<
  * mark when it has one, since the agent's mark is shared by everyone in the
  * task. The same pair always gives back the same session.
  */
-function taskSessionUnread(
-    session: GroupSession,
-    unread: TaskMembership["unread"],
-): GroupSession {
+function taskSessionUnread(session: GroupSession, unread: TaskMembership["unread"]): GroupSession {
     if (unread == null) return session;
     const cached = taskSessionCache.get(session);
     if (cached?.unread === unread) return cached.session;

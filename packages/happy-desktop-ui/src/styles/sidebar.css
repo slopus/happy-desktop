@@ -1589,7 +1589,9 @@
     white-space: nowrap;
 }
 
-.happy-sidebar__item:hover .happy-sidebar__item-trailing[data-swaps] .happy-sidebar__item-unread-count,
+.happy-sidebar__item:hover
+    .happy-sidebar__item-trailing[data-swaps]
+    .happy-sidebar__item-unread-count,
 .happy-sidebar__item-trailing[data-swaps]:focus-within .happy-sidebar__item-unread-count {
     visibility: hidden;
 }

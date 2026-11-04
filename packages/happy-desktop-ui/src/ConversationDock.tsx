@@ -129,6 +129,9 @@ function mentionSubjectOf(subject: ComposerMentionSubject): {
                 icon: surfaceTypeIcon(subject.type),
                 description: surfaceTypeLabel(subject.type),
             };
+        case "person":
+            // A person wears their initials, as they do everywhere else.
+            return { description: "Teammate" };
         case "agent":
             switch (subject.owner) {
                 case "bot":
@@ -138,9 +141,6 @@ function mentionSubjectOf(subject: ComposerMentionSubject): {
                 case "conversation":
                     return { icon: "chat" };
             }
-        case "person":
-            // A person wears their initials, as they do everywhere else.
-            return { description: "Teammate" };
     }
 }
 
