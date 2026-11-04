@@ -11,13 +11,12 @@ const execFile = promisify(execFileCallback);
 
 /**
  * The whole app, as one window: the server rail, the sidebar, and the new
- * task. A small window, so the cut, which draws it at the same size as a
- * larger one, shows less of the app and every part of it larger. Recorded at
- * HAPPY_DEMO_DEVICE_SCALE=2.
+ * task, in a golden rectangle 700 px tall, so the ending keeps the first
+ * preview in view above Steve's note. Recorded at HAPPY_DEMO_DEVICE_SCALE=2.
  */
-const viewport = { width: 840, height: 588 };
-/** Kirill keeps his sidebar a tenth narrower than the app's 288 px, dragged there with its handle. */
-const sidebarWidth = 259;
+const viewport = { width: 1133, height: 700 };
+/** Kirill's sidebar at the app's own width; a window that kept another is dragged back to it. */
+const sidebarWidth = 288;
 
 /** Kirill's computer, opened beside the gym; the window runs on it. */
 let personal;
@@ -398,6 +397,53 @@ function liveTicker() {
 }
 
 /**
+ * Releases the filmed task's subtask's edits one at a time, each once the
+ * subtask is waiting for it, so its row's counts climb while the take runs.
+ */
+function voiceTicker() {
+    let step = 1;
+    let timer;
+    return {
+        start(intervalMs) {
+            timer = setInterval(() => {
+                if (step > world.voiceEdits.length || !world.hasReached(`voice:${step}`)) return;
+                world.release(`voice:${step}`);
+                step += 1;
+            }, intervalMs);
+        },
+        stop() {
+            clearInterval(timer);
+        },
+    };
+}
+
+/**
+ * The new task's subtask row's counts each time they change, on the take's
+ * clock, read off the window.
+ */
+function countsFollow(page, label, seconds) {
+    const seen = [];
+    let timer;
+    return {
+        seen,
+        start() {
+            timer = setInterval(async () => {
+                const stats = await sidebarRow(page, label)
+                    .locator('[data-happy-desktop-ui="sidebar-item-change-stats"]')
+                    .first()
+                    .textContent({ timeout: 100 })
+                    .catch(() => null);
+                if (stats && stats !== seen.at(-1)?.stats)
+                    seen.push({ seconds: Math.round(seconds() * 1000) / 1000, stats });
+            }, 400);
+        },
+        stop() {
+            clearInterval(timer);
+        },
+    };
+}
+
+/**
  * Steve's parts as the take opens: the agent's and the desktop's done, every
  * edit written and their last word said, so they rest idle with their final
  * counts; iOS server codes under way and still working. Team Servers itself
@@ -502,9 +548,11 @@ async function pictureRect(locator) {
  * The take has no feed beat: Kirill watches his own task and Steve opens it
  * from his sidebar, so what it posts to their feeds is read as it lands: the
  * moment each one's own event stream says something is unread, and every
- * tenth of a second besides.
+ * tenth of a second besides. The agents `agentIds` names, the new task's
+ * subtask once it has one, are kept read the same way: its report lands in
+ * the task both are watching.
  */
-function feedKeptRead(clients) {
+function feedKeptRead(clients, agentIds = () => []) {
     let timer;
     const stop = new AbortController();
     const follow = async (client) => {
@@ -528,8 +576,13 @@ function feedKeptRead(clients) {
         start() {
             for (const client of clients) void follow(client);
             timer = setInterval(() => {
-                for (const client of clients)
+                for (const client of clients) {
                     void client.markFeedReadAll({}).catch(() => undefined);
+                    for (const agentId of agentIds())
+                        void client
+                            .markAgentRead(agentId, { mutationId: randomUUID() })
+                            .catch(() => undefined);
+                }
             }, 100);
         },
         stop() {
@@ -537,6 +590,37 @@ function feedKeptRead(clients) {
             stop.abort();
         },
     };
+}
+
+/** The filmed task's subtask, once it exists: its agent and its worktree. */
+async function voiceSubtaskFind(client) {
+    const task = await taskFind(client, world.taskTitle);
+    if (!task) return undefined;
+    const { agent } = await client.getAgent(task.agent.id);
+    const subtask = agent.subtasks?.find((entry) => entry.title === world.voiceSubtask.title);
+    return subtask && { id: subtask.id, workspaceId: subtask.workspaceId };
+}
+
+/**
+ * The desktop asks Happy Core to watch a new worktree's Git state the moment
+ * it is announced, while it is still initializing; Happy Agent v0.4.111
+ * refuses that whole request, and the desktop asks again only on its
+ * two-minute renewal, so the new row would show no counts for the rest of the
+ * take. Once the worktree is ready, the same request the renewal sends, every
+ * active project and workspace, goes to Happy Core early, through Kirill's
+ * own client. Every count after it is the daemon's own scan.
+ */
+async function gitWatchRenew(client) {
+    const { projects, workspaces } = await client.getDesktopBootstrap();
+    const active = (entry) => entry.archivedAt === null && entry.status === "active";
+    const workspaceIds = [
+        ...new Set([
+            ...projects.filter(active).map((project) => project.id),
+            ...workspaces.filter(active).map((workspace) => workspace.id),
+        ]),
+    ];
+    const { snapshots } = await client.watchGit({ workspaceIds });
+    return { workspaces: workspaceIds.length, snapshots: Object.keys(snapshots).length };
 }
 
 const sidebarRow = (page, label) =>
@@ -577,6 +661,8 @@ export default {
             await memberPrepare(steve, world.team.members[1]),
         ];
         filmed.profiles = { kirill: kirillProfile, steve: steveProfile };
+        // The agent mentions Steve by his own user link.
+        world.steveUserIdSet(steveProfile.userId);
         await nodeAvatarSet(kirill, world.team.picture, world.seedMode);
         await projectPicturesSet(kirill, gym.world.projectIds);
         await botsPrepare(kirill);
@@ -630,22 +716,25 @@ export default {
             await sidebarRow(page, subtask.title)
                 .filter({ hasText: /\+\d/u })
                 .waitFor({ timeout: 60000 });
-        // Kirill's sidebar, a tenth narrower: dragged by its own handle.
+        // Kirill's sidebar at the app's width: a window an earlier take left
+        // narrower is dragged back by its own handle.
         const handle = page
             .locator('[data-happy-desktop-ui="app-shell-resize-handle"][data-edge="right"]:visible')
             .first();
         const handleBox = await handle.boundingBox();
         const handleFrom = Number(await handle.getAttribute("aria-valuenow"));
-        const grip = {
-            x: handleBox.x + handleBox.width / 2,
-            y: handleBox.y + handleBox.height / 2,
-        };
-        await page.mouse.move(grip.x, grip.y);
-        await page.mouse.down();
-        await page.mouse.move(grip.x - (handleFrom - sidebarWidth) / 2, grip.y, { steps: 4 });
-        await page.mouse.move(grip.x - (handleFrom - sidebarWidth), grip.y, { steps: 4 });
-        await page.mouse.up();
-        await page.mouse.move(viewport.width / 2, viewport.height / 2);
+        if (handleFrom !== sidebarWidth) {
+            const grip = {
+                x: handleBox.x + handleBox.width / 2,
+                y: handleBox.y + handleBox.height / 2,
+            };
+            await page.mouse.move(grip.x, grip.y);
+            await page.mouse.down();
+            await page.mouse.move(grip.x - (handleFrom - sidebarWidth) / 2, grip.y, { steps: 4 });
+            await page.mouse.move(grip.x - (handleFrom - sidebarWidth), grip.y, { steps: 4 });
+            await page.mouse.up();
+            await page.mouse.move(viewport.width / 2, viewport.height / 2);
+        }
         if (Number(await handle.getAttribute("aria-valuenow")) !== sidebarWidth)
             throw new Error(
                 `The sidebar is ${await handle.getAttribute("aria-valuenow")} px wide, not ${sidebarWidth}.`,
@@ -725,7 +814,7 @@ export default {
         if (phone) {
             await phone.start({
                 TEAM_TASK: world.taskTitle,
-                TEAM_QUESTION: "how does it look?",
+                TEAM_QUESTION: world.previewQuestion,
                 TEAM_ANSWER: world.steveFeedback,
                 // The driver idles after sending until the desktop is done.
                 TEAM_TAIL_SECONDS: "120",
@@ -734,10 +823,17 @@ export default {
         }
         // Steve's counts climb for the whole take.
         ticker.start(3000);
-        const feed = feedKeptRead([kirill, steve]);
+        const voice = voiceTicker();
+        const keptRead = [];
+        const feed = feedKeptRead([kirill, steve], () => keptRead);
         feed.start();
         const takeSeconds = (epochMs) =>
             (epochMs - (performance.timeOrigin + demo.timing.startedAt)) / 1000;
+        const counts = countsFollow(
+            page,
+            world.voiceSubtask.title,
+            () => demo.timing.frames / demo.timing.fps,
+        );
 
         // ---- On camera: the new task, with the model list open. The hand
         // glides into the list at its foot and up through every provider's
@@ -788,8 +884,45 @@ export default {
             await demo.hold(1500);
             await beats.beat("read-voice");
             world.release("read-voice");
+            // The code goes to a subtask in a worktree of happy, whose row
+            // counts its lines as each edit lands.
+            await until(demo, () => world.hasReached("subtask"), "the subtask", 20000);
+            await demo.hold(900);
+            await beats.beat("subtask");
+            world.release("subtask");
+            cue("subtask", demo, phone);
+            counts.start();
+            // Its worktree is ready once it has read both files: Happy Core
+            // is asked to watch it, and the edits start.
+            await until(demo, () => world.hasReached("voice:1"), "the subtask's reads", 30000, 50);
+            const voiceSubtask = await until(
+                demo,
+                () => voiceSubtaskFind(kirill),
+                "the subtask's worktree",
+                10000,
+                100,
+            );
+            keptRead.push(voiceSubtask.id);
+            filmed.gitWatchRenewed = {
+                seconds: demo.timing.frames / demo.timing.fps,
+                workspaceId: voiceSubtask.workspaceId,
+                ...(await until(
+                    demo,
+                    () => gitWatchRenew(kirill),
+                    "Happy Core's Git watch",
+                    10000,
+                    200,
+                )),
+            };
+            await demo.hold(700);
+            voice.start(850);
+            // Its last edit in, it reports; the task then builds the preview.
+            await until(demo, () => world.hasReached("voice:done"), "the subtask's code", 30000);
+            await demo.hold(600);
+            await beats.beat("voice-done");
+            world.release("voice:done");
             await until(demo, () => world.hasReached("artifact"), "the preview", 20000);
-            await demo.hold(1300);
+            await demo.hold(900);
             await beats.beat("artifact");
             world.release("artifact");
             await until(demo, () => world.hasReached("reply"), "the preview's page", 30000);
@@ -799,16 +932,31 @@ export default {
             world.release("reply");
             await until(
                 demo,
-                () => page.getByText(world.previewReply.slice(0, 40)).first().isVisible(),
+                () => page.getByText(world.previewReplyLead.slice(0, 40)).first().isVisible(),
                 "the reply",
                 20000,
             );
-            // The first version is ready: only now does Steve open the task
+            filmed.mention = await page
+                .getByText(world.previewReplyLead.slice(0, 40))
+                .first()
+                .evaluate((element) => {
+                    const block = element.closest("p, li, div") ?? element;
+                    const bold = [...block.querySelectorAll("strong, b")].map(
+                        (node) => node.textContent,
+                    );
+                    return { text: block.textContent, bold };
+                })
+                .catch((error) => String(error));
+            // The first version is ready and the agent asks Steve by name:
+            // his phone comes forward, and only then does he open the task
             // from his sidebar, check the preview and answer there. Without
             // the phone his words go through his own client: in the desktop's
             // pass so they land when they landed in the phone's, in a
             // rehearsal about when he would have typed them.
-            await demo.hold(500);
+            await demo.hold(300);
+            await beats.beat("phone-forward");
+            cue("phone-forward", demo, phone);
+            await demo.hold(900);
             await beats.beat("steve-open");
             if (phone) await phone.signal("open");
             if (!phone) {
@@ -828,8 +976,8 @@ export default {
             // The desktop's pass sends his words this long before they should
             // land, about what the trip from his client to the window takes.
             if (phone) beats.record("steve-send", cues.at(-1).seconds - steveTripSeconds);
-            // Steve goes back to his sidebar, and his phone steps aside while
-            // the agent takes his note.
+            // Steve goes back to his sidebar, and his phone tucks aside again
+            // while the agent takes his note.
             if (phone) {
                 await until(
                     demo,
@@ -840,8 +988,8 @@ export default {
                 );
                 await demo.hold(500);
             } else if (!schedule) await demo.hold(1500);
-            await beats.beat("phone-exit");
-            cue("phone-exit", demo, phone);
+            await beats.beat("phone-back");
+            cue("phone-tuck", demo, phone);
             await demo.hold(300);
             // The agent takes Steve's note: it rewrites the page with five
             // bars, shows it open again under his note, and says so.
@@ -872,7 +1020,8 @@ export default {
             filmed.fiveBarsInView = await previewInView(page);
             filmed.pictures.closing = await pictures();
             // The result rests; the cut's loop dissolves from here into its
-            // first frame, its narration already gone.
+            // first frame, its narration already gone and Steve's phone,
+            // still tucked, fading out with it.
             await demo.hold(2400);
             cue("settled", demo, phone);
             await demo.hold(650);
@@ -883,8 +1032,21 @@ export default {
             throw error;
         } finally {
             ticker.stop();
+            voice.stop();
+            counts.stop();
             feed.stop();
             await demo.finish();
+        }
+        filmed.voiceCounts = counts.seen;
+        // The subtask's worktree as Happy Core counts it, once the take is over.
+        const voiceSubtask = await voiceSubtaskFind(kirill).catch(() => undefined);
+        if (voiceSubtask?.workspaceId) {
+            const { git } = await kirill.getWorkspaceGit(voiceSubtask.workspaceId);
+            filmed.voiceWorktree = {
+                workspaceId: voiceSubtask.workspaceId,
+                insertions: git?.insertions,
+                deletions: git?.deletions,
+            };
         }
         // The sidebar at the take's highest counts: every name still whole.
         await page.waitForTimeout(1000);
@@ -910,6 +1072,10 @@ export default {
                 ["home", "phone-home"],
             ])
                 if (at(mark) !== undefined) phoneCues.push({ name, seconds: at(mark) });
+            // Once the task has arrived in Steve's sidebar, long enough to be
+            // seen there, his phone tucks aside while the agent works.
+            if (at("task-arrived") !== undefined)
+                phoneCues.push({ name: "phone-tuck", seconds: at("task-arrived") + 1.6 });
             // The phone's movie, on the desktop's clock, and how smoothly the
             // Simulator delivered it while the phone was moving.
             const { report } = await phone.export({

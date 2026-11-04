@@ -23,12 +23,15 @@ Owner: Kirill. Script: [SCRIPT.md](./SCRIPT.md).
 3. **Nothing exists until Send.** On Send the task is created, and at that
    moment it is in Steve's sidebar on his phone, with Kirill's face. Nobody
    forwards it. Steve's sidebar is his own, not a mirror of Kirill's.
-4. **The team answers.** Steve leaves the task alone until its first version
-   is ready; then he opens it on his phone, checks the preview, gives feedback
-   in the same task, and goes back to his sidebar. The phone steps aside while
-   Opus acts on it: the preview goes to five bars and it says _"Five bars it
-   is."_ The result rests, and the cut eases back into its first frame,
-   because the homepage loops it.
+4. **The agent does real work.** Opus hands the code to a subtask in a
+   worktree of the repository, and the subtask's row counts the lines as its
+   edits land, while Steve's phone waits, tucked aside.
+5. **The team answers.** When its first version is ready, the agent asks
+   Steve by name. His phone comes forward; he opens the task, checks the
+   preview, gives feedback in the same task, and goes back to his sidebar. The
+   phone tucks aside again while Opus acts on it: the preview goes to five
+   bars and it says _"Five bars it is."_ The result rests, and the cut eases
+   back into its first frame, because the homepage loops it.
 
 ## Rules carried over from earlier takes
 
@@ -42,8 +45,10 @@ Owner: Kirill. Script: [SCRIPT.md](./SCRIPT.md).
   in the iOS Simulator on Kirill's Mac mini, inside the composition's iPhone
   frame. The desktop is recorded on that Mac too, at 60 fps. The phone is
   first-class but not the flagship surface: it rises beside the desktop as
-  the task reaches Steve, and the window makes room for it. It is labelled as
-  a teammate's phone, without a name.
+  the task reaches Steve, the window stepping back to make room; it tucks
+  aside, smaller and partly past the frame's edge, while the agent works, and
+  comes forward again while Steve answers. It is labelled as a teammate's
+  phone, without a name.
 - No black intro, no full-screen title cards, no stickers, no confetti, no
   spoken narration. Written narration, plain sentences saying what happens,
   sits as subtitles in the band below the window.
@@ -57,6 +62,7 @@ Owner: Kirill. Script: [SCRIPT.md](./SCRIPT.md).
 ## Out of scope
 
 - Stem cells, Focus, the Spaces sidebar, chat onboarding: removed from the app.
-- The new task does not fan out; the several repositories are Steve's task.
+- The new task does not fan out across repositories; it has one subtask, in
+  happy, for its code. The several repositories are Steve's task.
 - Shipping, CI, archiving, loop-ins: the take ends on the five-bar preview.
 - More than two servers, other people, generated or placeholder faces.

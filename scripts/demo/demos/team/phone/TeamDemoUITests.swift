@@ -94,8 +94,11 @@ final class TeamDemoUITests: XCTestCase {
         if app.buttons["Continue"].waitForExistence(timeout: 1) { app.buttons["Continue"].tap(); pause(0.5) }
         pause(0.8)
         mark("typing")
-        for character in answer {
-            composer.typeText(String(character))
+        // A word at a time: the keyboard still presses every key, without a
+        // round trip to the runner between letters.
+        let words = answer.split(separator: " ").map(String.init)
+        for (index, word) in words.enumerated() {
+            composer.typeText(index < words.count - 1 ? word + " " : word)
         }
         mark("typed")
         pause(0.6)

@@ -375,6 +375,108 @@ function phonePose(composition, focus, seconds, canvas) {
     return { scale, left: phone.left + shift * progress, bottom: phone.bottom };
 }
 
+/** `name` or `name#2` for a cue's second occurrence, in seconds. */
+function cueSeconds(cues, reference) {
+    const [name, occurrence = "1"] = reference.split("#");
+    const found = cues.filter((cue) => cue.name === name)[Number(occurrence) - 1];
+    if (!found) throw new Error(`The cues have no "${reference}" cue.`);
+    return found.seconds;
+}
+
+/**
+ * A composition that names its phone's states (`phoneStates`, each from a
+ * cue): the phone is away, below the frame, until the first, and each later
+ * state begins at its cue.
+ */
+function stagesRead(composition, cues) {
+    const stages = composition.phoneStates.map((entry) => ({
+        seconds: cueSeconds(cues, entry.from),
+        state: entry.state,
+    }));
+    stages.forEach((stage, index) => {
+        if (!["forward", "tucked"].includes(stage.state))
+            throw new Error(`The phone has no "${stage.state}" state.`);
+        if (index > 0 && !(stage.seconds > stages[index - 1].seconds))
+            throw new Error("The phone's states must follow one another.");
+    });
+    return stages;
+}
+
+/**
+ * The phone and the window in one state. Forward, the phone stands whole at
+ * its own pose with its label, and the window steps back to
+ * `desktop.forward`. Tucked, the phone is at `phone.tucked`, without its
+ * label, beside the window at rest. Away, the phone waits below the frame
+ * under its forward pose, and the window is at rest.
+ */
+function stagePoseOf(composition, state, canvas) {
+    const { output, desktop, phone } = composition;
+    const rest = { x: desktop.x, y: desktop.y, width: desktop.width };
+    if (state === "forward")
+        return {
+            phone: { width: phone.width, left: phone.left, bottom: phone.bottom, label: 1 },
+            desktop: { ...rest, ...desktop.forward },
+        };
+    if (state === "tucked") return { phone: { ...phone.tucked, label: 0 }, desktop: rest };
+    const height = (phone.width * canvas.height) / canvas.width;
+    return {
+        phone: {
+            width: phone.width,
+            left: phone.left,
+            bottom: output.height + height + 40,
+            label: 1,
+        },
+        desktop: rest,
+    };
+}
+
+const poseMix = (from, to, t) =>
+    Object.fromEntries(Object.keys(to).map((key) => [key, from[key] + (to[key] - from[key]) * t]));
+const stageMix = (from, to, t) => ({
+    phone: poseMix(from.phone, to.phone, t),
+    desktop: poseMix(from.desktop, to.desktop, t),
+});
+
+/**
+ * Where the phone and the window are at one instant of a composition with
+ * named phone states: each move eases, on the phone's transition, from
+ * wherever the one before it had got to.
+ */
+function stageAt(composition, stages, seconds, canvas) {
+    const ease = cubicBezier(composition.phone.transition.easing);
+    const progress = (from, to) =>
+        ease(Math.min(1, (to - from) / composition.phone.transition.seconds));
+    let pose = stagePoseOf(composition, "away", canvas);
+    for (const [index, stage] of stages.entries()) {
+        if (seconds < stage.seconds) break;
+        const target = stagePoseOf(composition, stage.state, canvas);
+        const until = Math.min(seconds, stages[index + 1]?.seconds ?? Infinity);
+        pose = stageMix(pose, target, progress(stage.seconds, until));
+    }
+    return pose;
+}
+
+/**
+ * The phone and the window at one instant, whichever way the composition
+ * moves its phone: by named states, or by focus windows with the window
+ * sliding aside by `desktop.focusShift`.
+ */
+function stagePose(composition, timing, seconds, canvas) {
+    if (timing.stages) return stageAt(composition, timing.stages, seconds, canvas);
+    const { desktop, phone } = composition;
+    const pose = phonePose(composition, timing.focus, seconds, canvas);
+    return {
+        phone: { width: phone.width * pose.scale, left: pose.left, bottom: pose.bottom, label: 1 },
+        desktop: {
+            x:
+                desktop.x +
+                (desktop.focusShift ?? 0) * focusProgress(composition, timing.focus, seconds),
+            y: desktop.y,
+            width: desktop.width,
+        },
+    };
+}
+
 /** A composition that keeps its phone clear of the desktop must fit it, focused, in the frame. */
 function phoneClearanceCheck(composition, canvas) {
     const { output, desktop, phone } = composition;
@@ -387,6 +489,28 @@ function phoneClearanceCheck(composition, canvas) {
         throw new Error("The focused phone must stay inside the frame.");
 }
 
+const LABEL_STEPS = 12;
+
+/** The phone's label at one of a few opacities, made on first use. */
+function labelFaded(layers, label, step) {
+    if (step === LABEL_STEPS) return label.png;
+    layers.labels ??= new Map();
+    if (!layers.labels.has(step))
+        layers.labels.set(
+            step,
+            (async () => {
+                const { data, info } = await sharp(label.png)
+                    .ensureAlpha()
+                    .raw()
+                    .toBuffer({ resolveWithObject: true });
+                for (let index = 3; index < data.length; index += 4)
+                    data[index] = Math.round((data[index] * step) / LABEL_STEPS);
+                return sharp(data, { raw: info }).png({ compressionLevel: 0 }).toBuffer();
+            })(),
+        );
+    return layers.labels.get(step);
+}
+
 /** One output frame, from one desktop frame and the phone screen at the same instant. */
 async function frameCompose({
     composition,
@@ -394,11 +518,11 @@ async function frameCompose({
     desktopRgb,
     phoneRgb,
     seconds,
-    focus,
+    timing,
     overlaysAt,
 }) {
-    const { output, desktop, phone } = composition;
-    const screen = phone.screen;
+    const { output, desktop } = composition;
+    const screen = composition.phone.screen;
     const masked = await sharp(phoneRgb, {
         raw: { width: screen.width, height: screen.height, channels: 3 },
     })
@@ -417,8 +541,9 @@ async function frameCompose({
         ])
         .png({ compressionLevel: 0 })
         .toBuffer();
-    const pose = phonePose(composition, focus, seconds, layers.phone.canvas);
-    const width = Math.round(phone.width * pose.scale);
+    const stage = stagePose(composition, timing, seconds, layers.phone.canvas);
+    const pose = stage.phone;
+    const width = Math.round(pose.width);
     const height = Math.round((width * layers.phone.canvas.height) / layers.phone.canvas.width);
     const left = Math.round(pose.left);
     const top = Math.round(pose.bottom - height);
@@ -455,13 +580,15 @@ async function frameCompose({
     const shadowLeft = Math.round(left - shadow.pad * shadowScale);
     const shadowTop = Math.round(top - shadow.pad * shadowScale);
     const overlays = [];
-    // The phone's label rides above the handset wherever it is.
+    // The phone's label rides above the handset wherever it is, faded with
+    // its pose.
     const label = overlaysAt?.phoneLabel;
+    const labelStep = Math.round(pose.label * LABEL_STEPS);
     // Only while the handset itself is in frame.
-    if (label && top < output.height)
+    if (label && top < output.height && labelStep > 0)
         overlays.push(
             ...(await placed(
-                label.png,
+                await labelFaded(layers, label, labelStep),
                 Math.round(left + width / 2 - label.width / 2),
                 top - label.height + 4,
                 label.width,
@@ -472,10 +599,9 @@ async function frameCompose({
         const { width: w, height: h } = await sharp(layer.input).metadata();
         overlays.push(...(await placed(layer.input, layer.left, layer.top, w, h)));
     }
-    // The window slides aside, on the phone's own easing, while the phone is up.
-    const windowLeft = Math.round(
-        desktop.x + (desktop.focusShift ?? 0) * focusProgress(composition, focus, seconds),
-    );
+    // The window moves, on the phone's own easing, while the phone is up.
+    const windowLeft = Math.round(stage.desktop.x);
+    const windowTop = Math.round(stage.desktop.y);
     const { pad, tile } = layers.desktop;
     const framed = await sharp(desktopRgb, {
         raw: { width: desktop.width, height: desktop.height, channels: 3 },
@@ -485,29 +611,64 @@ async function frameCompose({
         })
         .png({ compressionLevel: 0 })
         .toBuffer();
-    return sharp(layers.desktop.backdrop, {
-        raw: { width: output.width, height: output.height, channels: 3 },
-    }).composite([
+    const windowLayers = [
         ...(await placed(
             layers.desktop.shadow,
             windowLeft - pad,
-            desktop.y - pad,
+            windowTop - pad,
             tile.width,
             tile.height,
         )),
-        { input: framed, left: windowLeft, top: desktop.y },
+        { input: framed, left: windowLeft, top: windowTop },
         ...layers.desktop.pictures.map((picture) => ({
             ...picture,
             left: windowLeft + picture.left,
-            top: desktop.y + picture.top,
+            top: windowTop + picture.top,
         })),
         ...(await placed(
             layers.desktop.trim,
             windowLeft - pad,
-            desktop.y - pad,
+            windowTop - pad,
             tile.width,
             tile.height,
         )),
+    ];
+    // A window stepped back is the same window, shadow and trim, resampled once.
+    const scale = stage.desktop.width / desktop.width;
+    if (Math.abs(scale - 1) > 1e-4) {
+        const whole = await sharp(layers.desktop.shadow)
+            .composite([
+                { input: framed, left: pad, top: pad },
+                ...layers.desktop.pictures.map((picture) => ({
+                    ...picture,
+                    left: pad + picture.left,
+                    top: pad + picture.top,
+                })),
+                { input: layers.desktop.trim },
+            ])
+            .png({ compressionLevel: 0 })
+            .toBuffer();
+        const scaledWidth = Math.round(tile.width * scale);
+        const scaledHeight = Math.round(tile.height * scale);
+        windowLayers.splice(
+            0,
+            windowLayers.length,
+            ...(await placed(
+                await sharp(whole)
+                    .resize(scaledWidth, scaledHeight, { kernel: "lanczos3" })
+                    .png({ compressionLevel: 0 })
+                    .toBuffer(),
+                Math.round(stage.desktop.x - pad * scale),
+                Math.round(stage.desktop.y - pad * scale),
+                scaledWidth,
+                scaledHeight,
+            )),
+        );
+    }
+    return sharp(layers.desktop.backdrop, {
+        raw: { width: output.width, height: output.height, channels: 3 },
+    }).composite([
+        ...windowLayers,
         ...(await placed(shadowScaled, shadowLeft, shadowTop, shadowWidth, shadowHeight)),
         ...(await placed(handsetScaled, left, top, width, height)),
         ...overlays,
@@ -633,7 +794,9 @@ export async function compositionRender({
     const started = Date.now();
     const { output } = composition;
     const cueList = JSON.parse(await readFile(cues, "utf8"));
-    const focus = focusRead(cueList);
+    const timing = composition.phoneStates
+        ? { stages: stagesRead(composition, cueList) }
+        : { focus: focusRead(cueList) };
     const freezes = composition.cutFreezes
         ? await freezesRead(join(dirname(cues), "freezes.json"), output.fps)
         : [];
@@ -710,7 +873,7 @@ export async function compositionRender({
                     phoneRgb: phoneNext.value,
                     // Poses and overlays follow the takes' own clock.
                     seconds: source / output.fps,
-                    focus,
+                    timing,
                     overlaysAt,
                 });
                 const { data, info } = await frame.raw().toBuffer({ resolveWithObject: true });
@@ -794,6 +957,8 @@ export async function compositionRender({
             };
         }),
         loopSeconds: composition.loop?.seconds ?? 0,
+        // What the take staged off camera to get its shot, in the composition's words.
+        ...(composition.staging ? { staging: composition.staging } : {}),
     };
     // The take's evidence travels with the cut, with the cut's edits added.
     const evidenceFile = join(dirname(cues), `${composition.id}.evidence.json`);
@@ -810,7 +975,7 @@ export async function compositionRender({
                 desktop,
                 phone,
                 cues,
-                focus,
+                ...timing,
                 frames,
                 seconds,
                 bytes: size,
