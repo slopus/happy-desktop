@@ -123,25 +123,34 @@ export function MobilePairingOptions(props: MobilePairingOptionsProps) {
             {...(props.directActionError ? { actionError: props.directActionError } : {})}
             cancelling={props.directCancelling}
             codeCountdown={!headed}
-            {...(switchable
+            {...(switchable || props.layout === "dialog"
                 ? {
                       codeAside: (
-                          <Box
-                              className="happy-mobile-pairing-options__fallback"
-                              data-happy-desktop-ui="mobile-pairing-options-fallback"
-                          >
-                              <span className="happy-mobile-pairing-options__fallback-text">
-                                  Older phone app?
-                              </span>
-                              <Button
-                                  data-testid="mobile-pairing-use-relay"
-                                  onClick={() => props.onMethodSelect?.("relay")}
-                                  size="small"
-                                  variant="ghost"
-                              >
-                                  Use Relay
-                              </Button>
-                          </Box>
+                          <>
+                              {props.layout === "dialog" ? (
+                                  <span className="happy-mobile-pairing-options__hint">
+                                      On your phone, tap + and scan this code.
+                                  </span>
+                              ) : null}
+                              {switchable ? (
+                                  <Box
+                                      className="happy-mobile-pairing-options__fallback"
+                                      data-happy-desktop-ui="mobile-pairing-options-fallback"
+                                  >
+                                      <span className="happy-mobile-pairing-options__fallback-text">
+                                          Older phone app?
+                                      </span>
+                                      <Button
+                                          data-testid="mobile-pairing-use-relay"
+                                          onClick={() => props.onMethodSelect?.("relay")}
+                                          size="small"
+                                          variant="ghost"
+                                      >
+                                          Use Relay
+                                      </Button>
+                                  </Box>
+                              ) : null}
+                          </>
                       ),
                   }
                 : {})}

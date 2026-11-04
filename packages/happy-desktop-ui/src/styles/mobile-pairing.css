@@ -510,6 +510,45 @@
     container: happy-mobile-pairing-options / inline-size;
 }
 
+/*
+ * In a dialog the code stands centred, with its copy link, countdown and the
+ * one line of how to scan it centred under it.
+ */
+.happy-mobile-pairing-options[data-layout="dialog"] .happy-mobile-pairing__code {
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+}
+
+.happy-mobile-pairing-options[data-layout="dialog"] .happy-mobile-pairing__code-side {
+    align-items: center;
+    width: auto;
+    text-align: center;
+}
+
+.happy-mobile-pairing-options[data-layout="dialog"]
+    .happy-mobile-pairing__code-side
+    > .happy-copy-button[data-captioned] {
+    margin-inline-start: 0;
+}
+
+.happy-mobile-pairing-options[data-layout="dialog"] .happy-mobile-pairing-options__fallback {
+    align-items: center;
+}
+
+.happy-mobile-pairing-options[data-layout="dialog"]
+    .happy-mobile-pairing-options__fallback
+    > .happy-button {
+    margin-inline-start: 0;
+}
+
+.happy-mobile-pairing-options__hint {
+    margin-top: 8px;
+    color: var(--text);
+    font-size: 13px;
+    line-height: 18px;
+}
+
 /* The dialog already floats; its scrolling body would clip a floating code's shadow. */
 .happy-mobile-pairing-options[data-layout="dialog"] .happy-qr-code {
     box-shadow: 0 0 0 1px var(--divider);
