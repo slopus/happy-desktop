@@ -3,7 +3,6 @@ import {
     GptLiveSettings,
     GptLiveVoiceSettings,
     HappyAgentAccountSettings,
-    HappyAgentAutoJoinSettings,
     HappyAgentConnectionSettingsSection,
     HappyAgentDebugLogPanel,
     HappyAgentDebugSettings,
@@ -350,22 +349,10 @@ export function HappyAgentSettingsFlowPage() {
                 <HappyAgentExperimentalSettings
                     features={[
                         { id: "inbox", label: "Inbox", enabled: true },
-                        { id: "feed", label: "Feed", enabled: false },
-                        { id: "mobileDirect", label: "Direct phone connection", enabled: false },
+                        { id: "voice", label: "Voice calls", enabled: false },
                     ]}
                     onFeatureChange={noop}
                 />
-                <HappyAgentConnectionSettingsSection connectionLabel="This computer">
-                    <HappyAgentAutoJoinSettings
-                        connectionLabel="This computer"
-                        entity="Stories"
-                        label="Stories"
-                        description="See the stories your agents post, and let them post."
-                        status="ready"
-                        autoJoinEnabled={false}
-                        onAutoJoinChange={noop}
-                    />
-                </HappyAgentConnectionSettingsSection>
             </Screen>
             <Screen id="debug" number="14" screen="14-dev-tools">
                 <HappyAgentStateSettings

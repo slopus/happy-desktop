@@ -1,7 +1,6 @@
 /** Each unfinished feature is a separate choice, kept on this installation. */
 export const EXPERIMENTAL_FEATURES = [
     { id: "inbox", label: "Inbox" },
-    { id: "feed", label: "Feed" },
     { id: "voice", label: "Voice calls" },
     { id: "mobileDirect", label: "Direct phone connection" },
 ] as const;
@@ -40,7 +39,6 @@ export interface ExperimentsStore {
 
 const DISABLED: ExperimentsSnapshot = {
     inbox: false,
-    feed: false,
     voice: false,
     mobileDirect: false,
 };
@@ -60,7 +58,6 @@ function documentParse(value: unknown): ExperimentsSnapshot {
         id in value ? Reflect.get(value, id) === true : legacy && LEGACY_SWITCH_FEATURES.has(id);
     return {
         inbox: enabled("inbox"),
-        feed: enabled("feed"),
         voice: enabled("voice"),
         mobileDirect: enabled("mobileDirect"),
     };

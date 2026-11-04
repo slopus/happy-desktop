@@ -1441,7 +1441,6 @@ function rowMenuItems(
     botAttention: ((bot: HappyAgentBot) => HappyAgentBotAttention) | undefined,
     /** Whether the row's agent has a link to copy: its daemon names its instance. */
     agentLinked: boolean,
-    storiesEnabled: boolean,
 ): MenuItem[] {
     // The agent's link sits in its own section just above archiving.
     const agentCopy: MenuItem[] = agentLinked ? [agentIdCopyMenuItem(), { kind: "separator" }] : [];
@@ -1489,7 +1488,7 @@ function rowMenuItems(
     if (bot)
         return [
             { kind: "item", id: ROW_MENU_RENAME, label: "Rename bot", icon: "edit" },
-            ...(!storiesEnabled || bot.stories === undefined
+            ...(bot.stories === undefined
                 ? []
                 : [
                       {
@@ -2797,7 +2796,7 @@ function rowSurfaceMenuItems(
 
 /**
  * The first group in the sidebar, under no heading. Artifacts leads it, the
- * Feed under it when enabled; neither is reordered, and nothing is dragged
+ * Feed under it; both are always there, never move, and nothing is dragged
  * past them. The reader's
  * Surfaces follow in their own order and are dragged among themselves only.
  * Every type is listed by its own name and picture, including a type this
@@ -2812,7 +2811,6 @@ function happyAgentTopSection(
     catalog: HappyAgentSurfaceCatalogSnapshot,
     activeTodoCounts: ReadonlyMap<HappyAgentSurfaceId, number>,
     titleShimmerEnabled: boolean,
-    feedEnabled: boolean,
     feedUnread: number,
 ): SidebarSection {
     const offline = happyAgent?.status !== "connected";
@@ -2830,9 +2828,7 @@ function happyAgentTopSection(
               }),
         items: [
             ARTIFACTS_SIDEBAR_ITEM,
-            ...(feedEnabled
-                ? [{ ...FEED_SIDEBAR_ITEM, ...(feedUnread > 0 ? { badge: feedUnread } : {}) }]
-                : []),
+            { ...FEED_SIDEBAR_ITEM, ...(feedUnread > 0 ? { badge: feedUnread } : {}) },
             ...(catalog.availability === "available"
                 ? catalog.joined.map((surface) =>
                       surfaceSidebarItem(
@@ -3275,7 +3271,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
     // The order the reader arranged the pinned rows in belongs to the window
     // rather than to any one Happy Agent, so a machine going away rearranges nothing.
     const experimentsStore = props.experiments ?? experimentsStoreNoop;
-    // The inbox and feed are still being built, so they are offered only to
+    // The inbox and folders are still being built, so they are offered only to
     // a reader who has asked for unfinished work in settings. The switch is
     // read here so their routes, sidebar rows, and dialogs cannot disagree
     // about whether the surfaces exist.
@@ -3389,8 +3385,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
     // The Feed row counts what the reader has not looked at on the addressed
     // Happy Agent, whether or not the feed is open: like the inbox's count,
     // it is there to be seen while the reader is doing something else.
-    const feedUnreadStore =
-        (experimental.feed ? active?.session?.feed?.unread() : undefined) ?? feedUnreadStoreNone;
+    const feedUnreadStore = active?.session?.feed?.unread() ?? feedUnreadStoreNone;
     const feedUnread = useSyncExternalStore(
         feedUnreadStore.subscribe,
         () => feedUnreadStore.get().unread,
@@ -3693,7 +3688,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                     ? INBOX_ITEM
                     : props.artifactsOpen
                       ? ARTIFACTS_ITEM
-                      : experimental.feed && props.feedOpen
+                      : props.feedOpen
                         ? FEED_ITEM
                         : props.surfaceId !== undefined
                           ? happyAgentItemId(props.happyAgentId, surfaceRowId(props.surfaceId))
@@ -3781,7 +3776,6 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                           )
                         : [];
                 }
-                const storiesSetting = happyAgent.session?.storiesSettings?.().get();
                 return rowSurfaceMenuItems(
                     happyAgent,
                     row.id,
@@ -3795,7 +3789,6 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                             ? (bot) => happyAgentBotAttention(attention, happyAgent.id, bot.id)
                             : undefined,
                         happyAgent.instanceId !== undefined,
-                        storiesSetting?.status === "ready" && storiesSetting.autoJoinEnabled,
                     ),
                 );
             }}
@@ -3939,13 +3932,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                 }
                 const bot = happyAgent.bots.find((candidate) => candidate.workspaceId === row.id);
                 if (bot) {
-                    const storiesSetting = happyAgent.session?.storiesSettings?.().get();
-                    if (
-                        actionId === ROW_MENU_STORIES &&
-                        bot.stories !== undefined &&
-                        storiesSetting?.status === "ready" &&
-                        storiesSetting.autoJoinEnabled
-                    )
+                    if (actionId === ROW_MENU_STORIES && bot.stories !== undefined)
                         workspace.botStoriesUpdate(bot.id, !bot.stories);
                     if (actionId === ROW_MENU_ARCHIVE)
                         void workspace.botArchive(bot.id).catch(() => undefined);
@@ -3997,7 +3984,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                     return;
                 }
                 if (id === FEED_ITEM) {
-                    if (experimental.feed) props.onFeedOpen?.();
+                    props.onFeedOpen?.();
                     return;
                 }
                 const row = happyAgentItemParse(id);
@@ -4212,7 +4199,6 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                     surfaceCatalog,
                     activeTodoCounts,
                     titleShimmerEnabled,
-                    experimental.feed,
                     feedUnread,
                 ),
                 ...sectionsVoiceFocused(
@@ -4389,7 +4375,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
 
         // The feed belongs to the addressed machine, like its artifacts. Its
         // header carries Mark all read, so the header is the window's drag band.
-        if (experimental.feed && props.feedOpen && active?.session) {
+        if (props.feedOpen && active?.session) {
             const session = active.session;
             if (!session.feed)
                 return (
