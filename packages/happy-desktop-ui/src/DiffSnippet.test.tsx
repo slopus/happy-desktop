@@ -390,9 +390,8 @@ it("centers DiffSnippet ink optically in all engines", { timeout: 120_000 }, asy
      * Sign gutter: a single symmetric glyph in a 24x20 cell — strict
      * optical-center assertion on both axes. Raw Blink already centers the
      * +/− (they ride the font's math axis, which this font puts on the row
-     * center); Gecko/WebKit rasterize the same line half a pixel lower and
-     * carry a -0.5px translate. Measured drift after correction:
-     * |dx| <= 0.17, |dy| <= 0.12 in all three engines.
+     * center); Gecko and WebKit use separate optical translates to account
+     * for their rasterizers.
      */
     for (const [line, glyph] of [
         [4, "−"],
@@ -410,10 +409,8 @@ it("centers DiffSnippet ink optically in all engines", { timeout: 120_000 }, asy
      * Line numbers are right-aligned digit runs, so their horizontal ink
      * centroid is off-center by design (layout is asserted in the
      * geometry test); the optical contract is vertical: digit ink centers
-     * on the 20px row. Blink paints the digit line ~0.43px high raw and
-     * carries a +0.5px translate; Gecko/WebKit are centered raw. Measured
-     * drift after correction <= 0.17px in all engines across 1/2/3-digit
-     * content.
+     * on the 20px row. Blink and WebKit use optical translates to account
+     * for their rasterizers across 1/2/3-digit content.
      */
     for (const [line, digits] of [
         [2, "88"],

@@ -21,12 +21,10 @@
     /*
      * Measured optical corrections (see DiffSnippet.test.tsx; alpha-weighted
      * ink centroids per engine at 2x). Blink rasterizes the 12px/20px mono
-     * line ~0.43px above the row center while Gecko/WebKit land dead-on, so
-     * the base (Blink) rule drops text/number ink half a pixel. The +/−
-     * gutter glyphs ride the font's math axis, which sits ~0.4px lower in
-     * the em than the digit center: raw Blink is already centered there,
-     * and Gecko/WebKit need the opposite half-pixel lift. Half-pixel values
-     * are exactly one device pixel at the required 2x DPR.
+     * line above the row center, so the base (Blink) rule drops text and
+     * number ink half a pixel. The +/− gutter glyphs ride the font's math
+     * axis and need separate offsets. WebKit's quarter-pixel offsets keep
+     * the painted result centered on both macOS and Linux rasterizers.
      */
     --happy-diff-text-optical-y: 0.5px;
     --happy-diff-gutter-optical-y: 0px;
@@ -197,7 +195,7 @@
 /* WebKit — only WebKit parses -webkit-named-image(). */
 @supports (background: -webkit-named-image(i)) {
     .happy-diff-snippet {
-        --happy-diff-text-optical-y: 0px;
-        --happy-diff-gutter-optical-y: -0.5px;
+        --happy-diff-text-optical-y: 0.25px;
+        --happy-diff-gutter-optical-y: -0.25px;
     }
 }
