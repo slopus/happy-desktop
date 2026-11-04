@@ -2370,6 +2370,31 @@ it.each(cases.filter((entry) => !entry.restore || pageZoom))(
     60_000,
 );
 
+it("replays the reduced bottom-follow failure", async () => {
+    const h = harnessCreate(0, "seed:1000050");
+    try {
+        await h.view.ready();
+        await settle();
+        h.switch(2);
+        await settle();
+        const actions: Action[] = [
+            "runOneQueued", "stop", "dequeue", "dequeuedStream", "stop",
+            "runEmptyQueue", "stop", "dequeue", "dequeuedStream", "stop",
+            "summary", "stream", "stream", "finish", "agentMessage", "notice",
+            "compaction", "disclose", "replay", "send", "delivery", "delivery", "append",
+        ];
+        for (const [index, action] of actions.entries()) {
+            const step = index + 21;
+            await act(h, action, () => (step === 37 || step === 40 ? 1 : 0), step);
+            await frame();
+            await settle();
+        }
+        followingCheck(h);
+    } finally {
+        await h.close();
+    }
+}, 60_000);
+
 it("keeps an expanded trace reader fixed when media arrives below it (seed 1021)", async () => {
     const h = harnessCreate(0);
     try {
