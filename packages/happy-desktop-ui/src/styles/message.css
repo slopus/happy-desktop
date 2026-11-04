@@ -1466,8 +1466,8 @@
 /*
  * Measured with the repo's alpha-weighted centroid probes at true 2x captures
  * (dy = ink centroid minus box center, positive = ink sits low):
- * - author 14px/20px Figtree bold: Blink dy +0.09, Gecko +1.09, WebKit +1.03
- *   — Gecko and WebKit split the half-leading a full pixel lower.
+ * - author 14px/20px Figtree bold: Gecko and WebKit split the half-leading
+ *   lower than Blink; WebKit's macOS rasterizer needs a half-pixel correction.
  * - body 15px/22px Figtree: Gecko paints the line 0.5px lower than
  *   Blink/WebKit (centroids 18.29 vs 17.79/17.74), which would break the
  *   gutter-time baseline and the cross-engine screenshot rhythm.
@@ -1475,7 +1475,7 @@
  *   it needs a deeper below-baseline padding split than the base rule.
  * - code pill: Gecko glyph-vs-pill dy 0.00 with symmetric padding — the base
  *   1.5/0.5 split (tuned for Blink/WebKit -0.50) must be undone for Gecko.
- * - the author correction also lifts its baseline 1px in Gecko/WebKit, so the
+ * - the author correction also lifts its baseline in Gecko/WebKit, so the
  *   header hover metadata and its separators follow it by the same amount.
  * - day-divider label, gutter time, reaction row: measured within tolerance in
  *   all engines after the base rules above; no scoped overrides.
@@ -1515,12 +1515,12 @@
 @supports (background: -webkit-named-image(i)) {
     .happy-message__author {
         position: relative;
-        top: -1px;
+        top: -0.5px;
     }
 
     .happy-message__hover-meta[data-placement="header"] {
         position: relative;
-        top: -1px;
+        top: -0.5px;
     }
 
     .happy-message__hover-meta .happy-agent-trace-row__meta-separator {
