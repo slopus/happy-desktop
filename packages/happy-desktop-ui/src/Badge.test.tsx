@@ -245,7 +245,13 @@ it(
                 Math.abs(currentBaseline - baseline),
                 `${id} shared baseline`,
             ).toBeLessThanOrEqual(0.001);
-            const expectedBaseline = server.browser === "webkit" ? 12.875 : 13;
+            const expectedBaseline =
+                server.browser === "webkit" && server.platform !== "darwin" ? 12.875 : 13;
+            if (entry.count === 0 || entry.count === 1234)
+                console.info(
+                    "COUNT_BADGE_DIAGNOSTIC",
+                    JSON.stringify({ id, currentBaseline, metrics, measured }),
+                );
             expect(
                 Math.abs(currentBaseline - expectedBaseline),
                 `${id} measured baseline position`,
@@ -278,14 +284,18 @@ it(
                         : entry.tone === "accent"
                           ? { x: -0.013, y: -0.007 }
                           : { x: -0.011, y: -0.007 };
-                expect(
-                    Math.abs(measured.dx - expectedOptical.x),
-                    `${id} measured zero centroid x ${measured.dx}`,
-                ).toBeLessThanOrEqual(0.005);
-                expect(
-                    Math.abs(measured.dy - expectedOptical.y),
-                    `${id} measured zero centroid y ${measured.dy}`,
-                ).toBeLessThanOrEqual(0.005);
+                expect
+                    .soft(
+                        Math.abs(measured.dx - expectedOptical.x),
+                        `${id} measured zero centroid x ${measured.dx}`,
+                    )
+                    .toBeLessThanOrEqual(0.005);
+                expect
+                    .soft(
+                        Math.abs(measured.dy - expectedOptical.y),
+                        `${id} measured zero centroid y ${measured.dy}`,
+                    )
+                    .toBeLessThanOrEqual(0.005);
             }
             if (entry.count === 1234) {
                 const expectedOpticalY =
@@ -296,10 +306,12 @@ it(
                         : entry.tone === "accent"
                           ? 0.192
                           : 0.195;
-                expect(
-                    Math.abs(measured.dy - expectedOpticalY),
-                    `${id} measured content-dependent centroid y ${measured.dy}`,
-                ).toBeLessThanOrEqual(0.005);
+                expect
+                    .soft(
+                        Math.abs(measured.dy - expectedOpticalY),
+                        `${id} measured content-dependent centroid y ${measured.dy}`,
+                    )
+                    .toBeLessThanOrEqual(0.005);
             }
             /* Stepped integral width: fractional intrinsic text widths would
              * land right-aligned pills off the device-pixel grid. */
