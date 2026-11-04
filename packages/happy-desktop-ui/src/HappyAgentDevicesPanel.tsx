@@ -15,7 +15,7 @@ export type HappyAgentDevicesPanelProps = {
     /** One workspace's bridges, as its store projects them. */
     devices: HappyAgentDeviceBridgesSnapshot;
     onUsbAttach: (busId: string) => void;
-    /** Programs in the workspace reach `localPort` on this Mac at `workspacePort`. */
+    /** Programs in the workspace reach `localPort` on this computer at `workspacePort`. */
     onWorkspaceToLocalOpen: (localPort: number, workspacePort: number) => void;
     /** This Mac reaches `workspacePort` in the workspace at `localPort`. */
     onLocalToWorkspaceOpen: (workspacePort: number, localPort: number) => void;
@@ -305,7 +305,9 @@ export function HappyAgentDevicesPanel(props: HappyAgentDevicesPanelProps) {
     };
     const usbList = (bluetooth: boolean, empty: string): ReactNode => {
         if (!usb)
-            return <p className="happy-agent-devices__note">Looking for devices on this Mac…</p>;
+            return (
+                <p className="happy-agent-devices__note">Looking for devices on this computer…</p>
+            );
         if (!usb.available) return <p className="happy-agent-devices__note">{usb.reason}</p>;
         const listed = usb.devices.filter((device) => device.bluetooth === bluetooth);
         if (listed.length === 0) return <p className="happy-agent-devices__note">{empty}</p>;
@@ -345,7 +347,7 @@ export function HappyAgentDevicesPanel(props: HappyAgentDevicesPanelProps) {
                                 />
                                 <Capability
                                     capability={capabilities.workspaceToLocal}
-                                    label="The workspace can reach this Mac"
+                                    label="The workspace can reach this computer"
                                 />
                                 <Capability
                                     capability={capabilities.localToWorkspace}
@@ -363,7 +365,7 @@ export function HappyAgentDevicesPanel(props: HappyAgentDevicesPanelProps) {
                     {devices.host.status === "appOutdated" ? null : (
                         <>
                             <Section title="USB devices">
-                                {usbList(false, "No USB devices are plugged into this Mac.")}
+                                {usbList(false, "No USB devices are plugged into this computer.")}
                             </Section>
                             <Section
                                 note="An attached adapter becomes the workspace’s own Bluetooth controller. A spare USB adapter works best: macOS keeps the one it is using."
@@ -371,13 +373,13 @@ export function HappyAgentDevicesPanel(props: HappyAgentDevicesPanelProps) {
                             >
                                 {usbList(
                                     true,
-                                    "No USB Bluetooth adapters are plugged into this Mac.",
+                                    "No USB Bluetooth adapters are plugged into this computer.",
                                 )}
                             </Section>
-                            <Section title="Workspace to this Mac">
+                            <Section title="Workspace to this computer">
                                 <PortForm
                                     description={(local, workspace) =>
-                                        `Programs in the workspace connect to 127.0.0.1:${workspace} and reach localhost:${local} on this Mac.`
+                                        `Programs in the workspace connect to 127.0.0.1:${workspace} and reach localhost:${local} on this computer.`
                                     }
                                     disabled={
                                         !actionable ||
@@ -394,7 +396,7 @@ export function HappyAgentDevicesPanel(props: HappyAgentDevicesPanelProps) {
                             <Section title="This Mac to the workspace">
                                 <PortForm
                                     description={(workspace, local) =>
-                                        `Open localhost:${local} on this Mac to reach port ${workspace} in the workspace.`
+                                        `Open localhost:${local} on this computer to reach port ${workspace} in the workspace.`
                                     }
                                     disabled={
                                         !actionable ||
