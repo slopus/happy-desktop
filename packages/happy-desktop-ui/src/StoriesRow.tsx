@@ -39,13 +39,15 @@ export function StoryRing(props: {
 }) {
     const { size, radius, total = 1 } = props;
     const seen = props.state === "seen" ? total : (props.seen ?? 0);
-    // Watched 1px and new 2px, 1px off the photo, in whole device pixels at every zoom.
+    // 1px off the photo in whole device pixels at every zoom, then 2px while anything is new or
+    // 1px once all is watched; the extra pixel grows outward, so the photo's gap never changes.
     const ratio = useSyncExternalStore(pixelRatioSubscribe, () => devicePixelRatio);
-    const stroke = Math.max(1, Math.round(ratio)) / ratio;
-    const inset = Math.max(1, Math.round(ratio)) / ratio + stroke;
+    const pixel = Math.max(1, Math.round(ratio)) / ratio;
+    const stroke = seen < total ? 2 * pixel : pixel;
+    const inset = pixel + stroke / 2;
     // Arcs per pixel of stroke; between round caps a stroke long, a gap of a 21st the ring's side.
     const unit = total / (4 * (size - 2 * radius) + 2 * Math.PI * (radius + inset));
-    const gap = ((size + 2 * inset + 2 * stroke) / 21 + 2 * stroke) * unit;
+    const gap = ((size + 2 * inset + stroke) / 21 + stroke) * unit;
     const arcs = (from: number, count: number) =>
         count > 0 && (
             <rect
@@ -61,7 +63,7 @@ export function StoryRing(props: {
                         : undefined
                 }
                 strokeDashoffset={-from - (size / 2 - radius) * unit - gap / 2}
-                strokeWidth={from < seen ? stroke : 2 * stroke}
+                strokeWidth={stroke}
                 width={size + 2 * inset}
                 x={-inset}
                 y={-inset}

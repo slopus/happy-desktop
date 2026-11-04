@@ -184,9 +184,9 @@ export type MessageProps = Omit<HTMLAttributes<HTMLDivElement>, "style"> & {
     /** What the message answers, such as a story, shown above its body. */
     quote?: ReactNode;
     /**
-     * What the author did, after their name: "Replied to your story". The face
-     * then joins the author line, and an own message, which has none, gains
-     * one naming "You".
+     * What the author did, after their name: "Replied to your story", or
+     * "replied" after an own message's "You". The face then joins the author
+     * line, and an own message, which has none, gains one naming "You".
      */
     authorNote?: string;
     /** Follow-up message: no avatar/author row, time sits in the gutter. */

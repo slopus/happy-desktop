@@ -547,7 +547,7 @@ export function StoryPage() {
                 >
                     <Message
                         author="Kirill"
-                        authorNote="Replied to your story"
+                        authorNote="replied"
                         body="Love the new welcome screen! Does setup still ask for the camera?"
                         initials="K"
                         own
