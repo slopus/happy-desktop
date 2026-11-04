@@ -822,20 +822,6 @@ export function ConversationView(props: ConversationViewProps) {
        moves nothing: a reader following the bottom keeps following it, and
        one scrolled into history stays put. A send already present when the
        view opens is history. */
-    const sentKey = props.steeringSendId;
-    const [sendFollow, setSendFollow] = useState(() => ({
-        conversationId: props.conversationId,
-        sentKey,
-        followKey: undefined as string | undefined,
-    }));
-    if (sendFollow.conversationId !== props.conversationId)
-        setSendFollow({ conversationId: props.conversationId, sentKey, followKey: undefined });
-    else if (sendFollow.sentKey !== sentKey)
-        setSendFollow({
-            conversationId: props.conversationId,
-            sentKey,
-            followKey: sentKey ?? sendFollow.followKey,
-        });
     /*
      * The turn ended and the agents it delegated to did not. That is a state of
      * its own rather than a continuation of the turn: the conversation is still
@@ -1159,7 +1145,7 @@ export function ConversationView(props: ConversationViewProps) {
                            held below the composer. */
                         footerFollowed={sendPending || replyNext}
                         footerReserveHeight={queuedStatusHeight}
-                        followKey={sendFollow.followKey}
+                        followKey={props.steeringSendId}
                         {...(props.leadingHeader
                             ? {
                                   header: props.leadingHeader.content,
