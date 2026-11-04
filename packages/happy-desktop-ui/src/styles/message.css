@@ -870,6 +870,8 @@
     top: 6px;
     right: 6px;
     background: var(--surface-pressed);
+    /* Follow the code frame's 8px corner at the 6px inset. */
+    border-top-right-radius: 2px;
 }
 
 .happy-message__code-block:hover > .happy-message__code-copy,
