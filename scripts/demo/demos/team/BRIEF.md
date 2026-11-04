@@ -21,12 +21,13 @@ Owner: Kirill. Script: [SCRIPT.md](./SCRIPT.md).
    Steve's own task is already running across three repositories at once.
 3. **Nothing exists until Send.** On Send the task is created, and at that
    moment it is in Steve's sidebar on his phone, with Kirill's face. Nobody
-   forwards it.
-4. **The team answers.** Steve checks the design on his phone and gives
-   feedback in the same task. Opus acts on it: the preview goes to five bars
-   on both screens and it says _"Five bars it is."_ The result rests on both
-   screens, then the phone steps away and the cut eases back into its first
-   frame, because the homepage loops it.
+   forwards it. Steve's sidebar is his own, not a mirror of Kirill's.
+4. **The team answers.** Steve leaves the task alone until its first version
+   is ready; then he opens it on his phone, checks the preview, gives feedback
+   in the same task, and goes back to his sidebar. The phone steps aside while
+   Opus acts on it: the preview goes to five bars and it says _"Five bars it
+   is."_ The result rests, and the cut eases back into its first frame,
+   because the homepage loops it.
 
 ## Rules carried over from earlier takes
 
@@ -39,10 +40,12 @@ Owner: Kirill. Script: [SCRIPT.md](./SCRIPT.md).
 - The phone is the real native Happy iOS app, built from `happy` main and run
   in the iOS Simulator on Kirill's Mac mini, inside the composition's iPhone
   frame. The desktop is recorded on that Mac too, at 60 fps. The phone is
-  first-class but not the flagship surface: it rises beside the desktop when
-  the task reaches Steve, and the window makes room for it.
+  first-class but not the flagship surface: it rises beside the desktop as
+  the task reaches Steve, and the window makes room for it. It is labelled as
+  a teammate's phone, without a name.
 - No black intro, no full-screen title cards, no stickers, no confetti, no
-  generated narration. Captions sit in the band above the window.
+  spoken narration. Written narration, plain sentences saying what happens,
+  sits as subtitles in the band below the window.
 - One continuous 1× clock for desktop and phone. Only Steve's typing may play
   faster, on both screens at once, and the moments the desktop capture
   stalled are cut from both screens at once.

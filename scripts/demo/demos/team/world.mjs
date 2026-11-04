@@ -23,9 +23,13 @@ const asset = (name) => `demos/team/assets/${name}`;
 const coreAsset = (name) => readFile(join(demoRoot, "demos", "core", "assets", name), "utf8");
 export const assetPath = (name) => join(import.meta.dirname, "assets", name);
 
-/** Happy Core's members. Their faces are their GitHub pictures. */
+/**
+ * Happy Core's members. Their faces are their GitHub pictures. The server
+ * itself wears the Happy desktop app's icon.
+ */
 export const team = {
     node: "Happy Core",
+    picture: "happy-desktop.png",
     members: [
         {
             key: "kirill",
@@ -228,6 +232,10 @@ const doneChanges = {
 };
 
 // ------------------------------------------------------------------ repositories
+//
+// Each fixture repository wears its real project's icon: happy the Happy iOS
+// app's (happy-ios's AppIcon), happy-desktop the desktop app's
+// (happy-desktop-electron's app icon), happy-agent the agent's logo.
 
 export const repository = {
     name: "happy",
@@ -341,7 +349,40 @@ export const doneTasks = [
         change: doneChanges.sendFixes,
         reply: "iOS Send Fixes keeps the composer's frame through the send and the keyboard's return.",
     },
+    {
+        owner: "steve",
+        name: "Android Push Fixes",
+        message: "Pushes stop on Android after the app sits in the background. Find out why.",
+        reply: "Doze holds normal-priority pushes; replies now go out as high priority, so they arrive.",
+    },
+    {
+        owner: "steve",
+        name: "Sync Benchmarks",
+        message: "Benchmark a cold sync on a team server with ten thousand tasks.",
+        reply: "A cold sync of 10k tasks takes 1.8 s; most of it is the task list query.",
+    },
 ];
+
+/**
+ * Each member's own sidebar on Happy Core. Everyone joins every new task, so
+ * the two lists differ by what each has done with theirs: the tasks they
+ * left, the order they keep, and the bots they hid. Kirill's is the one the
+ * window has always shown; Steve's phone shows his.
+ */
+export const sidebars = {
+    kirill: { left: ["Android Push Fixes", "Sync Benchmarks"] },
+    steve: {
+        left: ["11labs Mobile", "Landing Page Rebrand"],
+        order: [
+            "Android Push Fixes",
+            "Activity Feed Design",
+            "Team Servers",
+            "iOS Overlay Layout",
+            "Sync Benchmarks",
+        ],
+        hiddenBots: ["disk_sweeper", "product_health"],
+    },
+};
 
 /** Steve's task that is working across three repositories while the take runs. */
 export const liveTask = {

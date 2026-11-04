@@ -5,8 +5,8 @@ import { resolve } from "node:path";
 /*
  * Captions and hints laid over a composed take.
  *
- * A caption is one line in the band above the window, from one cue to the
- * next caption. A hint is a short label with a notch that points at what the
+ * A caption is one line of narration, subtitle-style, centred in the
+ * composition's caption band, from one cue to the next caption. A hint is a short label with a notch that points at what the
  * take's cue recorded on screen — a sidebar row, a tool row, the phone's row —
  * with a ring around it. Every sprite is drawn once, in Chromium with the
  * app's own Figtree, and then only faded in and out on the take's clock.
@@ -51,9 +51,9 @@ async function pageOpen() {
         html, body { margin: 0; background: transparent; }
         body { font-family: Figtree; -webkit-font-smoothing: antialiased; }
         em { font-style: normal; color: ${ACCENT}; }
-        .caption { display: inline-block; padding: 6px 12px 12px; color: #fff; font-weight: 800;
-            font-size: 44px; line-height: 54px; letter-spacing: -0.01em; white-space: nowrap;
-            text-shadow: 0 2px 18px rgba(0,0,0,0.55), 0 1px 3px rgba(0,0,0,0.5); }
+        .caption { display: inline-block; padding: 10px 18px 14px; color: #fff; font-weight: 650;
+            font-size: 40px; line-height: 50px; letter-spacing: -0.005em; white-space: nowrap;
+            text-shadow: 0 2px 16px rgba(0,0,0,0.7), 0 1px 3px rgba(0,0,0,0.6); }
         .hint { display: inline-block; position: relative; padding: 14px; }
         .pill { position: relative; padding: 10px 16px 11px; border-radius: 12px; white-space: nowrap;
             background: rgba(22,22,24,0.95); color: #fff; font-weight: 650; font-size: 22px; line-height: 28px;
