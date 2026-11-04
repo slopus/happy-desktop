@@ -210,13 +210,6 @@
     }
 }
 
-@supports (background: -webkit-named-image(i)) {
-    .happy-avatar[data-size="sm"] .happy-avatar__initials,
-    .happy-avatar[data-size="lg"] .happy-avatar__initials {
-        transform: translateY(0.5px);
-    }
-}
-
 .happy-avatar__image {
     display: block;
     width: 100%;
