@@ -30,6 +30,7 @@ import { browserPermissionsInstall } from "./browserPermissions";
 import { BrowserPasswords } from "./browserPasswords";
 import { browserPasswordGuestAttach } from "./browserPasswordGuest";
 import { desktopInstanceMenuTargets } from "./applicationMenu";
+import { editContextMenuAttach } from "./editContextMenu";
 import {
     desktopWindowTarget,
     localWebNavigationAllowed,
@@ -929,6 +930,8 @@ async function artifactSessionStart(): Promise<void> {
 app.on("web-contents-created", (_event, contents) => {
     if (contents.getType() === "webview")
         contents.setWebRTCIPHandlingPolicy("disable_non_proxied_udp");
+    // The app's own pages get a text menu; guests keep their own handling.
+    if (contents.getType() === "window") editContextMenuAttach(contents);
 });
 
 app.on("select-client-certificate", (event, webContents, _url, _list, callback) => {
