@@ -517,7 +517,7 @@ it("keeps automated attribution on own image-only and attachment-only messages",
                     </Message>
                 </>,
             ),
-        { width: 620, height: 400 },
+        { width: 620, height: 800 },
     );
     await view.ready();
     for (const testId of ["image-only", "attachment-only"]) {
@@ -543,7 +543,7 @@ it("keeps automated attribution on own image-only and attachment-only messages",
     }
     expect(
         view.container.querySelector(
-            '[data-testid="image-only"] [data-happy-desktop-ui="message-media"]',
+            '[data-testid="image-only"] [data-happy-desktop-ui="media-flow"]',
         ),
     ).not.toBeNull();
     expect(
@@ -1666,13 +1666,13 @@ it("keeps grouped rows aligned to incoming messages and lays out media without a
     ).toBeNull();
     expect(
         view
-            .$('[data-testid="photo-only"] [data-happy-desktop-ui="message-media"]')
+            .$('[data-testid="photo-only"] [data-happy-desktop-ui="media-flow"]')
             .computedStyle("margin-top"),
         "media inset without a body",
     ).toBe("4px");
     expect(
         view
-            .$('[data-testid="photo-text"] [data-happy-desktop-ui="message-media"]')
+            .$('[data-testid="photo-text"] [data-happy-desktop-ui="media-flow"]')
             .computedStyle("margin-top"),
         "media keeps its gap under a body",
     ).toBe("8px");
@@ -1684,12 +1684,12 @@ it("keeps grouped rows aligned to incoming messages and lays out media without a
         Math.abs(box.width / box.height - 760 / 420),
         "box keeps the source aspect",
     ).toBeLessThanOrEqual(0.03);
-    expect(box.width, "box width is capped").toBeLessThanOrEqual(380);
+    expect(box.width, "box width is capped").toBeLessThanOrEqual(560);
     expect(
         view
             .$('[data-testid="photo-only"] [data-happy-desktop-ui="message-media-image"]')
             .computedStyle("object-fit"),
-    ).toBe("cover");
+    ).toBe("contain");
 });
 it("renders string bodies as safe streaming Markdown", async () => {
     const view = createRenderer();
@@ -2203,7 +2203,7 @@ it("reserves a fallback box for a singleton image without source dimensions", as
         '[data-testid="fallback-media"] [data-happy-desktop-ui="message-media-item"]',
     );
     expect(item.element.hasAttribute("data-fixed")).toBe(true);
-    expect(item.bounds()).toMatchObject({ width: 240, height: 180 });
+    expect(item.bounds()).toMatchObject({ width: 480, height: 360 });
 });
 it("centers SystemNotice service lines and lifts @user / #channel refs", async () => {
     const view = createRenderer();
