@@ -77,6 +77,8 @@ export function conversationMessageGrouped(
        keeps one: an open turn's answer offers "Hide traces" right where the
        folded one offered "View traces". */
     if (entry.message.agentTrace && !entry.message.agentTrace.quiet) return false;
+    /* A story reply's header says who replied, so it is never folded away. */
+    if (entry.message.storyQuote) return false;
     if (entry.message.sender?.kind === "agent") {
         const preceding = entries[index - 1];
         if (

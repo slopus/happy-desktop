@@ -1284,32 +1284,18 @@ function happyAgentConnectGroupProject(
     return visibleCollapsed.map((entry) => (entry === actualAnchor ? tracedAnchor : entry));
 }
 
-/** A quoted story's author by name and face: its agent as the window names it, or its reposter. */
+/** A quoted story, as the reader's own or as the named agent's. */
 function storyQuoteProject(
     quote: NonNullable<Extract<ChatElement, { kind: "user_message" }>["quote"]>,
     input: HappyAgentConversationInput,
 ): ConversationStoryQuote {
-    const { author } = quote;
-    const agent = author.kind === "agent" ? senderOf(input, author.agentId) : undefined;
-    const photo = author.kind === "person" ? author.profile?.avatar?.url : undefined;
     return {
         storyId: quote.storyId,
         expiresAt: quote.expiresAt,
         frame: quote.frame,
-        author:
-            author.kind === "agent"
-                ? {
-                      kind: "agent",
-                      name: agent?.agentName ?? "Agent",
-                      face: agent?.agentFace ?? { kind: "placeholder", seed: author.agentId },
-                  }
-                : {
-                      kind: "human",
-                      name: author.profile?.name ?? "Someone",
-                      face: photo
-                          ? { kind: "image", url: photo }
-                          : { kind: "placeholder", seed: author.userId },
-                  },
+        owner: quote.yours
+            ? "yours"
+            : { name: senderOf(input, quote.agentId).agentName ?? "this agent" },
     };
 }
 

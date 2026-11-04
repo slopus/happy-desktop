@@ -183,6 +183,11 @@ export type MessageProps = Omit<HTMLAttributes<HTMLDivElement>, "style"> & {
     children?: ReactNode;
     /** What the message answers, such as a story, shown above its body. */
     quote?: ReactNode;
+    /**
+     * What the author did, after their name: "replied to your story". An own
+     * message, which has no author line, then opens with one naming "You".
+     */
+    authorNote?: string;
     /** Follow-up message: no avatar/author row, time sits in the gutter. */
     compact?: boolean;
     /** Delivery styling that never inserts or removes layout. */
@@ -405,6 +410,7 @@ export function Message(props: MessageProps) {
         "onReactionSelect",
         "own",
         "quote",
+        "authorNote",
         "reactions",
         "style",
         "time",
@@ -686,6 +692,9 @@ export function Message(props: MessageProps) {
                     <span data-happy-desktop-ui="message-author-label">{local.author}</span>
                 </span>
             )}
+            {local.authorNote ? (
+                <span className="happy-message__author-note">{local.authorNote}</span>
+            ) : null}
             {local.automated && showIncomingIdentity() ? (
                 <>
                     <span
@@ -712,6 +721,7 @@ export function Message(props: MessageProps) {
             className={["happy-message", local.className].filter(Boolean).join(" ")}
             data-agent={local.agent ? "" : undefined}
             data-own={local.own ? "" : undefined}
+            data-author-note={local.authorNote ? "" : undefined}
             data-compact={grouped() ? "" : undefined}
             data-delivery-state={deliveryState()}
             data-generation-status={local.generationStatus}
@@ -748,6 +758,13 @@ export function Message(props: MessageProps) {
                     >
                         {local.contextNote}
                     </span>
+                ) : null}
+                {local.own && local.authorNote ? (
+                    <div className="happy-message__meta happy-message__meta--own">
+                        {renderAvatar("xs")}
+                        <span className="happy-message__author">You</span>
+                        <span className="happy-message__author-note">{local.authorNote}</span>
+                    </div>
                 ) : null}
                 {local.quote}
                 {ownBubbleLine ? (

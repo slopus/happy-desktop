@@ -640,20 +640,15 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
             {...(props.linkOpenDefault ? { linkOpenDefault: props.linkOpenDefault } : {})}
             {...(props.references ? { references: props.references } : {})}
             own={own}
+            {...(quote
+                ? {
+                      authorNote: `replied to ${quote.owner === "yours" ? "your" : `${quote.owner.name}’s`} story`,
+                  }
+                : {})}
             quote={
                 quote ? (
                     <StoryQuote
                         align={own ? "end" : "start"}
-                        author={{
-                            name: quote.author.name,
-                            face: {
-                                initials: initialsOf(quote.author.name),
-                                type: quote.author.kind,
-                                ...(quote.author.face.kind === "image"
-                                    ? { imageUrl: quote.author.face.url }
-                                    : { placeholderSeed: quote.author.face.seed }),
-                            },
-                        }}
                         frame={
                             quote.frame && {
                                 url: quote.frame.url,

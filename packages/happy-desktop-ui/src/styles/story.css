@@ -542,29 +542,25 @@
     color: var(--text);
 }
 
-/* The story a reply answers, above its bubble like an attached photo: the frame, then its author. */
-/* The whole content width, as the photo flow it holds would take, on the bubble's side. */
+/* The story a reply answers, right above it: a quote bar on the outer side, 8px from the frame. */
 .happy-story-quote {
     display: flex;
     align-self: stretch;
-    flex-direction: column;
-    gap: 6px;
+    gap: 8px;
     min-width: 0;
 }
-.happy-message[data-own] .happy-story-quote {
-    align-items: flex-end;
+.happy-story-quote[data-align="end"] {
+    flex-direction: row-reverse;
 }
-.happy-story-quote__author {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    min-width: 0;
-    max-width: 100%;
-    color: var(--text-secondary);
-    font: 600 12px / 20px var(--happy-font-ui);
+.happy-story-quote__bar {
+    flex: none;
+    width: 3px;
+    border-radius: 1.5px;
+    background: var(--divider);
 }
-.happy-story-quote__author > :last-child {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+/* An attached photo's single 9:16 cell: 202.5 × 360 wherever the column has the room. */
+.happy-story-quote > .happy-message__media-item {
+    flex: none;
+    width: min(202.5px, 100% - 11px);
+    aspect-ratio: 9 / 16;
 }

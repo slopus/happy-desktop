@@ -152,14 +152,15 @@ export interface UserMessageElement extends BaseChatElement {
     delivery: "pending_steering" | "sent";
     text: string;
     attachments?: readonly { data: string; mediaType: string }[];
-    /** The story this message replies to: its still at its own address, and its author. */
+    /** The story this message replies to, with its still at its own address. */
     quote?: {
         readonly storyId: string;
+        /** The story's agent, which is this conversation's. */
+        readonly agentId: string;
         readonly expiresAt: number;
+        /** The reader owns the story's agent: a bot, a standalone task, or their own team task. */
+        readonly yours: boolean;
         readonly frame: { readonly url: string; readonly thumbhash?: string } | null;
-        readonly author:
-            | { readonly kind: "agent"; readonly agentId: string }
-            | { readonly kind: "person"; readonly userId: string; readonly profile?: UserProfile };
     };
     source?: "notification";
     /**

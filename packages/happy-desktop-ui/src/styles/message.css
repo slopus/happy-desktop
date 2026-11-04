@@ -1533,7 +1533,25 @@
     }
 }
 
-/* A quote sits above the body that answers it, as far as a photo sits below one. */
+/* A quote sits right above the body that answers it. */
 .happy-message__content > .happy-story-quote {
-    margin-bottom: 8px;
+    margin-bottom: 4px;
+}
+
+/* "replied to your story": after the name, quieter, and the face the name's size. */
+.happy-message__author-note {
+    overflow: hidden;
+    color: var(--text-secondary);
+    font-size: 14px;
+    line-height: 20px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.happy-message__meta--own {
+    align-items: center;
+}
+.happy-message__meta--own > .happy-avatar,
+.happy-message[data-author-note] .happy-message__avatar-dangling .happy-avatar {
+    width: 16px;
+    height: 16px;
 }

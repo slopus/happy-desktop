@@ -64,6 +64,8 @@ export interface SessionProjectionInput {
     mediaUrl: (agentId: string, toolCallId: string, index: number) => string;
     /** Where a story reply's quoted still is served. */
     quoteFrameUrl: (agentId: string, messageId: string) => string;
+    /** Whether the reader owns this agent, so its stories are theirs. */
+    agentOwned?: boolean;
     hasMore: boolean;
     messages: readonly TranscriptMessage[];
     userProfiles?: ReadonlyMap<string, UserProfile>;
@@ -306,6 +308,7 @@ export function projectElements(input: SessionProjectionInput): readonly ChatEle
     const reader: TranscriptReader = {
         mediaUrl: input.mediaUrl,
         quoteFrameUrl: input.quoteFrameUrl,
+        agentOwned: input.agentOwned ?? true,
         agentId: input.agent.id,
         parentAgentId: input.agent.parentAgentId,
         userProfiles: input.userProfiles,
@@ -1069,8 +1072,6 @@ function projectSubagents(
  */
 interface MessageElements {
     readonly profile: UserProfile | undefined;
-    /** The person a quoted story is by, as read when these were made. */
-    readonly quoted: UserProfile | undefined;
     readonly own: boolean;
     readonly runId: string;
     readonly runStatus: Run["status"];
@@ -1089,6 +1090,7 @@ interface TranscriptReader {
     /** Stable for the connection's life, so it takes no part in the memory below. */
     readonly mediaUrl: SessionProjectionInput["mediaUrl"];
     readonly quoteFrameUrl: SessionProjectionInput["quoteFrameUrl"];
+    readonly agentOwned: boolean;
     readonly userProfiles?: ReadonlyMap<string, UserProfile>;
     readonly currentUserId?: string;
     readonly agentId: string;
@@ -1107,16 +1109,14 @@ function projectMessage(
     const userId = entry.message.role === "user" ? entry.message.metadata.userId : undefined;
     const profile = userId === undefined ? undefined : reader.userProfiles?.get(userId);
     const own = userId !== undefined && userId === reader.currentUserId;
-    const quoter = entry.message.role === "user" ? entry.message.quote?.userId : undefined;
-    const quoted = quoter ? reader.userProfiles?.get(quoter) : undefined;
     if (
         cached !== undefined &&
         cached.profile === profile &&
-        cached.quoted === quoted &&
         cached.own === own &&
         cached.runId === runId &&
         cached.runStatus === runStatus &&
         cached.reader.agentId === reader.agentId &&
+        cached.reader.agentOwned === reader.agentOwned &&
         cached.reader.parentAgentId === reader.parentAgentId
     )
         return cached.elements;
@@ -1127,30 +1127,27 @@ function projectMessage(
         reader,
         elements,
         profile,
-        quoted,
         own,
     });
     return elements;
 }
 
-/** A story reply's quote: its still at its own address, and its author as read so far. */
+/** A story reply's quote, with its still at its own address. */
 function storyQuoteProject(
     messageId: string,
     quote: StoryQuote,
     reader: TranscriptReader,
 ): NonNullable<Extract<ChatElement, { kind: "user_message" }>["quote"]> {
-    const { frame, userId } = quote;
+    const { frame } = quote;
     return {
         storyId: quote.storyId,
+        agentId: quote.agentId,
         expiresAt: quote.expiresAt,
+        yours: reader.agentOwned,
         frame: frame && {
             url: reader.quoteFrameUrl(reader.agentId, messageId),
             ...(frame.thumbhash === undefined ? {} : { thumbhash: frame.thumbhash }),
         },
-        author:
-            userId === null
-                ? { kind: "agent", agentId: quote.agentId }
-                : { kind: "person", userId, profile: reader.userProfiles?.get(userId) },
     };
 }
 

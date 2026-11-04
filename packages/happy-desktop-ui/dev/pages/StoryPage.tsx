@@ -538,7 +538,7 @@ export function StoryPage() {
             <Specimen
                 number="15"
                 label="Reply quote"
-                detail="The story a reply answers, above its bubble at an attached photo’s size: its first frame, then its author · a live story opens, an ended one only shows"
+                detail="Who replied, then the story’s first frame beside a quote bar, then the reply · a live story opens, an ended one only shows"
                 stage="app"
             >
                 <div
@@ -547,15 +547,13 @@ export function StoryPage() {
                 >
                     <Message
                         author="Kirill"
+                        authorNote="replied to your story"
                         body="Love the new welcome screen! Does setup still ask for the camera?"
+                        initials="K"
                         own
                         quote={
                             <StoryQuote
                                 align="end"
-                                author={{
-                                    name: "Desktop onboarding",
-                                    face: { initials: "DO", type: "agent" },
-                                }}
                                 frame={{ url: FRAME }}
                                 onOpen={() => undefined}
                             />
@@ -564,13 +562,9 @@ export function StoryPage() {
                     />
                     <Message
                         author="Maya Johnson"
+                        authorNote="replied to Desktop onboarding’s story"
                         body="Can we do the same on the phone?"
-                        quote={
-                            <StoryQuote
-                                author={{ name: "Steve", face: { initials: "S", type: "human" } }}
-                                frame={{ url: WHITE }}
-                            />
-                        }
+                        quote={<StoryQuote frame={{ url: WHITE }} />}
                         time="10:54"
                         tone="amber"
                     />
