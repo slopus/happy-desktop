@@ -16,6 +16,10 @@ const desktop = join(workspace, "packages", "happy-desktop-electron");
 const require = createRequire(join(desktop, "package.json"));
 const { build, Platform, Arch } = require("electron-builder");
 const metadata = JSON.parse(await readFile(join(desktop, "package.json"), "utf8"));
+// Previews embed their version in the package without changing the source manifest.
+const version = process.env.RELEASE_VERSION || metadata.version;
+if (!/^\d+\.\d+\.\d+(?:-preview\.(?:0|[1-9]\d*))?$/u.test(version))
+    throw new Error("RELEASE_VERSION must be a stable or numbered preview version.");
 // Every Windows build is signed; a missing setting fails rather than producing an unsigned one.
 const signing = {};
 for (const [option, variable] of Object.entries({
@@ -67,7 +71,7 @@ await build({
         appId: flavor.appId,
         productName: flavor.productName,
         artifactName: `${flavor.artifactPrefix}-\${version}-\${arch}.\${ext}`,
-        extraMetadata: { name: flavor.updaterCacheDirName.replace(/-updater$/u, "") },
+        extraMetadata: { name: flavor.updaterCacheDirName.replace(/-updater$/u, ""), version },
         directories: { ...metadata.build.directories, output },
         files: [
             ...(flavorName === "local-web"
@@ -120,11 +124,11 @@ if (![updater.publisherName].flat().includes(signing.publisherName)) {
     throw new Error("The signed app must verify its publisher when downloading updates.");
 }
 const manifest = parse(await readFile(join(output, `${flavor.channel}.yml`), "utf8"));
-const installer = `${flavor.artifactPrefix}-${metadata.version}-x64.exe`;
+const installer = `${flavor.artifactPrefix}-${version}-x64.exe`;
 const installerBytes = await readFile(join(output, installer));
 const installerHash = createHash("sha512").update(installerBytes).digest("base64");
 if (
-    manifest.version !== metadata.version ||
+    manifest.version !== version ||
     !manifest.files.some(
         (file) =>
             file.url === installer &&
@@ -134,6 +138,4 @@ if (
 ) {
     throw new Error(`Windows updater metadata does not match the final installer ${installer}.`);
 }
-console.log(
-    `Built ${flavor.productName} ${metadata.version}; installer and ${flavor.channel}.yml agree.`,
-);
+console.log(`Built ${flavor.productName} ${version}; installer and ${flavor.channel}.yml agree.`);

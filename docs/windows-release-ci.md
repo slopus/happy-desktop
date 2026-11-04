@@ -27,8 +27,16 @@ build and includes its installer and updater files beside the signed macOS
 artifacts. The release additionally exercises Desktop's real GitHub release
 lookup, checksum-verified Agent installation, saved binary selection, daemon
 startup, and authenticated named-pipe health with a fresh Happy home. Publish
-the Windows Agent before dispatching the Desktop release. Apple signing and
+the Windows Agent before dispatching a stable Desktop release; previews skip that
+Agent check, like macOS. Previews build, sign, install-test, and publish Windows too,
+with the preview version embedded in the installer and its manifest, and a
+Nightly-only preview builds the Nightly installer alone. Apple signing and
 notarization remain unchanged.
+
+Installed Windows apps update themselves as macOS does: Desktop picks the newest
+release allowed by the Preview updates setting that carries `latest.yml` (or
+`nightly.yml` for Nightly), and electron-updater installs it only after confirming
+the downloaded installer is signed by the publisher pinned in `app-update.yml`.
 
 ## Azure Artifact Signing
 

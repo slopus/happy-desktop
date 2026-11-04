@@ -3,6 +3,14 @@ name: Build and install Windows Desktop
 on:
     workflow_call:
         inputs:
+            version:
+                description: Version to embed, X.Y.Z or X.Y.Z-preview.N; empty uses the package version.
+                type: string
+                default: ""
+            nightly_only:
+                description: Build only Happy Nightly, for a Nightly-only preview.
+                type: boolean
+                default: false
             verify_agent_release:
                 type: boolean
                 default: false
@@ -28,7 +36,7 @@ jobs:
         strategy:
             fail-fast: false
             matrix:
-                flavor: [standard, local-web]
+                flavor: ${{ fromJSON(inputs.nightly_only && '["local-web"]' || '["standard", "local-web"]') }}
         defaults:
             run:
                 shell: bash
@@ -96,6 +104,7 @@ jobs:
             - name: Build NSIS installer and update metadata
               env:
                   HAPPY_POSTHOG_API_KEY: ${{ inputs.release_analytics && secrets.HAPPY_POSTHOG_API_KEY || '' }}
+                  RELEASE_VERSION: ${{ inputs.version }}
               run: pnpm desktop:win:release ${{ matrix.flavor }}
             - name: Install the actual release package
               shell: pwsh
