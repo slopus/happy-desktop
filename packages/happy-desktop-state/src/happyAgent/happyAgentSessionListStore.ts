@@ -230,6 +230,8 @@ export interface HappyAgentBotCreation {
  */
 export interface HappyAgentBotCreateInput {
     readonly name?: string;
+    /** Makes it an admin bot. Omitted, the bot is non-admin. */
+    readonly isAdmin?: boolean;
     /** The face, already painted. It goes on the row at once and up to the host once the bot exists. */
     readonly avatar?: HappyAgentAvatarImage;
     /**
@@ -2685,6 +2687,7 @@ export function happyAgentSessionListStoreCreate(
             // that anything happened.
             const request = deps.connectActions.createBot(
                 name === undefined || name.length === 0 ? undefined : name,
+                input.isAdmin === true ? { isAdmin: true } : undefined,
             );
             const botId = request.botId as HappyAgentBotId;
             const avatar =
