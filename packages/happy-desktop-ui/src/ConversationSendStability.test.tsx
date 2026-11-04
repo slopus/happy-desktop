@@ -483,8 +483,8 @@ it.each([
     },
 );
 
-// Firefox CSS zoom changes native scrollTop: happy-file://agents/ebzk9bggqj0qt6wts9jv0tgh/.context/fuzz-plainzoom24.log
-it.skipIf(server.browser === "firefox").each(["send", "draft"] as const)(
+// These cases use Chromium's CDP device metrics to emulate page zoom.
+it.skipIf(server.browser !== "chromium").each(["send", "draft"] as const)(
     "keeps visible content above held %s space through zoom changes",
     async (source) => {
         const { view, send } = renderConversation(40);
@@ -955,8 +955,8 @@ it("does not resume following on a small native offset adjustment after an upwar
     expect(viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop).toBeGreaterThan(1);
 });
 
-// Firefox CSS zoom changes native scrollTop: happy-file://agents/ebzk9bggqj0qt6wts9jv0tgh/.context/fuzz-plainzoom24.log
-it.skipIf(server.browser === "firefox").each([0.67, 0.9, 1.5, 2])(
+// These cases use Chromium's CDP device metrics to emulate page zoom.
+it.skipIf(server.browser !== "chromium").each([0.67, 0.9, 1.5, 2])(
     "never writes upward while following the fractional native bottom at zoom %f",
     async (zoom) => {
         const { view, send } = renderConversation(40);
