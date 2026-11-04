@@ -373,6 +373,8 @@ const MEDIA_MARGIN_BARE = 4;
 /** Linked attachment cards: 64px cards, 4px gaps, and the message slot's top inset. */
 const ATTACHMENT_CARD_HEIGHT = 64;
 const ATTACHMENT_CARD_GAP = 4;
+/** `.happy-story-quote`: a 64px frame, 5px padding and 1px border each side, and 4px under it. */
+const STORY_QUOTE_HEIGHT = 80;
 /** Collapsed `.happy-agent-activity-row` heights, by activity kind. */
 const ACTIVITY_HEIGHT = { tool: 32, labeled: 32, reasoning: 40, agentMessage: 32 } as const;
 /** Expanded reasoning: outer/header/gap chrome around its Markdown body. */
@@ -1434,6 +1436,7 @@ export function conversationRowHeight(
                 (hasBody ? MEDIA_MARGIN : MEDIA_MARGIN_BARE) +
                 cards * ATTACHMENT_CARD_HEIGHT +
                 (cards - 1) * ATTACHMENT_CARD_GAP;
+        if (message.storyQuote) height += STORY_QUOTE_HEIGHT;
         if (!own && !grouped && entry.contextNote) height += 21;
         return height;
     });

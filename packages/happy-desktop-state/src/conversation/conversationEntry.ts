@@ -88,7 +88,23 @@ export interface ConversationMessageProjection {
     readonly agentTrace?: AgentTurnTraceSummary;
     readonly reactions: readonly ConversationReaction[];
     readonly attachments: readonly ConversationAttachment[];
+    /** The story this message replies to, shown above it. */
+    readonly storyQuote?: ConversationStoryQuote;
     readonly createdAt: string;
+}
+
+/** A replied-to story: its first frame, never played, and who posted it. */
+export interface ConversationStoryQuote {
+    readonly storyId: string;
+    /** After this it cannot be opened, though its quote stays. */
+    readonly expiresAt: number;
+    readonly caption?: string;
+    readonly frame: { readonly url: string; readonly thumbhash?: string } | null;
+    readonly author: {
+        readonly kind: "agent" | "human";
+        readonly name: string;
+        readonly face: ConversationAgentFace;
+    };
 }
 
 /**

@@ -4521,6 +4521,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
             return (
                 <HappyAgentWorkspaceSurface
                     instanceId={active.instanceId}
+                    {...(storiesStore ? { onStoryOpen: storiesStore.storyOpen } : {})}
                     {...(referenceSurfaces ? { referenceSurfaces } : {})}
                     availability={
                         activeAvailability ??
@@ -6392,6 +6393,8 @@ interface HappyAgentWorkspaceSurfaceProps {
     chatId?: string;
     onChatSelect(groupId: string | undefined, chatId?: string, replace?: boolean): void;
     onChatClose(groupId: string, chatId: string, fallbackChatId?: string): boolean;
+    /** Opens a live story a reply in the transcript quotes. */
+    onStoryOpen?: (storyId: string) => void;
     onFileClose(groupId: string, path: string): void;
     onFileSelect(
         groupId: string,
@@ -7322,6 +7325,7 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                 {...chiefOfStaffNameProps(workspace.list.bots)}
                 {...(props.referenceSurfaces ? { referenceSurfaces: props.referenceSurfaces } : {})}
                 onReferenceGroupOpen={referenceGroupOpen}
+                onStoryOpen={props.onStoryOpen}
                 activitySelected={panel.open && panel.activeViewId === "activity"}
                 conversation={conversation}
                 {...(workspace.fileOpenFailure === undefined
@@ -8875,6 +8879,7 @@ function HappyAgentConversationBody(props: {
     chiefOfStaffName?: string;
     /** Opens a group a reference names, on one of its conversations or where it was left. */
     onReferenceGroupOpen: (groupId: HappyAgentGroupId, agentId?: string) => void;
+    onStoryOpen?: (storyId: string) => void;
     /** The Surfaces the transcript's references can name, and where one opens. */
     referenceSurfaces?: MessageReferenceSurfaces;
     modelUsageWatch?: ComposerModelUsageWatch;
@@ -8942,6 +8947,7 @@ function HappyAgentConversationBody(props: {
                     ? {}
                     : { chiefOfStaffName: props.chiefOfStaffName })}
                 onReferenceGroupOpen={props.onReferenceGroupOpen}
+                onStoryOpen={props.onStoryOpen}
                 {...(props.referenceSurfaces ? { referenceSurfaces: props.referenceSurfaces } : {})}
                 modelUsageWatch={props.modelUsageWatch}
                 conversation={conversation.value}
@@ -9343,6 +9349,7 @@ function HappyAgentConversationSurface(props: {
     chiefOfStaffName?: string;
     /** Opens a group a reference names, on one of its conversations or where it was left. */
     onReferenceGroupOpen: (groupId: HappyAgentGroupId, agentId?: string) => void;
+    onStoryOpen?: (storyId: string) => void;
     /** The Surfaces the transcript's references can name, and where one opens. */
     referenceSurfaces?: MessageReferenceSurfaces;
     modelUsageWatch?: ComposerModelUsageWatch;
@@ -9733,6 +9740,7 @@ function HappyAgentConversationSurface(props: {
             onImageOpen={(messageId, attachmentId) => {
                 if (props.happyAgentOnline()) workspace.imageOpen(messageId, attachmentId);
             }}
+            onStoryOpen={props.onStoryOpen}
             onAttachmentOpen={(attachment) => {
                 // An attached document is a page, not a file to save. When it
                 // lives in a checkout this workspace reads, it opens the way a

@@ -463,6 +463,11 @@ export function happyAgentStoriesStoreCreate(deps: {
         agentOpen(agentId: string) {
             if (enabled()) show(first(`agent:${agentId}`), null);
         },
+        /** Opens one live story, as a quote of it does; an ended one stays shut. */
+        storyOpen(storyId: string) {
+            const story = stories.find((each) => each.id === storyId);
+            if (enabled() && story) show(story, null);
+        },
         /** Opens a row tile's poster and plays on through the row. */
         tileOpen(key: string) {
             if (enabled())

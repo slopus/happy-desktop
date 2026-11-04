@@ -46,6 +46,7 @@ import {
 } from "./ConversationRequestView";
 import { type HappyAgentUserInputAnswerMap } from "./HappyAgentUserInputPrompt";
 import { FileAttachment, type FileAttachmentKind } from "./FileAttachment";
+import { StoryQuote } from "./StoryQuote";
 import { SYSTEM_NOTIFICATION_LABEL } from "./systemNotification";
 
 /** A failure card's live state and actions, supplied by the conversation that owns it. */
@@ -106,6 +107,8 @@ export type ConversationEntryViewProps = {
     onImageOpen?: (messageId: string, attachmentId: string) => void;
     /** Opens or downloads one linked attachment through the owning product surface. */
     onAttachmentOpen?: (attachment: ConversationLinkedAttachment) => void;
+    /** Opens a story a reply quotes, while it is still live at `now`. */
+    onStoryOpen?: (storyId: string) => void;
     /** Opens this entry's tool call in an owner-provided preview surface. */
     onToolSelect?: (entryId: string, tool: ConversationToolCall) => void;
     /** Opens one file this entry's tool call presented, by its media position. */
@@ -563,6 +566,7 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
             attachment.kind === "linked" &&
             (attachment.attachmentKind !== "image" || attachment.openUrl === undefined),
     );
+    const quote = message.storyQuote;
     const trace = message.agentTrace;
     const traceCollapsible = traceSettled(trace);
     /* A grouped row has no header to carry a quiet control in. */
@@ -636,6 +640,34 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
             {...(props.linkOpenDefault ? { linkOpenDefault: props.linkOpenDefault } : {})}
             {...(props.references ? { references: props.references } : {})}
             own={own}
+            quote={
+                quote ? (
+                    <StoryQuote
+                        author={{
+                            name: quote.author.name,
+                            face: {
+                                initials: initialsOf(quote.author.name),
+                                type: quote.author.kind,
+                                ...(quote.author.face.kind === "image"
+                                    ? { imageUrl: quote.author.face.url }
+                                    : { placeholderSeed: quote.author.face.seed }),
+                            },
+                        }}
+                        {...(quote.caption === undefined ? {} : { caption: quote.caption })}
+                        frame={
+                            quote.frame && {
+                                url: quote.frame.url,
+                                ...(quote.frame.thumbhash
+                                    ? { placeholderUrl: thumbhashDataUrl(quote.frame.thumbhash) }
+                                    : {}),
+                            }
+                        }
+                        {...(props.onStoryOpen && quote.expiresAt > (props.now ?? 0)
+                            ? { onOpen: () => props.onStoryOpen?.(quote.storyId) }
+                            : {})}
+                    />
+                ) : undefined
+            }
             style={props.style}
             time={messageTime(message.createdAt)}
         >

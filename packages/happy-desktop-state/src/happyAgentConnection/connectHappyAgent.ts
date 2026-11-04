@@ -272,21 +272,22 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                 publishGroups();
         },
     });
+    /** The people a message names: who wrote it, and whose repost it quotes. */
+    const messageUserIds = (message: Message): string[] =>
+        message.role === "user"
+            ? [message.metadata.userId, message.quote?.userId ?? undefined].filter(
+                  (id): id is string => id !== undefined,
+              )
+            : [];
     const ensureMessageUsers = (messages: readonly Message[]): Promise<void> =>
-        users.ensure(
-            messages.flatMap((message) =>
-                message.role === "user" && message.metadata.userId !== undefined
-                    ? [message.metadata.userId]
-                    : [],
-            ),
-        );
+        users.ensure(messages.flatMap(messageUserIds));
     const indexMessageUser = (entry: SessionEntry, message: Message): void => {
-        if (message.role !== "user" || message.metadata.userId === undefined) return;
-        const id = message.metadata.userId;
-        entry.userIds.add(id);
-        let references = userSessions.get(id);
-        if (!references) userSessions.set(id, (references = new Set()));
-        references.add(entry);
+        for (const id of messageUserIds(message)) {
+            entry.userIds.add(id);
+            let references = userSessions.get(id);
+            if (!references) userSessions.set(id, (references = new Set()));
+            references.add(entry);
+        }
     };
     const clearUserIndex = (entry: SessionEntry): void => {
         for (const id of entry.userIds) {
@@ -647,6 +648,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
             connection: groupsStore.getState().connection,
             endpoint,
             mediaUrl: toolCallMediaUrl,
+            quoteFrameUrl: (agentId, messageId) => client.storyQuoteFrameUrl(agentId, messageId),
             hasMore: entry.hasMore,
             messages: [...entry.messages.values()],
             userProfiles: users.profiles,

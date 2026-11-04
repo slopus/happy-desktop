@@ -152,6 +152,16 @@ export interface UserMessageElement extends BaseChatElement {
     delivery: "pending_steering" | "sent";
     text: string;
     attachments?: readonly { data: string; mediaType: string }[];
+    /** The story this message replies to: its still at its own address, and its author. */
+    quote?: {
+        readonly storyId: string;
+        readonly expiresAt: number;
+        readonly caption: string | null;
+        readonly frame: { readonly url: string; readonly thumbhash?: string } | null;
+        readonly author:
+            | { readonly kind: "agent"; readonly agentId: string }
+            | { readonly kind: "person"; readonly userId: string; readonly profile?: UserProfile };
+    };
     source?: "notification";
     /**
      * The agent that put this message in the user slot, when one did, and where

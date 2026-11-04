@@ -279,6 +279,7 @@ export type ConversationViewProps = {
     onImageOpen?: (messageId: string, attachmentId: string) => void;
     /** Opens or downloads one linked transcript attachment. */
     onAttachmentOpen?: ConversationEntryViewProps["onAttachmentOpen"];
+    onStoryOpen?: ConversationEntryViewProps["onStoryOpen"];
     /** Opens one tool entry in the workspace's replaceable Preview tab. */
     onToolSelect?: (entryId: string, tool: ConversationToolCall) => void;
     /** Opens one file a tool call presented: a picture full size, a file in its preview. */
@@ -1272,6 +1273,7 @@ export function ConversationView(props: ConversationViewProps) {
                                     }
                                     onImageOpen={props.onImageOpen}
                                     onAttachmentOpen={props.onAttachmentOpen}
+                                    onStoryOpen={props.onStoryOpen}
                                     onRequestAnswer={props.onRequestAnswer}
                                     onRequestSelectionChange={props.onRequestSelectionChange}
                                     onRowExpandedChange={(expanded) =>

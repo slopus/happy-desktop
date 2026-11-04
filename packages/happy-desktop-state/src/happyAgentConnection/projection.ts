@@ -15,6 +15,7 @@ import type {
     Question,
     Run,
     SlashCommand,
+    StoryQuote,
     Task,
     TaskMembership,
     UsageBreakdown,
@@ -61,6 +62,8 @@ export interface SessionProjectionInput {
      * presented, on the same authenticated origin as every other image it names.
      */
     mediaUrl: (agentId: string, toolCallId: string, index: number) => string;
+    /** Where a story reply's quoted still is served. */
+    quoteFrameUrl: (agentId: string, messageId: string) => string;
     hasMore: boolean;
     messages: readonly TranscriptMessage[];
     userProfiles?: ReadonlyMap<string, UserProfile>;
@@ -302,6 +305,7 @@ function projectQuestionElement(question: Question): Extract<ChatElement, { kind
 export function projectElements(input: SessionProjectionInput): readonly ChatElement[] {
     const reader: TranscriptReader = {
         mediaUrl: input.mediaUrl,
+        quoteFrameUrl: input.quoteFrameUrl,
         agentId: input.agent.id,
         parentAgentId: input.agent.parentAgentId,
         userProfiles: input.userProfiles,
@@ -1064,6 +1068,8 @@ function projectSubagents(
  */
 interface MessageElements {
     readonly profile: UserProfile | undefined;
+    /** The person a quoted story is by, as read when these were made. */
+    readonly quoted: UserProfile | undefined;
     readonly own: boolean;
     readonly runId: string;
     readonly runStatus: Run["status"];
@@ -1081,6 +1087,7 @@ interface MessageElements {
 interface TranscriptReader {
     /** Stable for the connection's life, so it takes no part in the memory below. */
     readonly mediaUrl: SessionProjectionInput["mediaUrl"];
+    readonly quoteFrameUrl: SessionProjectionInput["quoteFrameUrl"];
     readonly userProfiles?: ReadonlyMap<string, UserProfile>;
     readonly currentUserId?: string;
     readonly agentId: string;
@@ -1099,9 +1106,12 @@ function projectMessage(
     const userId = entry.message.role === "user" ? entry.message.metadata.userId : undefined;
     const profile = userId === undefined ? undefined : reader.userProfiles?.get(userId);
     const own = userId !== undefined && userId === reader.currentUserId;
+    const quoter = entry.message.role === "user" ? entry.message.quote?.userId : undefined;
+    const quoted = quoter ? reader.userProfiles?.get(quoter) : undefined;
     if (
         cached !== undefined &&
         cached.profile === profile &&
+        cached.quoted === quoted &&
         cached.own === own &&
         cached.runId === runId &&
         cached.runStatus === runStatus &&
@@ -1110,8 +1120,38 @@ function projectMessage(
     )
         return cached.elements;
     const elements = messageElementsProject(entry, runId, runStatus, reader);
-    messageElements.set(entry.message, { runId, runStatus, reader, elements, profile, own });
+    messageElements.set(entry.message, {
+        runId,
+        runStatus,
+        reader,
+        elements,
+        profile,
+        quoted,
+        own,
+    });
     return elements;
+}
+
+/** A story reply's quote: its still at its own address, and its author as read so far. */
+function storyQuoteProject(
+    messageId: string,
+    quote: StoryQuote,
+    reader: TranscriptReader,
+): NonNullable<Extract<ChatElement, { kind: "user_message" }>["quote"]> {
+    const { frame, userId } = quote;
+    return {
+        storyId: quote.storyId,
+        expiresAt: quote.expiresAt,
+        caption: quote.caption,
+        frame: frame && {
+            url: reader.quoteFrameUrl(reader.agentId, messageId),
+            ...(frame.thumbhash === undefined ? {} : { thumbhash: frame.thumbhash }),
+        },
+        author:
+            userId === null
+                ? { kind: "agent", agentId: quote.agentId }
+                : { kind: "person", userId, profile: reader.userProfiles?.get(userId) },
+    };
 }
 
 /** Everything a message says as one block of text, in the order it says it. */
@@ -1186,6 +1226,9 @@ function messageElementsProject(
                             block.type === "image",
                     )
                     .map((block) => ({ data: block.data, mediaType: block.mimeType })),
+                ...(message.quote?.kind === "story"
+                    ? { quote: storyQuoteProject(message.id, message.quote, reader) }
+                    : {}),
             },
         ];
     }

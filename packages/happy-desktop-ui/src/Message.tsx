@@ -181,6 +181,8 @@ export type MessageProps = Omit<HTMLAttributes<HTMLDivElement>, "style"> & {
     };
     /** Attachment cards (runs, approvals, events) rendered below the body. */
     children?: ReactNode;
+    /** What the message answers, such as a story, shown above its body. */
+    quote?: ReactNode;
     /** Follow-up message: no avatar/author row, time sits in the gutter. */
     compact?: boolean;
     /** Delivery styling that never inserts or removes layout. */
@@ -402,6 +404,7 @@ export function Message(props: MessageProps) {
         "onAuthorSelect",
         "onReactionSelect",
         "own",
+        "quote",
         "reactions",
         "style",
         "time",
@@ -746,6 +749,7 @@ export function Message(props: MessageProps) {
                         {local.contextNote}
                     </span>
                 ) : null}
+                {local.quote}
                 {ownBubbleLine ? (
                     <div
                         className="happy-message__bubble-line"

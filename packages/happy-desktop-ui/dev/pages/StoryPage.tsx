@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Sidebar, type SidebarItem } from "../../src/Sidebar";
+import { Message } from "../../src/Message";
 import { StoriesRow } from "../../src/StoriesRow";
+import { StoryQuote } from "../../src/StoryQuote";
 import { StoryViewer, type StoryViewerReply } from "../../src/StoryViewer";
 import clip from "../../src/assets/animations/chief-of-staff.mp4?url";
 import { ComponentPage, FullScreenSpecimen, Specimen } from "../kit";
@@ -533,6 +535,50 @@ export function StoryPage() {
                     </FullScreenSpecimen>
                 )),
             )}
+            <Specimen
+                number="15"
+                label="Reply quote"
+                detail="A reply quotes its story above the bubble: paused first frame, author, one-line caption · a live story opens, an ended one only shows"
+                stage="app"
+            >
+                <div
+                    data-screen="15-quote"
+                    style={{ display: "flex", flexDirection: "column", gap: 8, width: 640 }}
+                >
+                    <Message
+                        author="Kirill"
+                        body="Love the new welcome screen! Does setup still ask for the camera?"
+                        own
+                        quote={
+                            <StoryQuote
+                                author={{
+                                    name: "Desktop onboarding",
+                                    face: { initials: "DO", type: "agent" },
+                                }}
+                                caption="Onboarding now opens on the welcome screen, with setup one click away."
+                                frame={{ url: FRAME }}
+                                onOpen={() => undefined}
+                            />
+                        }
+                        time="10:52"
+                    />
+                    <Message
+                        author="Maya Johnson"
+                        body="Ship it"
+                        quote={
+                            <StoryQuote
+                                author={{
+                                    name: "Release bot",
+                                    face: { initials: "RB", type: "agent" },
+                                }}
+                                frame={{ url: WHITE }}
+                            />
+                        }
+                        time="10:54"
+                        tone="amber"
+                    />
+                </div>
+            </Specimen>
         </ComponentPage>
     );
 }

@@ -8,6 +8,7 @@ import {
     type ConversationEntry,
     type ConversationJson,
     type ConversationMessageProjection,
+    type ConversationStoryQuote,
     type ConversationRequestEntry,
     type ConversationToolCall,
 } from "../conversation/conversationEntry.js";
@@ -722,6 +723,9 @@ function happyAgentConnectGroupProject(
                                 ...inlineImageSize(attachment.data),
                             }),
                         ),
+                        ...(element.quote
+                            ? { storyQuote: storyQuoteProject(element.quote, input) }
+                            : {}),
                     }),
                 });
                 break;
@@ -1280,6 +1284,36 @@ function happyAgentConnectGroupProject(
     return visibleCollapsed.map((entry) => (entry === actualAnchor ? tracedAnchor : entry));
 }
 
+/** A quoted story's author by name and face: its agent as the window names it, or its reposter. */
+function storyQuoteProject(
+    quote: NonNullable<Extract<ChatElement, { kind: "user_message" }>["quote"]>,
+    input: HappyAgentConversationInput,
+): ConversationStoryQuote {
+    const { author } = quote;
+    const agent = author.kind === "agent" ? senderOf(input, author.agentId) : undefined;
+    const photo = author.kind === "person" ? author.profile?.avatar?.url : undefined;
+    return {
+        storyId: quote.storyId,
+        expiresAt: quote.expiresAt,
+        ...(quote.caption === null ? {} : { caption: quote.caption }),
+        frame: quote.frame,
+        author:
+            author.kind === "agent"
+                ? {
+                      kind: "agent",
+                      name: agent?.agentName ?? "Agent",
+                      face: agent?.agentFace ?? { kind: "placeholder", seed: author.agentId },
+                  }
+                : {
+                      kind: "human",
+                      name: author.profile?.name ?? "Someone",
+                      face: photo
+                          ? { kind: "image", url: photo }
+                          : { kind: "placeholder", seed: author.userId },
+                  },
+    };
+}
+
 function messageProject(input: {
     readonly id: string;
     readonly sessionId: string;
@@ -1288,6 +1322,7 @@ function messageProject(input: {
     readonly createdAt: number;
     readonly author: ConversationAuthor;
     readonly attachments?: ConversationMessageProjection["attachments"];
+    readonly storyQuote?: ConversationStoryQuote;
     readonly generationStatus?: ConversationMessageProjection["generationStatus"];
 }): ConversationMessageProjection {
     return {
@@ -1299,6 +1334,7 @@ function messageProject(input: {
         sender: input.author,
         text: input.text,
         attachments: input.attachments ?? [],
+        ...(input.storyQuote ? { storyQuote: input.storyQuote } : {}),
         reactions: [],
         createdAt: new Date(input.createdAt).toISOString(),
         ...(input.generationStatus ? { generationStatus: input.generationStatus } : {}),

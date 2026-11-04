@@ -541,3 +541,52 @@
     background: none;
     color: var(--text);
 }
+
+/* The story a reply answers, above the reply: a 36×64 frame at 9:16, so the card is 76px tall. */
+.happy-story-quote {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    max-width: min(280px, 100%);
+    padding: 5px 11px 5px 5px;
+    border: 1px solid var(--divider);
+    border-radius: var(--happy-radius-md);
+    background: var(--groupped-background);
+    color: var(--text-secondary);
+    font: 400 12px / 16px var(--happy-font-ui);
+    text-align: left;
+}
+button.happy-story-quote:hover {
+    background: var(--surface-high);
+    cursor: pointer;
+}
+/* 4px nests in the card's 10px corner across its 1px border and 5px padding. */
+.happy-story-quote__frame {
+    flex: none;
+    width: 36px;
+    height: 64px;
+    border-radius: 4px;
+    background: var(--surface-high) center / cover;
+    object-fit: cover;
+}
+.happy-story-quote > span {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+.happy-story-quote > span > span,
+.happy-story-quote__author > span:last-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.happy-story-quote__author {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text);
+    font-weight: 600;
+    font-size: 13px;
+    line-height: 20px;
+}

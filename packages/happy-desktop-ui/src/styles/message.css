@@ -1532,3 +1532,8 @@
         top: -1px;
     }
 }
+
+/* The quote sits 4px above the body it is answered by. */
+.happy-message__content > .happy-story-quote {
+    margin-bottom: 4px;
+}
