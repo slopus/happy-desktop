@@ -1,7 +1,6 @@
 import { expect, it } from "vitest";
 import "./theme.css";
 import "./styles/icon.css";
-import "./styles/vector-icon.css";
 import "./styles/badge.css";
 import "./styles/media-gallery.css";
 import { MediaGallery, type MediaItem } from "./MediaGallery";

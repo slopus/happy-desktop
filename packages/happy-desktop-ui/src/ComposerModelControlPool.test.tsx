@@ -7,7 +7,6 @@ import "./styles/button.css";
 import "./styles/composer-model-control.css";
 import "./styles/icon.css";
 import "./styles/tooltip.css";
-import "./styles/vector-icon.css";
 import {
     ComposerModelControl,
     type ComposerModelAccountUsage,

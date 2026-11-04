@@ -1,7 +1,6 @@
 import { expect, it } from "vitest";
 import "./theme.css";
 import "./styles/icon.css";
-import "./styles/vector-icon.css";
 import "./styles/turn-summary.css";
 import { TurnSummary } from "./TurnSummary";
 import { createRenderer } from "./testing";

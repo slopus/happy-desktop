@@ -2,7 +2,6 @@ import { EditorView } from "@codemirror/view";
 import { expect, it } from "vitest";
 import "./theme.css";
 import "./styles/icon.css";
-import "./styles/vector-icon.css";
 import "./styles/button.css";
 import "./styles/file-editor.css";
 import "./styles/file-path-label.css";

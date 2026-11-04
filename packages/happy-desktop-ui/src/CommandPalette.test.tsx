@@ -12,7 +12,6 @@ import "./styles/search-results.css";
 import "./styles/badge.css";
 import "./styles/button.css";
 import "./styles/icon.css";
-import "./styles/vector-icon.css";
 import { CommandPalette } from "./CommandPalette";
 import { CommandPaletteResults, type CommandPaletteResultsSection } from "./CommandPaletteResults";
 import { FormRow } from "./FormRow";

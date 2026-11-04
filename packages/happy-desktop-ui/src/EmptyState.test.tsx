@@ -1,7 +1,6 @@
 import { expect, it } from "vitest";
 import "./theme.css";
 import "./styles/icon.css";
-import "./styles/vector-icon.css";
 import "./styles/button.css";
 import "./styles/empty-state.css";
 import { EmptyState } from "./EmptyState";

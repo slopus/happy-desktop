@@ -4,7 +4,6 @@ import "./theme.css";
 import "./styles/emoji-picker.css";
 import "./styles/text-field.css";
 import "./styles/icon.css";
-import "./styles/vector-icon.css";
 import { EmojiPicker, type EmojiItem } from "./EmojiPicker";
 import { createRenderer } from "./testing";
 

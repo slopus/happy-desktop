@@ -9,7 +9,6 @@ import "./styles/command-palette.css";
 import "./styles/command-palette-results.css";
 import "./styles/badge.css";
 import "./styles/icon.css";
-import "./styles/vector-icon.css";
 import { CommandPalette } from "./CommandPalette";
 import { CommandPaletteResults } from "./CommandPaletteResults";
 import { ModalOverlay, ModalOverlayPresence } from "./ModalOverlay";

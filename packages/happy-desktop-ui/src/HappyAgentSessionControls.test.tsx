@@ -2,7 +2,6 @@ import { expect, it, vi } from "vitest";
 import type { HappyAgentMenusSnapshot, HappyAgentModelSelection } from "happy-desktop-state";
 import "./theme.css";
 import "./styles/icon.css";
-import "./styles/vector-icon.css";
 import "./styles/badge.css";
 import "./styles/menu.css";
 import "./styles/happy-agent-chat.css";

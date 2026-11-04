@@ -5,7 +5,6 @@ import "./styles/scrollbar.css";
 import "./styles/modal.css";
 import "./styles/button.css";
 import "./styles/icon.css";
-import "./styles/vector-icon.css";
 import { Button } from "./Button";
 import { Modal } from "./Modal";
 import { createRenderer } from "./testing";

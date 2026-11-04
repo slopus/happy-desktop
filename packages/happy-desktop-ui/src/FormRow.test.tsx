@@ -4,7 +4,6 @@ import "./theme.css";
 import "./styles/form-row.css";
 import "./styles/button.css";
 import "./styles/icon.css";
-import "./styles/vector-icon.css";
 import "./styles/badge.css";
 import { Badge } from "./Badge";
 import { Button } from "./Button";

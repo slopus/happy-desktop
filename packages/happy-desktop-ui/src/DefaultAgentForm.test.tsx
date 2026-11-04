@@ -3,7 +3,6 @@ import { type ReactNode } from "react";
 import "./theme.css";
 import "./styles/button.css";
 import "./styles/icon.css";
-import "./styles/vector-icon.css";
 import "./styles/text-field.css";
 import "./styles/default-agent-form.css";
 import { Button } from "./Button";

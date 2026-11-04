@@ -10,7 +10,6 @@ import "./styles/button.css";
 import "./styles/composer.css";
 import "./styles/emoji-picker.css";
 import "./styles/icon.css";
-import "./styles/vector-icon.css";
 /* The house scrollbar, exactly as the product loads it: it replaces the
    platform's invisible overlay bar with a classic 10px one, which is what makes
    a scrolling control's own bar cost its text real width. */

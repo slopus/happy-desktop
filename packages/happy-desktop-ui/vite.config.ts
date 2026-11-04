@@ -30,6 +30,7 @@ export default defineConfig({
         },
     },
     test: {
+        setupFiles: ["./src/testing/browserSetup.ts"],
         exclude: [...configDefaults.exclude, "eslint/**"],
         // Optical tests take several black/white Retina captures per fixture.
         // Three browsers run concurrently, so the 15s Vitest default is too

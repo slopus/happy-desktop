@@ -3,7 +3,6 @@ import { useState } from "react";
 import type { HappyAgentUserInputRequest } from "happy-desktop-state";
 import "./theme.css";
 import "./styles/icon.css";
-import "./styles/vector-icon.css";
 import "./styles/button.css";
 import "./styles/checkbox.css";
 import "./styles/happy-agent-chat.css";
