@@ -12,10 +12,20 @@
 // stills' own downscale does. Without the film grain: the shader reseeds it
 // every frame, which at 48 pixels reads as static, and the stills' grain is
 // averaged away at this size anyway. Rows run the clock at twice the
-// package's rate, as the live shader did; the last second blends into the
-// frames before the first, so the loop has no seam and never reverses.
+// package's rate, as the live shader did. Each loop runs forward and then
+// back over the same frames (0…n-1, n-2…1), so every step, the turn and the
+// wrap included, is one ordinary step between neighbouring frames: there is
+// no seam to hide and no blend to ghost.
 //
-// H.264 (yuv420p, faststart, no audio) for hardware decoding everywhere.
+// 15 frames a second, not 12: while only videos change, Chromium drops the
+// window's frame rate to the videos' and rounds 12 up to 15, so a 12 fps loop
+// shows its frames for one tick or two, unevenly; at 15 every frame is one.
+//
+// H.264 (yuv420p, faststart, no audio) for hardware decoding everywhere. The
+// predicted frames drift from the picture as the loop goes on, and the
+// keyframe at the wrap snaps back, which reads as a jump on a slow avatar; the
+// first frame and the last second are coded finer, so the loop closes on
+// nearly what it opens with.
 // Needs ffmpeg with libx264 on PATH.
 //
 //   node packages/happy-desktop-ui/scripts/generate-avatar-loops.mjs <happy>
@@ -33,10 +43,11 @@ import { AVATAR_SHADER_FRAGMENT, AVATAR_SHADER_VERTEX } from "./avatarShader/sha
 const PIXELS = 48;
 /** Drawn at this many times the size, then averaged down. */
 const SUPERSAMPLE = 4;
-const FPS = 12;
-const SECONDS = 6;
-/** The last second fades into the frames before the first. */
-const FADE_FRAMES = FPS;
+const FPS = 15;
+/** Forward; the loop plays them back again, so it lasts twice as long. */
+const SECONDS = 5;
+/** The last frames' bitrate climbs to this many times the rest. */
+const CLOSE_BOOST = 6;
 /** The live shader's clock rate for a row-sized avatar. */
 const SPEED = 2;
 const EFFECTS = { linear: 0, thermal: 1, topography: 2, plasma: 3, radial: 4 };
@@ -125,13 +136,22 @@ async function pageCreate() {
 let page = await pageCreate();
 
 const count = FPS * SECONDS;
+/** Forward 0…count-1, then back count-2…1; the wrap steps from 1 to 0. */
+const order = [
+    ...Array.from({ length: count }, (_, frame) => frame),
+    ...Array.from({ length: count - 2 }, (_, k) => count - 2 - k),
+];
+// The keyframe nearly exact, and the bitrate climbing towards it over the last second.
+const zones = [
+    "0,0,q=8",
+    ...Array.from({ length: FPS }, (_, k) => {
+        const frame = order.length - FPS + k;
+        return `${frame},${frame},b=${(1 + ((CLOSE_BOOST - 1) * (k + 1)) / FPS).toFixed(2)}`;
+    }),
+].join("/");
 for (const [index, row] of rows.entries()) {
-    // Frames 0…count-1 from the still's phase, then the fade's partners just before it.
-    const at = (frame) => row.phase + (frame / FPS) * SPEED;
-    const times = [
-        ...Array.from({ length: count }, (_, frame) => at(frame)),
-        ...Array.from({ length: FADE_FRAMES }, (_, k) => at(k - FADE_FRAMES)),
-    ];
+    // Frames 0…count-1 from the still's phase.
+    const times = Array.from({ length: count }, (_, frame) => row.phase + (frame / FPS) * SPEED);
     const draw = () =>
         page.evaluate(
             ({ row, effect, times, pixels, supersample }) => {
@@ -176,21 +196,9 @@ for (const [index, row] of rows.entries()) {
     }
     const frames = Buffer.from(rgb, "base64");
     const size = PIXELS * PIXELS * 3;
-    const video = Buffer.alloc(count * size);
-    for (let frame = 0; frame < count; frame++) {
-        const own = frames.subarray(frame * size, (frame + 1) * size);
-        const fade = frame - (count - FADE_FRAMES);
-        if (fade < 0) {
-            own.copy(video, frame * size);
-            continue;
-        }
-        // The last second moves towards the frames that lead into frame 0, and
-        // ends on the one just before it, so the seam is one ordinary step.
-        const weight = (fade + 1) / FADE_FRAMES;
-        const partner = frames.subarray((count + fade) * size, (count + fade + 1) * size);
-        for (let i = 0; i < size; i++)
-            video[frame * size + i] = Math.round(own[i] * (1 - weight) + partner[i] * weight);
-    }
+    const video = Buffer.concat(
+        order.map((frame) => frames.subarray(frame * size, (frame + 1) * size)),
+    );
     const name = `avatar-loop-${String(index + 1).padStart(3, "0")}.mp4`;
     const encoded = spawnSync(
         "ffmpeg",
@@ -199,7 +207,8 @@ for (const [index, row] of rows.entries()) {
             "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24",
             "-s", `${PIXELS}x${PIXELS}`, "-framerate", String(FPS), "-i", "-",
             "-an", "-vf", "scale=out_color_matrix=bt709:out_range=tv",
-            "-c:v", "libx264", "-preset", "veryslow", "-crf", "22",
+            "-c:v", "libx264", "-preset", "veryslow", "-crf", "16",
+            "-x264-params", `zones=${zones}`,
             "-pix_fmt", "yuv420p", "-color_range", "tv", "-colorspace", "bt709",
             "-color_primaries", "bt709", "-color_trc", "bt709",
             "-movflags", "+faststart", "-map_metadata", "-1", join(out, name),
@@ -210,4 +219,4 @@ for (const [index, row] of rows.entries()) {
     if ((index + 1) % 20 === 0) console.log(`${index + 1}/${rows.length}`);
 }
 await browser.close();
-console.log(`${rows.length} loops, ${count} frames at ${FPS} fps, ${PIXELS}px`);
+console.log(`${rows.length} loops, ${order.length} frames at ${FPS} fps, ${PIXELS}px`);

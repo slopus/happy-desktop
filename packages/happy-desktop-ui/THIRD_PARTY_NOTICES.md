@@ -30,7 +30,7 @@ in `slopus/happy` (`packages/happy-ios/Sources/HappyUI/Resources/AvatarPlacehold
 rendered by the site's still exporter, scaled from 384px to 128px by
 `scripts/generate-avatar-placeholders.mjs`.
 
-`src/assets/avatar-loops/` holds a six-second loop of each, drawn by
+`src/assets/avatar-loops/` holds a ten-second loop of each, drawn by
 `scripts/generate-avatar-loops.mjs` with `scripts/avatarShader/shaderSource.mjs`:
 the package's avatar shader (`src/shader.js`), the avatar half only, ported
 back to GLSL ES 3.00 from happy-ios's Metal port

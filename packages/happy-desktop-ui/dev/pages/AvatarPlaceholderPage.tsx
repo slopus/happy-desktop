@@ -90,7 +90,7 @@ export function AvatarPlaceholderPage() {
         <ComponentPage
             contract="Props only"
             number={componentNumber}
-            summary="The picture a person, bot, task, or project without one of its own wears: one of the 200 shader avatars from shaders.craftedstudios.co, picked by a hash of its ID exactly as the phone picks it, shown as the still the phone ships. While what it stands for is working, a six-second loop of that shader moving plays over the still, whose first frame it is: only while on screen, the window is shown, motion is allowed, and the machine is not on battery. Until the still is decoded a placeholder shows a gradient of its own colours."
+            summary="The picture a person, bot, task, or project without one of its own wears: one of the 200 shader avatars from shaders.craftedstudios.co, picked by a hash of its ID exactly as the phone picks it, shown as the still the phone ships. While what it stands for is working, a ten-second loop of that shader moving, there and back, plays over the still, whose first frame it is: only while on screen, the window is shown, motion is allowed, and the machine is not on battery. Until the still is decoded a placeholder shows a gradient of its own colours."
             title="AvatarPlaceholder"
         >
             <Specimen
