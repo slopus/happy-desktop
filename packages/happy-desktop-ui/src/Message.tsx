@@ -1342,7 +1342,7 @@ export function MessageList(props: MessageListProps) {
             type: "scrollTop",
         };
         readerScrollTop.current = element.scrollTop;
-        if (hold === "row-start" || hold === "row-start-or-control") positionReport();
+        positionReport();
     }).current;
     const startReachedReport = (element: HTMLElement) => {
         if (
