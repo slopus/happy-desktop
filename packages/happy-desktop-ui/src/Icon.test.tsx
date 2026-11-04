@@ -212,6 +212,18 @@ it("holds the plus and cross at their 16px drawing and Octicons in the live area
         ),
     );
     const metrics = await view.visibleMetrics(parts);
+    console.info(
+        "ICON_SIZE_DIAGNOSTIC",
+        JSON.stringify({
+            browser: server.browser,
+            platform: server.platform,
+            items: parts.map((part) => ({
+                name: part.element.getAttribute("data-name"),
+                box: part.bounds(),
+                ink: metrics.get(part),
+            })),
+        }),
+    );
     for (const [row, name] of held.entries()) {
         const at = (index: number) => metrics.get(parts[row * sizes.length + index]!)!;
         const reference = at(2);
