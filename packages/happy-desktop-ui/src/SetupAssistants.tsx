@@ -135,9 +135,9 @@ export function SetupAssistants(props: SetupAssistantsProps) {
                             data-happy-desktop-ui="setup-assistants-mark"
                         >
                             {assistant.mark === "custom" ? (
-                                <Ionicon name="key" size={22} />
+                                <Ionicon name="key" size={28} />
                             ) : (
-                                <AssistantMark name={assistant.mark} size={22} />
+                                <AssistantMark name={assistant.mark} size={28} />
                             )}
                         </span>
                         <span

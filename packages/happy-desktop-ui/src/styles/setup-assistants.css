@@ -54,23 +54,39 @@
     flex: none;
     align-items: center;
     justify-content: center;
-    height: 22px;
+    height: 28px;
     color: var(--text);
 }
 
 .happy-setup-assistants__name {
     color: var(--text);
-    font-size: 14px;
+    font-size: 15px;
     font-weight: 600;
     line-height: 20px;
 }
 
+/* Below 800px a column is too narrow for "Custom configuration" on one line
+   at 15px, and a wrapped name drops that column's remedy out of the row. */
+@container (max-width: 799px) {
+    .happy-setup-assistants__name {
+        font-size: 14px;
+    }
+}
+
 .happy-setup-assistants__detail {
     color: var(--text-secondary);
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 400;
-    line-height: 16px;
+    line-height: 20px;
     text-wrap: pretty;
+}
+
+/* A window under 700px tall has no slack between the remedies and the action
+   pinned under them, so the state line keeps its compact height there. */
+@container (max-height: 699px) {
+    .happy-setup-assistants__detail {
+        line-height: 16px;
+    }
 }
 
 /* A sentence is one line, so every column's remedy starts at one height and
@@ -143,7 +159,7 @@
     background: none;
     color: var(--text-link);
     font-family: inherit;
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 500;
     line-height: 16px;
     text-decoration: underline;
