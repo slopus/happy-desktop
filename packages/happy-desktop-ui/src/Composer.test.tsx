@@ -1062,11 +1062,16 @@ it("holds ContextChips and MentionPicker geometry and colors", async () => {
     expect(
         Math.abs(textDrift.dy - (server.browser === "firefox" ? -0.97 : 0.5)),
     ).toBeLessThanOrEqual(0.4);
+    const chipElement = view.$(fileChip).element as HTMLElement;
+    chipElement.style.borderColor = "transparent";
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
     const detailDrift = await centroidDrift(
         view,
         fileChip,
         `${fileChip} [data-happy-desktop-ui="context-chips-detail"]`,
     );
+    chipElement.style.borderColor = "";
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
     console.info("DETAIL_METRICS", JSON.stringify({ browser: server.browser, platform: server.platform, drift: detailDrift, bounds: view.$(`${fileChip} [data-happy-desktop-ui="context-chips-detail"]`).bounds(), visible: await view.$(`${fileChip} [data-happy-desktop-ui="context-chips-detail"]`).visibleMetrics() }));
     // Label and detail share one baseline: with x-height-only strings the ink
     // bottom is the softened baseline — both must sit at 16px of the 24px chip
