@@ -87,9 +87,9 @@ diff --git a/packages/happy-desktop-electron/sources/renderer/browserDevBridge.t
 diff --git a/packages/happy-desktop-electron/sources/renderer/renderer.tsx b/packages/happy-desktop-electron/sources/renderer/renderer.tsx
 --- a/packages/happy-desktop-electron/sources/renderer/renderer.tsx
 +++ b/packages/happy-desktop-electron/sources/renderer/renderer.tsx
-@@ -1008,6 +1008,13 @@ if (mediaPreviewBridge) {
-                 const snapshot = created.get();
-                 preferences.appearanceChanged(snapshot.mode, snapshot.scrollbarVisibility);
+@@ -1323,7 +1323,14 @@ if (mediaPreviewBridge) {
+                 if (snapshot.avatarsAnimated !== desktopAvatarsAnimated.read())
+                     desktopAvatarsAnimated.write(snapshot.avatarsAnimated);
              });
 -            const store = browserLocal ? undefined : desktopDaemonStoreCreate(desktopBridge);
 +            // Browser-local development has no machine-local daemon lifecycle,
@@ -100,8 +100,9 @@ diff --git a/packages/happy-desktop-electron/sources/renderer/renderer.tsx b/pac
 +                browserLocal && !window.happyDemoDaemon
 +                    ? undefined
 +                    : desktopDaemonStoreCreate(desktopBridge);
-             return { appearance: created, ...(store ? { daemon: store } : {}) };
-         })();
+             return {
+                 appearance: created,
+                 powerSaving: desktopPowerSavingCreate(desktopBridge),
 diff --git a/packages/happy-desktop-electron/vite.config.ts b/packages/happy-desktop-electron/vite.config.ts
 --- a/packages/happy-desktop-electron/vite.config.ts
 +++ b/packages/happy-desktop-electron/vite.config.ts

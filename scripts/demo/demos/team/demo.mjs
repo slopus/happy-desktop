@@ -1154,7 +1154,7 @@ export default {
         await writeFile(join(output, "sounds.json"), JSON.stringify(demo.sounds, null, 2));
         await writeFile(join(output, "filmed.json"), JSON.stringify(filmed, null, 2));
     },
-    async evidence(page, gym) {
+    async evidence() {
         return {
             fixture: {
                 inference: "screenplay",

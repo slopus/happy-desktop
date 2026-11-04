@@ -1,10 +1,10 @@
 diff --git a/packages/happy-desktop-app/sources/AppHappyAgentView.tsx b/packages/happy-desktop-app/sources/AppHappyAgentView.tsx
 --- a/packages/happy-desktop-app/sources/AppHappyAgentView.tsx
 +++ b/packages/happy-desktop-app/sources/AppHappyAgentView.tsx
-@@ -4569,7 +4569,7 @@
+@@ -4663,7 +4663,7 @@ export function AppHappyAgentView(props:
+                           }
                          : {})}
-                     shortcutHints="interactive"
-                     shortcutHintsSurface={paletteHints}
+                     sidebarShortcut
 -                    windowControls={desktop}
 +                    windowControls
                      windowFullScreen={windowState.fullScreen}
