@@ -122,6 +122,11 @@ it(
                 // strings do not share an alpha centroid (ST is top-heavy).
                 const metrics = initials.textMetrics();
                 const baseline = metrics.baseline.fromSurfaceTop - avatar.bounds().y;
+                if (content.initials === "O")
+                    console.info(
+                        "AVATAR_O_DIAGNOSTIC",
+                        JSON.stringify({ id, dx, dy, bx, by, baseline, metrics, visible, offsets }),
+                    );
                 baselineBySize.set(size, baselineBySize.get(size) ?? baseline);
                 expect(
                     Math.abs(baseline - baselineBySize.get(size)!),
@@ -152,11 +157,11 @@ it(
                             lg: { x: -0.239, y: -0.047 },
                         },
                     }[engine][size];
-                    expect(
+                    expect.soft(
                         Math.abs(dx - expected.x),
                         `${id} measured O optical x ${dx}`,
                     ).toBeLessThanOrEqual(0.005);
-                    expect(
+                    expect.soft(
                         Math.abs(dy - expected.y),
                         `${id} measured O optical y ${dy}`,
                     ).toBeLessThanOrEqual(0.005);
