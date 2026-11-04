@@ -55,14 +55,15 @@
     color: var(--text);
     font: inherit;
 }
-.happy-stories-row__item > span:not(.happy-avatar) {
+.happy-stories-row__item > span:last-child {
     max-width: 100%;
     letter-spacing: -0.01em;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
-.happy-stories-row__self {
+.happy-stories-row__self,
+.happy-story-face {
     position: relative;
     display: flex;
 }
@@ -74,7 +75,7 @@
     cursor: pointer;
 }
 /* A disc of 0.3 the photo, flush with its corner; the background around it and through its plus. */
-.happy-stories-row__add {
+.happy-story-badge {
     position: absolute;
     bottom: -2px;
     right: -2px;
@@ -88,6 +89,12 @@
     border-radius: 50%;
     background: var(--groupped-background);
     color: var(--text);
+}
+/* An owner's photo is the plus's disc, ringed in the same background. */
+.happy-avatar.happy-story-badge {
+    width: 15px;
+    height: 15px;
+    border: 2px solid var(--groupped-background);
 }
 
 .happy-story-viewer {
@@ -363,7 +370,7 @@
     }
 }
 
-.happy-story-viewer__head > span:not(.happy-avatar),
+.happy-story-viewer__head > span:not(.happy-story-face),
 .happy-story-viewer__peek > button {
     margin-right: auto;
     color: var(--text-secondary);

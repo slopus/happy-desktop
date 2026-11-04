@@ -177,7 +177,11 @@ function ViewerSpecimen(props: {
                 poster={
                     props.repost
                         ? { name: "Kirill", face: { initials: "K", tone: "ocean" } }
-                        : { name: "Desktop onboarding", face: { initials: "KD", type: "agent" } }
+                        : {
+                              name: "Desktop onboarding",
+                              face: { initials: "DO", placeholderSeed: "task-do", type: "agent" },
+                              owner: { initials: "K", placeholderSeed: "user-kirill" },
+                          }
                 }
                 replies={replies}
                 replyCount={all.length}
@@ -246,7 +250,8 @@ export function StoryPage() {
                             {
                                 id: "a",
                                 name: "Desktop onboarding",
-                                face: { initials: "KD", type: "agent" },
+                                face: { initials: "DO", placeholderSeed: "task-do", type: "agent" },
+                                owner: { initials: "K", placeholderSeed: "user-kirill" },
                                 state: "unseen",
                             },
                             {
@@ -258,7 +263,7 @@ export function StoryPage() {
                             {
                                 id: "b",
                                 name: "Release bot",
-                                face: { initials: "RB", type: "agent" },
+                                face: { initials: "RB", placeholderSeed: "bot-rb", type: "agent" },
                                 state: "seen",
                             },
                         ]}

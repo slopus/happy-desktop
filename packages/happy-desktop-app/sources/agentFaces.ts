@@ -1,4 +1,4 @@
-import type { HappyAgentBot, HappyAgentTask } from "happy-desktop-state";
+import type { HappyAgentBot, HappyAgentTask, HappyAgentTaskOwner } from "happy-desktop-state";
 import type { AvatarProps } from "happy-desktop-ui";
 
 /** What an avatar of a bot, task, or person is drawn from. */
@@ -15,17 +15,22 @@ export function botFace(bot: HappyAgentBot): Pick<AgentFace, "imageUrl" | "place
 
 /**
  * A task's face, as its row wears it and the phone draws it: in a team its
- * owner's photo, else the owner's own placeholder, picked by their user id as
- * every other place pictures them; a task nobody owns, or any task on a
- * standalone machine, the placeholder its own id picks.
+ * owner's face; a task nobody owns, or any task on a standalone machine, the
+ * placeholder its own id picks.
  */
 export function taskFace(task: HappyAgentTask): AgentFace {
-    const owner = task.owner;
+    return { initials: "", placeholderSeed: task.id, ...(task.owner && ownerFace(task.owner)) };
+}
+
+/**
+ * A task owner's face: their photo, else their own placeholder, picked by their
+ * user id as every other place pictures them, else their initials.
+ */
+export function ownerFace(owner: HappyAgentTaskOwner): AgentFace {
     return {
-        initials: owner?.name === undefined ? "" : ownerInitials(owner.name),
-        ...(owner?.avatar
-            ? { imageUrl: owner.avatar.url }
-            : { placeholderSeed: owner?.userId ?? task.id }),
+        initials: owner.name === undefined ? "" : ownerInitials(owner.name),
+        ...(owner.userId === undefined ? {} : { placeholderSeed: owner.userId }),
+        ...(owner.avatar ? { imageUrl: owner.avatar.url } : {}),
     };
 }
 

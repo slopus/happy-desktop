@@ -7,6 +7,7 @@ import {
     type CSSProperties,
     type MouseEvent,
     type PointerEvent,
+    type ReactNode,
 } from "react";
 import { Avatar, type AvatarProps } from "./Avatar";
 import { Button } from "./Button";
@@ -22,6 +23,27 @@ export type StoryFace = Pick<
     AvatarProps,
     "icon" | "imageUrl" | "initials" | "placeholderSeed" | "tone" | "type"
 >;
+
+/** Who posted; an agent also names the person it works for. */
+type StoryPoster = { readonly name: string; readonly face: StoryFace; readonly owner?: StoryFace };
+
+/** A poster's face, its owner's photo in the corner where Your Story wears its plus. */
+export function StoryPosterFace(
+    props: Omit<StoryPoster, "name"> & {
+        readonly size: "sm" | "md";
+        readonly children?: ReactNode;
+    },
+) {
+    return (
+        <span className="happy-story-face">
+            <Avatar {...props.face} size={props.size} />
+            {props.children}
+            {props.owner ? (
+                <Avatar {...props.owner} className="happy-story-badge" size="xs" type="human" />
+            ) : null}
+        </span>
+    );
+}
 
 export type StoryViewerReply = {
     readonly id: string;
@@ -82,7 +104,7 @@ export type StoryViewerProps = {
     readonly id: string;
     /** The `data-story-ring` it grows out of and shrinks back to; without one it opens and closes at once. */
     readonly ring?: string;
-    readonly poster: { readonly name: string; readonly face: StoryFace };
+    readonly poster: StoryPoster;
     /** When it was posted, already worded ("5m"). */
     readonly time: string;
     readonly media: StoryMedia;
@@ -953,7 +975,7 @@ export function StoryViewer(props: StoryViewerProps) {
                             )}
                         </span>
                         <div className="happy-story-viewer__head">
-                            {face(props.poster)}
+                            <StoryPosterFace {...props.poster} size="sm" />
                             <b>{props.poster.name}</b>
                             <span>{props.time}</span>
                             <div className="happy-story-viewer__actions">

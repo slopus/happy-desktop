@@ -1,7 +1,7 @@
 import { Avatar } from "./Avatar";
 import { useRef, useSyncExternalStore } from "react";
 import { Ionicon } from "./vectorIcons/VectorIcon";
-import type { StoryFace } from "./StoryViewer";
+import { StoryPosterFace, type StoryFace } from "./StoryViewer";
 
 /** One poster in the stories row. */
 export type StoriesRowItem = {
@@ -10,6 +10,8 @@ export type StoriesRowItem = {
     readonly shortName?: string;
     /** An agent's rounded tile or a person's round photo. */
     readonly face: StoryFace;
+    /** An agent's owner, badged on its face. */
+    readonly owner?: StoryFace;
     readonly state: "unseen" | "seen";
     /** Its live stories and how many were watched, one arc each; one story is a whole ring. */
     readonly total?: number;
@@ -105,7 +107,7 @@ export function StoriesRow(props: {
                             </button>
                             <button
                                 aria-label="Add a story"
-                                className="happy-stories-row__add"
+                                className="happy-story-badge"
                                 type="button"
                                 onClick={() => picker.current?.click()}
                             >
@@ -141,12 +143,13 @@ export function StoriesRow(props: {
                             aria-label={item.name}
                             type="button"
                         >
-                            <Avatar {...item.face} size="md" />
-                            <StoryRing
-                                {...item}
-                                radius={item.face.type === "agent" ? 9 : 18}
-                                size={36}
-                            />
+                            <StoryPosterFace {...item} size="md">
+                                <StoryRing
+                                    {...item}
+                                    radius={item.face.type === "agent" ? 9 : 18}
+                                    size={36}
+                                />
+                            </StoryPosterFace>
                             <span>{item.shortName ?? item.name}</span>
                         </button>
                     ))}

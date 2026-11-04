@@ -361,7 +361,7 @@ import {
 } from "./views/HappyAgentToolMediaPreview";
 import { BlueprintView } from "./views/BlueprintView";
 import { HappyAgentFeedSurface } from "./views/HappyAgentFeedSurface";
-import { botFace, ownerInitials, taskFace } from "./agentFaces";
+import { botFace, ownerFace, ownerInitials, taskFace } from "./agentFaces";
 import { sidebarReadAheadRows } from "./sidebarReadAhead";
 import type {
     AppHappyAgentDaemonSnapshot,
@@ -1067,7 +1067,7 @@ type StoryWho = Pick<HappyAgentStoryTile, "poster" | "agentId" | "userId">;
 type StoryPoster = (
     who: StoryWho,
     people: Extract<HappyAgentStoriesSnapshot, { mode: "on" }>["people"] | undefined,
-) => { name: string; shortName?: string; face: StoryFace };
+) => { name: string; shortName?: string; face: StoryFace; owner?: StoryFace };
 const storiesUnder = new WeakMap<StoriesStore, HappyAgentStoriesSnapshot>();
 /**
  * The rows' view of the stories, which waits while a story is open over them: opening and
@@ -3445,11 +3445,14 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
         const task = active?.tasks?.find((each) => each.conversation.id === who.agentId);
         const name = bot?.name ?? task?.name ?? "Agent";
         const shortName = bot ? bot.shortName : task?.shortName;
-        const face = bot ? botFace(bot) : task ? taskFace(task) : {};
+        // An agent posts as itself, badged with the team member it works for; a bot names nobody.
+        const face = bot ? botFace(bot) : task ? { placeholderSeed: task.id } : {};
+        const owner = bot || task?.owner?.userId === undefined ? null : task.owner;
         return {
             name,
             ...(shortName ? { shortName } : {}),
             face: { initials: ownerInitials(name), ...face, type: "agent" },
+            ...(owner ? { owner: { ...ownerFace(owner), type: "human" } } : {}),
         };
     };
     // Only the addressed Happy Agent's rows, whose stories these are, wear outlines.
