@@ -22,6 +22,11 @@ on:
                 required: false
                 default: false
                 type: boolean
+            skip_local_web_x64:
+                description: Skip Intel macOS Nightly and its macOS updater manifest for this preview
+                required: false
+                default: false
+                type: boolean
 
 permissions:
     contents: read
@@ -35,6 +40,7 @@ env:
     RELEASE_VERSION: ${{ inputs.version }}
     RELEASE_PRERELEASE: ${{ inputs.prerelease }}
     RELEASE_NIGHTLY_ONLY: ${{ inputs.nightly_only }}
+    RELEASE_SKIP_LOCAL_WEB_X64: ${{ inputs.skip_local_web_x64 }}
 
 jobs:
     linux:
@@ -108,6 +114,10 @@ jobs:
                     echo "A Nightly-only release must be a preview; stable releases ship every app." >&2
                     exit 1
                   fi
+                  if [[ "$RELEASE_SKIP_LOCAL_WEB_X64" == true && "$RELEASE_PRERELEASE" != true ]]; then
+                    echo "Skipping Intel macOS Nightly is only supported for previews." >&2
+                    exit 1
+                  fi
                   if [[ -z "${RELEASE_NOTES//[[:space:]]/}" ]]; then
                     echo "Release notes must not be blank." >&2
                     exit 1
@@ -153,6 +163,8 @@ jobs:
                 # A Nightly-only preview builds no standard app at all.
                 exclude:
                     - flavor: ${{ inputs.nightly_only && 'standard' || 'none' }}
+                    - arch: x64
+                      flavor: ${{ inputs.skip_local_web_x64 && 'local-web' || 'none' }}
                 include:
                     - arch: arm64
                       runner: macos-14
@@ -325,7 +337,9 @@ jobs:
                   if [[ "$RELEASE_NIGHTLY_ONLY" != true ]]; then
                     node scripts/create-mac-update-manifest.mjs standard
                   fi
-                  node scripts/create-mac-update-manifest.mjs local-web
+                  if [[ "$RELEASE_SKIP_LOCAL_WEB_X64" != true ]]; then
+                    node scripts/create-mac-update-manifest.mjs local-web
+                  fi
 
             - name: Create tag and GitHub release
               env:
@@ -341,7 +355,9 @@ jobs:
                   for (const name of flavorNames) {
                     const flavor = desktopFlavorRead(name);
                     const directory = `packages/happy-desktop-electron/release/${flavor.output}`;
-                    const files = [`${flavor.channel}-mac.yml`, ...['arm64', 'x64'].flatMap(arch =>
+                    const skipIntelNightly = name === 'local-web' && process.env.RELEASE_SKIP_LOCAL_WEB_X64 === 'true';
+                    const arches = skipIntelNightly ? ['arm64'] : ['arm64', 'x64'];
+                    const files = [...(skipIntelNightly ? [] : [`${flavor.channel}-mac.yml`]), ...arches.flatMap(arch =>
                       ['dmg', 'zip', 'dmg.blockmap', 'zip.blockmap'].map(ext =>
                         `${flavor.artifactPrefix}-${process.env.RELEASE_VERSION}-${arch}.${ext}`))];
                     for (const file of files) {
@@ -392,3 +408,6 @@ jobs:
                   fi
                   RELEASE_URL="$(gh release view "$RELEASE_TAG" --json url --jq .url)"
                   printf 'Published [Happy %s](%s).\n' "$RELEASE_TAG" "$RELEASE_URL" >> "$GITHUB_STEP_SUMMARY"
+                  if [[ "$RELEASE_SKIP_LOCAL_WEB_X64" == true ]]; then
+                    echo 'macOS Nightly (local-web) installs skip this release; manual arm64 download available.' >> "$GITHUB_STEP_SUMMARY"
+                  fi
