@@ -23,6 +23,7 @@ const ALIGN = [
     "Can @Bob Martin check where refunds are issued? Copying @Carol Diaz for the email copy, and @Dana Kim if support needs it.",
     "Emoji 👩🏽‍💻🚀 🇺🇦 mixed with text — @Eli Okafor ✅ and ZWJ 👨‍👩‍👧‍👦 families wrap here too.",
     "中文测试：请 @Fay Novak 看一下退款流程，日本語のテキストも混ぜます。한국어 문장도 있습니다.",
+    "RTL: שלום @Gus Kim עולם, ثم مرحبا بالعالم @Hana Diaz وبعد ذلك text runs on past the wrap point here.",
     "averyveryverylongunbrokenidentifierwithoutanyspacesthatmustbreakinsidethewordbecausenothingelsecan_continue_on",
     "spaces    in    runs        and\ttabs\tbetween\twords, then a line that ends with spaces    ",
     "https://example.com/a/very/long/path/that/keeps/going/and/going?with=query&params=true#and-a-fragment",

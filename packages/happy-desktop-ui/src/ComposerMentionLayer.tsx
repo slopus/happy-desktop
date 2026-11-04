@@ -24,29 +24,47 @@ export function ComposerMentionLayer(props: {
 }) {
     const ranges = composerMentionRanges(props.text, props.names);
     if (ranges.length === 0) return null;
-    const parts: (string | React.JSX.Element)[] = [];
-    let from = 0;
-    for (const range of ranges) {
-        if (range.start > from) parts.push(props.text.slice(from, range.start));
-        parts.push(
-            <mark
-                className="happy-composer__mention"
-                data-happy-desktop-ui="composer-mention"
-                key={range.start}
-            >
-                {props.text.slice(range.start, range.end)}
-            </mark>,
+    // One block per paragraph: an edit lays out only its own paragraph again,
+    // not every line above the last mention. Lines are a fixed height and a
+    // paragraph already ends in a hard break, so no line moves.
+    const paragraphs: React.JSX.Element[] = [];
+    let next = 0;
+    let at = 0;
+    for (const paragraph of props.text.split("\n")) {
+        const end = at + paragraph.length;
+        const parts: (string | React.JSX.Element)[] = [];
+        let from = at;
+        while (next < ranges.length && ranges[next]!.start < end) {
+            const range = ranges[next++]!;
+            if (range.start > from) parts.push(props.text.slice(from, range.start));
+            parts.push(
+                <mark
+                    className="happy-composer__mention"
+                    data-happy-desktop-ui="composer-mention"
+                    // Keyed within the paragraph: an edit above shifts every
+                    // offset below it, and offset keys would remount them all.
+                    key={parts.length}
+                >
+                    {props.text.slice(range.start, range.end)}
+                </mark>,
+            );
+            from = range.end;
+        }
+        if (from < end) parts.push(props.text.slice(from, end));
+        paragraphs.push(
+            <div className="happy-composer__mention-paragraph" key={paragraphs.length}>
+                {parts}
+            </div>,
         );
-        from = range.end;
+        at = end + 1;
     }
-    if (from < props.text.length) parts.push(props.text.slice(from));
     return (
         <div
             aria-hidden="true"
             className="happy-composer__mention-layer"
             data-happy-desktop-ui="composer-mention-layer"
         >
-            <div className="happy-composer__mention-layer-text">{parts}</div>
+            <div className="happy-composer__mention-layer-text">{paragraphs}</div>
         </div>
     );
 }

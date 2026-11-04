@@ -294,6 +294,11 @@
     transform: translateY(var(--happy-composer-textarea-y, 0px));
 }
 
+/* An empty paragraph is still one line of the textarea's. */
+.happy-composer__mention-paragraph {
+    min-block-size: 22px;
+}
+
 .happy-composer__mention {
     color: transparent;
     background: var(--happy-mention-tint);

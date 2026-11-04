@@ -88,11 +88,14 @@ async function run(browser: Browser, variant: string, chars: number, mentions: n
     const latencies = await page.evaluate(
         () => (window as unknown as { __latency: { latencies: number[] } }).__latency.latencies,
     );
-    // The caret must stay in view while typing at the end of a long draft.
-    const caretVisible = await textarea.evaluate((element: HTMLTextAreaElement) => {
+    // The caret must stay in view: at the bottom of a long draft typed at its
+    // end, at the top of one typed at its start.
+    const caretVisible = await textarea.evaluate((element: HTMLTextAreaElement, where) => {
         const scroller = element.closest(".happy-composer__mention-scroller") ?? element;
-        return scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 2;
-    });
+        return where === "start"
+            ? scroller.scrollTop <= 2
+            : scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 2;
+    }, caret);
     await context.close();
 
     const events = trace.traceEvents;
@@ -131,7 +134,8 @@ async function run(browser: Browser, variant: string, chars: number, mentions: n
 
 const browser = await chromium.launch();
 const rows: Record<string, unknown>[] = [];
-for (const chars of [50, 2000, 20_000])
+const sizes = (process.env.BENCH_SIZES ?? "50,2000,20000").split(",").map(Number);
+for (const chars of sizes)
     for (const mentions of [0, 5, 50]) {
         const collected: Record<
             string,
