@@ -627,6 +627,11 @@ export { Menu, type MenuItem, type MenuProps } from "./Menu";
 export { MenuButton, type MenuButtonProps } from "./MenuButton";
 export { Modal, type ModalProps, type ModalSize, type ModalTone } from "./Modal";
 export {
+    WindowsSandboxSetup,
+    type WindowsSandboxSetupProps,
+    type WindowsSandboxSetupState,
+} from "./WindowsSandboxSetup";
+export {
     ModalOverlay,
     ModalOverlayPresence,
     useModalOverlayPresence,

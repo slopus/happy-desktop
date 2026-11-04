@@ -4,6 +4,7 @@ import type { OnboardingStage } from "../../src/OnboardingSteps";
 import { ThemeScope } from "../../src/ThemeScope";
 import type { WelcomeSlide } from "../../src/WelcomeDeck";
 import { WelcomeScreen } from "../../src/WelcomeScreen";
+import { WindowsSandboxSetup } from "../../src/WindowsSandboxSetup";
 import { SplashCover } from "../../src/SplashCover";
 import { ComponentPage, FullScreenSpecimen } from "../kit";
 import type { DesktopMobilePairingOptions } from "../../src/DesktopMobileSetup";
@@ -143,6 +144,32 @@ const screens: readonly {
         id: "setup-starting",
         label: "Setup · starting Happy Agent",
         render: () => onboarding({ kind: "agent-setup", phase: { kind: "starting" } }),
+    },
+    ...(["explain", "waiting", "declined", "failed"] as const).map((state) => ({
+        id: `windows-sandbox-${state}`,
+        label: `Setup · Windows sandbox · ${state}`,
+        render: () => (
+            <>
+                {onboarding({ kind: "agent-setup", phase: { kind: "starting" } })}
+                <WindowsSandboxSetup state={state} onContinue={noop} />
+            </>
+        ),
+    })),
+    {
+        appearance: "light",
+        id: "windows-sandbox-explain-light",
+        label: "Setup · Windows sandbox · light appearance",
+        render: () => (
+            <>
+                {onboarding(
+                    { kind: "agent-setup", phase: { kind: "starting" } },
+                    undefined,
+                    false,
+                    "light",
+                )}
+                <WindowsSandboxSetup state="explain" onContinue={noop} />
+            </>
+        ),
     },
     {
         id: "subscriptions-checking",
