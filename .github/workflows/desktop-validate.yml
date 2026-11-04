@@ -8,7 +8,7 @@ on:
             platform:
                 description: Platforms to validate
                 type: choice
-                options: [all, windows, linux]
+                options: [all, windows, linux, macos]
                 default: all
             depth:
                 description: Browser stability test depth
@@ -25,7 +25,7 @@ concurrency:
 
 jobs:
     linux:
-        if: ${{ inputs.platform != 'windows' }}
+        if: ${{ inputs.platform != 'windows' && inputs.platform != 'macos' }}
         name: Linux build, tests, and gym
         runs-on: ubuntu-latest
         timeout-minutes: 120
@@ -131,5 +131,26 @@ jobs:
         permissions:
             contents: read
             id-token: write
-        if: ${{ inputs.platform != 'linux' }}
+        if: ${{ inputs.platform != 'linux' && inputs.platform != 'macos' }}
         uses: ./.github/workflows/build-windows.yml
+
+    macos:
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.platform == 'macos' && inputs.depth == 'full' }}
+        name: macOS full-depth browser stability
+        runs-on: macos-14
+        timeout-minutes: 120
+        steps:
+            - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+            - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+            - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+              with:
+                  node-version: "24"
+                  cache: pnpm
+            - run: pnpm install --frozen-lockfile
+            - name: Run full-depth browser stability suites
+              env:
+                  CI: ""
+                  HAPPY_TEST_DEPTH: full
+              run: |
+                  pnpm --dir packages/happy-desktop-ui test --depth=full
+                  pnpm --dir packages/happy-desktop-gym test:playwright --depth=full
