@@ -245,7 +245,10 @@ it(
                 Math.abs(currentBaseline - baseline),
                 `${id} shared baseline`,
             ).toBeLessThanOrEqual(0.001);
-            const expectedBaseline = server.browser === "webkit" ? 12.875 : 13;
+            // WebKit's DOM baseline differs by platform; painted bounds and
+            // centroids below remain checked independently at their measured values.
+            const expectedBaseline =
+                server.browser === "webkit" && server.platform !== "darwin" ? 12.875 : 13;
             expect(
                 Math.abs(currentBaseline - expectedBaseline),
                 `${id} measured baseline position`,
