@@ -49,6 +49,11 @@ export interface AnalyticsClient {
      * key or analytics off it never hears anything, so the caller's default stands.
      */
     flagFollow(flag: AnalyticsFlag, listener: (enabled: boolean) => void): () => void;
+    /**
+     * Call when the Settings switch changes. Off stops a loaded library from
+     * capturing at once; on lets it capture again, loading it if it is not.
+     */
+    enabledChanged(): void;
 }
 
 export interface AnalyticsClientOptions {
@@ -58,7 +63,10 @@ export interface AnalyticsClientOptions {
     readonly host?: string;
     /** This installation's random identity; never derived from anything about the person. */
     readonly distinctId: string;
-    /** Read before every event, so turning analytics off stops the next one. */
+    /**
+     * Read before every event and again as PostHog sends it, so turning
+     * analytics off stops the next one.
+     */
     readonly enabled: () => boolean;
 }
 
@@ -104,6 +112,12 @@ export function analyticsClientCreate(options: AnalyticsClientOptions): Analytic
     const load = (key: string): Promise<PostHog | undefined> => {
         loading ??= import("posthog-js").then(
             ({ default: posthog }) => {
+                // Turned off while the library was loading: it is not started,
+                // and the next allowed event loads it again.
+                if (!options.enabled()) {
+                    loading = undefined;
+                    return undefined;
+                }
                 posthog.init(key, {
                     api_host: options.host ?? POSTHOG_HOST,
                     bootstrap: { distinctID: options.distinctId },
@@ -129,11 +143,20 @@ export function analyticsClientCreate(options: AnalyticsClientOptions): Analytic
                     advanced_disable_flags: false,
                     save_referrer: false,
                     save_campaign_params: false,
-                    before_send: analyticsBeforeSend,
+                    before_send: (capture) =>
+                        options.enabled() ? analyticsBeforeSend(capture) : null,
                     // Each event leaves as it is captured, so turning analytics
                     // off in Settings leaves no batch behind to go out after it.
                     request_batching: false,
                 });
+                // PostHog keeps a request that failed and sends it again later
+                // from this queue, after `before_send` has run and whether or
+                // not capturing was turned off since. Without the queue a
+                // failed event is lost instead.
+                posthog._retryQueue = undefined;
+                // PostHog remembers opting out in local storage; the Settings
+                // switch, not an earlier window, decides.
+                posthog.opt_in_capturing({ captureEventName: null });
                 loaded = posthog;
                 return posthog;
             },
@@ -144,11 +167,12 @@ export function analyticsClientCreate(options: AnalyticsClientOptions): Analytic
         );
         return loading;
     };
+    const preload = (): void => {
+        if (apiKey === undefined || apiKey.length === 0 || !options.enabled()) return;
+        void load(apiKey);
+    };
     return {
-        preload() {
-            if (apiKey === undefined || apiKey.length === 0 || !options.enabled()) return;
-            void load(apiKey);
-        },
+        preload,
         track(event, properties, trackOptions) {
             if (apiKey === undefined || apiKey.length === 0 || !options.enabled()) return;
             if (trackOptions?.beacon && loaded) {
@@ -178,6 +202,14 @@ export function analyticsClientCreate(options: AnalyticsClientOptions): Analytic
                 stopped = true;
                 stop();
             };
+        },
+        enabledChanged() {
+            if (!loaded) {
+                preload();
+                return;
+            }
+            if (options.enabled()) loaded.opt_in_capturing({ captureEventName: null });
+            else loaded.opt_out_capturing();
         },
     };
 }

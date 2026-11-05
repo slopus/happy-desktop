@@ -359,6 +359,7 @@ it("reports a pairing page's choice of method", () => {
         preload: () => undefined,
         track: (event, properties) => void captured.push({ event, properties: { ...properties } }),
         flagFollow: () => () => undefined,
+        enabledChanged: () => undefined,
     };
     const directory = {
         get: () => ({
@@ -399,6 +400,7 @@ it("sends pairing events with catalog fields only: no code, address, emoji, or d
         preload: () => undefined,
         track: (event, properties) => void captured.push({ event, properties: { ...properties } }),
         flagFollow: () => () => undefined,
+        enabledChanged: () => undefined,
     };
     const directory = {
         get: () => ({

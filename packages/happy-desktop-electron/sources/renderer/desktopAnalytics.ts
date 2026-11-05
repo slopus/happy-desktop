@@ -349,6 +349,7 @@ export function desktopAnalyticsCreate(options: {
     // Loaded now rather than on the first event, so an event sent as the
     // window closes in its first seconds still has a library to send it.
     client.preload();
+    const preferenceUnsubscribe = preference.subscribe(() => client.enabledChanged());
     const os = desktopOs();
 
     /**
@@ -832,6 +833,7 @@ export function desktopAnalyticsCreate(options: {
             };
         },
         dispose() {
+            preferenceUnsubscribe();
             directoryUnsubscribe();
             followed?.stop();
             if (typeof document !== "undefined")
