@@ -3,6 +3,7 @@ import { expect, it } from "vitest";
 import { page, server } from "vitest/browser";
 import { KeyCap } from "./Badge";
 import { Button } from "./Button";
+import { commandShortcut } from "./keyboardShortcut";
 import { createRenderer } from "./testing";
 import { SearchField, TitleBar, WindowDragRegion } from "./TitleBar";
 
@@ -356,7 +357,7 @@ it("holds SearchField geometry, colors, and optical centering", async () => {
                 }}
             >
                 <div data-testid="cap-control-k" style={{ display: "flex" }}>
-                    <KeyCap keys="⌘K" />
+                    <KeyCap keys={commandShortcut("k").caps} />
                 </div>
                 <div data-testid="cap-control-p" style={{ display: "flex" }}>
                     <KeyCap keys="⇧⌘P" />
@@ -465,7 +466,7 @@ it("holds SearchField geometry, colors, and optical centering", async () => {
     expect(
         Math.round(field.bounds().x + field.bounds().width - (cap.bounds().x + cap.bounds().width)),
     ).toBe(4);
-    expect(cap.element.getAttribute("aria-label")).toBe("⌘K");
+    expect(cap.element.getAttribute("aria-label")).toBe(commandShortcut("k").caps);
     /* Cap glyph ink. Intra-cap glyph centering is owned and tuned by
        Badge.test.tsx (KeyCap's own optical corrections live in badge.css),
        so asserting an absolute centroid here would double-own that tuning.

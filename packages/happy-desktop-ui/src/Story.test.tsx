@@ -98,11 +98,11 @@ it("outlines the tile in the accent while unseen and in grey once seen", async (
     const ringOf = (hit: HTMLElement) => getComputedStyle(hit.querySelector("rect")!);
     expect(ringOf(unseen!).stroke).toBe(getComputedStyle(probe).color);
     probe.remove();
-    expect(ringOf(unseen!).strokeWidth).toBe("1px");
+    expect(ringOf(unseen!).strokeWidth).toBe("2px");
     expect(ringOf(seen!).stroke).not.toBe(ringOf(unseen!).stroke);
     // Around the tile's own rounded square, concentric with its corners.
     expect(getComputedStyle(tileOf(unseen!)).borderTopLeftRadius).toBe("6px");
-    expect(unseen!.querySelector("rect")!.getAttribute("rx")).toBe("8.5");
+    expect(unseen!.querySelector("rect")!.getAttribute("rx")).toBe("8");
     // The hit area is a 26px square on the tile's centre.
     const tile = tileOf(unseen!).getBoundingClientRect();
     const hit = unseen!.getBoundingClientRect();
