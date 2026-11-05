@@ -35,13 +35,15 @@ const values: Record<string, string> = {};
 
 function Harness(props: { initial?: string; testid: string }) {
     const [value, setValue] = useState(props.initial ?? "");
-    values[props.testid] = value;
     return (
         <Composer
             data-testid={props.testid}
             mentions={people}
             onSend={() => {}}
-            onValueChange={setValue}
+            onValueChange={(next) => {
+                values[props.testid] = next;
+                setValue(next);
+            }}
             value={value}
         />
     );
@@ -70,7 +72,9 @@ async function rendered(testids: readonly { testid: string; initial?: string }[]
 }
 
 const undo = () =>
-    userEvent.keyboard(navigator.platform.startsWith("Mac") ? "{Meta>}z{/Meta}" : "{Control>}z{/Control}");
+    userEvent.keyboard(
+        navigator.platform.startsWith("Mac") ? "{Meta>}z{/Meta}" : "{Control>}z{/Control}",
+    );
 
 it("shows a picked teammate as @Name on a tint and hands out their link", async () => {
     const { textareaOf, tintsOf } = await rendered([{ testid: "pick" }]);

@@ -54,27 +54,6 @@ export function MentionDemoPage() {
     const typed = value.trim();
     return (
         <div data-mention-demo="" style={{ display: "flex", gap: 32, padding: 32 }}>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8, width: 220 }}>
-                {[
-                    { name: "Pricing page", count: "2", mentioned: true },
-                    { name: "Onboarding copy", count: "6", mentioned: false },
-                    { name: "Support inbox", count: "99+", mentioned: false },
-                ].map((row) => (
-                    <div
-                        key={row.name}
-                        style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 600 }}
-                    >
-                        <span style={{ flex: 1 }}>{row.name}</span>
-                        <span
-                            className="happy-sidebar__item-unread-count"
-                            data-mentioned={row.mentioned ? "" : undefined}
-                        >
-                            {row.mentioned ? "@" : null}
-                            {row.count}
-                        </span>
-                    </div>
-                ))}
-            </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 16, width: 640 }}>
                 {sent.map((text, index) => (
                     <div

@@ -235,20 +235,15 @@
     --happy-tile-red-fill: rgb(255 59 48 / 0.11);
     --happy-tile-teal: #1c9fb8;
     --happy-tile-teal-fill: rgb(48 176 199 / 0.14);
-    /* The unread count a sidebar row wears: a white pill with dark figures,
-       ringed so it still reads against a selected row's grey. */
-    --happy-unread-pill-background: #ffffff;
     --happy-mention-tint: rgb(26 127 153 / 0.16);
     /* A mention of the reader themselves, and the words of a mention in a
        sent message, which are not drawn by a textarea and can take a colour. */
     --happy-mention-tint-self: rgb(26 127 153 / 0.32);
     --happy-mention-text: #12657a;
-    /* The unread pill of a row the reader was mentioned in: the mention's own
-       hue, filled, so it outranks a plain count at a glance. */
-    --happy-unread-pill-mention-background: #1a7f99;
-    --happy-unread-pill-mention-text: #ffffff;
-    --happy-unread-pill-text: #1c1c1e;
-    --happy-unread-pill-ring: rgb(0 0 0 / 0.14);
+    /* The unread mark of a row the reader was mentioned in: an `@` on the
+       mention's own hue, so it outranks the plain dot at a glance. */
+    --happy-unread-mention-background: #1a7f99;
+    --happy-unread-mention-text: #ffffff;
 
     --status-connected: #34c759;
     --status-connecting: #007aff;
@@ -680,14 +675,11 @@
         --happy-tile-red-fill: rgb(255 69 58 / 0.2);
         --happy-tile-teal: #40c8e0;
         --happy-tile-teal-fill: rgb(64 200 224 / 0.2);
-        --happy-unread-pill-background: #f2f2f7;
         --happy-mention-tint: rgb(92 200 226 / 0.24);
         --happy-mention-tint-self: rgb(92 200 226 / 0.42);
         --happy-mention-text: #9be0f0;
-        --happy-unread-pill-mention-background: #5cc8e2;
-        --happy-unread-pill-mention-text: #0b2a33;
-        --happy-unread-pill-text: #1c1c1e;
-        --happy-unread-pill-ring: transparent;
+        --happy-unread-mention-background: #5cc8e2;
+        --happy-unread-mention-text: #0b2a33;
         /* Declared again here, so they resolve against the dark palette. */
     }
 }
@@ -907,14 +899,11 @@
     --happy-tile-red-fill: rgb(255 69 58 / 0.2);
     --happy-tile-teal: #40c8e0;
     --happy-tile-teal-fill: rgb(64 200 224 / 0.2);
-    --happy-unread-pill-background: #f2f2f7;
     --happy-mention-tint: rgb(92 200 226 / 0.24);
     --happy-mention-tint-self: rgb(92 200 226 / 0.42);
     --happy-mention-text: #9be0f0;
-    --happy-unread-pill-mention-background: #5cc8e2;
-    --happy-unread-pill-mention-text: #0b2a33;
-    --happy-unread-pill-text: #1c1c1e;
-    --happy-unread-pill-ring: transparent;
+    --happy-unread-mention-background: #5cc8e2;
+    --happy-unread-mention-text: #0b2a33;
     /* Declared again here, so they resolve against the dark palette. */
 }
 

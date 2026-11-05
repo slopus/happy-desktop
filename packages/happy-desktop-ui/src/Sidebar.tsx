@@ -199,14 +199,8 @@ export type SidebarItem = {
     tone?: ToneName;
     unread?: boolean;
     /**
-     * How many messages are unread, when the host counts them. An unread row
-     * with a count wears it as a pill at the row's trailing edge in place of
-     * the dot; 100 or more reads "99+".
-     */
-    unreadCount?: number;
-    /**
-     * Someone mentioned the reader in what is unread. The pill then leads with
-     * `@` on the mention's own colour, and shows even without a count.
+     * Someone mentioned the reader in what is unread. The row's unread mark is
+     * then an `@` on the mention's own colour rather than the plain dot.
      */
     unreadMentioned?: boolean;
     /**
@@ -1630,36 +1624,34 @@ function SidebarRow({
     // An editing row hosts an editable label, so it must not be a native button.
     const Row = props.rename ? "div" : "button";
     const unread = () => item().unread === true;
-    // A muted row keeps the unread weight on its name and gives up only the dot.
-    const unreadDot = () => unread() && item().muted !== true;
-    // A counted row says how much in one place, the trailing edge, whatever it is.
-    const unreadCount = () =>
-        unreadDot() && (item().unreadCount ?? 0) > 0 ? item().unreadCount : undefined;
-    const unreadMention = () => unreadDot() && item().unreadMentioned === true;
-    const unreadPillShown = () => unreadCount() !== undefined || unreadMention();
-    const unreadOnLeading = () =>
-        unreadDot() &&
-        !unreadPillShown() &&
-        (item().kind === "project" || item().kind === "workspace");
-    const unreadPill = () =>
-        ((count, mention) =>
-            count === undefined && !mention ? null : (
-                <span
-                    aria-label={[
-                        count === undefined ? "Unread" : `${String(count)} unread`,
-                        mention ? "you were mentioned" : undefined,
-                    ]
-                        .filter(Boolean)
-                        .join(", ")}
-                    className="happy-sidebar__item-unread-count"
-                    data-happy-desktop-ui="sidebar-item-unread-count"
-                    data-mentioned={mention ? "" : undefined}
-                >
-                    {mention ? "@" : null}
-                    {count === undefined ? null : count >= 100 ? "99+" : String(count)}
-                </span>
-            ))(unreadCount(), unreadMention());
     const mentioned = () => (item().badge ?? 0) > 0;
+    /*
+     * What the row's unread mark says, if it shows one: that the reader was
+     * mentioned, or only that something is new. Never how much — a number
+     * would read as the folded count on the row's own mark. A muted row keeps
+     * the unread weight on its name and gives up only the mark, and a row
+     * with a count badge already says it there.
+     */
+    const unreadMark = (): "mentioned" | "unread" | undefined =>
+        !unread() || item().muted === true || mentioned()
+            ? undefined
+            : item().unreadMentioned === true
+              ? "mentioned"
+              : "unread";
+    /* The unread mark takes the cell the activity spinner occupies, centred in
+       it, so every row's mark lands on one column at the trailing edge, and it
+       gives way to the hover controls exactly as the spinner does. */
+    const unreadMarkCell = () =>
+        ((mark) =>
+            mark === undefined ? null : (
+                <span
+                    aria-label={mark === "mentioned" ? "Unread, you were mentioned" : "Unread"}
+                    className="happy-sidebar__item-unread"
+                    data-happy-desktop-ui="sidebar-item-unread"
+                    data-mentioned={mark === "mentioned" ? "" : undefined}
+                    role="img"
+                />
+            ))(unreadMark());
     const hasChangeStats = () =>
         (item().changeStats?.added ?? 0) > 0 || (item().changeStats?.deleted ?? 0) > 0;
     // Every act the row offers, in the trailing lane: the one about the row
@@ -2241,13 +2233,6 @@ function SidebarRow({
                     ) : (
                         <Icon name={leadingIcon(item())} size={16} />
                     )}
-                    {unreadOnLeading() ? (
-                        <span
-                            aria-label="Unread activity"
-                            className="happy-sidebar__item-leading-unread"
-                            data-happy-desktop-ui="sidebar-item-leading-unread"
-                        />
-                    ) : null}
                     {/* The fold, in the lane the row's own mark occupies rather
                         than in one of its own: the sidebar's rows are already a
                         tree drawn hanging off that lane, and a column of twisties
@@ -2381,13 +2366,6 @@ function SidebarRow({
                                 keys={props.shortcut.caps}
                             />
                         ) : null}
-                        {unreadDot() && !unreadOnLeading() && !unreadPillShown() && !mentioned() ? (
-                            <span
-                                aria-label="Unread"
-                                className="happy-sidebar__item-unread"
-                                data-happy-desktop-ui="sidebar-item-unread"
-                            />
-                        ) : null}
                         {mentioned() ? (
                             <CountBadge
                                 className="happy-sidebar__item-badge"
@@ -2422,7 +2400,6 @@ function SidebarRow({
                                 />
                             </>
                         ) : null}
-                        {lanes && !mentioned() ? unreadPill() : null}
                         {lanes && showCount() ? (
                             <span
                                 className="happy-sidebar__item-count"
@@ -2444,7 +2421,7 @@ function SidebarRow({
                     </span>
                 ) : null}
 
-                {((state, controls, stats, swaps, count, pill) =>
+                {((state, controls, stats, swaps, count, mark) =>
                     /* One lane at the trailing edge, and everything in it is ranged
                    right. The Git delta is the last thing in flow, so at rest it
                    ends the row on the same column as the marks above and below
@@ -2458,7 +2435,7 @@ function SidebarRow({
                     controls ||
                     stats ||
                     count !== undefined ||
-                    pill ||
+                    mark !== undefined ||
                     item().trailingWidth !== undefined ? (
                         <span
                             className="happy-sidebar__item-trailing"
@@ -2484,7 +2461,6 @@ function SidebarRow({
                                     {item().meta}
                                 </span>
                             ) : null}
-                            {pill ? unreadPill() : null}
                             {count !== undefined ? (
                                 <span
                                     className="happy-sidebar__item-count"
@@ -2501,7 +2477,14 @@ function SidebarRow({
                                     deleted={stats.deleted}
                                 />
                             ) : null}
-                            {state ? activityMark() : null}
+                            {/* One cell at the edge: a mention outranks the
+                                spinner, and the spinner outranks the plain dot,
+                                which comes back once the work is done. */}
+                            {mark === "mentioned" || (mark === "unread" && !state)
+                                ? unreadMarkCell()
+                                : state
+                                  ? activityMark()
+                                  : null}
                             {controls ? trailingLane() : null}
                         </span>
                     ) : null)(
@@ -2512,7 +2495,7 @@ function SidebarRow({
                     // nothing a row reports is covered while the pointer is on it.
                     !lanes && swapsTrailing(),
                     !lanes && showCount() ? item().count : undefined,
-                    !lanes && !mentioned() && unreadPillShown(),
+                    unreadMark(),
                 )}
                 {/* Only a row that folds has a fold at its edge. Revealed on hover, it
                 is laid over the trailing lane and takes the delta's place while

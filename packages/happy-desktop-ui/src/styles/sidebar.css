@@ -1214,15 +1214,13 @@
     opacity: 1;
 }
 
-/* The mark steps aside for exactly as long as the chevron is up. The unread dot
-   is not part of the mark and keeps its place: whether a row has activity in it
-   is not something reaching for the fold should take away. */
+/* The mark steps aside for exactly as long as the chevron is up. */
 .happy-sidebar__item:not([data-fold-placement="trailing"])[data-foldable]
     .happy-sidebar__item-leading:hover
-    > :not(.happy-sidebar__item-fold):not(.happy-sidebar__item-leading-unread),
+    > :not(.happy-sidebar__item-fold),
 .happy-sidebar__item:not([data-fold-placement="trailing"])[data-foldable]:focus-visible
     .happy-sidebar__item-leading
-    > :not(.happy-sidebar__item-fold):not(.happy-sidebar__item-leading-unread) {
+    > :not(.happy-sidebar__item-fold) {
     opacity: 0;
 }
 
@@ -1235,9 +1233,8 @@
  * is. The count is laid over the lane rather than placed in it, so it moves
  * nothing, and it steps aside with the mark when the chevron comes up.
  *
- * It sits on the corner opposite the unread dot, ringed in the sidebar's own
- * surface as that dot is, so the two never touch and either reads against
- * whatever picture is under it.
+ * It is ringed in the sidebar's own surface, so it reads against whatever
+ * picture is under it.
  */
 .happy-sidebar__item-folded {
     position: absolute;
@@ -1330,8 +1327,7 @@
     flex: none;
 }
 
-.happy-sidebar__item-main > .happy-sidebar__item-activity,
-.happy-sidebar__item-main > .happy-sidebar__item-unread {
+.happy-sidebar__item-main > .happy-sidebar__item-activity {
     margin: 0;
 }
 
@@ -1356,17 +1352,6 @@
 .happy-sidebar__item[data-fold-in-branch]
     .happy-sidebar__item-branch:has(> .happy-sidebar__item-folded)::after {
     opacity: 0;
-}
-
-.happy-sidebar__item-leading-unread {
-    position: absolute;
-    top: 1px;
-    right: -1px;
-    width: 6px;
-    height: 6px;
-    border: 1px solid var(--surface);
-    border-radius: var(--happy-radius-pill);
-    background: var(--status-error);
 }
 
 /* The compose pencil's ink is bottom-heavy; lift it to the row's optical center. */
@@ -1559,58 +1544,55 @@
 .happy-sidebar__item:hover .happy-sidebar__item-trailing[data-swaps] .happy-sidebar__item-activity,
 .happy-sidebar__item-trailing[data-swaps]:focus-within .happy-sidebar__item-activity,
 .happy-sidebar__item:hover .happy-sidebar__item-trailing[data-swaps] .happy-sidebar__item-count,
-.happy-sidebar__item-trailing[data-swaps]:focus-within .happy-sidebar__item-count {
+.happy-sidebar__item-trailing[data-swaps]:focus-within .happy-sidebar__item-count,
+.happy-sidebar__item:hover .happy-sidebar__item-trailing[data-swaps] .happy-sidebar__item-unread,
+.happy-sidebar__item-trailing[data-swaps]:focus-within .happy-sidebar__item-unread {
     visibility: hidden;
 }
 
-/* How many messages a row has unread: twice the dot's height, a white pill
-   rather than a red mark, centred on the row like everything else in its lane.
-   The figures are tabular so a count changing never changes the pill's width
-   more than a digit's step. */
-.happy-sidebar__item-unread-count {
+/*
+ * Whether a row has news for the reader: the activity spinner's own cell at the
+ * trailing edge, the same square and the same optical edge, so the marks of
+ * every row stand on one column and the delta before them never moves. Plain
+ * news is a dot in the text's own ink; a mention is the mention's hue around an
+ * `@`. Neither carries a number: the only number on a row is what a fold hides.
+ */
+.happy-sidebar__item-unread {
     display: flex;
     flex: none;
     align-items: center;
     justify-content: center;
-    box-sizing: border-box;
-    min-width: 12px;
-    height: 12px;
-    padding: 0 3px;
-    border-radius: var(--happy-radius-pill);
-    background: var(--happy-unread-pill-background);
-    box-shadow: inset 0 0 0 0.5px var(--happy-unread-pill-ring);
-    color: var(--happy-unread-pill-text);
-    font-family: var(--happy-font-mono);
-    font-size: 8.5px;
-    font-weight: 700;
-    line-height: 12px;
-    font-variant-numeric: lining-nums tabular-nums;
-    font-synthesis: none;
-    white-space: nowrap;
+    width: 18px;
+    height: 18px;
+    margin-right: -3px;
+    pointer-events: none;
 }
 
-/* Someone mentioned the reader here: the same pill, filled with the mention's
-   own hue and led by an `@`, so it outranks a plain count at a glance. */
-.happy-sidebar__item-unread-count[data-mentioned] {
-    background: var(--happy-unread-pill-mention-background);
-    box-shadow: none;
-    color: var(--happy-unread-pill-mention-text);
-}
-
-.happy-sidebar__item:hover
-    .happy-sidebar__item-trailing[data-swaps]
-    .happy-sidebar__item-unread-count,
-.happy-sidebar__item-trailing[data-swaps]:focus-within .happy-sidebar__item-unread-count {
-    visibility: hidden;
-}
-
-.happy-sidebar__item-unread {
-    flex: none;
+.happy-sidebar__item-unread:not([data-mentioned])::before {
+    content: "";
     width: 6px;
     height: 6px;
-    margin: 0 6px;
     border-radius: var(--happy-radius-pill);
-    background: var(--status-error);
+    background: var(--text);
+}
+
+/* The badge is drawn inside the cell, not as it: the cell keeps the spinner's
+   18px square, and the 14px disc is centred in it. */
+.happy-sidebar__item-unread[data-mentioned]::before {
+    content: "@";
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+    border-radius: var(--happy-radius-pill);
+    background: var(--happy-unread-mention-background);
+    color: var(--happy-unread-mention-text);
+    font-family: var(--happy-font-ui);
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 14px;
+    font-synthesis: none;
 }
 
 /* Where a voice call is pointing. It wears the live call's own green — the
