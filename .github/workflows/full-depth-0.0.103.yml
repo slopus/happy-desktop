@@ -1,0 +1,75 @@
+name: Validate 0.0.103 full depth
+run-name: Full-depth 0.0.103 validation at ${{ github.sha }}
+
+on:
+    push:
+        branches: [release/0.0.103-full-depth]
+
+permissions:
+    contents: read
+
+concurrency:
+    group: full-depth-0.0.103-${{ github.ref }}
+    cancel-in-progress: false
+
+jobs:
+    full-depth:
+        name: Full depth (${{ matrix.suite }})
+        runs-on: ubuntu-latest
+        timeout-minutes: 240
+        strategy:
+            fail-fast: false
+            matrix:
+                include:
+                    - suite: ui
+                      package: packages/happy-desktop-ui
+                      script: test
+                    - suite: gym
+                      package: packages/happy-desktop-gym
+                      script: test:playwright
+        defaults:
+            run:
+                shell: bash
+        steps:
+            - name: Check out candidate
+              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+            - name: Set up pnpm
+              uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+
+            - name: Set up Node.js
+              uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+              with:
+                  node-version: "24"
+                  cache: pnpm
+
+            - name: Install dependencies
+              run: pnpm install --frozen-lockfile
+
+            - name: Install all three browser engines and system dependencies
+              run: pnpm --dir "${{ matrix.package }}" exec playwright install --with-deps chromium firefox webkit
+
+            - name: Run the full-depth suite
+              run: |
+                  mkdir -p .context/full-depth
+                  set -o pipefail
+                  # The normal runner skips when CI is set. This dedicated validation
+                  # explicitly runs the existing suites without changing that policy.
+                  env -u CI pnpm --dir "${{ matrix.package }}" "${{ matrix.script }}" --depth=full \
+                    2>&1 | tee ".context/full-depth/${{ matrix.suite }}.log"
+
+            - name: Upload test reports and screenshots
+              if: always()
+              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+              with:
+                  name: full-depth-0.0.103-${{ matrix.suite }}
+                  include-hidden-files: true
+                  retention-days: 14
+                  if-no-files-found: warn
+                  path: |
+                      .context/full-depth/
+                      packages/happy-desktop-ui/.context/interaction-fuzz-stress-*/
+                      packages/happy-desktop-ui/**/__screenshots__/
+                      packages/happy-desktop-gym/**/__screenshots__/
+                      packages/**/test-results/
+                      packages/**/playwright-report/
