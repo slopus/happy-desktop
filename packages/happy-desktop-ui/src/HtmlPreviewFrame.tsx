@@ -43,6 +43,8 @@ export type HtmlPreviewFrameProps = {
     canvas?: "paper" | "none";
     /** Handed to the host's engine; see `HtmlPreviewProps.escapePressed`. */
     escapePressed?: () => void;
+    /** Handed to the host's engine; see `HtmlPreviewProps.closeRequested`. */
+    closeRequested?: () => void;
 };
 
 /**
@@ -71,6 +73,7 @@ export function HtmlPreviewFrame(props: HtmlPreviewFrameProps) {
         "children",
         "canvas",
         "escapePressed",
+        "closeRequested",
     ]);
     return (
         <div
@@ -99,6 +102,7 @@ export function HtmlPreviewFrame(props: HtmlPreviewFrameProps) {
                 <HtmlPreviewGuest
                     key={local.source}
                     {...(local.escapePressed ? { escapePressed: local.escapePressed } : {})}
+                    {...(local.closeRequested ? { closeRequested: local.closeRequested } : {})}
                     renderContent={local.renderContent}
                     {...(local.revision === undefined ? {} : { revision: local.revision })}
                     source={local.source}
@@ -117,6 +121,7 @@ export function HtmlPreviewFrame(props: HtmlPreviewFrameProps) {
  * beside the guest is what lets the guest stay mounted through a failure.
  */
 function HtmlPreviewGuest(props: {
+    closeRequested?: () => void;
     escapePressed?: () => void;
     renderContent: HtmlPreviewRenderer;
     revision?: string;
@@ -129,6 +134,7 @@ function HtmlPreviewGuest(props: {
                 source: props.source,
                 ...(props.revision === undefined ? {} : { revision: props.revision }),
                 ...(props.escapePressed ? { escapePressed: props.escapePressed } : {}),
+                ...(props.closeRequested ? { closeRequested: props.closeRequested } : {}),
                 previewFailed: (next) => failureSet(next),
                 previewLoaded: () => failureSet(undefined),
             })}

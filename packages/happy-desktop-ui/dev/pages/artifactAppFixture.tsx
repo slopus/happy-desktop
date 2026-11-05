@@ -3,12 +3,13 @@ import type {
     HappyAgentArtifactId,
     HappyAgentInlineArtifactsSnapshot,
 } from "happy-desktop-state";
-import { artifactPageAppModeStyle } from "../../src/artifactPageHost";
+import { artifactPageAppModeScript, artifactPageAppModeStyle } from "../../src/artifactPageHost";
 
 /**
  * A tiny canvas game written the way an agent writes an app-mode artifact: it
- * declares itself an app, sizes itself to the viewport, keeps its score clear
- * of the host's insets, and takes the pointer, touch, and the keyboard. It
+ * declares itself an app, sizes itself to the viewport, keeps its controls
+ * clear of the host's insets, takes the pointer, touch, and the keyboard, and
+ * leaves through the host with `happyApp.close()` rather than its own way. It
  * draws one still frame until it is started, so a capture is the same every
  * time.
  */
@@ -23,6 +24,18 @@ export const ARCADE_HTML = `<!doctype html>
 :root { color-scheme: dark; }
 body { background: #0d1117; color: #e6edf3; font-family: sans-serif; touch-action: none; user-select: none; }
 canvas { display: block; width: 100%; height: 100%; }
+.exit {
+    position: fixed;
+    top: calc(12px + var(--happy-app-inset-top, 0px));
+    left: calc(16px + var(--happy-app-inset-left, 0px));
+    padding: 6px 14px;
+    border: 1px solid rgba(230, 237, 243, 0.24);
+    border-radius: 999px;
+    background: rgba(230, 237, 243, 0.06);
+    color: inherit;
+    font: 600 13px sans-serif;
+    cursor: pointer;
+}
 .score {
     position: fixed;
     top: calc(16px + var(--happy-app-inset-top, 0px));
@@ -35,6 +48,7 @@ canvas { display: block; width: 100%; height: 100%; }
 </head>
 <body>
 <canvas id="court"></canvas>
+<button class="exit" id="exit" type="button">Exit</button>
 <div class="score" id="score">Score 0</div>
 <script>
 const court = document.getElementById("court");
@@ -119,10 +133,16 @@ function start() {
     requestAnimationFrame(step);
 }
 
+// The host owns leaving; the page only asks.
+document.getElementById("exit").addEventListener("click", () => window.happyApp?.close());
 court.addEventListener("pointermove", (event) => { paddle = event.clientX / width; draw(); });
 court.addEventListener("pointerdown", (event) => { paddle = event.clientX / width; start(); });
 window.addEventListener("keydown", (event) => {
-    if (event.key === " ") start();
+    if (event.key === " ") {
+        // Space starts a round; it never presses whatever button has focus.
+        event.preventDefault();
+        start();
+    }
     if (event.key === "ArrowLeft") paddle = Math.max(0, paddle - 0.05);
     if (event.key === "ArrowRight") paddle = Math.min(1, paddle + 0.05);
     draw();
@@ -135,13 +155,14 @@ resize();
 
 /**
  * The game as the host's guest would show it: the app-mode rules the host
- * inserts and the attribute it sets on the root, written into the document,
- * since Blueprint has no guest to insert them into.
+ * inserts and the script it runs at commit — the root's attributes and
+ * `happyApp` — written into the document, since Blueprint has no guest to
+ * insert them into. Nothing here listens for `happyApp.close()`.
  */
 export const ARCADE_HOSTED_HTML = ARCADE_HTML.replace(
-    "<html>",
-    '<html data-happy-page-mode="app">',
-).replace("<head>", `<head><style>${artifactPageAppModeStyle()}</style>`);
+    "<head>",
+    `<head><style>${artifactPageAppModeStyle()}</style><script>${artifactPageAppModeScript()}</script>`,
+);
 
 /**
  * What the host's guest would run for the game. Blueprint has no guest, so it

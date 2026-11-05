@@ -281,6 +281,7 @@ export {
     type InlinePageRender,
 } from "./inlinePageFit";
 export {
+    artifactPageAppCloseWaitScript,
     artifactPageAppModeScript,
     artifactPageHostObserve,
     artifactPageHostStyle,

@@ -1,5 +1,5 @@
 import { Component, createElement } from "react";
-import type { HtmlPreviewProps } from "happy-desktop-ui";
+import { artifactPageAppCloseWaitScript, type HtmlPreviewProps } from "happy-desktop-ui";
 import type { DesktopPreviewNavigation } from "../shared/desktopContract";
 import { GUEST_ESCAPE_SCRIPT } from "./guestEscape";
 import { GuestPageFit, type FitGuestElement } from "./guestPageFit";
@@ -94,6 +94,8 @@ export class DesktopHtmlPreviewView extends Component<DesktopHtmlPreviewViewProp
     private ready = false;
     /** Bumped whenever Escape stops being listened for, retiring every poll before. */
     private escapeGeneration = 0;
+    /** The same for `window.happyApp.close()`. */
+    private closeGeneration = 0;
 
     componentDidMount(): void {
         this.unsubscribe = window.happyDesktop?.previewNavigationSubscribe(this.receive);
@@ -106,6 +108,8 @@ export class DesktopHtmlPreviewView extends Component<DesktopHtmlPreviewViewProp
             this.element?.reload();
         if ((before.escapePressed === undefined) !== (this.props.escapePressed === undefined))
             this.escapeFollow();
+        if ((before.closeRequested === undefined) !== (this.props.closeRequested === undefined))
+            this.closeFollow();
     }
 
     componentWillUnmount(): void {
@@ -116,21 +120,51 @@ export class DesktopHtmlPreviewView extends Component<DesktopHtmlPreviewViewProp
         this.fitter.dispose();
         this.styler.stop();
         this.escapeGeneration += 1;
+        this.closeGeneration += 1;
+    }
+
+    /** Listens for Escape in the guest's page while the owner asks to hear it. */
+    private escapeFollow(): void {
+        const generation = ++this.escapeGeneration;
+        this.guestFollow(
+            GUEST_ESCAPE_SCRIPT,
+            () => generation === this.escapeGeneration,
+            () => this.props.escapePressed,
+        );
     }
 
     /**
-     * Listens for Escape in the guest's page while the owner asks to hear it,
-     * as one long poll after another, and stops the moment it no longer does.
+     * Listens for `window.happyApp.close()` while the owner asks to hear it.
+     * Only an artifact's page is given `happyApp`, so only an artifact's guest
+     * is listened to.
      */
-    private escapeFollow(): void {
-        const generation = ++this.escapeGeneration;
+    private closeFollow(): void {
+        const generation = ++this.closeGeneration;
+        if (this.props.canvas !== "none") return;
+        this.guestFollow(
+            artifactPageAppCloseWaitScript(),
+            () => generation === this.closeGeneration,
+            () => this.props.closeRequested,
+        );
+    }
+
+    /**
+     * Runs `script` in the guest's page as one long poll after another, calling
+     * the handler the owner holds at each answer, until `current` says this
+     * follow was retired or the owner stops asking.
+     */
+    private guestFollow(
+        script: string,
+        current: () => boolean,
+        handler: () => (() => void) | undefined,
+    ): void {
         const guest = this.element;
-        if (!guest || !this.ready || !this.props.escapePressed) return;
+        if (!guest || !this.ready || !handler()) return;
         const listen = (): void => {
-            guest.executeJavaScript(GUEST_ESCAPE_SCRIPT).then(
+            guest.executeJavaScript(script).then(
                 () => {
-                    if (generation !== this.escapeGeneration) return;
-                    this.props.escapePressed?.();
+                    if (!current()) return;
+                    handler()?.();
                     listen();
                 },
                 // The document went away; the next one is followed once it is ready.
@@ -262,6 +296,7 @@ export class DesktopHtmlPreviewView extends Component<DesktopHtmlPreviewViewProp
         if (this.props.fit && this.element) this.fitter.documentReady(this.element);
         this.ready = true;
         this.escapeFollow();
+        this.closeFollow();
     };
 
     private readonly elementApply = (view: HtmlPreviewWebViewElement | null): void => {
@@ -275,6 +310,7 @@ export class DesktopHtmlPreviewView extends Component<DesktopHtmlPreviewViewProp
         this.styled = false;
         this.ready = false;
         this.escapeGeneration += 1;
+        this.closeGeneration += 1;
         this.element?.addEventListener("did-attach", this.attached);
         this.element?.addEventListener("did-navigate", this.documentCommitted);
         this.element?.addEventListener("dom-ready", this.documentReady);

@@ -1,9 +1,11 @@
 import { happyAgentArtifactReferenceResolve } from "happy-desktop-state";
 import {
+    ARTIFACT_PAGE_APP_CLOSE_ATTRIBUTE,
     ARTIFACT_PAGE_APP_MODE,
     ARTIFACT_PAGE_APP_MODE_ATTRIBUTE,
     ARTIFACT_PAGE_INSET,
     ARTIFACT_PAGE_MEASURE,
+    artifactPageAppCloseResolve,
     artifactPageAppModeStyle,
     artifactPageMeasureStyle,
 } from "../../artifactPageHost";
@@ -194,8 +196,13 @@ export function artifactHtmlDocument(input: {
             ? ":where(html) { color-scheme: light dark; overflow: hidden; } :where(body) { margin: 0; font: 13px/18px system-ui, sans-serif; }"
             : `:where(html) { color-scheme: light; } :where(body) { margin: 0; padding: ${ARTIFACT_PAGE_INSET}; } ${artifactPageMeasureStyle(ARTIFACT_PAGE_MEASURE)}\n${artifactPageAppModeStyle()}`;
     head.prepend(policy, referrer, canvas);
-    if (input.surface !== "sidebar" && document.querySelector(ARTIFACT_PAGE_APP_MODE))
+    if (input.surface !== "sidebar" && document.querySelector(ARTIFACT_PAGE_APP_MODE)) {
         document.documentElement.setAttribute(ARTIFACT_PAGE_APP_MODE_ATTRIBUTE, "app");
+        document.documentElement.setAttribute(
+            ARTIFACT_PAGE_APP_CLOSE_ATTRIBUTE,
+            artifactPageAppCloseResolve(document),
+        );
+    }
 
     return `<!DOCTYPE html>${document.documentElement.outerHTML}`;
 }

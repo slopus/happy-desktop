@@ -157,6 +157,14 @@ export function HappyAgentArtifactViewer(props: HappyAgentArtifactViewerProps) {
         if (document.fullscreenElement === stage.current)
             document.exitFullscreen().catch(() => undefined);
     };
+    // An app's own exit, `window.happyApp.close()`: out of full screen if it
+    // is there, otherwise back from the viewer, as the header's arrow goes.
+    // A tab has no way back of its own; its close button is the tab's.
+    const onBack = props.onBack;
+    const appClose = () => {
+        if (document.fullscreenElement === stage.current) fullScreenExit();
+        else onBack?.();
+    };
     const back = props.onBack ? (
         <Button
             aria-label="Back"
@@ -311,6 +319,7 @@ export function HappyAgentArtifactViewer(props: HappyAgentArtifactViewerProps) {
                                     key={viewer.version?.number ?? 0}
                                     onFileDownload={props.onFileDownload}
                                     {...(fullScreen ? { escapePressed: fullScreenExit } : {})}
+                                    {...(app ? { closeRequested: appClose } : {})}
                                     {...(props.renderPage ? { renderPage: props.renderPage } : {})}
                                     title={artifact.title}
                                 />
@@ -429,6 +438,8 @@ function ArtifactContent(props: {
     onFileDownload: (link: HappyAgentArtifactFileLink) => void;
     /** Escape was pressed inside a running page; heard only while it is full screen. */
     escapePressed?: () => void;
+    /** A running app asked to close; offered only for a page that declared itself one. */
+    closeRequested?: () => void;
     renderPage?: HtmlPreviewRenderer;
     title: string;
 }): ReactNode {
@@ -524,6 +535,7 @@ function ArtifactContent(props: {
                     canvas="none"
                     data-testid="happy-agent-artifact-page"
                     {...(props.escapePressed ? { escapePressed: props.escapePressed } : {})}
+                    {...(props.closeRequested ? { closeRequested: props.closeRequested } : {})}
                     {...(props.renderPage ? { renderContent: props.renderPage } : {})}
                     source={content.page.url}
                 />

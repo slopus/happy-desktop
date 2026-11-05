@@ -79,6 +79,11 @@ export interface HtmlPreviewProps {
      * reaches the page's engine, never the window around it.
      */
     escapePressed?(): void;
+    /**
+     * The page called `window.happyApp.close()`. Asked for only for an
+     * artifact's page that declared itself an app, the one guest given it.
+     */
+    closeRequested?(): void;
 }
 
 /**

@@ -74,6 +74,41 @@ export const ARTIFACT_PAGE_APP_MODE = 'meta[name="happy-page-mode" i][content="a
 export const ARTIFACT_PAGE_APP_MODE_ATTRIBUTE = "data-happy-page-mode";
 
 /**
+ * Where an app asks for the host's close button, declared beside its mode:
+ *
+ *     <meta name="happy-app-close" content="top-end">
+ *
+ * The host sets the value it resolved on the app's root as
+ * `data-happy-app-close`, so a page reads the same thing on every platform.
+ */
+export const ARTIFACT_PAGE_APP_CLOSE_ATTRIBUTE = "data-happy-app-close";
+const ARTIFACT_PAGE_APP_CLOSE = 'meta[name="happy-app-close" i]';
+/** The corners an app may name, and `none`; any other value is the first. */
+const ARTIFACT_PAGE_APP_CLOSE_VALUES = [
+    "top-start",
+    "top-end",
+    "bottom-start",
+    "bottom-end",
+    "none",
+] as const;
+
+/** The close-button corner a document's `happy-app-close` declaration resolves to. */
+export function artifactPageAppCloseResolve(document: Document): string {
+    const declared = document
+        .querySelector(ARTIFACT_PAGE_APP_CLOSE)
+        ?.getAttribute("content")
+        ?.trim()
+        .toLowerCase();
+    return ARTIFACT_PAGE_APP_CLOSE_VALUES.find((value) => value === declared) ?? "top-start";
+}
+
+/**
+ * Where, in the page's own window, the requests `window.happyApp.close()`
+ * makes wait for the host to hear them. Only the host's own scripts use it.
+ */
+const ARTIFACT_PAGE_APP_CLOSE_HUB = "__happyAppClose";
+
+/**
  * `--happy-document-measure` and `--happy-document-inset` in `theme.css`, for a
  * page shown where the theme cannot be read from the host: a static preview's
  * `srcdoc`.
@@ -116,28 +151,81 @@ export function artifactPageAppModeStyle(): string {
         `${app} { --happy-host-page-inset: 0px; --happy-page-inset: 0px; --happy-app-inset-top: env(safe-area-inset-top, 0px); --happy-app-inset-right: env(safe-area-inset-right, 0px); --happy-app-inset-bottom: env(safe-area-inset-bottom, 0px); --happy-app-inset-left: env(safe-area-inset-left, 0px); }`,
         `${app}, ${app} > body { height: 100%; margin: 0; padding: 0; }`,
         `${app}, ${app} > body { overflow: hidden !important; overscroll-behavior: none !important; }`,
+        // The rect of the host's close button over the page. A desktop host
+        // draws none: its way out is the header's, outside the page.
+        ...["x", "y", "width", "height"].map(
+            (edge) =>
+                `@property --happy-app-close-${edge} { syntax: "<length>"; inherits: true; initial-value: 0px; }`,
+        ),
+        `${app} { --happy-app-close-x: 0px; --happy-app-close-y: 0px; --happy-app-close-width: 0px; --happy-app-close-height: 0px; }`,
     ].join("\n");
 }
 
 /**
- * Marks an app's root with `data-happy-page-mode="app"` once the page has
- * declared itself one, for a host to run in the page as soon as its document
- * is committed. It watches the document only until it is parsed, which is
- * as long as a declaration in the `<head>` can take to arrive.
+ * The meeting point of `window.happyApp.close()` and the host waiting to hear
+ * it, made by whichever of the two arrives first. A close asked for before
+ * the host listens is kept, so it is answered rather than lost.
+ */
+const ARTIFACT_PAGE_APP_CLOSE_HUB_GET = `(window[${JSON.stringify(ARTIFACT_PAGE_APP_CLOSE_HUB)}] ??= { waiting: new Set(), asked: false })`;
+
+/**
+ * Prepares a page that declared itself an app, for a host to run in it as
+ * soon as its document is committed: marks its root with
+ * `data-happy-page-mode="app"` and the `data-happy-app-close` it resolved,
+ * and gives it `window.happyApp.close()` to ask the host to close it. It
+ * watches the document only until it is parsed, which is as long as a
+ * declaration in the `<head>` can take to arrive.
  */
 export function artifactPageAppModeScript(): string {
     return `(() => {
+    const values = ${JSON.stringify(ARTIFACT_PAGE_APP_CLOSE_VALUES)};
     const mark = () => {
         if (!document.querySelector(${JSON.stringify(ARTIFACT_PAGE_APP_MODE)})) return false;
-        document.documentElement.setAttribute("${ARTIFACT_PAGE_APP_MODE_ATTRIBUTE}", "app");
+        const root = document.documentElement;
+        root.setAttribute("${ARTIFACT_PAGE_APP_MODE_ATTRIBUTE}", "app");
+        const declared = document.querySelector(${JSON.stringify(ARTIFACT_PAGE_APP_CLOSE)})?.getAttribute("content")?.trim().toLowerCase();
+        root.setAttribute("${ARTIFACT_PAGE_APP_CLOSE_ATTRIBUTE}", values.includes(declared) ? declared : values[0]);
+        if (!window.happyApp) {
+            const close = () => {
+                const hub = ${ARTIFACT_PAGE_APP_CLOSE_HUB_GET};
+                if (hub.waiting.size === 0) {
+                    hub.asked = true;
+                    return;
+                }
+                const heard = [...hub.waiting];
+                hub.waiting.clear();
+                for (const resolve of heard) resolve(true);
+            };
+            window.happyApp = Object.freeze({ close });
+        }
         return true;
     };
-    if (mark() || document.readyState !== "loading") return;
-    const observer = new MutationObserver(() => {
-        if (mark()) observer.disconnect();
-    });
+    mark();
+    if (document.readyState !== "loading") return;
+    // The close corner may be declared after the mode; both are read until
+    // the head can hold no more.
+    const observer = new MutationObserver(mark);
     observer.observe(document, { childList: true, subtree: true });
-    document.addEventListener("DOMContentLoaded", () => observer.disconnect(), { once: true });
+    document.addEventListener("DOMContentLoaded", () => {
+        observer.disconnect();
+        mark();
+    }, { once: true });
+})()`;
+}
+
+/**
+ * Resolves the next time the app in the page calls `window.happyApp.close()`,
+ * or at once for a call made before this was asked. A host asks again after
+ * every answer: each call is a long poll.
+ */
+export function artifactPageAppCloseWaitScript(): string {
+    return `(() => {
+    const hub = ${ARTIFACT_PAGE_APP_CLOSE_HUB_GET};
+    if (hub.asked) {
+        hub.asked = false;
+        return true;
+    }
+    return new Promise((resolve) => hub.waiting.add(resolve));
 })()`;
 }
 
