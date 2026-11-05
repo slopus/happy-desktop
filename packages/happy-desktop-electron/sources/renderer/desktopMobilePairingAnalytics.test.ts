@@ -24,11 +24,11 @@ import {
     type HappyMobileOnboardingSnapshot,
     type HappyMobileOnboardingStore,
 } from "happy-desktop-state";
-import { desktopAnalyticsCreate } from "./desktopAnalytics";
 import {
+    desktopAnalyticsCreate,
     mobilePairingObserveCreate,
     type MobilePairingReport,
-} from "./desktopMobilePairingAnalytics";
+} from "./desktopAnalytics";
 
 // The package index starts code-highlighting workers, which Node cannot run;
 // the step mapping is all analytics needs from it.
@@ -416,7 +416,7 @@ it("sends pairing events with catalog fields only: no code, address, emoji, or d
     });
     const methods = mobilePairingMethodStoreCreate();
     methods.methodSelect("direct", "mobile_access");
-    const observe = mobilePairingObserveCreate(methods, analytics.mobilePairingReport("remote"));
+    const observe = analytics.mobilePairingObserve("remote", methods);
     const relay = fakeCreate(integration({}));
     const direct = fakeCreate(connector(null));
     const relayStore = observe.integration(relay as unknown as HappyAgentIntegrationStore);

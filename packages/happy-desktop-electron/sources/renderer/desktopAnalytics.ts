@@ -1,7 +1,10 @@
+import { HappyAgentApiError } from "@slopus/happy-agent-client";
 import {
     analyticsBucket,
     analyticsClientCreate,
+    analyticsErrorCodeOfStatus,
     analyticsErrorThrottleCreate,
+    analyticsFailureKind,
     analyticsModel,
     analyticsOutageTrackerCreate,
     analyticsSeenCreate,
@@ -18,19 +21,36 @@ import {
     type AnalyticsFailureAction,
     type AnalyticsFlag,
     type AnalyticsMemory,
+    type AnalyticsMobilePairingMethod,
+    type AnalyticsMobilePairingSurface,
     type AnalyticsModelProperties,
     type AnalyticsOutcome,
+    type AnalyticsSeen,
     type AnalyticsSetupDownloadFailure,
     type AnalyticsSetupErrorCode,
     type AnalyticsTransferPercentBucket,
     type AnalyticsTrackOptions,
 } from "happy-desktop-analytics";
 import {
+    entryKey,
     usageAnalyticsStoreCreate,
-    type MobilePairingMethodOutput,
+    type ConversationEntry,
+    type ConversationFailure,
     type HappyAgentActionResult,
     type HappyAgentActivity,
     type HappyAgentActivityModel,
+    type HappyAgentIntegrationSnapshot,
+    type HappyAgentIntegrationStore,
+    type HappyAgentMobileConnectorSnapshot,
+    type HappyAgentMobileConnectorStore,
+    type HappyAgentModelStore,
+    type HappyAgentWorkspaceSnapshot,
+    type HappyAgentWorkspaceStore,
+    type HappyDesktopMobileStep,
+    type HappyMobileOnboardingSnapshot,
+    type HappyMobileOnboardingStore,
+    type MobilePairingMethodOutput,
+    type MobilePairingMethodStore,
     type UsageAnalyticsDocument,
     type UsageAnalyticsPersistence,
     type UsageAnalyticsStore,
@@ -49,17 +69,9 @@ import {
     type LocalOnboardingViewSnapshot,
 } from "./localOnboardingStore";
 import { LOCAL_HAPPY_AGENT_ID, type HappyAgentDirectoryStore } from "./happyAgentDirectoryStore";
-import {
-    mobilePairingMethodReport,
-    type MobilePairingReport,
-} from "./desktopMobilePairingAnalytics";
 import type { DesktopSystem } from "../shared/desktopContract";
 import type { AppHappyAgentUpdateStore } from "happy-desktop-app";
 import type { DesktopAgentBrokenStore } from "./desktopAgentBroken";
-import {
-    analyticsFailureKindOf,
-    conversationAnalyticsCreate,
-} from "./desktopConversationAnalytics";
 import { localWebBuild } from "./localWebBuild";
 
 declare const __HAPPY_RENDERER_VERSION__: string;
@@ -90,8 +102,11 @@ export interface DesktopAnalytics {
      * store, and subscribing it is what starts setup's machine work.
      */
     onboardingObserve(store: LocalOnboardingStore, welcome: WelcomeStore): LocalOnboardingStore;
-    /** Phone pairing events, reported on the Happy Agent the pairing is with. */
-    mobilePairingReport(happyAgentId: string): MobilePairingReport;
+    /** Observes one Happy Agent's phone pairing pages, reported on that Happy Agent. */
+    mobilePairingObserve(
+        happyAgentId: string,
+        methods: MobilePairingMethods,
+    ): HappyAgentMobilePairingObserve;
     /** The person picked a pairing method. */
     mobilePairingMethodSelected(output: MobilePairingMethodOutput): void;
     /**
@@ -320,6 +335,434 @@ function commandKindOf(
     }
 }
 
+/** The pairing events, each carrying only methods and pages: never a code, address, emoji, or name. */
+type MobilePairingEventName =
+    | "mobile_pairing_options_shown"
+    | "mobile_pairing_option_selected"
+    | "mobile_pairing_completed"
+    | "mobile_pairing_failed"
+    | "mobile_pairing_cancelled";
+
+/** The method a pairing page shows. */
+export type MobilePairingMethods = Pick<MobilePairingMethodStore, "get" | "subscribe">;
+
+export type MobilePairingReport = <E extends MobilePairingEventName>(
+    event: E,
+    properties: AnalyticsEvents[E],
+) => void;
+
+/**
+ * Wraps one Happy Agent's phone pairing stores so their pairings are observed
+ * exactly while a pairing page is subscribed to them. Observing on its own
+ * would subscribe them, and subscribing is what starts their pairing work.
+ */
+export interface HappyAgentMobilePairingObserve {
+    /** The direct connector, shared by onboarding and Settings. */
+    connector(store: HappyAgentMobileConnectorStore): HappyAgentMobileConnectorStore;
+    /** First-run onboarding's relay pairing. */
+    onboarding(store: HappyMobileOnboardingStore): HappyMobileOnboardingStore;
+    /** Settings → Mobile Access's relay pairing. */
+    integration(store: HappyAgentIntegrationStore): HappyAgentIntegrationStore;
+}
+
+/** What a pairing page shows: whether its methods are on screen, and how far its relay code got. */
+interface RelayPage {
+    readonly shown: boolean;
+    readonly phase: "idle" | "waiting" | "completed" | "failed";
+}
+
+const RELAY_CLOSED: RelayPage = { shown: false, phase: "idle" };
+
+function relayPageOfStep(step: HappyDesktopMobileStep): RelayPage {
+    switch (step.kind) {
+        case "intro":
+            return RELAY_CLOSED;
+        case "link":
+            return {
+                shown: true,
+                phase:
+                    step.phase.kind === "pairing"
+                        ? "waiting"
+                        : step.phase.kind === "failed"
+                          ? "failed"
+                          : "idle",
+            };
+        case "connected":
+            return { shown: false, phase: "completed" };
+    }
+}
+
+/** Onboarding's mobile step, local and guided or remote and in place. */
+function relayPageOfOnboarding(snapshot: HappyMobileOnboardingSnapshot): RelayPage {
+    switch (snapshot.status) {
+        case "desktop":
+            return relayPageOfStep(snapshot.step);
+        case "pairing":
+            return { shown: true, phase: "waiting" };
+        // A pending failure is a new code on its way.
+        case "failed":
+            return { shown: true, phase: snapshot.pending ? "idle" : "failed" };
+        case "configured":
+            return { shown: false, phase: "completed" };
+        default:
+            return RELAY_CLOSED;
+    }
+}
+
+/** Mobile Access: the local desktop's guided setup, or a remote Happy Agent's pairing card. */
+function relayPageOfIntegration(snapshot: HappyAgentIntegrationSnapshot): RelayPage {
+    if (snapshot.setup) return relayPageOfStep(snapshot.setup);
+    if (!snapshot.pairingOpen) return RELAY_CLOSED;
+    // As the card's relay slot reads it: a refused start, or a pairing that
+    // stopped or was cancelled, unless a new code is already on its way.
+    if (snapshot.pairingError) return { shown: true, phase: "failed" };
+    if (snapshot.configured === true) return { shown: true, phase: "completed" };
+    switch (snapshot.status) {
+        case "pairing":
+            return { shown: true, phase: snapshot.pairing ? "waiting" : "idle" };
+        case "failed":
+        case "disconnected":
+            return { shown: true, phase: snapshot.pairingStarting ? "idle" : "failed" };
+        default:
+            return { shown: true, phase: "idle" };
+    }
+}
+
+/**
+ * One pairing page's relay: reports the page showing its choice, and how a
+ * relay code shown on it ended. A code kept behind Direct is not the person's
+ * attempt, so it neither fails nor completes for them; choosing Direct while
+ * one is on screen leaves it.
+ */
+function relayFollow(
+    surface: AnalyticsMobilePairingSurface,
+    method: () => AnalyticsMobilePairingMethod,
+    report: MobilePairingReport,
+): (page: RelayPage) => void {
+    let current = RELAY_CLOSED;
+    /** A relay code was on screen since the page showed or the last outcome. */
+    let attempted = false;
+    let failureQueued = false;
+    return (page) => {
+        const previous = current;
+        current = page;
+        if (page.shown && !previous.shown) {
+            attempted = false;
+            report("mobile_pairing_options_shown", {
+                options: "relay_direct",
+                default_method: method(),
+                surface,
+            });
+        }
+        if (!previous.shown && !page.shown) return;
+        if (method() !== "relay") {
+            if (attempted) report("mobile_pairing_cancelled", { method: "relay" });
+            attempted = false;
+            return;
+        }
+        if (page.phase === "waiting") attempted = true;
+        if (page.phase === "completed" && previous.phase !== "completed") {
+            if (attempted) report("mobile_pairing_completed", { method: "relay" });
+            attempted = false;
+            return;
+        }
+        if (page.phase === "failed" && previous.phase !== "failed") {
+            // A store passes through a failure on its way to a new code, as an
+            // unused code expires or a page opens on a stopped integration;
+            // only a failure still standing once that call is done is one.
+            if (!failureQueued) {
+                failureQueued = true;
+                queueMicrotask(() => {
+                    failureQueued = false;
+                    if (!current.shown || current.phase !== "failed" || method() !== "relay")
+                        return;
+                    // A relay pairing says only that it stopped, never why.
+                    report("mobile_pairing_failed", { method: "relay", error_code: "unknown" });
+                    attempted = false;
+                });
+            }
+            return;
+        }
+        if (!page.shown && attempted) {
+            report("mobile_pairing_cancelled", { method: "relay" });
+            attempted = false;
+        }
+    };
+}
+
+/**
+ * The direct connector: how each pairing seen in progress on an open page
+ * ended, and an open page that could not get a code at all. One that expires
+ * before a phone connects is replaced by a new code, not ended.
+ */
+function directFollow(
+    report: MobilePairingReport,
+): (snapshot: HappyAgentMobileConnectorSnapshot) => void {
+    const inProgress = new Set<string>();
+    let noCode = false;
+    return (snapshot) => {
+        const read = snapshot.connector;
+        const pairing = read.kind === "ready" ? read.connector.pairing : null;
+        const failing =
+            snapshot.pairingOpen &&
+            pairing === null &&
+            (read.kind === "read-failed" ||
+                (read.kind === "ready" && read.connector.status === "failed") ||
+                snapshot.actionError !== undefined);
+        if (failing && !noCode)
+            report("mobile_pairing_failed", { method: "direct", error_code: "unavailable" });
+        noCode = failing;
+        if (!pairing) return;
+        if (pairing.status === "waiting" || pairing.status === "verifying") {
+            if (snapshot.pairingOpen) inProgress.add(pairing.id);
+            // The page closed, or the person chose Relay: the pairing is cancelled.
+            else if (inProgress.delete(pairing.id))
+                report("mobile_pairing_cancelled", { method: "direct" });
+            return;
+        }
+        if (!inProgress.has(pairing.id)) return;
+        // An unused code expiring is replaced; one a phone was checking timed out.
+        if (pairing.status === "expired" && pairing.device === null) {
+            inProgress.delete(pairing.id);
+            return;
+        }
+        inProgress.delete(pairing.id);
+        switch (pairing.status) {
+            case "completed":
+                report("mobile_pairing_completed", { method: "direct" });
+                return;
+            case "rejected":
+            case "expired":
+                report("mobile_pairing_failed", { method: "direct", error_code: pairing.status });
+                return;
+            case "failed":
+                report("mobile_pairing_failed", { method: "direct", error_code: "unknown" });
+                return;
+            case "cancelled":
+                report("mobile_pairing_cancelled", { method: "direct" });
+                return;
+        }
+    };
+}
+
+/**
+ * The store, with every snapshot its subscribers see observed, again whenever
+ * the chosen method changes, and once more as the last of them leaves, which
+ * closes the page: `open` is false then.
+ */
+function observed<S extends { get(): unknown; subscribe(listener: () => void): () => void }>(
+    store: S,
+    methods: MobilePairingMethods,
+    observe: (snapshot: ReturnType<S["get"]>, open: boolean) => void,
+): S {
+    const read = () => store.get() as ReturnType<S["get"]>;
+    let subscribers = 0;
+    let methodUnsubscribe: (() => void) | undefined;
+    return {
+        ...store,
+        subscribe(listener: () => void) {
+            subscribers += 1;
+            const unsubscribe = store.subscribe(() => {
+                observe(read(), true);
+                listener();
+            });
+            methodUnsubscribe ??= methods.subscribe(() => observe(read(), true));
+            observe(read(), true);
+            let released = false;
+            return () => {
+                if (released) return;
+                released = true;
+                unsubscribe();
+                subscribers -= 1;
+                if (subscribers > 0) return;
+                methodUnsubscribe?.();
+                methodUnsubscribe = undefined;
+                observe(read(), false);
+            };
+        },
+    };
+}
+
+/** The pairing observers for one Happy Agent, with the method each page shows. */
+export function mobilePairingObserveCreate(
+    methods: MobilePairingMethods,
+    report: MobilePairingReport,
+): HappyAgentMobilePairingObserve {
+    const method = (): AnalyticsMobilePairingMethod => methods.get().method;
+    return {
+        connector: (store) => observed(store, methods, directFollow(report)),
+        onboarding: (store) => {
+            const follow = relayFollow("onboarding", method, report);
+            return observed(store, methods, (snapshot, open) =>
+                follow(open ? relayPageOfOnboarding(snapshot) : RELAY_CLOSED),
+            );
+        },
+        integration: (store) => {
+            const follow = relayFollow("mobile_access", method, report);
+            return observed(store, methods, (snapshot, open) =>
+                follow(open ? relayPageOfIntegration(snapshot) : RELAY_CLOSED),
+            );
+        },
+    };
+}
+
+/** The person picked a method on a pairing page's Relay | Direct choice. */
+function mobilePairingMethodReport(
+    output: MobilePairingMethodOutput,
+    report: MobilePairingReport,
+): void {
+    report("mobile_pairing_option_selected", {
+        from: output.from,
+        to: output.to,
+        surface: output.surface,
+    });
+}
+
+/** A failure older than this was not just met; opening an old conversation is not news. */
+const FAILURE_FRESH_MS = 5 * 60_000;
+
+/**
+ * What kind of error a person was shown, from its cause chain: a Happy Agent
+ * refusal by its HTTP status, a request that never arrived as `offline`.
+ */
+function errorCodeOf(error: unknown): AnalyticsErrorCode {
+    for (let current = error; current instanceof Error; current = current.cause) {
+        if (current instanceof HappyAgentApiError) return analyticsErrorCodeOfStatus(current.status);
+        if (current instanceof TypeError) return "offline";
+        if (current.name === "TimeoutError") return "timeout";
+    }
+    return "unknown";
+}
+
+function providerTypeOf(failure: ConversationFailure | undefined): string | undefined {
+    return failure !== undefined && "provider" in failure ? failure.provider.type : undefined;
+}
+
+/**
+ * A failure card the transcript draws: a terminal failure row with a time,
+ * typed or not. A row that is the agent retrying by itself is not one.
+ */
+function failureRowOf(entry: ConversationEntry) {
+    if (entry.kind !== "notice" || entry.variant !== "notice") return undefined;
+    if (entry.occurredAt === undefined || entry.retry !== undefined) return undefined;
+    if (entry.failure === undefined && entry.level !== "error") return undefined;
+    return { id: entry.id, occurredAt: entry.occurredAt, failure: entry.failure };
+}
+
+interface ConversationObserveDeps {
+    readonly workspace: HappyAgentWorkspaceStore;
+    readonly models: HappyAgentModelStore;
+    /** Failures already counted on this device. */
+    readonly seen: AnalyticsSeen;
+    /** Analytics is on and the window is on screen with the keyboard. */
+    readonly foreground: () => boolean;
+    /** The entries the conversation's main view last said it has on screen. */
+    readonly entriesOnScreen: (conversationId: string) => ReadonlySet<string> | undefined;
+    readonly chatFailureShown: (properties: AnalyticsEvents["chat_failure_shown"]) => void;
+    readonly errorShown: (area: AnalyticsErrorArea, code: AnalyticsErrorCode) => void;
+}
+
+/**
+ * Reads one Happy Agent's workspace for errors the person is looking at: a
+ * fresh failure card or a message that could not be sent among the rows on
+ * screen, a conversation that could not load while it is the main view, and
+ * the file or diff tab on screen that could not be read. Each counts once it
+ * is first on screen in a foreground window, and again only after it stopped
+ * failing, however often the workspace notifies.
+ */
+function conversationObserve(deps: ConversationObserveDeps): () => void {
+    let loadCounted: string | undefined;
+    let filesCounted = new Set<string>();
+    let rowsConversation: string | undefined;
+    let sendsCounted = new Set<string>();
+    const poolOf = (snapshot: HappyAgentWorkspaceSnapshot): boolean => {
+        const conversation = snapshot.conversation;
+        if (conversation.type !== "ready" || conversation.value.session.type !== "ready")
+            return false;
+        const providerId = conversation.value.session.value.providerId;
+        const models = deps.models.get();
+        return (
+            models.type === "ready" &&
+            (models.catalog.providers.find((provider) => provider.id === providerId)?.poolMembers
+                ?.length ?? 0) > 0
+        );
+    };
+    const targetOf = (snapshot: HappyAgentWorkspaceSnapshot, conversationId: string) => {
+        const bot = snapshot.list.bots.find((entry) => entry.conversation.id === conversationId);
+        if (!bot) return "session" as const;
+        return bot.systemKey === "chief_of_staff" ? ("chief_of_staff" as const) : ("bot" as const);
+    };
+    return () => {
+        const snapshot = deps.workspace.get();
+        const foreground = deps.foreground();
+        const filesFailing = new Set<string>();
+        for (const tab of snapshot.fileTabs) {
+            if (tab.document.type !== "error") continue;
+            const key = `${tab.id}:${tab.presentationId}`;
+            if (filesCounted.has(key)) {
+                filesFailing.add(key);
+                continue;
+            }
+            // The tab the main content is showing, not one waiting in the strip.
+            if (!foreground || tab.placement !== "main" || tab.id !== snapshot.activeMainViewId)
+                continue;
+            filesFailing.add(key);
+            deps.errorShown(
+                tab.kind === "diff" ? "diff_load" : "file_load",
+                errorCodeOf(tab.document.error),
+            );
+        }
+        filesCounted = filesFailing;
+        const conversation = snapshot.conversation;
+        if (conversation.type === "error") {
+            const key = snapshot.address.conversationId ?? "";
+            if (loadCounted !== key && foreground && snapshot.activeMainViewId === undefined) {
+                loadCounted = key;
+                deps.errorShown("conversation_load", errorCodeOf(conversation.error));
+            }
+        } else loadCounted = undefined;
+        if (conversation.type !== "ready") return;
+        const conversationId = conversation.value.conversationId;
+        if (rowsConversation !== conversationId) {
+            rowsConversation = conversationId;
+            sendsCounted = new Set();
+        }
+        // Rows count once they are on screen: the conversation shows rather
+        // than a file, in a window the person is looking at.
+        const onScreen = deps.entriesOnScreen(conversationId);
+        if (!onScreen || !foreground || snapshot.displayedMainViewId !== undefined) return;
+        const entries = conversation.value.entries;
+        const now = Date.now();
+        // The rows on screen are a few, and most often the newest.
+        let found = 0;
+        for (let index = entries.length - 1; index >= 0 && found < onScreen.size; index -= 1) {
+            const entry = entries[index]!;
+            const key = entryKey(entry);
+            if (!onScreen.has(key)) continue;
+            found += 1;
+            if (entry.kind === "message") {
+                if (entry.delivery !== "failed") sendsCounted.delete(key);
+                else if (!sendsCounted.has(key)) {
+                    sendsCounted.add(key);
+                    deps.errorShown("message_send", errorCodeOf(entry.error));
+                }
+                continue;
+            }
+            const row = failureRowOf(entry);
+            if (!row || now - row.occurredAt > FAILURE_FRESH_MS) continue;
+            if (!deps.seen.first(row.id)) continue;
+            const kind = analyticsFailureKind(row.failure?.kind);
+            deps.chatFailureShown({
+                kind,
+                provider_kind: analyticsProviderKind(providerTypeOf(row.failure)),
+                target: targetOf(snapshot, conversationId),
+                session_client: "happy_agent",
+                is_pool: kind === "no_account_available" || poolOf(snapshot),
+            });
+        }
+    };
+}
+
 /**
  * The desktop's analytics: one client for the window, the common fields read
  * from the Happy Agent each event happened on, and the observers that turn
@@ -446,6 +889,14 @@ export function desktopAnalyticsCreate(options: {
     };
     closers.add(outageClose);
 
+    /** The rows the open conversation's main view last had on screen, and where. */
+    let onScreen:
+        | {
+              readonly happyAgentId: string;
+              readonly conversationId: string;
+              readonly entryIds: ReadonlySet<string>;
+          }
+        | undefined;
     // The conversation the person is looking at: the active Happy Agent's open one.
     let followed:
         | { readonly workspace: unknown; readonly check: () => void; readonly stop: () => void }
@@ -459,11 +910,16 @@ export function desktopAnalyticsCreate(options: {
             followed?.stop();
             followed = undefined;
             if (session) {
-                const check = conversationAnalyticsCreate({
+                const check = conversationObserve({
                     workspace: session.workspace,
                     models: session.models,
                     seen: failuresSeen,
-                    focused: windowFocused,
+                    // Nothing is remembered for a window that does not report.
+                    foreground: () => preference.get().usageAnalyticsEnabled && windowFocused(),
+                    entriesOnScreen: (conversationId) =>
+                        onScreen?.happyAgentId === id && onScreen.conversationId === conversationId
+                            ? onScreen.entryIds
+                            : undefined,
                     chatFailureShown: (properties) => track(id, "chat_failure_shown", properties),
                     errorShown: (area, code) => errorShown(id, area, code),
                 });
@@ -481,7 +937,12 @@ export function desktopAnalyticsCreate(options: {
         conversationFollow();
     };
     const directoryUnsubscribe = options.happyAgents.subscribe(directoryChanged);
-    const windowChanged = (): void => directoryChanged();
+    /** What else counts an error once the window comes to the front. */
+    const foregroundChecks = new Set<() => void>();
+    const windowChanged = (): void => {
+        directoryChanged();
+        for (const check of foregroundChecks) check();
+    };
     if (typeof document !== "undefined")
         document.addEventListener("visibilitychange", windowChanged);
     window.addEventListener("focus", windowChanged);
@@ -516,28 +977,47 @@ export function desktopAnalyticsCreate(options: {
             };
         },
         agentUpdateObserve(store) {
-            let failed = false;
+            /** The failure on the card was counted; cleared once the card stops failing. */
+            let counted = false;
+            const check = (): void => {
+                const snapshot = store.get();
+                const progress = snapshot?.progress;
+                if (progress?.kind !== "failed" || snapshot?.revealed !== true) {
+                    counted = false;
+                    return;
+                }
+                if (counted || !windowFocused()) return;
+                counted = true;
+                // A restart that never came back is the one failure with a cause of its own.
+                errorShown(
+                    LOCAL_HAPPY_AGENT_ID,
+                    "update",
+                    progress.failedAt === "reconnecting" ? "timeout" : "unknown",
+                );
+            };
+            let subscribers = 0;
             return {
                 ...store,
                 subscribe(listener) {
-                    return store.subscribe(() => {
-                        const snapshot = store.get();
-                        const progress = snapshot?.progress;
-                        const failing = progress?.kind === "failed" && snapshot?.revealed === true;
-                        // A restart that never came back is the one failure with a cause of its own.
-                        if (failing && !failed)
-                            errorShown(
-                                LOCAL_HAPPY_AGENT_ID,
-                                "update",
-                                progress.failedAt === "reconnecting" ? "timeout" : "unknown",
-                            );
-                        failed = failing;
+                    subscribers += 1;
+                    foregroundChecks.add(check);
+                    const unsubscribe = store.subscribe(() => {
+                        check();
                         listener();
                     });
+                    let released = false;
+                    return () => {
+                        if (released) return;
+                        released = true;
+                        unsubscribe();
+                        subscribers -= 1;
+                        if (subscribers === 0) foregroundChecks.delete(check);
+                    };
                 },
             };
         },
-        mobilePairingReport: pairingReport,
+        mobilePairingObserve: (happyAgentId, methods) =>
+            mobilePairingObserveCreate(methods, pairingReport(happyAgentId)),
         flagFollow: (flag, listener) => client.flagFollow(flag, listener),
         mobilePairingMethodSelected: (output) =>
             mobilePairingMethodReport(
@@ -625,7 +1105,7 @@ export function desktopAnalyticsCreate(options: {
                     return;
                 case "failureActionClicked":
                     track(happyAgentId, "chat_failure_action_clicked", {
-                        kind: analyticsFailureKindOf(activity.failure),
+                        kind: analyticsFailureKind(activity.failure),
                         action: FAILURE_ACTIONS[activity.action],
                     });
                     return;
@@ -634,6 +1114,14 @@ export function desktopAnalyticsCreate(options: {
                         source: activity.source,
                         ...outcomeOf(activity.result),
                     });
+                    return;
+                case "conversationEntriesSeen":
+                    onScreen = {
+                        happyAgentId,
+                        conversationId: activity.conversationId,
+                        entryIds: activity.entryIds,
+                    };
+                    followed?.check();
                     return;
             }
         },

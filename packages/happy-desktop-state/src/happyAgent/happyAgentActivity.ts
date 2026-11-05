@@ -32,9 +32,10 @@ export interface HappyAgentActivityAddress {
 }
 
 /**
- * One reader-initiated act a workspace completed or failed, reported to its
- * owner. Only enums, counts, and host-reported model identifiers: never a
- * name, path, or any text the reader wrote.
+ * One reader-initiated act a workspace completed or failed, or what its open
+ * conversation put on screen, reported to its owner. Only enums, counts,
+ * identifiers, and host-reported model identifiers: never a name, path, or
+ * any text the reader wrote.
  */
 export type HappyAgentActivity =
     | {
@@ -64,6 +65,12 @@ export type HappyAgentActivity =
           readonly action: "retry" | "switch" | "newChat" | "assistance";
           /** The failure's typed kind; absent for a failure that came without one. */
           readonly failure?: ConversationFailureKind;
+      }
+    | {
+          readonly kind: "conversationEntriesSeen";
+          readonly conversationId: string;
+          /** The entries on screen, partly or wholly, by their `entryKey`. */
+          readonly entryIds: ReadonlySet<string>;
       }
     | {
           readonly kind: "botCreated";

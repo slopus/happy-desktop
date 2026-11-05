@@ -654,6 +654,41 @@ export function analyticsProviderKind(
 }
 
 /**
+ * A conversation failure's kind on the catalog's list: `untyped` for a failure
+ * that came without one, `other` for a kind this client does not name.
+ */
+export function analyticsFailureKind(kind: string | undefined): AnalyticsFailureKind {
+    if (kind === undefined) return "untyped";
+    return kind !== "untyped" && (ANALYTICS_FAILURE_KINDS as readonly string[]).includes(kind)
+        ? (kind as AnalyticsFailureKind)
+        : "other";
+}
+
+/** What a Happy Agent refusal was, by its HTTP status. */
+export function analyticsErrorCodeOfStatus(status: number): AnalyticsErrorCode {
+    switch (status) {
+        case 401:
+            return "unauthorized";
+        case 403:
+            return "forbidden";
+        case 404:
+            return "not_found";
+        case 408:
+        case 504:
+            return "timeout";
+        case 409:
+        case 412:
+            return "conflict";
+        case 413:
+            return "too_large";
+        case 429:
+            return "rate_limited";
+        default:
+            return status >= 500 ? "server_error" : "refused";
+    }
+}
+
+/**
  * A Happy Agent model id as the catalog allows it: never `providerId:modelId`,
  * and a model outside the first-party vendors is `other`, since a custom
  * provider's model name could say something private. Null is the agent default.

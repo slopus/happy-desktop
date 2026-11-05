@@ -275,6 +275,11 @@ export type ConversationViewProps = {
      * nothing the reader sees moves.
      */
     onTracesSeen?: (viewer: HappyAgentTraceViewer, turnIds: ReadonlySet<string>) => void;
+    /**
+     * Told which transcript entries are on screen, partly or wholly, by their
+     * `entryKey`, each time that range or the number of rows changes.
+     */
+    onEntriesSeen?: (entryIds: ReadonlySet<string>) => void;
     /** @deprecated Pending steering now renders as an ordered transcript message. */
     queued?: readonly { readonly id: string; readonly text: string }[];
     /** Opens one transcript image full size; the owner hosts the viewer in `overlay`. */
@@ -425,6 +430,15 @@ function conversationTracesOnScreen(
     for (const [turnId, span] of spans)
         if (span.last >= first && span.first <= last) seen.add(turnId);
     return seen;
+}
+
+/** The row keys of the entries among `first`–`last`. */
+function conversationEntriesOnScreen(
+    entries: readonly ConversationEntry[],
+    first: number,
+    last: number,
+): ReadonlySet<string> {
+    return new Set(entries.slice(first, last + 1).map(entryKey));
 }
 
 /** Whether the turn this row carries the trace control for is currently open. */
@@ -1163,7 +1177,7 @@ export function ConversationView(props: ConversationViewProps) {
                         key={props.conversationId}
                         onScrollPositionChange={props.onScrollPositionChange}
                         onStartReached={props.onStartReached}
-                        {...(props.onTracesSeen
+                        {...(props.onTracesSeen || props.onEntriesSeen
                             ? {
                                   onVisibleRowsChange: (
                                       first: number,
@@ -1171,9 +1185,12 @@ export function ConversationView(props: ConversationViewProps) {
                                       element: HTMLElement,
                                   ) => {
                                       traceList.current = element;
-                                      props.onTracesSeen!(
+                                      props.onTracesSeen?.(
                                           traceViewer,
                                           conversationTracesOnScreen(traceSpans, first, last),
+                                      );
+                                      props.onEntriesSeen?.(
+                                          conversationEntriesOnScreen(listEntries, first, last),
                                       );
                                   },
                               }

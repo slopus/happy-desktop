@@ -2169,6 +2169,11 @@ export interface HappyAgentWorkspaceStore {
     /** Reports the watched-to-the-end turns one view has on screen; see `HappyAgentChatStore`. */
     turnTracesSeen(viewer: HappyAgentTraceViewer, turnIds: ReadonlySet<string>): void;
     /**
+     * Reports which entries of the open conversation its main view has on
+     * screen, to the owner only: nothing in the workspace changes.
+     */
+    conversationEntriesSeen(entryIds: ReadonlySet<string>): void;
+    /**
      * Records where one conversation is being read, so returning to it resumes
      * there rather than at the newest message. Kept for the workspace's lifetime
      * and never persisted: a reading position is worth restoring while switching
@@ -8856,6 +8861,14 @@ export function happyAgentWorkspaceStoreCreate(
         messageExpandedSet: (messageId, expanded) =>
             chatStore?.messageExpandedSet(messageId, expanded),
         turnTracesSeen: (viewer, turnIds) => chatStore?.turnTracesSeen(viewer, turnIds),
+        conversationEntriesSeen(entryIds) {
+            if (conversation.type !== "ready") return;
+            activityRecord({
+                kind: "conversationEntriesSeen",
+                conversationId: conversation.value.conversationId,
+                entryIds,
+            });
+        },
         conversationScrollUpdate(conversationId, position) {
             // Deliberately no `recompute()`. The transcript is the one thing
             // that already knows this position — it just reported it — and

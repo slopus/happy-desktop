@@ -30,7 +30,7 @@ import type {
     TerminalColorScheme,
 } from "happy-desktop-state";
 import type { HappyDesktopBridge } from "../shared/desktopContract";
-import type { HappyAgentMobilePairingObserve } from "./desktopMobilePairingAnalytics";
+import type { HappyAgentMobilePairingObserve } from "./desktopAnalytics";
 import {
     happyAgentConnectionOpen,
     type HappyAgentConnectionHandle,

@@ -167,7 +167,6 @@ import { desktopNavigationOrderPersistence } from "./desktopNavigationOrder";
 import { desktopSidebarCollapsePersistence } from "./desktopSidebarCollapse";
 import { DesktopBootGate, desktopBootSkip } from "./DesktopBootGate";
 import { desktopAnalyticsCreate } from "./desktopAnalytics";
-import { mobilePairingObserveCreate } from "./desktopMobilePairingAnalytics";
 import { desktopAgentUpdateStoreCreate } from "./desktopAgentUpdateStore";
 import {
     DesktopAgentBrokenGate,
@@ -1503,9 +1502,7 @@ if (mediaPreviewBridge) {
             activity: (happyAgentId, activity) => analytics.activity(happyAgentId, activity),
             // Reported through `analytics`, which is made once the directory exists.
             mobilePairingObserve: (happyAgentId) =>
-                mobilePairingObserveCreate(mobilePairingMethod, (event, properties) =>
-                    analytics.mobilePairingReport(happyAgentId)(event, properties),
-                ),
+                analytics.mobilePairingObserve(happyAgentId, mobilePairingMethod),
             subtasksForget: (happyAgentId, removed, open) =>
                 happyAgentRouterSubtasksForget(
                     connectionUis.get(happyAgentId)?.router ?? happyAgentRouter,

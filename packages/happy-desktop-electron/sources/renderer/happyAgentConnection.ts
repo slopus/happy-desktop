@@ -64,7 +64,7 @@ import { happyAgentHostServicesCreate } from "./happyAgentHostServices";
 import { happyAgentProfileSourceCreate } from "./happyAgentProfileSource";
 import { happyAgentTranscriptConnectCreate } from "./happyAgentTranscriptSource";
 import { happyAgentUsageSourceCreate } from "./happyAgentUsageSource";
-import type { HappyAgentMobilePairingObserve } from "./desktopMobilePairingAnalytics";
+import type { HappyAgentMobilePairingObserve } from "./desktopAnalytics";
 
 export interface HappyAgentProtocolMismatch {
     readonly message: string;
