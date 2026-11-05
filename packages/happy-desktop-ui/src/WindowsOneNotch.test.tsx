@@ -118,15 +118,18 @@ it("records one real downward notch from controlled distances while streaming", 
         if (!viewport) throw new Error("Missing viewport");
         const bottomDistance = () =>
             viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
-        viewport.addEventListener("wheel", (event) =>
-            events.push({
-                time: performance.now(),
-                type: "wheel",
-                deltaY: event.deltaY,
-                deltaMode: event.deltaMode,
-                trusted: event.isTrusted,
-                bottomDistance: bottomDistance(),
-            }),
+        viewport.addEventListener(
+            "wheel",
+            (event) =>
+                events.push({
+                    time: performance.now(),
+                    type: "wheel",
+                    deltaY: event.deltaY,
+                    deltaMode: event.deltaMode,
+                    trusted: event.isTrusted,
+                    bottomDistance: bottomDistance(),
+                }),
+            { capture: true },
         );
         viewport.addEventListener("scroll", () =>
             events.push({
@@ -171,7 +174,7 @@ it("records one real downward notch from controlled distances while streaming", 
                 type: "prepared",
                 bottomDistance: bottomDistance(),
             });
-            nextUpdate = performance.now() + 200;
+            nextUpdate = performance.now() + 150;
             streaming = true;
         };
         for (const distance of [40, 70, 95, 500]) {
