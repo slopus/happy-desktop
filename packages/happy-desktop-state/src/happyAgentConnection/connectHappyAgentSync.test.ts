@@ -12,6 +12,7 @@ import {
     type Message,
     type MessageMode,
     type Question,
+    type WatchGitResponse,
 } from "@slopus/happy-agent-client";
 import type {
     ChatDelta,
@@ -2815,4 +2816,100 @@ it("retains the last successful Git comparison through failed scans and clears i
         git: { ...git, files: [], changedFiles: 0, insertions: 0, scannedAt: 3000 },
     });
     await vi.waitFor(() => expect(groups.projects[0]?.git?.comparison).toBe("ready"));
+});
+
+function gitWatchRequests(daemon: FakeHappyAgentDaemon): (readonly string[])[] {
+    return daemon.calls
+        .filter((call) => call.method === "watchGit")
+        .map((call) => (call.args[0] as { workspaceIds: readonly string[] }).workspaceIds);
+}
+
+it("watches a new workspace as soon as its initialization is ready", async () => {
+    const { daemon, connection } = harnessOpen();
+    daemon.projectSeed({ id: "project-watch" });
+    const groups = groupsWatch(connection);
+    await vi.waitFor(() => expect(groups.state.connection).toBe("live"));
+    await vi.waitFor(() => expect(gitWatchRequests(daemon)).toEqual([["project-watch"]]));
+    const watchGit = daemon.client.watchGit.bind(daemon.client);
+    vi.spyOn(daemon.client, "watchGit").mockImplementation(
+        async (request, options): Promise<WatchGitResponse> => {
+            // The fake still refuses a request that names a workspace that is not ready.
+            await watchGit(request, options);
+            if (!request.workspaceIds.includes("workspace-new")) return { snapshots: {} };
+            return {
+                snapshots: {
+                    "workspace-new": {
+                        facts: {
+                            branch: "feature",
+                            detached: false,
+                            head: "head1",
+                            upstream: null,
+                            ahead: 0,
+                            behind: 0,
+                        },
+                        comparison: "ready",
+                        base: "base1",
+                        changedFiles: 1,
+                        insertions: 3,
+                        deletions: 1,
+                        countsExact: true,
+                        conflicted: false,
+                        files: [],
+                        filesTruncated: false,
+                        scannedAt: 1000,
+                    },
+                },
+            };
+        },
+    );
+
+    const created = daemon.workspaceSeed("project-watch", {
+        id: "workspace-new",
+        initialization: { attempt: 1, error: null, status: "initializing" },
+    });
+    daemon.eventEmit("workspace.created", { workspace: created });
+    await vi.waitFor(() =>
+        expect(groups.projects[0]?.workspaces.map((workspace) => workspace.id)).toContain(
+            "workspace-new",
+        ),
+    );
+    expect(gitWatchRequests(daemon).flat()).not.toContain("workspace-new");
+
+    // The renewal follows the update itself; the two-minute timer never fires in this test.
+    daemon.workspaceUpdate("workspace-new", {
+        initialization: { attempt: 1, error: null, status: "ready" },
+    });
+    await vi.waitFor(() =>
+        expect(
+            groups.projects[0]?.workspaces.find((workspace) => workspace.id === "workspace-new")
+                ?.git,
+        ).toMatchObject({ changedFiles: 1, insertions: 3, deletions: 1 }),
+    );
+    expect(gitWatchRequests(daemon).at(-1)).toEqual(["project-watch", "workspace-new"]);
+});
+
+it("keeps a failed workspace from refusing the Git watch for the rest", async () => {
+    const daemon = fakeHappyAgentDaemonCreate();
+    daemon.projectSeed({ id: "project-mixed" });
+    daemon.workspaceSeed("project-mixed", { id: "workspace-ready" });
+    daemon.workspaceSeed("project-mixed", {
+        id: "workspace-failed",
+        initialization: { attempt: 1, error: "setup failed", status: "failed" },
+    });
+    const { connection } = harnessOpen(daemon);
+    const groups = groupsWatch(connection);
+    await vi.waitFor(() => expect(groups.state.connection).toBe("live"));
+    await vi.waitFor(() =>
+        expect(gitWatchRequests(daemon)).toEqual([["project-mixed", "workspace-ready"]]),
+    );
+
+    // A rename of the failed workspace leaves it unwatchable, so nothing is asked again.
+    daemon.workspaceUpdate("workspace-failed", { name: "renamed" });
+    await vi.waitFor(() =>
+        expect(
+            groups.projects[0]?.workspaces.find((workspace) => workspace.id === "workspace-failed")
+                ?.name,
+        ).toBe("renamed"),
+    );
+    expect(gitWatchRequests(daemon)).toEqual([["project-mixed", "workspace-ready"]]);
 });
