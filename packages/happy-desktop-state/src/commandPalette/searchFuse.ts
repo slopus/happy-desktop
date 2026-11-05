@@ -46,11 +46,13 @@ export interface SearchFuseInput<Row> {
     /** The Happy Agent's answer to the same query; absent until it arrives. */
     readonly remote?: readonly SearchRemoteEntry<Row>[];
     /**
-     * The keys of the rows the reader has seen from the top through the
-     * highlighted one, in the order shown. Those rows keep their places when
-     * the other answer arrives; everything new goes below them.
+     * The keys of the rows the reader has passed from the top through the
+     * highlighted one, in the order shown, once they have moved the
+     * highlight. Those rows keep their places when the other answer arrives;
+     * everything new goes below them. Absent, nothing has been chosen, and
+     * the fused order stands as it is.
      */
-    readonly held: readonly string[];
+    readonly held?: readonly string[];
     /** The one row for a thing both found: the local row, with what the Happy Agent says of it. */
     readonly merge: (local: Row, remote: Row) => Row;
 }
@@ -59,10 +61,10 @@ export interface SearchFuseInput<Row> {
  * The rows the palette shows for one query.
  *
  * Until the Happy Agent answers, that is the local answer as it ranked
- * itself. Once it does, the two are fused, except that the rows the reader
- * has already seen down to the highlight stay where they were: with nothing
- * highlighted past the top, that is the top row. A thing both found is one
- * row, keyed as before, so the local row it was keeps its identity.
+ * itself. Once it does, the two are fused. If the reader has moved the
+ * highlight, the rows they passed down to it stay where they were; if not,
+ * the best match simply comes first. A thing both found is one row, keyed as
+ * before, so the local row it was keeps its identity.
  */
 export function searchFuse<Row>(input: SearchFuseInput<Row>): SearchEntry<Row>[] {
     const local = new Map<string, Row>();
@@ -83,8 +85,7 @@ export function searchFuse<Row>(input: SearchFuseInput<Row>): SearchEntry<Row>[]
                   input.remote,
                   [...local.keys()].map((key) => ({ key })),
               ).map((entry) => entry.key);
-    const first = input.local[0]?.key;
-    const held = input.held.length > 0 ? input.held : first === undefined ? [] : [first];
+    const held = input.held ?? [];
     const shown: SearchEntry<Row>[] = [];
     const placed = new Set<string>();
     const place = (key: string): void => {

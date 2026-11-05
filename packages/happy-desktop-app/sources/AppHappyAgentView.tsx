@@ -5125,7 +5125,7 @@ function HappyAgentCommandPalette(
         ...(search.status === "ready" && search.query === palette.query.trim()
             ? { remote: search.hits }
             : {}),
-        held: palette.held,
+        ...(palette.held === undefined ? {} : { held: palette.held }),
         ...(surfaceCatalog.availability === "available"
             ? {
                   surfaces: {

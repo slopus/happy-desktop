@@ -67,28 +67,44 @@ it("shows the local answer as it ranked itself until the Happy Agent answers", (
     expect(shown.every((entry) => entry.row.from === "local")).toBe(true);
 });
 
-it("fuses the remote answer under the top row, one row per key, remote fields merged", () => {
-    const shown = searchFuse({
-        local: [local("agent:a"), local("document:b"), local("todo:c")],
-        remote: [
-            remote("vault_file:f", 1, "line 3: budget"),
-            remote("document:b", 2, "## Budget"),
-            remote("calendar_event:e", 3),
-        ],
-        held: [],
-        merge,
-    });
+const FIRST = {
+    local: [local("agent:a"), local("document:b"), local("todo:c")],
+    remote: [
+        remote("vault_file:f", 1, "line 3: budget"),
+        remote("document:b", 2, "## Budget"),
+        remote("calendar_event:e", 3),
+    ],
+    merge,
+};
+
+it("puts the best match first while the reader has not moved the highlight", () => {
+    const shown = searchFuse(FIRST);
     // Fused: b (1/62 + 1/62), then f and a at 1/61 with the Happy Agent's own first,
-    // then e and c at 1/63 likewise. The top row the reader was looking at stays the top row.
+    // then e and c at 1/63 likewise. Nothing was chosen, so nothing is held.
     expect(keys(shown)).toEqual([
+        "document:b",
+        "vault_file:f",
+        "agent:a",
+        "calendar_event:e",
+        "todo:c",
+    ]);
+    // One row per key: this window's row, with what the Happy Agent says of it.
+    expect(shown[0]!.row).toEqual({ title: "document:b", from: "both", snippet: "## Budget" });
+    expect(shown[1]!.row.from).toBe("remote");
+});
+
+it("keeps the top row where it was once the reader has moved the highlight back to it", () => {
+    expect(keys(searchFuse({ ...FIRST, held: ["agent:a"] }))).toEqual([
         "agent:a",
         "document:b",
         "vault_file:f",
         "calendar_event:e",
         "todo:c",
     ]);
-    expect(shown[1]!.row).toEqual({ title: "document:b", from: "both", snippet: "## Budget" });
-    expect(shown[2]!.row.from).toBe("remote");
+});
+
+it("holds no found row while the highlight is on a row above them", () => {
+    expect(keys(searchFuse({ ...FIRST, held: [] }))).toEqual(keys(searchFuse(FIRST)));
 });
 
 it("keeps every row through the highlight where the reader saw it", () => {

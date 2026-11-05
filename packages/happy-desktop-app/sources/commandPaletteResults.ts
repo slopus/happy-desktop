@@ -342,7 +342,10 @@ export interface CommandPaletteInput extends CommandPaletteContext {
      * has answered. Absent, the palette's own answer stands alone.
      */
     readonly remote?: readonly HappyAgentSearchHit[];
-    /** The found rows the reader has passed, by key, as the palette recorded them. */
+    /**
+     * The found rows the reader has passed, by key, as the palette recorded
+     * them. Absent until the reader moves the highlight after typing.
+     */
     readonly held?: readonly string[];
     readonly surfaces?: CommandPaletteSurfaceSources;
     /** The artifacts the palette's own catalog has read, newest first. */
@@ -1778,7 +1781,7 @@ function foundRows(
     const fused = searchFuse<FoundRow>({
         local: localEntries,
         ...(remote === undefined ? {} : { remote }),
-        held: input.held ?? [],
+        ...(input.held === undefined ? {} : { held: input.held }),
         merge: (mine, theirs) =>
             snippetShown({
                 row: mine.row,
@@ -1788,9 +1791,15 @@ function foundRows(
     return {
         rows: fused.map((entry) => entry.row.row),
         keys: fused.map((entry) => entry.key),
-        // Only this window's own matches place the list among the sections, so the
-        // Happy Agent's answer arriving never moves it.
-        best: local.length > 0 ? Math.min(...local.map((entry) => entry.rank)) : Infinity,
+        best:
+            // Until the reader moves the highlight, nothing they chose can move, so the
+            // Happy Agent's answer puts the list first. Once they have, only this
+            // window's own matches place it, so the answer arriving never moves it.
+            input.held === undefined && remote !== undefined && remote.length > 0
+                ? -Infinity
+                : local.length > 0
+                  ? Math.min(...local.map((entry) => entry.rank))
+                  : Infinity,
     };
 }
 

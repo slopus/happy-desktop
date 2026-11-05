@@ -539,7 +539,7 @@ const REMOTE: readonly HappyAgentSearchHit[] = [
     },
 ];
 
-it("fuses the Happy Agent's answer into the found rows, keeping the top row and every local row's identity", () => {
+it("fuses the Happy Agent's answer into the found rows, best match first, keeping every local row's identity", () => {
     const base = input({
         query: "search",
         surfaces: { ...SOURCES, surfaces: [...SOURCES.surfaces, VAULT] },
@@ -548,10 +548,18 @@ it("fuses the Happy Agent's answer into the found rows, keeping the top row and 
     const after = commandPaletteResults({ ...base, remote: REMOTE });
     const found = (result: ReturnType<typeof commandPaletteResults>) =>
         result.sections.find((section) => section.id === "results")!.rows;
-    // The row the reader was looking at stays at the top; the vault file the Happy
-    // Agent ranked first, and the spec it found by its text too, come next.
+    // The reader has not moved the highlight, so the best fused match leads: the spec
+    // both found, then the vault file the Happy Agent ranked first, then the project
+    // that led before.
     expect(
         found(after)
+            .map((row) => row.id)
+            .slice(0, 3),
+    ).toEqual(["surface:srf_spec", "vault_file:vf_budget", found(before)[0]!.id]);
+    // Once they have moved it back to the top, that row stays at the top.
+    const held = commandPaletteResults({ ...base, remote: REMOTE, held: [before.found.keys[0]!] });
+    expect(
+        found(held)
             .map((row) => row.id)
             .slice(0, 3),
     ).toEqual([found(before)[0]!.id, "surface:srf_spec", "vault_file:vf_budget"]);
@@ -584,7 +592,6 @@ it("fuses the Happy Agent's answer into the found rows, keeping the top row and 
         },
     });
     expect(ids(after).filter((id) => id === "task:search_old")).toHaveLength(1);
-    expect(after.found.keys[0]).toBe(before.found.keys[0]);
 });
 
 it("keeps the rows the reader has passed where they were when the Happy Agent answers", () => {
@@ -657,4 +664,59 @@ it("opens a found message in its conversation, and leaves out what the desktop c
     expect(ids(result)).not.toContain("message:msg_2");
     expect(ids(result)).not.toContain("user:usr_1");
     expect(ids(result)).not.toContain("skill:sk_1");
+});
+
+const HIDE = {
+    query: "hide",
+    tasks: [...TASKS, task("hidden", "Why tasks hide on reload", 1)],
+    sidebar: { hidden: false },
+};
+const HIDE_REMOTE: readonly HappyAgentSearchHit[] = [
+    {
+        type: "vault_file",
+        key: "vault_file:vf_hide",
+        rank: 1,
+        surfaceId: VAULT.id,
+        fileId: "vf_hide" as HappyAgentVaultItemId,
+        name: "hide-and-seek.md",
+        path: "/hide-and-seek.md",
+        kind: "file",
+        match: "name",
+        innerPath: null,
+        line: null,
+        snippet: null,
+    },
+];
+
+it("puts the results first when the Happy Agent answers before the reader moves the highlight", () => {
+    // "Hide sidebar" outranks the task that only contains the word, until the answer arrives.
+    expect(commandPaletteResults(input(HIDE)).sections.map((section) => section.id)).toEqual([
+        "actions",
+        "results",
+        "settings",
+    ]);
+    const answered = commandPaletteResults(input({ ...HIDE, remote: HIDE_REMOTE }));
+    expect(answered.sections.map((section) => section.id)).toEqual([
+        "results",
+        "actions",
+        "settings",
+    ]);
+    // The highlight stays on the first row, which is now the best match.
+    expect(answered.rows[0]!.id).toBe("vault_file:vf_hide");
+    expect(answered.found.start).toBe(0);
+});
+
+it("keeps the sections where they were when the Happy Agent answers after the reader moved the highlight", () => {
+    const before = commandPaletteResults(input(HIDE));
+    // The reader arrowed onto the action above the results: no found row is passed.
+    const held = commandPaletteHeld(before, 0);
+    expect(held).toEqual([]);
+    const answered = commandPaletteResults(input({ ...HIDE, remote: HIDE_REMOTE, held }));
+    expect(answered.sections.map((section) => section.id)).toEqual([
+        "actions",
+        "results",
+        "settings",
+    ]);
+    expect(answered.rows[0]!.id).toBe(before.rows[0]!.id);
+    expect(answered.rows.map((row) => row.id)).toContain("vault_file:vf_hide");
 });

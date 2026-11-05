@@ -19,12 +19,13 @@ export interface CommandPaletteSnapshot {
     /** Which row Enter would run, as an index into the owner's flat list. */
     readonly activeIndex: number;
     /**
-     * The search keys of the found rows the reader has passed, from the
-     * top through the highlighted one, as they were shown when the highlight
-     * last moved. Those rows keep their places when the Happy Agent's answer
-     * arrives; a new query has passed none.
+     * The search keys of the found rows the reader has passed, from the top
+     * through the highlighted one, as they were shown when the highlight last
+     * moved. Those rows keep their places when the Happy Agent's answer
+     * arrives. Absent until the reader moves the highlight after typing: then
+     * nothing has been chosen, and the answer may reorder everything.
      */
-    readonly held: readonly string[];
+    readonly held?: readonly string[];
     readonly open: boolean;
     /**
      * What was typed. Closing keeps the last query, so a palette still leaving
@@ -50,9 +51,8 @@ export interface CommandPaletteStore {
     activeIndexUpdate(value: number, held: readonly string[]): void;
 }
 
-const NONE_HELD: readonly string[] = [];
-const CLOSED: CommandPaletteSnapshot = { activeIndex: 0, held: NONE_HELD, open: false, query: "" };
-const OPENED: CommandPaletteSnapshot = { activeIndex: 0, held: NONE_HELD, open: true, query: "" };
+const CLOSED: CommandPaletteSnapshot = { activeIndex: 0, open: false, query: "" };
+const OPENED: CommandPaletteSnapshot = { activeIndex: 0, open: true, query: "" };
 
 /**
  * Creates the window-lifetime command palette store.
@@ -93,12 +93,13 @@ export function commandPaletteStoreCreate(): CommandPaletteStore {
             // A closed palette has no query to change, so a keystroke arriving
             // from a card being taken down cannot bring one back.
             if (!snapshot.open || snapshot.query === value) return;
-            publish({ activeIndex: 0, held: NONE_HELD, open: true, query: value });
+            publish({ activeIndex: 0, open: true, query: value });
         },
         activeIndexUpdate(value, held) {
             if (!snapshot.open) return;
             if (
                 snapshot.activeIndex === value &&
+                snapshot.held !== undefined &&
                 snapshot.held.length === held.length &&
                 snapshot.held.every((key, index) => key === held[index])
             )
