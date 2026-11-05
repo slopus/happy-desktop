@@ -1675,7 +1675,9 @@ export function happyAgentVaultStoreCreate(deps: HappyAgentVaultDeps): HappyAgen
         },
         itemMove(itemId, folderId) {
             const entry = snapshot.items.get(itemId);
-            if (disposed || entry === undefined || entry.parentId === folderId) return;
+            if (disposed || entry === undefined) return;
+            store.dialogClose();
+            if (entry.parentId === folderId) return;
             if (folderId !== null && !snapshot.items.has(folderId)) return;
             if (vaultContains(projected(), itemId, folderId)) return;
             if (nameTaken(folderId, entry.name, itemId) !== undefined) {

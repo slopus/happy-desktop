@@ -44,6 +44,12 @@ export type FilePreviewProps = {
     style?: CSSProperties;
     /** Full path or name. Its last segment titles the preview. */
     path: string;
+    /**
+     * Leaves the path out of the header, where the surface around the preview
+     * already names the file, as a vault's breadcrumb does. The header keeps
+     * only the file's facts and its controls.
+     */
+    pathHidden?: boolean;
     /** Overrides the kind derived from the path — use it when the bytes disagree. */
     kind?: FilePreviewKind;
     /** What the file is when its name does not say, worn in the header as a file tree row wears it. */
@@ -241,6 +247,7 @@ export function FilePreview(props: FilePreviewProps) {
         "data-testid",
         "style",
         "path",
+        "pathHidden",
         "kind",
         "type",
         "content",
@@ -328,19 +335,24 @@ export function FilePreview(props: FilePreviewProps) {
             <header
                 className="happy-file-preview__header"
                 data-happy-desktop-ui="file-preview-header"
+                data-path-hidden={local.pathHidden ? "" : undefined}
             >
-                <span
-                    className="happy-file-family-glyph happy-file-preview__glyph"
-                    data-family={family}
-                    data-happy-desktop-ui="file-preview-glyph"
-                >
-                    {local.type ? (
-                        <Ionicon name={local.type.glyph} size={16} />
-                    ) : (
-                        <FileTreeFamilyIcon family={family} size={16} />
-                    )}
-                </span>
-                <FilePathLabel className="happy-file-preview__path" path={local.path} />
+                {local.pathHidden ? null : (
+                    <>
+                        <span
+                            className="happy-file-family-glyph happy-file-preview__glyph"
+                            data-family={family}
+                            data-happy-desktop-ui="file-preview-glyph"
+                        >
+                            {local.type ? (
+                                <Ionicon name={local.type.glyph} size={16} />
+                            ) : (
+                                <FileTreeFamilyIcon family={family} size={16} />
+                            )}
+                        </span>
+                        <FilePathLabel className="happy-file-preview__path" path={local.path} />
+                    </>
+                )}
                 {meta ? (
                     <span
                         className="happy-file-preview__meta"

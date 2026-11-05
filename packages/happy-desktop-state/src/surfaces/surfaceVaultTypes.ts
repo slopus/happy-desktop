@@ -267,6 +267,8 @@ export type HappyAgentVaultDialog =
     | { readonly kind: "folderCreate" }
     /** `name` is the one the field starts from, as the reader sees it: an artifact's without `.artifact`. */
     | { readonly kind: "rename"; readonly itemId: HappyAgentVaultItemId; readonly name: string }
+    /** Picks the folder an item moves into. */
+    | { readonly kind: "move"; readonly itemId: HappyAgentVaultItemId }
     | { readonly kind: "settings" };
 
 /** The vault's retention policy as the Happy Agent holds it, with this window's edit applied. */

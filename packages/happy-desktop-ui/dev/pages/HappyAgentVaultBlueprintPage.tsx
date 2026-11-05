@@ -792,6 +792,21 @@ export function HappyAgentVaultBlueprintPage() {
             </FullScreenSpecimen>
 
             <FullScreenSpecimen
+                detail="Moving a file from the context menu: every folder in the vault, indented under the root, with the one it is in now shown but not offered."
+                label="Move to"
+                number="15c"
+                screen="15c-move-dialog-1100x760"
+                window={WINDOW}
+            >
+                <Page
+                    vault={vaultOf(null, {
+                        selectedId: id("roadmap"),
+                        dialog: { kind: "move", itemId: id("roadmap") },
+                    })}
+                />
+            </FullScreenSpecimen>
+
+            <FullScreenSpecimen
                 detail="The vault's settings on the default Time Machine policy. Choosing Custom opens the rules; the Trash keeps items for 30 days."
                 label="Settings"
                 number="16"

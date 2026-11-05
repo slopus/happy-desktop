@@ -743,6 +743,74 @@
     gap: 16px;
 }
 
+/* The folder picker: the vault's folders as one indented column, the picked
+   one filled the way a selected sidebar row is. */
+.happy-vault-move {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-height: 320px;
+    overflow-y: auto;
+}
+
+.happy-vault-move__row {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 8px;
+    height: 32px;
+    padding-right: 10px;
+    border: 0;
+    border-radius: var(--happy-radius-sm);
+    background: transparent;
+    color: var(--text);
+    font: inherit;
+    font-size: 13px;
+    text-align: left;
+    cursor: pointer;
+}
+
+.happy-vault-move__row:hover {
+    background: var(--surface-ripple);
+}
+
+.happy-vault-move__row[data-selected] {
+    background: var(--surface-selected);
+}
+
+.happy-vault-move__row[aria-disabled="true"] {
+    color: var(--text-secondary);
+    cursor: default;
+}
+
+.happy-vault-move__row[aria-disabled="true"]:hover {
+    background: transparent;
+}
+
+.happy-vault-move__row:focus-visible {
+    outline: 2px solid var(--radio-active);
+    outline-offset: -2px;
+}
+
+.happy-vault-move__glyph {
+    flex: none;
+    color: var(--happy-tile-blue, var(--text-secondary));
+}
+
+.happy-vault-move__name {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-vault-move__note {
+    flex: none;
+    color: var(--text-secondary);
+    font-size: 12px;
+}
+
 .happy-vault-settings__section {
     display: flex;
     flex-direction: column;

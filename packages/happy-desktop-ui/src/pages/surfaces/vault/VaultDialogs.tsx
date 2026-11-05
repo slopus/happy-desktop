@@ -1,17 +1,20 @@
 import { useState } from "react";
 import {
+    happyAgentVaultNameShown,
     happyAgentVaultNameProblem,
     happyAgentVaultRetentionEqual,
     happyAgentVaultRetentionPreset,
     happyAgentVaultRetentionPresetApply,
     happyAgentVaultRetentionProblem,
     type HappyAgentVaultItem,
+    type HappyAgentVaultItemId,
     type HappyAgentVaultRetention,
     type HappyAgentVaultRetentionPreset,
     type HappyAgentVaultSettings,
 } from "happy-desktop-state";
 import { Banner } from "../../../Banner";
 import { Button } from "../../../Button";
+import { Ionicon } from "../../../vectorIcons/VectorIcon";
 import { Modal } from "../../../Modal";
 import { ModalOverlay } from "../../../ModalOverlay";
 import { Select } from "../../../Select";
@@ -66,6 +69,111 @@ export function VaultNameDialog(props: {
                         onValueChange={setName}
                         value={name}
                     />
+                </div>
+            </Modal>
+        </ModalOverlay>
+    );
+}
+
+/** One folder the picker offers, at its depth under the root. */
+interface MoveTarget {
+    readonly id: HappyAgentVaultItemId | null;
+    readonly name: string;
+    readonly depth: number;
+}
+
+/**
+ * Every folder an item could move into, in the order the vault shows them:
+ * the root, then each folder above its own folders. The item itself and,
+ * for a folder, everything inside it are left out, since nothing goes inside
+ * itself.
+ */
+function moveTargets(
+    rootName: string,
+    item: HappyAgentVaultItem,
+    children: ReadonlyMap<HappyAgentVaultItemId | null, readonly HappyAgentVaultItem[]>,
+): MoveTarget[] {
+    const targets: MoveTarget[] = [{ id: null, name: rootName, depth: 0 }];
+    const visit = (parentId: HappyAgentVaultItemId | null, depth: number): void => {
+        for (const child of children.get(parentId) ?? []) {
+            if (child.kind !== "folder" || child.id === item.id) continue;
+            targets.push({ id: child.id, name: happyAgentVaultNameShown(child.name), depth });
+            visit(child.id, depth + 1);
+        }
+    };
+    visit(null, 1);
+    return targets;
+}
+
+/**
+ * Where an item goes, picked from the vault's folders, so moving never
+ * depends on dragging. The folder it is in now is shown but cannot be picked.
+ */
+export function VaultMoveDialog(props: {
+    item: HappyAgentVaultItem;
+    rootName: string;
+    /** The vault's live items by the folder holding them, each folder's in the order it lists them. */
+    folders: ReadonlyMap<HappyAgentVaultItemId | null, readonly HappyAgentVaultItem[]>;
+    onSubmit: (folderId: HappyAgentVaultItemId | null) => void;
+    onClose: () => void;
+}) {
+    const [picked, setPicked] = useState<{ readonly id: HappyAgentVaultItemId | null }>();
+    const targets = moveTargets(props.rootName, props.item, props.folders);
+    const ready = picked !== undefined && picked.id !== props.item.parentId;
+    const submit = () => {
+        if (ready) props.onSubmit(picked.id);
+    };
+    return (
+        <ModalOverlay onDismiss={props.onClose}>
+            <Modal
+                data-testid="happy-vault-move-dialog"
+                footer={
+                    <>
+                        <Button onClick={props.onClose} variant="ghost">
+                            Cancel
+                        </Button>
+                        <Button disabled={!ready} onClick={submit} variant="primary">
+                            Move
+                        </Button>
+                    </>
+                }
+                onClose={props.onClose}
+                size="small"
+                title={`Move “${happyAgentVaultNameShown(props.item.name)}”`}
+            >
+                <div aria-label="Folders" className="happy-vault-move" role="listbox">
+                    {targets.map((target) => {
+                        const here = target.id === props.item.parentId;
+                        const selected = picked !== undefined && picked.id === target.id;
+                        return (
+                            <button
+                                aria-disabled={here}
+                                aria-selected={selected}
+                                className="happy-vault-move__row"
+                                data-selected={selected ? "" : undefined}
+                                key={target.id ?? ""}
+                                onClick={() => {
+                                    if (!here) setPicked({ id: target.id });
+                                }}
+                                onDoubleClick={() => {
+                                    if (!here) props.onSubmit(target.id);
+                                }}
+                                role="option"
+                                style={{ paddingLeft: `${String(10 + target.depth * 18)}px` }}
+                                type="button"
+                            >
+                                <Ionicon
+                                    className="happy-vault-move__glyph"
+                                    name={target.id === null ? "file-tray-stacked" : "folder-sharp"}
+                                    size={16}
+                                />
+                                <span className="happy-vault-move__name">{target.name}</span>
+                                {here ? (
+                                    <span className="happy-vault-move__note">Current folder</span>
+                                ) : null}
+                            </button>
+                        );
+                    })}
                 </div>
             </Modal>
         </ModalOverlay>

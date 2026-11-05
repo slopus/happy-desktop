@@ -21,7 +21,7 @@ import {
     type HappyAgentSurfaceChatToggle,
 } from "../HappyAgentSurfaceHeader";
 import type { HappyAgentSurfaceView } from "../surfacePresentation";
-import { VaultNameDialog, VaultSettingsDialog } from "./VaultDialogs";
+import { VaultMoveDialog, VaultNameDialog, VaultSettingsDialog } from "./VaultDialogs";
 import { VaultItemList } from "./VaultItemList";
 import { VaultPreviewPane } from "./VaultPreviewPane";
 import { VaultUploads } from "./VaultUploads";
@@ -198,6 +198,7 @@ export function HappyAgentVaultSurfacePage(props: HappyAgentVaultSurfacePageProp
             : [
                   { kind: "item", id: "open", label: "Open", icon: "eye" },
                   { kind: "item", id: "rename", label: "Rename…", icon: "edit" },
+                  { kind: "item", id: "move", label: "Move to…", icon: "arrow-right" },
                   { kind: "item", id: "download", label: "Download", icon: "arrow-down" },
                   ...(entry.kind === "folder"
                       ? []
@@ -232,6 +233,9 @@ export function HappyAgentVaultSurfacePage(props: HappyAgentVaultSurfacePageProp
                     itemId: entry.id,
                     name: happyAgentVaultNameShown(entry.name),
                 });
+                return;
+            case "move":
+                props.onDialogOpen({ kind: "move", itemId: entry.id });
                 return;
             case "download":
                 download(entry.id);
@@ -403,6 +407,7 @@ export function HappyAgentVaultSurfacePage(props: HappyAgentVaultSurfacePageProp
 
     const dialog = vault.dialog;
     const renamed = dialog?.kind === "rename" ? vault.items.get(dialog.itemId) : undefined;
+    const moved = dialog?.kind === "move" ? vault.items.get(dialog.itemId) : undefined;
 
     return (
         <div
@@ -638,6 +643,15 @@ export function HappyAgentVaultSurfacePage(props: HappyAgentVaultSurfacePageProp
                     onClose={props.onDialogClose}
                     onSubmit={(name) => props.onItemRename(dialog.itemId, name)}
                     title={`Rename ${renamed?.kind === "folder" ? "folder" : renamed?.kind === "artifact" ? "app" : "file"}`}
+                />
+            ) : dialog?.kind === "move" && moved !== undefined ? (
+                <VaultMoveDialog
+                    folders={vault.children}
+                    item={moved}
+                    key={dialog.itemId}
+                    onClose={props.onDialogClose}
+                    onSubmit={(folderId) => props.onItemMove(dialog.itemId, folderId)}
+                    rootName={props.surface.name}
                 />
             ) : dialog?.kind === "settings" ? (
                 <VaultSettingsDialog

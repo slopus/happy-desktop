@@ -153,6 +153,8 @@ function VaultPreviewContent(props: VaultPreviewPaneProps) {
         className: "happy-vault-preview__file",
         "data-testid": "happy-vault-preview-file",
         path: happyAgentVaultPathShown(preview.path),
+        // The breadcrumb above names the file and where it is.
+        pathHidden: true,
         ...(entry?.kind === "artifact"
             ? { type: { family: vaultItemFamily(entry), glyph: VAULT_APP_GLYPH } }
             : {}),

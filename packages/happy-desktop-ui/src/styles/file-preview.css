@@ -75,6 +75,11 @@
     gap: 4px;
 }
 
+/* Without the path to fill the row, the controls still keep to its end. */
+.happy-file-preview__header[data-path-hidden] .happy-file-preview__actions {
+    margin-left: auto;
+}
+
 .happy-file-preview__updating {
     display: inline-flex;
     align-items: center;
