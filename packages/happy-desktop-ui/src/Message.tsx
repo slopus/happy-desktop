@@ -1094,6 +1094,12 @@ function messageListKeyDirection(event: KeyboardEvent): number {
             return 0;
     }
 }
+/** How far a downward key scrolls the transcript, in CSS pixels, as Chromium steps it. */
+function messageListKeyReach(event: KeyboardEvent, element: HTMLElement): number {
+    if (event.key === "End") return Number.POSITIVE_INFINITY;
+    if (event.key === "ArrowDown") return 40;
+    return element.clientHeight * 0.875;
+}
 /** The padding/border-free viewport uses an overlaid scrollbar, so its resolved
  * CSS width is also its content width. Unlike clientWidth, this retains flex
  * layout's fractions without including ancestor zoom or transforms. */
@@ -3648,18 +3654,17 @@ export function MessageList(props: MessageListProps) {
                     element.scrollTop,
                 ) ?? { scrollTop: element.scrollTop, type: "scrollTop" };
             }
+            const bottomOffset = element.scrollHeight - element.scrollTop - element.clientHeight;
             if (
-                event.key === "End" &&
-                !event.defaultPrevented &&
-                !(
-                    event.target instanceof HTMLElement &&
-                    event.target.closest("input, textarea, select, [contenteditable]")
-                ) &&
-                element.scrollHeight - element.scrollTop - element.clientHeight <=
-                    FOLLOW_BOTTOM_THRESHOLD
+                wheelDirection > 0 &&
+                bottomOffset <=
+                    Math.max(FOLLOW_BOTTOM_THRESHOLD, messageListKeyReach(event, element))
             ) {
                 // End at the maximum has no scroll event. The key itself owns
                 // resuming following, just as a downward wheel at the end does.
+                // A key that reaches the end goes there now: its animation
+                // would land on the end as it was, short of a live one.
+                if (bottomOffset > FOLLOW_BOTTOM_THRESHOLD) event.preventDefault();
                 escapedFromFollow.current = false;
                 following.current = true;
                 sparseInsetRelease();
