@@ -27,15 +27,23 @@ navigating is never sent, and nothing is counted on the device.
 - Only closed enums, counts, booleans, version strings, and allowlisted model
   ids leave the window. No text anyone wrote, no names, ids, paths, URLs, hosts,
   error messages, or stacks. Anything else does not typecheck, and
-  `analyticsBeforeSend` drops any property the catalog does not name for that
+  `analyticsEnvelope` drops any property the catalog does not name for that
   event, or whose value its rule does not allow.
+- No SDK. Each event is one `POST /batch/` made with `fetch` (`sendBeacon` as
+  the window closes) in the spec's envelope: `distinct_id`, `$insert_id`,
+  `$lib: "happy-desktop"`, `$process_person_profile: false`, `$ip: null`,
+  `$geoip_disable: true`, and nothing PostHog would add itself. No cookies and
+  no referrer go with it. The one flag is a direct `POST /flags/?v=2` with the
+  install ID, asked once per window and kept in memory.
 - `model` is a first-party vendor-qualified id (`anthropic/…`, `openai/…`,
   `xai/…`, `google/…`, `zai/…`, `moonshotai/…`), else `other`. `os_version` is
   major.minor only. There is no per-account hash.
 - No IP from the desktop: events set `$ip: null` and `$geoip_disable: true`.
   PostHog still receives the request's IP unless the project's "Discard client
   IP data" is on, and Settings says so.
-- No autocapture, pageviews, session recording, or person properties.
+- No autocapture, pageviews, session recording, or person properties, and
+  nothing from a window driven by automation (`navigator.webdriver`), except
+  to a local capture endpoint.
 
 ## Identity
 
@@ -45,11 +53,12 @@ an account, a Happy Agent, or the phone's `anonID`.
 ## Switching it off
 
 - A build without a PostHog key sends nothing, nor does a development window.
-- The Settings switch stops sending at once: PostHog is opted out the moment
-  it turns off, `before_send` drops every event while it is off, a library
-  still loading then is never started, events leave as they are captured so
-  no batch is left, and PostHog's retry queue is removed so a failed request
-  is never sent again later.
+- The Settings switch stops sending at once. It is read right before every
+  request, nothing is queued or batched, and a request that fails is dropped,
+  never sent again, so nothing is left to leave once it is off. (posthog-js
+  was dropped for this: its retry queue resends a failed request past
+  `before_send` and past opting out, and can't be turned off from outside its
+  bundle.)
 - `DO_NOT_TRACK=1` in the environment turns analytics off the same way. Not
   yet built: the shell has to hand the variable to the renderer, which is a
   main or preload change waiting on Kirill's confirmation.
@@ -61,7 +70,8 @@ Analytics is `packages/happy-desktop-analytics` and the one renderer facade,
 file but the facade's two tests imports the package or names an `Analytics*`
 type or `analytics*` function. To remove it, delete:
 
-- `packages/happy-desktop-analytics/` and its `.oxfmtrc.json` ignore entry.
+- `packages/happy-desktop-analytics/`, its `.oxfmtrc.json` ignore entry, and
+  its `packages/happy-desktop-analytics` importer in `pnpm-lock.yaml`.
 - `desktopAnalytics.ts`, `desktopAnalytics.test.ts`, and
   `desktopMobilePairingAnalytics.test.ts` in the renderer.
 - In `renderer.tsx`: the `desktopAnalyticsCreate` import and call, and every
@@ -69,14 +79,20 @@ type or `analytics*` function. To remove it, delete:
   `mobilePairingObserve`, `dispose`, `flagFollow` (the direct-connection
   rollout then keeps its default), `appOpened`, `agentUpdateObserve`,
   `agentBrokenObserve`, `onboardingObserve`, and `preference`.
-- The `HappyAgentMobilePairingObserve` type import and the
-  `mobilePairingObserve` dep in `happyAgentDirectoryStore.ts` and
-  `happyAgentConnection.ts`, and the `activity` dep in both.
+- In `happyAgentDirectoryStore.ts`: the `HappyAgentMobilePairingObserve` type
+  import, the `activity` and `mobilePairingObserve` deps, and their forwarding
+  into each connection's deps.
+- In `happyAgentConnection.ts`: the same type import and deps, the
+  `activityRecorded` case that forwards activity, and the observer wrappers
+  around the mobile connector, onboarding's mobile store, and the Happy
+  integration store (`pairingObserve.connector`, `.onboarding`,
+  `.integration`).
 - `happy-desktop-analytics` in `happy-desktop-electron/package.json` and
   `scripts/demo/lib/stage.mjs`, the `__HAPPY_POSTHOG_API_KEY__` and
   `__HAPPY_POSTHOG_HOST__` defines in `vite.config.ts`, and
-  `HAPPY_POSTHOG_API_KEY` / `release_analytics` in the build and release
-  workflows.
+  `HAPPY_POSTHOG_API_KEY` / `release_analytics` in
+  `.github/workflows/build-linux.yml`, `build-windows.yml`,
+  `desktop-release.yml`, and `local-web-pages.yml`.
 
 What is left reports only to whoever listens and does nothing alone; it can
 stay or go with it:
@@ -112,6 +128,8 @@ stay or go with it:
 - Then use: `app_opened`, `message_sent`, `conversation_created`,
   `project_added`, `workspace_created`, `bot_created`, `task_created`, and the
   `onboarding_*` events.
+- Not wired: a file or diff that could not be read in the side panel; only
+  the active main tab counts.
 - Not yet: `app_crashed`, which needs the main process to leave a marker for
   the next launch, and `DO_NOT_TRACK` (above), both waiting on Kirill's
   confirmation of a main or preload change; and the voice events, which need
