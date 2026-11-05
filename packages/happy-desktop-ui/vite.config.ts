@@ -1,5 +1,5 @@
 import { availableParallelism } from "node:os";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { resolve } from "node:path";
 import babel from "@rolldown/plugin-babel";
 import react, { reactCompilerPreset } from "@vitejs/plugin-react";
@@ -145,6 +145,92 @@ export default defineConfig({
                         await new Promise((resolve) => setTimeout(resolve, 40));
                     }
                     await page.mouse.up();
+                },
+                scrollReproNativeOneNotch: async ({ page, iframe, frame }, offset: number) => {
+                    if (
+                        process.platform !== "win32" ||
+                        process.env.HAPPY_SCROLL_REPRO_NATIVE !== "1"
+                    )
+                        throw new Error(
+                            "Targeted native wheel requires the headed Windows native lane",
+                        );
+                    const box = await iframe
+                        .locator("[data-scrollbar-viewport]")
+                        .first()
+                        .boundingBox();
+                    if (!box) throw new Error("Targeted wheel viewport is missing");
+                    const geometry = await page.evaluate(() => ({
+                        x: window.screenX + (window.outerWidth - window.innerWidth) / 2,
+                        y:
+                            window.screenY +
+                            window.outerHeight -
+                            window.innerHeight -
+                            (window.outerWidth - window.innerWidth) / 2,
+                    }));
+                    const child = spawn(
+                        "powershell.exe",
+                        [
+                            "-NoLogo",
+                            "-NoProfile",
+                            "-NonInteractive",
+                            "-File",
+                            resolve(import.meta.dirname, "../../scripts/windows-scroll-wheel.ps1"),
+                            "-ScreenX",
+                            String(Math.round(geometry.x + box.x + box.width / 2)),
+                            "-ScreenY",
+                            String(Math.round(geometry.y + box.y + box.height / 2)),
+                            "-Delta",
+                            "-120",
+                            "-WaitForSignal",
+                        ],
+                        { stdio: "pipe" },
+                    );
+                    await new Promise<void>((resolvePromise, reject) => {
+                        let output = "";
+                        let errors = "";
+                        let signalled = false;
+                        child.stdout.on("data", (chunk: Buffer) => {
+                            output += chunk.toString();
+                            if (!signalled && output.includes("NATIVE_WHEEL_READY")) {
+                                signalled = true;
+                                void frame()
+                                    .then((target) =>
+                                        target.evaluate(async (distance) => {
+                                            const prepare = (
+                                                window as Window & {
+                                                    __happyOneNotchPrepare?: (
+                                                        distance: number,
+                                                    ) => Promise<void>;
+                                                }
+                                            ).__happyOneNotchPrepare;
+                                            if (!prepare)
+                                                throw new Error(
+                                                    "Targeted wheel fixture is missing",
+                                                );
+                                            await prepare(distance);
+                                        }, offset),
+                                    )
+                                    .then(() => child.stdin.end("go\n"))
+                                    .catch((error: unknown) => {
+                                        child.kill();
+                                        reject(error);
+                                    });
+                            }
+                        });
+                        child.stderr.on("data", (chunk: Buffer) => {
+                            errors += chunk.toString();
+                        });
+                        child.on("error", reject);
+                        child.on("close", (code) => {
+                            if (code !== 0 || !signalled)
+                                reject(
+                                    new Error(
+                                        `Native wheel failed (${String(code)}): ${errors}\n${output}`,
+                                    ),
+                                );
+                            else resolvePromise();
+                        });
+                    });
                 },
                 scrollReproKey: async ({ page, iframe }, key: string) => {
                     await iframe.locator("[data-scrollbar-viewport]").first().focus();

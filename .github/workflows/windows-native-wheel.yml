@@ -34,12 +34,12 @@ jobs:
               run: |
                   mkdir -p .context/native-wheel
                   set -o pipefail
-                  pnpm --dir packages/happy-desktop-ui exec vitest run --project chromium src/WindowsNotchedWheel.test.tsx 2>&1 | tee .context/native-wheel/output.log
+                  pnpm --dir packages/happy-desktop-ui exec vitest run --project chromium src/WindowsOneNotch.test.tsx 2>&1 | tee .context/native-wheel/output.log
             - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
               if: always()
               with:
                   name: windows-native-wheel
                   path: |
                       .context/native-wheel
-                      packages/happy-desktop-ui/src/__screenshots__/WindowsNotchedWheel.test.tsx/**
+                      packages/happy-desktop-ui/src/__screenshots__/WindowsOneNotch.test.tsx/**
                   if-no-files-found: warn
