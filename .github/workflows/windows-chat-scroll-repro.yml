@@ -152,10 +152,16 @@ jobs:
                 os: [windows-2025, ubuntu-latest]
                 dpr: [1, 1.25, 1.5]
                 headed: ["0"]
+                native: ["0"]
                 include:
                     - os: windows-2025
                       dpr: 1.25
                       headed: "1"
+                      native: "0"
+                    - os: windows-2025
+                      dpr: 1.25
+                      headed: "1"
+                      native: "1"
         runs-on: ${{ matrix.os }}
         timeout-minutes: 30
         defaults:
@@ -184,6 +190,7 @@ jobs:
                   HAPPY_SCROLL_REPRO_DPR: ${{ matrix.dpr }}
                   HAPPY_SCROLL_REPRO_SMOOTH: "1"
                   HAPPY_SCROLL_REPRO_HEADED: ${{ matrix.headed }}
+                  HAPPY_SCROLL_REPRO_NATIVE: ${{ matrix.native }}
               run: |
                   set -o pipefail
                   for iteration in 1 2 3; do
@@ -192,6 +199,6 @@ jobs:
             - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
               if: always()
               with:
-                  name: row-height-${{ matrix.os }}-${{ matrix.dpr }}-headed-${{ matrix.headed }}
+                  name: row-height-${{ matrix.os }}-${{ matrix.dpr }}-headed-${{ matrix.headed }}-native-${{ matrix.native }}
                   path: .context/row-height
                   if-no-files-found: warn
