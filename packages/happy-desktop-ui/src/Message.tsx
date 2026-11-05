@@ -1315,6 +1315,10 @@ export function MessageList(props: MessageListProps) {
             scrollTop: top,
             type: "scrollTop",
         };
+        // TanStack still holds the old offset until the scroll event reports
+        // it; a view hidden before then would reattach there.
+        virtualOffsetReport.current?.(top, virtualizer.isScrolling);
+        virtualizer.scrollOffset = top;
         return true;
     };
     const scrollBottomFollow = (
