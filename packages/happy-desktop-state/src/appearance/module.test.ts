@@ -35,7 +35,7 @@ describe("appearance store", () => {
             palette: "light",
             customTheme: customThemeEmpty,
             scrollbarVisibility: "automatic",
-            avatarsAnimated: false,
+            avatarsAnimated: true,
         });
 
         system.set("dark");
@@ -45,7 +45,7 @@ describe("appearance store", () => {
             palette: "dark",
             customTheme: customThemeEmpty,
             scrollbarVisibility: "automatic",
-            avatarsAnimated: false,
+            avatarsAnimated: true,
         });
         expect(seen).toEqual(["dark"]);
 
@@ -67,7 +67,7 @@ describe("appearance store", () => {
             palette: "light",
             customTheme: customThemeEmpty,
             scrollbarVisibility: "automatic",
-            avatarsAnimated: false,
+            avatarsAnimated: true,
         });
 
         store.appearanceToggle();
@@ -77,7 +77,7 @@ describe("appearance store", () => {
             palette: "dark",
             customTheme: customThemeEmpty,
             scrollbarVisibility: "automatic",
-            avatarsAnimated: false,
+            avatarsAnimated: true,
         });
 
         unsubscribe();
@@ -103,7 +103,7 @@ describe("appearance store", () => {
             palette: "dark",
             customTheme: customThemeEmpty,
             scrollbarVisibility: "automatic",
-            avatarsAnimated: false,
+            avatarsAnimated: true,
         });
         expect(seen).toEqual(["dark"]);
 
@@ -115,7 +115,7 @@ describe("appearance store", () => {
             palette: "light",
             customTheme: customThemeEmpty,
             scrollbarVisibility: "automatic",
-            avatarsAnimated: false,
+            avatarsAnimated: true,
         });
 
         unsubscribe();
@@ -155,7 +155,7 @@ describe("appearance store", () => {
             palette: "dark",
             customTheme: customThemeEmpty,
             scrollbarVisibility: "automatic",
-            avatarsAnimated: false,
+            avatarsAnimated: true,
         });
         // Re-selecting the current mode is not a change.
         store.appearanceSelect("dark");

@@ -93,7 +93,7 @@ export function AvatarPlaceholderPage() {
         <ComponentPage
             contract="Props only"
             number={componentNumber}
-            summary="The picture a person, bot, task, or project without one of its own wears: one of the 200 shader avatars from shaders.craftedstudios.co, picked by a hash of its ID exactly as the phone picks it, shown as the still the phone ships. Under Animated avatars (Settings › General › Appearance, off by default) it is drawn live by its shader instead, calmly, with its grain frozen: only while on screen, the window is shown, motion is allowed, and the machine is neither on battery nor saving power; otherwise it holds the still. Until the still is decoded or the first frame arrives a placeholder shows a gradient of its own colours."
+            summary="The picture a person, bot, task, or project without one of its own wears: one of the 200 shader avatars from shaders.craftedstudios.co, picked by a hash of its ID exactly as the phone picks it, shown as the still the phone ships. Under Animated avatars (Settings › General › Appearance, on by default) it is drawn live by its shader instead, calmly, with its grain frozen: only while on screen, the window is shown, motion is allowed, and the machine is neither on battery nor saving power; otherwise it holds the still. Until the still is decoded or the first frame arrives a placeholder shows a gradient of its own colours."
             title="AvatarPlaceholder"
         >
             <Specimen

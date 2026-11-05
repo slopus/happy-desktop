@@ -37,12 +37,12 @@ export const AVATAR_SHADER_GRAIN = 0.07;
 
 /**
  * The frames a second live placeholders are drawn at. The phone draws 20, but
- * here they move at half the phone's rate (`avatarShaderSpeed`), so at 12 each
+ * here they move at half the phone's rate (`avatarShaderSpeed`), so at 8 each
  * frame still moves less than one of the phone's did. Fewer frames is most of
  * the saving: every frame an avatar changes in is a whole window frame for
  * Chromium, a few milliseconds of the GPU process however small the avatars.
  */
-export const AVATAR_SHADER_FRAMES_PER_SECOND = 12;
+export const AVATAR_SHADER_FRAMES_PER_SECOND = 8;
 
 /** The most device pixels across a placeholder is drawn at. */
 export const AVATAR_SHADER_MAX_PIXELS = 512;

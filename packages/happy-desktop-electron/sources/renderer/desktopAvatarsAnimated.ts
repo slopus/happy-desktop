@@ -3,14 +3,15 @@ const AVATARS_ANIMATED_KEY = "happy.avatars-animated.v1";
 /**
  * Animated avatars, kept in this machine's window storage as the phone keeps
  * it on the phone: how this machine draws placeholders, and what it spends on
- * them, is nothing an account or a Happy Agent holds. Off unless turned on.
+ * them, is nothing an account or a Happy Agent holds. On unless turned off;
+ * a machine without a usable GPU still shows the stills.
  */
 export const desktopAvatarsAnimated = {
     read(): boolean {
         try {
-            return localStorage.getItem(AVATARS_ANIMATED_KEY) === "true";
+            return localStorage.getItem(AVATARS_ANIMATED_KEY) !== "false";
         } catch {
-            return false;
+            return true;
         }
     },
     write(animated: boolean): void {

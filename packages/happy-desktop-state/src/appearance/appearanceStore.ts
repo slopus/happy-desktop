@@ -34,8 +34,8 @@ export interface AppearanceSnapshot {
     readonly scrollbarVisibility: ScrollbarVisibility;
     /**
      * Animated avatars, as on the phone: placeholders are drawn live by their
-     * shader rather than shown as their stills. Kept by this window, off unless
-     * turned on.
+     * shader rather than shown as their stills. Kept by this window, on unless
+     * turned off.
      */
     readonly avatarsAnimated: boolean;
 }
@@ -78,7 +78,7 @@ export interface AppearanceStoreOptions {
     readonly customTheme?: CustomTheme;
     /** Initial scrollbar behavior; defaults to automatic. */
     readonly scrollbarVisibility?: ScrollbarVisibility;
-    /** Initial Animated avatars; defaults to off. */
+    /** Initial Animated avatars; defaults to on. */
     readonly avatarsAnimated?: boolean;
     /**
      * Injected platform appearance source. Supplying it keeps this store free of
@@ -132,7 +132,7 @@ export function appearanceStoreOwnedCreate(options: AppearanceStoreOptions = {})
     let toggleReturn: ThemeMode | undefined;
     let customTheme = options.customTheme ?? customThemeEmpty;
     let scrollbarVisibility: ScrollbarVisibility = options.scrollbarVisibility ?? "automatic";
-    let avatarsAnimated = options.avatarsAnimated ?? false;
+    let avatarsAnimated = options.avatarsAnimated ?? true;
     const paletteResolve = (): ThemePalette =>
         mode === "system" ? systemAppearance() : mode === "custom" ? customTheme.base : mode;
     const resolve = (): AppearanceSnapshot => {
