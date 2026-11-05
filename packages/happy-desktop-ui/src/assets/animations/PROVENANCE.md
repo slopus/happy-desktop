@@ -8,6 +8,10 @@ editing or retiming. It is Lottie 5.5.2, 512×512, 60fps, frames 120–300 (thre
 seconds), 39 vector layers, and has no raster or external image assets. The
 decompressed file is 363,723 bytes; its SHA-256 is
 `565ab5c14c9aab8f216daaf594bfc846296bd61ee73c6c83ad405848ef84ca32`.
+The replacement upload from the owner's Mac Desktop was verified as 48,638 bytes
+with TGS SHA-256
+`d674652f3166098021fe3e06ee234d758b1d37ce4667c21b46408c61f457f80d`.
+Its decompressed payload is byte-identical to this JSON.
 The supplied file records no author or upstream license metadata.
 
 The scene means **a safety net helps catch unintended agent actions**. Windows
