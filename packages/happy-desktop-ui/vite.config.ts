@@ -77,7 +77,7 @@ export default defineConfig({
                     firefoxUserPrefs: { "network.proxy.type": 0 },
                 },
                 contextOptions: {
-                    deviceScaleFactor: 2,
+                    deviceScaleFactor: Number(process.env.HAPPY_SCROLL_REPRO_DPR ?? 2),
                     /* Must be >= the tester viewport below: when the browser
                      * window is smaller, vitest CSS-scales the tester iframe
                      * and element captures come out at a fraction of true 2x. */
