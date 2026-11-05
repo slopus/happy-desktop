@@ -3533,6 +3533,19 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
         () => todoListActiveCount(openTodoList),
         () => todoListActiveCount(openTodoList),
     );
+    // An artifact kept in the sidebar is its own row there: while it is open,
+    // that row is the one marked, not Artifacts.
+    const artifactSurface =
+        props.artifactId === undefined
+            ? undefined
+            : happyAgentSurfaceReferenceFind(surfaceCatalog.joined, {
+                  kind: "artifact",
+                  id: props.artifactId as HappyAgentArtifactId,
+              });
+    const artifactsItemId =
+        artifactSurface === undefined
+            ? ARTIFACTS_ITEM
+            : happyAgentItemId(props.happyAgentId, surfaceRowId(artifactSurface.id));
     const activeTodoCounts =
         openSurface === undefined || openTodoCount === undefined
             ? surfaceCatalog.activeTodoCounts
@@ -3713,7 +3726,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                 experimental.inbox && props.inboxOpen
                     ? INBOX_ITEM
                     : props.artifactsOpen
-                      ? ARTIFACTS_ITEM
+                      ? artifactsItemId
                       : props.feedOpen
                         ? FEED_ITEM
                         : props.surfaceId !== undefined
