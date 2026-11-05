@@ -3,7 +3,8 @@ param(
     [Parameter(Mandatory = $true)][int]$ScreenY,
     [Parameter(Mandatory = $true)][int]$Delta,
     [int]$Count = 1,
-    [int]$IntervalMs = 75
+    [int]$IntervalMs = 75,
+    [switch]$WaitForSignal
 )
 $ErrorActionPreference = 'Stop'
 Add-Type -TypeDefinition @'
@@ -40,6 +41,11 @@ $targetWindow = [ScrollReproNative]::WindowFromPoint($point)
 $targetPid = [uint32]0
 [void][ScrollReproNative]::GetWindowThreadProcessId($targetWindow, [ref]$targetPid)
 Write-Output "NATIVE_WHEEL_TARGET requested=$ScreenX,$ScreenY actual=$($point.X),$($point.Y) foreground=$([ScrollReproNative]::GetForegroundWindow()) selected=$($window.MainWindowHandle) target=$targetWindow targetPid=$targetPid delta=$Delta"
+if ($WaitForSignal) {
+    Write-Output 'NATIVE_WHEEL_READY'
+    [Console]::Out.Flush()
+    if ($null -eq [Console]::In.ReadLine()) { throw 'Native wheel signal pipe closed.' }
+}
 $inputEvent = [ScrollReproNative+INPUT]::new()
 $inputEvent.type = 0
 $mouse = [ScrollReproNative+MOUSEINPUT]::new()
