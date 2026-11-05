@@ -57,7 +57,7 @@ export function vaultTimeText(at: number, now: number, zone: LocalTimeZone): str
 /** What an entry is, in a word or two, for the listing's kind column. */
 export function vaultKindText(entry: HappyAgentVaultItem): string {
     if (entry.kind === "folder") return "Folder";
-    if (entry.kind === "artifact") return entry.artifact.type === "html" ? "App" : "Markdown page";
+    if (entry.kind === "artifact") return "App";
     const type = entry.mediaType;
     const dot = entry.name.lastIndexOf(".");
     const extension = dot > 0 ? entry.name.slice(dot + 1).toUpperCase() : "";
@@ -74,12 +74,12 @@ export function vaultKindText(entry: HappyAgentVaultItem): string {
 
 /**
  * The colour family an entry wears. A folder and a file take the file tree's
- * own; an artifact takes the family of what it is written in, so an app reads
- * like the HTML it is and a Markdown page like prose.
+ * own; an artifact is an app whatever it is written in, so every one wears
+ * the same family.
  */
 export function vaultItemFamily(entry: HappyAgentVaultItem): FileTreeFamily {
     if (entry.kind === "folder") return "directory";
-    if (entry.kind === "artifact") return entry.artifact.type === "html" ? "code" : "prose";
+    if (entry.kind === "artifact") return "code";
     return fileTreeFamily({ kind: "file", name: entry.name });
 }
 
@@ -89,15 +89,12 @@ export function vaultItemIsImage(entry: HappyAgentVaultItem): boolean {
 }
 
 /**
- * The glyph an artifact wears in place of a file's: a globe for an app, a
- * page for Markdown. It is one item however many files it holds, and its name
- * is shown without the `.artifact` that would otherwise have said what it is.
+ * The glyph an artifact wears in place of a file's: one app glyph, the same
+ * for an HTML app and a Markdown one, so an app reads as one kind of thing.
+ * It is one item however many files it holds, and its name is shown without
+ * the `.artifact` that would otherwise have said what it is.
  */
-export function vaultArtifactGlyph(
-    entry: Extract<HappyAgentVaultItem, { kind: "artifact" }>,
-): IoniconName {
-    return entry.artifact.type === "html" ? "globe-outline" : "reader-outline";
-}
+export const VAULT_APP_GLYPH: IoniconName = "globe-outline";
 
 /** An entry's glyph in its family's colour: the file tree's for folders and files. */
 export function VaultItemGlyph(props: { item: HappyAgentVaultItem; size: 16 | 20 | 32 }) {
@@ -111,7 +108,7 @@ export function VaultItemGlyph(props: { item: HappyAgentVaultItem; size: 16 | 20
             data-size={props.size}
         >
             {props.item.kind === "artifact" ? (
-                <Ionicon name={vaultArtifactGlyph(props.item)} size={props.size} />
+                <Ionicon name={VAULT_APP_GLYPH} size={props.size} />
             ) : (
                 <FileTreeFamilyIcon family={family} size={props.size} />
             )}

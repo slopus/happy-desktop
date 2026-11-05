@@ -24,7 +24,7 @@ import { Ionicon } from "../../../vectorIcons/VectorIcon";
 import { HappyAgentArtifactHtmlFrame } from "../../artifacts/HappyAgentArtifactHtmlFrame";
 import {
     vaultActorName,
-    vaultArtifactGlyph,
+    VAULT_APP_GLYPH,
     vaultItemFamily,
     vaultSizeText,
     vaultTimeText,
@@ -164,7 +164,7 @@ function VaultPreviewContent(props: VaultPreviewPaneProps) {
         "data-testid": "happy-vault-preview-file",
         path: happyAgentVaultPathShown(preview.path),
         ...(entry?.kind === "artifact"
-            ? { type: { family: vaultItemFamily(entry), glyph: vaultArtifactGlyph(entry) } }
+            ? { type: { family: vaultItemFamily(entry), glyph: VAULT_APP_GLYPH } }
             : {}),
         ...(shown === undefined ? {} : { cacheKey: `${preview.itemId}@${String(shown)}` }),
         ...(size === undefined ? {} : { size: vaultSizeText(size) }),

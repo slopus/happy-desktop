@@ -5,7 +5,7 @@ import {
     type HappyAgentVaultSnapshot,
 } from "happy-desktop-state";
 import { FileTree, type FileTreeNode } from "../../../FileTree";
-import { vaultArtifactGlyph, vaultItemFamily } from "./vaultPresentation";
+import { VAULT_APP_GLYPH, vaultItemFamily } from "./vaultPresentation";
 
 /** The tree's nodes under one folder: its children, with the open folders' own beneath them. */
 function treeNodes(
@@ -20,7 +20,7 @@ function treeNodes(
                 id: entry.id,
                 kind: "file",
                 name,
-                type: { family: vaultItemFamily(entry), glyph: vaultArtifactGlyph(entry) },
+                type: { family: vaultItemFamily(entry), glyph: VAULT_APP_GLYPH },
             };
         if (entry.kind === "file") return { id: entry.id, kind: "file", name };
         const expanded = vault.treeExpanded.has(entry.id);

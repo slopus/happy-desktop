@@ -728,7 +728,7 @@ export function HappyAgentVaultSurfacePage(props: HappyAgentVaultSurfacePageProp
                     kind={renamed?.kind ?? "file"}
                     onClose={props.onDialogClose}
                     onSubmit={(name) => props.onItemRename(dialog.itemId, name)}
-                    title={`Rename ${renamed?.kind === "folder" ? "folder" : renamed?.kind === "artifact" ? "artifact" : "file"}`}
+                    title={`Rename ${renamed?.kind === "folder" ? "folder" : renamed?.kind === "artifact" ? "app" : "file"}`}
                 />
             ) : dialog?.kind === "settings" ? (
                 <VaultSettingsDialog

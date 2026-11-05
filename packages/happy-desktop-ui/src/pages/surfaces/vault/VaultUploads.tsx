@@ -2,7 +2,8 @@ import { happyAgentVaultNameShown, type HappyAgentVaultUpload } from "happy-desk
 import { Button } from "../../../Button";
 import { FileTreeFamilyIcon, fileTreeFamily } from "../../../FileTree";
 import { ScrollArea } from "../../../Scrollbar";
-import { vaultSizeText } from "./vaultPresentation";
+import { Ionicon } from "../../../vectorIcons/VectorIcon";
+import { VAULT_APP_GLYPH, vaultSizeText } from "./vaultPresentation";
 
 /** Where one upload stands, in words. */
 function phaseText(upload: HappyAgentVaultUpload): string {
@@ -12,7 +13,7 @@ function phaseText(upload: HappyAgentVaultUpload): string {
         case "sending":
             return `${vaultSizeText(upload.sent)} of ${vaultSizeText(upload.size)}`;
         case "placing":
-            return upload.kind === "artifact" ? "Reading the artifact" : "Finishing";
+            return upload.kind === "artifact" ? "Reading the app" : "Finishing";
         case "done":
             return "Done";
         case "failed":
@@ -59,12 +60,12 @@ export function VaultUploads(props: {
                                 : upload.size === 0
                                   ? 0
                                   : Math.min(1, upload.sent / upload.size);
-                        // An artifact shows as the page it becomes, not as the zip it is.
                         const name = happyAgentVaultNameShown(upload.name);
-                        const family = fileTreeFamily({
-                            kind: "file",
-                            name: upload.kind === "artifact" ? "index.html" : upload.name,
-                        });
+                        // An artifact shows as the app it becomes, not as the zip it is.
+                        const family =
+                            upload.kind === "artifact"
+                                ? "code"
+                                : fileTreeFamily({ kind: "file", name: upload.name });
                         return (
                             <li
                                 className="happy-vault-upload"
@@ -77,7 +78,11 @@ export function VaultUploads(props: {
                                     className="happy-file-family happy-vault-upload__glyph"
                                     data-family={family}
                                 >
-                                    <FileTreeFamilyIcon family={family} size={16} />
+                                    {upload.kind === "artifact" ? (
+                                        <Ionicon name={VAULT_APP_GLYPH} size={16} />
+                                    ) : (
+                                        <FileTreeFamilyIcon family={family} size={16} />
+                                    )}
                                 </span>
                                 <span className="happy-vault-upload__text">
                                     <span className="happy-vault-upload__line">
