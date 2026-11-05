@@ -76,7 +76,10 @@ export interface HappyAgentArtifactTitlesStore {
 }
 
 export interface HappyAgentArtifactTitlesDeps {
-    readonly client: Pick<HappyAgentClient, "getArtifact" | "artifactFileUrl" | "endpoint">;
+    readonly client: Pick<
+        HappyAgentClient,
+        "getArtifact" | "artifactFileUrl" | "artifactPreviewUrl"
+    >;
     readonly sync: HappyAgentSync;
 }
 

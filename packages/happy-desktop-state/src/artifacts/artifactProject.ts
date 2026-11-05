@@ -1,11 +1,11 @@
-import {
-    endpointUrl,
-    type Artifact,
-    type ArtifactAuthor,
-    type ArtifactFile,
-    type ArtifactSource,
-    type ArtifactVersion,
-    type HappyAgentClient,
+import type {
+    Artifact,
+    ArtifactAuthor,
+    ArtifactFile,
+    ArtifactFilePreview,
+    ArtifactSource,
+    ArtifactVersion,
+    HappyAgentClient,
 } from "@slopus/happy-agent-client";
 import type {
     HappyAgentArtifact,
@@ -103,25 +103,15 @@ export function happyAgentArtifactAuthorProject(author: ArtifactAuthor): HappyAg
     return { kind: "unknown" };
 }
 
-/**
- * How a connection's client addresses an artifact's files and previews. The
- * pinned client predates the preview route, so its address is built here the
- * way the client builds a file's, beneath the client's own endpoint.
- */
+/** How a connection's client addresses an artifact's files and their previews. */
 export function happyAgentArtifactLinksCreate(
-    client: Pick<HappyAgentClient, "artifactFileUrl" | "endpoint">,
+    client: Pick<HappyAgentClient, "artifactFileUrl" | "artifactPreviewUrl">,
     covers: boolean,
 ): HappyAgentArtifactLinks {
     return {
         file: (artifactId, version, path) => client.artifactFileUrl(artifactId, version, path),
         preview: (artifactId, version, path) =>
-            endpointUrl(
-                client.endpoint,
-                `v0/artifacts/${encodeURIComponent(artifactId)}/versions/${String(version)}/previews/${path
-                    .split("/")
-                    .map(encodeURIComponent)
-                    .join("/")}`,
-            ),
+            client.artifactPreviewUrl(artifactId, version, path),
         covers,
     };
 }
@@ -189,22 +179,20 @@ const ARTIFACT_COVER_MIME_TYPES: ReadonlySet<string> = new Set<HappyAgentArtifac
 ]);
 
 /**
- * The cover the artifact's latest version names. The pinned client predates
- * covers and hands the daemon's JSON over unparsed, so the field is read from
- * the object as the daemon sent it: an older daemon sends none, and a cover in
- * a format or of a shape this build does not know is no cover, so the
- * artifact keeps its compact row rather than a guess at its shape.
+ * The cover the artifact's latest version names. An older daemon sends none,
+ * and a cover in a format or of a shape this build does not know is no cover,
+ * so the artifact keeps its compact row rather than a guess at its shape. The
+ * artifact names its cover's preview only when the cover is its entry, whose
+ * file it carries.
  */
 export function happyAgentArtifactCoverProject(
     artifact: Artifact,
     links: Pick<HappyAgentArtifactLinks, "file" | "preview">,
 ): HappyAgentArtifactCover | null {
-    const cover: unknown = "cover" in artifact ? artifact.cover : undefined;
-    if (typeof cover !== "object" || cover === null) return null;
-    const fields = cover as Record<string, unknown>;
-    const { path, mimeType, width, height, aspect } = fields;
-    if (typeof path !== "string" || path === "") return null;
-    if (typeof mimeType !== "string" || !ARTIFACT_COVER_MIME_TYPES.has(mimeType)) return null;
+    const cover = artifact.cover;
+    if (cover === undefined || cover === null) return null;
+    const { path, mimeType, width, height, aspect } = cover;
+    if (path === "" || !ARTIFACT_COVER_MIME_TYPES.has(mimeType)) return null;
     if (!dimension(width) || !dimension(height)) return null;
     if (aspect !== "wide" && aspect !== "square") return null;
     const id = artifact.id as HappyAgentArtifactId;
@@ -216,28 +204,29 @@ export function happyAgentArtifactCoverProject(
         height,
         aspect: aspect satisfies HappyAgentArtifactCoverAspect,
         url: links.file(id, artifact.latestVersion, path),
-        thumbhash: thumbhashProject(fields.thumbhash),
-        preview: previewProject(fields.preview, () =>
-            links.preview(id, artifact.latestVersion, path),
-        ),
+        thumbhash: cover.thumbhash ?? null,
+        preview:
+            artifact.entry.path === path
+                ? previewProject(artifact.entry.preview, () =>
+                      links.preview(id, artifact.latestVersion, path),
+                  )
+                : null,
     };
 }
 
 /** A pixel count a daemon reports: a positive whole number. */
-function dimension(value: unknown): value is number {
-    return typeof value === "number" && Number.isInteger(value) && value > 0;
+function dimension(value: number): boolean {
+    return Number.isInteger(value) && value > 0;
 }
 
-/** A file's ThumbHash as the daemon sent it, or `null` for none or anything else. */
-function thumbhashProject(value: unknown): string | null {
-    return typeof value === "string" && value !== "" ? value : null;
-}
-
-/** A file's `preview`, read as `happyAgentArtifactCoverProject` reads a cover. */
-function previewProject(value: unknown, url: () => string): HappyAgentArtifactPreview | null {
-    if (typeof value !== "object" || value === null) return null;
-    const { width, height } = value as Record<string, unknown>;
-    return dimension(width) && dimension(height) ? { url: url(), width, height } : null;
+/** A file's still preview, when the daemon made one. */
+function previewProject(
+    value: ArtifactFilePreview | undefined,
+    url: () => string,
+): HappyAgentArtifactPreview | null {
+    return value !== undefined && dimension(value.width) && dimension(value.height)
+        ? { url: url(), width: value.width, height: value.height }
+        : null;
 }
 
 /** Types whose entry is itself a picture, or a video with a poster. */
@@ -245,9 +234,9 @@ const MEDIA_TYPES: ReadonlySet<string> = new Set(["image", "image_series", "vide
 
 /**
  * What a list leads the artifact's row with: its cover's preview, or the
- * whole cover where the daemon made none; else, for an image, image series,
- * or video, the preview of its entry — the first image, or the video's
- * poster; else nothing, and the row wears its type's glyph.
+ * whole cover where it has none; else, for an image, image series, or video,
+ * the preview of its entry — the first image, or the video's poster; else
+ * nothing, and the row wears its type's glyph.
  */
 export function happyAgentArtifactThumbnailProject(
     artifact: Artifact,
@@ -263,13 +252,13 @@ export function happyAgentArtifactThumbnailProject(
             thumbhash: cover.thumbhash,
         };
     if (!MEDIA_TYPES.has(artifact.type)) return null;
-    const entry = artifact.entry as ArtifactFile & Record<string, unknown>;
+    const entry = artifact.entry;
     const preview = previewProject(entry.preview, () =>
         links.preview(artifact.id as HappyAgentArtifactId, artifact.latestVersion, entry.path),
     );
     return preview === null
         ? null
-        : { kind: "media", url: preview.url, thumbhash: thumbhashProject(entry.thumbhash) };
+        : { kind: "media", url: preview.url, thumbhash: entry.thumbhash ?? null };
 }
 
 /** Whether two thumbnails are the same picture, drawn the same way. */
@@ -302,20 +291,16 @@ export function happyAgentArtifactCoverSame(
     );
 }
 
-/** The artifact's one-line summary, read as `happyAgentArtifactCoverProject` reads its cover. */
+/** The artifact's summary, when it has one with words in it. */
 export function happyAgentArtifactSummaryProject(artifact: Artifact): string | null {
-    const summary: unknown = "summary" in artifact ? artifact.summary : undefined;
+    const summary = artifact.summary;
     return typeof summary === "string" && summary.trim() !== "" ? summary : null;
 }
 
 export function happyAgentArtifactVersionProject(
     version: ArtifactVersion,
 ): HappyAgentArtifactVersion {
-    // The pinned client predates `background`; it hands the daemon's JSON over
-    // unparsed, so the field is read from the object as the daemon sent it.
-    const background = happyAgentArtifactBackground(
-        "background" in version ? version.background : undefined,
-    );
+    const background = happyAgentArtifactBackground(version.background);
     return {
         artifactId: version.artifactId as HappyAgentArtifactId,
         number: version.number,

@@ -111,7 +111,7 @@ export interface HappyAgentArtifactCatalogStore {
 export interface HappyAgentArtifactCatalogDeps {
     readonly client: Pick<
         HappyAgentClient,
-        "listArtifacts" | "getArtifact" | "artifactFileUrl" | "endpoint"
+        "listArtifacts" | "getArtifact" | "artifactFileUrl" | "artifactPreviewUrl"
     >;
     readonly sync: HappyAgentSync;
     /** Reports who a list credits, so the people among them can be named once for every surface. */

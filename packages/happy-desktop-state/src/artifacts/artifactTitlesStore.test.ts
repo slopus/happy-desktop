@@ -15,6 +15,7 @@ function artifact(latestVersion: number, extra: Record<string, unknown>): Artifa
         status: "active",
         latestVersion,
         background: "#16171c",
+        entry: { path: "index.md", mimeType: "text/markdown", size: 10, sha256: "a".repeat(64) },
         ...extra,
     } as unknown as Artifact;
 }
@@ -29,7 +30,8 @@ function open(options: { readonly covers: boolean; readonly answers: Artifact[] 
         },
         artifactFileUrl: (id: string, version: number, path: string) =>
             `https://daemon/v0/artifacts/${id}/versions/${String(version)}/files/${path}`,
-        endpoint: "https://daemon/",
+        artifactPreviewUrl: (id: string, version: number, path: string) =>
+            `https://daemon/v0/artifacts/${id}/versions/${String(version)}/previews/${path}`,
     };
     const sync = happyAgentSyncCreate();
     sync.writer.healthReceived({

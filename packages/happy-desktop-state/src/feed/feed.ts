@@ -5,7 +5,6 @@ import type {
     FeedItem,
     FeedQuery,
     FeedReadAllRequest,
-    FeedResponse,
     FeedSubject,
     HappyAgentClient,
 } from "@slopus/happy-agent-client";
@@ -295,20 +294,6 @@ export interface HappyAgentFeedDeps {
     readonly filterPersistence?: HappyAgentFeedFilterPersistence;
 }
 
-/**
- * A feed read, with the kinds of subject the daemon keeps. The pinned client
- * predates `subjects` and `filteredUnread`; a daemon with
- * `capabilities.feedSubjectFilter` takes and answers them.
- */
-type HappyAgentFeedQuery = FeedQuery & { subjects?: string[] };
-type HappyAgentFeedReadAllRequest = FeedReadAllRequest & { subjects?: string[] };
-
-/** The daemon's count of unread entries under the filter it was asked for, when it gave one. */
-function filteredUnreadOf(response: FeedResponse): number | undefined {
-    const count: unknown = "filteredUnread" in response ? response.filteredUnread : undefined;
-    return typeof count === "number" ? count : undefined;
-}
-
 /** How many entries one read takes. */
 const PAGE = 50;
 /**
@@ -522,7 +507,7 @@ export function happyAgentFeedCreate(deps: HappyAgentFeedDeps): HappyAgentFeed {
         const feedQuery = (
             query: HappyAgentFeedFilter,
             page: { readonly before?: string; readonly limit: number },
-        ): HappyAgentFeedQuery =>
+        ): FeedQuery =>
             query === "all"
                 ? page
                 : { ...page, subjects: [...HAPPY_AGENT_FEED_HIGHLIGHT_SUBJECTS] };
@@ -661,7 +646,7 @@ export function happyAgentFeedCreate(deps: HappyAgentFeedDeps): HappyAgentFeed {
                     false,
                 ),
             );
-            if (query !== "all") highlightsUnread = filteredUnreadOf(response);
+            if (query !== "all") highlightsUnread = response.filteredUnread;
             firstAnswered = true;
             publish({
                 hasMore: older.length > 0 ? snapshot.hasMore : response.hasMore,
@@ -683,7 +668,7 @@ export function happyAgentFeedCreate(deps: HappyAgentFeedDeps): HappyAgentFeed {
             client
                 .getFeed(feedQuery(heldQuery, { limit: 1 }), { signal })
                 .then((response) => {
-                    const count = filteredUnreadOf(response);
+                    const count = response.filteredUnread;
                     if (signal.aborted || at !== generation || count === highlightsUnread) return;
                     highlightsUnread = count;
                     publish({});
@@ -791,7 +776,7 @@ export function happyAgentFeedCreate(deps: HappyAgentFeedDeps): HappyAgentFeed {
                     for (const item of items) if (!ids.has(item.id)) merged.push(item);
                     heldSet(upsert(merged.sort(byCursor), items, false));
                     if (query !== "all")
-                        highlightsUnread = filteredUnreadOf(response) ?? highlightsUnread;
+                        highlightsUnread = response.filteredUnread ?? highlightsUnread;
                     publish({
                         hasMore: response.hasMore,
                         loadingMore: false,
@@ -902,7 +887,7 @@ export function happyAgentFeedCreate(deps: HappyAgentFeedDeps): HappyAgentFeed {
                     const through = newest.cursor;
                     const query = heldQuery;
                     const at = generation;
-                    const request: HappyAgentFeedReadAllRequest = {
+                    const request: FeedReadAllRequest = {
                         through,
                         mutationId: mutationIdCreate(),
                         ...(query === "all"

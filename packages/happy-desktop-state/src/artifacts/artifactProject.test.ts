@@ -16,7 +16,7 @@ const wire = (background?: unknown): ArtifactVersion => {
         source: null,
         createdAt: 1,
     };
-    // The pinned client's type has no `background`; the daemon's JSON does.
+    // An older daemon leaves `background` out.
     return (background === undefined ? version : { ...version, background }) as ArtifactVersion;
 };
 
@@ -128,13 +128,15 @@ describe("happyAgentArtifactProject cover", () => {
             expect(happyAgentArtifactProject(artifact(cover), link).cover).toBeNull();
     });
 
-    it("leads a list with the cover's still preview and ThumbHash", () => {
-        const cover = {
-            ...wide,
-            thumbhash: "1QcSHQRnh493V4dIh4eXh1h4kJUI",
+    it("leads a list with the cover's still preview and ThumbHash when the cover is the entry", () => {
+        const cover = { ...wide, thumbhash: "1QcSHQRnh493V4dIh4eXh1h4kJUI" };
+        const own = {
+            ...entry,
+            path: "cover.png",
+            mimeType: "image/png",
             preview: { width: 640, height: 360 },
         };
-        expect(happyAgentArtifactProject(artifact(cover), link)).toMatchObject({
+        expect(happyAgentArtifactProject(artifact(cover, "image", own), link)).toMatchObject({
             cover: {
                 thumbhash: cover.thumbhash,
                 preview: {
@@ -149,6 +151,11 @@ describe("happyAgentArtifactProject cover", () => {
                 preview: true,
                 thumbhash: cover.thumbhash,
             },
+        });
+        // A cover that is another file names no preview: the list reads it whole.
+        expect(happyAgentArtifactProject(artifact(cover), link).thumbnail).toMatchObject({
+            url: "https://daemon/art_1/3/files/cover.png",
+            preview: false,
         });
     });
 
