@@ -200,7 +200,7 @@ export type SidebarItem = {
     unread?: boolean;
     /**
      * Someone mentioned the reader in what is unread. The row's unread dot then
-     * grows to twice its size around an `@`, in the mention's own colour.
+     * grows to the folded count's size, in the mention's own colour.
      */
     unreadMentioned?: boolean;
     /**
@@ -1653,25 +1653,7 @@ function SidebarRow({
                     data-happy-desktop-ui="sidebar-item-unread"
                     data-mentioned={mark === "mentioned" ? "" : undefined}
                     role="img"
-                >
-                    {mark === "mentioned" ? (
-                        /* Lucide's at-sign, drawn rather than set in type so it is
-                           centred on the disc by geometry, not by a font's metrics. */
-                        <svg
-                            aria-hidden="true"
-                            fill="none"
-                            focusable="false"
-                            stroke="currentColor"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2.75}
-                            viewBox="0 0 24 24"
-                        >
-                            <circle cx="12" cy="12" r="4" />
-                            <path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8" />
-                        </svg>
-                    ) : null}
-                </span>
+                />
             ))(unreadMark());
     const hasChangeStats = () =>
         (item().changeStats?.added ?? 0) > 0 || (item().changeStats?.deleted ?? 0) > 0;

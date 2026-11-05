@@ -14,6 +14,8 @@
     --happy-surface-header-height: 56px;
     --happy-surface-footer-height: 40px;
     --happy-sidebar-floor: 226px;
+    /* One diameter for the badges on a mark's corners. */
+    --happy-sidebar-corner-badge: 12px;
     display: flex;
     flex: none;
     flex-direction: column;
@@ -1238,14 +1240,12 @@
  */
 .happy-sidebar__item-folded {
     position: absolute;
-    right: -5px;
-    bottom: -4px;
     display: flex;
     align-items: center;
     justify-content: center;
-    box-sizing: content-box;
-    min-width: 8px;
-    height: 12px;
+    box-sizing: border-box;
+    min-width: var(--happy-sidebar-corner-badge);
+    height: var(--happy-sidebar-corner-badge);
     padding: 0 2px;
     border: 1px solid var(--surface);
     border-radius: var(--happy-radius-pill);
@@ -1254,7 +1254,7 @@
     font-family: var(--happy-font-mono);
     font-size: 8.5px;
     font-weight: 700;
-    line-height: 12px;
+    line-height: 1;
     font-variant-numeric: lining-nums tabular-nums;
     font-synthesis: none;
     white-space: nowrap;
@@ -1266,8 +1266,6 @@
    was. */
 .happy-sidebar__item-branch > .happy-sidebar__item-folded {
     top: 50%;
-    right: auto;
-    bottom: auto;
     left: 50%;
     transform: translate(-50%, -50%);
 }
@@ -1554,21 +1552,14 @@
 
 /*
  * Whether a row has news for the reader: a red dot on the top corner of the
- * row's mark, opposite the folded count and ringed in the sidebar's surface as
- * that count is, so the two never touch and either reads against whatever
- * picture is under it. A mention doubles the dot around an `@` in the
- * mention's own colour. Both are centred on one point, the corner's edge, so a
- * dot that becomes a mention grows in place. Neither carries a number: the
- * only number on a row is what a fold hides.
+ * row's mark. A mention is the folded count's own disc, in the mention's
+ * colour. Neither carries a number: the only number on a row is what a fold
+ * hides.
  */
 .happy-sidebar__item-unread {
-    display: flex;
-    flex: none;
-    align-items: center;
-    justify-content: center;
-    box-sizing: content-box;
-    width: 6px;
-    height: 6px;
+    box-sizing: border-box;
+    width: 8px;
+    height: 8px;
     border: 1px solid var(--surface);
     border-radius: var(--happy-radius-pill);
     background: var(--status-error);
@@ -1576,23 +1567,34 @@
 }
 
 .happy-sidebar__item-unread[data-mentioned] {
-    width: 12px;
-    height: 12px;
+    width: var(--happy-sidebar-corner-badge);
+    height: var(--happy-sidebar-corner-badge);
     background: var(--happy-unread-mention-background);
-    color: var(--happy-unread-mention-text);
 }
 
-.happy-sidebar__item-unread > svg {
-    display: block;
-    width: 9px;
-    height: 9px;
+/*
+ * The two corner badges are centred on the corners of the mark's box — the
+ * unread mark on the top one, the folded count on the bottom one — so the
+ * mark's edge runs through the middle of each, and the pair mirror each other
+ * about the mark's midline. One diameter for both; the plain dot is smaller
+ * and shares its centre. The box's corner rather than the rounded corner's
+ * curve, so a square glyph and a rounded photo place them alike. Every size
+ * is even, so each centre lands on a whole pixel. The diameter is set on the
+ * sidebar so a count on a branch box takes it too.
+ */
+.happy-sidebar__item-leading > .happy-sidebar__item-unread,
+.happy-sidebar__item-leading > .happy-sidebar__item-folded {
+    position: absolute;
+    left: 100%;
+    transform: translate(-50%, -50%);
 }
 
 .happy-sidebar__item-leading > .happy-sidebar__item-unread {
-    position: absolute;
-    top: 3px;
-    left: 18px;
-    transform: translate(-50%, -50%);
+    top: 0;
+}
+
+.happy-sidebar__item-leading > .happy-sidebar__item-folded {
+    top: 100%;
 }
 
 /* A row with no mark of its own: the activity spinner's cell at the trailing

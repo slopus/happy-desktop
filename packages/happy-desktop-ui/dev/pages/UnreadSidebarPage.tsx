@@ -1,11 +1,11 @@
-import type { CSSProperties } from "react";
 import { Sidebar, type SidebarItem, type SidebarSection } from "../../src/Sidebar";
 import { ThemeScope } from "../../src/ThemeScope";
 
 /**
  * A review sheet, not a specimen: the real sidebar, light and dark, with the
- * red unread dot on the corner of each row's mark and the mention badge that
- * dot grows into, once per colour being weighed for that badge.
+ * red unread dot on the top corner of each row's mark, mirrored by the folded
+ * count on the bottom one, and the mention badge drawn each way being weighed
+ * for it. "Blue" is what the sidebar draws; the other two restyle it here.
  */
 export const componentNumber = "B-003";
 
@@ -134,44 +134,35 @@ function sections(): SidebarSection[] {
     }));
 }
 
-type Swatch = { readonly background: string; readonly text: string };
-
-const COLOURS: readonly {
-    readonly name: string;
-    readonly light: Swatch;
-    readonly dark: Swatch;
-}[] = [
-    {
-        name: "Teal, the mention tint",
-        light: { background: "#1a7f99", text: "#ffffff" },
-        dark: { background: "#2399b5", text: "#ffffff" },
-    },
-    {
-        name: "Red, the dot's own",
-        light: { background: "#ff3b30", text: "#ffffff" },
-        dark: { background: "#ff453a", text: "#ffffff" },
-    },
-    {
-        name: "Blue",
-        light: { background: "#007aff", text: "#ffffff" },
-        dark: { background: "#0a84ff", text: "#ffffff" },
-    },
-    {
-        name: "Violet",
-        light: { background: "#7c5cff", text: "#ffffff" },
-        dark: { background: "#8e7bff", text: "#ffffff" },
-    },
-    {
-        name: "Orange",
-        light: { background: "#f2760f", text: "#ffffff" },
-        dark: { background: "#ff8a2a", text: "#ffffff" },
-    },
-    {
-        name: "Ink, the text colour",
-        light: { background: "#1d1d1f", text: "#ffffff" },
-        dark: { background: "#f5f5f7", text: "#1d1d1f" },
-    },
+const VARIANTS: readonly { readonly id: string; readonly title: string }[] = [
+    { id: "red", title: "A. Big red" },
+    { id: "blue", title: "B. Blue, no glyph" },
+    { id: "at", title: "C. Blue with @" },
 ];
+
+/* A and C restyle the mention badge on this sheet only. C's `@` is the folded
+   count's own type. Its ink hangs 0.675px below its line box's centre, the
+   descender of the bowl, so it is raised by the nearest device pixel. */
+const VARIANT_STYLES = `
+[data-badge-variant="red"] .happy-sidebar__item-unread[data-mentioned] {
+    background: var(--status-error);
+}
+[data-badge-variant="at"] .happy-sidebar__item-unread[data-mentioned] {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #ffffff;
+    font-family: var(--happy-font-mono);
+    font-size: 8.5px;
+    font-weight: 700;
+    line-height: 1;
+    font-synthesis: none;
+}
+[data-badge-variant="at"] .happy-sidebar__item-unread[data-mentioned]::after {
+    content: "@";
+    transform: translateY(-0.5px);
+}
+`;
 
 export function UnreadSidebarPage() {
     return (
@@ -179,30 +170,29 @@ export function UnreadSidebarPage() {
             data-unread-sidebar=""
             style={{ display: "flex", flexDirection: "column", gap: 24, padding: 24 }}
         >
+            <style>{VARIANT_STYLES}</style>
             {(["light", "dark"] as const).map((appearance) => (
                 <div key={appearance} style={{ display: "flex", gap: 16 }}>
-                    {COLOURS.map((colour, index) => (
+                    {VARIANTS.map((variant) => (
                         <div
-                            key={colour.name}
+                            key={variant.id}
                             style={{ display: "flex", flexDirection: "column", gap: 8 }}
                         >
-                            <div style={{ fontSize: 13, fontWeight: 600 }}>{colour.name}</div>
+                            <div style={{ fontSize: 13, fontWeight: 600 }}>
+                                {variant.title} ({appearance})
+                            </div>
                             <ThemeScope mode={appearance}>
                                 <div
-                                    data-unread-variant={index}
-                                    style={
-                                        {
-                                            "--happy-unread-mention-background":
-                                                colour[appearance].background,
-                                            "--happy-unread-mention-text": colour[appearance].text,
-                                            background: "var(--groupped-background)",
-                                            color: "var(--text)",
-                                            display: "flex",
-                                            height: 400,
-                                            overflow: "hidden",
-                                            width: 250,
-                                        } as CSSProperties
-                                    }
+                                    data-badge-variant={variant.id}
+                                    data-unread-variant={variant.id}
+                                    style={{
+                                        background: "var(--groupped-background)",
+                                        color: "var(--text)",
+                                        display: "flex",
+                                        height: 400,
+                                        overflow: "hidden",
+                                        width: 280,
+                                    }}
                                 >
                                     <Sidebar
                                         activeItemId="notes"
@@ -210,7 +200,7 @@ export function UnreadSidebarPage() {
                                         onItemCollapseToggle={noop}
                                         onItemSelect={noop}
                                         sections={sections()}
-                                        style={{ width: 250 }}
+                                        style={{ width: 280 }}
                                     />
                                 </div>
                             </ThemeScope>

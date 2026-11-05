@@ -5,10 +5,11 @@ import { Sidebar, SIDEBAR_SLOT_CELL, type SidebarSection } from "./Sidebar";
 import { createRenderer } from "./testing";
 
 /*
- * A row's unread mark is a red dot on the top corner of its own mark, opposite
- * the folded count. A mention doubles it around a drawn `@`, centred on the
- * same point. It never carries a number and never touches the trailing lane;
- * a row with no mark of its own wears it in the spinner's cell instead.
+ * A row's unread mark is a red dot centred on the top corner of its own mark,
+ * mirroring the folded count centred on the bottom one. A mention is a disc of
+ * exactly the folded count's diameter on the same centre. It never carries a
+ * number and never touches the trailing lane; a row with no mark of its own
+ * wears it in the spinner's cell instead.
  */
 const leave = { icon: "close", label: "Leave", reveal: "hover" } as const;
 
@@ -57,6 +58,16 @@ const sections = (): SidebarSection[] => [
                 status: "working",
                 unread: true,
             },
+            {
+                collapsed: true,
+                id: "folded",
+                kind: "project",
+                label: "Folded and mentioned",
+                unread: true,
+                unreadMentioned: true,
+            },
+            { depth: 1, id: "folded-a", kind: "workspace", label: "Hidden" },
+            { depth: 1, id: "folded-b", kind: "workspace", label: "Hidden" },
         ],
     },
 ];
@@ -69,6 +80,7 @@ const render = () => {
                 activeItemId=""
                 data-testid="unread"
                 onItemAction={() => {}}
+                onItemCollapseToggle={() => {}}
                 onItemSelect={() => {}}
                 sections={sections()}
                 style={{ width: 300 }}
@@ -89,33 +101,45 @@ const centre = (rect: DOMRect) => ({
     y: rect.top + rect.height / 2,
 });
 
-it("puts the unread dot on the mark's top corner and doubles it for a mention", async () => {
+it("mirrors the unread mark and the folded count across the mark's corners at one diameter", async () => {
     const view = render();
     await view.ready();
-    const dot = mark("unread", "sidebar-item-unread")!.getBoundingClientRect();
-    const mention = mark("mentioned", "sidebar-item-unread")!.getBoundingClientRect();
-    // The visible disc, inside a one-pixel ring of the surface.
-    expect(dot.width - 2).toBe(6);
-    expect(mention.width - 2).toBe(12);
-    expect(mention.height).toBe(mention.width);
-    for (const [id, rect] of [
-        ["unread", dot],
-        ["mentioned", mention],
-    ] as const) {
-        const leading = mark(id, "sidebar-item-leading")!.getBoundingClientRect();
-        expect(centre(rect).x - leading.left).toBeCloseTo(18, 3);
-        expect(centre(rect).y - leading.top).toBeCloseTo(3, 3);
-        expect(
-            mark(id, "sidebar-item-trailing")?.contains(mark(id, "sidebar-item-unread")),
-        ).not.toBe(true);
+    const leading = mark("folded", "sidebar-item-leading")!.getBoundingClientRect();
+    const mention = mark("folded", "sidebar-item-unread")!.getBoundingClientRect();
+    const count = document
+        .querySelector<HTMLElement>(
+            '[data-testid="unread"] [data-item-id="folded"] .happy-sidebar__item-folded',
+        )!
+        .getBoundingClientRect();
+    const top = centre(mention);
+    const bottom = centre(count);
+    // Both centres on the mark box's right edge, one on each corner.
+    expect(top.x).toBe(leading.right);
+    expect(bottom.x).toBe(leading.right);
+    expect(top.y).toBe(leading.top);
+    expect(bottom.y).toBe(leading.bottom);
+    // Mirrored about the mark's midline.
+    const midline = leading.top + leading.height / 2;
+    expect(midline - top.y).toBe(bottom.y - midline);
+    // One diameter, a circle each, with the same ring.
+    expect(count.width).toBe(count.height);
+    expect(mention.width).toBe(mention.height);
+    expect(mention.width).toBe(count.width);
+    const ring = (selector: string) =>
+        getComputedStyle(
+            document.querySelector(`[data-testid="unread"] [data-item-id="folded"] ${selector}`)!,
+        ).borderTopWidth;
+    expect(ring(".happy-sidebar__item-unread")).toBe(ring(".happy-sidebar__item-folded"));
+    // The plain dot is smaller, on the same centre.
+    for (const id of ["unread"]) {
+        const dot = mark(id, "sidebar-item-unread")!.getBoundingClientRect();
+        const lead = mark(id, "sidebar-item-leading")!.getBoundingClientRect();
+        expect(dot.width).toBeLessThan(mention.width);
+        expect(centre(dot).x).toBe(lead.right);
+        expect(centre(dot).y).toBe(lead.top);
     }
-    // The `@` is drawn, centred by geometry: the label says it, and no text does.
-    const badge = mark("mentioned", "sidebar-item-unread")!;
-    expect(badge.textContent).toBe("");
-    const glyph = centre(badge.querySelector("svg")!.getBoundingClientRect());
-    expect(glyph.x).toBeCloseTo(centre(mention).x, 3);
-    expect(glyph.y).toBeCloseTo(centre(mention).y, 3);
-    expect(mark("unread", "sidebar-item-unread")!.querySelector("svg")).toBeNull();
+    expect(mark("folded", "sidebar-item-unread")!.textContent).toBe("");
+    expect(mark("folded", "sidebar-item-trailing")).toBeNull();
     expect(
         document.querySelector('[data-happy-desktop-ui="sidebar-item-unread-count"]'),
     ).toBeNull();
