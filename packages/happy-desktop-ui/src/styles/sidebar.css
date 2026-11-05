@@ -1217,10 +1217,10 @@
 /* The mark steps aside for exactly as long as the chevron is up. */
 .happy-sidebar__item:not([data-fold-placement="trailing"])[data-foldable]
     .happy-sidebar__item-leading:hover
-    > :not(.happy-sidebar__item-fold),
+    > :not(.happy-sidebar__item-fold):not(.happy-sidebar__item-unread),
 .happy-sidebar__item:not([data-fold-placement="trailing"])[data-foldable]:focus-visible
     .happy-sidebar__item-leading
-    > :not(.happy-sidebar__item-fold) {
+    > :not(.happy-sidebar__item-fold):not(.happy-sidebar__item-unread) {
     opacity: 0;
 }
 
@@ -1545,19 +1545,60 @@
 .happy-sidebar__item-trailing[data-swaps]:focus-within .happy-sidebar__item-activity,
 .happy-sidebar__item:hover .happy-sidebar__item-trailing[data-swaps] .happy-sidebar__item-count,
 .happy-sidebar__item-trailing[data-swaps]:focus-within .happy-sidebar__item-count,
-.happy-sidebar__item:hover .happy-sidebar__item-trailing[data-swaps] .happy-sidebar__item-unread,
-.happy-sidebar__item-trailing[data-swaps]:focus-within .happy-sidebar__item-unread {
+.happy-sidebar__item:hover
+    .happy-sidebar__item-trailing[data-swaps]
+    .happy-sidebar__item-unread-cell,
+.happy-sidebar__item-trailing[data-swaps]:focus-within .happy-sidebar__item-unread-cell {
     visibility: hidden;
 }
 
 /*
- * Whether a row has news for the reader: the activity spinner's own cell at the
- * trailing edge, the same square and the same optical edge, so the marks of
- * every row stand on one column and the delta before them never moves. Plain
- * news is a dot in the text's own ink; a mention is the mention's hue around an
- * `@`. Neither carries a number: the only number on a row is what a fold hides.
+ * Whether a row has news for the reader: a red dot on the top corner of the
+ * row's mark, opposite the folded count and ringed in the sidebar's surface as
+ * that count is, so the two never touch and either reads against whatever
+ * picture is under it. A mention doubles the dot around an `@` in the
+ * mention's own colour. Both are centred on one point, the corner's edge, so a
+ * dot that becomes a mention grows in place. Neither carries a number: the
+ * only number on a row is what a fold hides.
  */
 .happy-sidebar__item-unread {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    box-sizing: content-box;
+    width: 6px;
+    height: 6px;
+    border: 1px solid var(--surface);
+    border-radius: var(--happy-radius-pill);
+    background: var(--status-error);
+    pointer-events: none;
+}
+
+.happy-sidebar__item-unread[data-mentioned] {
+    width: 12px;
+    height: 12px;
+    background: var(--happy-unread-mention-background);
+    color: var(--happy-unread-mention-text);
+}
+
+.happy-sidebar__item-unread > svg {
+    display: block;
+    width: 9px;
+    height: 9px;
+}
+
+.happy-sidebar__item-leading > .happy-sidebar__item-unread {
+    position: absolute;
+    top: 3px;
+    left: 18px;
+    transform: translate(-50%, -50%);
+}
+
+/* A row with no mark of its own: the activity spinner's cell at the trailing
+   edge, the same square and the same optical edge, so the delta before it
+   never moves. */
+.happy-sidebar__item-unread-cell {
     display: flex;
     flex: none;
     align-items: center;
@@ -1565,34 +1606,6 @@
     width: 18px;
     height: 18px;
     margin-right: -3px;
-    pointer-events: none;
-}
-
-.happy-sidebar__item-unread:not([data-mentioned])::before {
-    content: "";
-    width: 6px;
-    height: 6px;
-    border-radius: var(--happy-radius-pill);
-    background: var(--text);
-}
-
-/* The badge is drawn inside the cell, not as it: the cell keeps the spinner's
-   18px square, and the 14px disc is centred in it. */
-.happy-sidebar__item-unread[data-mentioned]::before {
-    content: "@";
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 14px;
-    height: 14px;
-    border-radius: var(--happy-radius-pill);
-    background: var(--happy-unread-mention-background);
-    color: var(--happy-unread-mention-text);
-    font-family: var(--happy-font-ui);
-    font-size: 10px;
-    font-weight: 700;
-    line-height: 14px;
-    font-synthesis: none;
 }
 
 /* Where a voice call is pointing. It wears the live call's own green — the

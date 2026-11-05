@@ -1,19 +1,17 @@
-import type { CSSProperties, ReactNode } from "react";
+import type { CSSProperties } from "react";
 import { Sidebar, type SidebarItem, type SidebarSection } from "../../src/Sidebar";
 import { ThemeScope } from "../../src/ThemeScope";
 
 /**
- * A review sheet, not a specimen: the same tasks under the unread treatments
- * that were weighed, light and dark, beside folded rows whose corner number
- * counts what the fold hides. The earlier treatments are mocked up with plain
- * markup; "Final" is the real sidebar.
+ * A review sheet, not a specimen: the real sidebar, light and dark, with the
+ * red unread dot on the corner of each row's mark and the mention badge that
+ * dot grows into, once per colour being weighed for that badge.
  */
 export const componentNumber = "B-003";
 
 const noop = () => undefined;
 
-type Unread = { readonly count?: number; readonly mentioned?: boolean } | undefined;
-type Variant = "dot" | "counts" | "mentions" | "final";
+type Unread = { readonly mentioned?: boolean } | undefined;
 
 type Row = {
     readonly item: SidebarItem;
@@ -26,7 +24,7 @@ const ROWS: readonly { readonly section: string; readonly rows: readonly Row[] }
         rows: [
             {
                 item: { id: "chief", kind: "agent", label: "Chief of Staff", icon: "agents" },
-                unread: { count: 4 },
+                unread: {},
             },
             {
                 item: { id: "notes", kind: "agent", label: "Release notes", placeholderSeed: "n" },
@@ -46,7 +44,7 @@ const ROWS: readonly { readonly section: string; readonly rows: readonly Row[] }
                     kind: "project",
                     label: "@Person Mention Autocomplete",
                 },
-                unread: { count: 3 },
+                unread: {},
             },
             {
                 item: {
@@ -67,7 +65,7 @@ const ROWS: readonly { readonly section: string; readonly rows: readonly Row[] }
                     kind: "project",
                     label: "Enable Top-Level Task Creation",
                 },
-                unread: { count: 2, mentioned: true },
+                unread: { mentioned: true },
             },
             {
                 item: {
@@ -78,7 +76,7 @@ const ROWS: readonly { readonly section: string; readonly rows: readonly Row[] }
                     kind: "workspace",
                     label: "Universal Task Creation",
                 },
-                unread: { count: 5 },
+                unread: {},
             },
             {
                 item: {
@@ -89,7 +87,7 @@ const ROWS: readonly { readonly section: string; readonly rows: readonly Row[] }
                     kind: "project",
                     label: "Pricing page",
                 },
-                unread: { mentioned: true, count: 1 },
+                unread: { mentioned: true },
             },
             {
                 item: { depth: 1, id: "pricing-a", kind: "workspace", label: "Annual discount" },
@@ -108,7 +106,7 @@ const ROWS: readonly { readonly section: string; readonly rows: readonly Row[] }
                     label: "Support inbox triage",
                     status: "working",
                 },
-                unread: undefined,
+                unread: {},
             },
             {
                 item: {
@@ -118,7 +116,7 @@ const ROWS: readonly { readonly section: string; readonly rows: readonly Row[] }
                     kind: "project",
                     label: "Onboarding copy",
                 },
-                unread: { count: 6 },
+                unread: {},
             },
         ],
     },
@@ -136,109 +134,43 @@ function sections(): SidebarSection[] {
     }));
 }
 
-/* The earlier treatments, drawn as plain markup so the sheet still shows them
-   after the sidebar stopped drawing counts. */
-const pill: CSSProperties = {
-    alignItems: "center",
-    background: "var(--surface)",
-    borderRadius: 999,
-    boxShadow: "inset 0 0 0 0.5px var(--divider)",
-    display: "flex",
-    fontSize: 9,
-    fontWeight: 700,
-    height: 12,
-    justifyContent: "center",
-    minWidth: 12,
-    padding: "0 3px",
-};
+type Swatch = { readonly background: string; readonly text: string };
 
-function mockMark(variant: Exclude<Variant, "final">, unread: Unread): ReactNode {
-    if (unread === undefined) return null;
-    const dot = (
-        <span
-            style={{ background: "var(--status-error)", borderRadius: 999, height: 6, width: 6 }}
-        />
-    );
-    if (variant === "dot") return dot;
-    if (variant === "mentions" && !unread.mentioned) return dot;
-    const count = unread.count === undefined ? "" : unread.count >= 100 ? "99+" : unread.count;
-    return unread.mentioned ? (
-        <span
-            style={{
-                ...pill,
-                background: "var(--happy-unread-mention-background)",
-                boxShadow: "none",
-                color: "var(--happy-unread-mention-text)",
-            }}
-        >
-            @{count}
-        </span>
-    ) : (
-        <span style={pill}>{count}</span>
-    );
-}
-
-function Mock(props: { variant: Exclude<Variant, "final"> }) {
-    return (
-        <div style={{ display: "flex", flexDirection: "column", gap: 2, padding: "12px 16px" }}>
-            {ROWS.map(({ section, rows }) => (
-                <div key={section} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                    <div
-                        style={{
-                            color: "var(--text-secondary)",
-                            fontSize: 11,
-                            fontWeight: 600,
-                            letterSpacing: 1,
-                            padding: "10px 0 4px",
-                            textTransform: "uppercase",
-                        }}
-                    >
-                        {section}
-                    </div>
-                    {rows.map(({ item, unread }) => (
-                        <div
-                            key={item.id}
-                            style={{
-                                alignItems: "center",
-                                display: "flex",
-                                fontSize: 13,
-                                fontWeight: unread ? 700 : 500,
-                                gap: 8,
-                                height: 26,
-                                paddingLeft: (item.depth ?? 0) * 22,
-                            }}
-                        >
-                            <span
-                                style={{
-                                    flex: 1,
-                                    overflow: "hidden",
-                                    textOverflow: "ellipsis",
-                                    whiteSpace: "nowrap",
-                                }}
-                            >
-                                {item.label}
-                            </span>
-                            {mockMark(props.variant, unread)}
-                            {item.changeStats ? (
-                                <span
-                                    style={{ fontFamily: "var(--happy-font-mono)", fontSize: 11 }}
-                                >
-                                    +{item.changeStats.added} -{item.changeStats.deleted}
-                                </span>
-                            ) : null}
-                        </div>
-                    ))}
-                </div>
-            ))}
-        </div>
-    );
-}
-
-const VARIANTS: readonly { readonly variant: Variant; readonly title: string }[] = [
-    { variant: "dot", title: "Before: red dot" },
-    { variant: "counts", title: "Every unread counted" },
-    { variant: "mentions", title: "Dot, @count for mentions" },
-    { variant: "final", title: "Final: dot, @ for mentions, in the spinner's cell" },
+const COLOURS: readonly {
+    readonly name: string;
+    readonly light: Swatch;
+    readonly dark: Swatch;
+}[] = [
+    {
+        name: "Teal, the mention tint",
+        light: { background: "#1a7f99", text: "#ffffff" },
+        dark: { background: "#2399b5", text: "#ffffff" },
+    },
+    {
+        name: "Red, the dot's own",
+        light: { background: "#ff3b30", text: "#ffffff" },
+        dark: { background: "#ff453a", text: "#ffffff" },
+    },
+    {
+        name: "Blue",
+        light: { background: "#007aff", text: "#ffffff" },
+        dark: { background: "#0a84ff", text: "#ffffff" },
+    },
+    {
+        name: "Violet",
+        light: { background: "#7c5cff", text: "#ffffff" },
+        dark: { background: "#8e7bff", text: "#ffffff" },
+    },
+    {
+        name: "Orange",
+        light: { background: "#f2760f", text: "#ffffff" },
+        dark: { background: "#ff8a2a", text: "#ffffff" },
+    },
+    {
+        name: "Ink, the text colour",
+        light: { background: "#1d1d1f", text: "#ffffff" },
+        dark: { background: "#f5f5f7", text: "#1d1d1f" },
+    },
 ];
 
 export function UnreadSidebarPage() {
@@ -248,37 +180,38 @@ export function UnreadSidebarPage() {
             style={{ display: "flex", flexDirection: "column", gap: 24, padding: 24 }}
         >
             {(["light", "dark"] as const).map((appearance) => (
-                <div key={appearance} style={{ display: "flex", gap: 24 }}>
-                    {VARIANTS.map(({ variant, title }) => (
+                <div key={appearance} style={{ display: "flex", gap: 16 }}>
+                    {COLOURS.map((colour, index) => (
                         <div
-                            key={variant}
+                            key={colour.name}
                             style={{ display: "flex", flexDirection: "column", gap: 8 }}
                         >
-                            <div style={{ fontSize: 13, fontWeight: 600 }}>{title}</div>
+                            <div style={{ fontSize: 13, fontWeight: 600 }}>{colour.name}</div>
                             <ThemeScope mode={appearance}>
                                 <div
-                                    data-unread-variant={variant}
-                                    style={{
-                                        background: "var(--groupped-background)",
-                                        color: "var(--text)",
-                                        display: "flex",
-                                        height: 400,
-                                        overflow: "hidden",
-                                        width: 300,
-                                    }}
+                                    data-unread-variant={index}
+                                    style={
+                                        {
+                                            "--happy-unread-mention-background":
+                                                colour[appearance].background,
+                                            "--happy-unread-mention-text": colour[appearance].text,
+                                            background: "var(--groupped-background)",
+                                            color: "var(--text)",
+                                            display: "flex",
+                                            height: 400,
+                                            overflow: "hidden",
+                                            width: 250,
+                                        } as CSSProperties
+                                    }
                                 >
-                                    {variant === "final" ? (
-                                        <Sidebar
-                                            activeItemId="notes"
-                                            onItemAction={noop}
-                                            onItemCollapseToggle={noop}
-                                            onItemSelect={noop}
-                                            sections={sections()}
-                                            style={{ width: 300 }}
-                                        />
-                                    ) : (
-                                        <Mock variant={variant} />
-                                    )}
+                                    <Sidebar
+                                        activeItemId="notes"
+                                        onItemAction={noop}
+                                        onItemCollapseToggle={noop}
+                                        onItemSelect={noop}
+                                        sections={sections()}
+                                        style={{ width: 250 }}
+                                    />
                                 </div>
                             </ThemeScope>
                         </div>

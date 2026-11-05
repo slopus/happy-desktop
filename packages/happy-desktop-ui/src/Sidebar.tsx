@@ -199,8 +199,8 @@ export type SidebarItem = {
     tone?: ToneName;
     unread?: boolean;
     /**
-     * Someone mentioned the reader in what is unread. The row's unread mark is
-     * then an `@` on the mention's own colour rather than the plain dot.
+     * Someone mentioned the reader in what is unread. The row's unread dot then
+     * grows to twice its size around an `@`, in the mention's own colour.
      */
     unreadMentioned?: boolean;
     /**
@@ -1638,10 +1638,13 @@ function SidebarRow({
             : item().unreadMentioned === true
               ? "mentioned"
               : "unread";
-    /* The unread mark takes the cell the activity spinner occupies, centred in
-       it, so every row's mark lands on one column at the trailing edge, and it
-       gives way to the hover controls exactly as the spinner does. */
-    const unreadMarkCell = () =>
+    const leading = () =>
+        item().imageMark !== undefined || showsLeadingSlot(item()) || activityLeading();
+    /* The unread mark sits on the corner of the row's own mark, where the eye
+       already is when it picks a row out, opposite the folded count. A row with
+       no mark of its own wears it in the cell the activity spinner occupies,
+       which gives way to the hover controls exactly as the spinner does. */
+    const unreadMarkElement = () =>
         ((mark) =>
             mark === undefined ? null : (
                 <span
@@ -1650,7 +1653,25 @@ function SidebarRow({
                     data-happy-desktop-ui="sidebar-item-unread"
                     data-mentioned={mark === "mentioned" ? "" : undefined}
                     role="img"
-                />
+                >
+                    {mark === "mentioned" ? (
+                        /* Lucide's at-sign, drawn rather than set in type so it is
+                           centred on the disc by geometry, not by a font's metrics. */
+                        <svg
+                            aria-hidden="true"
+                            fill="none"
+                            focusable="false"
+                            stroke="currentColor"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2.75}
+                            viewBox="0 0 24 24"
+                        >
+                            <circle cx="12" cy="12" r="4" />
+                            <path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8" />
+                        </svg>
+                    ) : null}
+                </span>
             ))(unreadMark());
     const hasChangeStats = () =>
         (item().changeStats?.added ?? 0) > 0 || (item().changeStats?.deleted ?? 0) > 0;
@@ -2134,7 +2155,7 @@ function SidebarRow({
                     ) : null}
                 </span>
             ) : null}
-            {item().imageMark || showsLeadingSlot(item()) || activityLeading() ? (
+            {leading() ? (
                 <span
                     className="happy-sidebar__item-leading"
                     data-happy-desktop-ui="sidebar-item-leading"
@@ -2252,6 +2273,7 @@ function SidebarRow({
                             {foldControl()}
                         </>
                     ) : null}
+                    {unreadMarkElement()}
                 </span>
             ) : null}
             <>
@@ -2480,11 +2502,16 @@ function SidebarRow({
                             {/* One cell at the edge: a mention outranks the
                                 spinner, and the spinner outranks the plain dot,
                                 which comes back once the work is done. */}
-                            {mark === "mentioned" || (mark === "unread" && !state)
-                                ? unreadMarkCell()
-                                : state
-                                  ? activityMark()
-                                  : null}
+                            {mark === "mentioned" || (mark === "unread" && !state) ? (
+                                <span
+                                    className="happy-sidebar__item-unread-cell"
+                                    data-happy-desktop-ui="sidebar-item-unread-cell"
+                                >
+                                    {unreadMarkElement()}
+                                </span>
+                            ) : state ? (
+                                activityMark()
+                            ) : null}
                             {controls ? trailingLane() : null}
                         </span>
                     ) : null)(
@@ -2495,7 +2522,7 @@ function SidebarRow({
                     // nothing a row reports is covered while the pointer is on it.
                     !lanes && swapsTrailing(),
                     !lanes && showCount() ? item().count : undefined,
-                    unreadMark(),
+                    leading() ? undefined : unreadMark(),
                 )}
                 {/* Only a row that folds has a fold at its edge. Revealed on hover, it
                 is laid over the trailing lane and takes the delta's place while

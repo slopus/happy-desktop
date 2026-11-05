@@ -5,11 +5,10 @@ import { Sidebar, SIDEBAR_SLOT_CELL, type SidebarSection } from "./Sidebar";
 import { createRenderer } from "./testing";
 
 /*
- * A row's unread mark is the activity spinner's own cell at the trailing edge:
- * the same square, on the same column, so the marks of a list stand in one
- * line. It never carries a number, never moves the Git delta before it, never
- * sits on the avatar's corner, and gives way to a hover control as the spinner
- * does.
+ * A row's unread mark is a red dot on the top corner of its own mark, opposite
+ * the folded count. A mention doubles it around a drawn `@`, centred on the
+ * same point. It never carries a number and never touches the trailing lane;
+ * a row with no mark of its own wears it in the spinner's cell instead.
  */
 const leave = { icon: "close", label: "Leave", reveal: "hover" } as const;
 
@@ -85,70 +84,81 @@ const mark = (id: string, part: string) =>
         `[data-testid="unread"] [data-item-id="${id}"] [data-happy-desktop-ui="${part}"]`,
     );
 
-it("puts the unread mark in the spinner's cell, with no number and nothing on the avatar", async () => {
+const centre = (rect: DOMRect) => ({
+    x: rect.left + rect.width / 2,
+    y: rect.top + rect.height / 2,
+});
+
+it("puts the unread dot on the mark's top corner and doubles it for a mention", async () => {
     const view = render();
     await view.ready();
-    const spinner = mark("working", "sidebar-item-activity")!.getBoundingClientRect();
-    expect(spinner.width).toBe(SIDEBAR_SLOT_CELL);
-    for (const id of ["unread", "mentioned"]) {
-        const cell = mark(id, "sidebar-item-unread")!.getBoundingClientRect();
-        expect(cell.width).toBe(spinner.width);
-        expect(cell.height).toBe(spinner.height);
-        expect(cell.right).toBe(spinner.right);
-        // Sub-pixel layout rounds the two rows apart by a few millionths.
-        expect(cell.top - mark(id, "sidebar-item-label")!.getBoundingClientRect().top).toBeCloseTo(
-            spinner.top - mark("working", "sidebar-item-label")!.getBoundingClientRect().top,
-            3,
-        );
+    const dot = mark("unread", "sidebar-item-unread")!.getBoundingClientRect();
+    const mention = mark("mentioned", "sidebar-item-unread")!.getBoundingClientRect();
+    // The visible disc, inside a one-pixel ring of the surface.
+    expect(dot.width - 2).toBe(6);
+    expect(mention.width - 2).toBe(12);
+    expect(mention.height).toBe(mention.width);
+    for (const [id, rect] of [
+        ["unread", dot],
+        ["mentioned", mention],
+    ] as const) {
+        const leading = mark(id, "sidebar-item-leading")!.getBoundingClientRect();
+        expect(centre(rect).x - leading.left).toBeCloseTo(18, 3);
+        expect(centre(rect).y - leading.top).toBeCloseTo(3, 3);
+        expect(
+            mark(id, "sidebar-item-trailing")?.contains(mark(id, "sidebar-item-unread")),
+        ).not.toBe(true);
     }
-    // The `@` is drawn, not written: the label says it, and nothing else does.
-    expect(mark("unread", "sidebar-item-unread")!.textContent).toBe("");
-    expect(mark("mentioned", "sidebar-item-unread")!.textContent).toBe("");
-    expect(getComputedStyle(mark("mentioned", "sidebar-item-unread")!, "::before").content).toBe(
-        '"@"',
-    );
-    expect(
-        document.querySelector('[data-happy-desktop-ui="sidebar-item-leading-unread"]'),
-    ).toBeNull();
+    // The `@` is drawn, centred by geometry: the label says it, and no text does.
+    const badge = mark("mentioned", "sidebar-item-unread")!;
+    expect(badge.textContent).toBe("");
+    const glyph = centre(badge.querySelector("svg")!.getBoundingClientRect());
+    expect(glyph.x).toBeCloseTo(centre(mention).x, 3);
+    expect(glyph.y).toBeCloseTo(centre(mention).y, 3);
+    expect(mark("unread", "sidebar-item-unread")!.querySelector("svg")).toBeNull();
     expect(
         document.querySelector('[data-happy-desktop-ui="sidebar-item-unread-count"]'),
     ).toBeNull();
 });
 
-it("never moves the delta or shortens the name more than the spinner's cell does", async () => {
+it("keeps a row with no mark of its own in the spinner's cell, never moving the delta", async () => {
     const view = render();
     await view.ready();
+    const spinner = mark("working", "sidebar-item-activity")!.getBoundingClientRect();
+    const cell = mark("delta-unread", "sidebar-item-unread-cell")!.getBoundingClientRect();
+    expect(cell.width).toBe(SIDEBAR_SLOT_CELL);
+    expect(cell.width).toBe(spinner.width);
+    expect(cell.right).toBe(spinner.right);
     const read = mark("delta", "sidebar-item-change-stats")!.getBoundingClientRect();
     const unread = mark("delta-unread", "sidebar-item-change-stats")!.getBoundingClientRect();
-    const cell = mark("delta-unread", "sidebar-item-unread")!.getBoundingClientRect();
     // The cell joins the lane after the delta, exactly as a working spinner would.
     expect(unread.right).toBeLessThan(cell.left);
     expect(read.right - unread.right).toBe(cell.right - unread.right - 3);
 });
 
-it("lets a mention outrank the spinner, and the spinner outrank the plain dot", async () => {
+it("shows the spinner and the unread mark together", async () => {
     const view = render();
     await view.ready();
-    expect(mark("both", "sidebar-item-unread")?.hasAttribute("data-mentioned")).toBe(true);
-    expect(mark("both", "sidebar-item-activity")).toBeNull();
-    expect(mark("busy", "sidebar-item-activity")).not.toBeNull();
-    expect(mark("busy", "sidebar-item-unread")).toBeNull();
+    for (const id of ["both", "busy"]) {
+        expect(mark(id, "sidebar-item-activity")).not.toBeNull();
+        expect(mark(id, "sidebar-item-leading")!.contains(mark(id, "sidebar-item-unread"))).toBe(
+            true,
+        );
+    }
+    expect(mark("both", "sidebar-item-unread")!.hasAttribute("data-mentioned")).toBe(true);
 });
 
-it("swaps the mark for the hover control in the same cell", async () => {
+it("keeps the mark in place while the hover control comes up", async () => {
     const view = render();
     await view.ready();
-    const cell = mark("mentioned", "sidebar-item-unread")!;
-    const before = cell.getBoundingClientRect();
+    const badge = mark("mentioned", "sidebar-item-unread")!;
+    const before = badge.getBoundingClientRect();
     await userEvent.hover(
         document.querySelector('[data-testid="unread"] [data-item-id="mentioned"]')!,
     );
-    await expect.poll(() => getComputedStyle(cell).visibility).toBe("hidden");
-    const control = document
-        .querySelector(
-            '[data-testid="unread"] [data-item-id="mentioned"] [data-happy-desktop-ui="sidebar-item-actions"]',
-        )!
-        .getBoundingClientRect();
-    expect(control.right).toBe(before.right);
-    expect(cell.getBoundingClientRect()).toEqual(before);
+    await expect
+        .poll(() => mark("mentioned", "sidebar-item-actions")?.getBoundingClientRect().width ?? 0)
+        .toBeGreaterThan(0);
+    expect(getComputedStyle(badge).visibility).toBe("visible");
+    expect(badge.getBoundingClientRect()).toEqual(before);
 });

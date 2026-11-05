@@ -678,8 +678,8 @@
         --happy-mention-tint: rgb(92 200 226 / 0.24);
         --happy-mention-tint-self: rgb(92 200 226 / 0.42);
         --happy-mention-text: #9be0f0;
-        --happy-unread-mention-background: #5cc8e2;
-        --happy-unread-mention-text: #0b2a33;
+        --happy-unread-mention-background: #2399b5;
+        --happy-unread-mention-text: #ffffff;
         /* Declared again here, so they resolve against the dark palette. */
     }
 }
@@ -902,8 +902,8 @@
     --happy-mention-tint: rgb(92 200 226 / 0.24);
     --happy-mention-tint-self: rgb(92 200 226 / 0.42);
     --happy-mention-text: #9be0f0;
-    --happy-unread-mention-background: #5cc8e2;
-    --happy-unread-mention-text: #0b2a33;
+    --happy-unread-mention-background: #2399b5;
+    --happy-unread-mention-text: #ffffff;
     /* Declared again here, so they resolve against the dark palette. */
 }
 
