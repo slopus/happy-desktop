@@ -11,9 +11,30 @@ pose. Its 80×80px scene matches the other onboarding steps. The heading is
 “Set up a safety net for agents”; the copy explains fewer interruptions and
 Auto review checking requests for more access to help catch unintended actions.
 
-**The step is not connected to live onboarding yet.** Correct integration needs
-Electron host changes, which require two human confirmations under `AGENTS.md`.
-This change prepares the UI for review without changing host behavior.
+## How it is wired
+
+Happy Agent answers for its own sandbox through `happy-agent sandbox status --json`
+(`{status: "ready" | "required", setupVersion, previousAttempt?: "cancelled" | "failed"}`)
+and `happy-agent sandbox setup [--retry] --json`
+(`{status: "ready" | "cancelled" | "failed", setupVersion}`).
+`sources/main/windowsSandbox.ts` reads that answer once per selected Agent
+executable, on Windows with a daemon Happy manages:
+
+- Every daemon Happy starts takes its environment from `WindowsSandbox`, so a
+  supported Agent runs with `HAPPY_WINDOWS_SANDBOX_NO_PROVISION=1` and no command
+  can open Windows' administrator prompt by itself.
+- `LocalOnboarding` holds setup on the `sandbox` stage after Subscriptions while
+  the sandbox is `required`, for a returning machine as much as a new one, and
+  on `examining` until the Agent has answered.
+- Only the step's button reaches `onboardingSandboxSetup`, which runs explicit
+  setup without the hold. Presses while it runs join it rather than opening a
+  second prompt, and an attempt after an unfinished one passes `--retry`.
+- `cancelled` and `failed` come back typed and show as the unfinished state.
+- An Agent that cannot answer `sandbox status --json` is launched unchanged and
+  sets itself up on first use, as before; the step stays out of the way.
+
+The `windows-host` job in `desktop-validate.yml` typechecks and tests the
+Electron host on Windows from any ref, without signing.
 
 ## Where elevation comes from
 
@@ -53,8 +74,6 @@ in `.sandbox/setup-attempt.json`. Later automatic attempts refuse with:
 > Windows prompt was opened. Run `happy-agent sandbox setup --retry` when ready
 > to try again.
 
-The desktop bridge has no sandbox status, setup, retry, or typed cancellation
-contract. Its ordinary connection retry cannot explicitly retry provisioning.
 Onboarding may reach a connected daemon without the sandbox, because provisioning
 is lazy, but restricted command execution still fails closed. Proceeding past
 onboarding would therefore not establish a working sandbox.
@@ -64,29 +83,6 @@ Cancellation and failure share the calm “Sandbox setup didn’t finish.” lin
 and an explicit “Try again” action.
 The benefit copy stays visible while the Windows prompt is open or setup needs
 another attempt. It explains autonomous work and automatic checks in plain words.
-
-## Required integration
-
-1. Add a narrow typed native status/setup capability. The native helper already
-   exposes `--setup-status` JSON (`ready`, `stateDirectory`, `setupVersion`) and
-   `--setup [--retry]`. The CLI's `sandbox status` prints prose, so do not parse
-   its wording into product state. Use a machine-readable contract instead.
-2. Check readiness before any managed startup path can trigger provisioning.
-   Prevent automatic provisioning until the person presses Continue. A renderer
-   flag alone cannot control main's independent startup path.
-3. Place the step after Subscriptions, only on Windows when native setup is
-   required; skip it on other platforms and when readiness is already confirmed.
-   Show Sandbox in the stepper only for that flow (`OnboardingSteps.sandbox`).
-   Set up invokes explicit setup, then explicit retry after an unfinished attempt.
-   Serialize attempts and retain
-   the native pending-attempt guard so a second click cannot launch duplicate UAC.
-4. Project cancellation and other failures into the UI's `unfinished` state.
-   Keep native results typed; never infer cancellation by searching arbitrary
-   error text. Use `waiting` while the Windows prompt is open and `before`
-   before the first attempt.
-5. On confirmed readiness, resume normal onboarding. If adding Learn more,
-   connect it to a real host callback opening the sandbox documentation, for example
-   `https://github.com/slopus/happy-agent/blob/main/docs/permissions-and-sandbox.md`.
 
 Upstream source inspected for this investigation:
 

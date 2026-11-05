@@ -84,6 +84,8 @@ export interface LocalOnboardingStore {
      */
     commandCopied(copy: LocalOnboardingCommandCopy): void;
     stepBack(step: LocalOnboardingStepBack): void;
+    /** Starts Windows sandbox setup; Windows' administrator prompt opens from here. */
+    sandboxSetup(): void;
     happyMobileConnect(): void;
     happyMobileSkip(): void;
     happyMobilePlatformSelect(platform: "ios" | "android"): void;
@@ -925,6 +927,9 @@ export function localOnboardingStoreCreate(
         stepBack(step) {
             attempt(bridge.onboardingStepBack(step), "Happy could not go back to that step.");
         },
+        sandboxSetup() {
+            attempt(bridge.onboardingSandboxSetup(), "Happy could not start sandbox setup.");
+        },
         happyMobileConnect() {
             happyMobileStore?.happyMobileConnect();
         },
@@ -1012,6 +1017,18 @@ export function localOnboardingView(
             };
         case "examining":
             return { kind: "examining" };
+        case "sandbox": {
+            const sandbox = onboarding.sandbox;
+            return {
+                kind: "windows-sandbox",
+                state:
+                    sandbox?.settingUp || snapshot.pending
+                        ? "waiting"
+                        : sandbox?.previousAttempt
+                          ? "unfinished"
+                          : "before",
+            };
+        }
         case "project": {
             const mobile = snapshot.happyMobile;
             if (!mobile || mobile.status === "checking") return { kind: "happy-mobile-checking" };
@@ -1058,6 +1075,8 @@ export function localOnboardingReachedStage(
         case "assistantsFound":
         case "examining":
             return "subscriptions";
+        case "sandbox":
+            return "sandbox";
         case "project":
         case "complete":
             return "connect-phone";

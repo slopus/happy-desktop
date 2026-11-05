@@ -46,6 +46,8 @@ export function desktopMobilePairingOptionsCopy(options: DesktopMobilePairingOpt
 export interface DesktopMobileSetupProps {
     /** Full first-run context; Settings shows only the opted-in mobile branch. */
     readonly onboarding?: boolean;
+    /** The Windows sandbox step is part of this machine's onboarding. */
+    readonly sandboxStep?: boolean;
     /** Pinned bottom-right on every step, the way the rest of setup carries it. */
     readonly help?: ReactNode;
     /** Returns to an earlier onboarding step from the shared step bar. */
@@ -159,6 +161,7 @@ export function DesktopMobileSetup(props: DesktopMobileSetupProps) {
             stage={
                 mobile === "connect-phone" || mobile === "complete" ? "connect-phone" : "get-app"
             }
+            {...(props.sandboxStep ? { sandbox: true } : {})}
             {...(props.onStageSelect ? { onStageSelect: props.onStageSelect } : {})}
         />
     ) : (

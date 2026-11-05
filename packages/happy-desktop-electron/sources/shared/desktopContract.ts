@@ -526,6 +526,13 @@ export type LocalOnboardingStage =
      */
     | "assistantsFound"
     /**
+     * Windows' sandbox still needs setting up, and only the person can start
+     * it: setup opens Windows' administrator prompt. Comes after Subscriptions,
+     * for first runs and returning machines alike, because agents cannot run
+     * commands until it is done.
+     */
+    | "sandbox"
+    /**
      * The first step of the sequence, revisited. Nothing is owed here: setup
      * already finished this work, and the step exists so a person can go back
      * and see what Happy put on their machine.
@@ -647,6 +654,18 @@ export interface LocalOnboardingSnapshot {
      * this, so a revisit lights an earlier step without unwinding the rest.
      */
     readonly reachedStage?: LocalOnboardingStage;
+    /** Present at `sandbox`. */
+    readonly sandbox?: LocalOnboardingSandbox;
+    /** The Windows sandbox step belongs to this machine's sequence, done or not. */
+    readonly sandboxStep?: true;
+}
+
+/** The Windows sandbox step, while it is the current one. */
+export interface LocalOnboardingSandbox {
+    /** Setup the person started is running, and Windows' prompt may be open. */
+    readonly settingUp: boolean;
+    /** How the last attempt ended, when it did not finish. */
+    readonly previousAttempt?: "cancelled" | "failed";
 }
 
 /** A step of first-run setup a person may deliberately return to. */
@@ -1042,6 +1061,11 @@ export interface HappyDesktopBridge {
     onboardingAssistantsContinue(): Promise<void>;
     /** Returns to an earlier step of first-run setup. */
     onboardingStepBack(step: LocalOnboardingStepBack): Promise<void>;
+    /**
+     * Sets up the Windows sandbox, opening Windows' administrator prompt. Only
+     * the sandbox step's button calls this; the outcome arrives in the snapshot.
+     */
+    onboardingSandboxSetup(): Promise<void>;
     runtimeGet(): Promise<DesktopRuntimeSnapshot>;
     runtimeReset(): Promise<void>;
     runtimeRetry(): Promise<void>;
@@ -1151,6 +1175,7 @@ export const desktopIpc = {
     applicationMenuOpen: "happy:application-menu:open",
     onboardingAssistantsContinue: "happy:onboarding:assistants-continue",
     onboardingStepBack: "happy:onboarding:step-back",
+    onboardingSandboxSetup: "happy:onboarding:sandbox-setup",
     onboardingChanged: "happy:onboarding:changed",
     onboardingGet: "happy:onboarding:get",
     onboardingProjectChoose: "happy:onboarding:project-choose",

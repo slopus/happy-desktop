@@ -112,9 +112,47 @@ jobs:
                   path: packages/happy-desktop-electron/release/*.AppImage
                   if-no-files-found: error
 
+    # The Electron host on Windows, unsigned, from any ref: typecheck and its whole
+    # suite, which covers the Windows sandbox consent gate. Packaging is signed, and
+    # signing trusts only main, so it is the separate job below.
+    windows-host:
+        if: ${{ inputs.platform != 'linux' }}
+        name: Windows host typecheck and tests
+        runs-on: windows-2025
+        timeout-minutes: 30
+        defaults:
+            run:
+                shell: bash
+        steps:
+            - name: Check out source
+              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+            - name: Set up pnpm
+              uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+
+            - name: Set up Node.js
+              uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+              with:
+                  node-version: "24"
+                  cache: pnpm
+
+            - name: Use Git Bash for package scripts
+              run: pnpm config set script-shell "C:\Program Files\Git\bin\bash.exe"
+
+            - name: Install dependencies
+              run: pnpm install --frozen-lockfile
+
+            - name: Typecheck the Electron host and UI
+              run: |
+                  pnpm --dir packages/happy-desktop-electron typecheck
+                  pnpm --dir packages/happy-desktop-ui typecheck
+
+            - name: Test the Electron host
+              run: pnpm --dir packages/happy-desktop-electron test
+
     windows:
         permissions:
             contents: read
             id-token: write
-        if: ${{ inputs.platform != 'linux' }}
+        if: ${{ inputs.platform != 'linux' && github.ref == 'refs/heads/main' }}
         uses: ./.github/workflows/build-windows.yml

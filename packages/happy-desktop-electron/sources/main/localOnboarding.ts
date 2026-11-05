@@ -14,6 +14,7 @@ import type {
 } from "../shared/desktopContract";
 import { localAppsDetect } from "./localApps";
 import { localRuntimeProbe, type LocalRuntimeProbe } from "./localHappyAgent";
+import type { WindowsSandboxSnapshot } from "./windowsSandbox";
 
 const recordVersion = 3;
 
@@ -188,6 +189,13 @@ export interface LocalOnboardingRuntime {
     ): Promise<{ readonly path: string }>;
 }
 
+/** The Windows sandbox, which setup asks to be set up only when the person says so. */
+export interface LocalOnboardingWindowsSandbox {
+    get(): WindowsSandboxSnapshot;
+    subscribe(listener: (snapshot: WindowsSandboxSnapshot) => void): () => void;
+    setup(): Promise<void>;
+}
+
 /** The downloaded-daemon state first-run setup follows without owning it. */
 export interface LocalOnboardingDaemon {
     get(): DesktopDaemonSnapshot;
@@ -197,6 +205,8 @@ export interface LocalOnboardingDaemon {
 export interface LocalOnboardingOptions {
     readonly daemon?: LocalOnboardingDaemon;
     readonly recordPath: string;
+    /** Absent where there is no Windows sandbox for Happy to set up. */
+    readonly sandbox?: LocalOnboardingWindowsSandbox;
     readonly runtime: LocalOnboardingRuntime;
     readonly probe?: () => Promise<LocalRuntimeProbe>;
     /** Looks for the machine's other coding apps, given the PATH the probe found. */
@@ -348,6 +358,13 @@ export class LocalOnboarding implements Disposable {
     private durablePending = false;
     private daemonUnsubscribe?: () => void;
     private runtimeUnsubscribe?: () => void;
+    private sandboxUnsubscribe?: () => void;
+    /**
+     * The sandbox step has been owed during this run. It stays in the step bar
+     * once it is done, so finishing it does not take a step out from under the
+     * person.
+     */
+    private sandboxOwed = false;
     private snapshotValue: LocalOnboardingSnapshot = {
         busy: true,
         freshness: "checking",
@@ -366,6 +383,7 @@ export class LocalOnboarding implements Disposable {
         const onboarding = new LocalOnboarding(options, record);
         onboarding.daemonUnsubscribe = options.daemon?.subscribe(() => onboarding.refresh());
         onboarding.runtimeUnsubscribe = options.runtime.subscribe(() => onboarding.refresh());
+        onboarding.sandboxUnsubscribe = options.sandbox?.subscribe(() => onboarding.publish());
         // The first look at the machine is the same decision as every later one:
         // it happens because Happy is being asked to run here, not because this
         // object was constructed.
@@ -427,6 +445,19 @@ export class LocalOnboarding implements Disposable {
         }
         this.reopened = step;
         this.publish();
+    }
+
+    /**
+     * Sets up the Windows sandbox, which opens Windows' administrator prompt.
+     * Only the sandbox step's button asks for this. How it ended is the
+     * sandbox's own typed answer, carried on the snapshot rather than as a
+     * message.
+     */
+    sandboxSetup(): Promise<void> {
+        this.stageRequire("sandbox");
+        const sandbox = this.options.sandbox;
+        if (!sandbox) throw new Error("This machine has no Windows sandbox to set up.");
+        return sandbox.setup();
     }
 
     /** Finishes the desktop decisions without discovering or registering a project. */
@@ -534,6 +565,8 @@ export class LocalOnboarding implements Disposable {
         this.daemonUnsubscribe = undefined;
         this.runtimeUnsubscribe?.();
         this.runtimeUnsubscribe = undefined;
+        this.sandboxUnsubscribe?.();
+        this.sandboxUnsubscribe = undefined;
         this.listeners.clear();
     }
 
@@ -1022,6 +1055,13 @@ export class LocalOnboarding implements Disposable {
                 ? this.assistantsProject()
                 : undefined;
         const retrying = runtime.phase === "error" && runtime.retrying === true;
+        const sandbox = this.options.sandbox?.get();
+        if (sandbox?.state === "required" || sandbox?.state === "settingUp")
+            this.sandboxOwed = true;
+        // Before the Agent has answered, the step is probably ahead, and a bar
+        // that grows a step later moves every segment already drawn.
+        const sandboxStep =
+            this.sandboxOwed || sandbox?.state === "noAgent" || sandbox?.state === "checking";
         // Only the first install is watched here. A background update fetched
         // for a machine that already works is not a step of setting one up, and
         // this snapshot has no business reporting it.
@@ -1044,6 +1084,8 @@ export class LocalOnboarding implements Disposable {
             ...(retrying ? { retrying } : {}),
             ...(node ? { node } : {}),
             ...(this.record.projectPath ? { projectPath: this.record.projectPath } : {}),
+            ...(stage === "sandbox" && sandbox ? { sandbox: sandboxProject(sandbox) } : {}),
+            ...(sandboxStep ? { sandboxStep } : {}),
             stage,
         };
     }
@@ -1112,10 +1154,17 @@ export class LocalOnboarding implements Disposable {
         // a fact about Happy, and every way of arriving at unfinished setup
         // deserves the same report. A machine with nothing left to do never sees
         // it, because there is nothing for it to go in front of.
-        const live =
+        const reported =
             next === "project" && !this.assistantsAcknowledged && this.probed
                 ? "assistantsFound"
                 : next;
+        // The sandbox comes after Subscriptions and before anything that uses
+        // the agent, on a returning machine as much as a new one: without it no
+        // agent command can run.
+        const live =
+            reported === "project" || reported === "complete"
+                ? (this.sandboxStage() ?? reported)
+                : reported;
         // A step somebody went back to, shown only while the sequence has
         // genuinely moved past it. The step that would be current is reported
         // alongside, so the bar keeps drawing the work already done rather
@@ -1126,6 +1175,25 @@ export class LocalOnboarding implements Disposable {
         }
         this.liveStage = undefined;
         return live;
+    }
+
+    /** The step the Windows sandbox holds setup on, when it holds it at all. */
+    private sandboxStage(): LocalOnboardingSnapshot["stage"] | undefined {
+        switch (this.options.sandbox?.get().state) {
+            case undefined:
+            case "notApplicable":
+            case "noAgent":
+            case "unsupported":
+            case "ready":
+                return undefined;
+            // Opening the workspace before the Agent has said would show it to
+            // someone who may be about to be asked for Windows' permission.
+            case "checking":
+                return "examining";
+            case "required":
+            case "settingUp":
+                return "sandbox";
+        }
     }
 
     /**
@@ -1249,6 +1317,18 @@ export class LocalOnboarding implements Disposable {
         clearTimeout(this.probeRetry);
         this.probeRetry = undefined;
     }
+}
+
+function sandboxProject(
+    sandbox: WindowsSandboxSnapshot,
+): NonNullable<LocalOnboardingSnapshot["sandbox"]> {
+    if (sandbox.state === "settingUp") return { settingUp: true };
+    return {
+        settingUp: false,
+        ...(sandbox.state === "required" && sandbox.previousAttempt
+            ? { previousAttempt: sandbox.previousAttempt }
+            : {}),
+    };
 }
 
 /** Identity of the runtime state setup reacts to: its phase, and which connection. */

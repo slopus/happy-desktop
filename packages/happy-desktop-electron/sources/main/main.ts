@@ -90,6 +90,7 @@ import {
 } from "./mediaPreviewWindow";
 import { localHappyAgentConnectorCreate, localRuntimeProbe } from "./localHappyAgent";
 import { LocalOnboarding } from "./localOnboarding";
+import { WindowsSandbox } from "./windowsSandbox";
 import {
     desktopBrowserCommandValidate,
     desktopBrowserNetworkValidate,
@@ -1785,11 +1786,26 @@ void app
             launchEnvironment.HAPPY_AGENT_SERVER_SOCKET_PATH?.trim() &&
             launchEnvironment.HAPPY_AGENT_SERVER_TOKEN_PATH?.trim()
         );
+        // Every daemon Happy starts takes its environment from here, so a
+        // daemon never sets the Windows sandbox up before the person agreed to it.
+        const windowsSandbox = new WindowsSandbox({
+            applicable: process.platform === "win32" && managedDaemon,
+            environment: launchEnvironment,
+            selectedBinary: () => daemonController.selectedBinary(),
+        });
         daemonController = await DesktopDaemonController.create({
             channel: desktopConfigStore.get().previewUpdatesEnabled === true ? "preview" : "stable",
             environment: launchEnvironment,
-            launchEnvironment: async () => launchEnvironment,
+            launchEnvironment: () => windowsSandbox.launchEnvironment(),
             managed: managedDaemon,
+        });
+        // A newly selected release is asked again: it may set up a newer sandbox.
+        let sandboxCheckedVersion = daemonController.get().installedVersion;
+        void windowsSandbox.check();
+        daemonController.subscribe((snapshot) => {
+            if (snapshot.installedVersion === sandboxCheckedVersion) return;
+            sandboxCheckedVersion = snapshot.installedVersion;
+            void windowsSandbox.check();
         });
         daemonController.subscribe((snapshot) => {
             const window = windowLifecycle.get();
@@ -1882,6 +1898,7 @@ void app
             presentation: presentationIdentity,
             recordPath: join(desktopRoot, "local-onboarding.json"),
             runtime,
+            ...(windowsSandbox.get().state === "notApplicable" ? {} : { sandbox: windowsSandbox }),
         });
         onboarding.subscribe((snapshot) => {
             const window = windowLifecycle.get();
@@ -2273,6 +2290,12 @@ void app
             if (step !== "setup" && step !== "subscriptions")
                 throw new Error("That is not a first-run setup step.");
             onboarding.stepBack(step);
+        });
+        ipcMain.handle(desktopIpc.onboardingSandboxSetup, (event) => {
+            onboardingSenderRequire(event.sender);
+            if (event.senderFrame !== event.sender.mainFrame)
+                throw new Error("Only the desktop window can set up the sandbox.");
+            return onboarding.sandboxSetup();
         });
         ipcMain.handle(desktopIpc.runtimeStart, (_event, request: unknown) =>
             runtime.start(desktopStartRequestValidate(request)),

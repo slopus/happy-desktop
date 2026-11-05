@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { OnboardingSteps } from "./OnboardingSteps";
 import { SetupPage } from "./SetupPage";
 import type { ThemeMode } from "./ThemeScope";
@@ -7,6 +8,10 @@ export type WindowsSandboxSetupState = "before" | "waiting" | "unfinished";
 export interface WindowsSandboxSetupProps {
     readonly appearance: ThemeMode;
     readonly state: WindowsSandboxSetupState;
+    /** Onboarding's own step bar, when it is drawn inside the full sequence. */
+    readonly steps?: ReactNode;
+    /** Pinned bottom-right, the way the rest of setup carries it. */
+    readonly help?: ReactNode;
     /** Starts explicit setup, or an explicit retry after the previous attempt ended. */
     onContinue(): void;
 }
@@ -25,7 +30,8 @@ export function WindowsSandboxSetup(props: WindowsSandboxSetupProps) {
             className="happy-windows-sandbox"
             data-testid="windows-sandbox-setup"
             transitionKey="windows-sandbox"
-            steps={<OnboardingSteps scope="desktop" stage="sandbox" />}
+            steps={props.steps ?? <OnboardingSteps scope="desktop" stage="sandbox" />}
+            {...(props.help ? { help: props.help } : {})}
             scene="spider-catching-bug"
             title="Set up a safety net for agents"
             copy="Happy’s sandbox lets agents work with fewer interruptions. Auto review helps catch unintended actions when they request access beyond it."

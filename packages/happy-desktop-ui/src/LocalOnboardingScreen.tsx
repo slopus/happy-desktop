@@ -15,6 +15,7 @@ import {
 } from "./SetupAssistants";
 import { SetupPage, type SetupPageProgress, type SetupPageStatus } from "./SetupPage";
 import type { ThemeMode } from "./ThemeScope";
+import { WindowsSandboxSetup, type WindowsSandboxSetupState } from "./WindowsSandboxSetup";
 
 /** The coding assistants Happy looks for, and nothing beyond them. */
 export type LocalOnboardingAssistantId = "claude" | "codex" | "grok";
@@ -123,6 +124,8 @@ export type LocalOnboardingView =
           readonly nodeVersion?: string;
       }
     | { readonly kind: "examining" }
+    /** Windows' sandbox, which only the person's press may set up. */
+    | { readonly kind: "windows-sandbox"; readonly state: WindowsSandboxSetupState }
     | { readonly kind: "happy-mobile-checking" }
     | {
           readonly busy: boolean;
@@ -149,7 +152,11 @@ export interface LocalOnboardingScreenProps {
     readonly view: LocalOnboardingView;
     /** The furthest step setup has reached, for the bar's own drawing. */
     readonly reachedStage?: OnboardingStage;
+    /** The Windows sandbox step is part of this machine's sequence. */
+    readonly sandboxStep?: boolean;
     onAssistantsContinue(): void;
+    /** Starts Windows sandbox setup, or retries it after an unfinished attempt. */
+    onSandboxSetup?(): void;
     onConnectRetry(): void;
     /** Installs the update a newer-data refusal is waiting for. */
     onAgentUpdate?(): void;
@@ -571,6 +578,7 @@ export function LocalOnboardingScreen(props: LocalOnboardingScreenProps) {
                 help={<OnboardingHelp onExternalOpen={props.onExternalOpen} />}
                 step={view.step}
                 onboarding={props.showSteps}
+                {...(props.sandboxStep ? { sandboxStep: true } : {})}
                 {...(props.onStageSelect ? { onStageSelect: props.onStageSelect } : {})}
                 onContinue={props.onHappyMobileConnect}
                 onSkip={props.onHappyMobileSkip}
@@ -601,6 +609,7 @@ export function LocalOnboardingScreen(props: LocalOnboardingScreenProps) {
                 scope="desktop"
                 stage={localOnboardingStage(view)}
                 {...(props.reachedStage ? { reached: props.reachedStage } : {})}
+                {...(props.sandboxStep ? { sandbox: true } : {})}
                 {...(props.onStageSelect ? { onStageSelect: props.onStageSelect } : {})}
                 failed={
                     view.kind === "node-missing" ||
@@ -644,6 +653,17 @@ export function LocalOnboardingScreen(props: LocalOnboardingScreenProps) {
                     />
                 ) : undefined}
             </SetupPage>
+        );
+
+    if (view.kind === "windows-sandbox")
+        return (
+            <WindowsSandboxSetup
+                appearance={props.appearance}
+                help={frame.help}
+                state={view.state}
+                steps={frame.steps}
+                onContinue={() => props.onSandboxSetup?.()}
+            />
         );
 
     if (view.kind === "agent-ready")
@@ -797,6 +817,8 @@ export function localOnboardingStage(view: LocalOnboardingView): OnboardingStage
         case "examining":
         case "provider-authentication":
             return "subscriptions";
+        case "windows-sandbox":
+            return "sandbox";
         case "happy-mobile-desktop":
             return view.step.kind === "intro" ? "get-app" : "connect-phone";
         case "happy-mobile-checking":

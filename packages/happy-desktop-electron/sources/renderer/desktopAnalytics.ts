@@ -157,11 +157,16 @@ async function providerAccountHash(installation: string, providerId: string): Pr
         .slice(0, PROVIDER_ACCOUNT_HASH_LENGTH);
 }
 
-function stepOf(stage: OnboardingStage): AnalyticsEvents["onboarding_step_viewed"]["step"] {
+function stepOf(
+    stage: OnboardingStage,
+): AnalyticsEvents["onboarding_step_viewed"]["step"] | undefined {
     switch (stage) {
         case "setup":
         case "subscriptions":
             return stage;
+        // The analytics plan's step list has no sandbox step, so it is not sent.
+        case "sandbox":
+            return undefined;
         case "get-app":
             return "get_app";
         case "connect-phone":
@@ -571,7 +576,7 @@ export function desktopAnalyticsCreate(options: {
                 const view = localOnboardingView(snapshot);
                 if (view && view.kind !== "finishing" && welcome.get().welcomeAcknowledged) {
                     const next = stepOf(localOnboardingStage(view));
-                    if (next !== step) {
+                    if (next !== undefined && next !== step) {
                         step = next;
                         track(LOCAL_HAPPY_AGENT_ID, "onboarding_step_viewed", { step: next });
                     }
