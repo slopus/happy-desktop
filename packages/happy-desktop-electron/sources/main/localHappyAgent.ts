@@ -1,7 +1,7 @@
 import { execFile as execFileCallback } from "node:child_process";
-import { realpath, stat } from "node:fs/promises";
+import { access, constants, realpath, stat } from "node:fs/promises";
 import { userInfo } from "node:os";
-import { isAbsolute, normalize, resolve, win32 } from "node:path";
+import { isAbsolute, normalize, posix, resolve, win32 } from "node:path";
 import type { happyAgentProtocol } from "happy-desktop-state";
 import type { LocalAssistantId } from "../shared/desktopContract";
 import { environmentRead } from "./localApps";
@@ -137,8 +137,8 @@ export interface LocalRuntimeProbe {
     readonly assistants: LocalAssistantCommands;
     /**
      * The assistants found only through PATH entries this process did not
-     * start with, or at their installer's default location. Only Windows,
-     * whose GUI processes keep the PATH they were launched with, has any.
+     * start with, or at their installer's default location rather than on
+     * the PATH at all.
      */
     readonly assistantsRefreshed: readonly LocalAssistantId[];
     readonly environment: NodeJS.ProcessEnv;
@@ -162,6 +162,7 @@ export async function localRuntimeProbe(
     host: HappyAgentProcessHost = defaultProcessHost,
     environment: NodeJS.ProcessEnv = process.env,
     configuredShell?: string,
+    executable: (path: string) => Promise<boolean> = executableFileExists,
 ): Promise<LocalRuntimeProbe> {
     if (process.platform === "win32") return windowsRuntimeProbe(host, environment);
     const shell = loginShellResolve(environment, configuredShell);
@@ -169,14 +170,56 @@ export async function localRuntimeProbe(
         env: minimalShellEnvironment(environment),
     });
     const parsed = discoveryOutputParse(result.stdout);
+    const assistants: Record<string, string> = { ...parsed.assistants };
+    const assistantsRefreshed: LocalAssistantId[] = [];
+    const defaults = posixAssistantDefaults(parsed.environment.HOME ?? environment.HOME);
+    for (const command of Object.keys(assistantCommands) as LocalAssistantId[]) {
+        const fallback = defaults[command];
+        if (assistants[command] || !fallback || !(await executable(fallback))) continue;
+        assistants[command] = fallback;
+        assistantsRefreshed.push(command);
+    }
     return {
-        assistants: parsed.assistants,
-        assistantsRefreshed: [],
+        assistants,
+        assistantsRefreshed,
         environment: parsed.environment,
         ...(parsed.nodeCommand ? { nodeCommand: parsed.nodeCommand } : {}),
         ...(parsed.nodeVersion ? { nodeVersion: parsed.nodeVersion } : {}),
         shell,
     };
+}
+
+/**
+ * Where each assistant's official macOS and Linux installer puts its command.
+ * None of them requires the folder to be on the PATH, and Claude Code's leaves
+ * adding it to the person, so a command sitting there is on the machine even
+ * when the login shell cannot name it.
+ */
+function posixAssistantDefaults(home: string | undefined): LocalAssistantCommands {
+    if (!home || !posix.isAbsolute(home)) return {};
+    return {
+        // code.claude.com/docs/en/setup: `curl -fsSL https://claude.ai/install.sh | bash`.
+        claude: posix.join(home, ".local", "bin", "claude"),
+        // chatgpt.com/codex/install.sh without CODEX_INSTALL_DIR.
+        codex: posix.join(home, ".local", "bin", "codex"),
+        // x.ai/cli/install.sh without GROK_BIN_DIR.
+        grok: posix.join(home, ".grok", "bin", "grok"),
+    };
+}
+
+/**
+ * Whether `path` is a program that can be started: a regular file, reached
+ * through any symlinks, that this user may execute. A link left behind by an
+ * uninstall answers no.
+ */
+async function executableFileExists(path: string): Promise<boolean> {
+    try {
+        if (!(await stat(path)).isFile()) return false;
+        await access(path, constants.X_OK);
+        return true;
+    } catch {
+        return false;
+    }
 }
 
 /** The two registry values Windows builds a new process's PATH from, machine then user. */

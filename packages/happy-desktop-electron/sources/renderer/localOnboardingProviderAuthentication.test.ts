@@ -34,6 +34,12 @@ import type {
 const unsubscribes: (() => void)[] = [];
 /** Hands the window a new first-run snapshot, as the shell does on every change. */
 let onboardingPush: (next: LocalOnboardingSnapshot) => void = () => undefined;
+/** What the shell answers the window's first read with, when a test says otherwise. */
+let onboardingInitial: LocalOnboardingSnapshot | undefined;
+/** Opens the next store on `snapshot` instead of the default subscriptions step. */
+function onboardingGetSet(snapshot: LocalOnboardingSnapshot) {
+    onboardingInitial = snapshot;
+}
 
 beforeEach(() => {
     for (const method of Object.values(daemon)) method.mockReset();
@@ -45,6 +51,7 @@ beforeEach(() => {
 
 afterEach(() => {
     for (const unsubscribe of unsubscribes.splice(0)) unsubscribe();
+    onboardingInitial = undefined;
     vi.restoreAllMocks();
     vi.useRealTimers();
 });
@@ -82,7 +89,7 @@ function subscriptionsStep(): LocalOnboardingSnapshot {
 
 /** Claude Code installed and signed in to something, at the subscriptions step. */
 function storeOpen() {
-    const onboarding = subscriptionsStep();
+    const onboarding = onboardingInitial ?? subscriptionsStep();
     const runtime = {
         activeTarget: { happyAgentHttpUrl: "http://happy-agent.test", mode: "local" },
         activeTargetId: "local",
@@ -223,6 +230,63 @@ it("checks a sign-in again at once when the check was cut short rather than answ
     // An abandoned check is not a failed one: the next poll checks again
     // instead of reporting "Couldn't verify" for the next thirty seconds.
     await vi.waitFor(() => expect(verifiedIds()).toEqual(["claude", "claude"]));
+    await vi.waitFor(() =>
+        expect(localOnboardingView(store.get())).toMatchObject({
+            assistants: [{ authentication: "valid", id: "claude" }, {}, {}],
+        }),
+    );
+});
+
+it("asks for the install, not a sign-in, when an assistant that is not here fails its check", async () => {
+    daemon.getConfig.mockResolvedValue({ config: { providers: {} } });
+    // A sign-in left behind by a Claude Code that has since been removed.
+    daemon.verifyProvider.mockResolvedValue({
+        performedLevel: "inference",
+        requestedLevel: "inference",
+        status: "failed",
+    });
+    const missing = subscriptionsStep();
+    onboardingGetSet({
+        ...missing,
+        assistants: [
+            { id: "claude", status: "missing" },
+            { id: "codex", status: "missing" },
+            { id: "grok", status: "missing" },
+        ],
+    } as LocalOnboardingSnapshot);
+    const store = storeOpen();
+
+    await vi.waitFor(() => expect(store.get().providerAuthentication.complete).toBe(true));
+    const view = localOnboardingView(store.get());
+    expect(view).toMatchObject({
+        assistants: [{ authentication: "unavailable", id: "claude", status: "missing" }, {}, {}],
+    });
+    const claude = cardFind(screenRender(view as LocalOnboardingView), "Claude Code");
+    expect(
+        claude?.querySelector('[data-happy-desktop-ui="setup-assistants-detail"]')?.textContent,
+    ).toBe("Install by running:");
+    expect(claude?.textContent).toContain("curl -fsSL https://claude.ai/install.sh | bash");
+    expect(claude?.textContent).not.toContain("claude auth login");
+});
+
+it("counts a sign-in that works as Ready even without the command", async () => {
+    daemon.getConfig.mockResolvedValue({ config: { providers: {} } });
+    daemon.verifyProvider.mockResolvedValue({
+        performedLevel: "inference",
+        requestedLevel: "inference",
+        status: "passed",
+    });
+    onboardingGetSet({
+        ...subscriptionsStep(),
+        assistants: [
+            { id: "claude", status: "missing" },
+            { id: "codex", status: "missing" },
+            { id: "grok", status: "missing" },
+        ],
+    } as LocalOnboardingSnapshot);
+    const store = storeOpen();
+
+    // Happy Agent brings its own Claude Code, so only the sign-in matters.
     await vi.waitFor(() =>
         expect(localOnboardingView(store.get())).toMatchObject({
             assistants: [{ authentication: "valid", id: "claude" }, {}, {}],

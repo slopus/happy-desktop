@@ -1149,9 +1149,16 @@ function assistantsProject(
         const result = refused
             ? "invalid"
             : (authenticationFor(authentication, assistant.id) ?? "checking");
+        // Happy Agent never runs these commands: it uses the sign-in they leave
+        // behind, with its own copy of Claude Code where one is needed. So a
+        // sign-in still on the machine is Ready without the command. Anything
+        // short of that is fixed by signing in, which takes the command, so one
+        // that is not here is installed first whether its check failed or found
+        // nothing.
+        const unavailable =
+            assistant.status === "missing" && result !== "valid" && result !== "checking";
         return {
-            authentication:
-                result === "invalid" && assistant.status === "missing" ? "unavailable" : result,
+            authentication: unavailable ? "unavailable" : result,
             ...(assistant.command ? { command: assistant.command } : {}),
             id: assistant.id,
             status: assistant.status,

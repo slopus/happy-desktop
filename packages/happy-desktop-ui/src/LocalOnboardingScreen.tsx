@@ -256,7 +256,13 @@ const ASSISTANTS: Record<
     },
     codex: {
         command: "codex",
-        install: { posix: "npm i -g @openai/codex", powershell: "npm i -g @openai/codex" },
+        // learn.chatgpt.com/docs/codex/cli: the standalone installers come
+        // first; npm and Homebrew are offered as alternatives.
+        install: {
+            posix: "curl -fsSL https://chatgpt.com/codex/install.sh | sh",
+            powershell:
+                'powershell -ExecutionPolicy ByPass -c "irm https://chatgpt.com/codex/install.ps1 | iex"',
+        },
         mark: "openai",
         name: "Codex",
         signIn: "codex login",

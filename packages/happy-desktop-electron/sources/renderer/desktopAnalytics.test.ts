@@ -690,14 +690,18 @@ it("shows Windows the vendors' PowerShell installers and every other OS their sh
     expect(localOnboardingInstallCommand("grok", "powershell")).toBe(
         "irm https://x.ai/cli/install.ps1 | iex",
     );
-    expect(localOnboardingInstallCommand("codex", "powershell")).toBe("npm i -g @openai/codex");
+    expect(localOnboardingInstallCommand("codex", "powershell")).toBe(
+        'powershell -ExecutionPolicy ByPass -c "irm https://chatgpt.com/codex/install.ps1 | iex"',
+    );
     expect(localOnboardingInstallCommand("claude", "posix")).toBe(
         "curl -fsSL https://claude.ai/install.sh | bash",
     );
     expect(localOnboardingInstallCommand("grok", "posix")).toBe(
         "curl -fsSL https://x.ai/cli/install.sh | bash",
     );
-    expect(localOnboardingInstallCommand("codex", "posix")).toBe("npm i -g @openai/codex");
+    expect(localOnboardingInstallCommand("codex", "posix")).toBe(
+        "curl -fsSL https://chatgpt.com/codex/install.sh | sh",
+    );
 });
 
 it("takes the install shell from the desktop, and from the renderer's OS only on an older shell", () => {
