@@ -1958,6 +1958,11 @@ export interface HappyAgentWorkspaceStore {
     failureRetry(entryId: string): Promise<void>;
     /** Continues the failed turn on an account and model the live catalog offers. */
     failureSwitch(entryId: string, target: HappyAgentFailureSwitchTarget): Promise<void>;
+    /**
+     * Records that the reader chose New chat on a failure card in the open
+     * conversation; the caller opens the new chat.
+     */
+    failureNewChat(entryId: string): void;
     /** Loads the next page before the active conversation's current window. */
     historyLoadMore(): void;
     /** Requests termination of one background terminal in the active session (`/stop`). */
@@ -7444,18 +7449,26 @@ export function happyAgentWorkspaceStoreCreate(
             };
         },
         async voiceTaskCreate(input) {
-            const loaded = await client.models.load();
-            const latest = client.models.get();
-            const models = latest.type === "ready" ? latest : loaded;
-            // What the sidebar's New task would open on, with the named model
-            // in place of the default and that model's own effort and speed.
-            const selection = input.model
-                ? client.models.modelSelect(models.defaultSelection, input.model)
-                : models.defaultSelection;
-            return list.taskCreate({
-                ...(input.name === undefined ? {} : { name: input.name }),
-                selection,
-            });
+            let created: HappyAgentTaskCreation;
+            try {
+                const loaded = await client.models.load();
+                const latest = client.models.get();
+                const models = latest.type === "ready" ? latest : loaded;
+                // What the sidebar's New task would open on, with the named model
+                // in place of the default and that model's own effort and speed.
+                const selection = input.model
+                    ? client.models.modelSelect(models.defaultSelection, input.model)
+                    : models.defaultSelection;
+                created = await list.taskCreate({
+                    ...(input.name === undefined ? {} : { name: input.name }),
+                    selection,
+                });
+            } catch (error) {
+                activityRecord({ kind: "taskCreated", result: happyAgentActionFailed(error) });
+                throw error;
+            }
+            activityRecord({ kind: "taskCreated", result: HAPPY_AGENT_ACTION_OK });
+            return created;
         },
         draftUpdate: (sessionId, message) =>
             writeGuard(sessionConversationRefusal(sessionId), () =>
@@ -8275,6 +8288,7 @@ export function happyAgentWorkspaceStoreCreate(
                 failureActionRecord(entryId, "switch");
                 return withChat((store) => store.failureSwitch(entryId, target));
             }),
+        failureNewChat: (entryId) => failureActionRecord(entryId, "newChat"),
         historyLoadMore: () => chatStore?.historyLoadMore(),
         usageGet: () => withChat((store) => store.usageGet()),
         usagePanelOpen: () => panel.usageSelect(),

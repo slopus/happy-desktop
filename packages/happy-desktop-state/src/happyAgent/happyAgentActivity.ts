@@ -60,8 +60,8 @@ export type HappyAgentActivity =
     | { readonly kind: "taskCreated"; readonly result: HappyAgentActionResult }
     | {
           readonly kind: "failureActionClicked";
-          /** Retry, Switch to another account, or Ask Chief of Staff. */
-          readonly action: "retry" | "switch" | "assistance";
+          /** Retry, Switch to another account, New chat, or Ask Chief of Staff. */
+          readonly action: "retry" | "switch" | "newChat" | "assistance";
           /** The failure's typed kind; absent for a failure that came without one. */
           readonly failure?: ConversationFailureKind;
       }

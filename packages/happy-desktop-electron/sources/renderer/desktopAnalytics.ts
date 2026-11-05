@@ -152,6 +152,7 @@ function windowVisible(): boolean {
 const FAILURE_ACTIONS = {
     retry: "retry",
     switch: "switch_model",
+    newChat: "new_chat",
     assistance: "ask_chief",
 } as const satisfies Record<string, AnalyticsFailureAction>;
 

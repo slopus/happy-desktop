@@ -9962,7 +9962,14 @@ function HappyAgentConversationSurface(props: {
                                   );
                           },
                       }),
-                ...(props.onNewChat === undefined ? {} : { onNewChat: () => props.onNewChat!() }),
+                ...(props.onNewChat === undefined
+                    ? {}
+                    : {
+                          onNewChat: (entryId: string) => {
+                              workspace.failureNewChat(entryId);
+                              props.onNewChat!();
+                          },
+                      }),
             }}
             /* A daemon before protocol 32 accepts only the targets it stored
                with the failure, which are no longer read, so it offers Retry. */
