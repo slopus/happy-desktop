@@ -42,16 +42,15 @@ const initial = Array.from(
 ).join("\n\n");
 const chunks: readonly [string, string][] = [
     ["plain", `\n\n${"Streaming prose continues with a complete wrapped line. ".repeat(10)}`],
-    [
-        "list",
-        "\n\n- First item with detail\n- Second item with more detail\n- Third item\n- Fourth item",
-    ],
-    [
-        "table",
-        "\n\n| Column | Detail |\n| --- | --- |\n| First | A value |\n| Second | A longer value |",
-    ],
-    ["code", "\n\n```typescript\nconst a = 1;\nconst b = 2;\nconsole.log(a + b);\n```"],
-    ["heading", "\n\n## A newly completed heading\n\nA paragraph below the new heading."],
+    ["list-start", "\n\n- First item with detail"],
+    ["list-continues", "\n- Second item with more detail\n- Third item\n- Fourth item"],
+    ["table-header", "\n\n| Column | Detail |"],
+    ["table-delimiter", "\n| --- | --- |"],
+    ["table-rows", "\n| First | A value |\n| Second | A longer value |"],
+    ["code-opens", "\n\n```typescript\nconst a = 1;\nconst b = 2;"],
+    ["code-closes", "\nconsole.log(a + b);\n```"],
+    ["heading-marker", "\n\n##"],
+    ["heading-text", " A newly completed heading\n\nA paragraph below the new heading."],
 ];
 
 it("records every visible row while a parked response changes", async () => {

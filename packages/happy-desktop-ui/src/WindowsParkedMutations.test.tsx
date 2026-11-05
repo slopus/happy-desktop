@@ -39,6 +39,7 @@ type State = {
     completed: boolean;
     prepend: boolean;
     height: number;
+    width: number;
     draft: string;
 };
 const initial: State = {
@@ -48,6 +49,7 @@ const initial: State = {
     completed: false,
     prepend: false,
     height: 600,
+    width: 700,
     draft: "",
 };
 function message(id: string, sequence: number): ConversationEntry {
@@ -160,7 +162,7 @@ it("records parked rows through on-screen activity and geometry changes", async 
         const [state, setState] = useState(initial);
         update = setState;
         return (
-            <div className="happy-theme-dark" style={{ width: 700, height: state.height }}>
+            <div className="happy-theme-dark" style={{ width: state.width, height: state.height }}>
                 <ConversationView
                     agentAuthor={author}
                     conversationId="parked-mutations"
@@ -276,6 +278,8 @@ it("records parked rows through on-screen activity and geometry changes", async 
             ["history-prepended", { prepend: true }],
             ["viewport-grows", { height: 650 }],
             ["composer-grows", { draft: "first line\nsecond line\nthird line" }],
+            ["pane-narrows", { width: 520 }],
+            ["pane-widens", { width: 700 }],
         ];
         for (const [name, change] of changes) {
             samples = [];
