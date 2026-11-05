@@ -3020,6 +3020,22 @@ function happyAgentProjectsSection(
                         icon: "plus" as const,
                         label: "Add project",
                         reveal: "always" as const,
+                      ...(happyAgent.remoteId === undefined
+                          ? {
+                                menuItems: [
+                                    { kind: "item" as const, id: "custom-project-new", label: "Crear proyecto (nueva carpeta)…" },
+                                    { kind: "item" as const, id: "custom-project-import", label: "Importar carpeta existente…" },
+                                    { kind: "separator" as const },
+                                    { kind: "item" as const, id: "custom-project-clone", label: "Clonar desde GitHub…" },
+                                ],
+                            }
+                          : {
+                                menuItems: [
+                                                                        { kind: "item" as const, id: "custom-project-import", label: "Importar carpeta del servidor…" },
+                                    { kind: "separator" as const },
+                                    { kind: "item" as const, id: "custom-project-clone", label: "Clonar desde GitHub…" },
+                                ],
+                            }),
                     },
                     ...(happyAgent.projectAdd?.error !== undefined
                         ? { error: happyAgent.projectAdd.error }
@@ -3999,6 +4015,32 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
             // The Bots heading's menu of hidden bots puts one, or all, back.
             onSectionMenuSelect={(sectionId, _source, actionId) => {
                 const section = happyAgentSectionParse(sectionId);
+                if (section?.kind === "projects") {
+                    const agent = happyAgentOf(section.happyAgentId);
+                    if (agent?.status !== "connected" || !agent.session) return;
+                    const workspace = agent.session.workspace;
+                    if (
+                        actionId === "custom-project-new" ||
+                        actionId === "custom-project-import" ||
+                        actionId === "custom-project-clone"
+                    ) {
+                        // The window renders dialogs for the addressed agent.
+                        // Navigate to the initiating agent before opening its dialog.
+                        if (agent.id !== active?.id) {
+                            props.onChatSelect(agent.id, undefined);
+                        }
+
+                        if (actionId === "custom-project-new") {
+                            if (agent.remoteId === undefined) workspace.projectAdd();
+                        } else if (actionId === "custom-project-import") {
+                            if (agent.remoteId === undefined) workspace.projectAdd();
+                            else workspace.projectRemoteOpen("import");
+                        } else {
+                            workspace.projectCloneOpen();
+                        }
+                    }
+                    return;
+                }
                 if (section?.kind !== "bots") return;
                 const happyAgent = happyAgentOf(section.happyAgentId);
                 if (!happyAgent) return;
@@ -10154,6 +10196,58 @@ function HappyAgentWindowDialogs(props: {
                 props.happyAgentOnline,
                 props.unavailable,
             )}
+            {workspace.projectRemote ? (
+                <ModalOverlay
+                    onDismiss={() => {
+                        if (!workspace.projectRemote?.submitting)
+                            props.workspace.projectRemoteCancel();
+                    }}
+                >
+                    <Modal
+                        title="Importar carpeta de servidor remoto"
+                        icon="plus"
+                        size="medium"
+                        onClose={workspace.projectRemote.submitting
+                            ? undefined
+                            : () => props.workspace.projectRemoteCancel()}
+                        footer={
+                            <>
+                                <Button
+                                    variant="ghost"
+                                    disabled={workspace.projectRemote.submitting}
+                                    onClick={() => props.workspace.projectRemoteCancel()}
+                                >
+                                    Cancelar
+                                </Button>
+                                <Button
+                                    variant="primary"
+                                    disabled={workspace.projectRemote.submitting ||
+                                        !workspace.projectRemote.value.trim()}
+                                    onClick={() => props.workspace.projectRemoteSubmit()}
+                                >
+                                    {workspace.projectRemote.submitting
+                                        ? "Procesando…"
+                                        : "Importar carpeta"}
+                                </Button>
+                            </>
+                        }
+                    >
+                        <TextField
+                            autoFocus
+                            fullWidth
+                            disabled={workspace.projectRemote.submitting}
+                            label="Ruta del servidor"
+                            placeholder="/workspace/mi-proyecto"
+                            hint="La carpeta debe existir en servidor remoto."
+                            error={workspace.projectRemote.error}
+                            value={workspace.projectRemote.value}
+                            onValueChange={(value) =>
+                                props.workspace.projectRemoteUpdate(value)}
+                            onSubmit={() => props.workspace.projectRemoteSubmit()}
+                        />
+                    </Modal>
+                </ModalOverlay>
+            ) : null}
             {workspace.projectClone ? (
                 <HappyAgentProjectCloneDialog
                     repository={workspace.projectClone.repository}

@@ -842,6 +842,12 @@ export interface HappyAgentWorkspaceSnapshot {
     readonly projectAdd: HappyAgentProjectAddSnapshot;
     /** GitHub project being cloned onto a peer Happy Agent, while its dialog is open. */
     readonly projectClone?: HappyAgentProjectCloneSnapshot;
+    readonly projectRemote?: {
+        readonly kind: "import";
+        readonly value: string;
+        readonly submitting: boolean;
+        readonly error?: string;
+    };
 }
 
 /**
@@ -1653,6 +1659,10 @@ export interface HappyAgentWorkspaceStore {
      */
     projectAdd(): void;
     /** Opens the GitHub project dialog for the addressed peer Happy Agent. */
+    projectRemoteOpen(kind: "import"): void;
+    projectRemoteUpdate(value: string): void;
+    projectRemoteCancel(): void;
+    projectRemoteSubmit(): void;
     projectCloneOpen(): void;
     projectRepositoryUpdate(value: string): void;
     projectCloneCancel(): void;
@@ -2127,6 +2137,7 @@ export interface HappyAgentWorkspaceStore {
      * for another attempt.
      */
     projectArchiveSubmit(): Promise<void>;
+    projectDeleteRemote(projectId: HappyAgentProjectId): Promise<void>;
     /**
      * Chooses what the open project should say about where its sessions run.
      * Local and nothing at all commit on their own; Docker needs an image, so it
@@ -2634,6 +2645,12 @@ export function happyAgentWorkspaceStoreCreate(
      */
     let projectAdd: HappyAgentProjectAddSnapshot = PROJECT_ADD_IDLE;
     let projectClone: HappyAgentProjectCloneSnapshot | undefined;
+    let projectRemote: {
+        kind: "import";
+        value: string;
+        submitting: boolean;
+        error?: string;
+    } | undefined;
     /** Clone requests awaiting either a durable lifecycle or a mutation refusal. */
     const pendingProjectClones = new Map<
         HappyAgentProjectId,
@@ -2896,6 +2913,7 @@ export function happyAgentWorkspaceStoreCreate(
         workspaceFilesLoading,
         projectAdd,
         ...(projectClone ? { projectClone } : {}),
+        ...(projectRemote ? { projectRemote } : {}),
     }));
 
     const notify = (): void => {
@@ -3266,7 +3284,8 @@ export function happyAgentWorkspaceStoreCreate(
                 snapshot.taskCreate === taskCreate &&
                 (snapshot.taskBrowseOpen === true) === taskBrowseOpen &&
                 snapshot.projectAdd === projectAdd &&
-                snapshot.projectClone === projectClone
+                snapshot.projectClone === projectClone &&
+                snapshot.projectRemote === projectRemote
                     ? snapshot
                     : {
                           address: nextAddress,
@@ -3295,6 +3314,7 @@ export function happyAgentWorkspaceStoreCreate(
                           workspaceFilesLoading,
                           projectAdd,
                           ...(projectClone ? { projectClone } : {}),
+        ...(projectRemote ? { projectRemote } : {}),
                           ...(botCreate ? { botCreate } : {}),
                           ...(taskCreate ? { taskCreate } : {}),
                           ...(taskBrowseOpen ? { taskBrowseOpen: true as const } : {}),
@@ -6810,6 +6830,7 @@ export function happyAgentWorkspaceStoreCreate(
                     workspaceFilesLoading,
                     projectAdd,
                     ...(projectClone ? { projectClone } : {}),
+        ...(projectRemote ? { projectRemote } : {}),
                     ...(botCreate ? { botCreate } : {}),
                     ...(taskCreate ? { taskCreate } : {}),
                     ...(activeMainViewId ? { activeMainViewId } : {}),
@@ -7593,6 +7614,60 @@ export function happyAgentWorkspaceStoreCreate(
                     recompute();
                 }
             })();
+        },
+        projectRemoteOpen(kind) {
+            if (disposed || projectRemote?.submitting) return;
+            projectRemote = { kind, value: "", submitting: false };
+            recompute();
+        },
+        projectRemoteUpdate(value) {
+            if (!projectRemote || projectRemote.submitting) return;
+            projectRemote = { ...projectRemote, value, error: undefined };
+            recompute();
+        },
+        projectRemoteCancel() {
+            if (!projectRemote || projectRemote.submitting) return;
+            projectRemote = undefined;
+            recompute();
+        },
+        projectRemoteSubmit() {
+            const draft = projectRemote;
+            if (!draft || draft.submitting) return;
+
+            const value = draft.value.trim();
+            const valid = /^\/workspace\/[\p{L}\p{N}][\p{L}\p{N} _.-]{0,62}$/u.test(value);
+
+            if (!valid) {
+                projectRemote = {
+                    ...draft,
+                    error: "Ingresá una ruta existente, por ejemplo /workspace/proyecto.",
+                };
+                recompute();
+                return;
+            }
+
+            projectRemote = { ...draft, value, submitting: true };
+            recompute();
+
+            const operation = client.projectAdd(value);
+
+            void operation.then(
+                (projectId) => {
+                    if (disposed) return;
+                    projectRemote = undefined;
+                    recompute();
+                    output({ type: "groupOpenRequested", groupId: projectId });
+                },
+                (error) => {
+                    if (disposed) return;
+                    projectRemote = {
+                        ...draft,
+                        submitting: false,
+                        error: happyAgentUserError(error).message,
+                    };
+                    recompute();
+                },
+            );
         },
         projectCloneOpen() {
             if (disposed || projectClone?.submitting) return;
@@ -8581,6 +8656,15 @@ export function happyAgentWorkspaceStoreCreate(
             if (!projectArchive || projectArchive.submitting) return;
             projectArchive = undefined;
             recompute();
+        },
+
+        async projectDeleteRemote(_projectId) {
+            // Disabled until Happy Agent provides a race-safe server-side
+            // directory deletion API. Never archive before rejecting.
+            throw new Error(
+                "La eliminación física está temporalmente deshabilitada por seguridad. " +
+                "Utilizá Archivar proyecto para conservar sus archivos."
+            );
         },
         async projectArchiveSubmit() {
             const pending = projectArchive;
