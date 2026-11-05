@@ -1,6 +1,7 @@
 import { Component, createElement } from "react";
 import type { HtmlPreviewProps } from "happy-desktop-ui";
 import type { DesktopPreviewNavigation } from "../shared/desktopContract";
+import { GUEST_ESCAPE_SCRIPT } from "./guestEscape";
 import { GuestPageFit, type FitGuestElement } from "./guestPageFit";
 import { GuestPageStyle, type StyleGuestElement } from "./guestPageStyle";
 
@@ -89,6 +90,10 @@ export class DesktopHtmlPreviewView extends Component<DesktopHtmlPreviewViewProp
     private readonly styler = new GuestPageStyle(() => (this.props.fit ? "inline" : "panel"));
     /** Whether the document now in the guest was styled when it was committed. */
     private styled = false;
+    /** Whether the guest has parsed a document, before which it runs no script. */
+    private ready = false;
+    /** Bumped whenever Escape stops being listened for, retiring every poll before. */
+    private escapeGeneration = 0;
 
     componentDidMount(): void {
         this.unsubscribe = window.happyDesktop?.previewNavigationSubscribe(this.receive);
@@ -99,6 +104,8 @@ export class DesktopHtmlPreviewView extends Component<DesktopHtmlPreviewViewProp
         // of the same file is a reload.
         if (before.revision !== this.props.revision && before.source === this.props.source)
             this.element?.reload();
+        if ((before.escapePressed === undefined) !== (this.props.escapePressed === undefined))
+            this.escapeFollow();
     }
 
     componentWillUnmount(): void {
@@ -108,6 +115,29 @@ export class DesktopHtmlPreviewView extends Component<DesktopHtmlPreviewViewProp
         this.pending = [];
         this.fitter.dispose();
         this.styler.stop();
+        this.escapeGeneration += 1;
+    }
+
+    /**
+     * Listens for Escape in the guest's page while the owner asks to hear it,
+     * as one long poll after another, and stops the moment it no longer does.
+     */
+    private escapeFollow(): void {
+        const generation = ++this.escapeGeneration;
+        const guest = this.element;
+        if (!guest || !this.ready || !this.props.escapePressed) return;
+        const listen = (): void => {
+            guest.executeJavaScript(GUEST_ESCAPE_SCRIPT).then(
+                () => {
+                    if (generation !== this.escapeGeneration) return;
+                    this.props.escapePressed?.();
+                    listen();
+                },
+                // The document went away; the next one is followed once it is ready.
+                () => undefined,
+            );
+        };
+        listen();
     }
 
     private readonly receive = (step: DesktopPreviewNavigation): void => {
@@ -230,6 +260,8 @@ export class DesktopHtmlPreviewView extends Component<DesktopHtmlPreviewViewProp
         // A page laid inline is given the conversation's own colour scheme and
         // laid out at its content height.
         if (this.props.fit && this.element) this.fitter.documentReady(this.element);
+        this.ready = true;
+        this.escapeFollow();
     };
 
     private readonly elementApply = (view: HtmlPreviewWebViewElement | null): void => {
@@ -241,6 +273,8 @@ export class DesktopHtmlPreviewView extends Component<DesktopHtmlPreviewViewProp
         this.fitter.stop();
         this.styler.stop();
         this.styled = false;
+        this.ready = false;
+        this.escapeGeneration += 1;
         this.element?.addEventListener("did-attach", this.attached);
         this.element?.addEventListener("did-navigate", this.documentCommitted);
         this.element?.addEventListener("dom-ready", this.documentReady);

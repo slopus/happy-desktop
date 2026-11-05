@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from "react";
 import {
+    entryKey,
     happyAgentArtifactAuthorLabel,
     happyAgentArtifactSourceLabel,
     type HappyAgentArtifact,
@@ -15,6 +16,8 @@ import {
     type HappyAgentArtifactVersion,
     type HappyAgentArtifactViewerSnapshot,
 } from "happy-desktop-state";
+import { AgentActivityRow } from "../../src/AgentActivityRow";
+import { conversationInlinePage } from "../../src/conversationInlinePages";
 import type {
     HappyAgentArtifactLabels,
     HappyAgentArtifactSourceChoice,
@@ -22,7 +25,8 @@ import type {
 import { HappyAgentArtifactsPage } from "../../src/pages/artifacts/HappyAgentArtifactsPage";
 import { HappyAgentArtifactsPanel } from "../../src/pages/artifacts/HappyAgentArtifactsPanel";
 import { HappyAgentArtifactViewer } from "../../src/pages/artifacts/HappyAgentArtifactViewer";
-import { ComponentPage, FullScreenSpecimen } from "../kit";
+import { ComponentPage, FullScreenSpecimen, Specimen } from "../kit";
+import { ARCADE_HTML, ArcadeStandIn, arcadeEntry, arcadeInline } from "./artifactAppFixture";
 
 /** The component plan this page documents. The selector and the page header read the same value. */
 export const componentNumber = "P-017";
@@ -330,6 +334,7 @@ const landingViewer = viewerOf(
     {
         type: "html",
         entryPath: "index.html",
+        pageMode: "page",
         page: {
             kind: "static",
             reason: { type: "no-guest" },
@@ -369,6 +374,7 @@ const plainViewer = viewerOf(
     {
         type: "html",
         entryPath: "index.html",
+        pageMode: "page",
         page: {
             kind: "static",
             reason: { type: "no-guest" },
@@ -388,6 +394,7 @@ const posterViewer = viewerOf(
     {
         type: "html",
         entryPath: "index.html",
+        pageMode: "page",
         page: {
             kind: "static",
             reason: { type: "no-guest" },
@@ -410,6 +417,7 @@ const wideViewer = viewerOf(
     {
         type: "html",
         entryPath: "index.html",
+        pageMode: "page",
         page: {
             kind: "static",
             reason: { type: "no-guest" },
@@ -419,6 +427,27 @@ const wideViewer = viewerOf(
         },
     },
     wideFiles.map((entry) => link("landing", 1, entry)),
+);
+
+/**
+ * A canvas game that declares itself an app: it fills the slot edge to edge,
+ * never scrolls as a page, and the header offers it full screen.
+ */
+const arcade = artifact("arcade", "html", "Paddle", {
+    entry: file("index.html", "text/html", ARCADE_HTML.length),
+    size: ARCADE_HTML.length,
+});
+const arcadeFiles = [file("index.html", "text/html", ARCADE_HTML.length)];
+const arcadeViewer = viewerOf(
+    arcade,
+    [version(arcade, 1, arcadeFiles)],
+    {
+        type: "html",
+        entryPath: "index.html",
+        pageMode: "app",
+        page: { kind: "site", url: "happy-artifact://arcade-v1/index.html" },
+    },
+    arcadeFiles.map((entry) => link("arcade", 1, entry)),
 );
 
 const shotFiles = [
@@ -769,6 +798,7 @@ export function HappyAgentArtifactsBlueprintPage() {
                         content: {
                             type: "html",
                             entryPath: "index.html",
+                            pageMode: "page",
                             page: { kind: "site", url: "happy-artifact://landing-v1/index.html" },
                         },
                     }}
@@ -881,7 +911,84 @@ export function HappyAgentArtifactsBlueprintPage() {
             >
                 <HappyAgentArtifactViewer {...viewerHandlers} labels={labels} viewer={wideViewer} />
             </FullScreenSpecimen>
+
+            <FullScreenSpecimen
+                detail={`A page that declares <meta name="happy-page-mode" content="app"> — this canvas game — fills the slot edge to edge with no page scrolling, and the header offers Full screen: the slot alone takes the screen, with "Press Esc to exit full screen" for a moment. Escape, or the window's own control, brings it back.`}
+                label="Viewer · app"
+                screen="24-html-app-1100x760"
+                window={{ width: 1100, height: 760 }}
+                number="24"
+            >
+                <HappyAgentArtifactViewer
+                    {...viewerHandlers}
+                    labels={labels}
+                    renderPage={() => <ArcadeStandIn />}
+                    viewer={arcadeViewer}
+                />
+            </FullScreenSpecimen>
+
+            <FullScreenSpecimen
+                detail="The same app beside a chat, in the side panel's slim toolbar."
+                label="Viewer · app, side panel"
+                screen="25-html-app-panel-560x760"
+                window={{ width: 560, height: 760 }}
+                number="25"
+            >
+                <HappyAgentArtifactViewer
+                    {...panelViewerHandlers}
+                    labels={labels}
+                    renderPage={() => <ArcadeStandIn />}
+                    tab
+                    viewer={arcadeViewer}
+                />
+            </FullScreenSpecimen>
+
+            <Specimen
+                detail="In a reply, an app is never run: its title row says App and offers Open, which opens it beside the chat. No frame, no background, the same 28px title line every artifact has."
+                label="Inline · app"
+                number="26"
+                stage="surface"
+            >
+                <ArcadeInlineRow />
+            </Specimen>
         </ComponentPage>
+    );
+}
+
+/**
+ * The game's call in a reply, drawn through the same decision the transcript
+ * makes: an app is its title, which opens it, and never a running page.
+ */
+function ArcadeInlineRow() {
+    const page = conversationInlinePage(
+        arcadeEntry,
+        entryKey(arcadeEntry),
+        {
+            artifacts: arcadeInline,
+            artifactsRequest: noop,
+            artifactsContentRequest: noop,
+            artifactRender: () => <ArcadeStandIn />,
+            artifactOpen: noop,
+            pageOpen: noop,
+        },
+        new Map([[arcade.id, entryKey(arcadeEntry)]]),
+        {
+            collapsed: () => undefined,
+            collapsedSet: noop,
+            height: () => undefined,
+            heightSet: noop,
+        },
+    );
+    if (arcadeEntry.kind !== "agentActivity") return null;
+    return (
+        <div style={{ display: "flex", flexDirection: "column", width: "640px" }}>
+            <AgentActivityRow
+                activity={arcadeEntry.activity}
+                {...(page ? { inlinePage: page.props } : {})}
+                motion="calm"
+                treatment="focused"
+            />
+        </div>
     );
 }
 

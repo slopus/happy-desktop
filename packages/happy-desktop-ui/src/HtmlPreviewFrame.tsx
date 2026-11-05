@@ -41,6 +41,8 @@ export type HtmlPreviewFrameProps = {
      * Happy and decides for itself what, if anything, is under it.
      */
     canvas?: "paper" | "none";
+    /** Handed to the host's engine; see `HtmlPreviewProps.escapePressed`. */
+    escapePressed?: () => void;
 };
 
 /**
@@ -68,6 +70,7 @@ export function HtmlPreviewFrame(props: HtmlPreviewFrameProps) {
         "failure",
         "children",
         "canvas",
+        "escapePressed",
     ]);
     return (
         <div
@@ -95,6 +98,7 @@ export function HtmlPreviewFrame(props: HtmlPreviewFrameProps) {
                    previous one reported, belong to the document that is gone. */
                 <HtmlPreviewGuest
                     key={local.source}
+                    {...(local.escapePressed ? { escapePressed: local.escapePressed } : {})}
                     renderContent={local.renderContent}
                     {...(local.revision === undefined ? {} : { revision: local.revision })}
                     source={local.source}
@@ -113,6 +117,7 @@ export function HtmlPreviewFrame(props: HtmlPreviewFrameProps) {
  * beside the guest is what lets the guest stay mounted through a failure.
  */
 function HtmlPreviewGuest(props: {
+    escapePressed?: () => void;
     renderContent: HtmlPreviewRenderer;
     revision?: string;
     source: string;
@@ -123,6 +128,7 @@ function HtmlPreviewGuest(props: {
             {props.renderContent({
                 source: props.source,
                 ...(props.revision === undefined ? {} : { revision: props.revision }),
+                ...(props.escapePressed ? { escapePressed: props.escapePressed } : {}),
                 previewFailed: (next) => failureSet(next),
                 previewLoaded: () => failureSet(undefined),
             })}

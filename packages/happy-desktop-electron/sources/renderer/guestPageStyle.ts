@@ -1,4 +1,5 @@
 import {
+    artifactPageAppModeScript,
     artifactPageHostObserve,
     artifactPageHostStyle,
     type ArtifactPagePlacement,
@@ -31,7 +32,8 @@ const STANDARD_STYLES_READ =
  * wins, and one that does not looks like the app. The host values are inserted
  * as soon as the document is committed, before it is parsed, and again
  * whenever the app's appearance changes, so a theme change follows through
- * without a reload.
+ * without a reload. A page that declares itself an app has its root marked
+ * as one at the same moment.
  */
 export class GuestPageStyle {
     private generation = 0;
@@ -55,6 +57,8 @@ export class GuestPageStyle {
         this.hostKey = undefined;
         this.hostApply(guest, generation);
         this.standardApply(guest, generation);
+        // A guest that is already gone has no document left to mark.
+        guest.executeJavaScript(artifactPageAppModeScript()).catch(() => undefined);
     }
 
     /** Stops styling: the guest is gone, or another one replaced it. */

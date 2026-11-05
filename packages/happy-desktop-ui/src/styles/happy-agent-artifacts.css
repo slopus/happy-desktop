@@ -387,11 +387,46 @@
 }
 
 .happy-agent-artifact-viewer__body {
+    position: relative;
     display: flex;
     flex: 1 1 0%;
     flex-direction: column;
     min-width: 0;
     min-height: 0;
+}
+
+/* Full screen, the slot is the whole screen: it keeps the surface it was laid
+   on rather than the engine's black backdrop, unless the version names a
+   colour, which its own style still paints. */
+.happy-agent-artifact-viewer__body:fullscreen {
+    background: var(--surface);
+}
+
+/* Says once how to leave, then fades so it never sits over the app. */
+.happy-agent-artifact-viewer__full-screen-hint {
+    position: absolute;
+    top: 24px;
+    left: 50%;
+    padding: 8px 16px;
+    border-radius: var(--happy-radius-pill);
+    background: color-mix(in srgb, var(--text) 80%, transparent);
+    color: var(--surface);
+    font-size: 13px;
+    line-height: 18px;
+    pointer-events: none;
+    transform: translateX(-50%);
+    animation: happy-agent-artifact-full-screen-hint 2400ms ease-in forwards;
+}
+
+@keyframes happy-agent-artifact-full-screen-hint {
+    0%,
+    80% {
+        opacity: 1;
+    }
+    100% {
+        opacity: 0;
+        visibility: hidden;
+    }
 }
 
 .happy-agent-artifact-viewer__document {

@@ -1,7 +1,10 @@
 import { happyAgentArtifactReferenceResolve } from "happy-desktop-state";
 import {
+    ARTIFACT_PAGE_APP_MODE,
+    ARTIFACT_PAGE_APP_MODE_ATTRIBUTE,
     ARTIFACT_PAGE_INSET,
     ARTIFACT_PAGE_MEASURE,
+    artifactPageAppModeStyle,
     artifactPageMeasureStyle,
 } from "../../artifactPageHost";
 
@@ -183,13 +186,16 @@ export function artifactHtmlDocument(input: {
     // A sidebar widget is part of the window rather than a page in it: it takes
     // the window's scheme, which keeps its canvas transparent, and the row's
     // edges rather than a page's margin. It never scrolls; its row is its height.
-    // A page is inset and centred as a running page is (`artifactPageHost`).
+    // A page is inset and centred as a running page is (`artifactPageHost`),
+    // and an app fills the frame and is marked as one, as a running one is.
     const canvas = document.createElement("style");
     canvas.textContent =
         input.surface === "sidebar"
             ? ":where(html) { color-scheme: light dark; overflow: hidden; } :where(body) { margin: 0; font: 13px/18px system-ui, sans-serif; }"
-            : `:where(html) { color-scheme: light; } :where(body) { margin: 0; padding: ${ARTIFACT_PAGE_INSET}; } ${artifactPageMeasureStyle(ARTIFACT_PAGE_MEASURE)}`;
+            : `:where(html) { color-scheme: light; } :where(body) { margin: 0; padding: ${ARTIFACT_PAGE_INSET}; } ${artifactPageMeasureStyle(ARTIFACT_PAGE_MEASURE)}\n${artifactPageAppModeStyle()}`;
     head.prepend(policy, referrer, canvas);
+    if (input.surface !== "sidebar" && document.querySelector(ARTIFACT_PAGE_APP_MODE))
+        document.documentElement.setAttribute(ARTIFACT_PAGE_APP_MODE_ATTRIBUTE, "app");
 
     return `<!DOCTYPE html>${document.documentElement.outerHTML}`;
 }

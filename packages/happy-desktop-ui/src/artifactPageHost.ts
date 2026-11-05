@@ -59,6 +59,21 @@ const ARTIFACT_PAGE_FONT_FACES = [
 const ARTIFACT_PAGE_FULL_WIDTH = 'meta[name="happy-page-width" i][content="full" i]';
 
 /**
+ * What a page declares, in its `<head>`, to be an app rather than a document:
+ * a game, a canvas, a drawing pad — one screen, edge to edge, that never
+ * scrolls as a page. It implies the whole width.
+ *
+ *     <meta name="happy-page-mode" content="app">
+ *
+ * `happyAgentArtifactPageModeRead` in `happy-desktop-state` reads the same
+ * declaration from the markup, so the app knows what the page will draw.
+ */
+export const ARTIFACT_PAGE_APP_MODE = 'meta[name="happy-page-mode" i][content="app" i]';
+
+/** The attribute a host sets on an app's root, for the page's own CSS to react to. */
+export const ARTIFACT_PAGE_APP_MODE_ATTRIBUTE = "data-happy-page-mode";
+
+/**
  * `--happy-document-measure` and `--happy-document-inset` in `theme.css`, for a
  * page shown where the theme cannot be read from the host: a static preview's
  * `srcdoc`.
@@ -80,7 +95,50 @@ export const ARTIFACT_PAGE_INSET = "24px 32px";
  * nothing moves once that content arrives.
  */
 export function artifactPageMeasureStyle(measure: string): string {
-    return `:root:not(:has(${ARTIFACT_PAGE_FULL_WIDTH})) { padding-inline: max(0px, (100% - ${measure}) / 2) !important; }`;
+    return `:root:not(:has(${ARTIFACT_PAGE_FULL_WIDTH})):not(:has(${ARTIFACT_PAGE_APP_MODE})) { padding-inline: max(0px, (100% - ${measure}) / 2) !important; }`;
+}
+
+/**
+ * Lays a page that declared itself an app across the whole of its frame: no
+ * inset, no margin, the root and body exactly the frame's height, and nothing
+ * that scrolls or bounces as a page. The insets an app keeps its controls
+ * clear of are the safe area's; a desktop frame has no chrome of its own over
+ * the page, so they are only what the display itself takes.
+ *
+ * Like the measure, it is selected by the declaration itself, so it applies
+ * before any of the page's content is drawn. Scrolling is held off with
+ * `!important`, which a page's own rules cannot outrank from the author
+ * origin; the rest are defaults the page may restyle.
+ */
+export function artifactPageAppModeStyle(): string {
+    const app = `:root:has(${ARTIFACT_PAGE_APP_MODE})`;
+    return [
+        `${app} { --happy-host-page-inset: 0px; --happy-page-inset: 0px; --happy-app-inset-top: env(safe-area-inset-top, 0px); --happy-app-inset-right: env(safe-area-inset-right, 0px); --happy-app-inset-bottom: env(safe-area-inset-bottom, 0px); --happy-app-inset-left: env(safe-area-inset-left, 0px); }`,
+        `${app}, ${app} > body { height: 100%; margin: 0; padding: 0; }`,
+        `${app}, ${app} > body { overflow: hidden !important; overscroll-behavior: none !important; }`,
+    ].join("\n");
+}
+
+/**
+ * Marks an app's root with `data-happy-page-mode="app"` once the page has
+ * declared itself one, for a host to run in the page as soon as its document
+ * is committed. It watches the document only until it is parsed, which is
+ * as long as a declaration in the `<head>` can take to arrive.
+ */
+export function artifactPageAppModeScript(): string {
+    return `(() => {
+    const mark = () => {
+        if (!document.querySelector(${JSON.stringify(ARTIFACT_PAGE_APP_MODE)})) return false;
+        document.documentElement.setAttribute("${ARTIFACT_PAGE_APP_MODE_ATTRIBUTE}", "app");
+        return true;
+    };
+    if (mark() || document.readyState !== "loading") return;
+    const observer = new MutationObserver(() => {
+        if (mark()) observer.disconnect();
+    });
+    observer.observe(document, { childList: true, subtree: true });
+    document.addEventListener("DOMContentLoaded", () => observer.disconnect(), { once: true });
+})()`;
 }
 
 /** The colour scheme the surface around `host` is drawn in. */
@@ -130,6 +188,8 @@ export function artifactPageHostStyle(host: Element, placement: ArtifactPagePlac
     );
     const rules = [ARTIFACT_PAGE_FONT_FACES, `:root { ${declarations.join(" ")} }`];
     if (measure !== "none") rules.push(artifactPageMeasureStyle(measure));
+    // An app is never laid inline; on a surface of its own it fills it.
+    if (placement === "panel") rules.push(artifactPageAppModeStyle());
     // A guest has no backdrop of its own. A page that names no colour scheme
     // is drawn in the light one — black text — which is unreadable on a dark
     // surface, so it gets the paper it was written for; a page that follows

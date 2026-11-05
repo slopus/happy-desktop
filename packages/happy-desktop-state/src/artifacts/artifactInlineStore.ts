@@ -9,6 +9,10 @@ import {
     happyAgentArtifactEventProject,
 } from "./artifactCatalog.js";
 import {
+    happyAgentArtifactPageModeRead,
+    type HappyAgentArtifactPageMode,
+} from "./artifactPageMode.js";
+import {
     happyAgentArtifactBackground,
     happyAgentArtifactTypeProject,
     happyAgentArtifactVersionProject,
@@ -80,6 +84,11 @@ export type HappyAgentInlineArtifact =
           readonly background?: string;
           /** Only an HTML artifact is served as a page. */
           readonly site?: HappyAgentInlineArtifactSite;
+          /**
+           * What an HTML artifact's latest entry declares itself. An `app` is
+           * never run in a chat row, so the row knows before it draws anything.
+           */
+          readonly pageMode?: HappyAgentArtifactPageMode;
           /** Present for a live artifact, whose page is this address instead of its files. */
           readonly live?: HappyAgentInlineArtifactLive;
           /** Any other type's latest content, once a row asked to show it. */
@@ -160,6 +169,7 @@ function readyEqual(left: Ready, right: Ready): boolean {
         left.latestVersion === right.latestVersion &&
         left.display === right.display &&
         left.background === right.background &&
+        left.pageMode === right.pageMode &&
         left.live?.url === right.live?.url &&
         left.live?.networkId === right.live?.networkId &&
         left.content === right.content &&
@@ -187,6 +197,12 @@ export function happyAgentInlineArtifactsStoreCreate(
     const contentReading = new Set<string>();
     /** Versions being served as pages now, as `<id>:<version>`. */
     const opening = new Set<string>();
+    /**
+     * What each HTML version's entry declares, as `<id>:<version>`. A version
+     * never changes, so each is read once; one that could not be read is
+     * forgotten and read again the next time it is asked for.
+     */
+    const pageModes = new Map<string, Promise<HappyAgentArtifactPageMode>>();
     let following: AbortController | undefined;
     let retry: ReturnType<typeof setTimeout> | undefined;
     let disposed = false;
@@ -219,7 +235,9 @@ export function happyAgentInlineArtifactsStoreCreate(
             held?.type !== "ready" ||
             held.artifactType !== "html" ||
             held.status !== "active" ||
-            held.live !== undefined
+            held.live !== undefined ||
+            // An app is never run in a chat row, so it is not served for one.
+            held.pageMode === "app"
         )
             return;
         const version = held.latestVersion;
@@ -260,6 +278,58 @@ export function happyAgentInlineArtifactsStoreCreate(
                     artifactSet(artifactId, { ...current, site: { type: "unavailable" } });
                 },
             );
+    };
+    /**
+     * What one version of an HTML artifact declares; a page when it cannot be
+     * read. A read cut short by `signal` rejects, and is read again next time.
+     */
+    const pageModeOf = (
+        artifactId: HappyAgentArtifactId,
+        version: number,
+        signal: AbortSignal,
+    ): Promise<HappyAgentArtifactPageMode> => {
+        const key = `${artifactId}:${String(version)}`;
+        const held = pageModes.get(key);
+        if (held) return held;
+        const read = (async (): Promise<HappyAgentArtifactPageMode> => {
+            const manifest = happyAgentArtifactVersionProject(
+                (await deps.client.getArtifactVersion(artifactId, version, { signal })).version,
+            );
+            const entry = await deps.client.getArtifactFile(
+                artifactId,
+                version,
+                manifest.entry.path,
+                { signal },
+            );
+            if (entry === null) throw new Error("The artifact file could not be read.");
+            return happyAgentArtifactPageModeRead(new TextDecoder().decode(entry.data));
+        })().catch((error: unknown) => {
+            pageModes.delete(key);
+            if (signal.aborted) throw error;
+            return "page" as const;
+        });
+        pageModes.set(key, read);
+        return read;
+    };
+    /**
+     * Follows what the latest version of an HTML artifact declares. The mode
+     * held stays until the new version's is read.
+     */
+    const pageModeEnsure = (artifactId: HappyAgentArtifactId, signal: AbortSignal): void => {
+        const held = snapshot.get(artifactId);
+        if (held?.type !== "ready" || held.artifactType !== "html" || held.live !== undefined)
+            return;
+        const version = held.latestVersion;
+        pageModeOf(artifactId, version, signal).then(
+            (pageMode) => {
+                if (signal.aborted) return;
+                const current = snapshot.get(artifactId);
+                if (current?.type !== "ready" || current.latestVersion !== version) return;
+                artifactSet(artifactId, { ...current, pageMode });
+                siteEnsure(artifactId, signal);
+            },
+            () => undefined,
+        );
     };
     /**
      * Reads the latest content of an artifact a row shows expanded, unless it
@@ -325,21 +395,31 @@ export function happyAgentInlineArtifactsStoreCreate(
         void happyAgentSyncRead(
             signal,
             async () => {
-                try {
-                    return (await deps.client.getArtifact(artifactId, { signal })).artifact;
-                } catch (error) {
-                    if (notFound(error)) return undefined;
-                    throw error;
-                }
+                const artifact = await deps.client.getArtifact(artifactId, { signal }).then(
+                    (response) => response.artifact,
+                    (error: unknown) => {
+                        if (notFound(error)) return undefined;
+                        throw error;
+                    },
+                );
+                if (artifact === undefined) return undefined;
+                // An HTML artifact's row is drawn once what its entry declares
+                // is known, so an app never starts out as a page.
+                const pageMode =
+                    happyAgentArtifactTypeProject(artifact.type) === "html" && !artifact.live
+                        ? await pageModeOf(artifactId, artifact.latestVersion, signal)
+                        : undefined;
+                return { artifact, pageMode };
             },
             () => undefined,
         )
-            .then((artifact) => {
+            .then((read) => {
                 if (signal.aborted) return;
-                if (artifact === undefined) {
+                if (read === undefined) {
                     artifactSet(artifactId, { type: "missing" });
                     return;
                 }
+                const { artifact, pageMode } = read;
                 const held = snapshot.get(artifactId);
                 const background = happyAgentArtifactBackground(artifact.background);
                 artifactSet(artifactId, {
@@ -351,6 +431,7 @@ export function happyAgentInlineArtifactsStoreCreate(
                     display: displayProject(artifact.display),
                     ...(background === undefined ? {} : { background }),
                     ...(artifact.live ? { live: artifact.live } : {}),
+                    ...(pageMode === undefined ? {} : { pageMode }),
                     ...(held?.type === "ready" && held.site !== undefined
                         ? { site: held.site }
                         : {}),
@@ -360,6 +441,7 @@ export function happyAgentInlineArtifactsStoreCreate(
                 });
                 siteEnsure(artifactId, signal);
                 contentEnsure(artifactId, signal);
+                pageModeEnsure(artifactId, signal);
             })
             .catch(() => undefined)
             .finally(() => reading.delete(artifactId));
@@ -421,11 +503,15 @@ export function happyAgentInlineArtifactsStoreCreate(
                             : displayProject(changes.display),
                     ...(background === undefined ? {} : { background }),
                     ...(live === undefined ? {} : { live }),
+                    ...(held.pageMode === undefined || live !== undefined
+                        ? {}
+                        : { pageMode: held.pageMode }),
                     ...(held.site === undefined ? {} : { site: held.site }),
                     ...(held.content === undefined ? {} : { content: held.content }),
                 });
                 siteEnsure(event.artifactId, active.signal);
                 contentEnsure(event.artifactId, active.signal);
+                pageModeEnsure(event.artifactId, active.signal);
             }
         })()
             .catch(() => undefined)
@@ -478,6 +564,7 @@ export function happyAgentInlineArtifactsStoreCreate(
             if (disposed) return;
             disposed = true;
             stop();
+            pageModes.clear();
             listeners.clear();
         },
     };

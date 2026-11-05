@@ -88,7 +88,8 @@ export type IconName =
     | "pulse"
     | "feed"
     | "width-expand"
-    | "width-center";
+    | "width-center"
+    | "full-screen";
 export type IconProps = {
     name: IconName;
     /*
@@ -258,6 +259,9 @@ const glyphs: Record<IconName, IconGlyph> = {
     // column: corners pushed out, and pulled back in.
     "width-expand": { set: "ionicons", name: "expand-outline" },
     "width-center": { set: "ionicons", name: "contract-outline" },
+    // Taking the whole screen: four corner brackets framing nothing, not the
+    // arrows `width-expand` pushes outwards inside the window.
+    "full-screen": { set: "ionicons", name: "scan-outline" },
     // Finding your own place again: the crosshair that centres on where you
     // already are, not an arrow that takes you somewhere else.
     locate: { set: "ionicons", name: "locate-outline" },

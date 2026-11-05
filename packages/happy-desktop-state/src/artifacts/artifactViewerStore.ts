@@ -15,6 +15,10 @@ import {
     happyAgentArtifactMarkdownViewDefault,
     type HappyAgentArtifactMarkdownView,
 } from "./artifactMarkdownDiff.js";
+import {
+    happyAgentArtifactPageModeRead,
+    type HappyAgentArtifactPageMode,
+} from "./artifactPageMode.js";
 import { happyAgentArtifactAuthors } from "./artifactPeopleStore.js";
 import { happyAgentArtifactProject, happyAgentArtifactVersionProject } from "./artifactProject.js";
 import type {
@@ -91,7 +95,13 @@ export type HappyAgentArtifactContent =
            */
           readonly before?: HappyAgentArtifactMarkdownBefore;
       }
-    | { readonly type: "html"; readonly entryPath: string; readonly page: HappyAgentArtifactPage }
+    | {
+          readonly type: "html";
+          readonly entryPath: string;
+          readonly page: HappyAgentArtifactPage;
+          /** What the entry declares itself: a scrolling page, or a full-screen app. */
+          readonly pageMode: HappyAgentArtifactPageMode;
+      }
     | { readonly type: "image"; readonly image: HappyAgentArtifactFileLink }
     | { readonly type: "image_series"; readonly images: readonly HappyAgentArtifactFileLink[] }
     | { readonly type: "video"; readonly video: HappyAgentArtifactFileLink }
@@ -373,6 +383,14 @@ export function happyAgentArtifactViewerStoreCreate(
                 };
             }
             case "html": {
+                // The entry is read either way: what it declares decides how
+                // the viewer lays the page out before it is drawn.
+                const entryText = fileText(id, number, version.entry.path, signal).then(
+                    ({ data }) => new TextDecoder().decode(data),
+                );
+                // Handled below on either path; this keeps a failure while the
+                // site is being served from being reported as unhandled.
+                entryText.catch(() => undefined);
                 // Whatever keeps the page from running as a site, the static
                 // preview is still shown, and says why it is not the page.
                 let reason: HappyAgentArtifactStaticReason = { type: "no-guest" };
@@ -384,15 +402,23 @@ export function happyAgentArtifactViewerStoreCreate(
                             error: happyAgentUserError(error),
                         }),
                     );
-                    if (opening.type === "opened")
+                    if (opening.type === "opened") {
+                        // A served page whose entry cannot be read here is
+                        // still the page; it is shown as one that scrolls.
+                        const pageMode = await entryText.then(
+                            happyAgentArtifactPageModeRead,
+                            () => "page" as const,
+                        );
                         return {
                             type: "html",
                             entryPath: version.entry.path,
                             page: { kind: "site", url: opening.url },
+                            pageMode,
                         };
+                    }
                     reason = opening;
                 }
-                const { data } = await fileText(id, number, version.entry.path, signal);
+                const text = await entryText;
                 const assets = new Map<string, string>();
                 const omitted: string[] = [];
                 let budget = HTML_ASSETS_MAX_BYTES;
@@ -409,13 +435,8 @@ export function happyAgentArtifactViewerStoreCreate(
                 return {
                     type: "html",
                     entryPath: version.entry.path,
-                    page: {
-                        kind: "static",
-                        reason,
-                        text: new TextDecoder().decode(data),
-                        assets,
-                        omitted,
-                    },
+                    page: { kind: "static", reason, text, assets, omitted },
+                    pageMode: happyAgentArtifactPageModeRead(text),
                 };
             }
             case "image":

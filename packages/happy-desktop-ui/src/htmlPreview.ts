@@ -73,6 +73,12 @@ export interface HtmlPreviewProps {
      * colour scheme, never scrolls inside it, and reports each height.
      */
     readonly fit?: InlinePageFit;
+    /**
+     * The reader pressed Escape inside the page. Asked for only while the page
+     * is shown full screen, which Escape leaves: a key typed into the page
+     * reaches the page's engine, never the window around it.
+     */
+    escapePressed?(): void;
 }
 
 /**

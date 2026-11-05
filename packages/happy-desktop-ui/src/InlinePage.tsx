@@ -30,6 +30,11 @@ export interface InlinePageProps {
     onCollapsedChange?(collapsed: boolean): void;
     /** Opens the page beside the conversation; the title opens it too. */
     onOpenSide?(): void;
+    /**
+     * Words for the open control, beside its glyph, where opening is the only
+     * thing to do with the row: an app, which is never laid into the reply.
+     */
+    readonly openLabel?: string;
     /** Every height the page on screen settles on, for the transcript's row model. */
     onHeightChange(height: number): void;
     readonly "data-testid"?: string;
@@ -149,14 +154,16 @@ export function InlinePage(props: InlinePageProps) {
                         aria-label={`Open ${props.title} beside the chat`}
                         data-happy-desktop-ui="inline-page-open"
                         icon="open-external"
-                        iconOnly
+                        {...(props.openLabel === undefined ? { iconOnly: true } : {})}
                         onClick={(event) => {
                             disclosureAnchor?.(event.currentTarget);
                             props.onOpenSide?.();
                         }}
                         size="small"
                         variant="ghost"
-                    />
+                    >
+                        {props.openLabel}
+                    </Button>
                 ) : null}
                 {/* After the controls, so a status that changes with the
                     content under it never moves them. */}

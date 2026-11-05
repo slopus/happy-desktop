@@ -129,6 +129,10 @@ export function conversationInlinePage(
         const type = artifact?.artifactType ?? presentation.artifactType;
         const live = artifact?.live;
         const site = artifact?.site;
+        // An app is never run in a reply: a game in a chat row would take the
+        // scrolling and the keys the transcript needs. It is its title, which
+        // opens it beside the conversation, where it fills its own surface.
+        const app = type === "html" && live === undefined && artifact?.pageMode === "app";
         const lead = leads.get(artifactId) === entryKey(entry);
         const collapsed =
             local.collapsed(rowKey) ??
@@ -137,6 +141,7 @@ export function conversationInlinePage(
         // and a document is read beside the chat, where it has a viewer.
         const expandable =
             !gone &&
+            !app &&
             (type === "html"
                 ? live
                     ? pages.liveRender !== undefined
@@ -169,11 +174,15 @@ export function conversationInlinePage(
             ? held?.type === "missing"
                 ? "Unavailable"
                 : "Deleted"
-            : recorded === undefined || latest === undefined
-              ? undefined
-              : placement === "inline" && !collapsed
-                ? `Version ${String(recorded)} · showing the latest, ${String(latest)}`
-                : `Version ${String(recorded)}`;
+            : app
+              ? recorded === undefined
+                  ? "App"
+                  : `App · Version ${String(recorded)}`
+              : recorded === undefined || latest === undefined
+                ? undefined
+                : placement === "inline" && !collapsed
+                  ? `Version ${String(recorded)} · showing the latest, ${String(latest)}`
+                  : `Version ${String(recorded)}`;
         // A live artifact's files are only a placeholder, so the panel beside
         // the chat has nothing of it to show yet: it is read in the chat.
         const openSide =
@@ -223,6 +232,8 @@ export function conversationInlinePage(
                 title,
                 glyph: live ? (
                     <Icon name="globe" size={16} />
+                ) : app ? (
+                    <Icon name="full-screen" size={16} />
                 ) : (
                     <ArtifactTypeGlyph size={16} type={type} />
                 ),
@@ -236,6 +247,7 @@ export function conversationInlinePage(
                     ? { onCollapsedChange: (next: boolean) => local.collapsedSet(rowKey, next) }
                     : {}),
                 ...(openSide ? { onOpenSide: openSide } : {}),
+                ...(app ? { openLabel: "Open" } : {}),
                 onHeightChange: (next) => local.heightSet(rowKey, next),
                 "data-testid": "conversation-inline-artifact",
             },

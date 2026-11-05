@@ -74,6 +74,7 @@ export {
 export * from "./artifacts/artifactLabels.js";
 export * from "./artifacts/artifactReference.js";
 export * from "./artifacts/artifactMarkdownDiff.js";
+export type { HappyAgentArtifactPageMode } from "./artifacts/artifactPageMode.js";
 export {
     happyAgentArtifactCatalogStoreNoop,
     type HappyAgentArtifactCatalogSnapshot,

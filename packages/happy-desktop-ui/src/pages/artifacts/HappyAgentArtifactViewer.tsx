@@ -1,4 +1,4 @@
-import { useState, type CSSProperties, type ReactNode } from "react";
+import { useRef, useState, type CSSProperties, type ReactNode } from "react";
 import {
     happyAgentArtifactBackground,
     happyAgentArtifactMarkdownDiffOffered,
@@ -106,6 +106,11 @@ export interface HappyAgentArtifactViewerProps {
  * read as a rendered diff against that version, or as the document alone.
  * Deleting asks first, and names the version it is deleting so a change made
  * meanwhile is not deleted unseen.
+ *
+ * A page that declares itself an app fills the slot edge to edge and never
+ * scrolls as a page, and the header offers to show it full screen: the slot
+ * alone takes the screen, Escape or the window's own control brings it back,
+ * and a hint says so for a moment as it opens.
  */
 export function HappyAgentArtifactViewer(props: HappyAgentArtifactViewerProps) {
     const viewer = props.viewer;
@@ -118,6 +123,40 @@ export function HappyAgentArtifactViewer(props: HappyAgentArtifactViewerProps) {
         happyAgentArtifactMarkdownDiffOffered(artifact.type, shown);
     // Checked again where it becomes a style: a snapshot can be built by hand.
     const background = happyAgentArtifactBackground(viewer.version?.background);
+    const app =
+        artifact?.status === "active" &&
+        viewer.content.type === "html" &&
+        viewer.content.pageMode === "app";
+    // The slot is what goes full screen, so the page keeps its guest, its
+    // state, and its place; the window only reports when it went and came back.
+    const stage = useRef<HTMLDivElement | null>(null);
+    const [fullScreen, setFullScreen] = useState(false);
+    const stageAttach = (node: HTMLDivElement | null) => {
+        stage.current = node;
+        if (!node) return;
+        const changed = () => setFullScreen(document.fullscreenElement === node);
+        // Escape typed into the page reaches the page's engine (`escapePressed`);
+        // typed anywhere else in the window, it lands here. An engine that
+        // already leaves full screen on Escape has left it by now.
+        const keyDown = (event: KeyboardEvent) => {
+            if (event.key !== "Escape" || document.fullscreenElement !== node) return;
+            document.exitFullscreen().catch(() => undefined);
+        };
+        node.addEventListener("fullscreenchange", changed);
+        document.addEventListener("keydown", keyDown);
+        return () => {
+            node.removeEventListener("fullscreenchange", changed);
+            document.removeEventListener("keydown", keyDown);
+            stage.current = null;
+        };
+    };
+    const fullScreenEnter = () => {
+        stage.current?.requestFullscreen().catch(() => undefined);
+    };
+    const fullScreenExit = () => {
+        if (document.fullscreenElement === stage.current)
+            document.exitFullscreen().catch(() => undefined);
+    };
     const back = props.onBack ? (
         <Button
             aria-label="Back"
@@ -143,10 +182,25 @@ export function HappyAgentArtifactViewer(props: HappyAgentArtifactViewerProps) {
                         className="happy-agent-artifact-viewer__header"
                         {...(props.tab ? { compact: true } : {})}
                         {...(back ? { leading: back } : {})}
-                        subtitle={happyAgentArtifactTypeLabel(artifact.type)}
+                        subtitle={app ? "App" : happyAgentArtifactTypeLabel(artifact.type)}
                         title={artifact.title || "Untitled"}
                         trailing={
                             <>
+                                {/* First, so the controls after it stay where
+                                    they were when the version turns out to be
+                                    an app. */}
+                                {app ? (
+                                    <Button
+                                        data-testid="happy-agent-artifact-full-screen"
+                                        icon="full-screen"
+                                        onClick={fullScreenEnter}
+                                        size="small"
+                                        title="Show full screen · Esc exits"
+                                        variant="ghost"
+                                    >
+                                        Full screen
+                                    </Button>
+                                ) : null}
                                 {diffOffered ? (
                                     <SegmentedControl
                                         aria-label="How this version is shown"
@@ -233,6 +287,8 @@ export function HappyAgentArtifactViewer(props: HappyAgentArtifactViewerProps) {
                         <div
                             className="happy-agent-artifact-viewer__body"
                             data-happy-desktop-ui="happy-agent-artifact-viewer-body"
+                            data-page-mode={app ? "app" : undefined}
+                            ref={stageAttach}
                             style={
                                 background && artifact.status === "active"
                                     ? { backgroundColor: background }
@@ -254,10 +310,20 @@ export function HappyAgentArtifactViewer(props: HappyAgentArtifactViewerProps) {
                                     files={viewer.files}
                                     key={viewer.version?.number ?? 0}
                                     onFileDownload={props.onFileDownload}
+                                    {...(fullScreen ? { escapePressed: fullScreenExit } : {})}
                                     {...(props.renderPage ? { renderPage: props.renderPage } : {})}
                                     title={artifact.title}
                                 />
                             )}
+                            {fullScreen ? (
+                                <div
+                                    className="happy-agent-artifact-viewer__full-screen-hint"
+                                    data-happy-desktop-ui="happy-agent-artifact-full-screen-hint"
+                                    role="status"
+                                >
+                                    Press Esc to exit full screen
+                                </div>
+                            ) : null}
                         </div>
                         {artifact.status === "active" && historyShown ? (
                             <ArtifactHistory
@@ -361,6 +427,8 @@ function ArtifactContent(props: {
     entities?: MessageReferences;
     files: readonly HappyAgentArtifactFileLink[];
     onFileDownload: (link: HappyAgentArtifactFileLink) => void;
+    /** Escape was pressed inside a running page; heard only while it is full screen. */
+    escapePressed?: () => void;
     renderPage?: HtmlPreviewRenderer;
     title: string;
 }): ReactNode {
@@ -455,6 +523,7 @@ function ArtifactContent(props: {
                 <HtmlPreviewFrame
                     canvas="none"
                     data-testid="happy-agent-artifact-page"
+                    {...(props.escapePressed ? { escapePressed: props.escapePressed } : {})}
                     {...(props.renderPage ? { renderContent: props.renderPage } : {})}
                     source={content.page.url}
                 />
