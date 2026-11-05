@@ -48,10 +48,12 @@ export interface HappyAgentFeedActor {
  * or chart, drawn by the agent that made it. The feed draws only the picture.
  */
 export interface HappyAgentFeedCover {
-    /** Where the picture is read from. */
+    /** Where the picture is read from: the whole file, which may move. */
     readonly url: string;
     /** The picture's shape, 16:9 or square, which lays out its box before it loads. */
     readonly aspect: "wide" | "square";
+    /** The picture's ThumbHash, base64, painted in its box until it loads. */
+    readonly thumbhash?: string;
     /**
      * The colour the artifact asks to be shown on, painted behind the picture
      * while it loads and around it; without one, a neutral placeholder.
@@ -90,7 +92,11 @@ export interface HappyAgentFeedEntry {
      * the summary and then the picture across the card.
      */
     readonly cover?: HappyAgentFeedCover;
-    /** An artifact's one line about itself, shown in its post under the row. */
+    /**
+     * An artifact's own words about itself, plain text with its line breaks,
+     * shown in its post under the row: with one, the entry is a post even
+     * without a cover.
+     */
     readonly summary?: string;
     /** When the latest change happened. */
     readonly lastAt: number;

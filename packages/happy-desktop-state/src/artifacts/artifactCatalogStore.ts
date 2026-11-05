@@ -17,7 +17,7 @@ import {
     type HappyAgentArtifactEvent,
 } from "./artifactCatalog.js";
 import { happyAgentArtifactAuthors } from "./artifactPeopleStore.js";
-import { happyAgentArtifactProject } from "./artifactProject.js";
+import { happyAgentArtifactLinksCreate, happyAgentArtifactProject } from "./artifactProject.js";
 import type {
     HappyAgentArtifact,
     HappyAgentArtifactAuthor,
@@ -109,7 +109,10 @@ export interface HappyAgentArtifactCatalogStore {
 }
 
 export interface HappyAgentArtifactCatalogDeps {
-    readonly client: Pick<HappyAgentClient, "listArtifacts" | "getArtifact" | "artifactFileUrl">;
+    readonly client: Pick<
+        HappyAgentClient,
+        "listArtifacts" | "getArtifact" | "artifactFileUrl" | "endpoint"
+    >;
     readonly sync: HappyAgentSync;
     /** Reports who a list credits, so the people among them can be named once for every surface. */
     readonly authorsSeen?: (authors: readonly (HappyAgentArtifactAuthor | null)[]) => void;
@@ -259,13 +262,14 @@ export function happyAgentArtifactCatalogStoreCreate(
     let journal: HappyAgentArtifactEvent[] = [];
     let nextPageCursor: string | null = null;
     let failed = false;
-    /** How a cover's file is addressed, on a daemon that has covers; a list draws them. */
-    const coverLink = () =>
-        happyAgentHealthCapability(deps.sync.health(), "artifactCovers")
-            ? deps.client.artifactFileUrl
-            : undefined;
+    /** How an artifact's pictures are addressed; a list draws them, and covers where the daemon has them. */
+    const links = () =>
+        happyAgentArtifactLinksCreate(
+            deps.client,
+            happyAgentHealthCapability(deps.sync.health(), "artifactCovers"),
+        );
     const project = (artifact: Parameters<typeof happyAgentArtifactProject>[0]) =>
-        happyAgentArtifactProject(artifact, coverLink());
+        happyAgentArtifactProject(artifact, links());
     let disposed = false;
 
     const publish = (next: Partial<HappyAgentArtifactCatalogSnapshot>): void => {
@@ -463,18 +467,25 @@ export function happyAgentArtifactCatalogStoreCreate(
                     continue;
                 }
                 if (input.kind !== "update" || input.update.kind !== "event") continue;
-                const event = happyAgentArtifactEventProject(input.update.event, coverLink());
+                const event = happyAgentArtifactEventProject(input.update.event, links());
                 if (event === undefined) continue;
                 if (readsInFlight > 0) journal.push(event);
                 if (snapshot.loading || snapshot.availability !== "available") continue;
                 const artifacts = eventsApply(snapshot.artifacts, [event], !snapshot.hasMore);
                 if (artifacts === snapshot.artifacts) continue;
-                // A new version may name another cover, which its event does
-                // not carry: the artifact is read again for it.
+                // A new version may name another cover, or an image or video
+                // bring another preview, which its event does not carry: the
+                // artifact is read again for it.
                 if (
                     event.type === "updated" &&
-                    coverLink() !== undefined &&
-                    artifacts.some((artifact) => artifact.id === event.artifactId)
+                    artifacts.some(
+                        (artifact) =>
+                            artifact.id === event.artifactId &&
+                            (links().covers ||
+                                artifact.type === "image" ||
+                                artifact.type === "image_series" ||
+                                artifact.type === "video"),
+                    )
                 )
                     artifactReread(event.artifactId);
                 if (event.type === "created")

@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import { useState, type CSSProperties } from "react";
 import { Banner } from "../../Banner";
 import { Button } from "../../Button";
 import { EmptyState } from "../../EmptyState";
@@ -53,6 +53,11 @@ export interface HappyAgentFeedPageProps {
     /** The moment every row's time is told against. */
     now: number;
     zone?: LocalTimeZone;
+    /**
+     * Entries whose long summaries start opened, as if the reader had asked;
+     * after that, which are open is the reader's own choice, kept by the page.
+     */
+    defaultExpanded?: readonly string[];
     /** Opens what an entry is about; the owner marks it seen. */
     onEntryOpen: (entryId: string) => void;
     /** Reads older entries of the feed. */
@@ -88,8 +93,9 @@ const FILTERS = [
  * newest change first, in inset grouped cards under the day they happened —
  * the card lists Happy's phones draw. Changes the reader has not looked at
  * fold into one entry per subject, which rises as it takes in more. An
- * artifact with a cover is drawn as a post, its cover across the card, and
- * Highlights narrows the list to artifacts and tasks.
+ * artifact with a cover or a summary is drawn as a post, its summary under
+ * the row and its cover across the card, and Highlights narrows the list to
+ * artifacts and tasks.
  *
  * Beside it, the places the feed gathers from, which the reader can mute,
  * follow again, or peek into without following.
@@ -168,15 +174,22 @@ function FeedNotice(props: { title: string; error: string | undefined }) {
     );
 }
 
-/** An entry's height at the card's width, or a heading's. */
-const entrySlotHeight = (slot: HappyAgentFeedSlot<HappyAgentFeedEntry>, width: number): number =>
+/** An entry's height at the card's width, its summary opened or not, or a heading's. */
+const entrySlotHeight = (
+    slot: HappyAgentFeedSlot<HappyAgentFeedEntry>,
+    width: number,
+    expanded: ReadonlySet<string>,
+): number =>
     slot.kind === "heading"
         ? HAPPY_AGENT_FEED_HEADING_HEIGHT
-        : happyAgentFeedEntryHeight(slot.row, width);
+        : happyAgentFeedEntryHeight(slot.row, width, expanded.has(slot.row.id));
 const clusterSlotHeight = (slot: HappyAgentFeedSlot<HappyAgentFeedCluster>): number =>
     slot.kind === "heading" ? HAPPY_AGENT_FEED_HEADING_HEIGHT : HAPPY_AGENT_FEED_CLUSTER_ROW_HEIGHT;
 
-/** Entries as their date's cards, newest first. */
+/**
+ * Entries as their date's cards, newest first. Which posts' summaries the
+ * reader opened is theirs alone and lasts while the list is on screen.
+ */
 function FeedEntryCards(props: {
     label: string;
     list: HappyAgentFeedListState<HappyAgentFeedEntry>;
@@ -184,10 +197,21 @@ function FeedEntryCards(props: {
     zone?: LocalTimeZone;
     empty: { readonly loading: string; readonly title: string; readonly description: string };
     loadingTitle: string;
+    defaultExpanded?: readonly string[];
     onOpen: (entryId: string) => void;
     onLoadMore: () => void;
 }) {
     const list = props.list;
+    const [expanded, expandedSet] = useState<ReadonlySet<string>>(
+        () => new Set(props.defaultExpanded),
+    );
+    const expandedChange = (entryId: string, open: boolean) =>
+        expandedSet((current) => {
+            const next = new Set(current);
+            if (open) next.add(entryId);
+            else next.delete(entryId);
+            return next;
+        });
     return (
         <FeedVirtualList
             aria-label={props.label}
@@ -204,21 +228,24 @@ function FeedEntryCards(props: {
             hasMore={list.loading ? false : list.hasMore}
             loadingMore={list.loading ? false : list.loadingMore}
             onLoadMore={props.onLoadMore}
-            renderSlot={(slot) =>
+            renderSlot={(slot, width) =>
                 slot.kind === "heading" ? (
                     <HappyAgentFeedHeading label={slot.label} />
                 ) : (
                     <HappyAgentFeedRow
                         entry={slot.row}
+                        expanded={expanded.has(slot.row.id)}
                         first={slot.first}
                         last={slot.last}
                         now={props.now}
+                        onExpandedChange={expandedChange}
                         onOpen={props.onOpen}
+                        width={width}
                         {...(props.zone ? { zone: props.zone } : {})}
                     />
                 )
             }
-            slotHeight={entrySlotHeight}
+            slotHeight={(slot, width) => entrySlotHeight(slot, width, expanded)}
             slots={feedSlotsByDate(list.items, props.now, props.zone)}
         />
     );
@@ -247,6 +274,7 @@ function FeedActivity(props: HappyAgentFeedPageProps) {
                 }
                 label="Activity"
                 list={feed}
+                {...(props.defaultExpanded ? { defaultExpanded: props.defaultExpanded } : {})}
                 loadingTitle="Loading activity…"
                 now={props.now}
                 onLoadMore={props.onLoadMore}

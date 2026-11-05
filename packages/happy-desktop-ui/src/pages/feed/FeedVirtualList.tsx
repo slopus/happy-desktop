@@ -1,5 +1,16 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { useCallback, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import {
+    useCallback,
+    useLayoutEffect,
+    useRef,
+    useState,
+    useSyncExternalStore,
+    type ReactNode,
+} from "react";
+import {
+    messageTextLayoutFontGenerationGet,
+    messageTextLayoutFontGenerationSubscribe,
+} from "../../messageTextLayout";
 import { ScrollArea } from "../../Scrollbar";
 import { Spinner } from "../../Spinner";
 
@@ -18,10 +29,12 @@ export interface FeedVirtualListProps<Slot extends { readonly id: string }> {
     slots: readonly Slot[];
     /**
      * Every slot's height at the list's width, known ahead: the list measures
-     * its own width, never a slot.
+     * its own width, never a slot. A height may follow text laid out with
+     * `messageTextLayout`, which the list lays out again when a font arrives.
      */
     slotHeight: (slot: Slot, width: number) => number;
-    renderSlot: (slot: Slot) => ReactNode;
+    /** Draws a slot at the list's width, the one its height was given for. */
+    renderSlot: (slot: Slot, width: number) => ReactNode;
     /** Older slots exist beyond the last one held. */
     hasMore: boolean;
     loadingMore: boolean;
@@ -32,18 +45,21 @@ export interface FeedVirtualListProps<Slot extends { readonly id: string }> {
     "aria-label": string;
 }
 
-/** Where each slot starts, by id, in the list's own coordinates. */
-function startsOf<Slot extends { readonly id: string }>(
+/** Where each slot starts, and how tall it is, by id, in the list's own coordinates. */
+function placesOf<Slot extends { readonly id: string }>(
     slots: readonly Slot[],
     height: (slot: Slot) => number,
-): Map<string, number> {
+): { starts: Map<string, number>; heights: Map<string, number> } {
     const starts = new Map<string, number>();
+    const heights = new Map<string, number>();
     let at = 0;
     for (const slot of slots) {
+        const size = height(slot);
         starts.set(slot.id, at);
-        at += height(slot);
+        heights.set(slot.id, size);
+        at += size;
     }
-    return starts;
+    return { starts, heights };
 }
 
 /**
@@ -78,6 +94,12 @@ export function FeedVirtualList<Slot extends { readonly id: string }>(
         observer.observe(element);
         return () => observer.disconnect();
     }, []);
+    // A slot's height may follow its text, which a webfont arriving lays out
+    // again: read so the list lays itself out again then too.
+    const fonts = useSyncExternalStore(
+        messageTextLayoutFontGenerationSubscribe,
+        messageTextLayoutFontGenerationGet,
+    );
     const heightAt = props.slotHeight;
     const slotHeight = (slot: Slot): number => heightAt(slot, width);
     const count = props.slots.length;
@@ -109,19 +131,22 @@ export function FeedVirtualList<Slot extends { readonly id: string }>(
      * browser's own scroll anchoring cannot see them; this is that anchoring,
      * done against the list's ids. The anchor is the first slot on screen that
      * moved as its neighbour below did: a row that itself jumped to the top
-     * moved unlike its neighbours, and is not followed. It runs after the new
-     * positions are in the document and before they are painted, so the frame
-     * in between is never seen.
+     * moved unlike its neighbours, and is not followed. A slot on screen that
+     * grew or shrank where it stands, such as a post the reader opened up, is
+     * the anchor itself: it stays, and only what is below it moves. It runs
+     * after the new positions are in the document and before they are
+     * painted, so the frame in between is never seen.
      */
     const held = useRef<{
         readonly order: readonly string[];
         readonly starts: ReadonlyMap<string, number>;
-    }>({ order: [], starts: new Map() });
+        readonly heights: ReadonlyMap<string, number>;
+    }>({ order: [], starts: new Map(), heights: new Map() });
     // eslint-disable-next-line happy-react/no-layout-effect -- Scroll anchoring for positioned slots must correct scrollTop after the new offsets commit and before they paint; no declarative boundary sees both.
     useLayoutEffect(() => {
         const before = held.current;
-        const starts = startsOf(props.slots, (slot) => heightAt(slot, width));
-        held.current = { order: props.slots.map((slot) => slot.id), starts };
+        const { starts, heights } = placesOf(props.slots, (slot) => heightAt(slot, width));
+        held.current = { order: props.slots.map((slot) => slot.id), starts, heights };
         const element = scrollElement.current;
         if (element === null || element.scrollTop <= 0 || before.order.length === 0) return;
         const top = element.scrollTop - LIST_INSET;
@@ -133,18 +158,29 @@ export function FeedVirtualList<Slot extends { readonly id: string }>(
             const now = starts.get(id);
             return was === undefined || now === undefined ? undefined : now - was;
         };
+        const resized = (id: string | undefined): boolean =>
+            id !== undefined && delta(id) === 0 && before.heights.get(id) !== heights.get(id);
+        // The slot the top of the screen cuts through, if one does.
+        const cut = before.order[first - 1];
+        if (
+            cut !== undefined &&
+            (before.starts.get(cut) ?? 0) + (before.heights.get(cut) ?? 0) > top &&
+            resized(cut)
+        )
+            return;
         let fallback: number | undefined;
         const end = Math.min(before.order.length, first + ANCHOR_SPAN);
         for (let index = first; index < end; index++) {
             const moved = delta(before.order[index]);
             if (moved === undefined) continue;
+            if (resized(before.order[index])) return;
             fallback ??= moved;
             if (moved !== delta(before.order[index + 1])) continue;
             if (moved !== 0) element.scrollTop += moved;
             return;
         }
         if (fallback) element.scrollTop += fallback;
-    }, [props.slots, heightAt, width]);
+    }, [props.slots, heightAt, width, fonts]);
     const drawn = virtualizer.getVirtualItems();
     return (
         <ScrollArea
@@ -183,7 +219,7 @@ export function FeedVirtualList<Slot extends { readonly id: string }>(
                                         transform: `translateY(${String(entry.start - LIST_INSET)}px)`,
                                     }}
                                 >
-                                    {props.renderSlot(slot)}
+                                    {props.renderSlot(slot, width)}
                                 </div>
                             );
                         })}

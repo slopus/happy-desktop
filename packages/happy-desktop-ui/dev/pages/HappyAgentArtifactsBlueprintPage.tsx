@@ -13,6 +13,7 @@ import {
     type HappyAgentArtifactMarkdownView,
     type HappyAgentArtifactNames,
     type HappyAgentArtifactStaticReason,
+    type HappyAgentArtifactThumbnail,
     type HappyAgentArtifactType,
     type HappyAgentArtifactVersion,
     type HappyAgentArtifactViewerSnapshot,
@@ -76,7 +77,11 @@ function file(path: string, mimeType: string, size: number): HappyAgentArtifactF
 }
 
 /** A cover drawn for this page, in one of the two shapes covers come in. */
-function coverOf(asset: string, aspect: HappyAgentArtifactCover["aspect"]): HappyAgentArtifactCover {
+function coverOf(
+    asset: string,
+    aspect: HappyAgentArtifactCover["aspect"],
+    thumbhash: string,
+): HappyAgentArtifactCover {
     return {
         version: 1,
         path: "cover.webp",
@@ -85,17 +90,47 @@ function coverOf(asset: string, aspect: HappyAgentArtifactCover["aspect"]): Happ
         height: aspect === "wide" ? 900 : 1200,
         aspect,
         url: asset,
+        thumbhash,
+        // This page's covers are small enough to stand for their own previews.
+        preview: { url: asset, width: 640, height: aspect === "wide" ? 360 : 640 },
+    };
+}
+/** The thumbnail a list reads off a cover, as the state projection does. */
+function coverThumbnail(cover: HappyAgentArtifactCover): HappyAgentArtifactThumbnail {
+    return {
+        kind: "cover",
+        aspect: cover.aspect,
+        url: cover.preview?.url ?? cover.url,
+        preview: cover.preview !== null,
+        thumbhash: cover.thumbhash,
     };
 }
 const coverRevenue = coverOf(
     new URL("../assets/feed-cover-revenue.webp", import.meta.url).href,
     "wide",
+    "9ecJDIRWq5hYiIdvaqVJi5+z+A==",
 );
-const coverLaunch = coverOf(new URL("../assets/feed-cover-launch.webp", import.meta.url).href, "wide");
+const coverLaunch = coverOf(
+    new URL("../assets/feed-cover-launch.webp", import.meta.url).href,
+    "wide",
+    "8GYGJIJpd3h5iHiAd4t+h/CYKg==",
+);
 const coverSignups = coverOf(
     new URL("../assets/feed-cover-signups.webp", import.meta.url).href,
     "square",
+    "zucJDwQIVriLdod1iXl3eId3pwRXr5II",
 );
+/** An image or video's own preview, which a row without a cover leads with. */
+const mediaWelcome: HappyAgentArtifactThumbnail = {
+    kind: "media",
+    url: new URL("../assets/artifact-preview-welcome.webp", import.meta.url).href,
+    thumbhash: "OggGBID3R6eJiId8g3f3e4f8Zw==",
+};
+const mediaSync: HappyAgentArtifactThumbnail = {
+    kind: "media",
+    url: new URL("../assets/artifact-preview-sync.webp", import.meta.url).href,
+    thumbhash: "SdcFDIIJl2iGe4SDiZf3i3qvuA==",
+};
 
 function artifact(
     id: string,
@@ -111,6 +146,7 @@ function artifact(
         latestVersion: 1,
         cover: null,
         background: null,
+        thumbnail: null,
         entry: file("index.md", "text/markdown", 2_048),
         fileCount: 1,
         size: 2_048,
@@ -143,6 +179,7 @@ const launchPost = artifact("launch", "markdown", "Launch post draft", {
 });
 const landing = artifact("landing", "html", "Landing page mock", {
     cover: coverLaunch,
+    thumbnail: coverThumbnail(coverLaunch),
     entry: file("index.html", "text/html", 1_200),
     fileCount: 3,
     size: 9_400,
@@ -151,6 +188,7 @@ const landing = artifact("landing", "html", "Landing page mock", {
     updatedAt: 1_760_090_000_000,
 });
 const shots = artifact("shots", "image_series", "Onboarding screenshots", {
+    thumbnail: mediaWelcome,
     entry: file("01-welcome.svg", "image/svg+xml", 1_400),
     fileCount: 3,
     size: 4_200,
@@ -163,6 +201,7 @@ const shots = artifact("shots", "image_series", "Onboarding screenshots", {
 });
 const report = artifact("report", "document", "Q3 report", {
     cover: coverRevenue,
+    thumbnail: coverThumbnail(coverRevenue),
     entry: file("report.pdf", "application/pdf", 1_482_113),
     size: 1_482_113,
     source: { kind: "task", taskId: "task-1", agentId: "agent-3" },
@@ -171,6 +210,7 @@ const report = artifact("report", "document", "Q3 report", {
 });
 const signups = artifact("signups", "image", "Signups by channel", {
     cover: coverSignups,
+    thumbnail: coverThumbnail(coverSignups),
     background: "#16171c",
     entry: file("signups.png", "image/png", 36_992),
     size: 36_992,
@@ -182,6 +222,7 @@ const signups = artifact("signups", "image", "Signups by channel", {
     updatedAt: 1_760_003_600_000,
 });
 const capture = artifact("capture", "video", "Sync walkthrough", {
+    thumbnail: mediaSync,
     entry: file("walkthrough.mp4", "video/mp4", 18_220_331),
     size: 18_220_331,
     source: null,
@@ -200,6 +241,7 @@ const removed = artifact("removed", "image", "Old logo", {
     status: "deleted",
     // Never drawn: a deleted artifact wears its glyph.
     cover: coverSignups,
+    thumbnail: coverThumbnail(coverSignups),
     entry: file("logo.svg", "image/svg+xml", 900),
     size: 900,
     deletedBy: { kind: "user", userId: "user-1" },

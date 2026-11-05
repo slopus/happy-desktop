@@ -81,6 +81,7 @@ function viewerOf(
         latestVersion: 1,
         cover: null,
         background: null,
+        thumbnail: null,
         entry,
         fileCount: 1,
         size,

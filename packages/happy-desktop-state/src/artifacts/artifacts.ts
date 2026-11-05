@@ -80,6 +80,7 @@ export interface HappyAgentArtifactsDeps {
         | "getArtifactVersion"
         | "getArtifactFile"
         | "artifactFileUrl"
+        | "endpoint"
         | "deleteArtifact"
         | "createArtifact"
         | "getUsers"

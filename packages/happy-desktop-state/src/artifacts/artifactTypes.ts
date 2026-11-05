@@ -76,17 +76,64 @@ export interface HappyAgentArtifactCover {
     readonly aspect: HappyAgentArtifactCoverAspect;
     /** Where the picture is read from, through the client's authenticated file route. */
     readonly url: string;
+    /**
+     * The picture's ThumbHash, standard base64, drawn in its place until it
+     * loads; `null` when the daemon could not decode it or predates them.
+     */
+    readonly thumbhash: string | null;
+    /** The still the daemon made of its first frame, or `null` when it made none. */
+    readonly preview: HappyAgentArtifactPreview | null;
 }
 
 /**
- * The address of one file of one version, as the connection's client reads
- * it. Given to a projection where covers are shown; without it, there are none.
+ * A still WebP the daemon makes of an image file, a cover, or a video's
+ * poster: the first frame, fitted within 640×640 and never enlarged.
  */
+export interface HappyAgentArtifactPreview {
+    /** Where it is read from, through the client's authenticated preview route. */
+    readonly url: string;
+    readonly width: number;
+    readonly height: number;
+}
+
+/**
+ * The picture a list leads an artifact's row with: its cover, else its own
+ * image or video's preview. A media picture is always a still preview; a
+ * cover is its preview where the daemon made one, and otherwise its whole
+ * file, of which a list draws only the first frame.
+ */
+export type HappyAgentArtifactThumbnail =
+    | {
+          readonly kind: "cover";
+          readonly aspect: HappyAgentArtifactCoverAspect;
+          readonly url: string;
+          /** Whether `url` is the cover's still preview rather than its whole file. */
+          readonly preview: boolean;
+          readonly thumbhash: string | null;
+      }
+    | {
+          readonly kind: "media";
+          readonly url: string;
+          readonly thumbhash: string | null;
+      };
+
+/** The address of one file, or of its preview, of one version, as the connection's client reads it. */
 export type HappyAgentArtifactFileLinkCreate = (
     artifactId: HappyAgentArtifactId,
     version: number,
     path: string,
 ) => string;
+
+/**
+ * How a projection addresses an artifact's pictures. Given where a surface
+ * draws them; without it, an artifact has no cover and no thumbnail.
+ */
+export interface HappyAgentArtifactLinks {
+    readonly file: HappyAgentArtifactFileLinkCreate;
+    readonly preview: HappyAgentArtifactFileLinkCreate;
+    /** Whether the daemon has `capabilities.artifactCovers`; without it, covers are not read. */
+    readonly covers: boolean;
+}
 
 /** The two shapes a cover comes in: 16:9, or square. */
 export type HappyAgentArtifactCoverAspect = "wide" | "square";
@@ -142,6 +189,13 @@ export interface HappyAgentArtifact {
      * a cover is drawn on it. Kept with the cover, and read the same way.
      */
     readonly background: string | null;
+    /**
+     * The picture a list leads its row with, or `null` for its type's glyph:
+     * its cover, else, for an image, image series, or video, the preview the
+     * daemon made of its entry. After a new version it is the previous one's
+     * until the artifact is read again.
+     */
+    readonly thumbnail: HappyAgentArtifactThumbnail | null;
     /** The latest version's entry: the file a client opens to show it. */
     readonly entry: HappyAgentArtifactFile;
     readonly fileCount: number;

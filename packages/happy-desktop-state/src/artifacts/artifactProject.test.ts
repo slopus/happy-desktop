@@ -54,15 +54,15 @@ describe("happyAgentArtifactVersionProject background", () => {
 
 describe("happyAgentArtifactProject cover", () => {
     /** An artifact as a daemon with covers sends it. */
-    const artifact = (cover: unknown): Artifact =>
+    const artifact = (cover: unknown, type = "html", file: object = entry): Artifact =>
         ({
             id: "art_1",
-            type: "html",
+            type,
             title: "Page",
             status: "active",
             latestVersion: 3,
             background: "#10161c",
-            entry,
+            entry: file,
             fileCount: 2,
             size: 20,
             source: null,
@@ -77,14 +77,38 @@ describe("happyAgentArtifactProject cover", () => {
             version: "v",
             cover,
         }) as unknown as Artifact;
-    const link = (id: string, version: number, path: string) =>
-        `https://daemon/${id}/${String(version)}/${path}`;
-    const wide = { path: "cover.png", mimeType: "image/png", width: 1600, height: 900, aspect: "wide" };
+    const link = {
+        file: (id: string, version: number, path: string) =>
+            `https://daemon/${id}/${String(version)}/files/${path}`,
+        preview: (id: string, version: number, path: string) =>
+            `https://daemon/${id}/${String(version)}/previews/${path}`,
+        covers: true,
+    };
+    const wide = {
+        path: "cover.png",
+        mimeType: "image/png",
+        width: 1600,
+        height: 900,
+        aspect: "wide",
+    };
 
     it("reads the latest version's cover and background where covers are drawn", () => {
         expect(happyAgentArtifactProject(artifact(wide), link)).toMatchObject({
-            cover: { ...wide, version: 3, url: "https://daemon/art_1/3/cover.png" },
+            cover: {
+                ...wide,
+                version: 3,
+                url: "https://daemon/art_1/3/files/cover.png",
+                thumbhash: null,
+                preview: null,
+            },
             background: "#10161c",
+            thumbnail: {
+                kind: "cover",
+                aspect: "wide",
+                url: "https://daemon/art_1/3/files/cover.png",
+                preview: false,
+                thumbhash: null,
+            },
         });
     });
 
@@ -92,6 +116,7 @@ describe("happyAgentArtifactProject cover", () => {
         expect(happyAgentArtifactProject(artifact(wide))).toMatchObject({
             cover: null,
             background: null,
+            thumbnail: null,
         });
         for (const cover of [
             null,
@@ -101,5 +126,55 @@ describe("happyAgentArtifactProject cover", () => {
             { ...wide, mimeType: "image/svg+xml" },
         ])
             expect(happyAgentArtifactProject(artifact(cover), link).cover).toBeNull();
+    });
+
+    it("leads a list with the cover's still preview and ThumbHash", () => {
+        const cover = {
+            ...wide,
+            thumbhash: "1QcSHQRnh493V4dIh4eXh1h4kJUI",
+            preview: { width: 640, height: 360 },
+        };
+        expect(happyAgentArtifactProject(artifact(cover), link)).toMatchObject({
+            cover: {
+                thumbhash: cover.thumbhash,
+                preview: {
+                    url: "https://daemon/art_1/3/previews/cover.png",
+                    width: 640,
+                    height: 360,
+                },
+            },
+            thumbnail: {
+                kind: "cover",
+                url: "https://daemon/art_1/3/previews/cover.png",
+                preview: true,
+                thumbhash: cover.thumbhash,
+            },
+        });
+    });
+
+    it("leads an image or video without a cover with its own preview, and nothing else with one", () => {
+        const media = {
+            path: "clips/launch day.mp4",
+            mimeType: "video/mp4",
+            size: 10,
+            sha256: "b".repeat(64),
+            thumbhash: "3OcRJYB4d3h/iIeHeEh3eIhw+j2w",
+            preview: { width: 640, height: 360 },
+        };
+        expect(happyAgentArtifactProject(artifact(null, "video", media), link).thumbnail).toEqual({
+            kind: "media",
+            url: "https://daemon/art_1/3/previews/clips/launch day.mp4",
+            thumbhash: media.thumbhash,
+        });
+        // Without covers, the media preview is still drawn.
+        expect(
+            happyAgentArtifactProject(artifact(wide, "image", media), { ...link, covers: false })
+                .thumbnail,
+        ).toMatchObject({ kind: "media" });
+        expect(happyAgentArtifactProject(artifact(null, "html", media), link).thumbnail).toBeNull();
+        const { preview: _preview, ...older } = media;
+        expect(
+            happyAgentArtifactProject(artifact(null, "video", older), link).thumbnail,
+        ).toBeNull();
     });
 });

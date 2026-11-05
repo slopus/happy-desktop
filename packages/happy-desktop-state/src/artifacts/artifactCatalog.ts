@@ -5,14 +5,15 @@ import {
     happyAgentArtifactFileProject,
     happyAgentArtifactProject,
     happyAgentArtifactSourceProject,
+    happyAgentArtifactThumbnailSame,
 } from "./artifactProject.js";
 import type {
     HappyAgentArtifact,
     HappyAgentArtifactAuthor,
     HappyAgentArtifactFile,
-    HappyAgentArtifactFileLinkCreate,
     HappyAgentArtifactFilter,
     HappyAgentArtifactId,
+    HappyAgentArtifactLinks,
     HappyAgentArtifactSource,
 } from "./artifactTypes.js";
 
@@ -60,13 +61,13 @@ export type HappyAgentArtifactEvent =
 /** The artifact change an event carries, or nothing for every other event. */
 export function happyAgentArtifactEventProject(
     event: HappyAgentEvent,
-    coverLink?: HappyAgentArtifactFileLinkCreate,
+    links?: HappyAgentArtifactLinks,
 ): HappyAgentArtifactEvent | undefined {
     switch (event.type) {
         case "artifact.created":
             return {
                 type: "created",
-                artifact: happyAgentArtifactProject(event.payload.artifact, coverLink),
+                artifact: happyAgentArtifactProject(event.payload.artifact, links),
             };
         case "artifact.updated": {
             const { changes } = event.payload;
@@ -274,11 +275,12 @@ export function happyAgentArtifactCatalogReplace(
     if (happyAgentArtifactVersionNewer(current.version, artifact.version)) return artifacts;
     if (!happyAgentArtifactFilterMatches(filter, artifact))
         return [...artifacts.slice(0, index), ...artifacts.slice(index + 1)];
-    // An update's event does not carry the new version's cover, so a read of
-    // the same version may still bring one.
+    // An update's event does not carry the new version's cover or preview, so
+    // a read of the same version may still bring them.
     if (
         current.version === artifact.version &&
         happyAgentArtifactCoverSame(current.cover, artifact.cover) &&
+        happyAgentArtifactThumbnailSame(current.thumbnail, artifact.thumbnail) &&
         current.background === artifact.background
     )
         return artifacts;

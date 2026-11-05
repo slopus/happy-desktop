@@ -175,7 +175,7 @@ interface FeedSubjectShown {
     readonly title: string;
     readonly face?: HappyAgentFeedFace;
     readonly artifactType?: HappyAgentFeedEntry["artifactType"];
-    /** An artifact's cover, which makes its entry a post, and its summary. */
+    /** An artifact's cover and its summary, either of which makes its entry a post. */
     readonly cover?: HappyAgentFeedEntry["cover"];
     readonly summary?: string;
 }
@@ -234,12 +234,13 @@ function feedSubjectOf(subject: FeedSubject, world: FeedWorld): FeedSubjectShown
                           cover: {
                               url: cover.url,
                               aspect: cover.aspect,
+                              ...(cover.thumbhash === null ? {} : { thumbhash: cover.thumbhash }),
                               ...(artifact.background === null
                                   ? {}
                                   : { background: artifact.background }),
                           },
-                          ...(artifact.summary === null ? {} : { summary: artifact.summary }),
                       }),
+                ...(artifact.summary === null ? {} : { summary: artifact.summary }),
             };
         }
         default:

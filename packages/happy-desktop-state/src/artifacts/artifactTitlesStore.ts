@@ -10,6 +10,7 @@ import {
     happyAgentArtifactBackground,
     happyAgentArtifactCoverProject,
     happyAgentArtifactCoverSame,
+    happyAgentArtifactLinksCreate,
     happyAgentArtifactSummaryProject,
     happyAgentArtifactTypeProject,
 } from "./artifactProject.js";
@@ -34,7 +35,7 @@ export type HappyAgentArtifactTitle =
            * named, or a daemon without `capabilities.artifactCovers`.
            */
           readonly cover: HappyAgentArtifactCover | null;
-          /** One plain line about the artifact, or `null`. */
+          /** The artifact's own words about itself, plain text with line breaks, or `null`. */
           readonly summary: string | null;
           /** The colour the latest version asks to be shown on, or `null` for none. */
           readonly background: string | null;
@@ -75,7 +76,7 @@ export interface HappyAgentArtifactTitlesStore {
 }
 
 export interface HappyAgentArtifactTitlesDeps {
-    readonly client: Pick<HappyAgentClient, "getArtifact" | "artifactFileUrl">;
+    readonly client: Pick<HappyAgentClient, "getArtifact" | "artifactFileUrl" | "endpoint">;
     readonly sync: HappyAgentSync;
 }
 
@@ -153,7 +154,10 @@ export function happyAgentArtifactTitlesStoreCreate(
                     return;
                 }
                 const cover = happyAgentHealthCapability(deps.sync.health(), "artifactCovers")
-                    ? happyAgentArtifactCoverProject(artifact, deps.client.artifactFileUrl)
+                    ? happyAgentArtifactCoverProject(
+                          artifact,
+                          happyAgentArtifactLinksCreate(deps.client, true),
+                      )
                     : null;
                 artifactSet(artifactId, {
                     type: "ready",

@@ -287,6 +287,12 @@ button.happy-media-image-tile:focus-visible {
     opacity: 1;
 }
 
+/* A still tile shows its canvas, which holds the picture's first frame; the
+   image it was read through is never painted, so it never moves. */
+.happy-media-image-tile[data-still] img.happy-media-image-tile__image {
+    visibility: hidden;
+}
+
 /* Once the picture has faded in, the placeholder goes. It is drawn whole in
    the box, so it would otherwise show around a picture drawn smaller than
    that (`scale-down`, `none`), behind a transparent one, and as a fringe at

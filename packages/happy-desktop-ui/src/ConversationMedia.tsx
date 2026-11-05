@@ -1,4 +1,4 @@
-import { Fragment, useState, useSyncExternalStore, type CSSProperties } from "react";
+import { Fragment, useRef, useState, useSyncExternalStore, type CSSProperties } from "react";
 import type { ConversationMediaItem, ConversationMediaLayout } from "happy-desktop-state";
 import { artifactSizeText } from "./pages/artifacts/artifactPresentation";
 import { conversationMediaPlan, mediaFlowPointSize } from "./mediaLayout";
@@ -47,6 +47,12 @@ export type MediaImageTileProps = {
     pointSize?: { readonly width: number; readonly height: number };
     /** Opens the picture full size. Absent leaves the tile a picture, not a fake button. */
     onOpen?: () => void;
+    /**
+     * Draws only the picture's first frame, for one that may be animated
+     * where it must hold still: a small thumbnail, or a reader who asked for
+     * less motion.
+     */
+    still?: boolean;
 };
 
 /**
@@ -62,6 +68,20 @@ export type MediaImageTileProps = {
 export function MediaImageTile(props: MediaImageTileProps) {
     const [settled, setSettled] = useState<{ url: string; state: "loaded" | "failed" }>();
     const state = settled?.url === props.url ? settled.state : "loading";
+    // A still tile loads the picture into a hidden image, which is never
+    // painted and so never advances past its first frame, and draws that frame
+    // once onto a canvas in its place: the frame a canvas is given of an
+    // animated picture.
+    const image = useRef<HTMLImageElement | null>(null);
+    const canvas = useRef<HTMLCanvasElement | null>(null);
+    const stillDraw = () => {
+        const source = image.current;
+        const target = canvas.current;
+        if (!target || !source?.complete || source.naturalWidth === 0) return;
+        target.width = source.naturalWidth;
+        target.height = source.naturalHeight;
+        target.getContext("2d")?.drawImage(source, 0, 0);
+    };
     const content = (
         <>
             <span
@@ -83,18 +103,37 @@ export function MediaImageTile(props: MediaImageTileProps) {
                 draggable={false}
                 height={props.height}
                 onError={() => setSettled({ url: props.url, state: "failed" })}
-                onLoad={() => setSettled({ url: props.url, state: "loaded" })}
+                onLoad={() => {
+                    stillDraw();
+                    setSettled({ url: props.url, state: "loaded" });
+                }}
                 // A row scrolled back into view finds its picture in the
                 // cache, already decoded: shown in the same frame instead of
                 // flashing its placeholder first.
-                ref={(image) => {
-                    if (image?.complete && image.naturalWidth > 0 && state === "loading")
+                ref={(element) => {
+                    image.current = element;
+                    if (element?.complete && element.naturalWidth > 0 && state === "loading")
                         setSettled({ url: props.url, state: "loaded" });
                 }}
                 src={props.url}
                 style={imagePlacement(props)}
                 width={props.width}
             />
+            {props.still ? (
+                // After the image, so a picture already loaded when the
+                // canvas appears is drawn onto it at once.
+                <canvas
+                    aria-label={props.alt}
+                    className="happy-media-image-tile__image"
+                    data-happy-desktop-ui="media-image-tile-still"
+                    ref={(element) => {
+                        canvas.current = element;
+                        stillDraw();
+                    }}
+                    role="img"
+                    style={imagePlacement(props)}
+                />
+            ) : null}
             {state === "failed" ? (
                 <span
                     aria-hidden="true"
@@ -111,6 +150,7 @@ export function MediaImageTile(props: MediaImageTileProps) {
         "data-happy-desktop-ui": "media-image-tile",
         "data-fit": props.fit === undefined || props.fit === "contain" ? undefined : props.fit,
         "data-state": state,
+        "data-still": props.still ? "" : undefined,
         "data-testid": props["data-testid"],
         style:
             props.width === undefined || props.height === undefined

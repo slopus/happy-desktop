@@ -8,12 +8,14 @@
  * column narrower than the one the other pages of the main lane share,
  * centred in the lane the same way, and the header, the view switch, and the
  * cards stand on its gutter. Every row is one fixed
- * height, and a post — an artifact with a cover — is as tall as its cover's
- * shape at the card's width makes it, so the long list is drawn only where it
- * is on screen and laid out without measuring.
+ * height, and a post — an artifact with a cover or a summary — is as tall as
+ * its summary's laid-out lines and its cover's shape at the card's width make
+ * it, so the long list is drawn only where it is on screen and laid out
+ * without measuring.
  *
- * Layout is flexbox throughout, except the drawn slots and a row's rule (see
- * below); colors, radii, and type come only from theme roles.
+ * Layout is flexbox throughout, except the drawn slots, a row's rule, and the
+ * control laid over a post (see below); colors, radii, and type come only
+ * from theme roles.
  */
 
 /* The feed reads down a column narrower than the lane's, so a square cover
@@ -345,14 +347,16 @@
 /* ---- Post -------------------------------------------------------------- */
 
 /* A post is its row's head, the summary, and the cover, down one column. The
-   head stands where a row's text does, 10px from the top; the cover keeps
-   16px from the card's sides and foot. Every height here is one
-   `happyAgentFeedEntryHeight` in HappyAgentFeedRow.tsx adds up: change both. */
+   head stands where a row's text does, 10px from the top; the summary and
+   the cover keep 16px from the card's sides and foot. Every height here is
+   one `happyAgentFeedEntryHeight` in HappyAgentFeedRow.tsx adds up: change
+   both. */
 .happy-agent-feed-row[data-post] {
     flex-direction: column;
     align-items: stretch;
     gap: 12px;
     padding: 10px 16px 16px;
+    cursor: pointer;
 }
 
 /* Under a post the rule runs from the cover's edge, the post's own inset. */
@@ -369,26 +373,73 @@
     height: 44px;
 }
 
+/* The summary as it was written, its line breaks kept, on the lines
+   `uiTextClampLayout` laid it out on; a word too long for a line breaks
+   anywhere, as that layout does. */
 .happy-agent-feed-row__post-summary {
     flex: none;
     min-width: 0;
-    overflow: hidden;
+    margin: 0;
     color: var(--text);
     font-size: 14px;
     line-height: 20px;
-    text-overflow: ellipsis;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+/* "Show more" and "Show less" read as the text they end, and stand over the
+   control that opens the post so a click on them stays theirs. */
+.happy-agent-feed-row__more {
+    position: relative;
+    z-index: 1;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--text-secondary);
+    font: inherit;
     white-space: nowrap;
+    cursor: pointer;
+}
+
+.happy-agent-feed-row__more:hover {
+    color: var(--text);
+}
+
+.happy-agent-feed-row__more:focus-visible {
+    border-radius: var(--happy-radius-sm);
+    outline: 2px solid var(--text-link);
+    outline-offset: 1px;
 }
 
 /* The cover takes the rest of the post, which its shape decided, and fades in
-   over the artifact's own background or a neutral placeholder. Its box is the
-   picture's own shape, so nothing is cropped or letterboxed. */
+   over its ThumbHash, the artifact's own background, or a neutral
+   placeholder. Its box is the picture's own shape, so nothing is cropped or
+   letterboxed. */
 .happy-agent-feed-row__cover.happy-media-image-tile {
     flex: 1 1 0;
     width: 100%;
     min-height: 0;
     background: var(--surface-ripple);
     border-radius: var(--happy-radius-window);
+}
+
+/* The control that opens the post covers all of it. Absolute: it is laid
+   over the post's own column, which flex cannot do with a child. */
+.happy-agent-feed-row__open {
+    position: absolute;
+    inset: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: inherit;
+    background: transparent;
+    cursor: pointer;
+}
+
+.happy-agent-feed-row__open:focus-visible {
+    outline: 2px solid var(--text-link);
+    outline-offset: -2px;
 }
 
 /* ---- Faces ------------------------------------------------------------- */

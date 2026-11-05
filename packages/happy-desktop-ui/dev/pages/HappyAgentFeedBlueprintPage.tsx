@@ -50,16 +50,61 @@ const research: HappyAgentFeedActor = {
 const coverRevenue = {
     url: new URL("../assets/feed-cover-revenue.webp", import.meta.url).href,
     aspect: "wide",
+    thumbhash: "9ecJDIRWq5hYiIdvaqVJi5+z+A==",
 } as const;
 const coverSignups = {
     url: new URL("../assets/feed-cover-signups.webp", import.meta.url).href,
     aspect: "square",
     background: "#16171c",
+    thumbhash: "zucJDwQIVriLdod1iXl3eId3pwRXr5II",
 } as const;
 const coverLaunch = {
     url: new URL("../assets/feed-cover-launch.webp", import.meta.url).href,
     aspect: "wide",
+    thumbhash: "8GYGJIJpd3h5iHiAd4t+h/CYKg==",
 } as const;
+/** An animated WebP: the week's bars light up one by one, and loop. */
+const coverUptime = {
+    url: new URL("../assets/feed-cover-uptime.webp", import.meta.url).href,
+    aspect: "wide",
+    thumbhash: "CecFBICaWGSXeIdQdlifmbG/xw==",
+} as const;
+
+/** An artifact whose summary runs to several paragraphs, over its animated cover. */
+const uptime: HappyAgentFeedEntry = {
+    id: "e-uptime",
+    subject: "artifact",
+    artifactType: "html",
+    title: "Weekly uptime report",
+    actors: [releaseBot],
+    actorCount: 1,
+    created: true,
+    updates: 0,
+    cover: coverUptime,
+    summary: [
+        "99.98% across all regions this week, up from 99.91%.",
+        "The one amber day was Thursday: a certificate rotation in eu-west took the API gateway down for 11 minutes before the old certificate was put back. Every other region stayed green the whole week.",
+        "What changes next:\n• rotations now run behind a canary\n• the gateway alerts on a certificate's age, not only its expiry\n• the runbook gained a rollback step",
+        "The full timeline, the graphs per region, and the incident notes are in the report.",
+    ].join("\n\n"),
+    lastAt: NOW - 8 * MINUTE,
+    unread: true,
+};
+/** An artifact with a summary and no cover: a post of words alone. */
+const notes: HappyAgentFeedEntry = {
+    id: "e-notes",
+    subject: "artifact",
+    artifactType: "markdown",
+    title: "Interview notes",
+    actors: [ana],
+    actorCount: 1,
+    created: true,
+    updates: 0,
+    summary:
+        "Five customer calls on the new onboarding.\nEveryone found the import; two missed the team invite.",
+    lastAt: NOW - 40 * MINUTE,
+    unread: false,
+};
 
 const lead: readonly HappyAgentFeedEntry[] = [
     {
@@ -76,6 +121,7 @@ const lead: readonly HappyAgentFeedEntry[] = [
         lastAt: NOW - 2 * MINUTE,
         unread: true,
     },
+    uptime,
     {
         id: "e-shopping",
         subject: "todoList",
@@ -100,6 +146,7 @@ const lead: readonly HappyAgentFeedEntry[] = [
         lastAt: NOW - 52 * MINUTE,
         unread: true,
     },
+    notes,
     {
         id: "e-signups",
         subject: "artifact",
@@ -307,7 +354,7 @@ export function HappyAgentFeedBlueprintPage() {
         <ComponentPage
             contract="Props only"
             number={componentNumber}
-            summary="What happened on a Happy Agent, for one reader: new tasks, bots, Surfaces, and artifacts, and changes to them, newest change first. Unseen changes fold into one entry per subject; an artifact with a cover is a post; Highlights keeps the artifacts and tasks; the places activity gathers from can be muted, followed, or peeked into."
+            summary="What happened on a Happy Agent, for one reader: new tasks, bots, Surfaces, and artifacts, and changes to them, newest change first. Unseen changes fold into one entry per subject; an artifact with a cover or a summary is a post, its long summary opened in place; Highlights keeps the artifacts and tasks; the places activity gathers from can be muted, followed, or peeked into."
             title="HappyAgentFeed"
         >
             <FullScreenSpecimen
@@ -376,6 +423,37 @@ export function HappyAgentFeedBlueprintPage() {
                     )}
                     filter="highlights"
                     unread={0}
+                />
+            </FullScreenSpecimen>
+
+            <FullScreenSpecimen
+                detail="A summary of several paragraphs, its line breaks kept, shown to four lines with “Show more” closing the fourth, over an animated cover that loops (held at its first frame for a reader who asked for less motion); then an artifact with a summary and no cover, a post of words alone."
+                label="Long summary, collapsed"
+                number="14"
+                screen="14-summary-collapsed-1100x760"
+                window={{ width: 1100, height: 760 }}
+            >
+                <HappyAgentFeedPage
+                    {...base}
+                    feed={ready([uptime, notes])}
+                    filter="highlights"
+                    unread={1}
+                />
+            </FullScreenSpecimen>
+
+            <FullScreenSpecimen
+                detail="The same summary opened in place: the whole text, ending in “Show less”; the post grows and the cover moves down with it."
+                label="Long summary, expanded"
+                number="15"
+                screen="15-summary-expanded-1100x760"
+                window={{ width: 1100, height: 760 }}
+            >
+                <HappyAgentFeedPage
+                    {...base}
+                    defaultExpanded={[uptime.id]}
+                    feed={ready([uptime, notes])}
+                    filter="highlights"
+                    unread={1}
                 />
             </FullScreenSpecimen>
 

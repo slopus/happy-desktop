@@ -30,6 +30,7 @@ const artifact = (
     latestVersion: 1,
     cover: null,
     background: null,
+    thumbnail: null,
     entry: { path: "index.md", mimeType: "text/markdown", size: 10, sha256: "a".repeat(64) },
     fileCount: 1,
     size: 10,
@@ -283,6 +284,8 @@ describe("an artifact read again after a gap", () => {
                 height: 900,
                 aspect: "wide",
                 url: "https://daemon/v0/artifacts/a/versions/2/files/cover.png",
+                thumbhash: null,
+                preview: null,
             },
             background: "#10161c",
         });

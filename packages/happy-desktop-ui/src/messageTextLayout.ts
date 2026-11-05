@@ -1022,6 +1022,126 @@ export function uiTextHeight(
     return runHeight(text, `${String(size)}px ${UI_FAMILY}`, lineHeight, measure, cache);
 }
 
+/**
+ * A run of UI text kept to a few lines until the reader asks for the rest:
+ * the whole text as it is drawn, and, when it runs past `maxLines`, the part
+ * that fits them with the "more" control closing the last one.
+ */
+export interface UiTextClampLayout {
+    /** The text as drawn: line breaks kept, CRLF as LF, trailing whitespace dropped. */
+    readonly text: string;
+    /**
+     * The start of `text` that fills `maxLines` with the "more" control after
+     * it on the last line, or `null` when the whole text fits them.
+     */
+    readonly clamped: string | null;
+    /** Lines the clamped text takes, or the whole text when it is not clamped. */
+    readonly clampedLines: number;
+    /** Lines the whole text takes, with the "less" control after it when it has one. */
+    readonly lines: number;
+}
+const clampLayouts = new Map<string, UiTextClampLayout>();
+/** Above this many results the memo starts again rather than grow without bound. */
+const CLAMP_LAYOUTS_MAX = 2_048;
+let clampGeneration = -1;
+/**
+ * Lays out UI text under `pre-wrap` and `overflow-wrap: anywhere` at one
+ * size, keeping its first `maxLines`. Past them, the last kept line breaks
+ * early enough to leave `moreWidth` for its control, at a word where it can,
+ * as the browser would if the text stopped there; the whole text then ends
+ * with a control `lessWidth` wide, on its last line if it fits.
+ */
+export function uiTextClampLayout(
+    source: string,
+    size: number,
+    measure: number,
+    maxLines: number,
+    moreWidth: number,
+    lessWidth: number,
+    cache: MessageTextLayoutCache = sharedCache,
+): UiTextClampLayout {
+    const ready = cacheReady(cache);
+    if (clampGeneration !== fontGeneration || clampLayouts.size > CLAMP_LAYOUTS_MAX) {
+        clampLayouts.clear();
+        clampGeneration = fontGeneration;
+    }
+    const key = `${String(size)}:${String(measure)}:${String(maxLines)}:${String(moreWidth)}:${String(lessWidth)}:${source}`;
+    const hit = clampLayouts.get(key);
+    if (hit !== undefined) return hit;
+    const text = source.replace(/\r\n?/gu, "\n").trimEnd();
+    const font = `${String(size)}px ${UI_FAMILY}`;
+    const hard = text.split("\n");
+    /* Every line box, as the hard line it belongs to, where in it it starts,
+       and how wide it is. */
+    const boxes: {
+        readonly line: number;
+        readonly start: LayoutCursor | undefined;
+        readonly width: number;
+    }[] = [];
+    for (const [index, line] of hard.entries()) {
+        if (line.length === 0 || measure <= 0) {
+            boxes.push({ line: index, start: undefined, width: 0 });
+            continue;
+        }
+        const prepared = preparedTextSegments(line, font, ready, "pre-wrap");
+        let cursor: LayoutCursor | undefined;
+        for (;;) {
+            const range = layoutNextLineRange(prepared, measure, cursor);
+            if (!range) break;
+            boxes.push({ line: index, start: cursor, width: range.width });
+            cursor = range.end;
+        }
+    }
+    const last = boxes.at(-1);
+    let result: UiTextClampLayout;
+    if (boxes.length <= maxLines || last === undefined) {
+        result = { text, clamped: null, clampedLines: boxes.length, lines: boxes.length };
+    } else {
+        /* The last kept line is laid out again, narrower by the control, from
+           where it starts; the clamped text runs to where that line ends. */
+        const end = boxes[maxLines - 1]!;
+        const line = hard[end.line]!;
+        let kept = 0;
+        if (line.length > 0) {
+            const prepared = preparedTextSegments(line, font, ready, "pre-wrap");
+            const range = layoutNextLineRange(
+                prepared,
+                Math.max(1, measure - moreWidth),
+                end.start,
+            );
+            if (range) kept = cursorOffset(prepared, range.end);
+        }
+        result = {
+            text,
+            // The space a line broke after is dropped so the control follows
+            // the last word; an empty last line keeps the control to itself.
+            clamped: [...hard.slice(0, end.line), line.slice(0, kept).replace(/[ \t]+$/u, "")].join(
+                "\n",
+            ),
+            clampedLines: maxLines,
+            lines:
+                boxes.length + (last.width + lessWidth > measure + INLINE_MEASURE_EPSILON ? 1 : 0),
+        };
+    }
+    clampLayouts.set(key, result);
+    return result;
+}
+
+/** Where in the prepared text a layout cursor stands, in UTF-16 units. */
+function cursorOffset(prepared: PreparedTextWithSegments, cursor: LayoutCursor): number {
+    let offset = 0;
+    for (let index = 0; index < cursor.segmentIndex; index++)
+        offset += prepared.segments[index]?.length ?? 0;
+    const segment = prepared.segments[cursor.segmentIndex];
+    if (segment === undefined || cursor.graphemeIndex === 0) return offset;
+    let graphemes = 0;
+    for (const { index } of GRAPHEME_SEGMENTER.segment(segment)) {
+        if (graphemes === cursor.graphemeIndex) return offset + index;
+        graphemes += 1;
+    }
+    return offset + segment.length;
+}
+
 /** The error card's 14/20 text, including preserved diagnostic line breaks. */
 export function errorTextHeight(
     text: string,

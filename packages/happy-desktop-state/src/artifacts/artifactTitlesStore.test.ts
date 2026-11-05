@@ -29,6 +29,7 @@ function open(options: { readonly covers: boolean; readonly answers: Artifact[] 
         },
         artifactFileUrl: (id: string, version: number, path: string) =>
             `https://daemon/v0/artifacts/${id}/versions/${String(version)}/files/${path}`,
+        endpoint: "https://daemon/",
     };
     const sync = happyAgentSyncCreate();
     sync.writer.healthReceived({
@@ -61,7 +62,12 @@ const COVER = {
 it("reads the latest version's cover, summary, and background", async () => {
     const store = open({
         covers: true,
-        answers: [artifact(3, { cover: COVER, summary: "Revenue up 18% QoQ." })],
+        answers: [
+            artifact(3, {
+                cover: { ...COVER, thumbhash: "1QcSHQRnh493V4dIh4eXh1h4kJUI" },
+                summary: "Revenue up 18% QoQ.\n\nEnterprise seats led.",
+            }),
+        ],
     });
     await until(() => store.titles.get().has(ID));
     expect(store.titles.get().get(ID)).toEqual({
@@ -74,8 +80,10 @@ it("reads the latest version's cover, summary, and background", async () => {
             ...COVER,
             version: 3,
             url: "https://daemon/v0/artifacts/artifact-1/versions/3/files/cover.png",
+            thumbhash: "1QcSHQRnh493V4dIh4eXh1h4kJUI",
+            preview: null,
         },
-        summary: "Revenue up 18% QoQ.",
+        summary: "Revenue up 18% QoQ.\n\nEnterprise seats led.",
         background: "#16171c",
     });
 });

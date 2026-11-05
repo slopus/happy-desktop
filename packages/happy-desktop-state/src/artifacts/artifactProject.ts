@@ -1,9 +1,11 @@
-import type {
-    Artifact,
-    ArtifactAuthor,
-    ArtifactFile,
-    ArtifactSource,
-    ArtifactVersion,
+import {
+    endpointUrl,
+    type Artifact,
+    type ArtifactAuthor,
+    type ArtifactFile,
+    type ArtifactSource,
+    type ArtifactVersion,
+    type HappyAgentClient,
 } from "@slopus/happy-agent-client";
 import type {
     HappyAgentArtifact,
@@ -12,9 +14,11 @@ import type {
     HappyAgentArtifactCoverAspect,
     HappyAgentArtifactCoverMimeType,
     HappyAgentArtifactFile,
-    HappyAgentArtifactFileLinkCreate,
     HappyAgentArtifactId,
+    HappyAgentArtifactLinks,
+    HappyAgentArtifactPreview,
     HappyAgentArtifactSource,
+    HappyAgentArtifactThumbnail,
     HappyAgentArtifactType,
     HappyAgentArtifactVersion,
 } from "./artifactTypes.js";
@@ -100,22 +104,52 @@ export function happyAgentArtifactAuthorProject(author: ArtifactAuthor): HappyAg
 }
 
 /**
- * The artifact as this build shows it. Its cover is read only where a surface
- * draws covers and the daemon has them: `coverLink` is how its file is
- * addressed, and without it the artifact has none.
+ * How a connection's client addresses an artifact's files and previews. The
+ * pinned client predates the preview route, so its address is built here the
+ * way the client builds a file's, beneath the client's own endpoint.
+ */
+export function happyAgentArtifactLinksCreate(
+    client: Pick<HappyAgentClient, "artifactFileUrl" | "endpoint">,
+    covers: boolean,
+): HappyAgentArtifactLinks {
+    return {
+        file: (artifactId, version, path) => client.artifactFileUrl(artifactId, version, path),
+        preview: (artifactId, version, path) =>
+            endpointUrl(
+                client.endpoint,
+                `v0/artifacts/${encodeURIComponent(artifactId)}/versions/${String(version)}/previews/${path
+                    .split("/")
+                    .map(encodeURIComponent)
+                    .join("/")}`,
+            ),
+        covers,
+    };
+}
+
+/**
+ * The artifact as this build shows it. Its pictures are read only where a
+ * surface draws them: `links` is how they are addressed, and without it the
+ * artifact has no cover and no thumbnail. Its cover is read only from a
+ * daemon that has covers.
  */
 export function happyAgentArtifactProject(
     artifact: Artifact,
-    coverLink?: HappyAgentArtifactFileLinkCreate,
+    links?: HappyAgentArtifactLinks,
 ): HappyAgentArtifact {
+    const cover = links?.covers === true ? happyAgentArtifactCoverProject(artifact, links) : null;
     return {
         id: artifact.id as HappyAgentArtifactId,
         type: happyAgentArtifactTypeProject(artifact.type),
         title: artifact.title,
         status: artifact.status === "deleted" ? "deleted" : "active",
         latestVersion: artifact.latestVersion,
-        cover: coverLink === undefined ? null : happyAgentArtifactCoverProject(artifact, coverLink),
-        background: coverLink === undefined ? null : (happyAgentArtifactBackground(artifact.background) ?? null),
+        cover,
+        background:
+            links?.covers === true
+                ? (happyAgentArtifactBackground(artifact.background) ?? null)
+                : null,
+        thumbnail:
+            links === undefined ? null : happyAgentArtifactThumbnailProject(artifact, cover, links),
         entry: happyAgentArtifactFileProject(artifact.entry),
         fileCount: artifact.fileCount,
         size: artifact.size,
@@ -163,16 +197,17 @@ const ARTIFACT_COVER_MIME_TYPES: ReadonlySet<string> = new Set<HappyAgentArtifac
  */
 export function happyAgentArtifactCoverProject(
     artifact: Artifact,
-    link: HappyAgentArtifactFileLinkCreate,
+    links: Pick<HappyAgentArtifactLinks, "file" | "preview">,
 ): HappyAgentArtifactCover | null {
     const cover: unknown = "cover" in artifact ? artifact.cover : undefined;
     if (typeof cover !== "object" || cover === null) return null;
-    const { path, mimeType, width, height, aspect } = cover as Record<string, unknown>;
+    const fields = cover as Record<string, unknown>;
+    const { path, mimeType, width, height, aspect } = fields;
     if (typeof path !== "string" || path === "") return null;
     if (typeof mimeType !== "string" || !ARTIFACT_COVER_MIME_TYPES.has(mimeType)) return null;
-    if (typeof width !== "number" || !Number.isInteger(width) || width <= 0) return null;
-    if (typeof height !== "number" || !Number.isInteger(height) || height <= 0) return null;
+    if (!dimension(width) || !dimension(height)) return null;
     if (aspect !== "wide" && aspect !== "square") return null;
+    const id = artifact.id as HappyAgentArtifactId;
     return {
         version: artifact.latestVersion,
         path,
@@ -180,8 +215,72 @@ export function happyAgentArtifactCoverProject(
         width,
         height,
         aspect: aspect satisfies HappyAgentArtifactCoverAspect,
-        url: link(artifact.id as HappyAgentArtifactId, artifact.latestVersion, path),
+        url: links.file(id, artifact.latestVersion, path),
+        thumbhash: thumbhashProject(fields.thumbhash),
+        preview: previewProject(fields.preview, () =>
+            links.preview(id, artifact.latestVersion, path),
+        ),
     };
+}
+
+/** A pixel count a daemon reports: a positive whole number. */
+function dimension(value: unknown): value is number {
+    return typeof value === "number" && Number.isInteger(value) && value > 0;
+}
+
+/** A file's ThumbHash as the daemon sent it, or `null` for none or anything else. */
+function thumbhashProject(value: unknown): string | null {
+    return typeof value === "string" && value !== "" ? value : null;
+}
+
+/** A file's `preview`, read as `happyAgentArtifactCoverProject` reads a cover. */
+function previewProject(value: unknown, url: () => string): HappyAgentArtifactPreview | null {
+    if (typeof value !== "object" || value === null) return null;
+    const { width, height } = value as Record<string, unknown>;
+    return dimension(width) && dimension(height) ? { url: url(), width, height } : null;
+}
+
+/** Types whose entry is itself a picture, or a video with a poster. */
+const MEDIA_TYPES: ReadonlySet<string> = new Set(["image", "image_series", "video"]);
+
+/**
+ * What a list leads the artifact's row with: its cover's preview, or the
+ * whole cover where the daemon made none; else, for an image, image series,
+ * or video, the preview of its entry — the first image, or the video's
+ * poster; else nothing, and the row wears its type's glyph.
+ */
+export function happyAgentArtifactThumbnailProject(
+    artifact: Artifact,
+    cover: HappyAgentArtifactCover | null,
+    links: Pick<HappyAgentArtifactLinks, "preview">,
+): HappyAgentArtifactThumbnail | null {
+    if (cover !== null)
+        return {
+            kind: "cover",
+            aspect: cover.aspect,
+            url: cover.preview?.url ?? cover.url,
+            preview: cover.preview !== null,
+            thumbhash: cover.thumbhash,
+        };
+    if (!MEDIA_TYPES.has(artifact.type)) return null;
+    const entry = artifact.entry as ArtifactFile & Record<string, unknown>;
+    const preview = previewProject(entry.preview, () =>
+        links.preview(artifact.id as HappyAgentArtifactId, artifact.latestVersion, entry.path),
+    );
+    return preview === null
+        ? null
+        : { kind: "media", url: preview.url, thumbhash: thumbhashProject(entry.thumbhash) };
+}
+
+/** Whether two thumbnails are the same picture, drawn the same way. */
+export function happyAgentArtifactThumbnailSame(
+    left: HappyAgentArtifactThumbnail | null,
+    right: HappyAgentArtifactThumbnail | null,
+): boolean {
+    if (left === right) return true;
+    if (left === null || right === null || left.url !== right.url) return false;
+    if (left.thumbhash !== right.thumbhash || left.kind !== right.kind) return false;
+    return left.kind === "media" || (right.kind === "cover" && left.aspect === right.aspect);
 }
 
 /** Whether two covers are the same picture, drawn the same way. */
@@ -197,7 +296,9 @@ export function happyAgentArtifactCoverSame(
             left.mimeType === right.mimeType &&
             left.width === right.width &&
             left.height === right.height &&
-            left.aspect === right.aspect)
+            left.aspect === right.aspect &&
+            left.thumbhash === right.thumbhash &&
+            left.preview?.url === right.preview?.url)
     );
 }
 
