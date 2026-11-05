@@ -62,10 +62,10 @@ jobs:
                   set -euo pipefail
                   tag=v0.4.110-preview.12
                   version=${tag#v}
-                  mkdir -p "$RUNNER_TEMP/happy-agent"
-                  gh release download "$tag" --repo slopus/happy-agent --pattern "happy-agent-${version}-win32-x64.tar.gz" --dir "$RUNNER_TEMP/happy-agent"
-                  tar --force-local -xzf "$RUNNER_TEMP/happy-agent/happy-agent-${version}-win32-x64.tar.gz" -C "$RUNNER_TEMP/happy-agent"
-                  exe="$RUNNER_TEMP/happy-agent/happy-agent-win32-x64.exe"
+                  mkdir -p .context/happy-agent
+                  gh release download "$tag" --repo slopus/happy-agent --pattern "happy-agent-${version}-win32-x64.tar.gz" --dir .context/happy-agent
+                  tar -xzf ".context/happy-agent/happy-agent-${version}-win32-x64.tar.gz" -C .context/happy-agent
+                  exe="$PWD/.context/happy-agent/happy-agent-win32-x64.exe"
                   "$exe" --version
                   printf 'HAPPY_DESKTOP_AGENT_EXECUTABLE=%s\n' "$(cygpath -w "$exe")" >> "$GITHUB_ENV"
                   printf 'HAPPY_DESKTOP_GYM_EXPECTED_AGENT_VERSION=%s\n' "$version" >> "$GITHUB_ENV"

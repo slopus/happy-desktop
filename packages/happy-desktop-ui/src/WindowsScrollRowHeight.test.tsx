@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { flushSync } from "react-dom";
+import { createRoot } from "react-dom/client";
 import type { ComposerSnapshot, ConversationAuthor, ConversationMessageEntry } from "happy-desktop-state";
 import { expect, it } from "vitest";
 import "./styles.css";
 import { ConversationDock } from "./ConversationDock";
 import { ConversationView } from "./ConversationView";
 import { messageListRowHeightCheckInstall } from "./messageListRowHeightCheck";
-import { createRenderer } from "./testing";
 
 const author: ConversationAuthor = {
     id: "height-diagnostic-agent", displayName: "Happy", username: "happy", kind: "agent", agentRole: "default",
@@ -30,19 +30,21 @@ const payloads = [
 ] as const;
 
 it("reports settled predicted and painted row heights for representative scripts", async () => {
-    const view = createRenderer();
-    let update!: (text: string) => void;
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    let update!: (state: { name: string; text: string }) => void;
     let content = "";
     let kind = "";
     const stop = messageListRowHeightCheckInstall((mismatch) => {
         console.log("ROW_HEIGHT_DIAGNOSTIC " + JSON.stringify({ ...mismatch, dpr: window.devicePixelRatio, kind, sample: content.slice(0, 200) }));
     });
     function Harness() {
-        const [text, setText] = useState("");
-        update = setText;
+        const [{ name, text }, setContent] = useState({ name: "initial", text: "" });
+        update = setContent;
         const entry: ConversationMessageEntry = {
             kind: "message", source: "server", delivery: "sent",
-            message: { id: "diagnostic-row", chatId: "height-diagnostic", sequence: "1", changePts: "1", sender: author,
+            message: { id: `diagnostic-${name}`, chatId: "height-diagnostic", sequence: "1", changePts: "1", sender: author,
                 text, attachments: [], reactions: [], createdAt: "2026-09-06T12:34:00.000Z", generationStatus: "streaming" },
         };
         return <div className="happy-theme-dark" style={{ width: 560, height: 700 }}>
@@ -51,18 +53,19 @@ it("reports settled predicted and painted row heights for representative scripts
         </div>;
     }
     try {
-        view.render(Harness, { width: 900, height: 700 });
-        await view.ready();
+        flushSync(() => root.render(<Harness />));
         await document.fonts.ready;
         for (const [name, text] of payloads) {
             kind = name;
             content = text;
-            flushSync(() => update(text));
+            flushSync(() => update({ name, text }));
             await new Promise((resolve) => setTimeout(resolve, 650));
-            expect(view.container.querySelector(".happy-message-list__virtual-row")).not.toBeNull();
+            expect(container.querySelector(".happy-message-list__virtual-row")).not.toBeNull();
             console.log("ROW_HEIGHT_CASE " + JSON.stringify({ kind, dpr: window.devicePixelRatio }));
         }
     } finally {
         stop();
+        root.unmount();
+        container.remove();
     }
 });
