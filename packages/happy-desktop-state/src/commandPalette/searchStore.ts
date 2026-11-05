@@ -1,4 +1,4 @@
-import type { HappyAgentClient, QuickSearchResult } from "@slopus/happy-agent-client";
+import type { HappyAgentClient, SearchResult } from "@slopus/happy-agent-client";
 import type { HappyAgentArtifactId } from "../artifacts/artifactTypes.js";
 import type { HappyAgentSync } from "../happyAgentConnection/happyAgentSync.js";
 import type {
@@ -13,13 +13,10 @@ import type {
     HappyAgentSurfaceTodoId,
 } from "../surfaces/surfaceTypes.js";
 import type { HappyAgentVaultItemId } from "../surfaces/surfaceVaultTypes.js";
-import type {
-    HappyAgentQuickSearchHit,
-    HappyAgentQuickSearchSnapshot,
-} from "./quickSearchTypes.js";
+import type { HappyAgentSearchHit, HappyAgentSearchSnapshot } from "./searchTypes.js";
 
-export interface HappyAgentQuickSearchStore {
-    get(): HappyAgentQuickSearchSnapshot;
+export interface HappyAgentSearchStore {
+    get(): HappyAgentSearchSnapshot;
     /** Subscribing costs nothing; the last listener leaving cancels a search and forgets its answer. */
     subscribe(listener: () => void): () => void;
     /**
@@ -31,8 +28,8 @@ export interface HappyAgentQuickSearchStore {
     [Symbol.dispose](): void;
 }
 
-export interface HappyAgentQuickSearchDeps {
-    readonly client: Pick<HappyAgentClient, "quickSearch">;
+export interface HappyAgentSearchDeps {
+    readonly client: Pick<HappyAgentClient, "search">;
     readonly sync: Pick<HappyAgentSync, "health">;
 }
 
@@ -40,10 +37,10 @@ export interface HappyAgentQuickSearchDeps {
 const DEBOUNCE_MS = 120;
 /** How many hits one answer asks for. */
 const LIMIT = 20;
-const OFF: HappyAgentQuickSearchSnapshot = { status: "off" };
+const OFF: HappyAgentSearchSnapshot = { status: "off" };
 
 /** One wire result as its product variant. */
-function hitProject(result: QuickSearchResult): HappyAgentQuickSearchHit {
+function hitProject(result: SearchResult): HappyAgentSearchHit {
     const base = { key: result.key, rank: result.rank };
     switch (result.type) {
         case "vault_file":
@@ -98,6 +95,30 @@ function hitProject(result: QuickSearchResult): HappyAgentQuickSearchHit {
                 title: result.title,
                 allDay: result.allDay,
                 start: result.start,
+                match: result.match,
+                snippet: result.snippet,
+            };
+        case "message":
+            return {
+                ...base,
+                type: "message",
+                agentId: result.agentId as HappyAgentSessionId,
+                messageId: result.messageId,
+                role: result.role,
+                snippet: result.snippet,
+                createdAt: result.createdAt,
+                workspaceId: result.workspaceId as HappyAgentGroupId | null,
+                projectId: result.projectId as HappyAgentProjectId | null,
+            };
+        case "user":
+            return { ...base, type: "user", userId: result.userId, name: result.name };
+        case "skill":
+            return {
+                ...base,
+                type: "skill",
+                skillId: result.skillId,
+                name: result.name,
+                description: result.description,
             };
         case "artifact":
             return {
@@ -149,21 +170,19 @@ function hitProject(result: QuickSearchResult): HappyAgentQuickSearchHit {
 }
 
 /**
- * The palette's question to one Happy Agent's quick search, for the
+ * The palette's question to one Happy Agent's search, for the
  * palette's lifetime on screen. Constructing it opens nothing; a query asks,
- * after a short pause, only when the Happy Agent says it has quick search,
+ * after a short pause, only when the Happy Agent says it has search,
  * and anything else leaves the window's own answer to stand alone.
  */
-export function happyAgentQuickSearchStoreCreate(
-    deps: HappyAgentQuickSearchDeps,
-): HappyAgentQuickSearchStore {
+export function happyAgentSearchStoreCreate(deps: HappyAgentSearchDeps): HappyAgentSearchStore {
     const listeners = new Set<() => void>();
-    let snapshot: HappyAgentQuickSearchSnapshot = OFF;
+    let snapshot: HappyAgentSearchSnapshot = OFF;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let request: AbortController | undefined;
     let disposed = false;
 
-    const set = (next: HappyAgentQuickSearchSnapshot): void => {
+    const set = (next: HappyAgentSearchSnapshot): void => {
         if (next === snapshot) return;
         snapshot = next;
         for (const listener of listeners) listener();
@@ -180,7 +199,7 @@ export function happyAgentQuickSearchStoreCreate(
         timer = undefined;
         const own = new AbortController();
         request = own;
-        deps.client.quickSearch({ q: query, limit: LIMIT }, { signal: own.signal }).then(
+        deps.client.search({ q: query, limit: LIMIT }, { signal: own.signal }).then(
             (response) => {
                 if (own.signal.aborted) return;
                 request = undefined;
@@ -215,7 +234,7 @@ export function happyAgentQuickSearchStoreCreate(
             const query = value.trim();
             if (snapshot.status !== "off" && snapshot.query === query) return;
             cancel();
-            if (query === "" || deps.sync.health()?.capabilities?.quickSearch !== true) {
+            if (query === "" || deps.sync.health()?.capabilities?.search !== true) {
                 set(OFF);
                 return;
             }
@@ -230,8 +249,8 @@ export function happyAgentQuickSearchStoreCreate(
     };
 }
 
-/** For a connection that has no quick search: always off. */
-export const happyAgentQuickSearchStoreNone: HappyAgentQuickSearchStore = {
+/** For a connection that has no search: always off. */
+export const happyAgentSearchStoreNone: HappyAgentSearchStore = {
     get: () => OFF,
     subscribe: () => () => undefined,
     queryUpdate: () => undefined,

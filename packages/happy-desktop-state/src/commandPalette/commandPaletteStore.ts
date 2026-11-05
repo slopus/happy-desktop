@@ -19,7 +19,7 @@ export interface CommandPaletteSnapshot {
     /** Which row Enter would run, as an index into the owner's flat list. */
     readonly activeIndex: number;
     /**
-     * The quick-search keys of the found rows the reader has passed, from the
+     * The search keys of the found rows the reader has passed, from the
      * top through the highlighted one, as they were shown when the highlight
      * last moved. Those rows keep their places when the Happy Agent's answer
      * arrives; a new query has passed none.

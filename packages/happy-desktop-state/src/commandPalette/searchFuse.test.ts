@@ -2,12 +2,12 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { expect, it } from "vitest";
 import {
-    quickSearchFuse,
-    quickSearchOrder,
-    type QuickSearchEntry,
-    type QuickSearchFrom,
-    type QuickSearchRemoteEntry,
-} from "./quickSearchFuse.js";
+    searchFuse,
+    searchOrder,
+    type SearchEntry,
+    type SearchFrom,
+    type SearchRemoteEntry,
+} from "./searchFuse.js";
 
 /** The fusion cases every platform must pass, as the client ships them. */
 interface FusionFixture {
@@ -16,13 +16,13 @@ interface FusionFixture {
         readonly name: string;
         readonly remote: readonly { readonly key: string; readonly rank: number }[];
         readonly local: readonly { readonly key: string }[];
-        readonly expected: readonly { readonly key: string; readonly from: QuickSearchFrom }[];
+        readonly expected: readonly { readonly key: string; readonly from: SearchFrom }[];
     }[];
 }
 const fixture = JSON.parse(
     readFileSync(
         createRequire(import.meta.url).resolve(
-            "@slopus/happy-agent-client/quickSearchFusion.fixtures.json",
+            "@slopus/happy-agent-client/searchFusion.fixtures.json",
         ),
         "utf8",
     ),
@@ -34,11 +34,11 @@ interface Row {
     readonly snippet?: string;
 }
 
-const local = (key: string, title = key): QuickSearchEntry<Row> => ({
+const local = (key: string, title = key): SearchEntry<Row> => ({
     key,
     row: { title, from: "local" },
 });
-const remote = (key: string, rank: number, snippet?: string): QuickSearchRemoteEntry<Row> => ({
+const remote = (key: string, rank: number, snippet?: string): SearchRemoteEntry<Row> => ({
     key,
     rank,
     row: { title: `remote ${key}`, from: "remote", ...(snippet ? { snippet } : {}) },
@@ -48,17 +48,17 @@ const merge = (mine: Row, theirs: Row): Row => ({
     from: "both",
     ...(theirs.snippet ? { snippet: theirs.snippet } : {}),
 });
-const keys = (entries: readonly QuickSearchEntry<Row>[]) => entries.map((entry) => entry.key);
+const keys = (entries: readonly SearchEntry<Row>[]) => entries.map((entry) => entry.key);
 
 it("passes the client's fusion cases", () => {
     expect(fixture.k).toBe(60);
     expect(fixture.cases.length).toBeGreaterThan(0);
     for (const fusion of fixture.cases)
-        expect(quickSearchOrder(fusion.remote, fusion.local), fusion.name).toEqual(fusion.expected);
+        expect(searchOrder(fusion.remote, fusion.local), fusion.name).toEqual(fusion.expected);
 });
 
 it("shows the local answer as it ranked itself until the Happy Agent answers", () => {
-    const shown = quickSearchFuse({
+    const shown = searchFuse({
         local: [local("agent:a"), local("document:b"), local("todo:c")],
         held: [],
         merge,
@@ -68,7 +68,7 @@ it("shows the local answer as it ranked itself until the Happy Agent answers", (
 });
 
 it("fuses the remote answer under the top row, one row per key, remote fields merged", () => {
-    const shown = quickSearchFuse({
+    const shown = searchFuse({
         local: [local("agent:a"), local("document:b"), local("todo:c")],
         remote: [
             remote("vault_file:f", 1, "line 3: budget"),
@@ -92,7 +92,7 @@ it("fuses the remote answer under the top row, one row per key, remote fields me
 });
 
 it("keeps every row through the highlight where the reader saw it", () => {
-    const shown = quickSearchFuse({
+    const shown = searchFuse({
         local: [local("agent:a"), local("agent:b"), local("agent:c")],
         remote: [remote("agent:c", 1), remote("vault_folder:v", 2), remote("agent:b", 3)],
         held: ["agent:a", "agent:b"],
@@ -108,14 +108,14 @@ it("gives the same order again when the held rows are the ones it showed", () =>
         remote: [remote("vault_file:x", 1), remote("agent:b", 2), remote("vault_file:y", 3)],
         merge,
     };
-    const first = keys(quickSearchFuse({ ...input, held: [] }));
+    const first = keys(searchFuse({ ...input, held: [] }));
     // The reader arrows down two rows: the prefix they pass is what was shown.
-    const again = keys(quickSearchFuse({ ...input, held: first.slice(0, 3) }));
+    const again = keys(searchFuse({ ...input, held: first.slice(0, 3) }));
     expect(again).toEqual(first);
 });
 
 it("drops a held row that neither answer still finds", () => {
-    const shown = quickSearchFuse({
+    const shown = searchFuse({
         local: [local("agent:b")],
         remote: [remote("vault_file:x", 1)],
         held: ["agent:a", "agent:b"],
@@ -125,7 +125,7 @@ it("drops a held row that neither answer still finds", () => {
 });
 
 it("shows the remote answer alone when nothing is found locally", () => {
-    const shown = quickSearchFuse({
+    const shown = searchFuse({
         local: [],
         remote: [remote("vault_file:x", 1), remote("artifact:y", 2)],
         held: [],

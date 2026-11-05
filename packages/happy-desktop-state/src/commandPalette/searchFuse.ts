@@ -1,50 +1,50 @@
 /**
- * One quick-search answer drawn from two: what this window found at
+ * One search answer drawn from two: what this window found at
  * keystroke speed among the snapshots it already holds, and what the Happy
- * Agent's quick search found, which arrives later and may be missing.
+ * Agent's search found, which arrives later and may be missing.
  *
- * Both are ranked best first and name each thing by its quick-search key,
+ * Both are ranked best first and name each thing by its search key,
  * `<type>:<id>`, so the same chat, document, or file found by both is one
- * row. The order is the client's `fuseQuickSearchResults`, the Reciprocal
+ * row. The order is the client's `fuseSearchResults`, the Reciprocal
  * Rank Fusion every platform shares; what is this window's own is only that
  * rows the reader has already looked at stay put.
  */
-import { fuseQuickSearchResults } from "@slopus/happy-agent-client";
+import { fuseSearchResults } from "@slopus/happy-agent-client";
 
-/** One ranked thing, by its quick-search key. */
-export interface QuickSearchEntry<Row> {
+/** One ranked thing, by its search key. */
+export interface SearchEntry<Row> {
     readonly key: string;
     readonly row: Row;
 }
 
 /** One thing the Happy Agent found, at its 1-based place in its own answer. */
-export interface QuickSearchRemoteEntry<Row> extends QuickSearchEntry<Row> {
+export interface SearchRemoteEntry<Row> extends SearchEntry<Row> {
     readonly rank: number;
 }
 
 /** Where one fused result's fields come from. */
-export type QuickSearchFrom = "local" | "remote";
+export type SearchFrom = "local" | "remote";
 
 /**
  * The fused order of two answers, each key once, saying which answer's
  * fields it carries: the Happy Agent's whenever it found the thing too.
  */
-export function quickSearchOrder(
+export function searchOrder(
     remote: readonly { readonly key: string; readonly rank: number }[],
     local: readonly { readonly key: string }[],
-): { readonly key: string; readonly from: QuickSearchFrom }[] {
+): { readonly key: string; readonly from: SearchFrom }[] {
     const remoteKeys = new Set(remote.map((entry) => entry.key));
-    return fuseQuickSearchResults(remote, local).map((entry) => ({
+    return fuseSearchResults(remote, local).map((entry) => ({
         key: entry.key,
         from: remoteKeys.has(entry.key) ? "remote" : "local",
     }));
 }
 
-export interface QuickSearchFuseInput<Row> {
+export interface SearchFuseInput<Row> {
     /** This window's own answer, best first. */
-    readonly local: readonly QuickSearchEntry<Row>[];
+    readonly local: readonly SearchEntry<Row>[];
     /** The Happy Agent's answer to the same query; absent until it arrives. */
-    readonly remote?: readonly QuickSearchRemoteEntry<Row>[];
+    readonly remote?: readonly SearchRemoteEntry<Row>[];
     /**
      * The keys of the rows the reader has seen from the top through the
      * highlighted one, in the order shown. Those rows keep their places when
@@ -64,7 +64,7 @@ export interface QuickSearchFuseInput<Row> {
  * highlighted past the top, that is the top row. A thing both found is one
  * row, keyed as before, so the local row it was keeps its identity.
  */
-export function quickSearchFuse<Row>(input: QuickSearchFuseInput<Row>): QuickSearchEntry<Row>[] {
+export function searchFuse<Row>(input: SearchFuseInput<Row>): SearchEntry<Row>[] {
     const local = new Map<string, Row>();
     for (const entry of input.local) if (!local.has(entry.key)) local.set(entry.key, entry.row);
     const remote = new Map<string, Row>();
@@ -79,13 +79,13 @@ export function quickSearchFuse<Row>(input: QuickSearchFuseInput<Row>): QuickSea
     const order =
         input.remote === undefined
             ? [...local.keys()]
-            : quickSearchOrder(
+            : searchOrder(
                   input.remote,
                   [...local.keys()].map((key) => ({ key })),
               ).map((entry) => entry.key);
     const first = input.local[0]?.key;
     const held = input.held.length > 0 ? input.held : first === undefined ? [] : [first];
-    const shown: QuickSearchEntry<Row>[] = [];
+    const shown: SearchEntry<Row>[] = [];
     const placed = new Set<string>();
     const place = (key: string): void => {
         if (placed.has(key)) return;

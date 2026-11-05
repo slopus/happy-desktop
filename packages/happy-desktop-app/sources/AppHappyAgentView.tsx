@@ -151,7 +151,7 @@ import {
     happyAgentArtifactCatalogStoreNoop,
     type HappyAgentArtifactCatalogSnapshot,
     happyAgentArtifactChatContext,
-    happyAgentQuickSearchStoreNone,
+    happyAgentSearchStoreNone,
     happyAgentSurfaceCatalogStoreNoop,
     happyAgentSurfaceSupportStoreNone,
     type HappyAgentStoriesSnapshot,
@@ -195,7 +195,7 @@ import {
     type HappyAgentSurfaceSupportSnapshot,
     type HappyAgentSurfaceId,
     type HappyAgentVaultItemId,
-    type HappyAgentQuickSearchStore,
+    type HappyAgentSearchStore,
     type HappyAgentSurfaces,
     type HappyAgentTodoListStore,
     type HappyAgentSurfaceMessagesStore,
@@ -680,11 +680,11 @@ export interface AppHappyAgentSession {
      */
     readonly surfaces?: HappyAgentSurfaces;
     /**
-     * What this Happy Agent's quick search finds for the palette's query, to
+     * What this Happy Agent's search finds for the palette's query, to
      * fuse with what the palette finds itself. Absent, the palette's own
      * answer stands alone.
      */
-    readonly quickSearch?: HappyAgentQuickSearchStore;
+    readonly search?: HappyAgentSearchStore;
 }
 
 export interface AppHappyAgentDirectorySnapshot {
@@ -4297,7 +4297,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
         workspace: active?.session?.workspace,
         surfaceCatalog: surfaceCatalogStore,
         ...(active?.session?.artifacts ? { artifacts: active.session.artifacts.search() } : {}),
-        ...(active?.session?.quickSearch ? { quickSearch: active.session.quickSearch } : {}),
+        ...(active?.session?.search ? { search: active.session.search } : {}),
         workspaceCreateProjectId: workspaceCreateTarget?.projectId,
         taskCreateAvailable: taskCreateTarget !== undefined,
         // A window that keeps no fold of its own leaves it to the shell, which
@@ -4875,10 +4875,10 @@ interface HappyAgentPaletteSubject {
      */
     artifacts?: HappyAgentArtifactCatalogStore;
     /**
-     * The machine's own quick search, asked as the query is typed and fused
+     * The machine's own search, asked as the query is typed and fused
      * with what the palette finds itself. Absent, the palette's answer stands alone.
      */
-    quickSearch?: HappyAgentQuickSearchStore;
+    search?: HappyAgentSearchStore;
     /** The window's own fold of its left side, when it keeps one. */
     sidebar?: { readonly hidden: boolean };
     /** What the sidebar on screen lists at its top level. */
@@ -5117,17 +5117,13 @@ function HappyAgentCommandPalette(
         artifactStore.get,
     );
     // Subscribing is all it costs; the palette closing cancels a search still running.
-    const quickSearchStore = props.quickSearch ?? happyAgentQuickSearchStoreNone;
-    const quickSearch = useSyncExternalStore(
-        quickSearchStore.subscribe,
-        quickSearchStore.get,
-        quickSearchStore.get,
-    );
+    const searchStore = props.search ?? happyAgentSearchStoreNone;
+    const search = useSyncExternalStore(searchStore.subscribe, searchStore.get, searchStore.get);
     const results = commandPaletteResults({
         ...paletteContext(props, props.facts),
         // An answer to another query is no answer to this one.
-        ...(quickSearch.status === "ready" && quickSearch.query === palette.query.trim()
-            ? { remote: quickSearch.hits }
+        ...(search.status === "ready" && search.query === palette.query.trim()
+            ? { remote: search.hits }
             : {}),
         held: palette.held,
         ...(surfaceCatalog.availability === "available"
@@ -5204,7 +5200,7 @@ function HappyAgentCommandPalette(
                 onClose={() => props.store.paletteClose()}
                 onQueryChange={(value) => {
                     props.store.queryUpdate(value);
-                    quickSearchStore.queryUpdate(value);
+                    searchStore.queryUpdate(value);
                     highlightIntent();
                 }}
                 onSelectionCommit={() => rowCommit(palette.activeIndex)}

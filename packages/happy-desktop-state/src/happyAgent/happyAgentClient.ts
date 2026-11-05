@@ -136,9 +136,9 @@ import {
 import { happyAgentSurfaceChatGroupsCreate } from "../surfaces/surfaceChatGroups.js";
 import { happyAgentSurfacesCreate, type HappyAgentSurfaces } from "../surfaces/surfaces.js";
 import {
-    happyAgentQuickSearchStoreCreate,
-    type HappyAgentQuickSearchStore,
-} from "../commandPalette/quickSearchStore.js";
+    happyAgentSearchStoreCreate,
+    type HappyAgentSearchStore,
+} from "../commandPalette/searchStore.js";
 import {
     happyAgentDeviceBridgesStoreCreate,
     type HappyAgentDeviceBridgesStore,
@@ -254,11 +254,11 @@ export interface HappyAgentWorkspaceClient {
      */
     surfaces(): HappyAgentSurfaces;
     /**
-     * What this Happy Agent's quick search finds for the command palette's
-     * query. Materialized on first access; a daemon without quick search
+     * What this Happy Agent's search finds for the command palette's
+     * query. Materialized on first access; a daemon without search
      * answers nothing, and the palette's own answer stands alone.
      */
-    quickSearch(): HappyAgentQuickSearchStore;
+    search(): HappyAgentSearchStore;
     /**
      * The document a presented-file preview shows, read into memory for the
      * host's viewer. Materialized on first access and shared, since one
@@ -619,7 +619,7 @@ export function happyAgentWorkspaceClientCreate(
                 : {}),
         }));
     let surfaces: HappyAgentSurfaces | undefined;
-    let quickSearch: HappyAgentQuickSearchStore | undefined;
+    let search: HappyAgentSearchStore | undefined;
     let toolMediaDocument: HappyAgentToolMediaDocumentStore | undefined;
     const deviceBridgeStores = new Map<HappyAgentGroupId, HappyAgentDeviceBridgesStore>();
     let deviceBridgeSupport: HappyAgentDeviceBridgeSupportStore | undefined;
@@ -845,9 +845,9 @@ export function happyAgentWorkspaceClientCreate(
             });
             return surfaces;
         },
-        quickSearch() {
+        search() {
             if (disposed) throw new Error("The Happy Agent client is disposed.");
-            return (quickSearch ??= happyAgentQuickSearchStoreCreate({
+            return (search ??= happyAgentSearchStoreCreate({
                 client: deps.client,
                 sync: deps.connection.sync,
             }));
@@ -1168,7 +1168,7 @@ export function happyAgentWorkspaceClientCreate(
             feed?.[Symbol.dispose]();
             feed = undefined;
             surfaces?.[Symbol.dispose]();
-            quickSearch?.[Symbol.dispose]();
+            search?.[Symbol.dispose]();
             surfaces = undefined;
             deps.catalogSource[Symbol.dispose]();
             for (const binding of chats.values()) {

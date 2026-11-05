@@ -7,7 +7,7 @@ import type {
     HappyAgentGroupId,
     HappyAgentProjectGroup,
     HappyAgentProjectId,
-    HappyAgentQuickSearchHit,
+    HappyAgentSearchHit,
     HappyAgentRecentTabMemory,
     HappyAgentSessionId,
     HappyAgentSurface,
@@ -477,7 +477,7 @@ it("offers no documents, todos, or artifacts on an empty palette", () => {
 
 const VAULT = surface("srf_vault", "Team vault", { kind: "vault" }, 50);
 
-const REMOTE: readonly HappyAgentQuickSearchHit[] = [
+const REMOTE: readonly HappyAgentSearchHit[] = [
     {
         type: "vault_file",
         key: "vault_file:vf_budget",
@@ -605,4 +605,56 @@ it("keeps the rows the reader has passed where they were when the Happy Agent an
         held: commandPaletteHeld(after, 4),
     });
     expect(ids(further)).toEqual(ids(after));
+});
+
+it("opens a found message in its conversation, and leaves out what the desktop cannot open", () => {
+    const remote: readonly HappyAgentSearchHit[] = [
+        {
+            type: "message",
+            key: "message:msg_1",
+            rank: 1,
+            agentId: "ses_index" as HappyAgentSessionId,
+            messageId: "msg_1",
+            role: "agent",
+            snippet: "rebuilt the search index overnight",
+            createdAt: NOW,
+            workspaceId: "prj_infra" as HappyAgentProjectId,
+            projectId: "prj_infra" as HappyAgentProjectId,
+        },
+        {
+            type: "message",
+            key: "message:msg_2",
+            rank: 2,
+            agentId: "ses_gone" as HappyAgentSessionId,
+            messageId: "msg_2",
+            role: "user",
+            snippet: "search where?",
+            createdAt: NOW,
+            workspaceId: null,
+            projectId: null,
+        },
+        { type: "user", key: "user:usr_1", rank: 3, userId: "usr_1", name: "Search Person" },
+        {
+            type: "skill",
+            key: "skill:sk_1",
+            rank: 4,
+            skillId: "sk_1",
+            name: "search-skill",
+            description: "Searches",
+        },
+    ];
+    const result = commandPaletteResults(input({ query: "search", remote }));
+    expect(result.rows.find((row) => row.id === "message:msg_1")).toMatchObject({
+        title: "rebuilt the search index overnight",
+        command: {
+            kind: "chatOpen",
+            happyAgentId: "local",
+            groupId: "prj_infra",
+            chatId: "ses_index",
+            archived: false,
+        },
+    });
+    expect(ids(result)).not.toContain("message:msg_2");
+    expect(ids(result)).not.toContain("user:usr_1");
+    expect(ids(result)).not.toContain("skill:sk_1");
 });

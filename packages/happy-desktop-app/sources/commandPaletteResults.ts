@@ -13,7 +13,7 @@ import type {
     HappyAgentTask,
     HappyAgentWorktreeGroup,
     HappyAgentLinkOpenPlacement,
-    HappyAgentQuickSearchHit,
+    HappyAgentSearchHit,
     ScrollbarVisibility,
     ThemeMode,
 } from "happy-desktop-state";
@@ -22,9 +22,9 @@ import {
     happyAgentSessionGroupIdOf,
     happyAgentVaultNameShown,
     happyAgentVaultPathShown,
-    quickSearchFuse,
-    type QuickSearchEntry,
-    type QuickSearchRemoteEntry,
+    searchFuse,
+    type SearchEntry,
+    type SearchRemoteEntry,
 } from "happy-desktop-state";
 import {
     commandShortcut,
@@ -222,7 +222,7 @@ export interface CommandPaletteResults {
      */
     readonly numbered: readonly number[];
     /**
-     * Where the found rows are in the flat list and the quick-search key of
+     * Where the found rows are in the flat list and the search key of
      * each, in order: what the palette records as the rows the reader has
      * passed when the highlight moves, so they keep their places when the
      * Happy Agent's answer arrives.
@@ -231,7 +231,7 @@ export interface CommandPaletteResults {
 }
 
 /**
- * The quick-search keys of the found rows the reader has passed, from the top
+ * The search keys of the found rows the reader has passed, from the top
  * through the highlighted row at `index`.
  */
 export function commandPaletteHeld(results: CommandPaletteResults, index: number): string[] {
@@ -338,10 +338,10 @@ export interface CommandPaletteSurfaceSources {
 export interface CommandPaletteInput extends CommandPaletteContext {
     readonly query: string;
     /**
-     * What the Happy Agent's quick search found for this same query, once it
+     * What the Happy Agent's search found for this same query, once it
      * has answered. Absent, the palette's own answer stands alone.
      */
-    readonly remote?: readonly HappyAgentQuickSearchHit[];
+    readonly remote?: readonly HappyAgentSearchHit[];
     /** The found rows the reader has passed, by key, as the palette recorded them. */
     readonly held?: readonly string[];
     readonly surfaces?: CommandPaletteSurfaceSources;
@@ -611,7 +611,7 @@ function rowRank(
 interface Ranked {
     readonly row: CommandPaletteRow;
     /**
-     * The thing's quick-search key, `<type>:<id>`, for a row a typed query
+     * The thing's search key, `<type>:<id>`, for a row a typed query
      * finds: the key the Happy Agent's answer names the same thing by.
      */
     readonly key?: string;
@@ -717,7 +717,7 @@ function subtasksOf(subtasks: readonly HappyAgentBotSubtask[]): HappyAgentBotSub
  */
 interface WorkOffer {
     readonly row: CommandPaletteCommandRow;
-    /** Its quick-search key: `agent:` and the conversation for a chat, a task, or a bot. */
+    /** Its search key: `agent:` and the conversation for a chat, a task, or a bot. */
     readonly key: string;
     /**
      * 0 for a top-level row of the sidebar on screen, 1 for any other live
@@ -1458,7 +1458,7 @@ const FOUND_LIMIT = 12;
 /**
  * What a typed query finds among the snapshots this window holds, best first:
  * live work, the open workspace's files, documents, todos, artifacts, and
- * other shared Surfaces, each with its quick-search key. The better match
+ * other shared Surfaces, each with its search key. The better match
  * comes first whatever it is; among equals, what the sidebar lists or the
  * reader joined, then what they opened last, then what changed last.
  */
@@ -1544,11 +1544,12 @@ const AGENT_KIND_LABEL = {
 /**
  * One thing the Happy Agent found, as the row that opens it here. Work this
  * window holds is its own row; other work opens in the workspace the Happy
- * Agent names, and is left out when it names none. Anything archived, which
- * the palette lists apart, is left out too.
+ * Agent names, and is left out when it names none, as a message is. Anything
+ * archived, which the palette lists apart, is left out too, and so is what
+ * the desktop has nowhere to open: a person, a skill.
  */
 function remoteRow(
-    hit: HappyAgentQuickSearchHit,
+    hit: HappyAgentSearchHit,
     input: CommandPaletteInput,
     work: ReadonlyMap<string, WorkOffer>,
 ): FoundRow | undefined {
@@ -1636,8 +1637,40 @@ function remoteRow(
                     glyph: { kind: "icon", name: "calendar" },
                     command: surfaceOpen(hit.surfaceId),
                 },
+                ...(hit.match === "content" ? snippet(hit.snippet) : {}),
             };
         }
+        case "message": {
+            // A message opens its conversation, where the conversation is known.
+            if (hit.workspaceId === null) return undefined;
+            const conversation = work.get(`agent:${hit.agentId}`)?.row.title;
+            const day = new Date(hit.createdAt).toLocaleDateString(undefined, {
+                month: "short",
+                day: "numeric",
+            });
+            return {
+                row: {
+                    kind: "command",
+                    id: hit.key,
+                    title: hit.snippet,
+                    meta: [conversation ?? "Chat", hit.role === "agent" ? "Agent" : undefined, day]
+                        .filter((part) => part !== undefined)
+                        .join(" · "),
+                    glyph: { kind: "icon", name: "chat" },
+                    command: {
+                        kind: "chatOpen",
+                        happyAgentId,
+                        groupId: hit.workspaceId,
+                        chatId: hit.agentId,
+                        archived: false,
+                    },
+                },
+            };
+        }
+        // The desktop has no page of its own for a person or a skill, so neither is offered.
+        case "user":
+        case "skill":
+            return undefined;
         case "artifact": {
             const type = artifactTypeOf(hit.artifactType);
             return {
@@ -1727,12 +1760,12 @@ function foundRows(
     offers: readonly WorkOffer[],
 ): { readonly rows: CommandPaletteCommandRow[]; readonly keys: string[]; readonly best: number } {
     const local = localFound(input, offers);
-    const localEntries: QuickSearchEntry<FoundRow>[] = local.flatMap((entry) =>
+    const localEntries: SearchEntry<FoundRow>[] = local.flatMap((entry) =>
         entry.key === undefined || entry.row.kind !== "command"
             ? []
             : [{ key: entry.key, row: { row: entry.row } }],
     );
-    let remote: QuickSearchRemoteEntry<FoundRow>[] | undefined;
+    let remote: SearchRemoteEntry<FoundRow>[] | undefined;
     if (input.remote !== undefined) {
         const work = new Map(offers.map((offer) => [offer.key, offer]));
         remote = input.remote.flatMap((hit) => {
@@ -1742,7 +1775,7 @@ function foundRows(
                 : [{ key: hit.key, rank: hit.rank, row: snippetShown(row) }];
         });
     }
-    const fused = quickSearchFuse<FoundRow>({
+    const fused = searchFuse<FoundRow>({
         local: localEntries,
         ...(remote === undefined ? {} : { remote }),
         held: input.held ?? [],
@@ -1768,7 +1801,7 @@ function foundRows(
  * An empty query answers with what the reader is likely to open next. Anything
  * typed searches the whole machine: one list of what it finds — its work, the
  * open workspace's files, documents, todos, artifacts, shared Surfaces, and
- * whatever the Happy Agent's quick search adds, vault files and calendar
+ * whatever the Happy Agent's search adds, vault files and calendar
  * events among them — then the window's acts and its settings. Those three
  * are listed by their best answer, so a typed act ("fold sidebar") is not left
  * under work that merely contains one of its words. Work that is over comes
