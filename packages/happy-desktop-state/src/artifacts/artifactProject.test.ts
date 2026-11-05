@@ -1,6 +1,6 @@
-import type { ArtifactVersion } from "@slopus/happy-agent-client";
+import type { Artifact, ArtifactVersion } from "@slopus/happy-agent-client";
 import { describe, expect, it } from "vitest";
-import { happyAgentArtifactVersionProject } from "./artifactProject.js";
+import { happyAgentArtifactProject, happyAgentArtifactVersionProject } from "./artifactProject.js";
 
 const entry = { path: "index.html", mimeType: "text/html", size: 10, sha256: "a".repeat(64) };
 
@@ -49,5 +49,57 @@ describe("happyAgentArtifactVersionProject background", () => {
             {},
         ])
             expect(happyAgentArtifactVersionProject(wire(value))).not.toHaveProperty("background");
+    });
+});
+
+describe("happyAgentArtifactProject cover", () => {
+    /** An artifact as a daemon with covers sends it. */
+    const artifact = (cover: unknown): Artifact =>
+        ({
+            id: "art_1",
+            type: "html",
+            title: "Page",
+            status: "active",
+            latestVersion: 3,
+            background: "#10161c",
+            entry,
+            fileCount: 2,
+            size: 20,
+            source: null,
+            createdBy: { kind: "user", userId: null },
+            createdAt: 1,
+            updatedBy: { kind: "user", userId: null },
+            updatedSource: null,
+            updatedAt: 1,
+            deletedBy: null,
+            deletedSource: null,
+            deletedAt: null,
+            version: "v",
+            cover,
+        }) as unknown as Artifact;
+    const link = (id: string, version: number, path: string) =>
+        `https://daemon/${id}/${String(version)}/${path}`;
+    const wide = { path: "cover.png", mimeType: "image/png", width: 1600, height: 900, aspect: "wide" };
+
+    it("reads the latest version's cover and background where covers are drawn", () => {
+        expect(happyAgentArtifactProject(artifact(wide), link)).toMatchObject({
+            cover: { ...wide, version: 3, url: "https://daemon/art_1/3/cover.png" },
+            background: "#10161c",
+        });
+    });
+
+    it("reads none where covers are not drawn, or for one it does not know", () => {
+        expect(happyAgentArtifactProject(artifact(wide))).toMatchObject({
+            cover: null,
+            background: null,
+        });
+        for (const cover of [
+            null,
+            undefined,
+            { ...wide, aspect: "tall" },
+            { ...wide, aspect: undefined },
+            { ...wide, mimeType: "image/svg+xml" },
+        ])
+            expect(happyAgentArtifactProject(artifact(cover), link).cover).toBeNull();
     });
 });

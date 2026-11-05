@@ -6,6 +6,7 @@ import {
     type HappyAgentArtifact,
     type HappyAgentArtifactCatalogSnapshot,
     type HappyAgentArtifactContent,
+    type HappyAgentArtifactCover,
     type HappyAgentArtifactFile,
     type HappyAgentArtifactFileLink,
     type HappyAgentArtifactId,
@@ -74,6 +75,28 @@ function file(path: string, mimeType: string, size: number): HappyAgentArtifactF
     return { path, mimeType, size, sha256: `sha-${path}` };
 }
 
+/** A cover drawn for this page, in one of the two shapes covers come in. */
+function coverOf(asset: string, aspect: HappyAgentArtifactCover["aspect"]): HappyAgentArtifactCover {
+    return {
+        version: 1,
+        path: "cover.webp",
+        mimeType: "image/webp",
+        width: aspect === "wide" ? 1600 : 1200,
+        height: aspect === "wide" ? 900 : 1200,
+        aspect,
+        url: asset,
+    };
+}
+const coverRevenue = coverOf(
+    new URL("../assets/feed-cover-revenue.webp", import.meta.url).href,
+    "wide",
+);
+const coverLaunch = coverOf(new URL("../assets/feed-cover-launch.webp", import.meta.url).href, "wide");
+const coverSignups = coverOf(
+    new URL("../assets/feed-cover-signups.webp", import.meta.url).href,
+    "square",
+);
+
 function artifact(
     id: string,
     type: HappyAgentArtifactType,
@@ -86,6 +109,8 @@ function artifact(
         title,
         status: "active",
         latestVersion: 1,
+        cover: null,
+        background: null,
         entry: file("index.md", "text/markdown", 2_048),
         fileCount: 1,
         size: 2_048,
@@ -117,6 +142,7 @@ const launchPost = artifact("launch", "markdown", "Launch post draft", {
     updatedAt: 1_760_100_000_000,
 });
 const landing = artifact("landing", "html", "Landing page mock", {
+    cover: coverLaunch,
     entry: file("index.html", "text/html", 1_200),
     fileCount: 3,
     size: 9_400,
@@ -136,11 +162,24 @@ const shots = artifact("shots", "image_series", "Onboarding screenshots", {
     updatedAt: 1_760_003_600_000,
 });
 const report = artifact("report", "document", "Q3 report", {
+    cover: coverRevenue,
     entry: file("report.pdf", "application/pdf", 1_482_113),
     size: 1_482_113,
     source: { kind: "task", taskId: "task-1", agentId: "agent-3" },
     createdBy: { kind: "user", userId: null },
     updatedBy: { kind: "user", userId: null },
+});
+const signups = artifact("signups", "image", "Signups by channel", {
+    cover: coverSignups,
+    background: "#16171c",
+    entry: file("signups.png", "image/png", 36_992),
+    size: 36_992,
+    source: { kind: "bot", botId: "bot-1", agentId: "agent-2" },
+    createdBy: { kind: "agent", agentId: "agent-2", botId: "bot-1" },
+    updatedBy: { kind: "agent", agentId: "agent-2", botId: "bot-1" },
+    updatedSource: { kind: "bot", botId: "bot-1", agentId: "agent-2" },
+    createdAt: 1_760_003_600_000,
+    updatedAt: 1_760_003_600_000,
 });
 const capture = artifact("capture", "video", "Sync walkthrough", {
     entry: file("walkthrough.mp4", "video/mp4", 18_220_331),
@@ -159,6 +198,8 @@ const future = artifact("future", "unknown", "Spreadsheet from a newer agent", {
 });
 const removed = artifact("removed", "image", "Old logo", {
     status: "deleted",
+    // Never drawn: a deleted artifact wears its glyph.
+    cover: coverSignups,
     entry: file("logo.svg", "image/svg+xml", 900),
     size: 900,
     deletedBy: { kind: "user", userId: "user-1" },
@@ -175,7 +216,7 @@ const catalogBase: HappyAgentArtifactCatalogSnapshot = {
     deletedShown: false,
     scope: "all",
     loading: false,
-    artifacts: [launchPost, landing, shots, report, capture, future],
+    artifacts: [launchPost, landing, signups, shots, report, capture, future],
     hasMore: true,
     loadingMore: false,
 };
@@ -537,7 +578,7 @@ export function HappyAgentArtifactsBlueprintPage() {
             title="HappyAgentArtifacts"
         >
             <FullScreenSpecimen
-                detail="Newest first, one row per artifact: type glyph, title, version, and where, who, and when. An unknown type and an unknown place read as an artifact made elsewhere by someone."
+                detail="Newest first, one row per artifact: a 16:9 thumbnail, title, version, and where, who, and when. A wide cover fills the thumbnail, a square one stands whole on the artifact's background, and an artifact without a cover wears its type's glyph there. An unknown type and an unknown place read as an artifact made elsewhere by someone."
                 label="Catalog"
                 screen="01-catalog-1100x760"
                 window={{ width: 1100, height: 760 }}
@@ -621,6 +662,28 @@ export function HappyAgentArtifactsBlueprintPage() {
                         selectedId={launchPost.id}
                     />
                 }
+            </FullScreenSpecimen>
+
+            <FullScreenSpecimen
+                detail="The panel beside a chat scoped to everything: the same thumbnails, 64 by 36."
+                label="Panel · everything"
+                number="27"
+                screen="27-panel-all-320x560"
+                window={{ width: 320, height: 560 }}
+            >
+                <HappyAgentArtifactsPanel
+                    catalog={{
+                        ...catalogBase,
+                        scope: "all",
+                        context: { chat: { by: "agent", agentId: "agent-1" } },
+                        hasMore: false,
+                    }}
+                    labels={labels}
+                    onArtifactOpen={noop}
+                    onLoadMore={noop}
+                    onScopeChange={noop}
+                    selectedId={signups.id}
+                />
             </FullScreenSpecimen>
 
             <FullScreenSpecimen

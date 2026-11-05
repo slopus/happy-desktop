@@ -72,6 +72,7 @@ it("reads the latest version's cover, summary, and background", async () => {
         latestVersion: 3,
         cover: {
             ...COVER,
+            version: 3,
             url: "https://daemon/v0/artifacts/artifact-1/versions/3/files/cover.png",
         },
         summary: "Revenue up 18% QoQ.",

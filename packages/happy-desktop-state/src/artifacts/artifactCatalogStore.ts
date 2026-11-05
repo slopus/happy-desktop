@@ -3,6 +3,7 @@ import {
     type ArtifactListQuery,
     type HappyAgentClient,
 } from "@slopus/happy-agent-client";
+import { happyAgentHealthCapability } from "../happyAgentConnection/happyAgentHealthCapability.js";
 import type { HappyAgentSync } from "../happyAgentConnection/happyAgentSync.js";
 import { happyAgentSyncRead } from "../happyAgentConnection/happyAgentSyncRead.js";
 import { happyAgentUserError } from "../happyAgent/happyAgentSupport.js";
@@ -108,7 +109,7 @@ export interface HappyAgentArtifactCatalogStore {
 }
 
 export interface HappyAgentArtifactCatalogDeps {
-    readonly client: Pick<HappyAgentClient, "listArtifacts" | "getArtifact">;
+    readonly client: Pick<HappyAgentClient, "listArtifacts" | "getArtifact" | "artifactFileUrl">;
     readonly sync: HappyAgentSync;
     /** Reports who a list credits, so the people among them can be named once for every surface. */
     readonly authorsSeen?: (authors: readonly (HappyAgentArtifactAuthor | null)[]) => void;
@@ -258,6 +259,13 @@ export function happyAgentArtifactCatalogStoreCreate(
     let journal: HappyAgentArtifactEvent[] = [];
     let nextPageCursor: string | null = null;
     let failed = false;
+    /** How a cover's file is addressed, on a daemon that has covers; a list draws them. */
+    const coverLink = () =>
+        happyAgentHealthCapability(deps.sync.health(), "artifactCovers")
+            ? deps.client.artifactFileUrl
+            : undefined;
+    const project = (artifact: Parameters<typeof happyAgentArtifactProject>[0]) =>
+        happyAgentArtifactProject(artifact, coverLink());
     let disposed = false;
 
     const publish = (next: Partial<HappyAgentArtifactCatalogSnapshot>): void => {
@@ -313,7 +321,7 @@ export function happyAgentArtifactCatalogStoreCreate(
         void deps.client.getArtifact(artifactId, { signal }).then(
             (response) => {
                 if (signal.aborted) return;
-                const artifact = happyAgentArtifactProject(response.artifact);
+                const artifact = project(response.artifact);
                 const artifacts = happyAgentArtifactCatalogReplace(
                     snapshot.artifacts,
                     artifact,
@@ -369,7 +377,7 @@ export function happyAgentArtifactCatalogStoreCreate(
                 }
                 nextPageCursor = response.nextPageCursor;
                 const complete = nextPageCursor === null;
-                const read = response.artifacts.map(happyAgentArtifactProject);
+                const read = response.artifacts.map(project);
                 const artifacts = eventsApply(read, journal.slice(mark), complete);
                 deps.authorsSeen?.(happyAgentArtifactAuthors(artifacts));
                 publish({
@@ -455,12 +463,20 @@ export function happyAgentArtifactCatalogStoreCreate(
                     continue;
                 }
                 if (input.kind !== "update" || input.update.kind !== "event") continue;
-                const event = happyAgentArtifactEventProject(input.update.event);
+                const event = happyAgentArtifactEventProject(input.update.event, coverLink());
                 if (event === undefined) continue;
                 if (readsInFlight > 0) journal.push(event);
                 if (snapshot.loading || snapshot.availability !== "available") continue;
                 const artifacts = eventsApply(snapshot.artifacts, [event], !snapshot.hasMore);
                 if (artifacts === snapshot.artifacts) continue;
+                // A new version may name another cover, which its event does
+                // not carry: the artifact is read again for it.
+                if (
+                    event.type === "updated" &&
+                    coverLink() !== undefined &&
+                    artifacts.some((artifact) => artifact.id === event.artifactId)
+                )
+                    artifactReread(event.artifactId);
                 if (event.type === "created")
                     deps.authorsSeen?.(happyAgentArtifactAuthors([event.artifact]));
                 publish({ artifacts });
@@ -507,7 +523,7 @@ export function happyAgentArtifactCatalogStoreCreate(
                     const complete = nextPageCursor === null;
                     const known = new Set(snapshot.artifacts.map((artifact) => artifact.id));
                     const page = response.artifacts
-                        .map(happyAgentArtifactProject)
+                        .map(project)
                         .filter((artifact) => !known.has(artifact.id));
                     const artifacts = eventsApply(
                         [...snapshot.artifacts, ...page],

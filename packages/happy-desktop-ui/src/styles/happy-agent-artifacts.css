@@ -198,22 +198,37 @@
     outline-offset: -2px;
 }
 
-.happy-agent-artifact-row__glyph {
+/* Every row leads with one 16:9 slot, so every row is one height whatever it
+   shows: a wide cover across it, a square one whole in its middle, or the
+   type's glyph. The sizes are `THUMBNAIL` in HappyAgentArtifactRow.tsx. */
+.happy-agent-artifact-row__thumbnail {
     display: flex;
     flex: 0 0 auto;
     align-items: center;
     justify-content: center;
-    width: 36px;
-    height: 36px;
+    overflow: hidden;
+    width: 80px;
+    height: 45px;
     border-radius: var(--happy-radius-md);
     background: var(--surface-high);
     color: var(--text-secondary);
 }
 
-.happy-agent-artifact-row[data-density="panel"] .happy-agent-artifact-row__glyph {
-    width: 28px;
-    height: 28px;
+.happy-agent-artifact-row[data-density="panel"] .happy-agent-artifact-row__thumbnail {
+    width: 64px;
+    height: 36px;
     border-radius: var(--happy-radius-sm);
+}
+
+/* The slot clips and rounds the picture; a square one stands on the slot's
+   own colour, so it has no corners or hairline of its own. */
+.happy-agent-artifact-row__cover.happy-media-image-tile {
+    border-radius: 0;
+    background: transparent;
+}
+
+.happy-agent-artifact-row__cover.happy-media-image-tile::after {
+    content: none;
 }
 
 .happy-agent-artifact-row__text {

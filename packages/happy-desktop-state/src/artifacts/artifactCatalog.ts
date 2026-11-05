@@ -1,6 +1,7 @@
 import type { HappyAgentEvent } from "@slopus/happy-agent-client";
 import {
     happyAgentArtifactAuthorProject,
+    happyAgentArtifactCoverSame,
     happyAgentArtifactFileProject,
     happyAgentArtifactProject,
     happyAgentArtifactSourceProject,
@@ -9,6 +10,7 @@ import type {
     HappyAgentArtifact,
     HappyAgentArtifactAuthor,
     HappyAgentArtifactFile,
+    HappyAgentArtifactFileLinkCreate,
     HappyAgentArtifactFilter,
     HappyAgentArtifactId,
     HappyAgentArtifactSource,
@@ -58,10 +60,14 @@ export type HappyAgentArtifactEvent =
 /** The artifact change an event carries, or nothing for every other event. */
 export function happyAgentArtifactEventProject(
     event: HappyAgentEvent,
+    coverLink?: HappyAgentArtifactFileLinkCreate,
 ): HappyAgentArtifactEvent | undefined {
     switch (event.type) {
         case "artifact.created":
-            return { type: "created", artifact: happyAgentArtifactProject(event.payload.artifact) };
+            return {
+                type: "created",
+                artifact: happyAgentArtifactProject(event.payload.artifact, coverLink),
+            };
         case "artifact.updated": {
             const { changes } = event.payload;
             return {
@@ -268,6 +274,13 @@ export function happyAgentArtifactCatalogReplace(
     if (happyAgentArtifactVersionNewer(current.version, artifact.version)) return artifacts;
     if (!happyAgentArtifactFilterMatches(filter, artifact))
         return [...artifacts.slice(0, index), ...artifacts.slice(index + 1)];
-    if (current.version === artifact.version) return artifacts;
+    // An update's event does not carry the new version's cover, so a read of
+    // the same version may still bring one.
+    if (
+        current.version === artifact.version &&
+        happyAgentArtifactCoverSame(current.cover, artifact.cover) &&
+        current.background === artifact.background
+    )
+        return artifacts;
     return [...artifacts.slice(0, index), artifact, ...artifacts.slice(index + 1)];
 }

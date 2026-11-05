@@ -9,6 +9,7 @@ import { happyAgentHealthCapability } from "../happyAgentConnection/happyAgentHe
 import {
     happyAgentArtifactBackground,
     happyAgentArtifactCoverProject,
+    happyAgentArtifactCoverSame,
     happyAgentArtifactSummaryProject,
     happyAgentArtifactTypeProject,
 } from "./artifactProject.js";
@@ -17,12 +18,6 @@ import type {
     HappyAgentArtifactId,
     HappyAgentArtifactType,
 } from "./artifactTypes.js";
-
-/** An artifact's cover, and the address its picture is read from. */
-export interface HappyAgentArtifactTitleCover extends HappyAgentArtifactCover {
-    /** The cover file of the latest version, through the client's authenticated file route. */
-    readonly url: string;
-}
 
 /** What one artifact a message names reads as, once it has been read. */
 export type HappyAgentArtifactTitle =
@@ -38,7 +33,7 @@ export type HappyAgentArtifactTitle =
            * The picture the artifact is shown by as a post, or `null`: none
            * named, or a daemon without `capabilities.artifactCovers`.
            */
-          readonly cover: HappyAgentArtifactTitleCover | null;
+          readonly cover: HappyAgentArtifactCover | null;
           /** One plain line about the artifact, or `null`. */
           readonly summary: string | null;
           /** The colour the latest version asks to be shown on, or `null` for none. */
@@ -93,19 +88,6 @@ function notFound(error: unknown): boolean {
 
 const EMPTY: HappyAgentArtifactTitlesSnapshot = new Map();
 
-const sameCover = (
-    left: HappyAgentArtifactTitleCover | null,
-    right: HappyAgentArtifactTitleCover | null,
-): boolean =>
-    left === right ||
-    (left !== null &&
-        right !== null &&
-        left.url === right.url &&
-        left.mimeType === right.mimeType &&
-        left.width === right.width &&
-        left.height === right.height &&
-        left.aspect === right.aspect);
-
 const sameTitle = (left: HappyAgentArtifactTitle, right: HappyAgentArtifactTitle): boolean =>
     left.type === "missing" || right.type === "missing"
         ? left.type === right.type
@@ -113,7 +95,7 @@ const sameTitle = (left: HappyAgentArtifactTitle, right: HappyAgentArtifactTitle
           left.artifactType === right.artifactType &&
           left.status === right.status &&
           left.latestVersion === right.latestVersion &&
-          sameCover(left.cover, right.cover) &&
+          happyAgentArtifactCoverSame(left.cover, right.cover) &&
           left.summary === right.summary &&
           left.background === right.background;
 
@@ -171,7 +153,7 @@ export function happyAgentArtifactTitlesStoreCreate(
                     return;
                 }
                 const cover = happyAgentHealthCapability(deps.sync.health(), "artifactCovers")
-                    ? happyAgentArtifactCoverProject(artifact)
+                    ? happyAgentArtifactCoverProject(artifact, deps.client.artifactFileUrl)
                     : null;
                 artifactSet(artifactId, {
                     type: "ready",
@@ -179,17 +161,7 @@ export function happyAgentArtifactTitlesStoreCreate(
                     artifactType: happyAgentArtifactTypeProject(artifact.type),
                     status: artifact.status,
                     latestVersion: artifact.latestVersion,
-                    cover:
-                        cover === null
-                            ? null
-                            : {
-                                  ...cover,
-                                  url: deps.client.artifactFileUrl(
-                                      artifact.id,
-                                      artifact.latestVersion,
-                                      cover.path,
-                                  ),
-                              },
+                    cover,
                     summary: happyAgentArtifactSummaryProject(artifact),
                     background: happyAgentArtifactBackground(artifact.background) ?? null,
                 });

@@ -79,6 +79,8 @@ function viewerOf(
         title,
         status: "active",
         latestVersion: 1,
+        cover: null,
+        background: null,
         entry,
         fileCount: 1,
         size,

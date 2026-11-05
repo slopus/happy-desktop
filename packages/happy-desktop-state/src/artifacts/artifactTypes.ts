@@ -65,14 +65,28 @@ export type HappyAgentArtifactCoverMimeType =
  * box before a byte of it has arrived.
  */
 export interface HappyAgentArtifactCover {
-    /** One file of the latest version. */
+    /** The version whose file it is: the latest one when it was read. */
+    readonly version: number;
+    /** One file of that version. */
     readonly path: string;
     readonly mimeType: HappyAgentArtifactCoverMimeType;
     readonly width: number;
     readonly height: number;
     /** The cover's shape, which it is drawn at exactly. */
     readonly aspect: HappyAgentArtifactCoverAspect;
+    /** Where the picture is read from, through the client's authenticated file route. */
+    readonly url: string;
 }
+
+/**
+ * The address of one file of one version, as the connection's client reads
+ * it. Given to a projection where covers are shown; without it, there are none.
+ */
+export type HappyAgentArtifactFileLinkCreate = (
+    artifactId: HappyAgentArtifactId,
+    version: number,
+    path: string,
+) => string;
 
 /** The two shapes a cover comes in: 16:9, or square. */
 export type HappyAgentArtifactCoverAspect = "wide" | "square";
@@ -116,6 +130,18 @@ export interface HappyAgentArtifact {
     readonly status: "active" | "deleted";
     /** The number of the latest version, from 1. */
     readonly latestVersion: number;
+    /**
+     * The picture that stands for the artifact in a list, or `null`: none
+     * named, one this build cannot draw, or a daemon without
+     * `capabilities.artifactCovers`. After a new version it is the previous
+     * one's until the artifact is read again.
+     */
+    readonly cover: HappyAgentArtifactCover | null;
+    /**
+     * The colour the latest version asks to be shown on, or `null` for none;
+     * a cover is drawn on it. Kept with the cover, and read the same way.
+     */
+    readonly background: string | null;
     /** The latest version's entry: the file a client opens to show it. */
     readonly entry: HappyAgentArtifactFile;
     readonly fileCount: number;

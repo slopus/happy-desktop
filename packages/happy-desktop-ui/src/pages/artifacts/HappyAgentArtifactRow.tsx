@@ -2,6 +2,7 @@ import { Fragment } from "react";
 import type { HappyAgentArtifact, HappyAgentArtifactId } from "happy-desktop-state";
 import { happyAgentArtifactTypeLabel } from "happy-desktop-state";
 import { Badge } from "../../Badge";
+import { MediaImageTile } from "../../ConversationMedia";
 import { ArtifactTypeGlyph, type HappyAgentArtifactLabels } from "./artifactPresentation";
 
 export interface HappyAgentArtifactRowProps {
@@ -14,16 +15,28 @@ export interface HappyAgentArtifactRowProps {
     onOpen: (artifactId: HappyAgentArtifactId) => void;
 }
 
+/** The 16:9 slot a row leads with, by density: its cover, or its type's glyph. */
+const THUMBNAIL = {
+    page: { width: 80, height: 45, glyph: 18 },
+    panel: { width: 64, height: 36, glyph: 16 },
+} as const;
+
 /**
- * One artifact in a list: what kind of thing it is, what it is called, where it
- * was made and by whom, when it last changed, and how many versions it has.
- * The whole row opens it. A deleted artifact stays readable as a record of what
- * was there, in secondary type and marked as gone.
+ * One artifact in a list: its cover, what it is called, where it was made and
+ * by whom, when it last changed, and how many versions it has. The whole row
+ * opens it. A deleted artifact stays readable as a record of what was there,
+ * in secondary type and marked as gone.
+ *
+ * Every row leads with the same 16:9 slot, so every row is one height: a wide
+ * cover fills it, a square one stands whole in its middle on the artifact's
+ * background, and an artifact without a cover, or a deleted one, wears its
+ * type's glyph there instead.
  */
 export function HappyAgentArtifactRow(props: HappyAgentArtifactRowProps) {
     const artifact = props.artifact;
     const deleted = artifact.status === "deleted";
-    const glyphSize = props.density === "page" ? 18 : 16;
+    const thumbnail = THUMBNAIL[props.density];
+    const cover = deleted ? null : artifact.cover;
     const changed =
         deleted && artifact.deletedAt !== null
             ? `Deleted ${props.labels.time(artifact.deletedAt)}`
@@ -53,11 +66,29 @@ export function HappyAgentArtifactRow(props: HappyAgentArtifactRowProps) {
         >
             <span
                 aria-hidden="true"
-                className="happy-agent-artifact-row__glyph"
-                data-happy-desktop-ui="happy-agent-artifact-row-glyph"
+                className="happy-agent-artifact-row__thumbnail"
+                data-aspect={cover?.aspect}
+                data-happy-desktop-ui="happy-agent-artifact-row-thumbnail"
                 data-type={artifact.type}
+                style={
+                    cover !== null && artifact.background !== null
+                        ? { background: artifact.background }
+                        : undefined
+                }
             >
-                <ArtifactTypeGlyph size={glyphSize} type={artifact.type} />
+                {cover === null ? (
+                    <ArtifactTypeGlyph size={thumbnail.glyph} type={artifact.type} />
+                ) : (
+                    <MediaImageTile
+                        alt=""
+                        className="happy-agent-artifact-row__cover"
+                        height={thumbnail.height}
+                        url={cover.url}
+                        width={
+                            cover.aspect === "wide" ? thumbnail.width : thumbnail.height
+                        }
+                    />
+                )}
             </span>
             <span className="happy-agent-artifact-row__text">
                 <span className="happy-agent-artifact-row__headline">

@@ -28,6 +28,8 @@ const artifact = (
     title: id,
     status: "active",
     latestVersion: 1,
+    cover: null,
+    background: null,
     entry: { path: "index.md", mimeType: "text/markdown", size: 10, sha256: "a".repeat(64) },
     fileCount: 1,
     size: 10,
@@ -265,6 +267,27 @@ describe("an artifact read again after a gap", () => {
                 ),
             ),
         ).toEqual(["c"]);
+    });
+
+    it("takes the cover a read of the version already held brings", () => {
+        // An update's event carries no cover; the read after it does.
+        const current = [artifact("a", 1_000, { version: v(4), latestVersion: 2 })];
+        const read = artifact("a", 1_000, {
+            version: v(4),
+            latestVersion: 2,
+            cover: {
+                version: 2,
+                path: "cover.png",
+                mimeType: "image/png",
+                width: 1600,
+                height: 900,
+                aspect: "wide",
+                url: "https://daemon/v0/artifacts/a/versions/2/files/cover.png",
+            },
+            background: "#10161c",
+        });
+        expect(happyAgentArtifactCatalogReplace(current, read, ALL)[0]).toBe(read);
+        expect(happyAgentArtifactCatalogReplace([read], { ...read }, ALL)).toEqual([read]);
     });
 
     it("never goes back to an older version than the one held", () => {

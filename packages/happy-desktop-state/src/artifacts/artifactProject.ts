@@ -12,6 +12,7 @@ import type {
     HappyAgentArtifactCoverAspect,
     HappyAgentArtifactCoverMimeType,
     HappyAgentArtifactFile,
+    HappyAgentArtifactFileLinkCreate,
     HappyAgentArtifactId,
     HappyAgentArtifactSource,
     HappyAgentArtifactType,
@@ -98,13 +99,23 @@ export function happyAgentArtifactAuthorProject(author: ArtifactAuthor): HappyAg
     return { kind: "unknown" };
 }
 
-export function happyAgentArtifactProject(artifact: Artifact): HappyAgentArtifact {
+/**
+ * The artifact as this build shows it. Its cover is read only where a surface
+ * draws covers and the daemon has them: `coverLink` is how its file is
+ * addressed, and without it the artifact has none.
+ */
+export function happyAgentArtifactProject(
+    artifact: Artifact,
+    coverLink?: HappyAgentArtifactFileLinkCreate,
+): HappyAgentArtifact {
     return {
         id: artifact.id as HappyAgentArtifactId,
         type: happyAgentArtifactTypeProject(artifact.type),
         title: artifact.title,
         status: artifact.status === "deleted" ? "deleted" : "active",
         latestVersion: artifact.latestVersion,
+        cover: coverLink === undefined ? null : happyAgentArtifactCoverProject(artifact, coverLink),
+        background: coverLink === undefined ? null : (happyAgentArtifactBackground(artifact.background) ?? null),
         entry: happyAgentArtifactFileProject(artifact.entry),
         fileCount: artifact.fileCount,
         size: artifact.size,
@@ -150,7 +161,10 @@ const ARTIFACT_COVER_MIME_TYPES: ReadonlySet<string> = new Set<HappyAgentArtifac
  * a format or of a shape this build does not know is no cover, so the
  * artifact keeps its compact row rather than a guess at its shape.
  */
-export function happyAgentArtifactCoverProject(artifact: Artifact): HappyAgentArtifactCover | null {
+export function happyAgentArtifactCoverProject(
+    artifact: Artifact,
+    link: HappyAgentArtifactFileLinkCreate,
+): HappyAgentArtifactCover | null {
     const cover: unknown = "cover" in artifact ? artifact.cover : undefined;
     if (typeof cover !== "object" || cover === null) return null;
     const { path, mimeType, width, height, aspect } = cover as Record<string, unknown>;
@@ -160,12 +174,31 @@ export function happyAgentArtifactCoverProject(artifact: Artifact): HappyAgentAr
     if (typeof height !== "number" || !Number.isInteger(height) || height <= 0) return null;
     if (aspect !== "wide" && aspect !== "square") return null;
     return {
+        version: artifact.latestVersion,
         path,
         mimeType: mimeType as HappyAgentArtifactCoverMimeType,
         width,
         height,
         aspect: aspect satisfies HappyAgentArtifactCoverAspect,
+        url: link(artifact.id as HappyAgentArtifactId, artifact.latestVersion, path),
     };
+}
+
+/** Whether two covers are the same picture, drawn the same way. */
+export function happyAgentArtifactCoverSame(
+    left: HappyAgentArtifactCover | null,
+    right: HappyAgentArtifactCover | null,
+): boolean {
+    return (
+        left === right ||
+        (left !== null &&
+            right !== null &&
+            left.url === right.url &&
+            left.mimeType === right.mimeType &&
+            left.width === right.width &&
+            left.height === right.height &&
+            left.aspect === right.aspect)
+    );
 }
 
 /** The artifact's one-line summary, read as `happyAgentArtifactCoverProject` reads its cover. */
