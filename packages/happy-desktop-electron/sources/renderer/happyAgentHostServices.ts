@@ -123,6 +123,20 @@ async function artifactSiteOpen(
     return { type: "opened", url: (await jsonRead<{ readonly url: string }>(response)).url };
 }
 
+/** Asks the app to serve one version of a vault's `.artifact` file as a site, as `artifactSiteOpen`. */
+async function vaultSiteOpen(
+    baseUrl: string,
+    surfaceId: string,
+    fileId: string,
+    version: number,
+): Promise<HappyAgentArtifactSiteOpening> {
+    const response = await fetch(
+        serviceUrl(baseUrl, "/vault-site", { surfaceId, fileId, version: String(version) }),
+    );
+    if (responseOutdated(response)) return { type: "app-outdated" };
+    return { type: "opened", url: (await jsonRead<{ readonly url: string }>(response)).url };
+}
+
 /** A follow that failed waits this long before asking again. */
 const BRIDGE_EVENTS_RETRY_MS = 2_000;
 
@@ -284,6 +298,8 @@ export function happyAgentHostServicesCreate(
             ? {
                   artifactSiteOpen: (artifactId: string, version: number) =>
                       artifactSiteOpen(baseUrl, artifactId, version),
+                  vaultSiteOpen: (surfaceId: string, fileId: string, version: number) =>
+                      vaultSiteOpen(baseUrl, surfaceId, fileId, version),
               }
             : {}),
         ...(options.deviceBridges ? { deviceBridges: deviceBridgeHostCreate(baseUrl) } : {}),

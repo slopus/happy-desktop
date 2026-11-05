@@ -43,6 +43,8 @@ export function surfaceTypeIcon(type: HappyAgentSurfaceType): IconName {
             return "doc";
         case "calendar":
             return "calendar";
+        case "vault":
+            return "vault";
         case "system_monitor":
             return "pulse";
         case "chat":
@@ -74,6 +76,8 @@ export function surfaceSidebarMark(type: HappyAgentSurfaceType): {
             return { icon: "tasks", tint: "green" };
         case "calendar":
             return { icon: "calendar", tint: "red" };
+        case "vault":
+            return { icon: "vault", tint: "purple" };
         case "system_monitor":
             return { icon: "pulse", tint: "teal" };
         case "chat":
@@ -98,6 +102,8 @@ export function surfaceTypeLabel(type: HappyAgentSurfaceType): string {
             return "Document";
         case "calendar":
             return "Calendar";
+        case "vault":
+            return "Vault";
         case "system_monitor":
             return "System Monitor";
         case "chat":

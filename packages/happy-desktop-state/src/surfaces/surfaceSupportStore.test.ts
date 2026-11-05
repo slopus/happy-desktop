@@ -50,6 +50,7 @@ it("answers from the health the connection already heard, asking nothing of its 
             calendars: "unsupported",
             systemMonitors: "unsupported",
             chats: "unsupported",
+            vaults: "unsupported",
         });
         expect(bridges.get()).toEqual({ status: "unsupported" });
     });
@@ -77,6 +78,7 @@ it("reuses the health an older daemon was asked for apart", async () => {
             calendars: "unsupported",
             systemMonitors: "unsupported",
             chats: "unsupported",
+            vaults: "unsupported",
         }),
     );
     expect(daemon.callCount("getHealth")).toBe(1);

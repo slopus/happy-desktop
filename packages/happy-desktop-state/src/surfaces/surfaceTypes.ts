@@ -54,6 +54,11 @@ export type HappyAgentSurfaceType =
      * every other type.
      */
     | { readonly kind: "chat" }
+    /**
+     * A shared tree of folders, files, and artifact entries, each file keeping
+     * its earlier versions under the vault's retention policy.
+     */
+    | { readonly kind: "vault" }
     /** One artifact, bot, or task, kept among the Surfaces; opening it opens that. */
     | { readonly kind: HappyAgentSurfaceReferenceKind }
     | { readonly kind: "unsupported"; readonly type: string };
@@ -72,6 +77,7 @@ export function happyAgentSurfaceChatSupported(type: HappyAgentSurfaceType): boo
         case "calendar":
         case "system_monitor":
         case "chat":
+        case "vault":
         case "artifact":
         case "bot":
         case "task":

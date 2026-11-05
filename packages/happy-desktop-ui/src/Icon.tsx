@@ -89,7 +89,8 @@ export type IconName =
     | "feed"
     | "width-expand"
     | "width-center"
-    | "full-screen";
+    | "full-screen"
+    | "vault";
 export type IconProps = {
     name: IconName;
     /*
@@ -225,6 +226,9 @@ const glyphs: Record<IconName, IconGlyph> = {
     image: { set: "ionicons", name: "image-outline" },
     // A shared calendar, and the events in it.
     calendar: { set: "ionicons", name: "calendar-outline" },
+    // A shared vault of files: trays stacked on one another, a store of many
+    // things kept together rather than one document or one inbox.
+    vault: { set: "ionicons", name: "file-tray-stacked-outline" },
     // An event that happens again: the series it belongs to, not one occurrence.
     repeat: { set: "ionicons", name: "repeat-outline" },
     // Where an event happens.

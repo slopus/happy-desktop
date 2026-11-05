@@ -31,6 +31,11 @@ import {
 } from "./surfaceTodoListStore.js";
 import type { HappyAgentSurfaceId } from "./surfaceTypes.js";
 import {
+    happyAgentVaultStoreCreate,
+    type HappyAgentVaultDeps,
+    type HappyAgentVaultStore,
+} from "./surfaceVaultStore.js";
+import {
     happyAgentSystemMonitorStoreCreate,
     type HappyAgentSystemMonitorStore,
     type HappyAgentSystemMonitorDeps,
@@ -69,6 +74,12 @@ export interface HappyAgentSurfaces {
      * reader has moved on.
      */
     messages(surfaceId: HappyAgentSurfaceId): HappyAgentSurfaceMessagesStore;
+    /**
+     * One vault Surface, kept for the life of the connection like a todo
+     * list, so a change or an upload goes on after the reader has moved on,
+     * and the folder last shown is where the vault opens again.
+     */
+    vault(surfaceId: HappyAgentSurfaceId): HappyAgentVaultStore;
     /** Which newer Surface types this Happy Agent serves. */
     support(): HappyAgentSurfaceSupportStore;
     [Symbol.dispose](): void;
@@ -81,6 +92,7 @@ export interface HappyAgentSurfacesDeps {
         HappyAgentCalendarDeps["client"] &
         HappyAgentSystemMonitorDeps["client"] &
         HappyAgentSurfaceMessagesDeps["client"] &
+        HappyAgentVaultDeps["client"] &
         HappyAgentSurfaceSupportDeps["client"];
     readonly sync: HappyAgentSync;
     /** Told of the workspace each Surface chat is held in, once the daemon has said. */
@@ -89,6 +101,8 @@ export interface HappyAgentSurfacesDeps {
     readonly chatsShownMemory?: HappyAgentSurfaceCatalogDeps["chatsShownMemory"];
     /** Where the Surfaces the reader widened are remembered between runs. */
     readonly expandedMemory?: HappyAgentSurfaceCatalogDeps["expandedMemory"];
+    /** Serves a vault's HTML artifact entry as a live site, where the host can. */
+    readonly vaultSiteOpen?: HappyAgentVaultDeps["siteOpen"];
 }
 
 export function happyAgentSurfacesCreate(deps: HappyAgentSurfacesDeps): HappyAgentSurfaces {
@@ -98,6 +112,7 @@ export function happyAgentSurfacesCreate(deps: HappyAgentSurfacesDeps): HappyAge
     const calendars = new Map<HappyAgentSurfaceId, HappyAgentCalendarStore>();
     const monitors = new Map<HappyAgentSurfaceId, HappyAgentSystemMonitorStore>();
     const messages = new Map<HappyAgentSurfaceId, HappyAgentSurfaceMessagesStore>();
+    const vaults = new Map<HappyAgentSurfaceId, HappyAgentVaultStore>();
     let support: HappyAgentSurfaceSupportStore | undefined;
     /** Lists this connection is making, until the daemon answers, for their todo stores to wait on. */
     const creating = new Map<HappyAgentSurfaceId, Promise<void>>();
@@ -210,6 +225,23 @@ export function happyAgentSurfacesCreate(deps: HappyAgentSurfacesDeps): HappyAge
             }
             return store;
         },
+        vault(surfaceId) {
+            let store = vaults.get(surfaceId);
+            if (store === undefined) {
+                const created = creating.get(surfaceId);
+                store = inert(
+                    happyAgentVaultStoreCreate({
+                        client: deps.client,
+                        sync: deps.sync,
+                        surfaceId,
+                        ...(created === undefined ? {} : { surfaceCreated: created }),
+                        ...(deps.vaultSiteOpen ? { siteOpen: deps.vaultSiteOpen } : {}),
+                    }),
+                );
+                if (!disposed) vaults.set(surfaceId, store);
+            }
+            return store;
+        },
         support() {
             return (support ??= inert(
                 happyAgentSurfaceSupportStoreCreate({
@@ -233,6 +265,8 @@ export function happyAgentSurfacesCreate(deps: HappyAgentSurfacesDeps): HappyAge
             monitors.clear();
             for (const store of messages.values()) store[Symbol.dispose]();
             messages.clear();
+            for (const store of vaults.values()) store[Symbol.dispose]();
+            vaults.clear();
         },
     };
 }

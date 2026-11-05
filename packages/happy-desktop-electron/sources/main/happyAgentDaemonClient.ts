@@ -22,6 +22,7 @@ import {
     type InspectorStartedResponse,
     type InspectorStoppedResponse,
     type ShutdownResponse,
+    type VaultVersionDetailResponse,
     type WorkspaceResponse,
     type WriteFileRequest,
     type WriteFileResponse,
@@ -438,6 +439,45 @@ export class HappyAgentDaemonClient {
         signal?: AbortSignal,
     ): Promise<HappyAgentDaemonRawResponse> {
         const url = new URL(this.#client.artifactFileUrl(artifactId as Cuid2, version, filePath));
+        return this.rawRequest({
+            method: "GET",
+            path: `${url.pathname}${url.search}`,
+            headers: { accept: "*/*", ...(range === undefined ? {} : { range }) },
+            ...(signal ? { signal } : {}),
+        });
+    }
+
+    /** One numbered version of a vault file; an artifact's carries its whole file list. */
+    getVaultVersion(
+        surfaceId: string,
+        fileId: string,
+        version: number,
+        signal?: AbortSignal,
+    ): Promise<VaultVersionDetailResponse> {
+        return this.#client.getVaultVersion(
+            surfaceId,
+            fileId as Cuid2,
+            version,
+            signal ? { signal } : undefined,
+        );
+    }
+
+    /**
+     * Opens one file of a numbered vault artifact version as a stream, under
+     * every rule its artifact file route has, ranges included. The route
+     * carries this client's connection prefix.
+     */
+    openVaultArtifactFile(
+        surfaceId: string,
+        fileId: string,
+        version: number,
+        filePath: string,
+        range?: string,
+        signal?: AbortSignal,
+    ): Promise<HappyAgentDaemonRawResponse> {
+        const url = new URL(
+            this.#client.vaultArtifactFileUrl(surfaceId, fileId as Cuid2, version, filePath),
+        );
         return this.rawRequest({
             method: "GET",
             path: `${url.pathname}${url.search}`,

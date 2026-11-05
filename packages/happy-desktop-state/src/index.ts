@@ -189,6 +189,13 @@ export type {
     HappyAgentSystemMonitorSample,
     HappyAgentSystemMonitorSnapshot,
 } from "./surfaces/surfaceSystemMonitorTypes.js";
+export * from "./surfaces/surfaceVaultTypes.js";
+export * from "./surfaces/surfaceVaultRetention.js";
+export type { HappyAgentVaultStore } from "./surfaces/surfaceVaultStore.js";
+export {
+    happyAgentVaultArtifactNamed,
+    happyAgentVaultNameProblem,
+} from "./surfaces/surfaceVaultTree.js";
 export type { HappyAgentSurfaces } from "./surfaces/surfaces.js";
 export type {
     HappyAgentArtifactTitle,

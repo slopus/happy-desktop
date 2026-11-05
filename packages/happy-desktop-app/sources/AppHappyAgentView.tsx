@@ -198,6 +198,7 @@ import {
     type HappyAgentSurfaceMessagesStore,
     type HappyAgentSurfaceDocumentStore,
     type HappyAgentCalendarStore,
+    type HappyAgentVaultStore,
 } from "happy-desktop-state";
 import {
     type AgentWaitStatus,
@@ -278,6 +279,7 @@ import {
     HappyAgentMessagesSurfacePage,
     HappyAgentDocumentSurfacePage,
     HappyAgentCalendarSurfacePage,
+    HappyAgentVaultSurfacePage,
     type HappyAgentDocumentSurfaceContent,
     type DocumentEditorUser,
     surfaceSidebarMark,
@@ -2578,12 +2580,14 @@ const SURFACE_CREATE_OFFERS: readonly {
     { kind: "calendar", icon: "calendar", label: "New calendar" },
     { kind: "system_monitor", icon: "pulse", label: "New system monitor" },
     { kind: "chat", icon: "users", label: "New chat" },
+    { kind: "vault", icon: "vault", label: "New vault" },
 ];
 
 /**
  * The + menu: a document only from a Happy Agent that serves collaborative
  * documents, since an older one can show a document but nobody can write it,
- * and a calendar, a system monitor, or a chat only from one that serves them.
+ * and a calendar, a system monitor, a chat, or a vault only from one that
+ * serves them.
  */
 function surfaceCreateMenu(support: HappyAgentSurfaceSupportSnapshot): MenuItem[] {
     return SURFACE_CREATE_OFFERS.filter(
@@ -2591,7 +2595,8 @@ function surfaceCreateMenu(support: HappyAgentSurfaceSupportSnapshot): MenuItem[
             (offer.kind !== "document" || support.documents === "supported") &&
             (offer.kind !== "calendar" || support.calendars === "supported") &&
             (offer.kind !== "system_monitor" || support.systemMonitors === "supported") &&
-            (offer.kind !== "chat" || support.chats === "supported"),
+            (offer.kind !== "chat" || support.chats === "supported") &&
+            (offer.kind !== "vault" || support.vaults === "supported"),
     ).map((offer) => ({ kind: "item", id: offer.kind, icon: offer.icon, label: offer.label }));
 }
 
@@ -4457,6 +4462,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
             return (
                 <HappyAgentSurfaceContent
                     key={props.surfaceId}
+                    {...(props.artifactPage ? { artifactPage: props.artifactPage } : {})}
                     support={surfaceSupport}
                     {...(props.surfaceChat ? { chat: props.surfaceChat } : {})}
                     chatConversation={(chat, surfaceName) => (
@@ -5707,6 +5713,8 @@ function HappyAgentSurfaceContent(props: {
         chat: { readonly groupId: string; readonly chatId: string },
         surfaceName: string,
     ) => ReactNode;
+    /** Shows a vault's HTML artifact entry served as a live site, where the host can. */
+    artifactPage?: HtmlPreviewRenderer;
 }) {
     const catalogStore = props.surfaces.catalog();
     const support = props.support;
@@ -5829,6 +5837,17 @@ function HappyAgentSurfaceContent(props: {
                     {...(props.unavailable === undefined ? {} : { unavailable: props.unavailable })}
                     {...(catalog.viewer ? { viewer: catalog.viewer } : {})}
                     width={width}
+                />
+            );
+        if (surface.type.kind === "vault")
+            return (
+                <HappyAgentVaultSurface
+                    {...(chat ? { chat } : {})}
+                    clock={props.clock}
+                    {...(props.artifactPage ? { artifactPage: props.artifactPage } : {})}
+                    store={props.surfaces.vault(surface.id)}
+                    surface={view}
+                    {...(catalog.viewer ? { viewer: catalog.viewer } : {})}
                 />
             );
         if (surface.type.kind === "calendar")
@@ -6156,6 +6175,67 @@ function HappyAgentCalendarSurface(props: {
             onWeekShow={store.weekShow}
             surface={props.surface}
             timeZones={calendarTimeZones()}
+        />
+    );
+}
+
+/** A vault Surface, read from its own store for as long as it is on screen. */
+function HappyAgentVaultSurface(props: {
+    store: HappyAgentVaultStore;
+    surface: HappyAgentSurfaceView;
+    viewer?: { readonly userId: string | null };
+    artifactPage?: HtmlPreviewRenderer;
+    chat?: HappyAgentSurfaceChatToggle;
+    clock: HappyAgentClockStore;
+}) {
+    const store = props.store;
+    const vault = useSyncExternalStore(store.subscribe, store.get, store.get);
+    const now = useSyncExternalStore(
+        props.clock.subscribe,
+        () => clockMinuteOf(props.clock),
+        () => clockMinuteOf(props.clock),
+    );
+    return (
+        <HappyAgentVaultSurfacePage
+            {...(props.chat ? { chat: props.chat } : {})}
+            {...(props.artifactPage ? { renderPage: props.artifactPage } : {})}
+            {...(props.viewer ? { viewer: props.viewer } : {})}
+            onDialogClose={store.dialogClose}
+            onDialogOpen={store.dialogOpen}
+            onItemDelete={store.itemDelete}
+            onItemDownload={async (itemId, version) => {
+                const download = store.downloadOf(itemId, version);
+                if (download === undefined) throw new Error("This can no longer be saved.");
+                await fileDownload(download.fileName, { type: "url", url: download.url });
+            }}
+            onItemMove={store.itemMove}
+            onItemOpen={store.itemOpen}
+            onItemRename={store.itemRename}
+            onItemSelect={store.itemSelect}
+            onFailureDismiss={store.failureDismiss}
+            onFilesUpload={store.filesUpload}
+            onFolderCreate={store.folderCreate}
+            onFolderOpen={store.folderOpen}
+            onHistoryMoreLoad={store.historyMoreLoad}
+            onLayoutChange={store.layoutUpdate}
+            onPreviewClose={store.previewClose}
+            onPreviewPanelChange={store.previewPanelUpdate}
+            onPreviewVersionSelect={store.previewVersionSelect}
+            onRetentionChange={store.retentionUpdate}
+            onSearchQueryChange={store.searchQueryUpdate}
+            onSortChange={store.sortUpdate}
+            onTrashRestore={store.trashRestore}
+            onTrashShow={store.trashShow}
+            onTreeFolderExpandedChange={store.treeFolderExpandedUpdate}
+            onTreeShownChange={store.treeShownUpdate}
+            onUploadDismiss={store.uploadDismiss}
+            onUploadRetry={store.uploadRetry}
+            onVersionPinnedChange={store.versionPinnedUpdate}
+            onVersionRestore={store.versionRestore}
+            now={now}
+            surface={props.surface}
+            thumbnailOf={store.thumbnailOf}
+            vault={vault}
         />
     );
 }

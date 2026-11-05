@@ -948,6 +948,10 @@ export {
 } from "./pages/surfaces/HappyAgentCalendarMonthView";
 export { CalendarSeriesNote } from "./pages/surfaces/CalendarSeriesNote";
 export {
+    HappyAgentVaultSurfacePage,
+    type HappyAgentVaultSurfacePageProps,
+} from "./pages/surfaces/vault/HappyAgentVaultSurfacePage";
+export {
     HappyAgentCalendarWeekView,
     type HappyAgentCalendarWeekViewProps,
 } from "./pages/surfaces/HappyAgentCalendarWeekView";

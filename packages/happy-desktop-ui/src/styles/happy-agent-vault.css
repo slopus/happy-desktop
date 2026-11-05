@@ -1,0 +1,1126 @@
+/*
+ * P-032 Happy Agent Vault: one shared vault Surface, browsed as Finder browses
+ * a disk.
+ *
+ * The page is the shared Surface header over a 48px section toolbar and a
+ * body of up to three panes that meet on hairlines: the folder tree, the
+ * listing with its uploads at its foot, and the preview. A file browser is
+ * two-dimensional, so the page takes the whole lane rather than the content
+ * column, and its header goes across the lane with it.
+ *
+ * Rows, toolbars, panes, and dialogs are flexbox. Only the rows of a
+ * virtualized listing leave the flow, each such rule says why. A drop target
+ * is marked by an outline inside its own box, which moves nothing.
+ *
+ * Colors, radii, and type come only from theme roles; a file's colour is its
+ * family's, from file-family.css.
+ */
+
+.happy-vault,
+.happy-vault * {
+    box-sizing: border-box;
+}
+
+.happy-vault {
+    --happy-agent-surface-column: 100%;
+    display: flex;
+    flex: 1 1 0%;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    width: 100%;
+    background: var(--surface);
+    color: var(--text);
+    font-family: var(--happy-font-ui);
+    font-synthesis: none;
+}
+
+.happy-vault__file-input {
+    display: none;
+}
+
+/* Pressed while its view is shown, as a hovered ghost button looks. */
+.happy-vault__toggle[aria-pressed="true"] {
+    background: var(--surface-ripple);
+    color: var(--text);
+}
+
+/* ---- Toolbar ------------------------------------------------------------ */
+
+.happy-vault__toolbar {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 8px;
+    height: 48px;
+    padding: 0 16px;
+}
+
+/* The breadcrumb takes the free space; a long path gives way from its middle
+   crumbs, each ending in an ellipsis inside its own width. */
+.happy-vault__crumbs {
+    display: flex;
+    flex: 1 1 0%;
+    align-items: center;
+    gap: 2px;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.happy-vault__crumb-step {
+    display: flex;
+    flex: 0 1 auto;
+    align-items: center;
+    gap: 2px;
+    min-width: 0;
+}
+
+.happy-vault__crumb-step:last-child {
+    flex-shrink: 0;
+    max-width: 50%;
+}
+
+.happy-vault__crumb-separator {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 12px;
+    color: var(--text-secondary);
+}
+
+.happy-vault__crumb {
+    flex: 0 1 auto;
+    min-width: 0;
+    height: 28px;
+    padding: 0 6px;
+    overflow: hidden;
+    border: 0;
+    border-radius: var(--happy-radius-sm);
+    background: transparent;
+    color: var(--text-secondary);
+    font: inherit;
+    font-size: 13px;
+    line-height: 28px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.happy-vault__crumb:hover {
+    background: var(--surface-ripple);
+    color: var(--text);
+}
+
+.happy-vault__crumb[aria-current] {
+    color: var(--text);
+    font-weight: 600;
+}
+
+.happy-vault__crumb[data-static] {
+    cursor: default;
+}
+
+.happy-vault__crumb[data-static]:hover {
+    background: transparent;
+}
+
+.happy-vault__crumb:focus-visible {
+    outline: 2px solid var(--radio-active);
+    outline-offset: -2px;
+}
+
+.happy-vault__search {
+    display: flex;
+    flex: 0 1 240px;
+    min-width: 120px;
+}
+
+.happy-vault__notices {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    gap: 8px;
+    padding: 0 16px 8px;
+}
+
+/* ---- Body --------------------------------------------------------------- */
+
+.happy-vault__body {
+    display: flex;
+    flex: 1 1 0%;
+    min-width: 0;
+    min-height: 0;
+}
+
+.happy-vault__tree-pane {
+    display: flex;
+    flex: 0 1 clamp(200px, 22%, 280px);
+    flex-direction: column;
+    min-width: 160px;
+    min-height: 0;
+    border-right: 1px solid var(--divider);
+}
+
+.happy-vault-tree {
+    display: flex;
+    flex: 1 1 0%;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.happy-vault-tree .happy-file-tree__row[data-vault-drop-over] {
+    background: var(--surface-selected);
+    outline: 2px solid var(--radio-active);
+    outline-offset: -2px;
+}
+
+.happy-vault__main {
+    position: relative;
+    display: flex;
+    flex: 1 1 0%;
+    flex-direction: column;
+    min-width: 200px;
+    min-height: 0;
+}
+
+.happy-vault__trash-note {
+    flex: none;
+    margin: 0;
+    padding: 0 16px 8px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+}
+
+/* A quiet word beside a name: the default policy, the newest or a pinned version. */
+.happy-vault-tag {
+    flex: none;
+    padding: 0 6px;
+    border: 1px solid var(--radio-inactive);
+    border-radius: var(--happy-radius-pill);
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 16px;
+}
+
+/* ---- Glyph -------------------------------------------------------------- */
+
+.happy-vault-glyph {
+    width: 16px;
+    height: 16px;
+}
+
+.happy-vault-glyph[data-size="20"] {
+    width: 20px;
+    height: 20px;
+}
+
+.happy-vault-glyph[data-size="32"] {
+    width: 32px;
+    height: 32px;
+}
+
+/* ---- Listing ------------------------------------------------------------ */
+
+/* A size container, so the columns a narrow listing has no room for step
+   aside rather than squeezing the name. */
+.happy-vault-list {
+    position: relative;
+    container-type: inline-size;
+    display: flex;
+    flex: 1 1 0%;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+}
+
+/* The listing's own space takes a drop for the folder it shows; the outline
+   is drawn over the panes' content rather than around it. */
+.happy-vault-list[data-vault-drop-over]::after {
+    content: "";
+    /* Absolute: an outline laid over the whole listing, above the rows that are themselves out of flow. */
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    border: 2px solid var(--radio-active);
+    border-radius: var(--happy-radius-sm);
+    pointer-events: none;
+}
+
+.happy-vault-list__header {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 8px;
+    height: 28px;
+    padding: 0 16px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+}
+
+.happy-vault-list__heading {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+    height: 24px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+}
+
+button.happy-vault-list__heading {
+    cursor: pointer;
+}
+
+.happy-vault-list__heading:hover,
+.happy-vault-list__heading[data-active] {
+    color: var(--text);
+}
+
+.happy-vault-list__heading-label {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* The arrow's place is held on every heading, so choosing one moves no label. */
+.happy-vault-list__heading-mark {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 12px;
+}
+
+/* One width per column, shared by the headings and every row's cells. */
+.happy-vault-list__heading[data-column="name"],
+.happy-vault-row__name-cell {
+    flex: 1 1 0%;
+}
+
+.happy-vault-list__heading[data-column="updatedAt"],
+.happy-vault-list__heading[data-column="deleted"],
+.happy-vault-row__cell[data-column="updatedAt"],
+.happy-vault-row__cell[data-column="deleted"] {
+    flex: 0 0 152px;
+}
+
+.happy-vault-list__heading[data-column="size"],
+.happy-vault-row__cell[data-column="size"] {
+    flex: 0 0 72px;
+    justify-content: flex-end;
+}
+
+.happy-vault-list__heading[data-column="kind"],
+.happy-vault-row__cell[data-column="kind"] {
+    flex: 0 0 120px;
+}
+
+.happy-vault-list__heading[data-column="restore"],
+.happy-vault-row__cell[data-column="restore"] {
+    flex: 0 0 72px;
+    justify-content: flex-end;
+}
+
+@container (max-width: 560px) {
+    .happy-vault-list__heading[data-column="kind"],
+    .happy-vault-row__cell[data-column="kind"] {
+        display: none;
+    }
+}
+
+@container (max-width: 400px) {
+    .happy-vault-list__heading[data-column="updatedAt"],
+    .happy-vault-row__cell[data-column="updatedAt"],
+    .happy-vault-list__heading[data-column="deleted"],
+    .happy-vault-row__cell[data-column="deleted"] {
+        display: none;
+    }
+}
+
+/* Scrollport: edge to edge, with no spacing of its own. */
+.happy-vault-list__scroll {
+    flex: 1 1 0%;
+    width: 100%;
+    min-height: 0;
+}
+
+.happy-vault-list__viewport {
+    overflow-x: hidden;
+    overflow-y: auto;
+    outline: none;
+}
+
+.happy-vault-list__viewport:focus-visible .happy-vault-row[data-selected],
+.happy-vault-list__viewport:focus-visible .happy-vault-tile[data-selected] {
+    outline: 2px solid var(--radio-active);
+    outline-offset: -2px;
+}
+
+.happy-vault-list__empty {
+    display: flex;
+    flex-direction: column;
+    min-height: 100%;
+    padding: 16px;
+}
+
+/* The inner wrapper carries the listing's inset, so the scrollport stays flush. */
+.happy-vault-list__content {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    padding: 0 8px 8px;
+}
+
+.happy-vault-list__sizer {
+    position: relative;
+    flex: none;
+    width: 100%;
+}
+
+/* Rows leave the flow deliberately: their position is the virtualizer's
+   answer to where the row would be if every row existed. */
+.happy-vault-list__slot {
+    position: absolute;
+    top: 0;
+    left: 0;
+    display: flex;
+    gap: 8px;
+    width: 100%;
+}
+
+/* ---- List and Trash rows ----------------------------------------------- */
+
+.happy-vault-row {
+    display: flex;
+    flex: 1 1 0%;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    height: 32px;
+    padding: 0 8px;
+    border-radius: var(--happy-radius-sm);
+    font-size: 13px;
+    line-height: 20px;
+    cursor: default;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+.happy-vault-row[data-trash] {
+    height: 40px;
+}
+
+.happy-vault-row:hover {
+    background: var(--surface-ripple);
+}
+
+.happy-vault-row[data-selected] {
+    background: var(--surface-selected);
+}
+
+.happy-vault-row[data-vault-drop-over],
+.happy-vault-tile[data-vault-drop-over] {
+    background: var(--surface-selected);
+    outline: 2px solid var(--radio-active);
+    outline-offset: -2px;
+}
+
+.happy-vault-row__name-cell {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.happy-vault-row__name {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--text);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Where a Trash item was: gray, and the first thing to give way. */
+.happy-vault-row__path {
+    flex: 0 4 auto;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--file-path-text);
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-vault-row__cell {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+/* ---- Grid tiles --------------------------------------------------------- */
+
+/* Each tile is one column's share of the row, so every row's tiles line up
+   with the row above whatever the last row holds. */
+.happy-vault-tile {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    width: calc((100% - (var(--happy-vault-columns) - 1) * 8px) / var(--happy-vault-columns));
+    height: 120px;
+    padding: 8px;
+    border-radius: var(--happy-radius-md);
+    cursor: default;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+.happy-vault-tile:hover {
+    background: var(--surface-ripple);
+}
+
+.happy-vault-tile[data-selected] {
+    background: var(--surface-selected);
+}
+
+.happy-vault-tile__picture {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 64px;
+    height: 64px;
+    overflow: hidden;
+    border-radius: var(--happy-radius-sm);
+}
+
+.happy-vault-tile__thumbnail {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.happy-vault-tile__name {
+    display: -webkit-box;
+    max-width: 100%;
+    overflow: hidden;
+    color: var(--text);
+    font-size: 12px;
+    line-height: 16px;
+    text-align: center;
+    overflow-wrap: anywhere;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+}
+
+/* ---- Search ------------------------------------------------------------- */
+
+.happy-vault-search {
+    flex: 1 1 0%;
+    width: 100%;
+    min-height: 0;
+}
+
+.happy-vault-search__viewport {
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+
+.happy-vault-search__content {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: 0 8px 16px;
+}
+
+.happy-vault-search__section {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.happy-vault-search__heading,
+.happy-vault-history__heading,
+.happy-vault-uploads__heading,
+.happy-vault-settings__heading {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 16px;
+}
+
+.happy-vault-search__heading {
+    padding: 4px 8px;
+}
+
+.happy-vault-search__list,
+.happy-vault-history__list,
+.happy-vault-uploads__list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.happy-vault-search__result {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    width: 100%;
+    padding: 6px 8px;
+    border: 0;
+    border-radius: var(--happy-radius-sm);
+    background: transparent;
+    color: var(--text);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.happy-vault-search__result:hover {
+    background: var(--surface-ripple);
+}
+
+.happy-vault-search__result:focus-visible {
+    outline: 2px solid var(--radio-active);
+    outline-offset: -2px;
+}
+
+.happy-vault-search__result > .happy-vault-glyph {
+    height: 20px;
+}
+
+.happy-vault-search__text {
+    display: flex;
+    flex: 1 1 0%;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.happy-vault-search__line {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    min-width: 0;
+}
+
+.happy-vault-search__name {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    font-size: 13px;
+    line-height: 20px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-vault-search__path {
+    flex: 0 4 auto;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--file-path-text);
+    font-size: 12px;
+    line-height: 16px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-vault-search__snippet {
+    overflow: hidden;
+    color: var(--text-secondary);
+    font-family: var(--happy-font-mono);
+    font-size: 12px;
+    line-height: 18px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-vault-search__mark {
+    border-radius: 2px;
+    background: var(--box-warning-background);
+    color: var(--text);
+    font-weight: 600;
+}
+
+.happy-vault-search__note {
+    margin: 0;
+    padding: 0 8px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+}
+
+.happy-vault-search__notice {
+    display: flex;
+    flex-direction: column;
+    padding: 0 16px;
+}
+
+.happy-vault-search__waiting {
+    display: flex;
+    flex: 1 1 0%;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    color: var(--text-secondary);
+    font-size: 13px;
+}
+
+/* ---- Uploads ------------------------------------------------------------ */
+
+.happy-vault-uploads {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 176px;
+    padding-top: 8px;
+    border-top: 1px solid var(--divider);
+}
+
+.happy-vault-uploads__heading {
+    padding: 0 16px;
+}
+
+.happy-vault-uploads__scroll {
+    flex: 0 1 auto;
+    width: 100%;
+    min-height: 0;
+}
+
+.happy-vault-uploads__viewport {
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+
+.happy-vault-uploads__list {
+    padding: 0 8px 8px;
+}
+
+.happy-vault-upload {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 40px;
+    padding: 0 8px;
+}
+
+.happy-vault-upload__glyph {
+    width: 16px;
+    height: 16px;
+}
+
+.happy-vault-upload__text {
+    display: flex;
+    flex: 1 1 0%;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.happy-vault-upload__line {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    min-width: 0;
+}
+
+.happy-vault-upload__name {
+    flex: 1 1 0%;
+    min-width: 0;
+    overflow: hidden;
+    font-size: 13px;
+    line-height: 16px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-vault-upload__phase {
+    flex: 0 4 auto;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    line-height: 16px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-vault-upload[data-phase="failed"] .happy-vault-upload__phase {
+    color: var(--text-destructive);
+}
+
+.happy-vault-upload__bar {
+    display: flex;
+    height: 4px;
+    overflow: hidden;
+    border-radius: var(--happy-radius-pill);
+    background: var(--surface-highest);
+}
+
+/* Grows by transform from its leading edge, so progress never relays out the row. */
+.happy-vault-upload__fill {
+    flex: 1 1 0%;
+    background: var(--radio-active);
+    transform-origin: left center;
+    transition: transform 160ms linear;
+}
+
+.happy-vault-upload[data-phase="done"] .happy-vault-upload__fill {
+    background: var(--success);
+}
+
+.happy-vault-upload[data-phase="failed"] .happy-vault-upload__fill {
+    background: var(--text-destructive);
+}
+
+.happy-vault-upload__actions {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 4px;
+}
+
+/* ---- Preview pane ------------------------------------------------------- */
+
+.happy-vault-preview {
+    display: flex;
+    flex: 0 1 clamp(300px, 40%, 560px);
+    flex-direction: column;
+    min-width: 260px;
+    min-height: 0;
+    border-left: 1px solid var(--divider);
+}
+
+.happy-vault-preview__bar {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    height: 40px;
+    padding: 0 8px 0 16px;
+}
+
+.happy-vault-preview__notices {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    gap: 8px;
+    padding: 0 16px 8px;
+}
+
+.happy-vault-preview__file {
+    flex: 1 1 0%;
+    height: auto;
+}
+
+/* ---- History ------------------------------------------------------------ */
+
+.happy-vault-history {
+    flex: 1 1 0%;
+    width: 100%;
+    min-height: 0;
+}
+
+.happy-vault-history__viewport {
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+
+.happy-vault-history__content {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+    padding: 8px 8px 16px;
+}
+
+.happy-vault-history__section {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    width: 100%;
+}
+
+.happy-vault-history__heading {
+    padding: 0 8px;
+}
+
+.happy-vault-history__note {
+    margin: 0;
+    padding: 16px;
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 20px;
+}
+
+.happy-vault-history__version-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding-right: 4px;
+    border-radius: var(--happy-radius-sm);
+}
+
+.happy-vault-history__version-item:hover {
+    background: var(--surface-ripple);
+}
+
+.happy-vault-history__version-item:has(> [aria-current]) {
+    background: var(--surface-selected);
+}
+
+.happy-vault-history__version {
+    display: flex;
+    flex: 1 1 0%;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    padding: 8px;
+    border: 0;
+    border-radius: var(--happy-radius-sm);
+    background: transparent;
+    color: var(--text);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.happy-vault-history__version:focus-visible {
+    outline: 2px solid var(--radio-active);
+    outline-offset: -2px;
+}
+
+.happy-vault-history__line {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.happy-vault-history__title {
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 20px;
+}
+
+.happy-vault-history__meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+}
+
+.happy-vault-history__meta-text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-vault-history__actor-mark {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 12px;
+    height: 16px;
+    color: var(--text-secondary);
+}
+
+.happy-vault-history__actions {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 4px;
+}
+
+.happy-vault-history__activity {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 6px 8px;
+    font-size: 13px;
+    line-height: 20px;
+}
+
+.happy-vault-history__activity > .happy-vault-history__actor-mark {
+    height: 20px;
+}
+
+.happy-vault-history__activity-text {
+    display: flex;
+    flex: 1 1 0%;
+    flex-direction: column;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.happy-vault-history__time {
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+}
+
+/* ---- Dialogs ------------------------------------------------------------ */
+
+.happy-vault-dialog {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.happy-vault-settings__section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.happy-vault-settings__presets {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.happy-vault-settings__preset {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 8px;
+    border: 0;
+    border-radius: var(--happy-radius-sm);
+    background: transparent;
+    color: var(--text);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.happy-vault-settings__preset:hover {
+    background: var(--surface-ripple);
+}
+
+.happy-vault-settings__preset[aria-checked="true"] {
+    background: var(--surface-selected);
+}
+
+.happy-vault-settings__preset:focus-visible {
+    outline: 2px solid var(--radio-active);
+    outline-offset: -2px;
+}
+
+/* The radio's ring is the same box chosen or not; only its dot is filled in. */
+.happy-vault-settings__radio {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    border: 1px solid var(--radio-inactive);
+    border-radius: var(--happy-radius-pill);
+}
+
+.happy-vault-settings__radio::after {
+    content: "";
+    width: 8px;
+    height: 8px;
+    border-radius: var(--happy-radius-pill);
+    background: transparent;
+}
+
+.happy-vault-settings__preset[aria-checked="true"] .happy-vault-settings__radio {
+    border-color: var(--radio-active);
+}
+
+.happy-vault-settings__preset[aria-checked="true"] .happy-vault-settings__radio::after {
+    background: var(--radio-active);
+}
+
+.happy-vault-settings__preset-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.happy-vault-settings__preset-line {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.happy-vault-settings__preset-label {
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 20px;
+}
+
+.happy-vault-settings__preset-description {
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+}
+
+.happy-vault-settings__custom {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 8px 8px 8px 34px;
+}
+
+.happy-vault-settings__sentence {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    min-height: 28px;
+    color: var(--text);
+    font-size: 13px;
+    line-height: 20px;
+}
+
+.happy-vault-settings__number {
+    flex: none;
+    width: 72px;
+}
+
+.happy-vault-settings__note {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+}
+
+.happy-vault-settings__problem {
+    margin: 0;
+    color: var(--text-destructive);
+    font-size: 12px;
+    line-height: 16px;
+}

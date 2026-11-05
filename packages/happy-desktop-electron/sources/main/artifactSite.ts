@@ -9,9 +9,10 @@ export const artifactSiteScheme = "happy-artifact";
 export type ArtifactSiteClient = Pick<
     HappyAgentDaemonClient,
     "getArtifactVersion" | "openArtifactFile" | "openArtifactApi"
-> & {
-    readonly connection?: (id: string) => ArtifactSiteClient;
-};
+> &
+    Partial<Pick<HappyAgentDaemonClient, "getVaultVersion" | "openVaultArtifactFile">> & {
+        readonly connection?: (id: string) => ArtifactSiteClient;
+    };
 
 /** A request a site cannot be opened for, with the status the renderer is told. */
 export class ArtifactSiteError extends Error {
@@ -36,6 +37,13 @@ export interface ArtifactSiteHandle {
             version: number,
             connectionId?: string,
         ) => Promise<string>;
+        /** The same for one numbered version of a vault's `.artifact` file. */
+        readonly openVault: (
+            surfaceId: string,
+            fileId: string,
+            version: number,
+            connectionId?: string,
+        ) => Promise<string>;
     };
     /** Whether an address is the entry or a file of a site opened by `open`. */
     owns(url: string): boolean;
@@ -44,11 +52,20 @@ export interface ArtifactSiteHandle {
     close(): void;
 }
 
+/**
+ * Where a site's files come from: a daemon artifact, or an artifact entry in a
+ * vault. A vault artifact has no data store, so its site has no API and its
+ * `api/` files are files like any other.
+ */
+type ArtifactSiteSource =
+    | { readonly kind: "artifact"; readonly artifactId: string }
+    | { readonly kind: "vault"; readonly surfaceId: string; readonly fileId: string };
+
 /** One numbered version published as an origin of its own. */
 interface ArtifactSite {
     readonly client: ArtifactSiteClient;
     readonly connectionId?: string;
-    readonly artifactId: string;
+    readonly source: ArtifactSiteSource;
     readonly version: number;
     /** Exactly the manifest's paths, each with the media type the daemon decided for it. */
     readonly files: ReadonlyMap<string, string>;
@@ -63,6 +80,7 @@ const ARTIFACT_SITE_LIMIT = 64;
 /** A manifest larger than this is not a page anyone wrote by hand. */
 const ARTIFACT_SITE_MAX_FILES = 10_000;
 const ARTIFACT_ID = /^[a-z0-9]{1,48}$/u;
+const SURFACE_ID = /^[a-z][a-z0-9]{23}$/u;
 const BYTE_RANGE = /^bytes=\d*-\d*$/u;
 
 /**
@@ -83,6 +101,34 @@ export function artifactSiteHost(
         return undefined;
     const site = `${artifactId}-v${String(version)}`;
     if (site.length > 63) return undefined;
+    return siteHostConnected(site, connectionId);
+}
+
+/**
+ * The host a numbered version of a vault's `.artifact` file is served as:
+ * `vault-<digest>-v<number>`, the digest naming the vault and the file
+ * together. An artifact id never holds a `-`, so no artifact lands here, and
+ * each file and version is an origin of its own, apart from every other site.
+ */
+export function vaultSiteHost(
+    surfaceId: string,
+    fileId: string,
+    version: number,
+    connectionId?: string,
+): string | undefined {
+    if (
+        !SURFACE_ID.test(surfaceId) ||
+        !ARTIFACT_ID.test(fileId) ||
+        !Number.isSafeInteger(version) ||
+        version < 1
+    )
+        return undefined;
+    const file = createHash("sha256").update(`${surfaceId}/${fileId}`).digest("hex").slice(0, 32);
+    return siteHostConnected(`vault-${file}-v${String(version)}`, connectionId);
+}
+
+/** A site's host, with a label of the remote connection it was reached through. */
+function siteHostConnected(site: string, connectionId: string | undefined): string {
     if (connectionId === undefined) return site;
     const connection = createHash("sha256").update(connectionId).digest("hex").slice(0, 16);
     return `${site}.c${connection}`;
@@ -246,37 +292,44 @@ export function artifactSitesCreate(
                         413,
                         "This artifact holds too many files to serve.",
                     );
-                const files = new Map<string, string>();
-                for (const file of read.files) {
-                    // `/api/` is the artifact's API on every site, so a file
-                    // published there is shadowed rather than served.
-                    if (file.path === "api" || file.path.startsWith("api/")) continue;
-                    // The daemon already refuses these paths; a manifest that
-                    // still holds one is not served at all rather than in part.
-                    if (
-                        artifactSitePath(
-                            `/${file.path.split("/").map(encodeURIComponent).join("/")}`,
-                        ) !== file.path
-                    )
-                        throw new ArtifactSiteError(
-                            502,
-                            "This artifact names a file it cannot hold.",
-                        );
-                    files.set(file.path, file.mimeType);
-                }
-                if (!files.has(read.entry.path))
-                    throw new ArtifactSiteError(
-                        502,
-                        "This artifact's entry is not one of its files.",
-                    );
+                // `/api/` is the artifact's API on every site, so a file
+                // published there is shadowed rather than served.
+                const files = siteFiles(read.files, true, read.entry.path);
                 remember(host, {
                     client,
                     ...(connectionId === undefined ? {} : { connectionId }),
-                    artifactId,
+                    source: { kind: "artifact", artifactId },
                     version,
                     files,
                 });
                 return artifactSiteUrl(host, read.entry.path);
+            },
+            openVault: async (surfaceId, fileId, version, connectionId) => {
+                const host = vaultSiteHost(surfaceId, fileId, version, connectionId);
+                if (host === undefined)
+                    throw new ArtifactSiteError(400, "This vault version cannot be served.");
+                const reader =
+                    connectionId === undefined ? client : client.connection?.(connectionId);
+                if (!reader?.getVaultVersion)
+                    throw new ArtifactSiteError(501, "This vault is unavailable here.");
+                const { version: read } = await reader.getVaultVersion(surfaceId, fileId, version);
+                if (
+                    read.surfaceId !== surfaceId ||
+                    read.fileId !== fileId ||
+                    read.number !== version
+                )
+                    throw new ArtifactSiteError(502, "Happy Agent answered for another version.");
+                if (read.artifact === null)
+                    throw new ArtifactSiteError(400, "This vault file is not an artifact.");
+                const files = siteFiles(read.artifact.files, false, read.artifact.entry);
+                remember(host, {
+                    client,
+                    ...(connectionId === undefined ? {} : { connectionId }),
+                    source: { kind: "vault", surfaceId, fileId },
+                    version,
+                    files,
+                });
+                return artifactSiteUrl(host, read.artifact.entry);
             },
         }),
         owns: (url) => {
@@ -287,11 +340,12 @@ export function artifactSitesCreate(
         },
         handle: async (request) => {
             const api = artifactSiteApi(request.url);
-            if (api) {
-                const site = sites.get(api.host);
-                if (!site) return refuse(404);
+            const apiSite = api ? sites.get(api.host) : undefined;
+            if (api && !apiSite) return refuse(404);
+            // A vault site has no API, so its `/api/` paths name its own files.
+            if (api && apiSite?.source.kind === "artifact") {
                 if (api.rest === "v1/code.js") return codeAnswer(request);
-                return forward(site, api.rest, api.search, request);
+                return forward(apiSite, apiSite.source.artifactId, api.rest, api.search, request);
             }
             // A version is something to read. There is nothing on a site to
             // submit to, and a page asking to is answered as such.
@@ -306,14 +360,26 @@ export function artifactSitesCreate(
                     : site.client.connection?.(site.connectionId);
             if (!reader) return refuse(502);
             const range = request.headers.get("range") ?? undefined;
+            const asked = range !== undefined && BYTE_RANGE.test(range) ? range : undefined;
+            const source = site.source;
             let upstream: Awaited<ReturnType<ArtifactSiteClient["openArtifactFile"]>>;
             try {
-                upstream = await reader.openArtifactFile(
-                    site.artifactId,
-                    site.version,
-                    address.path,
-                    range !== undefined && BYTE_RANGE.test(range) ? range : undefined,
-                );
+                if (source.kind === "artifact")
+                    upstream = await reader.openArtifactFile(
+                        source.artifactId,
+                        site.version,
+                        address.path,
+                        asked,
+                    );
+                else if (reader.openVaultArtifactFile)
+                    upstream = await reader.openVaultArtifactFile(
+                        source.surfaceId,
+                        source.fileId,
+                        site.version,
+                        address.path,
+                        asked,
+                    );
+                else return refuse(502);
             } catch {
                 return refuse(502);
             }
@@ -340,6 +406,34 @@ export function artifactSitesCreate(
         },
         close: () => sites.clear(),
     };
+}
+
+/**
+ * Exactly a manifest's paths, each with the media type the daemon decided for
+ * it, after making sure its entry is one of them.
+ */
+function siteFiles(
+    manifest: readonly { readonly path: string; readonly mimeType: string }[],
+    apiShadowed: boolean,
+    entryPath: string,
+): Map<string, string> {
+    if (manifest.length > ARTIFACT_SITE_MAX_FILES)
+        throw new ArtifactSiteError(413, "This artifact holds too many files to serve.");
+    const files = new Map<string, string>();
+    for (const file of manifest) {
+        if (apiShadowed && (file.path === "api" || file.path.startsWith("api/"))) continue;
+        // The daemon already refuses these paths; a manifest that still holds
+        // one is not served at all rather than in part.
+        if (
+            artifactSitePath(`/${file.path.split("/").map(encodeURIComponent).join("/")}`) !==
+            file.path
+        )
+            throw new ArtifactSiteError(502, "This artifact names a file it cannot hold.");
+        files.set(file.path, file.mimeType);
+    }
+    if (!files.has(entryPath))
+        throw new ArtifactSiteError(502, "This artifact's entry is not one of its files.");
+    return files;
 }
 
 /** Where a site URL names its artifact's API. */
@@ -399,6 +493,7 @@ const apiResponseHeaders = [
  */
 async function forward(
     site: ArtifactSite,
+    artifactId: string,
     rest: string | null,
     search: string,
     request: Request,
@@ -419,7 +514,7 @@ async function forward(
     }
     let upstream: Awaited<ReturnType<ArtifactSiteClient["openArtifactApi"]>>;
     try {
-        upstream = await reader.openArtifactApi(site.artifactId, rest, search, {
+        upstream = await reader.openArtifactApi(artifactId, rest, search, {
             method: request.method,
             headers,
             ...(body === undefined ? {} : { body }),

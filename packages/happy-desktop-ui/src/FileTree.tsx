@@ -199,7 +199,7 @@ const FAMILY_GLYPH: Record<Exclude<FileTreeFamily, "directory">, IoniconName> = 
 export function FileTreeFamilyIcon(props: {
     family: FileTreeFamily;
     expanded?: boolean;
-    size?: 14 | 16 | 20;
+    size?: 14 | 16 | 20 | 32;
 }) {
     const size = props.size ?? 14;
     if (props.family === "directory")

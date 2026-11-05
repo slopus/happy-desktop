@@ -172,6 +172,7 @@
 @import "./styles/reordering-list.css";
 @import "./styles/happy-agent-surfaces.css";
 @import "./styles/happy-agent-calendar.css";
+@import "./styles/happy-agent-vault.css";
 @import "./styles/workspace-lifecycle-notice.css";
 @import "./styles/connections.css";
 @import "./styles/window-chrome.css";

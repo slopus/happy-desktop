@@ -828,6 +828,9 @@ export function happyAgentWorkspaceClientCreate(
                     read: () => memory.surfacesExpandedRead(),
                     write: (surfaceIds) => memory.surfacesExpandedWrite(surfaceIds),
                 },
+                ...(deps.hostServices.vaultSiteOpen
+                    ? { vaultSiteOpen: deps.hostServices.vaultSiteOpen.bind(deps.hostServices) }
+                    : {}),
             });
             return surfaces;
         },

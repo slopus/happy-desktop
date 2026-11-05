@@ -50,6 +50,17 @@ export interface HappyAgentHostServices {
      */
     artifactSiteOpen?(artifactId: string, version: number): Promise<HappyAgentArtifactSiteOpening>;
     /**
+     * Serves one numbered version of a vault's HTML artifact (a `.artifact`
+     * file) as a live site and names its entry page's address, as
+     * `artifactSiteOpen` does for a daemon artifact. A host without one shows
+     * the page as a static preview.
+     */
+    vaultSiteOpen?(
+        surfaceId: string,
+        fileId: string,
+        version: number,
+    ): Promise<HappyAgentArtifactSiteOpening>;
+    /**
      * Where a file the reader chose lives on this machine, when it lives
      * anywhere. A pasted screenshot exists only in the browser and answers
      * undefined, as does a host that cannot tell.

@@ -28,6 +28,7 @@ export type HappyAgentSurfaceCreateKind =
     | "todo"
     | "document"
     | "calendar"
+    | "vault"
     | "system_monitor"
     | "chat";
 
@@ -43,6 +44,7 @@ const KINDS = {
     todo: { title: "New todo list", icon: "tasks", placeholder: "Groceries" },
     document: { title: "New document", icon: "doc", placeholder: "House rules" },
     calendar: { title: "New calendar", icon: "calendar", placeholder: "Team" },
+    vault: { title: "New vault", icon: "vault", placeholder: "Studio" },
     system_monitor: { title: "New system monitor", icon: "pulse", placeholder: "System Monitor" },
     chat: { title: "New chat", icon: "users", placeholder: "Family" },
 } as const satisfies Record<

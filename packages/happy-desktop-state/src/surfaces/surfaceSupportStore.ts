@@ -6,13 +6,14 @@ export type HappyAgentSurfaceSupport = "checking" | "supported" | "unsupported";
 
 /**
  * Which Surfaces a Happy Agent can make that an older one cannot, as its
- * health says: collaborative documents, calendars, system monitors, and chats.
+ * health says: collaborative documents, calendars, system monitors, chats, and vaults.
  */
 export interface HappyAgentSurfaceSupportSnapshot {
     readonly documents: HappyAgentSurfaceSupport;
     readonly calendars: HappyAgentSurfaceSupport;
     readonly systemMonitors: HappyAgentSurfaceSupport;
     readonly chats: HappyAgentSurfaceSupport;
+    readonly vaults: HappyAgentSurfaceSupport;
 }
 
 export interface HappyAgentSurfaceSupportStore {
@@ -31,12 +32,14 @@ const CHECKING: HappyAgentSurfaceSupportSnapshot = {
     calendars: "checking",
     systemMonitors: "checking",
     chats: "checking",
+    vaults: "checking",
 };
 const UNSUPPORTED: HappyAgentSurfaceSupportSnapshot = {
     documents: "unsupported",
     calendars: "unsupported",
     systemMonitors: "unsupported",
     chats: "unsupported",
+    vaults: "unsupported",
 };
 const RETRY_MS = 5_000;
 
@@ -66,7 +69,8 @@ export function happyAgentSurfaceSupportStoreCreate(
             next.documents === snapshot.documents &&
             next.calendars === snapshot.calendars &&
             next.systemMonitors === snapshot.systemMonitors &&
-            next.chats === snapshot.chats
+            next.chats === snapshot.chats &&
+            next.vaults === snapshot.vaults
         )
             return;
         snapshot = next;
@@ -79,6 +83,7 @@ export function happyAgentSurfaceSupportStoreCreate(
             calendars: supportOf(health.capabilities?.calendarSurfaces === true),
             systemMonitors: supportOf(health.capabilities?.systemMonitorSurfaces === true),
             chats: supportOf(health.capabilities?.chatSurfaces === true),
+            vaults: supportOf(health.capabilities?.vaults === true),
         });
 
     const check = (parent: AbortSignal): void => {

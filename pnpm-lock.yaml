@@ -157,8 +157,8 @@ importers:
         specifier: ^0.34.49
         version: 0.34.52
       '@slopus/happy-agent-client':
-        specifier: 0.0.142
-        version: 0.0.142
+        specifier: 0.0.152
+        version: 0.0.152
       electron-updater:
         specifier: ^6.8.9
         version: 6.8.9
@@ -2118,10 +2118,6 @@ packages:
 
   '@slopus/ghostty-web@0.1.3':
     resolution: {integrity: sha512-z6t+XKBqUWQPM2tjBbOL6EjuKtD12gqtuLKUjMT4Pn74DjuGNHDw5tEdzn5hA0MTvXPW2w1rQTX089QDa892Xw==}
-
-  '@slopus/happy-agent-client@0.0.142':
-    resolution: {integrity: sha512-10i8Jj2IlRKCvvj+qLzriQ08dY66a4c8XF6cxbpJOIGbr0VjNpw9RUib52z70YQGBGT/1JSOQ5D6qDe7VscAPA==}
-    engines: {node: '>=20'}
 
   '@slopus/happy-agent-client@0.0.152':
     resolution: {integrity: sha512-TwID1zuAPg8A001kSIP2c7e0rDLIIEmJ7uSuQLXz1O1j/6XpeCLBYu5mDtJB1Ow5hReGrXWbOF45khlYoNqctw==}
@@ -7469,11 +7465,6 @@ snapshots:
   '@slopus/ghostty-wasm@1.3.6': {}
 
   '@slopus/ghostty-web@0.1.3': {}
-
-  '@slopus/happy-agent-client@0.0.142':
-    dependencies:
-      '@sinclair/typebox': 0.34.52
-      parse5: 8.0.1
 
   '@slopus/happy-agent-client@0.0.152':
     dependencies:

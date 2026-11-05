@@ -143,7 +143,8 @@ export type HappyAgentSurfaceCreateKind =
     | "document"
     | "calendar"
     | "system_monitor"
-    | "chat";
+    | "chat"
+    | "vault";
 
 /**
  * Whether the form that makes a new Surface is open, and for which kind.
@@ -513,6 +514,7 @@ const CREATE_NOUNS = {
     calendar: "calendars",
     system_monitor: "System Monitors",
     chat: "chats",
+    vault: "vaults",
     artifact: "artifacts",
     bot: "bots",
     task: "tasks",
@@ -525,6 +527,7 @@ const KIND_NOUNS = {
     calendar: "calendar",
     system_monitor: "system monitor",
     chat: "chat",
+    vault: "vault",
     artifact: "artifact",
     bot: "bot",
     task: "task",
