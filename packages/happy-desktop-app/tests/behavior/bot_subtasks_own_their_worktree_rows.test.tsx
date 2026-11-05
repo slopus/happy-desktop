@@ -133,7 +133,12 @@ function workspace(actions: {
     botStoriesUpdate?: (botId: string, stories: boolean) => void;
 }): HappyAgentWorkspaceStore {
     const snapshot = {
-        list: { bots: BOTS, tasks: [], projects: { type: "ready" as const, value: PROJECTS } },
+        list: {
+            bots: BOTS,
+            tasks: [],
+            taskDirectory: [],
+            projects: { type: "ready" as const, value: PROJECTS },
+        },
         conversation: { type: "unloaded" as const },
         address: {},
         groupAccess: happyAgentGroupAccessRefused(HAPPY_AGENT_GROUP_UNLISTED_REFUSAL),

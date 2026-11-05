@@ -64,7 +64,12 @@ const PROJECTS: AppHappyAgentDirectorySnapshot["happyAgents"][number]["projects"
 
 function workspace(): HappyAgentWorkspaceStore {
     const snapshot = {
-        list: { bots: [], tasks: [], projects: { type: "ready" as const, value: PROJECTS } },
+        list: {
+            bots: [],
+            tasks: [],
+            taskDirectory: [],
+            projects: { type: "ready" as const, value: PROJECTS },
+        },
         conversation: { type: "unloaded" as const },
         address: {},
         groupAccess: happyAgentGroupAccessRefused(HAPPY_AGENT_GROUP_UNLISTED_REFUSAL),

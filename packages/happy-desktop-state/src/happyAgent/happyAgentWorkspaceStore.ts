@@ -5091,6 +5091,11 @@ export function happyAgentWorkspaceStoreCreate(
         if (bot) return bot.workspaceId;
         const task = snapshot.tasks.find((entry) => entry.conversation.id === conversationId);
         if (task) return task.workspaceId;
+        // A task the reader has not joined, opened from search.
+        const unjoined = snapshot.taskDirectory.find(
+            (entry) => entry.conversation.id === conversationId,
+        );
+        if (unjoined) return unjoined.workspaceId;
         const subtask = happyAgentBotSubtasks([...snapshot.bots, ...snapshot.tasks]).find(
             (entry) => entry.conversation.id === conversationId,
         );
@@ -5124,6 +5129,11 @@ export function happyAgentWorkspaceStoreCreate(
             (entry) => entry.conversation.id === conversationId,
         );
         if (subtask) return subtask.conversation;
+        // A task the reader has not joined, opened from search.
+        const unjoined = listSnapshot.taskDirectory.find(
+            (entry) => entry.conversation.id === conversationId,
+        );
+        if (unjoined) return unjoined.conversation;
         const archived = listSnapshot.tasksArchived.find(
             (entry) => entry.conversation.id === conversationId,
         );

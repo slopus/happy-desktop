@@ -1953,6 +1953,20 @@ function documentLinkResolve(from: string, href: string): string {
 }
 
 /**
+ * The tasks a window can open: the reader's own, then every active one they
+ * have not joined. One they left is still found in search, and opening it shows
+ * it without putting it back in their list.
+ */
+function tasksOpenable(list: {
+    readonly tasks: readonly HappyAgentTask[];
+    readonly taskDirectory: readonly HappyAgentTask[];
+}): readonly HappyAgentTask[] {
+    const joined = new Set<string>(list.tasks.map((task) => task.id));
+    const unjoined = list.taskDirectory.filter((task) => !joined.has(task.id));
+    return unjoined.length === 0 ? list.tasks : [...list.tasks, ...unjoined];
+}
+
+/**
  * Resolves an addressed group id against the list, matching projects, worktrees
  * and bots alike.
  *
@@ -4927,7 +4941,7 @@ function paletteFacts(
     const openGroup = openGroupFind(
         rows,
         workspace.list.bots,
-        workspace.list.tasks,
+        tasksOpenable(workspace.list),
         workspace.list.tasksArchived,
         groupId,
         workspace.address.conversationId,
@@ -6614,7 +6628,7 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
     const openGroup = openGroupFind(
         rows,
         workspace.list.bots,
-        workspace.list.tasks,
+        tasksOpenable(workspace.list),
         workspace.list.tasksArchived,
         props.groupId,
         props.chatId,
@@ -6925,7 +6939,7 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
         const currentGroup = openGroupFind(
             currentRows,
             current.list.bots,
-            current.list.tasks,
+            tasksOpenable(current.list),
             current.list.tasksArchived,
             current.address.groupId,
             current.address.conversationId,
@@ -7096,7 +7110,7 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
         const currentGroup = openGroupFind(
             current.list.projects.type === "ready" ? current.list.projects.value : [],
             current.list.bots,
-            current.list.tasks,
+            tasksOpenable(current.list),
             current.list.tasksArchived,
             current.address.groupId,
             current.address.conversationId,

@@ -2289,6 +2289,10 @@ export function happyAgentSessionListStoreCreate(
                 )
             )
                 return undefined;
+            // A task the reader has not joined is open to them all the same:
+            // joining only puts it in their list.
+            if (catalog.tasks.some((task) => !task.archived && task.workspaceId === groupId))
+                return undefined;
             // An archived task still answers for its conversation, which stays
             // readable where it is open, and takes nothing new.
             if (catalog.tasks.some((task) => task.archived && task.workspaceId === groupId))
@@ -2321,6 +2325,10 @@ export function happyAgentSessionListStoreCreate(
                     (task) => task.workspaceId === groupId,
                 )
             )
+                return undefined;
+            // A task the reader has not joined is open to them all the same:
+            // joining only puts it in their list.
+            if (catalog.tasks.some((task) => !task.archived && task.workspaceId === groupId))
                 return undefined;
             // An archived task still answers for its conversation, which stays
             // readable where it is open, and takes nothing new.

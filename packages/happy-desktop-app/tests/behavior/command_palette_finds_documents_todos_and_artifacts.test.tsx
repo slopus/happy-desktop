@@ -117,6 +117,7 @@ function workspace(): HappyAgentWorkspaceStore {
         list: {
             bots: [],
             tasks: [],
+            taskDirectory: [],
             tasksArchived: [],
             archivedSessions: [],
             projects: { type: "ready" as const, value: [] },
