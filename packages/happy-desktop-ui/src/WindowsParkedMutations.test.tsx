@@ -291,6 +291,32 @@ it("records parked rows through on-screen activity and geometry changes", async 
             );
             expect(samples.length).toBeGreaterThan(2);
         }
+        // Prepare a distinct near-top parked position before inserting a page.
+        state = { ...state, prepend: false };
+        update(state);
+        await delay(200);
+        viewport.scrollTop = 220;
+        await delay(200);
+        await commands.scrollReproWheel(-100 * devicePixelRatio, 1);
+        await delay(450);
+        expect(viewport.scrollTop).toBeGreaterThan(0);
+        expect(viewport.scrollTop).toBeLessThan(200);
+        samples = [];
+        active = true;
+        await delay(100);
+        state = { ...state, prepend: true };
+        update(state);
+        await delay(350);
+        active = false;
+        console.log(
+            "PARKED_MUTATION_TRACE " +
+                JSON.stringify({
+                    change: "history-prepended-near-top",
+                    dpr: devicePixelRatio,
+                    samples,
+                }),
+        );
+        expect(samples.length).toBeGreaterThan(2);
     } finally {
         cancelAnimationFrame(animation);
         root.unmount();
