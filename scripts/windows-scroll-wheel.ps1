@@ -1,7 +1,9 @@
 param(
     [Parameter(Mandatory = $true)][int]$ScreenX,
     [Parameter(Mandatory = $true)][int]$ScreenY,
-    [Parameter(Mandatory = $true)][int]$Delta
+    [Parameter(Mandatory = $true)][int]$Delta,
+    [int]$Count = 1,
+    [int]$IntervalMs = 75
 )
 $ErrorActionPreference = 'Stop'
 Add-Type -TypeDefinition @'
@@ -46,6 +48,9 @@ $mouse.mouseData = [BitConverter]::ToUInt32([BitConverter]::GetBytes($Delta), 0)
 $union = [ScrollReproNative+InputUnion]::new()
 $union.mouse = $mouse
 $inputEvent.data = $union
-if ([ScrollReproNative]::SendInput(1, @($inputEvent), [Runtime.InteropServices.Marshal]::SizeOf($inputEvent)) -ne 1) {
-    throw "SendInput failed: $([Runtime.InteropServices.Marshal]::GetLastWin32Error())"
+for ($i = 0; $i -lt $Count; $i++) {
+    if ([ScrollReproNative]::SendInput(1, @($inputEvent), [Runtime.InteropServices.Marshal]::SizeOf($inputEvent)) -ne 1) {
+        throw "SendInput failed: $([Runtime.InteropServices.Marshal]::GetLastWin32Error())"
+    }
+    if ($i -lt $Count - 1) { Start-Sleep -Milliseconds $IntervalMs }
 }

@@ -64,7 +64,7 @@ export default defineConfig({
                 reducedMotionEmulate: async ({ page }, reduce: boolean) => {
                     await page.emulateMedia({ reducedMotion: reduce ? "reduce" : "no-preference" });
                 },
-                scrollReproWheel: async ({ page, iframe }, deltaY: number) => {
+                scrollReproWheel: async ({ page, iframe }, deltaY: number, count: number) => {
                     const box = await iframe
                         .locator("[data-scrollbar-viewport]")
                         .first()
@@ -107,6 +107,8 @@ export default defineConfig({
                                 String(y),
                                 "-Delta",
                                 String(deltaY < 0 ? 120 : -120),
+                                "-Count",
+                                String(count),
                             ],
                             { stdio: "pipe" },
                         );
@@ -118,7 +120,10 @@ export default defineConfig({
                         return;
                     }
                     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-                    await page.mouse.wheel(0, deltaY);
+                    for (let i = 0; i < count; i += 1) {
+                        await page.mouse.wheel(0, deltaY);
+                        if (i < count - 1) await new Promise((resolve) => setTimeout(resolve, 75));
+                    }
                 },
                 scrollReproDrag: async ({ page, iframe }, direction: "up" | "down") => {
                     const track = iframe
