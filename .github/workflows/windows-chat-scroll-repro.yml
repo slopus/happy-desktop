@@ -34,7 +34,7 @@ jobs:
               run: |
                   mkdir -p .context/windows-browser
                   set -o pipefail
-                  pnpm --dir packages/happy-desktop-ui exec vitest run --project chromium src/Conversation src/MessageList 2>&1 | tee .context/windows-browser/vitest.log
+                  pnpm --dir packages/happy-desktop-ui exec vitest run --project chromium src/Conversation src/MessageList src/Message.test.tsx src/Scrollbar 2>&1 | tee .context/windows-browser/vitest.log
             - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
               if: always()
               with:
@@ -43,6 +43,32 @@ jobs:
                       .context/windows-browser
                       packages/happy-desktop-ui/**/__screenshots__/**
                       packages/happy-desktop-ui/**/__diffs__/**
+                  if-no-files-found: warn
+
+    linux-browser:
+        runs-on: ubuntu-latest
+        timeout-minutes: 45
+        env:
+            HAPPY_TEST_DEPTH: full
+        steps:
+            - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+            - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+            - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+              with:
+                  node-version: "24"
+                  cache: pnpm
+            - run: pnpm install --frozen-lockfile
+            - run: pnpm --dir packages/happy-desktop-ui exec playwright install --with-deps chromium firefox webkit
+            - name: Run transcript suites in all three engines
+              run: |
+                  mkdir -p .context/linux-browser
+                  set -o pipefail
+                  pnpm --dir packages/happy-desktop-ui exec vitest run src/Conversation src/MessageList src/Message.test.tsx src/Scrollbar 2>&1 | tee .context/linux-browser/vitest.log
+            - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+              if: always()
+              with:
+                  name: linux-chat-browser
+                  path: .context/linux-browser
                   if-no-files-found: warn
 
     electron:
