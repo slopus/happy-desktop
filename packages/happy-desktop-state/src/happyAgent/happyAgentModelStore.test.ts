@@ -228,7 +228,7 @@ it("starts new sessions on the default model, on the provider picked last", asyn
     expect(selection()).toMatchObject({ providerId: "codex_other", modelId: "astra" });
 });
 
-it("starts new sessions on the Settings effort, not the one last used with the model", async () => {
+it("starts new sessions on the default effort, not the one last used in a conversation", async () => {
     const { models, selection } = await stickyStoreOpen({
         defaultModelId: "astra",
         defaultEffort: "low",
@@ -241,6 +241,70 @@ it("starts new sessions on the Settings effort, not the one last used with the m
         permissionMode: "auto",
     });
     expect(selection()).toMatchObject({ modelId: "astra", effort: "low" });
+});
+
+it("starts new sessions on the model, effort, and provider the last new session started on", async () => {
+    const { models, selection, document } = await stickyStoreOpen({
+        defaultModelId: "astra",
+        defaultEffort: "low",
+        preferences: {},
+    });
+    models.selectionStarted({
+        providerId: "codex",
+        modelId: "sol",
+        effort: "high",
+        permissionMode: "auto",
+    });
+    expect(selection()).toMatchObject({ providerId: "codex", modelId: "sol", effort: "high" });
+    expect(document()).toMatchObject({
+        defaultModelId: "sol",
+        defaultEffort: "high",
+        lastPickedProviderId: "codex",
+    });
+
+    models.selectionStarted({
+        providerId: "codex_other",
+        modelId: "astra",
+        effort: "medium",
+        permissionMode: "auto",
+    });
+    expect(selection()).toMatchObject({
+        providerId: "codex_other",
+        modelId: "astra",
+        effort: "medium",
+    });
+
+    // A session started without an effort leaves the remembered one alone.
+    models.selectionStarted({ providerId: "codex", modelId: "sol", permissionMode: "auto" });
+    expect(selection()).toMatchObject({ providerId: "codex", modelId: "sol", effort: "medium" });
+});
+
+it("falls back per field when the last started model, effort, or provider is no longer offered", async () => {
+    const { selection } = await stickyStoreOpen({
+        // A model this catalog does not have, an effort it does not offer, and
+        // a provider it does not list each fall back on their own.
+        defaultModelId: "retired",
+        defaultEffort: "ultra",
+        lastPickedProviderId: "gone",
+        preferences: {},
+    });
+    expect(selection()).toMatchObject({ providerId: "codex", modelId: "astra", effort: "medium" });
+});
+
+it("reopens on the selection the last new session started on", async () => {
+    const { models, document } = await stickyStoreOpen({ preferences: {} });
+    models.selectionStarted({
+        providerId: "codex_other",
+        modelId: "astra",
+        effort: "high",
+        permissionMode: "auto",
+    });
+    const reopened = await stickyStoreOpen(document());
+    expect(reopened.selection()).toMatchObject({
+        providerId: "codex_other",
+        modelId: "astra",
+        effort: "high",
+    });
 });
 
 it("keeps the default model when the provider picked last does not serve it", async () => {

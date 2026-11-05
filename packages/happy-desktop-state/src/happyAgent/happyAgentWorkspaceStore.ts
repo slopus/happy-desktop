@@ -5740,6 +5740,8 @@ export function happyAgentWorkspaceStoreCreate(
                 : list.sessionCreate(create);
             return started.then(async (location) => {
                 if (!location) throw new Error("The conversation could not be started.");
+                // The next new session starts the way this one did.
+                if (selection) client.models.selectionStarted(selection);
                 const model = activityModel(create);
                 activityRecord({ kind: "conversationCreated", source: "workspace", model });
                 output({ type: "conversationOpenRequested", location });
@@ -5972,6 +5974,8 @@ export function happyAgentWorkspaceStoreCreate(
                 result: HAPPY_AGENT_ACTION_OK,
             });
         if (disposed) return;
+        // The next new session starts the way this one did.
+        if (selection) client.models.selectionStarted(selection);
         const { location } = created;
         // The surface stays up, composer and all, until the window turns to
         // the conversation. Everything between here and there is a wait on the

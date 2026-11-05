@@ -41,18 +41,23 @@ export interface HappyAgentModelPreferenceIdentity {
 /** One person's model choices on this Happy Agent, supplied by its preference authority. */
 export interface HappyAgentModelPreferenceDocument {
     /**
-     * The model a new session starts on, chosen in Settings. It names a model
-     * only: which account serves it is `lastPickedProviderId`'s to answer.
+     * The model a new session starts on: the one the last new session started
+     * on, or chosen in Settings since. It names a model only: which account
+     * serves it is `lastPickedProviderId`'s to answer.
      */
     readonly defaultModelId?: string;
-    /** Reasoning level configured for new sessions before a model-specific fallback. */
+    /**
+     * Reasoning level a new session starts on, kept apart from the model: the
+     * one the last new session started on, or chosen in Settings since. A model
+     * without that level starts on its own default.
+     */
     readonly defaultEffort?: HappyAgentThinkingLevel;
     /** Access mode configured for a new session, independent of its model. */
     readonly defaultPermissionMode?: HappyAgentPermissionMode;
     /**
-     * The provider most recently picked in any model picker. A new session
-     * starts on it whenever it serves the default model; sessions that already
-     * exist keep their own.
+     * The provider most recently picked in any model picker or started a new
+     * session on. A new session starts on it whenever it serves the default
+     * model; sessions that already exist keep their own.
      */
     readonly lastPickedProviderId?: string;
     readonly preferences: HappyAgentModelPreferences;
@@ -113,6 +118,13 @@ export interface HappyAgentModelStore {
      * It changes no session that already exists.
      */
     providerPicked(providerId: string): void;
+    /**
+     * Records what a new session was just started on: its model, effort, and
+     * provider each become what the next new session starts on, and the
+     * model's effort and speed are remembered as `selectionUsed` does. A
+     * selection without an effort leaves the remembered effort as it was.
+     */
+    selectionStarted(selection: HappyAgentSelection): void;
     /** Selects a model with that model's last locally remembered effort and speed. */
     modelSelect(current: HappyAgentSelection, input: HappyAgentModelSelection): HappyAgentSelection;
     /** The effort last chosen for a model on a provider, when this machine remembers one. */
@@ -360,26 +372,21 @@ export function happyAgentModelStoreCreate(
         },
         selectionUsed(selection) {
             if (snapshot.type !== "ready") return;
-            const provider = { ...preferences[selection.providerId] };
-            // Reinsert the selected entry so bounded picker memory retains recent choices.
-            delete provider[selection.modelId];
-            const remainingProviders = { ...preferences };
-            delete remainingProviders[selection.providerId];
-            preferences = {
-                ...remainingProviders,
-                [selection.providerId]: {
-                    ...provider,
-                    [selection.modelId]: {
-                        effort: selection.effort ?? null,
-                        serviceTier: selection.serviceTier ?? null,
-                    },
-                },
-            };
-            documentWrite({ ...document, preferences });
+            documentWrite({ ...document, preferences: preferencesUsed(preferences, selection) });
         },
         providerPicked(providerId) {
             if (snapshot.type !== "ready" || document.lastPickedProviderId === providerId) return;
             documentWrite({ ...document, lastPickedProviderId: providerId });
+        },
+        selectionStarted(selection) {
+            if (snapshot.type !== "ready") return;
+            documentWrite({
+                ...document,
+                defaultModelId: selection.modelId,
+                ...(selection.effort !== undefined ? { defaultEffort: selection.effort } : {}),
+                lastPickedProviderId: selection.providerId,
+                preferences: preferencesUsed(preferences, selection),
+            });
         },
         modelSelect(current, input) {
             if (snapshot.type !== "ready")
@@ -431,12 +438,35 @@ export function happyAgentModelStoreCreate(
     };
 }
 
+/** Remembers a selection's effort and speed for its model. */
+function preferencesUsed(
+    preferences: HappyAgentModelPreferences,
+    selection: HappyAgentSelection,
+): HappyAgentModelPreferences {
+    const provider = { ...preferences[selection.providerId] };
+    // Reinsert the selected entry so bounded picker memory retains recent choices.
+    delete provider[selection.modelId];
+    const remainingProviders = { ...preferences };
+    delete remainingProviders[selection.providerId];
+    return {
+        ...remainingProviders,
+        [selection.providerId]: {
+            ...provider,
+            [selection.modelId]: {
+                effort: selection.effort ?? null,
+                serviceTier: selection.serviceTier ?? null,
+            },
+        },
+    };
+}
+
 /**
- * What a new session starts on. The model is the one chosen in Settings, or the
- * catalog's own default until one is chosen; the provider is the one picked
- * last whenever it serves that model. A provider that does not is passed over
- * for the catalog's default provider and then the first usable one serving the
- * same model, so a provider choice never silently changes the model.
+ * What a new session starts on. The model is the last new session's, or the
+ * one chosen in Settings since, or the catalog's own default until either
+ * happens; the provider is the one picked last whenever it serves that model.
+ * A provider that does not is passed over for the catalog's default provider
+ * and then the first usable one serving the same model, so a provider choice
+ * never silently changes the model.
  */
 function defaultSelectionResolve(
     catalog: HappyAgentModelCatalog,
@@ -488,8 +518,8 @@ function preferenceSelection(
     defaultEffort?: HappyAgentThinkingLevel,
 ): HappyAgentSelection {
     const preference = preferences[providerId]?.[model.id];
-    // A new session starts on the Settings effort, not the one last used with
-    // this model; a model without that level starts on its own default.
+    // A new session starts on the remembered default effort, not the one last
+    // used with this model; a model without that level starts on its own default.
     const supportedDefaultEffort =
         defaultEffort && model.thinkingLevels.includes(defaultEffort) ? defaultEffort : undefined;
     const serviceTier =

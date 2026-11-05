@@ -30,8 +30,9 @@ export type HappyAgentGeneralSettingsProps = {
     linkOpenPlacement: HappyAgentLinkOpenPlacementChoice;
     /**
      * The model and effort a new session starts on, in the composer's own model
-     * pill. Its account headers are read-only: a new session runs on the account
-     * last picked in a conversation's model menu. Absent once the catalog failed.
+     * pill; starting a new session replaces both with that session's. Its account
+     * headers are read-only: a new session runs on the account last picked in a
+     * model menu. Absent once the catalog failed.
      */
     defaultModel?: ComposerModelControlProps;
     /**
@@ -371,7 +372,7 @@ export function HappyAgentGeneralSettings(props: HappyAgentGeneralSettingsProps)
                             />
                         ) : null
                     }
-                    description="Runs on the account you last picked in a chat"
+                    description="Follows the last session you started"
                     label="Default model"
                 />
                 <FormRow

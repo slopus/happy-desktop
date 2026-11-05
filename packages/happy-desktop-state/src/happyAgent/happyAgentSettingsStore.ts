@@ -26,8 +26,10 @@ export type HappyAgentLinkOpenPlacement = "panel" | "browser";
 
 export interface HappyAgentSettingsSnapshot {
     /**
-     * Unset until the reader picks a model; the catalog's own default stands in.
-     * A model only: the provider a new session uses is the one picked last.
+     * Unset until the reader picks a model here or starts a new session; the
+     * catalog's own default stands in. Starting a new session replaces it, and
+     * `defaultEffort`, with that session's. A model only: the provider a new
+     * session uses is the one picked last.
      */
     readonly defaultModelId?: string;
     readonly defaultEffort: HappyAgentThinkingLevel;

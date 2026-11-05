@@ -1,5 +1,13 @@
+import type { DaemonConfig } from "@slopus/happy-agent-client";
 import { expect, it, vi } from "vitest";
+import { fakeHappyAgentDaemonCreate } from "../testing/fakeHappyAgentDaemon.js";
 import type { HappyAgentWorkspaceClient } from "./happyAgentClient.js";
+import {
+    happyAgentModelStoreCreate,
+    type HappyAgentModelPreferenceDocument,
+    type HappyAgentModelStore,
+} from "./happyAgentModelStore.js";
+import { happyAgentModelCatalogProject } from "./happyAgentProject.js";
 import type {
     HappyAgentSessionListSnapshot,
     HappyAgentTaskCreateInput,
@@ -60,6 +68,7 @@ const TASK = {
 function store(
     taskCreate: (input: HappyAgentTaskCreateInput) => Promise<HappyAgentTaskCreation>,
     taskRename: (taskId: HappyAgentTaskId, name: string) => Promise<void> = () => Promise.resolve(),
+    models?: HappyAgentModelStore,
 ) {
     const list = {
         projects: { type: "ready", value: [] },
@@ -80,7 +89,7 @@ function store(
     const loading = { type: "loading" } as const;
     const client = new Proxy(
         {
-            models: {
+            models: models ?? {
                 get: () => loading,
                 load: () => new Promise(() => undefined),
                 subscribe: () => () => undefined,
@@ -177,4 +186,89 @@ it("renames a task through the same dialog a bot uses", async () => {
     expect(taskRename).toHaveBeenCalledWith(TASK.id, "Alpha prime");
     expect(workspace.get().rename).toBeUndefined();
     unsubscribe();
+});
+
+/** The fake daemon's model on two accounts, beside a second model on one of them. */
+function twoAccountConfig(): DaemonConfig {
+    const config = fakeHappyAgentDaemonCreate().configGet();
+    return {
+        ...config,
+        models: {
+            ...config.models,
+            "second-model": {
+                ...config.models["test-model"]!,
+                name: "Second Model",
+                efforts: ["low", "medium", "high", "xhigh"],
+            },
+        },
+        providers: {
+            ...config.providers,
+            "other-provider": {
+                enabled: true,
+                models: [
+                    { enabled: true, id: "test-model" },
+                    { enabled: true, id: "second-model" },
+                ],
+                type: "claude",
+            },
+        },
+    };
+}
+
+it("opens the next task on the model, effort, and account the last one started on", async () => {
+    let document: HappyAgentModelPreferenceDocument = { preferences: {} };
+    const models = happyAgentModelStoreCreate({
+        catalogRead: async () => happyAgentModelCatalogProject(twoAccountConfig()),
+        preferencePersistence: {
+            read: () => document,
+            write: (next) => {
+                document = next;
+            },
+        },
+    });
+    await models.load();
+    const taskCreate = vi.fn(() =>
+        Promise.resolve({
+            taskId: "task_new" as HappyAgentTaskId,
+            location: {
+                groupId: "ws_new" as HappyAgentGroupId,
+                sessionId: "ses_new" as HappyAgentSessionId,
+            },
+        }),
+    );
+    const { workspace, unsubscribe } = store(taskCreate, undefined, models);
+
+    workspace.taskCreateOpen();
+    await vi.waitFor(() => expect(workspace.get().taskCreate?.menus).toBeDefined());
+    expect(workspace.get().taskCreate?.menus).toMatchObject({
+        currentProviderId: "test-provider",
+        currentModelId: "test-model",
+    });
+    workspace.taskCreateModelUpdate({ providerId: "other-provider", modelId: "second-model" });
+    workspace.taskCreateEffortUpdate("xhigh");
+    await workspace.taskCreateSubmit();
+
+    expect(taskCreate).toHaveBeenCalledWith({
+        selection: expect.objectContaining({
+            providerId: "other-provider",
+            modelId: "second-model",
+            effort: "xhigh",
+        }),
+    });
+    // Each part is kept on its own, so a later model can still take the effort.
+    expect(document).toMatchObject({
+        defaultModelId: "second-model",
+        defaultEffort: "xhigh",
+        lastPickedProviderId: "other-provider",
+    });
+
+    workspace.taskCreateOpen();
+    await vi.waitFor(() => expect(workspace.get().taskCreate?.menus).toBeDefined());
+    expect(workspace.get().taskCreate?.menus).toMatchObject({
+        currentProviderId: "other-provider",
+        currentModelId: "second-model",
+        currentEffort: "xhigh",
+    });
+    unsubscribe();
+    models[Symbol.dispose]();
 });
