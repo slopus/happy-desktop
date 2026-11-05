@@ -156,6 +156,12 @@ it("records trusted wheel movement during a growing response", async () => {
         await delay(100);
         await commands.scrollReproWheel(-100 * devicePixelRatio);
         await delay(700);
+        events.push({ type: "return-start", time: performance.now() - started });
+        for (let i = 0; i < 8; i += 1) {
+            await commands.scrollReproWheel(100 * devicePixelRatio);
+            await delay(75);
+        }
+        await delay(600);
         console.log(
             "NOTCHED_WHEEL_TRACE " + JSON.stringify({ dpr: devicePixelRatio, samples, events }),
         );
