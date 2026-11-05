@@ -15,16 +15,22 @@ concurrency:
 jobs:
     full-depth:
         name: Full depth (${{ matrix.suite }})
-        runs-on: ubuntu-latest
+        runs-on: ${{ matrix.runner }}
         timeout-minutes: 240
         strategy:
             fail-fast: false
             matrix:
                 include:
                     - suite: ui
+                      runner: ubuntu-latest
                       package: packages/happy-desktop-ui
                       script: test
                     - suite: gym
+                      runner: ubuntu-latest
+                      package: packages/happy-desktop-gym
+                      script: test:playwright
+                    - suite: gym-macos
+                      runner: macos-15
                       package: packages/happy-desktop-gym
                       script: test:playwright
         defaults:
