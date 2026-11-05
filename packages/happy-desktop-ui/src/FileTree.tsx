@@ -34,6 +34,11 @@ export type FileTreeNode = {
      */
     readonly directory?: string;
     readonly kind: "file" | "directory" | "section";
+    /**
+     * File only: what it is when its name does not say, as the family and glyph
+     * it wears instead of the ones its extension would pick.
+     */
+    readonly type?: { readonly family: FileTreeFamily; readonly glyph: IoniconName };
     readonly gitStatus?: FileTreeGitStatus;
     /** Lines the file gained and lost, shown beside its status. */
     readonly addedLines?: number;
@@ -515,7 +520,7 @@ function FileTreeRowView(props: FileTreeRowViewProps) {
     const node = row.node;
     const directory = node.kind === "directory";
     const status = node.gitStatus ? GIT_STATUS[node.gitStatus] : undefined;
-    const family = fileTreeFamily(node);
+    const family = node.type?.family ?? fileTreeFamily(node);
     const paddingLeft = `${String(BASE_PADDING + row.indent * props.indent)}px`;
     const activate = (modifiers: FileTreeSelectModifiers) => {
         if (row.kind === "more") {
@@ -690,7 +695,11 @@ function FileTreeRowView(props: FileTreeRowViewProps) {
                             className="happy-file-tree__icon"
                             data-happy-desktop-ui="file-tree-icon"
                         >
-                            <FileTreeFamilyIcon family={family} expanded={node.expanded} />
+                            {node.type ? (
+                                <Ionicon name={node.type.glyph} size={14} />
+                            ) : (
+                                <FileTreeFamilyIcon family={family} expanded={node.expanded} />
+                            )}
                         </span>
                         <span
                             className="happy-file-tree__label"

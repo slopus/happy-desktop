@@ -498,6 +498,7 @@ const UPLOADS: readonly HappyAgentVaultUpload[] = [
         sent: 120_000_000,
         phase: "failed",
         error: new UserError("The connection to the Happy Agent was lost."),
+        retryable: true,
     },
     {
         id: "up-6",
@@ -517,6 +518,7 @@ const UPLOADS: readonly HappyAgentVaultUpload[] = [
         sent: 12_000_000,
         phase: "failed",
         error: new UserError("The artifact has no artifact.json at its root."),
+        retryable: false,
     },
 ];
 
@@ -762,7 +764,7 @@ export function HappyAgentVaultBlueprintPage() {
                     vault={vaultOf("sites", {
                         selectedId: id("handbook"),
                         preview: previewOf("handbook", {
-                            type: "markdownSite",
+                            type: "markdownArtifact",
                             entryPath: "index.md",
                             text: HANDBOOK,
                             files: HANDBOOK_FILES,
@@ -782,7 +784,7 @@ export function HappyAgentVaultBlueprintPage() {
                     vault={vaultOf("sites", {
                         selectedId: id("launch"),
                         preview: previewOf("launch", {
-                            type: "htmlSite",
+                            type: "htmlArtifact",
                             entryPath: "index.html",
                             page: {
                                 kind: "static",

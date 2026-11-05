@@ -102,7 +102,7 @@ export interface HappyAgentSurfacesDeps {
     /** Where the Surfaces the reader widened are remembered between runs. */
     readonly expandedMemory?: HappyAgentSurfaceCatalogDeps["expandedMemory"];
     /** Serves a vault's HTML artifact entry as a live site, where the host can. */
-    readonly vaultSiteOpen?: HappyAgentVaultDeps["siteOpen"];
+    readonly vaultAppOpen?: HappyAgentVaultDeps["appOpen"];
 }
 
 export function happyAgentSurfacesCreate(deps: HappyAgentSurfacesDeps): HappyAgentSurfaces {
@@ -235,7 +235,7 @@ export function happyAgentSurfacesCreate(deps: HappyAgentSurfacesDeps): HappyAge
                         sync: deps.sync,
                         surfaceId,
                         ...(created === undefined ? {} : { surfaceCreated: created }),
-                        ...(deps.vaultSiteOpen ? { siteOpen: deps.vaultSiteOpen } : {}),
+                        ...(deps.vaultAppOpen ? { appOpen: deps.vaultAppOpen } : {}),
                     }),
                 );
                 if (!disposed) vaults.set(surfaceId, store);

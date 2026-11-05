@@ -1,4 +1,4 @@
-import type { HappyAgentVaultUpload } from "happy-desktop-state";
+import { happyAgentVaultNameShown, type HappyAgentVaultUpload } from "happy-desktop-state";
 import { Button } from "../../../Button";
 import { FileTreeFamilyIcon, fileTreeFamily } from "../../../FileTree";
 import { ScrollArea } from "../../../Scrollbar";
@@ -22,8 +22,9 @@ function phaseText(upload: HappyAgentVaultUpload): string {
 
 /**
  * The files this window is sending, newest first, at the foot of the listing.
- * Each says how far it has gone; a failed one can be sent again, and any one
- * can be taken off the list, which cancels it while it is still going.
+ * Each says how far it has gone; a failed one can be sent again unless the
+ * daemon refused the file itself, and any one can be taken off the list,
+ * which cancels it while it is still going.
  */
 export function VaultUploads(props: {
     uploads: readonly HappyAgentVaultUpload[];
@@ -59,6 +60,7 @@ export function VaultUploads(props: {
                                   ? 0
                                   : Math.min(1, upload.sent / upload.size);
                         // An artifact shows as the page it becomes, not as the zip it is.
+                        const name = happyAgentVaultNameShown(upload.name);
                         const family = fileTreeFamily({
                             kind: "file",
                             name: upload.kind === "artifact" ? "index.html" : upload.name,
@@ -79,11 +81,8 @@ export function VaultUploads(props: {
                                 </span>
                                 <span className="happy-vault-upload__text">
                                     <span className="happy-vault-upload__line">
-                                        <span
-                                            className="happy-vault-upload__name"
-                                            title={upload.name}
-                                        >
-                                            {upload.name}
+                                        <span className="happy-vault-upload__name" title={name}>
+                                            {name}
                                         </span>
                                         <span
                                             className="happy-vault-upload__phase"
@@ -93,7 +92,7 @@ export function VaultUploads(props: {
                                         </span>
                                     </span>
                                     <span
-                                        aria-label={`${upload.name}: ${phaseText(upload)}`}
+                                        aria-label={`${name}: ${phaseText(upload)}`}
                                         aria-valuemax={100}
                                         aria-valuemin={0}
                                         aria-valuenow={Math.round(progress * 100)}
@@ -107,7 +106,7 @@ export function VaultUploads(props: {
                                     </span>
                                 </span>
                                 <span className="happy-vault-upload__actions">
-                                    {upload.phase === "failed" ? (
+                                    {upload.phase === "failed" && upload.retryable ? (
                                         <Button
                                             onClick={() => props.onRetry(upload.id)}
                                             size="small"
@@ -118,9 +117,7 @@ export function VaultUploads(props: {
                                     ) : null}
                                     <Button
                                         aria-label={
-                                            active
-                                                ? `Cancel ${upload.name}`
-                                                : `Take ${upload.name} off the list`
+                                            active ? `Cancel ${name}` : `Take ${name} off the list`
                                         }
                                         icon="close"
                                         iconOnly

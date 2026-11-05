@@ -26,10 +26,10 @@ export interface HappyAgentVaultContentDeps {
     >;
     readonly surfaceId: HappyAgentSurfaceId;
     /**
-     * Serves an artifact's HTML version as a live site and names its item
+     * Runs an artifact's HTML version as a live app and names its entry
      * page's address. Absent, the page is shown as a static preview.
      */
-    readonly siteOpen?: (
+    readonly appOpen?: (
         surfaceId: HappyAgentSurfaceId,
         fileId: string,
         version: number,
@@ -115,19 +115,19 @@ export async function happyAgentVaultContentRead(
     const { version } = await client.getVaultVersion(surfaceId, vaultFile.id, number, { signal });
     const manifest = version.artifact;
     if (manifest === null || !("files" in manifest))
-        throw new UserError("This version of the site could not be read.");
+        throw new UserError("This version of the app could not be read.");
     const fileText = async (path: string): Promise<ArrayBuffer> => {
         const file = await client.getVaultArtifactFile(surfaceId, vaultFile.id, number, path, {
             signal,
         });
-        if (file === null) throw new UserError("The site's file could not be read.");
+        if (file === null) throw new UserError("The app's file could not be read.");
         return file.data;
     };
     const entryPath = manifest.entry;
     if (manifest.type === "markdown")
         return {
             content: {
-                type: "markdownSite",
+                type: "markdownArtifact",
                 entryPath,
                 text: new TextDecoder().decode(await fileText(entryPath)),
                 files: new Map(
@@ -141,8 +141,8 @@ export async function happyAgentVaultContentRead(
     const entryText = fileText(entryPath).then((data) => new TextDecoder().decode(data));
     entryText.catch(() => undefined);
     let reason: HappyAgentArtifactStaticReason = { type: "no-guest" };
-    if (deps.siteOpen) {
-        const opening = await deps.siteOpen(surfaceId, vaultFile.id, number).then(
+    if (deps.appOpen) {
+        const opening = await deps.appOpen(surfaceId, vaultFile.id, number).then(
             (value) => value,
             (error: unknown) => ({ type: "failed" as const, error: happyAgentUserError(error) }),
         );
@@ -153,7 +153,7 @@ export async function happyAgentVaultContentRead(
             );
             return {
                 content: {
-                    type: "htmlSite",
+                    type: "htmlArtifact",
                     entryPath,
                     page: { kind: "site", url: opening.url },
                     pageMode,
@@ -178,7 +178,7 @@ export async function happyAgentVaultContentRead(
     }
     return {
         content: {
-            type: "htmlSite",
+            type: "htmlArtifact",
             entryPath,
             page: { kind: "static", reason, text, assets, omitted },
             pageMode: happyAgentArtifactPageModeRead(text),

@@ -1,8 +1,10 @@
 import type { ReactNode } from "react";
-import type {
-    HappyAgentVaultItem,
-    HappyAgentVaultSearch,
-    HappyAgentVaultSearchResult,
+import {
+    happyAgentVaultNameShown,
+    happyAgentVaultPathShown,
+    type HappyAgentVaultItem,
+    type HappyAgentVaultSearch,
+    type HappyAgentVaultSearchResult,
 } from "happy-desktop-state";
 import { Banner } from "../../../Banner";
 import { EmptyState } from "../../../EmptyState";
@@ -32,7 +34,7 @@ function highlighted(text: string, query: string): ReactNode {
 
 /**
  * What the search field found: items whose names match, then lines of text
- * inside files and sites. A query still being answered keeps the last results
+ * inside files and apps. A query still being answered keeps the last results
  * on screen, so typing never empties the list.
  */
 export function VaultSearchResults(props: {
@@ -66,38 +68,40 @@ export function VaultSearchResults(props: {
                 title={`Nothing found for “${query}”`}
             />
         );
-    const resultRow = (result: HappyAgentVaultSearchResult, index: number) => (
-        <li key={`${result.match}:${result.item.id}:${String(index)}`}>
-            <button
-                className="happy-vault-search__result"
-                data-happy-desktop-ui="vault-search-result"
-                data-match={result.match}
-                onClick={() => props.onOpen(result.item)}
-                type="button"
-            >
-                <VaultItemGlyph item={result.item} size={16} />
-                <span className="happy-vault-search__text">
-                    <span className="happy-vault-search__line">
-                        <span className="happy-vault-search__name">
-                            {result.match === "name"
-                                ? highlighted(result.item.name, query)
-                                : result.item.name}
+    const resultRow = (result: HappyAgentVaultSearchResult, index: number) => {
+        const name = happyAgentVaultNameShown(result.item.name);
+        const path = happyAgentVaultPathShown(result.path);
+        return (
+            <li key={`${result.match}:${result.item.id}:${String(index)}`}>
+                <button
+                    className="happy-vault-search__result"
+                    data-happy-desktop-ui="vault-search-result"
+                    data-match={result.match}
+                    onClick={() => props.onOpen(result.item)}
+                    type="button"
+                >
+                    <VaultItemGlyph item={result.item} size={16} />
+                    <span className="happy-vault-search__text">
+                        <span className="happy-vault-search__line">
+                            <span className="happy-vault-search__name">
+                                {result.match === "name" ? highlighted(name, query) : name}
+                            </span>
+                            <span className="happy-vault-search__path" title={path}>
+                                {result.match === "name"
+                                    ? vaultParentPath(path)
+                                    : `${result.innerPath === null ? path : `${path}/${result.innerPath}`}, line ${String(result.line)}`}
+                            </span>
                         </span>
-                        <span className="happy-vault-search__path" title={result.path}>
-                            {result.match === "name"
-                                ? vaultParentPath(result.path)
-                                : `${result.innerPath === null ? result.path : `${result.path}/${result.innerPath}`}, line ${String(result.line)}`}
-                        </span>
+                        {result.match === "content" ? (
+                            <span className="happy-vault-search__snippet">
+                                {highlighted(result.snippet, query)}
+                            </span>
+                        ) : null}
                     </span>
-                    {result.match === "content" ? (
-                        <span className="happy-vault-search__snippet">
-                            {highlighted(result.snippet, query)}
-                        </span>
-                    ) : null}
-                </span>
-            </button>
-        </li>
-    );
+                </button>
+            </li>
+        );
+    };
     return (
         <ScrollArea
             className="happy-vault-search"

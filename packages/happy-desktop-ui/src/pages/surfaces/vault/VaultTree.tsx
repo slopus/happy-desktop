@@ -1,9 +1,11 @@
-import type {
-    HappyAgentVaultItem,
-    HappyAgentVaultItemId,
-    HappyAgentVaultSnapshot,
+import {
+    happyAgentVaultNameShown,
+    type HappyAgentVaultItem,
+    type HappyAgentVaultItemId,
+    type HappyAgentVaultSnapshot,
 } from "happy-desktop-state";
 import { FileTree, type FileTreeNode } from "../../../FileTree";
+import { vaultArtifactGlyph, vaultItemFamily } from "./vaultPresentation";
 
 /** The tree's nodes under one folder: its children, with the open folders' own beneath them. */
 function treeNodes(
@@ -12,12 +14,20 @@ function treeNodes(
 ): FileTreeNode[] {
     const children: readonly HappyAgentVaultItem[] = vault.children.get(folderId) ?? [];
     return children.map((entry) => {
-        if (entry.kind !== "folder") return { id: entry.id, kind: "file", name: entry.name };
+        const name = happyAgentVaultNameShown(entry.name);
+        if (entry.kind === "artifact")
+            return {
+                id: entry.id,
+                kind: "file",
+                name,
+                type: { family: vaultItemFamily(entry), glyph: vaultArtifactGlyph(entry) },
+            };
+        if (entry.kind === "file") return { id: entry.id, kind: "file", name };
         const expanded = vault.treeExpanded.has(entry.id);
         return {
             id: entry.id,
             kind: "directory",
-            name: entry.name,
+            name,
             expanded,
             ...(expanded ? { children: treeNodes(vault, entry.id) } : {}),
         };

@@ -1,7 +1,7 @@
 /**
  * Closed product projections of a vault Surface: a shared tree of folders
- * and files, where a file is a plain file or an artifact (a small static site
- * named `*.artifact`), each file keeping numbered versions under the vault's
+ * and files, where a file is a plain file or an artifact (a small app named
+ * `*.artifact`, shown without that suffix), each file keeping numbered versions under the vault's
  * retention policy. The wire shapes are projected at the state boundary in
  * `surfaceVaultProject.ts`.
  */
@@ -26,7 +26,7 @@ export interface HappyAgentVaultActor {
     readonly agentId: string | null;
 }
 
-/** An artifact's site: an HTML page, or a Markdown document. */
+/** What an artifact is: an HTML app, or a Markdown document. */
 export interface HappyAgentVaultArtifactSummary {
     readonly type: "html" | "markdown";
     readonly entry: "index.html" | "index.md";
@@ -84,7 +84,7 @@ export interface HappyAgentVaultVersion {
     readonly size: number;
     /** The file's digest; `null` for an artifact version. */
     readonly sha256: string | null;
-    /** The site's summary for an artifact version; `null` for a file. */
+    /** The artifact's summary for an artifact version; `null` for a file. */
     readonly artifact: HappyAgentVaultArtifactSummary | null;
     /** Pinned versions are never pruned. */
     readonly pinned: boolean;
@@ -252,7 +252,12 @@ export type HappyAgentVaultUpload = {
     | { readonly phase: "waiting" | "sending" | "placing" }
     /** It is in the vault: a new file, or a new version of the one that had its name. */
     | { readonly phase: "done"; readonly itemId: HappyAgentVaultItemId }
-    | { readonly phase: "failed"; readonly error: UserError }
+    /**
+     * It stopped. `retryable` is whether sending it again could go otherwise:
+     * not when the daemon refused the file itself, as it does a `.artifact`
+     * that is not one.
+     */
+    | { readonly phase: "failed"; readonly error: UserError; readonly retryable: boolean }
 );
 
 /** What the preview shows for the version on screen. */
@@ -266,14 +271,14 @@ export type HappyAgentVaultContent =
     /** Nothing can be shown here; the file can still be downloaded. */
     | { readonly type: "unavailable"; readonly reason: "binary" | "large" }
     | {
-          readonly type: "markdownSite";
+          readonly type: "markdownArtifact";
           readonly entryPath: string;
           readonly text: string;
           /** Every file of the version by path, at the address it is served from. */
           readonly files: ReadonlyMap<string, string>;
       }
     | {
-          readonly type: "htmlSite";
+          readonly type: "htmlArtifact";
           readonly entryPath: string;
           readonly page: HappyAgentArtifactPage;
           readonly pageMode: HappyAgentArtifactPageMode;
@@ -313,6 +318,7 @@ export interface HappyAgentVaultPreview {
 /** The form open over the vault, if any; what is typed into it is the form's own. */
 export type HappyAgentVaultDialog =
     | { readonly kind: "folderCreate" }
+    /** `name` is the one the field starts from, as the reader sees it: an artifact's without `.artifact`. */
     | { readonly kind: "rename"; readonly itemId: HappyAgentVaultItemId; readonly name: string }
     | { readonly kind: "settings" };
 

@@ -521,9 +521,12 @@
     min-height: 0;
 }
 
+/* A column, so the banner, which never shrinks along its stack, takes the
+   pane's width and wraps its text rather than running out of the pane. */
 .happy-agent-artifact-html__notice {
     display: flex;
     flex: 0 0 auto;
+    flex-direction: column;
     padding: 8px var(--happy-content-inline);
 }
 

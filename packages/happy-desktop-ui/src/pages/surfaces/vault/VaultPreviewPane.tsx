@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
 import {
     happyAgentArtifactReferenceResolve,
+    happyAgentVaultNameShown,
+    happyAgentVaultPathShown,
     type HappyAgentVaultActivity,
     type HappyAgentVaultContent,
     type HappyAgentVaultItem,
@@ -20,7 +22,14 @@ import { ScrollArea } from "../../../Scrollbar";
 import { SegmentedControl } from "../../../SegmentedControl";
 import { Ionicon } from "../../../vectorIcons/VectorIcon";
 import { HappyAgentArtifactHtmlFrame } from "../../artifacts/HappyAgentArtifactHtmlFrame";
-import { vaultActorName, vaultSizeText, vaultTimeText, type VaultNames } from "./vaultPresentation";
+import {
+    vaultActorName,
+    vaultArtifactGlyph,
+    vaultItemFamily,
+    vaultSizeText,
+    vaultTimeText,
+    type VaultNames,
+} from "./vaultPresentation";
 
 export interface VaultPreviewPaneProps {
     preview: HappyAgentVaultPreview;
@@ -41,7 +50,7 @@ export interface VaultPreviewPaneProps {
     onDownload: (itemId: HappyAgentVaultItemId, version?: number) => Promise<void>;
 }
 
-/** What FilePreview draws for a plain file's content; a site's never reaches it. */
+/** What FilePreview draws for a plain file's content; an artifact's never reaches it. */
 function fileContent(content: HappyAgentVaultContent): FilePreviewContent {
     switch (content.type) {
         case "loading":
@@ -53,17 +62,17 @@ function fileContent(content: HappyAgentVaultContent): FilePreviewContent {
         case "text":
             return { type: "text", text: content.text };
         case "unavailable":
-        case "markdownSite":
-        case "htmlSite":
+        case "markdownArtifact":
+        case "htmlArtifact":
             return { type: "unavailable" };
     }
 }
 
 /**
- * The file or site open beside the listing: its preview, or its history of
+ * The file or app open beside the listing: its preview, or its history of
  * versions and what happened to it. The preview is the shared FilePreview,
- * with a site's rendered page handed to it as the file's rendered face, so a
- * site reads like any other file and its source stays a click away.
+ * with an artifact's rendered page handed to it as the file's rendered face,
+ * so an app reads like any other file and its source stays a click away.
  */
 export function VaultPreviewPane(props: VaultPreviewPaneProps) {
     const preview = props.preview;
@@ -72,7 +81,7 @@ export function VaultPreviewPane(props: VaultPreviewPaneProps) {
     const older = entry !== undefined && shown !== undefined && shown !== entry.latestVersion;
     return (
         <aside
-            aria-label={`Preview of ${preview.path}`}
+            aria-label={`Preview of ${happyAgentVaultPathShown(preview.path)}`}
             className="happy-vault-preview"
             data-happy-desktop-ui="vault-preview"
         >
@@ -153,14 +162,17 @@ function VaultPreviewContent(props: VaultPreviewPaneProps) {
     const common = {
         className: "happy-vault-preview__file",
         "data-testid": "happy-vault-preview-file",
-        path: preview.path,
+        path: happyAgentVaultPathShown(preview.path),
+        ...(entry?.kind === "artifact"
+            ? { type: { family: vaultItemFamily(entry), glyph: vaultArtifactGlyph(entry) } }
+            : {}),
         ...(shown === undefined ? {} : { cacheKey: `${preview.itemId}@${String(shown)}` }),
         ...(size === undefined ? {} : { size: vaultSizeText(size) }),
         ...(entry === undefined
             ? {}
             : { onDownload: () => props.onDownload(preview.itemId, shown) }),
     };
-    if (content.type === "markdownSite") {
+    if (content.type === "markdownArtifact") {
         const references: MarkdownDocumentReferences = {
             image: (src) => {
                 const target = happyAgentArtifactReferenceResolve(content.entryPath, src);
@@ -188,13 +200,13 @@ function VaultPreviewContent(props: VaultPreviewPaneProps) {
             />
         );
     }
-    if (content.type === "htmlSite") {
+    if (content.type === "htmlArtifact") {
         const page = content.page;
         const rendered: ReactNode =
             page.kind === "site" ? (
                 <HtmlPreviewFrame
                     canvas="none"
-                    data-testid="happy-vault-preview-site"
+                    data-testid="happy-vault-preview-app"
                     {...(props.renderPage ? { renderContent: props.renderPage } : {})}
                     source={page.url}
                 />
@@ -205,7 +217,7 @@ function VaultPreviewContent(props: VaultPreviewPaneProps) {
                     omitted={page.omitted}
                     reason={page.reason}
                     text={page.text}
-                    title={entry?.name ?? "Web page"}
+                    title={entry ? happyAgentVaultNameShown(entry.name) : "App"}
                 />
             );
         return (
@@ -227,7 +239,8 @@ function VaultPreviewContent(props: VaultPreviewPaneProps) {
 /** The name of a folder a record names, as the reader knows it; `null` is the vault's root. */
 function folderName(props: VaultPreviewPaneProps, folderId: HappyAgentVaultItemId | null) {
     if (folderId === null) return props.rootName;
-    return props.items.get(folderId)?.name ?? "another folder";
+    const folder = props.items.get(folderId);
+    return folder ? happyAgentVaultNameShown(folder.name) : "another folder";
 }
 
 /** What a record says happened, after who did it. */
@@ -241,8 +254,9 @@ function activityText(props: VaultPreviewPaneProps, activity: HappyAgentVaultAct
             const renamed = activity.fromName !== activity.toName;
             const moved = activity.fromParentId !== activity.toParentId;
             if (renamed && moved)
-                return `moved it to ${folderName(props, activity.toParentId)} and renamed it “${activity.toName}”`;
-            if (renamed) return `renamed it from “${activity.fromName}” to “${activity.toName}”`;
+                return `moved it to ${folderName(props, activity.toParentId)} and renamed it “${happyAgentVaultNameShown(activity.toName)}”`;
+            if (renamed)
+                return `renamed it from “${happyAgentVaultNameShown(activity.fromName)}” to “${happyAgentVaultNameShown(activity.toName)}”`;
             return `moved it from ${folderName(props, activity.fromParentId)} to ${folderName(props, activity.toParentId)}`;
         }
         case "deleted":

@@ -4,7 +4,7 @@ import type { MessageReferences } from "./messageReferences";
 import { useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Button } from "./Button";
 import { CodeBlock } from "./CodeBlock";
-import { FileTreeFamilyIcon, fileTreeFamily } from "./FileTree";
+import { FileTreeFamilyIcon, fileTreeFamily, type FileTreeNode } from "./FileTree";
 import { FilePathLabel } from "./FilePathLabel";
 import { Icon, type IconName } from "./Icon";
 import { ImageViewer } from "./ImageViewer";
@@ -46,6 +46,8 @@ export type FilePreviewProps = {
     path: string;
     /** Overrides the kind derived from the path — use it when the bytes disagree. */
     kind?: FilePreviewKind;
+    /** What the file is when its name does not say, worn in the header as a file tree row wears it. */
+    type?: FileTreeNode["type"];
     content: FilePreviewContent;
     /**
      * Stable identity for the authoritative text behind this preview. It is
@@ -240,6 +242,7 @@ export function FilePreview(props: FilePreviewProps) {
         "style",
         "path",
         "kind",
+        "type",
         "content",
         "cacheKey",
         "size",
@@ -266,7 +269,7 @@ export function FilePreview(props: FilePreviewProps) {
     const [measured, setMeasured] = useState<{ source: string; dimensions: string }>();
     const kind = local.kind ?? filePreviewKind(local.path);
     const name = local.path.slice(local.path.lastIndexOf("/") + 1);
-    const family = fileTreeFamily({ kind: "file", name });
+    const family = local.type?.family ?? fileTreeFamily({ kind: "file", name });
     const source = local.content.type === "url" ? local.content.url : local.path;
     // This is the outcome of pressing this control, like the Lightbox's copy
     // and download controls, rather than the file's authoritative state.
@@ -331,7 +334,11 @@ export function FilePreview(props: FilePreviewProps) {
                     data-family={family}
                     data-happy-desktop-ui="file-preview-glyph"
                 >
-                    <FileTreeFamilyIcon family={family} size={16} />
+                    {local.type ? (
+                        <Ionicon name={local.type.glyph} size={16} />
+                    ) : (
+                        <FileTreeFamilyIcon family={family} size={16} />
+                    )}
                 </span>
                 <FilePathLabel className="happy-file-preview__path" path={local.path} />
                 {meta ? (

@@ -195,6 +195,9 @@ export type { HappyAgentVaultStore } from "./surfaces/surfaceVaultStore.js";
 export {
     happyAgentVaultArtifactNamed,
     happyAgentVaultNameProblem,
+    happyAgentVaultNameShown,
+    happyAgentVaultNameStored,
+    happyAgentVaultPathShown,
 } from "./surfaces/surfaceVaultTree.js";
 export type { HappyAgentSurfaces } from "./surfaces/surfaces.js";
 export type {

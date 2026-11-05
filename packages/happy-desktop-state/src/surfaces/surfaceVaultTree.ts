@@ -1,4 +1,4 @@
-import { isVaultArtifactName } from "@slopus/happy-agent-client";
+import { isVaultArtifactName, VAULT_ARTIFACT_SUFFIX } from "@slopus/happy-agent-client";
 import type {
     HappyAgentVaultCrumb,
     HappyAgentVaultItem,
@@ -40,7 +40,12 @@ export function vaultLive(items: Entries): Entries {
 }
 
 function nameCompare(left: HappyAgentVaultItem, right: HappyAgentVaultItem): number {
-    return collator.compare(left.name, right.name) || (left.id < right.id ? -1 : 1);
+    return (
+        collator.compare(
+            happyAgentVaultNameShown(left.name),
+            happyAgentVaultNameShown(right.name),
+        ) || (left.id < right.id ? -1 : 1)
+    );
 }
 
 /** Each folder's children, folders first, then by name; `null` is the root. */
@@ -75,7 +80,10 @@ export function vaultListing(
             Number(right.kind === "folder") - Number(left.kind === "folder") ||
             sign *
                 (sort.key === "name"
-                    ? collator.compare(left.name, right.name)
+                    ? collator.compare(
+                          happyAgentVaultNameShown(left.name),
+                          happyAgentVaultNameShown(right.name),
+                      )
                     : sort.key === "size"
                       ? size(left) - size(right)
                       : left.updatedAt - right.updatedAt) ||
@@ -131,17 +139,43 @@ export function happyAgentVaultArtifactNamed(name: string): boolean {
     return isVaultArtifactName(name);
 }
 
-/** The daemon's name rule, in words for the reader, or `undefined` for a name it takes. */
+/**
+ * A name as the reader sees and types it. Every artifact's name ends in
+ * `.artifact` and no other item's does, so the suffix says nothing the
+ * artifact's glyph and preview do not; it is left off everywhere it is shown.
+ */
+export function happyAgentVaultNameShown(name: string): string {
+    if (!isVaultArtifactName(name) || name.length === VAULT_ARTIFACT_SUFFIX.length) return name;
+    return name.slice(0, -VAULT_ARTIFACT_SUFFIX.length);
+}
+
+/** A path as the reader sees it: each artifact in it named as `happyAgentVaultNameShown` does. */
+export function happyAgentVaultPathShown(path: string): string {
+    return path.split("/").map(happyAgentVaultNameShown).join("/");
+}
+
+/** The name stored for one the reader typed: an artifact's keeps its `.artifact`. */
+export function happyAgentVaultNameStored(
+    shown: string,
+    kind: HappyAgentVaultItem["kind"],
+): string {
+    return kind === "artifact" && !isVaultArtifactName(shown)
+        ? `${shown}${VAULT_ARTIFACT_SUFFIX}`
+        : shown;
+}
+
+/**
+ * The daemon's name rule, in words for the reader, for a name as they typed
+ * it, or `undefined` for a name it takes.
+ */
 export function happyAgentVaultNameProblem(
-    name: string,
+    shown: string,
     kind: HappyAgentVaultItem["kind"],
 ): string | undefined {
-    if (name.length === 0) return "Give it a name.";
-    // A name ends in `.artifact` exactly when the file is an artifact.
-    if (kind === "artifact" && !happyAgentVaultArtifactNamed(name))
-        return "An artifact’s name ends in “.artifact”.";
-    if (kind !== "artifact" && happyAgentVaultArtifactNamed(name))
-        return "Only artifacts have names ending in “.artifact”.";
+    if (shown.length === 0) return "Give it a name.";
+    if (kind !== "artifact" && happyAgentVaultArtifactNamed(shown))
+        return "A name can’t end in “.artifact”.";
+    const name = happyAgentVaultNameStored(shown, kind);
     if (name === "." || name === "..") return "That name is reserved.";
     if (/[/\\]/u.test(name)) return "A name can’t hold “/” or “\\”.";
     // eslint-disable-next-line no-control-regex

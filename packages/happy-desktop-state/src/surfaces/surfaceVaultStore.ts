@@ -42,6 +42,8 @@ import {
     vaultLive,
     happyAgentVaultArtifactNamed,
     happyAgentVaultNameProblem,
+    happyAgentVaultNameShown,
+    happyAgentVaultNameStored,
     vaultNameFree,
     vaultNameKey,
     vaultPath,
@@ -170,8 +172,8 @@ export interface HappyAgentVaultDeps {
     readonly now?: () => number;
     /** Given for a vault this window is still making: reads and changes wait for it. */
     readonly surfaceCreated?: Promise<void>;
-    /** Serves an artifact item's HTML version as a live site; absent shows it as a static page. */
-    readonly siteOpen?: HappyAgentVaultContentDeps["siteOpen"];
+    /** Runs an artifact item's HTML version as a live app; absent shows it as a static page. */
+    readonly appOpen?: HappyAgentVaultContentDeps["appOpen"];
 }
 
 /** How many versions and activity records one history read asks for. */
@@ -280,6 +282,14 @@ function notFound(error: unknown): boolean {
 
 function refused(error: unknown): boolean {
     return error instanceof HappyAgentApiError && error.status >= 400 && error.status < 500;
+}
+
+/** A refusal that says "not now" rather than "not this": a timeout, a conflict, or too many requests. */
+function retryableRefusal(error: unknown): boolean {
+    return (
+        error instanceof HappyAgentApiError &&
+        (error.status === 408 || error.status === 409 || error.status === 429)
+    );
 }
 
 function waitFor(milliseconds: number, signal: AbortSignal): Promise<void> {
@@ -565,7 +575,7 @@ export function happyAgentVaultStoreCreate(deps: HappyAgentVaultDeps): HappyAgen
         if (preview.versionShown === undefined || snapshot.preview?.content.type === "error")
             snapshot = { ...snapshot, preview: { ...preview, content: { type: "loading" } } };
         void happyAgentVaultContentRead(
-            { client, surfaceId, ...(deps.siteOpen ? { siteOpen: deps.siteOpen } : {}) },
+            { client, surfaceId, ...(deps.appOpen ? { appOpen: deps.appOpen } : {}) },
             entry,
             number,
             controller.signal,
@@ -1268,7 +1278,8 @@ export function happyAgentVaultStoreCreate(deps: HappyAgentVaultDeps): HappyAgen
     /** Why a change was refused, in words for the reader. */
     const refusalOf = (op: VaultOp, error: unknown): UserError => {
         if (apiCode(error) === "name_taken") {
-            const name = op.kind === "delete" ? "That name" : `“${op.name}”`;
+            const name =
+                op.kind === "delete" ? "That name" : `“${happyAgentVaultNameShown(op.name)}”`;
             return new UserError(`${name} is already used in that folder.`, "name_taken", error);
         }
         return happyAgentUserError(error);
@@ -1356,7 +1367,10 @@ export function happyAgentVaultStoreCreate(deps: HappyAgentVaultDeps): HappyAgen
         notify();
     };
 
-    /** A name the reader typed, cleaned as the daemon would take it, or `undefined` after saying why not. */
+    /**
+     * A name the reader typed, cleaned and stored as the daemon would take it,
+     * an artifact's with its `.artifact`, or `undefined` after saying why not.
+     */
     const nameClean = (name: string, kind: HappyAgentVaultItem["kind"]): string | undefined => {
         const clean = name.trim().normalize("NFC");
         const problem = happyAgentVaultNameProblem(clean, kind);
@@ -1364,7 +1378,7 @@ export function happyAgentVaultStoreCreate(deps: HappyAgentVaultDeps): HappyAgen
             fail(problem);
             return undefined;
         }
-        return clean;
+        return happyAgentVaultNameStored(clean, kind);
     };
 
     const siblingsOf = (
@@ -1459,7 +1473,9 @@ export function happyAgentVaultStoreCreate(deps: HappyAgentVaultDeps): HappyAgen
                 republish();
             }
         }
-        throw new UserError(`“${name}” could not be placed; the folder kept changing.`);
+        throw new UserError(
+            `“${happyAgentVaultNameShown(name)}” could not be placed; the folder kept changing.`,
+        );
     };
 
     const uploadsRun = async (): Promise<void> => {
@@ -1496,8 +1512,13 @@ export function happyAgentVaultStoreCreate(deps: HappyAgentVaultDeps): HappyAgen
                 } catch (error) {
                     if (disposed || signal.aborted) continue;
                     // An upload used up or expired is begun again on retry.
-                    if (notFound(error)) delete record.uploadId;
-                    uploadView(record, { phase: "failed", error: happyAgentUserError(error) });
+                    const expired = notFound(error) && record.view.phase === "sending";
+                    if (expired) delete record.uploadId;
+                    uploadView(record, {
+                        phase: "failed",
+                        error: happyAgentUserError(error),
+                        retryable: expired || !refused(error) || retryableRefusal(error),
+                    });
                 }
             }
         } finally {
@@ -1735,7 +1756,7 @@ export function happyAgentVaultStoreCreate(deps: HappyAgentVaultDeps): HappyAgen
             const clean = nameClean(name, "folder");
             if (clean === undefined) return;
             if (nameTaken(location.folderId, clean) !== undefined) {
-                fail(`“${clean}” is already used in this folder.`);
+                fail(`“${happyAgentVaultNameShown(clean)}” is already used in this folder.`);
                 return;
             }
             store.dialogClose();
@@ -1757,7 +1778,7 @@ export function happyAgentVaultStoreCreate(deps: HappyAgentVaultDeps): HappyAgen
             store.dialogClose();
             if (clean === entry.name) return;
             if (nameTaken(entry.parentId, clean, itemId) !== undefined) {
-                fail(`“${clean}” is already used in this folder.`);
+                fail(`“${happyAgentVaultNameShown(clean)}” is already used in this folder.`);
                 return;
             }
             void enqueue({ kind: "move", itemId, parentId: entry.parentId, name: clean });
@@ -1768,7 +1789,7 @@ export function happyAgentVaultStoreCreate(deps: HappyAgentVaultDeps): HappyAgen
             if (folderId !== null && !snapshot.items.has(folderId)) return;
             if (vaultContains(projected(), itemId, folderId)) return;
             if (nameTaken(folderId, entry.name, itemId) !== undefined) {
-                fail(`“${entry.name}” is already used in that folder.`);
+                fail(`“${happyAgentVaultNameShown(entry.name)}” is already used in that folder.`);
                 return;
             }
             void enqueue({ kind: "move", itemId, parentId: folderId, name: entry.name });
@@ -1877,7 +1898,7 @@ export function happyAgentVaultStoreCreate(deps: HappyAgentVaultDeps): HappyAgen
         },
         uploadRetry(uploadId) {
             const record = uploads.find((candidate) => candidate.view.id === uploadId);
-            if (disposed || record === undefined || record.view.phase !== "failed") return;
+            if (disposed || record?.view.phase !== "failed" || !record.view.retryable) return;
             record.controller = new AbortController();
             uploadView(record, { phase: "waiting" });
             void uploadsRun();

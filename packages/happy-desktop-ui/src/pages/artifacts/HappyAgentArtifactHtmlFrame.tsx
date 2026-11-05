@@ -79,12 +79,12 @@ function StaticNotice(props: {
         props.reason.type === "app-outdated"
             ? {
                   tone: "warning",
-                  title: "Update Happy to run this page",
-                  text: `This version of the Happy app shows the page without running its scripts. Update the app and restart it to see the page live.${missing}`,
+                  title: "Update Happy to run this app",
+                  text: `This version of Happy shows the app without running its scripts. Update Happy and restart it to run the app live.${missing}`,
               }
             : {
                   tone: "danger",
-                  title: "The page could not be run",
+                  title: "The app could not be run",
                   text: `${props.reason.error.message} This is a static preview of it, without its scripts.${missing}`,
               };
     return (

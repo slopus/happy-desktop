@@ -8,11 +8,13 @@ import {
     type ReactNode,
 } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import type {
-    HappyAgentVaultItem,
-    HappyAgentVaultItemId,
-    HappyAgentVaultSort,
-    HappyAgentVaultSortKey,
+import {
+    happyAgentVaultNameShown,
+    happyAgentVaultPathShown,
+    type HappyAgentVaultItem,
+    type HappyAgentVaultItemId,
+    type HappyAgentVaultSort,
+    type HappyAgentVaultSortKey,
 } from "happy-desktop-state";
 import { Button } from "../../../Button";
 import { Icon } from "../../../Icon";
@@ -250,6 +252,7 @@ export function VaultItemList(props: VaultItemListProps) {
             </div>
         ) : null;
     const row = (entry: HappyAgentVaultItem): ReactNode => {
+        const name = happyAgentVaultNameShown(entry.name);
         if (mode.kind === "grid") {
             const thumbnail = vaultItemIsImage(entry) ? props.thumbnailOf?.(entry) : undefined;
             return (
@@ -258,7 +261,7 @@ export function VaultItemList(props: VaultItemListProps) {
                     className="happy-vault-tile"
                     data-happy-desktop-ui="vault-tile"
                     key={entry.id}
-                    title={entry.name}
+                    title={name}
                 >
                     <span className="happy-vault-tile__picture">
                         {thumbnail ? (
@@ -273,7 +276,7 @@ export function VaultItemList(props: VaultItemListProps) {
                             <VaultItemGlyph item={entry} size={32} />
                         )}
                     </span>
-                    <span className="happy-vault-tile__name">{entry.name}</span>
+                    <span className="happy-vault-tile__name">{name}</span>
                 </div>
             );
         }
@@ -288,9 +291,14 @@ export function VaultItemList(props: VaultItemListProps) {
                 >
                     <span className="happy-vault-row__name-cell">
                         <VaultItemGlyph item={entry} size={16} />
-                        <span className="happy-vault-row__name">{entry.name}</span>
-                        <span className="happy-vault-row__path" title={mode.paths.get(entry.id)}>
-                            {vaultParentPath(mode.paths.get(entry.id) ?? "")}
+                        <span className="happy-vault-row__name">{name}</span>
+                        <span
+                            className="happy-vault-row__path"
+                            title={happyAgentVaultPathShown(mode.paths.get(entry.id) ?? "")}
+                        >
+                            {happyAgentVaultPathShown(
+                                vaultParentPath(mode.paths.get(entry.id) ?? ""),
+                            )}
                         </span>
                     </span>
                     <span className="happy-vault-row__cell" data-column="deleted">
@@ -323,8 +331,8 @@ export function VaultItemList(props: VaultItemListProps) {
             >
                 <span className="happy-vault-row__name-cell">
                     <VaultItemGlyph item={entry} size={16} />
-                    <span className="happy-vault-row__name" title={entry.name}>
-                        {entry.name}
+                    <span className="happy-vault-row__name" title={name}>
+                        {name}
                     </span>
                 </span>
                 <span className="happy-vault-row__cell" data-column="updatedAt">

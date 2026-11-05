@@ -1,14 +1,15 @@
 import { useRef, useState, type CSSProperties, type DragEvent } from "react";
-import type {
-    HappyAgentVaultDialog,
-    HappyAgentVaultItem,
-    HappyAgentVaultItemId,
-    HappyAgentVaultLayout,
-    HappyAgentVaultRetention,
-    HappyAgentVaultSnapshot,
-    HappyAgentVaultSort,
-    HappyAgentVaultSortKey,
-    HappyAgentVaultUploadFile,
+import {
+    happyAgentVaultNameShown,
+    type HappyAgentVaultDialog,
+    type HappyAgentVaultItem,
+    type HappyAgentVaultItemId,
+    type HappyAgentVaultLayout,
+    type HappyAgentVaultRetention,
+    type HappyAgentVaultSnapshot,
+    type HappyAgentVaultSort,
+    type HappyAgentVaultSortKey,
+    type HappyAgentVaultUploadFile,
 } from "happy-desktop-state";
 import { Banner } from "../../../Banner";
 import { Button } from "../../../Button";
@@ -51,11 +52,11 @@ export interface HappyAgentVaultSurfacePageProps {
     now: number;
     /** Whose clock times are told on; the viewer's own by default. */
     zone?: LocalTimeZone;
-    /** The host's engine for a site whose scripts run. */
+    /** The host's engine for an app whose scripts run. */
     renderPage?: HtmlPreviewRenderer;
     /** A picture's thumbnail for the grid. */
     thumbnailOf?: (entry: HappyAgentVaultItem) => string | undefined;
-    /** Saves an entry, a folder or a site as a zip; `version` defaults to the newest. */
+    /** Saves an entry, a folder or an artifact as a zip; `version` defaults to the newest. */
     onItemDownload: (itemId: HappyAgentVaultItemId, version?: number) => Promise<void>;
     onFolderOpen: (folderId: HappyAgentVaultItemId | null) => void;
     onTrashShow: () => void;
@@ -121,7 +122,7 @@ function folderWithin(
 /**
  * HappyAgentVaultSurfacePage — one shared vault, browsed as Finder browses a
  * disk: a breadcrumb and the folder's contents as rows or tiles, the vault
- * as a tree beside them, and the file or site that is open on the right with
+ * as a tree beside them, and the file or app that is open on the right with
  * its history. Searching replaces the folder with what matched; the Trash
  * holds what was deleted until it is restored or its time runs out.
  *
@@ -245,7 +246,11 @@ export function HappyAgentVaultSurfacePage(props: HappyAgentVaultSurfacePageProp
                 props.onItemOpen(entry.id);
                 return;
             case "rename":
-                props.onDialogOpen({ kind: "rename", itemId: entry.id, name: entry.name });
+                props.onDialogOpen({
+                    kind: "rename",
+                    itemId: entry.id,
+                    name: happyAgentVaultNameShown(entry.name),
+                });
                 return;
             case "download":
                 download(entry.id);
