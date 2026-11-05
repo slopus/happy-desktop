@@ -128,15 +128,13 @@ describe("happyAgentArtifactProject cover", () => {
             expect(happyAgentArtifactProject(artifact(cover), link).cover).toBeNull();
     });
 
-    it("leads a list with the cover's still preview and ThumbHash when the cover is the entry", () => {
-        const cover = { ...wide, thumbhash: "1QcSHQRnh493V4dIh4eXh1h4kJUI" };
-        const own = {
-            ...entry,
-            path: "cover.png",
-            mimeType: "image/png",
+    it("leads a list with the cover's still preview and ThumbHash", () => {
+        const cover = {
+            ...wide,
+            thumbhash: "1QcSHQRnh493V4dIh4eXh1h4kJUI",
             preview: { width: 640, height: 360 },
         };
-        expect(happyAgentArtifactProject(artifact(cover, "image", own), link)).toMatchObject({
+        expect(happyAgentArtifactProject(artifact(cover), link)).toMatchObject({
             cover: {
                 thumbhash: cover.thumbhash,
                 preview: {
@@ -152,8 +150,8 @@ describe("happyAgentArtifactProject cover", () => {
                 thumbhash: cover.thumbhash,
             },
         });
-        // A cover that is another file names no preview: the list reads it whole.
-        expect(happyAgentArtifactProject(artifact(cover), link).thumbnail).toMatchObject({
+        // Without a preview, the list reads the cover whole.
+        expect(happyAgentArtifactProject(artifact(wide), link).thumbnail).toMatchObject({
             url: "https://daemon/art_1/3/files/cover.png",
             preview: false,
         });

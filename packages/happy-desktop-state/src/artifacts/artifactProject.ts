@@ -181,9 +181,7 @@ const ARTIFACT_COVER_MIME_TYPES: ReadonlySet<string> = new Set<HappyAgentArtifac
 /**
  * The cover the artifact's latest version names. An older daemon sends none,
  * and a cover in a format or of a shape this build does not know is no cover,
- * so the artifact keeps its compact row rather than a guess at its shape. The
- * artifact names its cover's preview only when the cover is its entry, whose
- * file it carries.
+ * so the artifact keeps its compact row rather than a guess at its shape.
  */
 export function happyAgentArtifactCoverProject(
     artifact: Artifact,
@@ -205,12 +203,9 @@ export function happyAgentArtifactCoverProject(
         aspect: aspect satisfies HappyAgentArtifactCoverAspect,
         url: links.file(id, artifact.latestVersion, path),
         thumbhash: cover.thumbhash ?? null,
-        preview:
-            artifact.entry.path === path
-                ? previewProject(artifact.entry.preview, () =>
-                      links.preview(id, artifact.latestVersion, path),
-                  )
-                : null,
+        preview: previewProject(cover.preview, () =>
+            links.preview(id, artifact.latestVersion, path),
+        ),
     };
 }
 
