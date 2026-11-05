@@ -1,4 +1,5 @@
 import { availableParallelism } from "node:os";
+import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
 import babel from "@rolldown/plugin-babel";
 import react, { reactCompilerPreset } from "@vitejs/plugin-react";
@@ -68,6 +69,41 @@ export default defineConfig({
                         .first()
                         .boundingBox();
                     if (!box) throw new Error("Scroll repro viewport is missing");
+                    if (process.env.HAPPY_SCROLL_REPRO_NATIVE === "1") {
+                        if (process.platform !== "win32")
+                            throw new Error("Native wheel repro requires Windows");
+                        const windowGeometry = await page.evaluate(() => ({
+                            x: window.screenX + (window.outerWidth - window.innerWidth) / 2,
+                            y:
+                                window.screenY +
+                                window.outerHeight -
+                                window.innerHeight -
+                                (window.outerWidth - window.innerWidth) / 2,
+                        }));
+                        const x = Math.round(windowGeometry.x + box.x + box.width / 2);
+                        const y = Math.round(windowGeometry.y + box.y + box.height / 2);
+                        execFileSync(
+                            "powershell.exe",
+                            [
+                                "-NoLogo",
+                                "-NoProfile",
+                                "-NonInteractive",
+                                "-File",
+                                resolve(
+                                    import.meta.dirname,
+                                    "../../scripts/windows-scroll-wheel.ps1",
+                                ),
+                                "-ScreenX",
+                                String(x),
+                                "-ScreenY",
+                                String(y),
+                                "-Delta",
+                                String(deltaY < 0 ? 120 : -120),
+                            ],
+                            { stdio: "pipe" },
+                        );
+                        return;
+                    }
                     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
                     await page.mouse.wheel(0, deltaY);
                 },
