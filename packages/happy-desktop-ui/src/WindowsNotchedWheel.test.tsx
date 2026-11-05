@@ -14,7 +14,7 @@ import { ConversationView } from "./ConversationView";
 
 declare module "vitest/browser" {
     interface BrowserCommands {
-        scrollReproWheel: (deltaY: number) => Promise<void>;
+        scrollReproWheel: (deltaY: number, count: number) => Promise<void>;
         scrollReproDrag: (direction: "up" | "down") => Promise<void>;
         scrollReproKey: (key: string) => Promise<void>;
     }
@@ -174,24 +174,19 @@ it("records trusted wheel movement during a growing response", async () => {
             update(`Streaming begins. ${"additional streamed text ".repeat(ticks)}`);
         }, 100);
         await delay(350);
-        await commands.scrollReproWheel(-100 * devicePixelRatio);
+        await commands.scrollReproWheel(-100 * devicePixelRatio, 1);
         await delay(750);
-        await commands.scrollReproWheel(-100 * devicePixelRatio);
-        await delay(100);
-        await commands.scrollReproWheel(-100 * devicePixelRatio);
+        await commands.scrollReproWheel(-100 * devicePixelRatio, 2);
         await delay(700);
         events.push({ type: "return-start", time: performance.now() - started });
-        for (let i = 0; i < 8; i += 1) {
-            await commands.scrollReproWheel(100 * devicePixelRatio);
-            await delay(75);
-        }
+        await commands.scrollReproWheel(100 * devicePixelRatio, 8);
         await delay(600);
         // Position the fixture at the tail, then use trusted reader input to
         // re-arm following before measuring an independent input scenario.
         streaming = false;
         viewport.scrollTop = viewport.scrollHeight;
         await delay(100);
-        await commands.scrollReproWheel(4 * devicePixelRatio);
+        await commands.scrollReproWheel(4 * devicePixelRatio, 1);
         expect(
             viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight,
         ).toBeLessThanOrEqual(1);
@@ -205,7 +200,7 @@ it("records trusted wheel movement during a growing response", async () => {
         streaming = false;
         viewport.scrollTop = viewport.scrollHeight;
         await delay(100);
-        await commands.scrollReproWheel(4 * devicePixelRatio);
+        await commands.scrollReproWheel(4 * devicePixelRatio, 1);
         expect(
             viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight,
         ).toBeLessThanOrEqual(1);
