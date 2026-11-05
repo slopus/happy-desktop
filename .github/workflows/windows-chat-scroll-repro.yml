@@ -90,7 +90,18 @@ jobs:
                   foreach ($sid in @($identity, [Security.Principal.SecurityIdentifier]::new('S-1-5-18'), [Security.Principal.SecurityIdentifier]::new('S-1-5-32-544'))) { $acl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new($sid, 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow')) }
                   $target.SetAccessControl($acl)
                   PS
-                  powershell.exe -NoLogo -NoProfile -NonInteractive -File "$(cygpath -w "$PWD/.context/acl-probe.ps1")" > .context/windows-electron/acl-probe.log 2>&1 || cat .context/windows-electron/acl-probe.log
+                  if powershell.exe -NoLogo -NoProfile -NonInteractive -File "$(cygpath -w "$PWD/.context/acl-probe.ps1")" > .context/windows-electron/acl-probe.log 2>&1; then
+                    echo 'ACL probe passed' >> .context/windows-electron/acl-probe.log
+                  else
+                    echo 'ACL probe failed' >> .context/windows-electron/acl-probe.log
+                    cat .context/windows-electron/acl-probe.log
+                  fi
+            - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+              if: always()
+              with:
+                  name: windows-agent-acl-probe
+                  path: .context/windows-electron/acl-probe.log
+                  if-no-files-found: warn
             - name: Run Electron workloads
               timeout-minutes: 20
               run: |
