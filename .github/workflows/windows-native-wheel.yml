@@ -1,0 +1,45 @@
+name: Windows native wheel repro
+
+on:
+    push:
+        branches: ["windows-scroll-native**"]
+    workflow_dispatch:
+
+permissions:
+    contents: read
+
+jobs:
+    native-wheel:
+        runs-on: windows-2025
+        timeout-minutes: 20
+        defaults:
+            run:
+                shell: bash
+        steps:
+            - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+            - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+            - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+              with:
+                  node-version: "24"
+                  cache: pnpm
+            - run: pnpm config set script-shell "C:\Program Files\Git\bin\bash.exe"
+            - run: pnpm install --frozen-lockfile
+            - run: pnpm --dir packages/happy-desktop-ui exec playwright install chromium
+            - name: Run native wheel trace
+              env:
+                  HAPPY_SCROLL_REPRO_DPR: "1.25"
+                  HAPPY_SCROLL_REPRO_SMOOTH: "1"
+                  HAPPY_SCROLL_REPRO_HEADED: "1"
+                  HAPPY_SCROLL_REPRO_NATIVE: "1"
+              run: |
+                  mkdir -p .context/native-wheel
+                  set -o pipefail
+                  pnpm --dir packages/happy-desktop-ui exec vitest run --project chromium src/WindowsNotchedWheel.test.tsx 2>&1 | tee .context/native-wheel/output.log
+            - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+              if: always()
+              with:
+                  name: windows-native-wheel
+                  path: |
+                      .context/native-wheel
+                      packages/happy-desktop-ui/src/__screenshots__/WindowsNotchedWheel.test.tsx/**
+                  if-no-files-found: warn
