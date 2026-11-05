@@ -12,6 +12,10 @@ jobs:
     native-wheel:
         runs-on: windows-2025
         timeout-minutes: 20
+        strategy:
+            fail-fast: false
+            matrix:
+                dpr: [1, 1.25]
         defaults:
             run:
                 shell: bash
@@ -27,7 +31,7 @@ jobs:
             - run: pnpm --dir packages/happy-desktop-ui exec playwright install chromium
             - name: Run native wheel trace
               env:
-                  HAPPY_SCROLL_REPRO_DPR: "1.25"
+                  HAPPY_SCROLL_REPRO_DPR: ${{ matrix.dpr }}
                   HAPPY_SCROLL_REPRO_SMOOTH: "1"
                   HAPPY_SCROLL_REPRO_HEADED: "1"
                   HAPPY_SCROLL_REPRO_NATIVE: "1"
@@ -38,7 +42,7 @@ jobs:
             - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
               if: always()
               with:
-                  name: windows-native-wheel
+                  name: windows-native-wheel-${{ matrix.dpr }}
                   path: |
                       .context/native-wheel
                       packages/happy-desktop-ui/src/__screenshots__/WindowsOneNotch.test.tsx/**
