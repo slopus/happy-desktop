@@ -44,24 +44,75 @@ an account, a Happy Agent, or the phone's `anonID`.
 
 ## Switching it off
 
-Everything lives in `packages/happy-desktop-analytics` and the renderer facade
-`desktopAnalytics.ts` with its two observers (`desktopConversationAnalytics.ts`,
-`desktopMobilePairingAnalytics.ts`). Deleting them and their call sites in
-`renderer.tsx` removes analytics. A build without a PostHog key sends nothing,
-nor does a development window. The Settings switch stops the next event at
-once; events are sent as they are captured, so no batch is left to go out.
+- A build without a PostHog key sends nothing, nor does a development window.
+- The Settings switch stops sending at once: PostHog is opted out the moment
+  it turns off, `before_send` drops every event while it is off, a library
+  still loading then is never started, events leave as they are captured so
+  no batch is left, and PostHog's retry queue is removed so a failed request
+  is never sent again later.
+- `DO_NOT_TRACK=1` in the environment turns analytics off the same way. Not
+  yet built: the shell has to hand the variable to the renderer, which is a
+  main or preload change waiting on Kirill's confirmation.
+
+### Removing analytics
+
+Analytics is `packages/happy-desktop-analytics` and the one renderer facade,
+`packages/happy-desktop-electron/sources/renderer/desktopAnalytics.ts`. No other
+file but the facade's two tests imports the package or names an `Analytics*`
+type or `analytics*` function. To remove it, delete:
+
+- `packages/happy-desktop-analytics/` and its `.oxfmtrc.json` ignore entry.
+- `desktopAnalytics.ts`, `desktopAnalytics.test.ts`, and
+  `desktopMobilePairingAnalytics.test.ts` in the renderer.
+- In `renderer.tsx`: the `desktopAnalyticsCreate` import and call, and every
+  `analytics.` use: `mobilePairingMethodSelected`, `activity`,
+  `mobilePairingObserve`, `dispose`, `flagFollow` (the direct-connection
+  rollout then keeps its default), `appOpened`, `agentUpdateObserve`,
+  `agentBrokenObserve`, `onboardingObserve`, and `preference`.
+- The `HappyAgentMobilePairingObserve` type import and the
+  `mobilePairingObserve` dep in `happyAgentDirectoryStore.ts` and
+  `happyAgentConnection.ts`, and the `activity` dep in both.
+- `happy-desktop-analytics` in `happy-desktop-electron/package.json` and
+  `scripts/demo/lib/stage.mjs`, the `__HAPPY_POSTHOG_API_KEY__` and
+  `__HAPPY_POSTHOG_HOST__` defines in `vite.config.ts`, and
+  `HAPPY_POSTHOG_API_KEY` / `release_analytics` in the build and release
+  workflows.
+
+What is left reports only to whoever listens and does nothing alone; it can
+stay or go with it:
+
+- happy-desktop-state: `happyAgentActivity.ts`, the workspace store's
+  `activityRecorded` output with `activityRecord`, `activityModel`,
+  `activityAddress`, `failureActionRecord`, `failureNewChat`, and
+  `conversationEntriesSeen`, a failure notice's `occurredAt`, and
+  `usageAnalytics/usageAnalyticsStore.ts`.
+- happy-desktop-ui: `ConversationView`'s `onEntriesSeen`, and the Settings
+  switch `HappyAgentProductAnalyticsSettings` with its `usageAnalyticsEnabled`
+  props in `HappyAgentGeneralSettings` and its Blueprint pages.
+- happy-desktop-app: the `usageAnalytics` prop through the router and the
+  settings view, and `AppHappyAgentView`'s `onEntriesSeen` and
+  `failureNewChat` calls.
+- The shell's `main/localApps.ts` look and the onboarding fields that carry
+  it, read only for `onboarding_local_apps`; a host change, so it waits on
+  Kirill like the rest of main.
 
 ## The desktop's part
 
-- Errors first: `chat_failure_shown` (a fresh failure card in the focused
-  conversation, counted once per failure on this device), `chat_failure_action_clicked`,
-  `agent_connection_lost` (one per outage of 10 s or more while the window is
-  on screen, sent when it ends), `error_shown` (at most once per area and code
-  every 10 minutes, with `repeat_count`), `onboarding_setup_result`, and the
-  `mobile_pairing_*` results.
+- Errors first. `chat_failure_shown`: a failure card less than 5 minutes old,
+  counted when the conversation's virtualized list actually has it on screen
+  in a foreground window, once per failure on this device.
+  `chat_failure_action_clicked`: Retry, Switch, New chat, or Ask Chief of Staff
+  on a failure card. `agent_connection_lost`: one per outage of 10 s or more
+  while the window is on screen, sent when it ends. `error_shown`: an error on
+  the surface the person is looking at in a foreground window (the active file
+  or diff tab, the conversation that could not load, a failed send on screen,
+  the update card), at most once per area and code every 10 minutes, with
+  `repeat_count`. Then `onboarding_setup_result` and the `mobile_pairing_*`
+  results.
 - Then use: `app_opened`, `message_sent`, `conversation_created`,
   `project_added`, `workspace_created`, `bot_created`, `task_created`, and the
   `onboarding_*` events.
 - Not yet: `app_crashed`, which needs the main process to leave a marker for
-  the next launch, and the voice events, which need the voice store to keep a
-  typed reason instead of an error string.
+  the next launch, and `DO_NOT_TRACK` (above), both waiting on Kirill's
+  confirmation of a main or preload change; and the voice events, which need
+  the voice store to keep a typed reason instead of an error string.
