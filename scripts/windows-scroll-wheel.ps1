@@ -4,7 +4,8 @@ param(
     [Parameter(Mandatory = $true)][int]$Delta,
     [int]$Count = 1,
     [int]$IntervalMs = 75,
-    [switch]$WaitForSignal
+    [switch]$WaitForSignal,
+    [switch]$PrepareUp
 )
 $ErrorActionPreference = 'Stop'
 Add-Type -TypeDefinition @'
@@ -41,8 +42,20 @@ $targetWindow = [ScrollReproNative]::WindowFromPoint($point)
 $targetPid = [uint32]0
 [void][ScrollReproNative]::GetWindowThreadProcessId($targetWindow, [ref]$targetPid)
 Write-Output "NATIVE_WHEEL_TARGET requested=$ScreenX,$ScreenY actual=$($point.X),$($point.Y) foreground=$([ScrollReproNative]::GetForegroundWindow()) selected=$($window.MainWindowHandle) target=$targetWindow targetPid=$targetPid delta=$Delta"
+if ($PrepareUp) {
+    $up = [ScrollReproNative+MOUSEINPUT]::new()
+    $up.dwFlags = 0x0800
+    $up.mouseData = 120
+    $upUnion = [ScrollReproNative+InputUnion]::new()
+    $upUnion.mouse = $up
+    $upEvent = [ScrollReproNative+INPUT]::new()
+    $upEvent.type = 0
+    $upEvent.data = $upUnion
+    if ([ScrollReproNative]::SendInput(1, @($upEvent), [Runtime.InteropServices.Marshal]::SizeOf($upEvent)) -ne 1) { throw 'Native setup wheel failed.' }
+    Start-Sleep -Milliseconds 300
+}
 if ($WaitForSignal) {
-    Write-Output 'NATIVE_WHEEL_READY'
+    [Console]::Out.WriteLine('NATIVE_WHEEL_READY')
     [Console]::Out.Flush()
     if ($null -eq [Console]::In.ReadLine()) { throw 'Native wheel signal pipe closed.' }
 }

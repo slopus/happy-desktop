@@ -182,6 +182,7 @@ export default defineConfig({
                             "-Delta",
                             "-120",
                             "-WaitForSignal",
+                            "-PrepareUp",
                         ],
                         { stdio: "pipe" },
                     );
