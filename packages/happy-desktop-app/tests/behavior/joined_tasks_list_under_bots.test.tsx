@@ -462,7 +462,7 @@ const CREATES = "0.4.87-preview.6";
 /** The New task row directly under Search, the sidebar's one way to make a task. */
 const NEW_TASK_ROW = '[data-happy-desktop-ui="sidebar-item"][data-item-id="new-chat"]';
 
-it("makes a task from the New task row under Search, not from the Tasks heading", () => {
+it("makes a task from the New task row under Search", () => {
     const onTaskCreateOpen = vi.fn();
     const { container, actions } = view({
         onTaskCreateOpen,
@@ -471,14 +471,28 @@ it("makes a task from the New task row under Search, not from the Tasks heading"
     const create = container.querySelector<HTMLButtonElement>(NEW_TASK_ROW)!;
     expect(create).not.toBeNull();
     expect(create.textContent).toContain("New task");
-    expect(
-        container.querySelector(
-            '[aria-label="New task"][data-happy-desktop-ui="sidebar-section-action"]',
-        ),
-    ).toBeNull();
     expect(container.querySelector('[aria-label="Browse tasks"]')).toBeNull();
 
     fireEvent.click(create);
+    expect(onTaskCreateOpen).toHaveBeenCalledWith("local");
+    expect(actions.taskBrowseOpen).not.toHaveBeenCalled();
+});
+
+it("makes a task from the hover-revealed + on the Tasks heading", () => {
+    const onTaskCreateOpen = vi.fn();
+    const { container, actions } = view({
+        onTaskCreateOpen,
+        entries: (actions) => [entry("local", actions, { version: CREATES })],
+    });
+    const plus = container.querySelector<HTMLButtonElement>(
+        '[aria-label="New task"][data-happy-desktop-ui="sidebar-section-action"]',
+    )!;
+    expect(plus).not.toBeNull();
+    expect(plus.getAttribute("data-reveal")).toBe("hover");
+    // The chord belongs to the row under Search, not the heading's +.
+    expect(plus.getAttribute("aria-keyshortcuts")).toBeNull();
+
+    fireEvent.click(plus);
     expect(onTaskCreateOpen).toHaveBeenCalledWith("local");
     expect(actions.taskBrowseOpen).not.toHaveBeenCalled();
 });

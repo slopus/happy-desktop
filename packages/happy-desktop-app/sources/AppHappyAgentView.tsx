@@ -2502,11 +2502,18 @@ function happyAgentTasksSection(
                 id: happyAgentItemId(happyAgent.id, item.id),
                 ...happyAgentSidebarItemAvailability(item, happyAgent),
             })),
-        // A task is made from the New task row under Search, so the heading
-        // carries no + of its own. Task search is available through the
+        // The New task row under Search is the main way to make a task; the
+        // heading's + makes one on this machine and shows only on hover. The
+        // chord stays on the row. Task search is available through the
         // global search controls.
         ...(materialized && happyAgentTaskCreateSupported(happyAgent)
             ? {
+                  action: {
+                      disabled: offline,
+                      icon: "plus" as const,
+                      label: "New task",
+                      reveal: "hover" as const,
+                  },
                   // Nothing joined yet says so under the heading, with making
                   // the first one right beside it while it can be made.
                   empty: {
