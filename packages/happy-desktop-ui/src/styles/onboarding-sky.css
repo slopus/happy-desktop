@@ -5,27 +5,27 @@
     inset: 0;
     overflow: hidden;
     pointer-events: none;
-    /* Native's still fallback: four corner glows over the same base palette. */
+    /* Match the shader's 70% inward reach, anchored at the same corners. */
     background:
         radial-gradient(
-            circle at 100% 35%,
+            circle at 100% 24.5%,
             color-mix(in srgb, var(--onboarding-grain-3) 70%, transparent),
-            transparent 75%
+            transparent 52.5%
         ),
         radial-gradient(
-            circle at 0% 60%,
+            circle at 0% 72%,
             color-mix(in srgb, var(--onboarding-grain-2) 70%, transparent),
-            transparent 75%
+            transparent 52.5%
         ),
         radial-gradient(
             circle at 100% 0%,
             color-mix(in srgb, var(--onboarding-grain-1) 70%, transparent),
-            transparent 75%
+            transparent 52.5%
         ),
         radial-gradient(
             circle at 0% 100%,
             color-mix(in srgb, var(--onboarding-grain-0) 70%, transparent),
-            transparent 75%
+            transparent 52.5%
         ),
         var(--onboarding-grain-back);
 }

@@ -18,7 +18,8 @@
  * noise .25 and speed 1, replaces the noise texture with proceduralHash21,
  * and uses forward differences instead of fwidth. Those choices are retained.
  * Desktop changes: AGSL/Metal types to GLSL ES 1.00, gl_FragColor output,
- * and WebGL's already-upward fragment Y coordinate (no native Y inversion).
+ * WebGL's already-upward fragment Y coordinate (no native Y inversion), and
+ * corner fields compressed to 70% of their native reach around each corner.
  */
 export const onboardingGrainFragmentShader = `
 precision highp float;
@@ -34,6 +35,7 @@ const float COUNT = 4.;
 const float SOFTNESS = .5;
 const float INTENSITY = .5;
 const float NOISE = .25;
+const float CORNER_REACH = .7;
 
 vec3 permute(vec3 x) { return mod(((x * 34.0) + 1.0) * x, 289.0); }
 
@@ -115,13 +117,17 @@ void main() {
   vec2 grain_uv = shape_uv * box * .7;
 
   shape_uv *= .6;
+  // Compress each field toward its own corner without moving that anchor.
+  // Its inward reach is 30% shorter; grain still uses the original coordinates.
+  vec2 corner = .3 * u_resolution / box;
+  vec2 corner_uv = corner + (shape_uv - corner) / CORNER_REACH;
   vec2 outer = vec2(.5);
-  vec2 bl = smoothstep(vec2(0.), outer, shape_uv + vec2(.1 + .1 * sin(3. * t), .2 - .1 * sin(5.25 * t)));
-  vec2 tr = smoothstep(vec2(0.), outer, 1. - shape_uv);
+  vec2 bl = smoothstep(vec2(0.), outer, corner_uv + vec2(.1 + .1 * sin(3. * t), .2 - .1 * sin(5.25 * t)));
+  vec2 tr = smoothstep(vec2(0.), outer, 1. - corner_uv);
   float shape = 1. - bl.x * bl.y * tr.x * tr.y;
-  shape_uv = -shape_uv;
-  bl = smoothstep(vec2(0.), outer, shape_uv + vec2(.1 + .1 * sin(3. * t), .2 - .1 * cos(5.25 * t)));
-  tr = smoothstep(vec2(0.), outer, 1. - shape_uv);
+  corner_uv = corner + (-shape_uv - corner) / CORNER_REACH;
+  bl = smoothstep(vec2(0.), outer, corner_uv + vec2(.1 + .1 * sin(3. * t), .2 - .1 * cos(5.25 * t)));
+  tr = smoothstep(vec2(0.), outer, 1. - corner_uv);
   shape -= bl.x * bl.y * tr.x * tr.y;
   shape = 1. - smoothstep(0., 1., shape);
 

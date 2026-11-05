@@ -44,8 +44,9 @@ interface OnboardingSkyProps {
 
 /**
  * The native iOS/Android Grain Gradient behind first-run onboarding.
- * Its palette, corner shape and procedural grain match native; it moves at a
- * third of native's speed, and not at all without GPU acceleration.
+ * Its palette and procedural grain match native, with corner fields at 70% of
+ * native's inward reach. It moves at a third of native's speed, and not at all
+ * without GPU acceleration.
  * Where the caption buttons sit top-right, the gradient is mirrored so its
  * dense corners are top-left and bottom-right, clear of them.
  * The CSS corner glows remain underneath if WebGL is unavailable or lost.
