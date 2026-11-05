@@ -11,6 +11,7 @@ import { testDepthBrowsers, testDepthRead } from "happy-desktop-gym/test-depth";
 
 const depth = testDepthRead(process.env.HAPPY_TEST_DEPTH);
 const browsers = testDepthBrowsers(depth);
+const nativeWheelRepro = process.env.HAPPY_SCROLL_REPRO_NATIVE === "1";
 
 export default defineConfig({
     define: { "import.meta.env.HAPPY_TEST_DEPTH": JSON.stringify(depth) },
@@ -170,8 +171,8 @@ export default defineConfig({
                      * window is smaller, vitest CSS-scales the tester iframe
                      * and element captures come out at a fraction of true 2x. */
                     viewport: {
-                        height: 1660,
-                        width: 1660,
+                        height: nativeWheelRepro ? 680 : 1660,
+                        width: nativeWheelRepro ? 980 : 1660,
                     },
                 },
             }),
@@ -179,8 +180,8 @@ export default defineConfig({
             /* Element captures clip to the viewport; keep it larger than any
              * test surface so screenshots and pixel measurements never truncate. */
             viewport: {
-                height: 1600,
-                width: 1600,
+                height: nativeWheelRepro ? 650 : 1600,
+                width: nativeWheelRepro ? 900 : 1600,
             },
         },
     },
