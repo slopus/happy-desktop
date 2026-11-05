@@ -62,12 +62,27 @@ export default defineConfig({
                 reducedMotionEmulate: async ({ page }, reduce: boolean) => {
                     await page.emulateMedia({ reducedMotion: reduce ? "reduce" : "no-preference" });
                 },
+                scrollReproWheel: async ({ page, iframe }, deltaY: number) => {
+                    const box = await iframe
+                        .locator("[data-scrollbar-viewport]")
+                        .first()
+                        .boundingBox();
+                    if (!box) throw new Error("Scroll repro viewport is missing");
+                    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+                    await page.mouse.wheel(0, deltaY);
+                },
             },
             enabled: true,
             headless: true,
             instances: browsers.map((browser) => ({ browser })),
             provider: playwright({
                 launchOptions: {
+                    ...(process.env.HAPPY_SCROLL_REPRO_SMOOTH === "1"
+                        ? {
+                              args: ["--enable-smooth-scrolling"],
+                              ignoreDefaultArgs: ["--disable-smooth-scrolling"],
+                          }
+                        : {}),
                     /* Firefox honours HTTP_PROXY/ALL_PROXY from the environment,
                      * so on a machine behind a local proxy it cannot reach the
                      * Vitest server on loopback and every session times out.

@@ -2,7 +2,12 @@ name: Windows chat scroll repro
 
 on:
     push:
-        branches: ["windows-scroll-repro**", "worktree/windows-scroll-repro**", "worktree/windows-chat-scroll-fixes**"]
+        branches:
+            [
+                "windows-scroll-repro**",
+                "worktree/windows-scroll-repro**",
+                "worktree/windows-chat-scroll-fixes**",
+            ]
     workflow_dispatch:
 
 permissions:
@@ -115,6 +120,13 @@ jobs:
                   mkdir -p .context/row-height
                   set -o pipefail
                   pnpm --dir packages/happy-desktop-ui exec vitest run --project chromium src/WindowsScrollRowHeight.test.tsx 2>&1 | tee .context/row-height/output.log
+            - name: Capture trusted notched wheels during streaming
+              env:
+                  HAPPY_SCROLL_REPRO_DPR: ${{ matrix.dpr }}
+                  HAPPY_SCROLL_REPRO_SMOOTH: "1"
+              run: |
+                  set -o pipefail
+                  pnpm --dir packages/happy-desktop-ui exec vitest run --project chromium src/WindowsNotchedWheel.test.tsx 2>&1 | tee .context/row-height/wheel.log
             - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
               if: always()
               with:
