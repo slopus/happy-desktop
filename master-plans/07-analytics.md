@@ -29,8 +29,8 @@ navigating is never sent, and nothing is counted on the device.
   error messages, or stacks. Anything else does not typecheck, and
   `analyticsEnvelope` drops any property the catalog does not name for that
   event, or whose value its rule does not allow.
-- No SDK. Each event is one `POST /batch/` made with `fetch` (`sendBeacon` as
-  the window closes) in the spec's envelope: `distinct_id`, `$insert_id`,
+- No SDK. Each event is one `POST /batch/` made with `fetch` (with `keepalive`
+  as the window closes) in the spec's envelope: `distinct_id`, `$insert_id`,
   `$lib: "happy-desktop"`, `$process_person_profile: false`, `$ip: null`,
   `$geoip_disable: true`, and nothing PostHog would add itself. No cookies and
   no referrer go with it. The one flag is a direct `POST /flags/?v=2` with the
@@ -43,7 +43,7 @@ navigating is never sent, and nothing is counted on the device.
   IP data" is on, and Settings says so.
 - No autocapture, pageviews, session recording, or person properties, and
   nothing from a window driven by automation (`navigator.webdriver`), except
-  to a local capture endpoint.
+  to a capture endpoint on this machine (`127.0.0.1`, `::1`, or `localhost`).
 
 ## Identity
 
@@ -52,10 +52,12 @@ an account, a Happy Agent, or the phone's `anonID`.
 
 ## Switching it off
 
-- A build without a PostHog key sends nothing, nor does a development window.
+- A build without a PostHog key sends nothing, nor does a development window
+  unless its host override is a capture endpoint on this machine.
 - The Settings switch stops sending at once. It is read right before every
   request, nothing is queued or batched, and a request that fails is dropped,
-  never sent again, so nothing is left to leave once it is off. (posthog-js
+  never sent again, so nothing is sent after opt-out. A request already on
+  its way when the switch turns off is not recalled. (posthog-js
   was dropped for this: its retry queue resends a failed request past
   `before_send` and past opting out, and can't be turned off from outside its
   bundle.)
@@ -87,7 +89,8 @@ type or `analytics*` function. To remove it, delete:
   around the mobile connector, onboarding's mobile store, and the Happy
   integration store (`pairingObserve.connector`, `.onboarding`,
   `.integration`).
-- `happy-desktop-analytics` in `happy-desktop-electron/package.json` and
+- `happy-desktop-analytics` in `happy-desktop-electron/package.json`, in the
+  `packages/happy-desktop-electron` importer of `pnpm-lock.yaml`, and in
   `scripts/demo/lib/stage.mjs`, the `__HAPPY_POSTHOG_API_KEY__` and
   `__HAPPY_POSTHOG_HOST__` defines in `vite.config.ts`, and
   `HAPPY_POSTHOG_API_KEY` / `release_analytics` in

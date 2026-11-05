@@ -5,6 +5,7 @@ import {
     analyticsErrorCodeOfStatus,
     analyticsErrorThrottleCreate,
     analyticsFailureKind,
+    analyticsHostLoopback,
     analyticsModel,
     analyticsOutageTrackerCreate,
     analyticsSeenCreate,
@@ -782,9 +783,11 @@ export function desktopAnalyticsCreate(options: {
     const client: AnalyticsClient =
         options.client ??
         analyticsClientCreate({
-            // Development windows send nothing, except to a local capture endpoint.
+            // Development windows send nothing, except to a capture endpoint
+            // on this machine.
             apiKey:
-                options.development && __HAPPY_POSTHOG_HOST__ === null
+                options.development &&
+                (__HAPPY_POSTHOG_HOST__ === null || !analyticsHostLoopback(__HAPPY_POSTHOG_HOST__))
                     ? undefined
                     : (__HAPPY_POSTHOG_API_KEY__ ?? undefined),
             ...(__HAPPY_POSTHOG_HOST__ === null ? {} : { host: __HAPPY_POSTHOG_HOST__ }),

@@ -25,8 +25,8 @@ export const ANALYTICS_ENVELOPE_PROPERTY_NAMES: ReadonlySet<string> = new Set([
 
 export interface AnalyticsTrackOptions {
     /**
-     * Sends this one event by `sendBeacon` instead of `fetch`, for the moment
-     * the window is going away and a request in flight would be cut off.
+     * Sends this one event with `keepalive`, for the moment the window is
+     * going away and an ordinary request in flight would be cut off.
      */
     readonly beacon?: boolean;
 }
@@ -54,6 +54,26 @@ export interface AnalyticsClientOptions {
     readonly distinctId: string;
     /** Read right before every request, so turning analytics off stops the next one. */
     readonly enabled: () => boolean;
+}
+
+/**
+ * Whether a host override is this machine's own capture endpoint. Only such a
+ * host may receive what a development or automated window would otherwise
+ * never send.
+ */
+export function analyticsHostLoopback(host: string): boolean {
+    let hostname: string;
+    try {
+        hostname = new URL(host).hostname;
+    } catch {
+        return false;
+    }
+    return (
+        hostname === "127.0.0.1" ||
+        hostname === "[::1]" ||
+        hostname === "::1" ||
+        hostname === "localhost"
+    );
 }
 
 /** One event as `/batch/` takes it. */
@@ -115,17 +135,17 @@ function flagsOf(answer: unknown): ReadonlySet<string> {
 /**
  * Sends catalog events to PostHog from this renderer, one request per event,
  * without an SDK. A request that fails is dropped, never kept or sent again,
- * so nothing is left to leave once analytics is off. No cookie or referrer
+ * so nothing is sent after analytics is turned off. No cookie or referrer
  * goes with it, and a window driven by automation sends nothing unless it
- * sends to a local capture endpoint.
+ * sends to a capture endpoint on this machine.
  */
 export function analyticsClientCreate(options: AnalyticsClientOptions): AnalyticsClient {
     const host = options.host ?? POSTHOG_HOST;
+    const loopback = options.host !== undefined && analyticsHostLoopback(options.host);
     const sendable = (): string | undefined => {
         const apiKey = options.apiKey;
         if (apiKey === undefined || apiKey.length === 0 || !options.enabled()) return undefined;
-        if (options.host === undefined && typeof navigator !== "undefined" && navigator.webdriver)
-            return undefined;
+        if (!loopback && typeof navigator !== "undefined" && navigator.webdriver) return undefined;
         return apiKey;
     };
     /** This window's answer from `/flags`, asked once; undefined when PostHog gave none. */
@@ -144,25 +164,20 @@ export function analyticsClientCreate(options: AnalyticsClientOptions): Analytic
         track(event, properties, trackOptions) {
             const apiKey = sendable();
             if (apiKey === undefined) return;
-            const batch = analyticsEnvelope(event, properties, {
+            const batch = analyticsEnvelope(event, { ...properties }, {
                 distinctId: options.distinctId,
                 insertId: crypto.randomUUID(),
                 timestamp: new Date().toISOString(),
             });
             if (!batch) return;
-            const url = `${host}/batch/`;
-            const body = JSON.stringify({ api_key: apiKey, batch: [batch] });
-            if (trackOptions?.beacon) {
-                // Best effort, like everything sent at close; a refused beacon is dropped.
-                navigator.sendBeacon(url, body);
-                return;
-            }
-            void fetch(url, {
+            void fetch(`${host}/batch/`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body,
+                body: JSON.stringify({ api_key: apiKey, batch: [batch] }),
                 credentials: "omit",
                 referrerPolicy: "no-referrer",
+                // Outlives the window it was sent from; best effort, like anything sent at close.
+                ...(trackOptions?.beacon ? { keepalive: true } : {}),
             }).catch(() => undefined);
         },
         flagFollow(flag, listener) {
