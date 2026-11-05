@@ -37,8 +37,8 @@ export interface ArtifactSiteHandle {
             version: number,
             connectionId?: string,
         ) => Promise<string>;
-        /** The same for one numbered version of a vault's `.artifact` file. */
-        readonly openVault: (
+        /** The same for one numbered version of a vault's `.artifact` file, run as an app. */
+        readonly openVaultApp: (
             surfaceId: string,
             fileId: string,
             version: number,
@@ -53,8 +53,8 @@ export interface ArtifactSiteHandle {
 }
 
 /**
- * Where a site's files come from: a daemon artifact, or an artifact entry in a
- * vault. A vault artifact has no data store, so its site has no API and its
+ * Where a site's files come from: a daemon artifact, or a vault's `.artifact`
+ * file run as an app. A vault app has no data store, so it has no API and its
  * `api/` files are files like any other.
  */
 type ArtifactSiteSource =
@@ -105,12 +105,12 @@ export function artifactSiteHost(
 }
 
 /**
- * The host a numbered version of a vault's `.artifact` file is served as:
+ * The host a numbered version of a vault's `.artifact` file runs as an app at:
  * `vault-<digest>-v<number>`, the digest naming the vault and the file
  * together. An artifact id never holds a `-`, so no artifact lands here, and
  * each file and version is an origin of its own, apart from every other site.
  */
-export function vaultSiteHost(
+export function vaultAppHost(
     surfaceId: string,
     fileId: string,
     version: number,
@@ -304,8 +304,8 @@ export function artifactSitesCreate(
                 });
                 return artifactSiteUrl(host, read.entry.path);
             },
-            openVault: async (surfaceId, fileId, version, connectionId) => {
-                const host = vaultSiteHost(surfaceId, fileId, version, connectionId);
+            openVaultApp: async (surfaceId, fileId, version, connectionId) => {
+                const host = vaultAppHost(surfaceId, fileId, version, connectionId);
                 if (host === undefined)
                     throw new ArtifactSiteError(400, "This vault version cannot be served.");
                 const reader =
@@ -342,7 +342,7 @@ export function artifactSitesCreate(
             const api = artifactSiteApi(request.url);
             const apiSite = api ? sites.get(api.host) : undefined;
             if (api && !apiSite) return refuse(404);
-            // A vault site has no API, so its `/api/` paths name its own files.
+            // A vault app has no API, so its `/api/` paths name its own files.
             if (api && apiSite?.source.kind === "artifact") {
                 if (api.rest === "v1/code.js") return codeAnswer(request);
                 return forward(apiSite, apiSite.source.artifactId, api.rest, api.search, request);

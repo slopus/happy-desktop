@@ -31,6 +31,7 @@ const LOCAL_ROUTES = new Set([
     "/workspace-file-media",
     "/html-preview",
     "/artifact-site",
+    "/vault-app",
     "/bridge-events",
     "/bridge-usb-attach",
     "/bridge-port-open",

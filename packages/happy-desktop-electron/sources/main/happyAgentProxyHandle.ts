@@ -46,8 +46,8 @@ export interface HappyAgentProxyHandleOptions {
         version: number,
         connectionId?: string,
     ) => Promise<string>;
-    /** The same for one numbered version of a vault's `.artifact` file. */
-    readonly vaultSiteUrl?: (
+    /** The same for one numbered version of a vault's `.artifact` file, run as an app. */
+    readonly vaultAppUrl?: (
         surfaceId: string,
         fileId: string,
         version: number,
@@ -207,10 +207,10 @@ export async function happyAgentProxyHandle(
             });
             return true;
         }
-        if (method === "GET" && path === "/vault-site") {
-            if (!options.vaultSiteUrl) {
+        if (method === "GET" && path === "/vault-app") {
+            if (!options.vaultAppUrl) {
                 writeJson(response, 501, {
-                    error: "This desktop cannot serve a vault page as a site.",
+                    error: "This desktop cannot run a vault app.",
                 });
                 return true;
             }
@@ -218,7 +218,7 @@ export async function happyAgentProxyHandle(
             const fileId = requiredQuery(query, "fileId");
             const version = Number(requiredQuery(query, "version"));
             writeJson(response, 200, {
-                url: await options.vaultSiteUrl(surfaceId, fileId, version, connectionId),
+                url: await options.vaultAppUrl(surfaceId, fileId, version, connectionId),
             });
             return true;
         }

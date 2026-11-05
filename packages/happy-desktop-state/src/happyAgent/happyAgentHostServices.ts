@@ -55,7 +55,7 @@ export interface HappyAgentHostServices {
      * `artifactSiteOpen` does for a daemon artifact. A host without one shows
      * the page as a static preview.
      */
-    vaultSiteOpen?(
+    vaultAppOpen?(
         surfaceId: string,
         fileId: string,
         version: number,

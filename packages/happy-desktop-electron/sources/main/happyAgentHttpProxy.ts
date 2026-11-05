@@ -223,7 +223,7 @@ export function happyAgentHttpProxyCreate(
                         ...(artifactSite
                             ? {
                                   artifactSiteUrl: artifactSite.open,
-                                  vaultSiteUrl: artifactSite.openVault,
+                                  vaultAppUrl: artifactSite.openVaultApp,
                               }
                             : {}),
                         ...(options.deviceBridges ? { deviceBridges: options.deviceBridges } : {}),
