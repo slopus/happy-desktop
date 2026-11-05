@@ -876,13 +876,14 @@ export {
 } from "./pages/feed/HappyAgentFeedPage";
 export {
     liveFeedAgeText,
+    LIVE_FEED_ROWS,
+    LiveFeedControl,
     LiveFeedEntry,
     LiveFeedPanel,
-    LiveFeedToggle,
+    liveFeedItemRows,
     type LiveFeedFollowTarget,
     type LiveFeedItem,
     type LiveFeedMedia,
-    type LiveFeedMode,
     type LiveFeedPanelProps,
     type LiveFeedTier,
 } from "./LiveFeed";

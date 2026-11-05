@@ -1,4 +1,9 @@
-import type { LiveFeedItem, LiveFeedMode, LiveFeedTier } from "../../../src/LiveFeed";
+import {
+    LIVE_FEED_ROWS,
+    liveFeedItemRows,
+    type LiveFeedItem,
+    type LiveFeedTier,
+} from "../../../src/LiveFeed";
 import {
     DEMO_SCRIPT,
     DEMO_SEED,
@@ -12,21 +17,24 @@ import {
  * immutable snapshot, typed actions, and timers that only run between Play
  * and the page going away. A real store would take arrivals from the Feed's
  * realtime events instead of a script; the rules below are the proposal.
+ *
+ * The feed region shows exactly what is unread, and the footer counts it.
+ * An item stops being unread when the reader ×s it, opens it, presses Read
+ * all, or has had it on screen long enough.
  */
 
-/** How long an item stays in the stream, by tier, counting only unpaused time. */
-export const LIVE_FEED_STREAM_TTL: Record<LiveFeedTier, number> = {
+/**
+ * How long an item may be on screen before it counts as seen and leaves, by
+ * tier: only time in view, with the feed on and the pointer off it. An item
+ * washed out above the region, or one that came while the feed was off, has
+ * not been seen and waits. A mention stays until the reader deals with it.
+ */
+export const LIVE_FEED_SEEN_MS: Record<LiveFeedTier, number | null> = {
     line: 8_000,
     card: 12_000,
     post: 16_000,
-    mention: 30_000,
+    mention: null,
 };
-/**
- * The most the stream holds at once; a further arrival lets the oldest go
- * early. The band is a fifth of the sidebar, about four rows, so the fifth is
- * the one washing out at its top.
- */
-export const LIVE_FEED_STREAM_MAX = 5;
 /** How long a leaving item takes to fade before it is dropped. */
 const LEAVE_MS = 650;
 /** Items that waited while paused come in one after another, this far apart. */
@@ -36,10 +44,11 @@ const TICK_MS = 100;
 /** The installation clock the prototype tells ages against: 4 Nov 2026, 13:00 UTC. */
 export const DEMO_EPOCH = Date.UTC(2026, 10, 4, 13, 0, 0);
 
-interface StreamEntry {
+interface UnreadEntry {
     readonly id: string;
-    /** In unpaused stream time. */
-    readonly expiresAt: number;
+    /** Time in view so far, counted as LIVE_FEED_SEEN_MS describes. */
+    readonly seenMs: number;
+    /** Script time it was read at; it fades, then is dropped. */
     readonly leavingSince: number | null;
 }
 
@@ -54,15 +63,16 @@ export interface LiveFeedDemoSnapshot {
     readonly running: boolean;
     /** Wall-clock moment ages are told against. */
     readonly now: number;
-    readonly mode: LiveFeedMode;
+    /** The footer control: the region is drawn. */
+    readonly on: boolean;
     readonly hovering: boolean;
-    /** Everything delivered and still collected, oldest first. */
-    readonly stack: readonly LiveFeedItem[];
-    /** What the panel draws in the current mode, oldest first. */
-    readonly visible: readonly LiveFeedItem[];
-    /** Arrived while hovering, waiting to come in. */
-    readonly queued: number;
+    /** What the region draws: everything unread, and what is just leaving, oldest first. */
+    readonly unreadItems: readonly LiveFeedItem[];
+    /** Unread, counting what waits while the pointer holds the feed. */
     readonly unread: number;
+    readonly unreadIds: ReadonlySet<string>;
+    /** Everything ever delivered, read or not, oldest first: what the Feed page lists. */
+    readonly delivered: readonly LiveFeedItem[];
     readonly following: ReadonlyMap<DemoTaskId, boolean>;
     /** Not delivered: artifacts and posts of tasks the reader does not follow. */
     readonly held: readonly HeldItem[];
@@ -79,25 +89,23 @@ export class LiveFeedDemo {
     private listeners = new Set<Listener>();
     private snapshot: LiveFeedDemoSnapshot;
     private timer: ReturnType<typeof setInterval> | null = null;
-    /** Real ms since Play; drives arrivals, which keep coming while paused. */
+    /** Real ms since Play; drives arrivals, which keep coming while hovered. */
     private scriptClock = 0;
-    /** Unpaused ms since Play; drives expiry, which stops while paused. */
-    private streamClock = 0;
     private lastTick = 0;
     private nextEvent = 0;
     private nextFlushAt = 0;
-    private stream: StreamEntry[] = [];
+    private unread: UnreadEntry[] = [];
+    /** Arrived while the pointer held the feed; they come in when it leaves. */
     private queue: LiveFeedItem[] = [];
     private items = new Map<string, LiveFeedItem>();
-    private stackIds: string[] = [];
-    private unreadIds = new Set<string>();
+    private deliveredIds: string[] = [];
     private events = new Map<string, DemoEvent>();
     private heldEvents: DemoEvent[] = [];
     private belowEvents: DemoEvent[] = [];
     private following = new Map<DemoTaskId, boolean>(
         DEMO_TASKS.map((task) => [task.id, task.following]),
     );
-    private mode: LiveFeedMode = "stream";
+    private on = true;
     private hovering = false;
     private view: "chat" | "feed" = "chat";
     private opened: string | null = null;
@@ -137,10 +145,11 @@ export class LiveFeedDemo {
         this.publish();
     }
 
-    modeToggle(): void {
-        this.mode = this.mode === "stream" ? "stack" : "stream";
-        // Opening the stack is reading it.
-        if (this.mode === "stack") this.unreadIds.clear();
+    /** The footer control: shows or hides the region; nothing is read by it. */
+    feedToggle(): void {
+        this.on = !this.on;
+        // A hidden region has no pointer on it.
+        this.hoverUpdate(false);
         this.publish();
     }
 
@@ -156,7 +165,7 @@ export class LiveFeedDemo {
         if (id === undefined) return;
         this.following.set(id, following);
         if (following) {
-            // Following seeds the stack with what was held back, already read,
+            // Following brings what was held back into the Feed, already read,
             // the way the daemon seeds a new subscription; none of it streams.
             const released = this.heldEvents.filter((event) => event.taskId === id);
             this.heldEvents = this.heldEvents.filter((event) => event.taskId !== id);
@@ -164,38 +173,35 @@ export class LiveFeedDemo {
                 const item = this.itemOf(event, DEMO_EPOCH + this.scriptClock - 60_000);
                 this.items.set(item.id, item);
                 this.events.set(item.id, event);
-                this.stackIds.push(item.id);
+                this.deliveredIds.push(item.id);
             }
         }
         this.publish();
     }
 
-    /** The item's ×: in the stream it leaves now; in the stack it is put away. */
+    /** The item's ×: read, so it leaves, and what stood above it drops down. */
     itemDismiss(itemId: string): void {
-        this.unreadIds.delete(itemId);
-        if (this.mode === "stack") {
-            this.stackIds = this.stackIds.filter((id) => id !== itemId);
-            this.stream = this.stream.filter((entry) => entry.id !== itemId);
-        } else {
-            this.stream = this.stream.map((entry) =>
-                entry.id === itemId && entry.leavingSince === null
-                    ? { ...entry, leavingSince: this.streamClock }
-                    : entry,
-            );
-        }
+        this.read((entry) => entry.id === itemId);
         this.publish();
     }
 
     itemOpen(itemId: string): void {
         this.opened = itemId;
-        this.unreadIds.delete(itemId);
         this.view = "chat";
+        this.read((entry) => entry.id === itemId);
+        this.publish();
+    }
+
+    /** Everything unread is read: the region empties and goes; the control stays on. */
+    readAll(): void {
+        this.read(() => true);
+        for (const item of this.queue) this.deliveredIds.push(item.id);
+        this.queue = [];
         this.publish();
     }
 
     viewAllOpen(): void {
         this.view = "feed";
-        this.mode = "stream";
         this.publish();
     }
 
@@ -217,12 +223,34 @@ export class LiveFeedDemo {
         this.listeners.clear();
     }
 
+    private read(which: (entry: UnreadEntry) => boolean): void {
+        this.unread = this.unread.map((entry) =>
+            entry.leavingSince === null && which(entry)
+                ? { ...entry, leavingSince: this.scriptClock }
+                : entry,
+        );
+    }
+
+    /** The ids that are in view: from the newest up, as many rows as the region shows. */
+    private inView(): Set<string> {
+        const ids = new Set<string>();
+        let rows = 0;
+        for (let index = this.unread.length - 1; index >= 0; index -= 1) {
+            const entry = this.unread[index];
+            const item = entry === undefined ? undefined : this.items.get(entry.id);
+            if (entry === undefined || item === undefined) continue;
+            rows += liveFeedItemRows(item);
+            if (rows > LIVE_FEED_ROWS) break;
+            ids.add(entry.id);
+        }
+        return ids;
+    }
+
     private tick(): void {
         const at = performance.now();
         const elapsed = at - this.lastTick;
         this.lastTick = at;
         this.scriptClock += elapsed;
-        if (!this.hovering) this.streamClock += elapsed;
         let event = DEMO_SCRIPT[this.nextEvent];
         while (event !== undefined && event.at <= this.scriptClock) {
             this.nextEvent += 1;
@@ -234,19 +262,25 @@ export class LiveFeedDemo {
             if (item !== undefined) this.enter(item);
             this.nextFlushAt = this.scriptClock + FLUSH_STAGGER_MS;
         }
-        if (!this.hovering) {
-            this.stream = this.stream
-                .map((entry) =>
-                    entry.leavingSince === null && entry.expiresAt <= this.streamClock
-                        ? { ...entry, leavingSince: this.streamClock }
-                        : entry,
-                )
-                .filter(
-                    (entry) =>
-                        entry.leavingSince === null ||
-                        this.streamClock - entry.leavingSince < LEAVE_MS,
-                );
+        if (this.on && !this.hovering) {
+            const visible = this.inView();
+            this.unread = this.unread.map((entry) => {
+                const item = this.items.get(entry.id);
+                const limit = item === undefined ? null : LIVE_FEED_SEEN_MS[item.tier];
+                if (entry.leavingSince !== null || limit === null || !visible.has(entry.id))
+                    return entry;
+                const seenMs = entry.seenMs + elapsed;
+                return {
+                    ...entry,
+                    seenMs,
+                    leavingSince: seenMs >= limit ? this.scriptClock : null,
+                };
+            });
         }
+        this.unread = this.unread.filter(
+            (entry) =>
+                entry.leavingSince === null || this.scriptClock - entry.leavingSince < LEAVE_MS,
+        );
         this.publish();
     }
 
@@ -254,7 +288,7 @@ export class LiveFeedDemo {
         this.deliver(event, DEMO_EPOCH + this.scriptClock);
     }
 
-    /** The follow rule, then the hover rule, then into the stack and the stream. */
+    /** The follow rule, then the hover rule, then into the unread stack. */
     private deliver(event: DemoEvent, at: number): void {
         if (event.gate === "below") {
             this.belowEvents.push(event);
@@ -267,25 +301,13 @@ export class LiveFeedDemo {
         const item = this.itemOf(event, at);
         this.items.set(item.id, item);
         this.events.set(item.id, event);
-        if (this.hovering) this.queue.push(item);
+        if (this.on && this.hovering) this.queue.push(item);
         else this.enter(item);
     }
 
     private enter(item: LiveFeedItem): void {
-        this.stackIds.push(item.id);
-        if (this.mode === "stream") this.unreadIds.add(item.id);
-        this.stream.push({
-            id: item.id,
-            expiresAt: this.streamClock + LIVE_FEED_STREAM_TTL[item.tier],
-            leavingSince: null,
-        });
-        const live = this.stream.filter((entry) => entry.leavingSince === null);
-        if (live.length > LIVE_FEED_STREAM_MAX) {
-            const oldest = live[0];
-            this.stream = this.stream.map((entry) =>
-                entry === oldest ? { ...entry, leavingSince: this.streamClock } : entry,
-            );
-        }
+        this.deliveredIds.push(item.id);
+        this.unread.push({ id: item.id, seenMs: 0, leavingSince: null });
     }
 
     private itemOf(event: DemoEvent, at: number): LiveFeedItem {
@@ -297,7 +319,6 @@ export class LiveFeedDemo {
         const event = this.events.get(id);
         if (item === undefined || event === undefined) return null;
         const task = DEMO_TASKS.find((entry) => entry.id === event.taskId);
-        const unread = this.unreadIds.has(id);
         return {
             ...item,
             ...(event.followable && task !== undefined
@@ -310,34 +331,39 @@ export class LiveFeedDemo {
                   }
                 : {}),
             ...(leaving ? { leaving: true } : {}),
-            ...(unread ? { unread: true } : {}),
         };
     }
 
     private build(): LiveFeedDemoSnapshot {
         const previous = this.snapshot as LiveFeedDemoSnapshot | undefined;
-        const reuse = (next: LiveFeedItem): LiveFeedItem => {
-            // Keep an unchanged item's object, so its row renders nothing new.
-            const old = previous?.stack.find((item) => item.id === next.id);
-            return old !== undefined && sameItem(old, next) ? old : next;
-        };
-        const stack = this.stackIds
-            .map((id) => this.present(id, false))
-            .filter((item): item is LiveFeedItem => item !== null)
-            .map(reuse);
-        const stream = this.stream
+        const reuse =
+            (from: readonly LiveFeedItem[] | undefined) =>
+            (next: LiveFeedItem): LiveFeedItem => {
+                // Keep an unchanged item's object, so its row renders nothing new.
+                const old = from?.find((item) => item.id === next.id);
+                return old !== undefined && sameItem(old, next) ? old : next;
+            };
+        const unreadItems = this.unread
             .map((entry) => this.present(entry.id, entry.leavingSince !== null))
             .filter((item): item is LiveFeedItem => item !== null)
-            .map(reuse);
+            .map(reuse(previous?.unreadItems));
+        const delivered = this.deliveredIds
+            .map((id) => this.present(id, false))
+            .filter((item): item is LiveFeedItem => item !== null)
+            .map(reuse(previous?.delivered));
+        const unreadIds = new Set(
+            this.unread.filter((entry) => entry.leavingSince === null).map((entry) => entry.id),
+        );
+        for (const item of this.queue) unreadIds.add(item.id);
         return {
             running: this.timer !== null,
             now: DEMO_EPOCH + this.scriptClock,
-            mode: this.mode,
+            on: this.on,
             hovering: this.hovering,
-            stack,
-            visible: this.mode === "stack" ? stack : stream,
-            queued: this.queue.length,
-            unread: this.unreadIds.size,
+            unreadItems,
+            unread: unreadIds.size,
+            unreadIds,
+            delivered,
             following: new Map(this.following),
             held: this.heldEvents.map((event) => ({
                 item: this.itemOf(event, DEMO_EPOCH),
@@ -358,7 +384,6 @@ export class LiveFeedDemo {
 function sameItem(left: LiveFeedItem, right: LiveFeedItem): boolean {
     return (
         left.leaving === right.leaving &&
-        left.unread === right.unread &&
         left.follow?.following === right.follow?.following &&
         left.at === right.at
     );

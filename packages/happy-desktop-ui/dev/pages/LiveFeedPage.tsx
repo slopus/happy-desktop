@@ -3,9 +3,10 @@ import { AppShell } from "../../src/AppShell";
 import { Button } from "../../src/Button";
 import { Composer } from "../../src/Composer";
 import {
+    LIVE_FEED_ROWS,
+    LiveFeedControl,
     LiveFeedEntry,
     LiveFeedPanel,
-    LiveFeedToggle,
     type LiveFeedItem,
 } from "../../src/LiveFeed";
 import type {
@@ -20,7 +21,7 @@ import { ComponentPage, DimensionRule, FullScreenSpecimen, Specimen } from "../k
 import { DEMO_SCRIPT, DEMO_SEED, DEMO_TASKS } from "./liveFeed/liveFeedData";
 import {
     DEMO_EPOCH,
-    LIVE_FEED_STREAM_TTL,
+    LIVE_FEED_SEEN_MS,
     LiveFeedDemo,
     type LiveFeedDemoSnapshot,
 } from "./liveFeed/liveFeedDemo";
@@ -110,7 +111,7 @@ const ready = <Item,>(items: readonly Item[]): HappyAgentFeedListState<Item> => 
 });
 
 /** A live item as the full Feed lists it: one entry per subject, newest first. */
-function feedEntryOf(item: LiveFeedItem): HappyAgentFeedEntry {
+function feedEntryOf(item: LiveFeedItem, unread: boolean): HappyAgentFeedEntry {
     return {
         id: item.id,
         subject: item.subject,
@@ -125,7 +126,7 @@ function feedEntryOf(item: LiveFeedItem): HappyAgentFeedEntry {
         updates: item.verb.startsWith("published v") ? 1 : 0,
         ...(item.detail === undefined ? {} : { detail: item.detail }),
         lastAt: item.at,
-        unread: item.unread === true,
+        unread,
     };
 }
 
@@ -141,12 +142,17 @@ function FullFeed(props: { readonly snapshot: LiveFeedDemoSnapshot }) {
         [...DEMO_SEED, ...DEMO_SCRIPT].map((event) => [event.item.id, event.realAt]),
     );
     const happened = [
-        ...props.snapshot.stack,
+        ...props.snapshot.delivered,
         ...props.snapshot.held.map((held) => held.item),
         ...props.snapshot.below.map((event) => ({ ...event.item, at: 0 })),
     ];
     const entries = happened
-        .map((item) => feedEntryOf({ ...item, at: realAt.get(item.id) ?? item.at }))
+        .map((item) =>
+            feedEntryOf(
+                { ...item, at: realAt.get(item.id) ?? item.at },
+                props.snapshot.unreadIds.has(item.id),
+            ),
+        )
         .sort((left, right) => right.lastAt - left.lastAt);
     return (
         <HappyAgentFeedPage
@@ -171,7 +177,7 @@ function FullFeed(props: { readonly snapshot: LiveFeedDemoSnapshot }) {
             onPeekClose={noop}
             onPeekEntryOpen={noop}
             onPeekLoadMore={noop}
-            onReadAll={noop}
+            onReadAll={() => demo.readAll()}
             onViewChange={noop}
             unread={props.snapshot.unread}
             view="activity"
@@ -265,7 +271,7 @@ function OpenedChat(props: { readonly item: LiveFeedItem }) {
 
 function DemoWindow(props: { readonly snapshot: LiveFeedDemoSnapshot }) {
     const snapshot = props.snapshot;
-    const opened = snapshot.stack.find((item) => item.id === snapshot.opened);
+    const opened = snapshot.delivered.find((item) => item.id === snapshot.opened);
     return (
         <AppShell
             sidebar={
@@ -284,22 +290,23 @@ function DemoWindow(props: { readonly snapshot: LiveFeedDemoSnapshot }) {
                                 width: "100%",
                             }}
                         >
-                            <LiveFeedToggle
-                                mode={snapshot.mode}
-                                onToggle={() => demo.modeToggle()}
+                            <LiveFeedControl
+                                on={snapshot.on}
+                                onReadAll={() => demo.readAll()}
+                                onToggle={() => demo.feedToggle()}
+                                onViewAll={() => demo.viewAllOpen()}
                                 unread={snapshot.unread}
                             />
                             <LiveFeedPanel
-                                items={snapshot.visible}
-                                mode={snapshot.mode}
+                                items={snapshot.unreadItems}
                                 now={snapshot.now}
                                 onFollowToggle={(id, following) => demo.followUpdate(id, following)}
                                 onHoverChange={(hovering) => demo.hoverUpdate(hovering)}
                                 onItemDismiss={(id) => demo.itemDismiss(id)}
                                 onItemOpen={(id) => demo.itemOpen(id)}
+                                onReadAll={() => demo.readAll()}
                                 onViewAll={() => demo.viewAllOpen()}
-                                paused={snapshot.hovering}
-                                queued={snapshot.queued}
+                                shown={snapshot.on}
                             />
                             <SidebarFooter
                                 keepAwake={{ active: false, mode: "off", onModeSelect: noop }}
@@ -365,8 +372,11 @@ function DemoControls(props: { readonly snapshot: LiveFeedDemoSnapshot }) {
             <Button onClick={() => demo.eventNext()} size="small" variant="secondary">
                 Next event
             </Button>
-            <Button onClick={() => demo.modeToggle()} size="small" variant="secondary">
-                {snapshot.mode === "stream" ? "Open the stack" : "Back to the stream"}
+            <Button onClick={() => demo.feedToggle()} size="small" variant="secondary">
+                {snapshot.on ? "Feed off" : "Feed on"}
+            </Button>
+            <Button onClick={() => demo.readAll()} size="small" variant="secondary">
+                Read all
             </Button>
             <Button
                 onClick={() => (snapshot.view === "feed" ? demo.viewClose() : demo.viewAllOpen())}
@@ -376,7 +386,7 @@ function DemoControls(props: { readonly snapshot: LiveFeedDemoSnapshot }) {
                 {snapshot.view === "feed" ? "Back to chat" : "View all"}
             </Button>
             <DimensionRule
-                label={`${snapshot.mode} · ${snapshot.hovering ? "paused" : "live"} · ${String(snapshot.queued)} waiting · ${String(snapshot.unread)} unread · ${String(snapshot.held.length)} held back (not following)`}
+                label={`feed ${snapshot.on ? "on" : "off"} · ${snapshot.hovering ? "held" : "live"} · ${String(snapshot.unread)} unread · ${String(snapshot.held.length)} held back (not following)`}
             />
         </div>
     );
@@ -412,12 +422,12 @@ export function LiveFeedPage() {
     return (
         <ComponentPage
             number={componentNumber}
-            summary={`The feed as a live stream rising from the sidebar footer, where the update card stands, in a band at most a fifth of the sidebar tall. Every item is an ordinary sidebar row — mark, one line, one quick action on hover, × — and a post with media is two rows. Items pop in at the bottom and wash out at the top; a line stays ${String(LIVE_FEED_STREAM_TTL.line / 1000)}s, a card ${String(LIVE_FEED_STREAM_TTL.card / 1000)}s, a post ${String(LIVE_FEED_STREAM_TTL.post / 1000)}s. Hovering holds the stream still and queues arrivals. Artifacts and posts reach you only for tasks you follow; new work a teammate starts reaches everyone, with Follow on hover. The footer's feed control toggles the stream and the stack, and the stack's View all opens the whole Feed. Prototype: driven by a script of this installation's real recent work.`}
+            summary={`What is unread in the feed, rising from the sidebar footer where the update card stands, in one region of a fixed height: ${String(LIVE_FEED_ROWS)} sidebar rows (134px). Every item is an ordinary sidebar row — mark, one line, one quick action on hover, × — and a post with media is two rows. Items pop in at the bottom; with more unread than fits, the top row washes out, and older items come back down as the ones below are read. An item is read when you × it, open it, press Read all, or once it has been in view for a while: a line ${String((LIVE_FEED_SEEN_MS.line ?? 0) / 1000)}s, a card ${String((LIVE_FEED_SEEN_MS.card ?? 0) / 1000)}s, a post ${String((LIVE_FEED_SEEN_MS.post ?? 0) / 1000)}s; a mention stays until you deal with it. Hovering holds the feed still and shows View all and Read all. The footer's feed control shows or hides the region and counts what is unread — quietly while the feed is on, in red while it is off. Prototype: driven by a script of this installation's real recent work.`}
             title="Live feed"
         >
             <DemoControls snapshot={snapshot} />
             <FullScreenSpecimen
-                detail="Play runs the script; hover an item to pause, Follow a task from it, press the feed control at the footer's left to open the stack."
+                detail="Play runs the script; hover the feed to hold it and for View all and Read all, × items to bring older ones back down, press the feed control at the footer's left to switch the feed off and on, hover it for View feed and Read all."
                 label="Live feed in the sidebar"
                 number="01"
                 screen="01-live-feed-1100x760"
@@ -460,7 +470,7 @@ export function LiveFeedPage() {
                 </div>
             </Specimen>
             <Specimen
-                detail="Not delivered to this reader: artifacts and posts of tasks they do not follow. Following a task brings these into the stack, already read; only later ones stream."
+                detail="Not delivered to this reader: artifacts and posts of tasks they do not follow. Following a task brings these into the Feed, already read; only later ones stream."
                 label="Held back by the follow rule"
                 number="03"
                 stage="surface"

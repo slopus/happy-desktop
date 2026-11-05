@@ -1,5 +1,5 @@
 /*
- * LiveFeedPanel and LiveFeedToggle. The panel stands where the update card
+ * LiveFeedPanel and LiveFeedControl. The panel stands where the update card
  * stands, over the bottom of the sidebar's rows (`.happy-sidebar-footer` is
  * the containing block; see `.happy-sidebar-agent-update__panel`), and its
  * items are sidebar rows: `.happy-sidebar__item` itself, with its height,
@@ -7,14 +7,16 @@
  *
  *   panel     the rows' width (the footer row plus the 6px the body insets
  *             less), its bottom one panel inset above the footer's divider
- *   stream    a fifth of the sidebar's height, top 35% washed out
+ *   region    fixed: LIVE_FEED_ROWS (4) rows, 4 × 32 + 3 × 2 = 134px; with
+ *             more waiting above, the top row washes out
  *   row       32px, 2px between rows, 20px mark, 13/16 label
  *   media     2 rows (66px): a 54px square or 96 × 54 thumbnail, caption,
  *             and a 12/16 meta line; the × stands on the caption's line
- *   stack     the same rows on the sidebar's background under a section
- *             heading, at most half the sidebar, scrolling
+ *   header    18px, on hover only, laid over the top of what the region holds
  *
- * No frames: nothing here draws a border, a card, or a shadow.
+ * No frames: nothing here draws a border, a card, or a shadow. Every hover
+ * reveal is instant, as the sidebar's are: a drag is the only thing in the
+ * sidebar that moves.
  */
 .happy-sidebar-feed {
     display: flex;
@@ -22,8 +24,7 @@
 }
 
 .happy-live-feed {
-    --happy-live-feed-band: calc(var(--happy-live-feed-sidebar, 760px) * 0.2);
-    --happy-live-feed-heading: 28px;
+    --happy-live-feed-header: 18px;
     /* Overlay above the footer; the column inside it is an ordinary flex stack. */
     position: absolute;
     /* Out from the footer's 12px padding to the body's 6px inset, so every
@@ -35,34 +36,39 @@
     display: flex;
     flex-direction: column;
     box-sizing: border-box;
-    height: var(--happy-live-feed-band);
+    /* Rows of 32px and the 2px between them. */
+    height: calc(var(--happy-live-feed-rows, 4) * 34px - 2px);
     color: var(--text);
     font-family: var(--happy-font-ui);
     font-synthesis: none;
-    /* The empty part of the stream is not there: the rows under it stay clickable. */
+    /* The empty part of the region is not there: the rows under it stay clickable. */
     pointer-events: none;
     user-select: none;
 }
 
-.happy-live-feed[data-mode="stack"] {
-    height: auto;
-    max-height: calc(var(--happy-live-feed-sidebar, 760px) * 0.5);
-    pointer-events: auto;
+.happy-live-feed[hidden] {
+    display: none;
 }
 
 /*
  * Behind the items, out to the sidebar's edges and down to the footer's
  * divider: the sidebar's own background, with a 16px fade above what the
- * stream holds instead of an edge. It hides the rows the band stands on, so
- * the stream's own wash is the only thing that reads as fading; an empty
- * stream covers nothing.
+ * region holds instead of an edge. It hides the rows the region stands on, so
+ * the wash is the only thing that reads as fading; an empty region covers
+ * nothing.
  */
 .happy-live-feed__scrim {
     position: absolute;
     right: calc(-1 * var(--happy-panel-inset));
     bottom: calc(-1 * var(--happy-panel-inset));
     left: calc(-1 * var(--happy-panel-inset));
-    height: calc(min(var(--happy-live-feed-content, 0px) + 16px, 100%) + var(--happy-panel-inset));
+    /* Up to what the region shows, and its fade above that: over the region's
+       top edge, never inside it, so nothing behind shows through the wash.
+       Both shrink to nothing with an empty region. */
+    height: calc(
+        min(var(--happy-live-feed-content, 0px), 100%) +
+            min(var(--happy-live-feed-content, 0px), 16px + var(--happy-panel-inset))
+    );
     background: linear-gradient(
         to bottom,
         transparent 0,
@@ -73,55 +79,8 @@
     transition: height 280ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
-/* The stack may stand taller than the band, so its fade sits above it. */
-.happy-live-feed[data-mode="stack"] .happy-live-feed__scrim {
-    height: calc(100% + var(--happy-panel-inset) + 16px);
-}
-
-/* The stack's heading, a sidebar section heading in the column's flow. */
-.happy-live-feed__header {
-    position: relative;
-    display: none;
-    flex: none;
-    align-items: center;
-    gap: 8px;
-    box-sizing: border-box;
-    height: var(--happy-live-feed-heading);
-    padding: 0 var(--happy-sidebar-fold-inset) 0 var(--happy-panel-row-padding);
-}
-
-.happy-live-feed[data-mode="stack"] .happy-live-feed__header {
-    display: flex;
-}
-
-.happy-live-feed__view-all {
-    flex: none;
-    height: 18px;
-    margin: 0;
-    padding: 0 4px;
-    border: 0;
-    border-radius: var(--happy-hover-radius);
-    background: transparent;
-    color: var(--text-link);
-    font: inherit;
-    font-size: 12px;
-    font-weight: 600;
-    line-height: 18px;
-    cursor: pointer;
-    appearance: none;
-}
-
-.happy-live-feed__view-all:hover {
-    background: var(--happy-hover-fill);
-}
-
-.happy-live-feed__view-all:focus-visible {
-    outline: 2px solid var(--surface-selected);
-    outline-offset: 1px;
-}
-
-/* Full-bleed scrollport; column-reverse with one child starts it at the
-   bottom and keeps it there as items come in, in every engine. */
+/* Full-bleed clip; column-reverse with one child keeps the newest at the
+   bottom, nearest the footer, in every engine. */
 .happy-live-feed__scroller {
     position: relative;
     display: flex;
@@ -129,14 +88,13 @@
     flex-direction: column-reverse;
     min-height: 0;
     overflow: hidden;
-    -webkit-mask-image: linear-gradient(to bottom, transparent 0, black 35%);
-    mask-image: linear-gradient(to bottom, transparent 0, black 35%);
 }
 
-.happy-live-feed[data-mode="stack"] .happy-live-feed__scroller {
-    overflow-y: auto;
-    -webkit-mask-image: none;
-    mask-image: none;
+/* More than fits: the top row washes out, so it reads as the edge of more
+   rather than as the last thing there. With room to spare nothing is washed. */
+.happy-live-feed[data-overflow] .happy-live-feed__scroller {
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0, black 36px);
+    mask-image: linear-gradient(to bottom, transparent 0, black 36px);
 }
 
 /* The sidebar's own row rhythm: 2px between rows. */
@@ -148,31 +106,82 @@
     pointer-events: auto;
 }
 
-/* ---- Paused ------------------------------------------------------------- */
+/* ---- Hover header -------------------------------------------------------- */
 
-/* On the footer's status line just after the feed control and its count, in
-   the free space before the trailing controls, out of every flow, so it
-   appearing moves nothing. */
-.happy-live-feed__paused {
+/*
+ * View all and Read all, laid over the top of what the region holds: just
+ * above the top row while there is room, over the washed-out top row once the
+ * region is full. Out of every flow, on the sidebar's background with a short
+ * fade above, so appearing moves and pushes nothing. Shown while the pointer
+ * is anywhere on the feed, and for the keyboard.
+ */
+.happy-live-feed__header {
     position: absolute;
-    bottom: calc(-1 * var(--happy-panel-inset) - var(--happy-surface-footer-height) / 2 - 8px);
-    left: 54px;
+    right: 0;
+    bottom: min(var(--happy-live-feed-content, 0px), 100% - var(--happy-live-feed-header));
+    left: 0;
     display: flex;
     align-items: center;
-    gap: 4px;
-    height: 16px;
-    color: var(--text-secondary);
-    font-size: 11px;
-    font-weight: 600;
-    line-height: 16px;
-    white-space: nowrap;
+    gap: 2px;
+    box-sizing: border-box;
+    height: var(--happy-live-feed-header);
+    /* The first label's text starts on the column the rows' marks start on. */
+    padding-left: calc(var(--happy-panel-row-padding) - 6px);
+    background: var(--groupped-background);
     opacity: 0;
-    transition: opacity 160ms ease;
     pointer-events: none;
 }
 
-.happy-live-feed__paused[data-shown] {
+.happy-live-feed__header::before {
+    position: absolute;
+    right: 0;
+    bottom: 100%;
+    left: 0;
+    height: 12px;
+    background: linear-gradient(to top, var(--groupped-background), transparent);
+    content: "";
+}
+
+.happy-live-feed:not([data-empty]):is(:hover, :has(:focus-visible)) .happy-live-feed__header {
     opacity: 1;
+    pointer-events: auto;
+}
+
+/* A quiet text button, in the sidebar's meta type: View all, Read all. */
+.happy-live-feed__link {
+    flex: none;
+    height: 18px;
+    margin: 0;
+    padding: 0 6px;
+    border: 0;
+    border-radius: var(--happy-hover-radius);
+    background: transparent;
+    color: var(--text-secondary);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 18px;
+    white-space: nowrap;
+    cursor: pointer;
+    appearance: none;
+}
+
+.happy-live-feed__link:hover {
+    background: var(--happy-hover-fill);
+    color: var(--text);
+}
+
+.happy-live-feed__link:disabled,
+.happy-live-feed__link:disabled:hover {
+    background: transparent;
+    color: var(--text-secondary);
+    opacity: 0.45;
+    cursor: default;
+}
+
+.happy-live-feed__link:focus-visible {
+    outline: 2px solid var(--surface-selected);
+    outline-offset: 1px;
 }
 
 /* ---- Items: sidebar rows ------------------------------------------------ */
@@ -371,7 +380,6 @@
     white-space: nowrap;
     opacity: 0;
     cursor: pointer;
-    transition: opacity 120ms ease;
 }
 
 .happy-live-feed-item[data-rows="2"] .happy-live-feed-item__quick {
@@ -429,14 +437,28 @@
     );
 }
 
-/* ---- Footer toggle ------------------------------------------------------ */
+/* ---- Footer control ----------------------------------------------------- */
+
+/* The glyph and its count in the row; View feed and Read all stand in a
+   bubble just above it, out of the row's flow. */
+.happy-live-feed-control {
+    position: relative;
+    /* Over the feed region, which the bubble overlaps. */
+    z-index: 31;
+    display: flex;
+    flex: none;
+    align-items: center;
+}
 
 .happy-live-feed-toggle {
+    /* Above the bubble's hover bridge, which runs under it. */
+    position: relative;
+    z-index: 1;
     display: flex;
     flex: none;
     align-items: center;
     justify-content: center;
-    gap: 4px;
+    gap: 5px;
     box-sizing: border-box;
     min-width: 28px;
     height: 28px;
@@ -446,13 +468,14 @@
     border-radius: var(--happy-hover-radius);
     background: transparent;
     color: var(--text-secondary);
-    font-family: var(--happy-font-mono);
-    font-size: 11px;
-    font-weight: 700;
-    font-variant-numeric: lining-nums tabular-nums;
-    line-height: 14px;
     cursor: pointer;
     appearance: none;
+}
+
+/* With a count the glyph keeps its 7px and the pill stands 5px from the
+   control's end, as an 18px pill sits in a 28px box elsewhere. */
+.happy-live-feed-toggle:has(.happy-live-feed-toggle__count) {
+    padding-right: 5px;
 }
 
 .happy-live-feed-toggle:hover {
@@ -460,18 +483,58 @@
     color: var(--text);
 }
 
-.happy-live-feed-toggle[aria-pressed="true"] {
-    background: var(--surface-ripple);
+.happy-live-feed-control[data-on] .happy-live-feed-toggle {
     color: var(--text);
 }
 
-.happy-live-feed-toggle[data-unread] {
-    color: var(--text-link);
+/* Off, what piles up unseen wears the sidebar's unread red. */
+.happy-live-feed-control:not([data-on]) .happy-live-feed-toggle__count {
+    background: var(--status-error);
+    color: #ffffff;
 }
 
 .happy-live-feed-toggle:focus-visible {
     outline: 2px solid var(--radio-active);
     outline-offset: 2px;
+}
+
+/* The Tooltip's bubble (tooltip.css): the plain surface, its 1px modal
+   hairline, the 6px control radius and its faint drop, 24px tall, held 4px
+   clear of the control and starting at its leading edge. Revealed at once,
+   as the sidebar's own controls are. */
+.happy-live-feed-control__actions {
+    position: absolute;
+    bottom: calc(100% + 4px);
+    left: 0;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    box-sizing: border-box;
+    height: 24px;
+    padding: 2px;
+    border: 1px solid var(--modal-border);
+    border-radius: var(--happy-radius-sm);
+    background: var(--surface);
+    box-shadow: 0 2px 8px var(--shadow-color);
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* Once it shows, the bubble also holds everything under it down to the
+   footer row's bottom: the 4px gap and the free space beside the control,
+   so a pointer heading up and right to Read all never lets the pair go. */
+.happy-live-feed-control__actions::after {
+    position: absolute;
+    right: 0;
+    bottom: calc(-4px - 28px - 1px);
+    left: 0;
+    height: calc(4px + 28px);
+    content: "";
+}
+
+.happy-live-feed-control:is(:hover, :has(:focus-visible)) .happy-live-feed-control__actions {
+    opacity: 1;
+    pointer-events: auto;
 }
 
 @media (prefers-reduced-motion: reduce) {

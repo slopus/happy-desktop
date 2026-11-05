@@ -1,6 +1,7 @@
 import type { HappyAgentArtifactType } from "happy-desktop-state";
-import { useState, type ReactNode } from "react";
+import { useState, type CSSProperties, type ReactNode } from "react";
 import { Avatar } from "./Avatar";
+import { CountBadge } from "./Badge";
 import { Icon } from "./Icon";
 import {
     FeedSubjectGlyph,
@@ -62,31 +63,39 @@ export interface LiveFeedItem {
     readonly media?: LiveFeedMedia;
     readonly follow?: LiveFeedFollowTarget;
     readonly at: number;
-    /** Its time in the stream is up: it fades where it stands, then the owner drops it. */
+    /** It was read — ×, opened, Read all, or its time on screen is up: it fades
+        where it stands, then the owner drops it. */
     readonly leaving?: boolean;
-    /** Arrived since the reader last opened the stack. */
-    readonly unread?: boolean;
 }
 
-/** `stream` floats new items up and lets them go; `stack` holds them still to be read. */
-export type LiveFeedMode = "stream" | "stack";
+/**
+ * How many sidebar rows the feed region is tall, and it never grows past
+ * that: 4 × 32 + 3 × 2 = 134px, under a fifth of a 760px sidebar. With more
+ * unread than fits, the top row washes out and the rest wait above it.
+ */
+export const LIVE_FEED_ROWS = 4;
+
+/** The rows an item takes: a post with media is two, everything else one. */
+export function liveFeedItemRows(item: LiveFeedItem): 1 | 2 {
+    return item.tier === "post" && item.media !== undefined ? 2 : 1;
+}
 
 export interface LiveFeedPanelProps {
-    readonly mode: LiveFeedMode;
-    /** Oldest first: the newest item sits at the bottom, nearest the footer. */
+    /** The footer's feed control is on; off, the region is not drawn at all. */
+    readonly shown: boolean;
+    /** Everything unread, oldest first: the newest sits at the bottom, nearest the footer. */
     readonly items: readonly LiveFeedItem[];
     readonly now: number;
-    /** The pointer is over the items: nothing arrives, nothing leaves. */
-    readonly paused: boolean;
-    /** Items that arrived while paused and wait to come in. */
-    readonly queued: number;
+    /** The pointer is over the feed: the owner holds arrivals and expiry still. */
     readonly onHoverChange: (hovering: boolean) => void;
     readonly onItemOpen: (itemId: string) => void;
-    /** The item's ×: out of the stream now, or out of the stack. */
+    /** The item's ×: it is read and leaves, and what stood above it drops down. */
     readonly onItemDismiss: (itemId: string) => void;
     readonly onFollowToggle: (targetId: string, following: boolean) => void;
     /** Opens the whole Feed. */
     readonly onViewAll: () => void;
+    /** Marks everything read, which empties the region. */
+    readonly onReadAll: () => void;
 }
 
 /** "now", "40s", "3m", "2h": how long ago, in the width of a row's meta. */
@@ -108,15 +117,15 @@ export function liveFeedDurationText(ms: number): string {
 /*
  * An item comes in by growing from nothing at the bottom, so the items above it
  * glide up by exactly its height, once, instead of stepping. Run from a ref
- * callback on the item's first attachment only: an item already on screen when
- * the panel turns into the stack keeps its node and does not play again, and
- * one shown first in the stack just appears.
+ * callback on the item's first attachment only: one that arrived while the
+ * feed was switched off is already there when it is switched on, and just
+ * appears with the rest.
  */
 const entered = new WeakSet<Element>();
 function liveFeedItemAttach(element: HTMLElement | null) {
     if (element === null || entered.has(element)) return;
     entered.add(element);
-    if (element.closest('[data-mode="stack"]') !== null) return;
+    if (element.closest("[hidden]") !== null) return;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     const height = element.getBoundingClientRect().height;
     element.animate(
@@ -129,30 +138,42 @@ function liveFeedItemAttach(element: HTMLElement | null) {
 }
 
 /*
- * The band the stream may take is a fifth of the sidebar's height, which is
- * not the panel's containing block (the footer is), so the sidebar's height is
- * measured onto the panel as a custom property that only the band reads. The
- * column's height is measured too, for the scrim: it washes out only as much
- * of the sidebar as the stream holds, so an empty stream covers nothing.
+ * The column's height is measured onto the panel for the scrim and the hover
+ * header: the scrim washes out only as much of the sidebar as the feed holds,
+ * so an empty feed covers nothing, and the header stands on top of what is
+ * there rather than at the top of an empty region.
  */
 function liveFeedPanelAttach(element: HTMLDivElement | null) {
     if (element === null) return;
-    const sidebar = element.closest<HTMLElement>(".happy-sidebar");
     const column = element.querySelector<HTMLElement>(".happy-live-feed__column");
-    if (sidebar === null || column === null) return;
+    if (column === null) return;
     const observer = new ResizeObserver(() => {
-        element.style.setProperty(
-            "--happy-live-feed-sidebar",
-            `${String(sidebar.getBoundingClientRect().height)}px`,
-        );
         element.style.setProperty(
             "--happy-live-feed-content",
             `${String(column.getBoundingClientRect().height)}px`,
         );
     });
-    observer.observe(sidebar);
     observer.observe(column);
     return () => observer.disconnect();
+}
+
+/** A quiet text button: View all, Read all. */
+function LiveFeedLink(props: {
+    readonly label: string;
+    readonly disabled?: boolean;
+    readonly onPress: () => void;
+}) {
+    return (
+        <button
+            className="happy-live-feed__link"
+            data-happy-desktop-ui="live-feed-link"
+            disabled={props.disabled}
+            onClick={props.onPress}
+            type="button"
+        >
+            {props.label}
+        </button>
+    );
 }
 
 /** The one thing hovering an item offers; each has its own width to clear. */
@@ -372,7 +393,6 @@ export function LiveFeedEntry(props: {
             data-quick={quick?.kind}
             data-rows={media === undefined ? "1" : "2"}
             data-tier={item.tier}
-            data-feed-unread={item.unread ? "" : undefined}
             onClick={() => props.onOpen(item.id)}
             ref={liveFeedItemAttach}
             title={item.tier === "mention" ? `${item.actor.name}: ${item.detail ?? ""}` : undefined}
@@ -399,56 +419,46 @@ export function LiveFeedEntry(props: {
 }
 
 /**
- * LiveFeedPanel — the feed as a live stream rising from the sidebar footer.
+ * LiveFeedPanel — what is unread in the feed, rising from the sidebar footer.
  *
  * It stands where the update card stands, over the bottom of the sidebar's
- * rows and exactly as wide as them, and takes at most a fifth of the sidebar's
- * height. In `stream` mode new items come in at the bottom and the older ones
- * drift up and wash out at the top of that band; each leaves on its own after
- * a while, fading where it stands. The column is anchored to the bottom, so an
- * item leaving from the top moves nothing.
+ * rows and exactly as wide as them, in one region of a fixed height:
+ * `LIVE_FEED_ROWS` rows. Items stack newest at the bottom; when more is
+ * unread than fits, the top row washes out and the rest wait above it. When
+ * an item is read — its ×, opened, or its time on screen is up — it fades
+ * where it stands and its slot closes, so everything above drops down and the
+ * older items come back into view, until nothing is unread and the region is
+ * gone.
  *
- * While the pointer is over the items the stream holds still — nothing new
- * pushes in under the cursor and nothing times out — and what arrives in the
- * meantime waits, counted in the footer.
- *
- * In `stack` mode the same rows, with the same nodes, hold everything still
- * collected under a "Feed" heading with View all, on the sidebar's own
- * background: the wash lifts and the column scrolls.
+ * Hovering it holds it still (the owner stops arrivals and expiry, without
+ * saying so) and lays View all and Read all over its top-left corner, which
+ * take no room and move nothing. The footer's control shows or hides the
+ * whole region.
  */
 export function LiveFeedPanel(props: LiveFeedPanelProps) {
-    const stack = props.mode === "stack";
+    let rows = 0;
+    let live = false;
+    for (const item of props.items) {
+        rows += liveFeedItemRows(item);
+        if (item.leaving !== true) live = true;
+    }
     return (
         <div
-            aria-label={stack ? "Feed" : "Live feed"}
+            aria-label="Live feed"
             className="happy-live-feed"
+            data-empty={live ? undefined : ""}
             data-happy-desktop-ui="live-feed"
-            data-mode={props.mode}
-            data-paused={props.paused ? "" : undefined}
+            data-overflow={rows > LIVE_FEED_ROWS ? "" : undefined}
+            hidden={!props.shown}
+            onPointerEnter={() => props.onHoverChange(true)}
+            onPointerLeave={() => props.onHoverChange(false)}
             ref={liveFeedPanelAttach}
             role="log"
+            style={{ "--happy-live-feed-rows": LIVE_FEED_ROWS } as CSSProperties}
         >
             <span aria-hidden="true" className="happy-live-feed__scrim" />
-            {/* The stack's heading is a sidebar section heading: its label, its
-                count, and View all where a heading keeps its control. */}
-            <div aria-hidden={!stack} className="happy-live-feed__header" inert={!stack}>
-                <span className="happy-sidebar__section-item-label happy-live-feed__heading">
-                    {`Feed · ${String(props.items.length)}`}
-                </span>
-                <button
-                    className="happy-live-feed__view-all"
-                    onClick={props.onViewAll}
-                    type="button"
-                >
-                    View all
-                </button>
-            </div>
             <div className="happy-live-feed__scroller">
-                <div
-                    className="happy-live-feed__column"
-                    onPointerEnter={() => props.onHoverChange(true)}
-                    onPointerLeave={() => props.onHoverChange(false)}
-                >
+                <div className="happy-live-feed__column">
                     {props.items.map((item) => (
                         <LiveFeedEntry
                             item={item}
@@ -461,53 +471,62 @@ export function LiveFeedPanel(props: LiveFeedPanelProps) {
                     ))}
                 </div>
             </div>
-            <span
-                aria-live="polite"
-                className="happy-live-feed__paused"
-                data-shown={props.paused && !stack ? "" : undefined}
-            >
-                <Icon name="pause" size={12} />
-                {props.queued > 0 ? `${String(props.queued)} new` : "Paused"}
-            </span>
+            <div className="happy-live-feed__header" data-happy-desktop-ui="live-feed-header">
+                <LiveFeedLink label="View all" onPress={props.onViewAll} />
+                <LiveFeedLink label="Read all" onPress={props.onReadAll} />
+            </div>
         </div>
     );
 }
 
 /**
- * LiveFeedToggle — the feed's control at the start of the footer's status
- * line: it switches the stream and the stack, and counts what arrived since
- * the stack was last opened. The count grows the control to its right only,
- * into the footer's free space, so nothing else on the row moves.
+ * LiveFeedControl — the feed's control at the start of the footer's status
+ * line. The glyph shows or hides the feed region and carries the unread
+ * count: quiet while the feed is on screen, the sidebar's unread red while it
+ * is off and things pile up unseen. Hovering it lays View feed and Read all
+ * just after it, over the footer's free space, so nothing on the row moves;
+ * Read all is there but disabled when nothing is unread.
  */
-export function LiveFeedToggle(props: {
-    readonly mode: LiveFeedMode;
+export function LiveFeedControl(props: {
+    readonly on: boolean;
     readonly unread: number;
     readonly onToggle: () => void;
+    readonly onViewAll: () => void;
+    readonly onReadAll: () => void;
 }) {
-    const stack = props.mode === "stack";
     return (
-        <button
-            aria-label={
-                stack
-                    ? "Back to the live feed"
-                    : props.unread > 0
-                      ? `Open the feed, ${String(props.unread)} new`
-                      : "Open the feed"
-            }
-            aria-pressed={stack}
-            className="happy-live-feed-toggle"
-            data-happy-desktop-ui="live-feed-toggle"
-            data-unread={props.unread > 0 ? "" : undefined}
-            onClick={props.onToggle}
-            title={stack ? "Show the live feed" : "Show the feed stack"}
-            type="button"
+        <div
+            className="happy-live-feed-control"
+            data-happy-desktop-ui="live-feed-control"
+            data-on={props.on ? "" : undefined}
         >
-            <Icon name="feed" size={14} />
-            {props.unread > 0 ? (
-                <span className="happy-live-feed-toggle__count">
-                    {props.unread > 99 ? "99+" : String(props.unread)}
-                </span>
-            ) : null}
-        </button>
+            <button
+                aria-label={
+                    props.unread > 0 ? `Live feed, ${String(props.unread)} unread` : "Live feed"
+                }
+                aria-pressed={props.on}
+                className="happy-live-feed-toggle"
+                data-happy-desktop-ui="live-feed-toggle"
+                onClick={props.onToggle}
+                type="button"
+            >
+                <Icon name="feed" size={14} />
+                {props.unread > 0 ? (
+                    <CountBadge
+                        className="happy-live-feed-toggle__count"
+                        count={Math.min(props.unread, 99)}
+                        tone="neutral"
+                    />
+                ) : null}
+            </button>
+            <div className="happy-live-feed-control__actions">
+                <LiveFeedLink label="View feed" onPress={props.onViewAll} />
+                <LiveFeedLink
+                    disabled={props.unread === 0}
+                    label="Read all"
+                    onPress={props.onReadAll}
+                />
+            </div>
+        </div>
     );
 }
