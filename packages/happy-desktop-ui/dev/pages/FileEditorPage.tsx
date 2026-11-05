@@ -91,6 +91,26 @@ export function FileEditorPage() {
             </Specimen>
 
             <Specimen
+                detail="A file Git lists as created opens as the file, marked New with its line total"
+                label="New file"
+                number="01b"
+                stage="surface"
+            >
+                {frame(
+                    <FileEditor
+                        created
+                        documentKey="src/components/Counter.tsx@7f3a"
+                        onSave={() => {}}
+                        path="src/components/Counter.tsx"
+                        pathShown={false}
+                        stats={{ added: sample.split("\n").length, removed: 0 }}
+                        value={sample}
+                    />,
+                    320,
+                )}
+            </Specimen>
+
+            <Specimen
                 detail="Dirty — classic tab dot and Revert; Command-S is the only save control"
                 label="Unsaved edits"
                 number="02"

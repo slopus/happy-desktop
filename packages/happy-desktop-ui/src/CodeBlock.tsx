@@ -41,6 +41,8 @@ export type CodeBlockProps = {
     cacheKey?: string;
     /** Numbers the lines. On for a file, off for a snippet inside prose. */
     lineNumbers?: boolean;
+    /** Soft-wraps long lines, for a column too narrow to scroll them sideways. */
+    wrap?: boolean;
 };
 
 /**
@@ -80,7 +82,7 @@ export function CodeBlock(props: CodeBlockProps) {
             options={{
                 disableFileHeader: true,
                 disableLineNumbers: props.lineNumbers !== true,
-                overflow: "scroll",
+                overflow: props.wrap ? "wrap" : "scroll",
                 onPostRender: (node, _instance, phase) => pierreCodeSurfacePhase(node, phase),
                 theme: { dark: "pierre-dark", light: "pierre-light" },
                 // Whatever scrolls this code is outside the renderer, so its own

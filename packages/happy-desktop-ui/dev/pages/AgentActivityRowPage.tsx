@@ -21,6 +21,7 @@ import {
     happyAgentExecTool,
     happyAgentExplorationTool,
     happyAgentFailedTool,
+    happyAgentFileCreateTool,
     happyAgentFileDiffTool,
     happyAgentGenericTool,
     happyAgentMcpInterruptedTool,
@@ -132,7 +133,7 @@ export function AgentActivityRowPage() {
                 </div>
             </Specimen>
             <Specimen
-                detail="file diff, exec command, and background terminal, expanded"
+                detail="file diff, created file, exec command, and background terminal, expanded"
                 label="Rich tool bodies"
                 number="01"
                 stage="surface"
@@ -147,6 +148,10 @@ export function AgentActivityRowPage() {
                 >
                     <AgentActivityRow
                         activity={{ kind: "tool", tool: happyAgentFileDiffTool }}
+                        defaultExpanded
+                    />
+                    <AgentActivityRow
+                        activity={{ kind: "tool", tool: happyAgentFileCreateTool }}
                         defaultExpanded
                     />
                     <AgentActivityRow

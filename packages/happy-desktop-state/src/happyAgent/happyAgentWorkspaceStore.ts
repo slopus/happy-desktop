@@ -3655,6 +3655,8 @@ export function happyAgentWorkspaceStoreCreate(
      * Resolves every ordinary source-file intent from the live catalog only.
      * A missing Git snapshot and an unchanged path both deliberately resolve to
      * the raw file; neither starts a Git read to discover a different answer.
+     * A newly created file has nothing to compare against, so it opens as the
+     * file itself and becomes a diff once a later change has a base.
      */
     const fileKindResolve = (
         groupId: HappyAgentGroupId,
@@ -3662,7 +3664,10 @@ export function happyAgentWorkspaceStoreCreate(
         requestedKind: HappyAgentFileTabKind,
     ): HappyAgentFileTabKind => {
         if (requestedKind === "media" || requestedKind === "document") return requestedKind;
-        return fileChangeFind(groupId, path) === undefined ? "file" : "diff";
+        const change = fileChangeFind(groupId, path);
+        if (change === undefined || change.status === "added" || change.status === "untracked")
+            return "file";
+        return "diff";
     };
 
     const fileDocumentRead = (
@@ -3722,8 +3727,11 @@ export function happyAgentWorkspaceStoreCreate(
     ): void => {
         if (!active || disposed) return;
         const kind = fileKindResolve(groupId, path, requestedKind);
-        const change = kind === "diff" ? fileChangeFind(groupId, path) : undefined;
-        const revision = change?.revision ?? "";
+        const found = fileChangeFind(groupId, path);
+        const change = kind === "diff" ? found : undefined;
+        // Keyed by the Git revision whatever the kind, as an opened tab is, so
+        // a warmed new file is the one its tab reads.
+        const revision = found?.revision ?? "";
         const cacheBaseKey = happyAgentReadyDocumentCacheBaseKey(groupId, path, kind, revision);
         if (readyDocumentCacheRead(cacheBaseKey) !== undefined) return;
         if (fileLoadRequests.has(cacheBaseKey)) return;

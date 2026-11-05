@@ -7,6 +7,7 @@ import {
     agentSpawnStopped,
     agentSpawnUnresolved,
 } from "./agentSpawnFixtures";
+import { happyAgentFileCreateTool } from "./happyAgentChatFixtures";
 
 /** The component plan this page documents. The selector and the page header read the same value. */
 export const componentNumber = "C-165";
@@ -152,6 +153,17 @@ export function ToolCallPreviewPage() {
                     <div style={{ padding: "24px" }}>
                         <Preview tool={patch} width={250} />
                         <DimensionRule label="250px · wrapped diff lines" />
+                    </div>
+                </Specimen>
+                <Specimen
+                    detail="250px inspector · a created file reads as its highlighted source, wrapped"
+                    label="File created"
+                    number="T-04"
+                    stage="app"
+                >
+                    <div style={{ padding: "24px" }}>
+                        <Preview tool={happyAgentFileCreateTool} width={250} />
+                        <DimensionRule label="250px · highlighted file lines" />
                     </div>
                 </Specimen>
             </div>

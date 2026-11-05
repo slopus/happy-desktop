@@ -6,6 +6,7 @@ import {
     type ReactNode,
 } from "react";
 import { Button } from "./Button";
+import { ChangeStats } from "./ChangeStats";
 import { CodeEditor, type CodeEditorReveal } from "./CodeEditor";
 import { FileTreeFamilyIcon, fileTreeFamily } from "./FileTree";
 import { FilePathLabel } from "./FilePathLabel";
@@ -56,6 +57,10 @@ export type FileEditorProps = {
     initialFace?: "rendered" | "source";
     /** Compact trailing status, used for saving or an unavailable persistence path. */
     status?: string;
+    /** Git lists the file as created: a "New" mark in the header says so. */
+    created?: boolean;
+    /** The file's Git line totals, shown in their added and removed colours. */
+    stats?: { added: number; removed: number };
     placeholder?: string;
     revertLabel?: string;
     closeLabel?: string;
@@ -105,6 +110,8 @@ export function FileEditor(props: FileEditorProps) {
         "rendered",
         "initialFace",
         "status",
+        "created",
+        "stats",
         "placeholder",
         "revertLabel",
         "closeLabel",
@@ -164,6 +171,22 @@ export function FileEditor(props: FileEditorProps) {
                     className="happy-file-editor__actions"
                     data-happy-desktop-ui="file-editor-actions"
                 >
+                    {local.created ? (
+                        <span
+                            className="happy-file-editor__tag"
+                            data-happy-desktop-ui="file-editor-tag"
+                        >
+                            New
+                        </span>
+                    ) : null}
+                    {local.stats && (local.stats.added || local.stats.removed) ? (
+                        <ChangeStats
+                            added={local.stats.added}
+                            className="happy-file-editor__stats"
+                            data-happy-desktop-ui="file-editor-stats"
+                            deleted={local.stats.removed}
+                        />
+                    ) : null}
                     {local.status ? (
                         <span
                             className="happy-file-editor__status"

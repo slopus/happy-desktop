@@ -6,7 +6,8 @@ import type {
 import { happyAgentArtifactTypeLabel } from "happy-desktop-state";
 import { ConversationMedia } from "./ConversationMedia";
 import { conversationMediaVisible } from "./conversationInlineLayouts";
-import { DiffSnippet, type DiffLine } from "./DiffSnippet";
+import { codeBlockLanguage } from "./codeBlockLanguage";
+import { DiffSnippet, type DiffLine, type DiffSnippetSource } from "./DiffSnippet";
 import { Icon } from "./Icon";
 import { ArtifactTypeGlyph } from "./pages/artifacts/artifactPresentation";
 import { ResultCard } from "./ResultCard";
@@ -31,6 +32,19 @@ function json(value: ConversationToolCall["arguments"]): string {
     } catch {
         return String(value);
     }
+}
+
+/**
+ * A created file as the file it is: its lines as one text, highlighted in the
+ * language the producer named or the one its path implies.
+ */
+function createdFileSource(file: ConversationFileDiff): DiffSnippetSource {
+    const lang = codeBlockLanguage(file.language);
+    return {
+        name: file.path,
+        text: file.hunks.flatMap((hunk) => hunk.lines.map((line) => line.text)).join("\n"),
+        ...(lang === undefined ? {} : { lang }),
+    };
 }
 
 function diffLines(file: ConversationFileDiff): DiffLine[] {
@@ -199,7 +213,9 @@ export function ToolCallPreview(props: ToolCallPreviewProps) {
                               <DiffSnippet
                                   file={file.path}
                                   key={file.path}
-                                  lines={diffLines(file)}
+                                  {...(file.kind === "add"
+                                      ? { created: true, source: createdFileSource(file) }
+                                      : { lines: diffLines(file) })}
                                   stats={{
                                       added: file.added ?? 0,
                                       removed: file.deleted ?? 0,

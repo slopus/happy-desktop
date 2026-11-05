@@ -7141,7 +7141,7 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
             key={`${file.id}:${file.kind}`}
             {...(props.mediaWindow ? { mediaWindow: props.mediaWindow } : {})}
             mode={workspace.fileViewMode}
-            {...((change) => (change === undefined ? {} : { changeStatus: change.status }))(
+            {...((change) => (change === undefined ? {} : { change }))(
                 openGroup?.id === file.groupId
                     ? openGroup.changes.find((candidate) => candidate.path === file.path)
                     : undefined,
@@ -8244,9 +8244,10 @@ function HappyAgentFileBody(props: {
     mode: HappyAgentFileViewMode;
     /**
      * What the live Git snapshot says happened to this file, when its checkout
-     * lists it as changed. It decides whether the change can be read rendered.
+     * lists it as changed. It decides whether the change can be read rendered,
+     * and marks a created file, which opens as a file, as new.
      */
-    changeStatus?: HappyAgentGitChangedFile["status"];
+    change?: HappyAgentGitChangedFile;
     /** Whether long diff lines wrap to the pane or scroll out of it. */
     wrap: boolean;
     /** Re-reads Happy Agent availability when a retained file handler fires. */
@@ -8398,6 +8399,15 @@ function HappyAgentFileBody(props: {
                 saveDisabled={saveDisabled}
                 saving={file.saving}
                 {...(status === undefined ? {} : { status })}
+                {...(props.change?.status === "added" || props.change?.status === "untracked"
+                    ? {
+                          created: true,
+                          stats: {
+                              added: props.change.addedLines ?? 0,
+                              removed: props.change.deletedLines ?? 0,
+                          },
+                      }
+                    : {})}
                 value={text}
                 wrap={props.wrap}
             />
@@ -8486,7 +8496,7 @@ function HappyAgentFileBody(props: {
                         : {})}
                     onModeChange={(mode) => workspace.fileViewModeUpdate(mode)}
                     onWrapChange={(wrap) => workspace.fileViewWrapUpdate(wrap)}
-                    {...(changedFileRenderedDiffOffered(file.path, props.changeStatus)
+                    {...(changedFileRenderedDiffOffered(file.path, props.change?.status)
                         ? {
                               renderedDiff: (
                                   <HappyAgentChangedFileRenderedDiff

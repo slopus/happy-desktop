@@ -85,6 +85,44 @@ export const happyAgentFileDiffTool: ConversationToolCall = {
     },
 };
 
+/** A Write that created its file: the row shows the file rather than an all-added diff. */
+export const happyAgentFileCreateTool: ConversationToolCall = {
+    toolCallId: "tool-create",
+    toolName: "write",
+    arguments: { path: "src/auth/backoff.ts" },
+    status: "success",
+    failed: false,
+    display: "Added src/auth/backoff.ts",
+    presentation: {
+        type: "fileDiff",
+        files: [
+            {
+                path: "src/auth/backoff.ts",
+                kind: "add",
+                added: 8,
+                deleted: 0,
+                omittedLines: 3,
+                hunks: [
+                    {
+                        oldStart: 0,
+                        newStart: 1,
+                        lines: [
+                            { kind: "add", text: "/** Waits longer after each failed refresh. */" },
+                            {
+                                kind: "add",
+                                text: "export function backoff(attempt: number): number {",
+                            },
+                            { kind: "add", text: "  const base = 250 * 2 ** attempt" },
+                            { kind: "add", text: "  return Math.min(base, 30_000)" },
+                            { kind: "add", text: "}" },
+                        ],
+                    },
+                ],
+            },
+        ],
+    },
+};
+
 export const happyAgentExecTool: ConversationToolCall = {
     toolCallId: "tool-exec",
     toolName: "bash",

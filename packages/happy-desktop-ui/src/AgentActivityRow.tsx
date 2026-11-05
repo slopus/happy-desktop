@@ -16,7 +16,8 @@ import { compactCount, changeCountLabel } from "./countText";
 import { Avatar } from "./Avatar";
 import { ConversationMedia } from "./ConversationMedia";
 import { CopyButton } from "./CopyButton";
-import { DiffSnippet, type DiffLine } from "./DiffSnippet";
+import { codeBlockLanguage } from "./codeBlockLanguage";
+import { DiffSnippet, type DiffLine, type DiffSnippetSource } from "./DiffSnippet";
 import { filePreviewKind } from "./FilePreview";
 import { Icon, type IconName } from "./Icon";
 import { InlinePage, type InlinePageProps } from "./InlinePage";
@@ -711,6 +712,19 @@ function diffCounts(file: ConversationFileDiff): { added: number; deleted: numbe
     return { added, deleted };
 }
 
+/**
+ * A created file as the file it is: its lines as one text, highlighted in the
+ * language the producer named or the one its path implies.
+ */
+function createdFileSource(file: ConversationFileDiff): DiffSnippetSource {
+    const lang = codeBlockLanguage(file.language);
+    return {
+        name: file.path,
+        text: file.hunks.flatMap((hunk) => hunk.lines.map((line) => line.text)).join("\n"),
+        ...(lang === undefined ? {} : { lang }),
+    };
+}
+
 /** Flattens a file's hunks into numbered DiffSnippet lines with `@@` meta rows. */
 function diffLines(file: ConversationFileDiff): DiffLine[] {
     const lines: DiffLine[] = [];
@@ -1362,7 +1376,12 @@ function AgentToolActivity(props: {
                                           >
                                               <DiffSnippet
                                                   file={file.path}
-                                                  lines={diffLines(file)}
+                                                  {...(file.kind === "add"
+                                                      ? {
+                                                            created: true,
+                                                            source: createdFileSource(file),
+                                                        }
+                                                      : { lines: diffLines(file) })}
                                                   stats={{
                                                       added: diffCounts(file).added,
                                                       removed: diffCounts(file).deleted,

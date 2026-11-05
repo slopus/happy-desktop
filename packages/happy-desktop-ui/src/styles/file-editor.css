@@ -64,6 +64,29 @@
     gap: 6px;
 }
 
+/* What Git says of the whole file, in the colour the file tree gives a new file
+   on a faint wash of it, then its line totals in their own tones. */
+.happy-file-editor__tag {
+    display: block;
+    flex: none;
+    padding: 0 6px;
+    border-radius: 4px;
+    background: color-mix(in srgb, var(--git-status-new) 14%, transparent);
+    color: var(--git-status-new);
+    font-family: var(--happy-font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 16px;
+}
+
+.happy-file-editor__stats [data-tone="added"] {
+    color: var(--diff-success);
+}
+
+.happy-file-editor__stats [data-tone="deleted"] {
+    color: var(--diff-error);
+}
+
 .happy-file-editor__status {
     display: block;
     max-width: 240px;

@@ -2,7 +2,7 @@
  * C-006 DiffSnippet — code-well diff block.
  *
  * A diff-context well with a hairline border: optional 28px header
- * (mono file name + right-aligned +N/−N stats), then 20px mono diff
+ * (mono file name, optional tag, right-aligned +N/−N stats), then 20px mono diff
  * lines with a 24px +/− gutter, optional 32px line-number gutter, and
  * add/del/context/meta treatments. Long lines scroll horizontally
  * inside the well; they never wrap — unless the well is asked to wrap
@@ -58,6 +58,17 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     color: var(--text-secondary);
+}
+
+/* What happened to the whole file, in the Git colour the file tree gives a new
+   file, on a faint wash of it so it reads as a mark rather than as the path. */
+.happy-diff-snippet__tag {
+    box-sizing: border-box;
+    flex: none;
+    padding: 0 6px;
+    border-radius: 4px;
+    background: color-mix(in srgb, var(--git-status-new) 14%, transparent);
+    color: var(--git-status-new);
 }
 
 .happy-diff-snippet__stats {
@@ -198,4 +209,12 @@
         --happy-diff-text-optical-y: 0.25px;
         --happy-diff-gutter-optical-y: -0.25px;
     }
+}
+
+/* A created file read as a file: the shared highlighted code surface, on the
+   well's own background and with the same vertical inset as diff lines. */
+.happy-diff-snippet .happy-diff-snippet__source {
+    --diffs-gap-block: 8px;
+    --diffs-light-bg: var(--diff-context-bg);
+    --diffs-dark-bg: var(--diff-context-bg);
 }
