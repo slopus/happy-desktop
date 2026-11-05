@@ -151,6 +151,7 @@ import {
     happyAgentArtifactCatalogStoreNoop,
     type HappyAgentArtifactCatalogSnapshot,
     happyAgentArtifactChatContext,
+    happyAgentQuickSearchStoreNone,
     happyAgentSurfaceCatalogStoreNoop,
     happyAgentSurfaceSupportStoreNone,
     type HappyAgentStoriesSnapshot,
@@ -193,6 +194,8 @@ import {
     type HappyAgentSurfaceCreateKind,
     type HappyAgentSurfaceSupportSnapshot,
     type HappyAgentSurfaceId,
+    type HappyAgentVaultItemId,
+    type HappyAgentQuickSearchStore,
     type HappyAgentSurfaces,
     type HappyAgentTodoListStore,
     type HappyAgentSurfaceMessagesStore,
@@ -341,6 +344,7 @@ import { APP_SHORTCUTS } from "./appShortcuts";
 import { happyAgentConversationContent } from "happy-desktop-state";
 import { HappyAgentVersionProvider } from "./HappyAgentVersionProvider";
 import {
+    commandPaletteHeld,
     commandPaletteIndexMove,
     commandPaletteResults,
     commandPaletteRowAt,
@@ -675,6 +679,12 @@ export interface AppHappyAgentSession {
      * without them says so through its catalog, and the sidebar offers none.
      */
     readonly surfaces?: HappyAgentSurfaces;
+    /**
+     * What this Happy Agent's quick search finds for the palette's query, to
+     * fuse with what the palette finds itself. Absent, the palette's own
+     * answer stands alone.
+     */
+    readonly quickSearch?: HappyAgentQuickSearchStore;
 }
 
 export interface AppHappyAgentDirectorySnapshot {
@@ -4287,6 +4297,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
         workspace: active?.session?.workspace,
         surfaceCatalog: surfaceCatalogStore,
         ...(active?.session?.artifacts ? { artifacts: active.session.artifacts.search() } : {}),
+        ...(active?.session?.quickSearch ? { quickSearch: active.session.quickSearch } : {}),
         workspaceCreateProjectId: workspaceCreateTarget?.projectId,
         taskCreateAvailable: taskCreateTarget !== undefined,
         // A window that keeps no fold of its own leaves it to the shell, which
@@ -4320,6 +4331,17 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
         onTaskCreateOpen: props.onTaskCreateOpen,
         onSurfaceOpen: props.onSurfaceOpen,
         onArtifactOpen: props.onArtifactOpen,
+        ...(props.onSurfaceOpen && active?.session?.surfaces
+            ? {
+                  onVaultItemOpen: (happyAgentId: string, surfaceId: string, itemId: string) => {
+                      // The vault opens on the item, waiting for its tree if it has not been read.
+                      active.session?.surfaces
+                          ?.vault(surfaceId as HappyAgentSurfaceId)
+                          .itemOpen(itemId as HappyAgentVaultItemId);
+                      props.onSurfaceOpen?.(happyAgentId, surfaceId);
+                  },
+              }
+            : {}),
         store: commandPaletteStore,
         settings: settingsStore,
         sidebarVisibility: sidebarVisibilityStore,
@@ -4852,6 +4874,11 @@ interface HappyAgentPaletteSubject {
      * the palette is open, so a closed palette costs the connection nothing.
      */
     artifacts?: HappyAgentArtifactCatalogStore;
+    /**
+     * The machine's own quick search, asked as the query is typed and fused
+     * with what the palette finds itself. Absent, the palette's answer stands alone.
+     */
+    quickSearch?: HappyAgentQuickSearchStore;
     /** The window's own fold of its left side, when it keeps one. */
     sidebar?: { readonly hidden: boolean };
     /** What the sidebar on screen lists at its top level. */
@@ -4881,6 +4908,8 @@ interface HappyAgentPaletteActions {
     onTaskCreateOpen?(happyAgentId: string): void;
     onSurfaceOpen?(happyAgentId: string, surfaceId: string): void;
     onArtifactOpen?(happyAgentId: string, artifactId: string): void;
+    /** Opens a vault on one of its folders or files. */
+    onVaultItemOpen?(happyAgentId: string, surfaceId: string, itemId: string): void;
 }
 
 /**
@@ -5087,8 +5116,20 @@ function HappyAgentCommandPalette(
         artifactStore.get,
         artifactStore.get,
     );
+    // Subscribing is all it costs; the palette closing cancels a search still running.
+    const quickSearchStore = props.quickSearch ?? happyAgentQuickSearchStoreNone;
+    const quickSearch = useSyncExternalStore(
+        quickSearchStore.subscribe,
+        quickSearchStore.get,
+        quickSearchStore.get,
+    );
     const results = commandPaletteResults({
         ...paletteContext(props, props.facts),
+        // An answer to another query is no answer to this one.
+        ...(quickSearch.status === "ready" && quickSearch.query === palette.query.trim()
+            ? { remote: quickSearch.hits }
+            : {}),
+        held: palette.held,
         ...(surfaceCatalog.availability === "available"
             ? {
                   surfaces: {
@@ -5163,6 +5204,7 @@ function HappyAgentCommandPalette(
                 onClose={() => props.store.paletteClose()}
                 onQueryChange={(value) => {
                     props.store.queryUpdate(value);
+                    quickSearchStore.queryUpdate(value);
                     highlightIntent();
                 }}
                 onSelectionCommit={() => rowCommit(palette.activeIndex)}
@@ -5171,9 +5213,8 @@ function HappyAgentCommandPalette(
                     if (index !== undefined) rowCommit(index);
                 }}
                 onSelectionMove={(direction) => {
-                    props.store.activeIndexUpdate(
-                        commandPaletteIndexMove(palette.activeIndex, direction, length),
-                    );
+                    const index = commandPaletteIndexMove(palette.activeIndex, direction, length);
+                    props.store.activeIndexUpdate(index, commandPaletteHeld(results, index));
                     highlightIntent();
                 }}
                 placeholder="Search work, documents, todos, and artifacts…"
@@ -5186,7 +5227,7 @@ function HappyAgentCommandPalette(
                         : { emptyLabel: "Nothing recent yet" })}
                     label="Search results"
                     onActiveIndexChange={(index) => {
-                        props.store.activeIndexUpdate(index);
+                        props.store.activeIndexUpdate(index, commandPaletteHeld(results, index));
                         highlightIntent();
                     }}
                     onSelect={(_id, index) => rowCommit(index)}
@@ -5450,6 +5491,9 @@ function paletteCommandRun(
             return;
         case "artifactOpen":
             props.onArtifactOpen?.(command.happyAgentId, command.artifactId);
+            return;
+        case "vaultItemOpen":
+            props.onVaultItemOpen?.(command.happyAgentId, command.surfaceId, command.itemId);
             return;
         case "panelToggle":
             props.workspace?.panel.panelToggle();

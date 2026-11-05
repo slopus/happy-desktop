@@ -264,7 +264,7 @@ it("finds documents, open todos, and artifacts, and opens each where its own row
     act(() => palette.paletteOpen());
     expect(artifactsRead).toHaveBeenCalled();
     act(() => palette.queryUpdate("launch"));
-    // Sections follow their best match: two titles start with the query, the todo only contains it.
+    // One list, the better match first: two titles start with the query, the todo only contains it.
     expect(rowIds()).toEqual(["surface:srf_plan", "artifact:art_deck", "todo:todo_email"]);
     expect(
         [
@@ -272,7 +272,7 @@ it("finds documents, open todos, and artifacts, and opens each where its own row
                 '[data-happy-desktop-ui="command-palette-results-caption"]',
             ),
         ].map((caption) => caption.textContent),
-    ).toEqual(["Documents", "Artifacts", "Todos"]);
+    ).toEqual(["Results"]);
 
     rowClick("artifact:art_deck");
     expect(onArtifactOpen).toHaveBeenCalledExactlyOnceWith("local", "art_deck");

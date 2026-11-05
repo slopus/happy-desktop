@@ -136,6 +136,10 @@ import {
 import { happyAgentSurfaceChatGroupsCreate } from "../surfaces/surfaceChatGroups.js";
 import { happyAgentSurfacesCreate, type HappyAgentSurfaces } from "../surfaces/surfaces.js";
 import {
+    happyAgentQuickSearchStoreCreate,
+    type HappyAgentQuickSearchStore,
+} from "../commandPalette/quickSearchStore.js";
+import {
     happyAgentDeviceBridgesStoreCreate,
     type HappyAgentDeviceBridgesStore,
 } from "./happyAgentDeviceBridgesStore.js";
@@ -249,6 +253,12 @@ export interface HappyAgentWorkspaceClient {
      * Surfaces says so through the catalog's availability.
      */
     surfaces(): HappyAgentSurfaces;
+    /**
+     * What this Happy Agent's quick search finds for the command palette's
+     * query. Materialized on first access; a daemon without quick search
+     * answers nothing, and the palette's own answer stands alone.
+     */
+    quickSearch(): HappyAgentQuickSearchStore;
     /**
      * The document a presented-file preview shows, read into memory for the
      * host's viewer. Materialized on first access and shared, since one
@@ -609,6 +619,7 @@ export function happyAgentWorkspaceClientCreate(
                 : {}),
         }));
     let surfaces: HappyAgentSurfaces | undefined;
+    let quickSearch: HappyAgentQuickSearchStore | undefined;
     let toolMediaDocument: HappyAgentToolMediaDocumentStore | undefined;
     const deviceBridgeStores = new Map<HappyAgentGroupId, HappyAgentDeviceBridgesStore>();
     let deviceBridgeSupport: HappyAgentDeviceBridgeSupportStore | undefined;
@@ -833,6 +844,13 @@ export function happyAgentWorkspaceClientCreate(
                     : {}),
             });
             return surfaces;
+        },
+        quickSearch() {
+            if (disposed) throw new Error("The Happy Agent client is disposed.");
+            return (quickSearch ??= happyAgentQuickSearchStoreCreate({
+                client: deps.client,
+                sync: deps.connection.sync,
+            }));
         },
         toolMediaDocument() {
             if (disposed) throw new Error("The Happy Agent client is disposed.");
@@ -1150,6 +1168,7 @@ export function happyAgentWorkspaceClientCreate(
             feed?.[Symbol.dispose]();
             feed = undefined;
             surfaces?.[Symbol.dispose]();
+            quickSearch?.[Symbol.dispose]();
             surfaces = undefined;
             deps.catalogSource[Symbol.dispose]();
             for (const binding of chats.values()) {

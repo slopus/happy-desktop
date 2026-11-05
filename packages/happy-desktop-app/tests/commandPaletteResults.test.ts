@@ -7,6 +7,7 @@ import type {
     HappyAgentGroupId,
     HappyAgentProjectGroup,
     HappyAgentProjectId,
+    HappyAgentQuickSearchHit,
     HappyAgentRecentTabMemory,
     HappyAgentSessionId,
     HappyAgentSurface,
@@ -15,12 +16,17 @@ import type {
     HappyAgentSurfaceTodoId,
     HappyAgentTask,
     HappyAgentTaskId,
+    HappyAgentVaultItemId,
     HappyAgentWorktreeGroup,
     HappyAgentWorktreeId,
 } from "happy-desktop-state";
 import { commandShortcut } from "happy-desktop-ui";
 import { APP_SHORTCUTS } from "../sources/appShortcuts";
-import { commandPaletteResults, type CommandPaletteInput } from "../sources/commandPaletteResults";
+import {
+    commandPaletteHeld,
+    commandPaletteResults,
+    type CommandPaletteInput,
+} from "../sources/commandPaletteResults";
 import { happyAgentSettingsCategoryExists } from "../sources/views/AppHappyAgentSettingsView";
 
 const NOW = 1_764_000_000_000;
@@ -201,7 +207,7 @@ it("wears the sidebar's marks: pictures in rounded tiles, else the placeholder i
 
 it("searches titles only, sidebar work first, and lets a subtask's title find its parent", () => {
     const result = commandPaletteResults(input({ query: "search" }));
-    expect(result.sections.map((section) => section.id)).toEqual(["work", "archived"]);
+    expect(result.sections.map((section) => section.id)).toEqual(["results", "archived"]);
     expect(ids(result)).toEqual([
         "workspace:prj_infra",
         "task:cmdk",
@@ -220,7 +226,7 @@ it("ranks a recently opened match above an older one of the same quality", () =>
     const result = commandPaletteResults(
         input({ query: "e", visits: [visit("ws_release", "ses_notes")] }),
     );
-    const work = result.sections.find((section) => section.id === "work");
+    const work = result.sections.find((section) => section.id === "results");
     expect(work?.rows[0]?.id).toBe("task:release");
 });
 
@@ -252,7 +258,11 @@ it("lists a section with a better answer first", () => {
             sidebar: { hidden: false },
         }),
     );
-    expect(result.sections.map((section) => section.id)).toEqual(["actions", "work", "settings"]);
+    expect(result.sections.map((section) => section.id)).toEqual([
+        "actions",
+        "results",
+        "settings",
+    ]);
 });
 
 it.each([false, true])(
@@ -304,7 +314,7 @@ it("numbers the first nine rows that open something for ⌘1…⌘9, never an ac
     );
     expect(typed.sections.map((section) => section.id)).toEqual([
         "actions",
-        "work",
+        "results",
         "settings",
         "archived",
     ]);
@@ -408,25 +418,27 @@ it("finds documents, open todos, artifacts, and other shared Surfaces by name", 
     const result = commandPaletteResults(
         input({ query: "search", surfaces: SOURCES, artifacts: ARTIFACTS }),
     );
-    expect(result.sections.map((section) => section.id)).toEqual([
-        "work",
-        "documents",
-        "todos",
-        "artifacts",
-        "shared",
-        "archived",
+    expect(result.sections.map((section) => section.id)).toEqual(["results", "archived"]);
+    // One list, the better match first whatever it is: every title here starts with
+    // the query but the task's. Among equals, what the reader joined or the sidebar
+    // lists comes first, then what changed last.
+    expect(ids(result)).toEqual([
+        "artifact:art_deck",
+        "artifact:art_shot",
+        "workspace:prj_infra",
+        "surface:srf_roadmap",
+        "surface:srf_spec",
+        // A joined document before one the reader has not joined, however recent.
+        "surface:srf_notes",
+        // A todo is found by what it says, never by its list's name, and below the
+        // lists themselves.
+        "todo:todo_copy",
+        "task:cmdk",
+        "task:search_old",
     ]);
-    const section = (id: string) =>
-        result.sections.find((entry) => entry.id === id)?.rows.map((row) => row.id);
-    // A joined document before one the reader has not joined, however recent.
-    expect(section("documents")).toEqual(["surface:srf_spec", "surface:srf_notes"]);
-    // A todo is found by what it says, never by its list's name.
-    expect(section("todos")).toEqual(["todo:todo_copy"]);
-    // A deleted artifact is not offered.
-    expect(section("artifacts")).toEqual(["artifact:art_deck", "artifact:art_shot"]);
-    // A calendar is another shared Surface; a Surface that only points at an
-    // artifact is found under the artifact's own title.
-    expect(section("shared")).toEqual(["surface:srf_roadmap"]);
+    // A deleted artifact is not offered; a calendar is another shared Surface; a
+    // Surface that only points at an artifact is found under the artifact's own title.
+    expect(ids(result)).not.toContain("artifact:art_gone");
     expect(ids(result)).not.toContain("surface:srf_kept");
 
     expect(result.rows.find((row) => row.id === "surface:srf_notes")).toMatchObject({
@@ -448,7 +460,7 @@ it("finds documents, open todos, artifacts, and other shared Surfaces by name", 
 
 it("finds a todo list by its name and says how much is left in it", () => {
     const result = commandPaletteResults(input({ query: "launch", surfaces: SOURCES }));
-    expect(result.sections.map((section) => section.id)).toEqual(["todos"]);
+    expect(result.sections.map((section) => section.id)).toEqual(["results"]);
     expect(result.rows[0]).toMatchObject({
         id: "surface:srf_launch",
         meta: "Todo list · 2 open",
@@ -461,4 +473,110 @@ it("finds a todo list by its name and says how much is left in it", () => {
 it("offers no documents, todos, or artifacts on an empty palette", () => {
     const result = commandPaletteResults(input({ surfaces: SOURCES, artifacts: ARTIFACTS }));
     expect(result.sections.map((section) => section.id)).toEqual(["recent"]);
+});
+
+const VAULT = surface("srf_vault", "Team vault", { kind: "vault" }, 50);
+
+const REMOTE: readonly HappyAgentQuickSearchHit[] = [
+    {
+        type: "vault_file",
+        key: "vault_file:vf_budget",
+        rank: 1,
+        surfaceId: VAULT.id,
+        fileId: "vf_budget" as HappyAgentVaultItemId,
+        name: "budget.md",
+        path: "/Reports/budget.md",
+        kind: "file",
+        match: "content",
+        innerPath: null,
+        line: 3,
+        snippet: "the search budget for Q3",
+    },
+    {
+        type: "document",
+        key: "document:srf_spec",
+        rank: 2,
+        surfaceId: SPEC.id,
+        name: "Search ranking spec",
+        match: "content",
+        line: 12,
+        snippet: "…ranking search results by…",
+    },
+    // Neither archived work nor a chat this window does not hold is offered.
+    {
+        type: "agent",
+        key: "agent:ses_search_old",
+        rank: 3,
+        agentId: "ses_search_old" as HappyAgentSessionId,
+        title: "Search experiment, take one",
+        kind: "task",
+        archived: true,
+    },
+    {
+        type: "agent",
+        key: "agent:ses_elsewhere",
+        rank: 4,
+        agentId: "ses_elsewhere" as HappyAgentSessionId,
+        title: "Search elsewhere",
+        kind: "chat",
+        archived: false,
+    },
+];
+
+it("fuses the Happy Agent's answer into the found rows, keeping the top row and every local row's identity", () => {
+    const base = input({
+        query: "search",
+        surfaces: { ...SOURCES, surfaces: [...SOURCES.surfaces, VAULT] },
+    });
+    const before = commandPaletteResults(base);
+    const after = commandPaletteResults({ ...base, remote: REMOTE });
+    const found = (result: ReturnType<typeof commandPaletteResults>) =>
+        result.sections.find((section) => section.id === "results")!.rows;
+    // The row the reader was looking at stays at the top; the vault file the Happy
+    // Agent ranked first, and the spec it found by its text too, come next.
+    expect(
+        found(after)
+            .map((row) => row.id)
+            .slice(0, 3),
+    ).toEqual([found(before)[0]!.id, "surface:srf_spec", "vault_file:vf_budget"]);
+    // A document both found is one row, keeping this window's id, saying where the words are.
+    expect(found(after).filter((row) => row.id === "surface:srf_spec")).toHaveLength(1);
+    expect(after.rows.find((row) => row.id === "surface:srf_spec")).toMatchObject({
+        meta: "…ranking search results by…",
+        command: { kind: "surfaceOpen", surfaceId: "srf_spec" },
+    });
+    expect(after.rows.find((row) => row.id === "vault_file:vf_budget")).toMatchObject({
+        title: "budget.md",
+        meta: "the search budget for Q3",
+        glyph: { kind: "icon", name: "doc" },
+        command: {
+            kind: "vaultItemOpen",
+            happyAgentId: "local",
+            surfaceId: "srf_vault",
+            itemId: "vf_budget",
+        },
+    });
+    expect(ids(after)).not.toContain("agent:ses_elsewhere");
+    expect(ids(after).filter((id) => id === "task:search_old")).toHaveLength(1);
+    expect(after.found.keys[0]).toBe(before.found.keys[0]);
+});
+
+it("keeps the rows the reader has passed where they were when the Happy Agent answers", () => {
+    const base = input({ query: "search", surfaces: SOURCES, artifacts: ARTIFACTS });
+    const before = commandPaletteResults(base);
+    // The reader arrowed down to the third row before the answer arrived.
+    const held = commandPaletteHeld(before, 2);
+    expect(held).toEqual(before.found.keys.slice(0, 3));
+    const after = commandPaletteResults({ ...base, remote: REMOTE, held });
+    expect(after.rows.slice(0, 3).map((row) => row.id)).toEqual(
+        before.rows.slice(0, 3).map((row) => row.id),
+    );
+    expect(ids(after)).toContain("vault_file:vf_budget");
+    // Arrowing on through what is shown now holds what is shown now.
+    const further = commandPaletteResults({
+        ...base,
+        remote: REMOTE,
+        held: commandPaletteHeld(after, 4),
+    });
+    expect(ids(further)).toEqual(ids(after));
 });

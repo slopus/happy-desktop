@@ -42,6 +42,7 @@ import {
     type HappyAgentSecurityPolicyStore,
     type HappyAgentSecretsStore,
     type HappyAgentArtifacts,
+    type HappyAgentQuickSearchStore,
     type HappyAgentSurfaces,
     type HappyAgentSessionLocation,
     type HappyAgentWorkspaceMemoryDocument,
@@ -158,6 +159,8 @@ export interface HappyAgentSession {
     readonly feed: import("happy-desktop-state").HappyAgentFeed;
     /** This Happy Agent's shared Surfaces, such as todo lists, materialized as they open. */
     readonly surfaces: HappyAgentSurfaces;
+    /** What this Happy Agent's quick search finds for the command palette's query. */
+    readonly quickSearch: HappyAgentQuickSearchStore;
     readonly clock: HappyAgentClockStore;
 }
 
@@ -624,6 +627,7 @@ export function happyAgentConnectionOpen(input: {
                     artifacts: client.artifacts(),
                     feed: client.feed(),
                     surfaces: client.surfaces(),
+                    quickSearch: client.quickSearch(),
                     clock,
                 };
                 debugEntry({

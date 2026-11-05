@@ -73,6 +73,7 @@ export interface HappyAgentVaultStore {
     /**
      * Opens an item: a folder is shown, a file or an artifact opens in the
      * preview in its folder's place. An item in the Trash opens in the preview.
+     * Asked before the vault is first read, it opens once it is.
      */
     itemOpen(itemId: HappyAgentVaultItemId): void;
     previewClose(): void;
@@ -384,6 +385,8 @@ export function happyAgentVaultStoreCreate(deps: HappyAgentVaultDeps): HappyAgen
     };
     let trashTimer: ReturnType<typeof setTimeout> | undefined;
     let trashRead: AbortController | undefined;
+    /** An item asked to open before the tree was first read, opened once it is. */
+    let openWaiting: HappyAgentVaultItemId | undefined;
     const agentsAsked = new Set<string>();
 
     let snapshot: HappyAgentVaultSnapshot = {
@@ -1074,6 +1077,11 @@ export function happyAgentVaultStoreCreate(deps: HappyAgentVaultDeps): HappyAgen
                 authoritative = read;
                 for (const event of journal.slice(mark)) eventApply(event);
                 republish({ status: "ready" });
+                if (openWaiting !== undefined) {
+                    const itemId = openWaiting;
+                    openWaiting = undefined;
+                    store.itemOpen(itemId);
+                }
                 if (snapshot.preview !== undefined) historyLoad(false);
                 trashSchedule();
             })
@@ -1474,6 +1482,7 @@ export function happyAgentVaultStoreCreate(deps: HappyAgentVaultDeps): HappyAgen
         },
         folderOpen(folderId) {
             if (disposed) return;
+            openWaiting = undefined;
             if (folderId !== null && !snapshot.items.has(folderId)) return;
             const { selectedId: _selected, ...rest } = snapshot;
             snapshot = rest;
@@ -1482,6 +1491,7 @@ export function happyAgentVaultStoreCreate(deps: HappyAgentVaultDeps): HappyAgen
         },
         trashShow() {
             if (disposed || snapshot.location.kind === "trash") return;
+            openWaiting = undefined;
             const { selectedId: _selected, ...rest } = snapshot;
             snapshot = rest;
             previewDrop();
@@ -1498,7 +1508,13 @@ export function happyAgentVaultStoreCreate(deps: HappyAgentVaultDeps): HappyAgen
         },
         itemOpen(itemId) {
             if (disposed) return;
+            openWaiting = undefined;
             const live = snapshot.items.get(itemId);
+            if (live === undefined && snapshot.status === "loading") {
+                // Opened from outside the vault, as a search hit is, before its tree is read.
+                openWaiting = itemId;
+                return;
+            }
             if (live?.kind === "folder") {
                 store.folderOpen(itemId);
                 return;

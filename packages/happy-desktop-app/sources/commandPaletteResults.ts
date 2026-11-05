@@ -13,10 +13,19 @@ import type {
     HappyAgentTask,
     HappyAgentWorktreeGroup,
     HappyAgentLinkOpenPlacement,
+    HappyAgentQuickSearchHit,
     ScrollbarVisibility,
     ThemeMode,
 } from "happy-desktop-state";
-import { happyAgentArtifactTypeLabel, happyAgentSessionGroupIdOf } from "happy-desktop-state";
+import {
+    happyAgentArtifactTypeLabel,
+    happyAgentSessionGroupIdOf,
+    happyAgentVaultNameShown,
+    happyAgentVaultPathShown,
+    quickSearchFuse,
+    type QuickSearchEntry,
+    type QuickSearchRemoteEntry,
+} from "happy-desktop-state";
 import {
     commandShortcut,
     surfaceTypeIcon,
@@ -81,6 +90,13 @@ export type CommandPaletteCommand =
     | { readonly kind: "workspaceOpen"; readonly happyAgentId: string; readonly groupId: string }
     | { readonly kind: "surfaceOpen"; readonly happyAgentId: string; readonly surfaceId: string }
     | { readonly kind: "artifactOpen"; readonly happyAgentId: string; readonly artifactId: string }
+    /** A folder or file in a vault, opened in its vault as its own row there would open it. */
+    | {
+          readonly kind: "vaultItemOpen";
+          readonly happyAgentId: string;
+          readonly surfaceId: string;
+          readonly itemId: string;
+      }
     | {
           readonly kind: "fileOpen";
           readonly happyAgentId: string;
@@ -178,12 +194,8 @@ export type CommandPaletteRow = CommandPaletteCommandRow | CommandPaletteSetting
 export type CommandPaletteSectionId =
     | "update"
     | "recent"
-    | "work"
-    | "tabs"
-    | "documents"
-    | "todos"
-    | "artifacts"
-    | "shared"
+    /** What a typed query finds, this window's answer and the Happy Agent's fused into one list. */
+    | "results"
     | "actions"
     | "settings"
     | "archived";
@@ -209,6 +221,23 @@ export interface CommandPaletteResults {
      * own chords or controls already say what they do.
      */
     readonly numbered: readonly number[];
+    /**
+     * Where the found rows are in the flat list and the quick-search key of
+     * each, in order: what the palette records as the rows the reader has
+     * passed when the highlight moves, so they keep their places when the
+     * Happy Agent's answer arrives.
+     */
+    readonly found: { readonly start: number; readonly keys: readonly string[] };
+}
+
+/**
+ * The quick-search keys of the found rows the reader has passed, from the top
+ * through the highlighted row at `index`.
+ */
+export function commandPaletteHeld(results: CommandPaletteResults, index: number): string[] {
+    const { start, keys } = results.found;
+    if (index < start) return [];
+    return keys.slice(0, Math.min(keys.length, index - start + 1));
 }
 
 /** One tab of the open workspace, as the surface that owns the strip states it. */
@@ -308,6 +337,13 @@ export interface CommandPaletteSurfaceSources {
 
 export interface CommandPaletteInput extends CommandPaletteContext {
     readonly query: string;
+    /**
+     * What the Happy Agent's quick search found for this same query, once it
+     * has answered. Absent, the palette's own answer stands alone.
+     */
+    readonly remote?: readonly HappyAgentQuickSearchHit[];
+    /** The found rows the reader has passed, by key, as the palette recorded them. */
+    readonly held?: readonly string[];
     readonly surfaces?: CommandPaletteSurfaceSources;
     /** The artifacts the palette's own catalog has read, newest first. */
     readonly artifacts?: readonly HappyAgentArtifact[];
@@ -574,11 +610,18 @@ function rowRank(
 /** A row offered by a match, carried with what orders it against its peers. */
 interface Ranked {
     readonly row: CommandPaletteRow;
+    /**
+     * The thing's quick-search key, `<type>:<id>`, for a row a typed query
+     * finds: the key the Happy Agent's answer names the same thing by.
+     */
+    readonly key?: string;
     readonly rank: number;
     /** Among equal matches, lower first: a Surface the reader joined before one they did not. */
     readonly tier?: number;
     /** Epoch milliseconds of last activity, for the entities that have one. */
     readonly updatedAt: number;
+    /** How long ago the reader last opened it, for work: 0 for the last thing opened. */
+    readonly visit?: number;
 }
 
 /**
@@ -674,6 +717,8 @@ function subtasksOf(subtasks: readonly HappyAgentBotSubtask[]): HappyAgentBotSub
  */
 interface WorkOffer {
     readonly row: CommandPaletteCommandRow;
+    /** Its quick-search key: `agent:` and the conversation for a chat, a task, or a bot. */
+    readonly key: string;
     /**
      * 0 for a top-level row of the sidebar on screen, 1 for any other live
      * work, 2 for work that is over — an archived task, a closed session —
@@ -731,6 +776,7 @@ function workOffers(context: CommandPaletteContext): WorkOffer[] {
         for (const subtask of subtasks) subtaskWorkspaces.add(subtask.workspaceId);
         const listed = joined.has(task.id) && !task.archived;
         push({
+            key: `agent:${task.conversation.id}`,
             tier: task.archived ? 2 : listed ? 0 : 1,
             sessions: new Set([
                 task.conversation.id,
@@ -760,6 +806,7 @@ function workOffers(context: CommandPaletteContext): WorkOffer[] {
         for (const subtask of subtasks) subtaskWorkspaces.add(subtask.workspaceId);
         const listed = !listing.botsHidden.has(bot.id);
         push({
+            key: `agent:${bot.conversation.id}`,
             tier: listed ? 0 : 1,
             sessions: new Set([bot.conversation.id, ...subtasks.map((sub) => sub.conversation.id)]),
             groups: NONE,
@@ -778,6 +825,7 @@ function workOffers(context: CommandPaletteContext): WorkOffer[] {
     const projectsListed = !listing.projectsHidden;
     for (const project of context.projects) {
         push({
+            key: `project:${project.id}`,
             tier: projectsListed ? 0 : 1,
             sessions: NONE,
             groups: new Set([project.id]),
@@ -795,6 +843,7 @@ function workOffers(context: CommandPaletteContext): WorkOffer[] {
         for (const worktree of project.worktrees) {
             if (subtaskWorkspaces.has(worktree.id)) continue;
             push({
+                key: `workspace:${worktree.id}`,
                 tier: projectsListed ? 0 : 1,
                 sessions: NONE,
                 groups: new Set([worktree.id]),
@@ -823,6 +872,7 @@ function workOffers(context: CommandPaletteContext): WorkOffer[] {
         for (const { worktree, conversations } of groups)
             for (const summary of conversations)
                 push({
+                    key: `agent:${summary.id}`,
                     tier: 1,
                     sessions: new Set([summary.id]),
                     groups: NONE,
@@ -845,6 +895,7 @@ function workOffers(context: CommandPaletteContext): WorkOffer[] {
         const owner = groupFind(context.projects, groupId);
         if (!owner) continue;
         push({
+            key: `agent:${session.id}`,
             tier: 2,
             sessions: new Set([session.id]),
             groups: NONE,
@@ -930,6 +981,9 @@ function workRanked(
         .slice(0, limit)
         .map((entry) => ({
             rank: entry.match,
+            key: entry.offer.key,
+            tier: entry.offer.tier,
+            visit: entry.visit,
             updatedAt: entry.offer.updatedAt,
             row: entry.offer.row,
         }));
@@ -951,6 +1005,7 @@ function tabRows(input: CommandPaletteInput): Ranked[] {
         if (rank === undefined) continue;
         rows.push({
             rank,
+            key: `tab:${tab.id}`,
             updatedAt: 0,
             row: {
                 kind: "command",
@@ -1049,6 +1104,7 @@ function surfaceRows(input: CommandPaletteInput): {
             .join(" · ");
         const entry: Ranked = {
             rank,
+            key: kind === "document" ? `document:${surface.id}` : `surface:${surface.id}`,
             tier: joined ? 0 : 1,
             updatedAt: surface.updatedAt,
             row: {
@@ -1072,6 +1128,7 @@ function surfaceRows(input: CommandPaletteInput): {
             if (rank === undefined) continue;
             todos.push({
                 rank,
+                key: `todo:${todo.id}`,
                 // The list itself outranks its todos when both match equally.
                 tier: 2,
                 updatedAt: todo.updatedAt,
@@ -1100,6 +1157,7 @@ function artifactRows(input: CommandPaletteInput): Ranked[] {
         if (rank === undefined) continue;
         rows.push({
             rank,
+            key: `artifact:${artifact.id}`,
             updatedAt: artifact.updatedAt,
             row: {
                 kind: "command",
@@ -1394,87 +1452,349 @@ export function commandPaletteSuggestionSections(
     ];
 }
 
+/** How many found rows the palette's own answer offers to the fusion, and how many it shows. */
+const FOUND_LIMIT = 12;
+
+/**
+ * What a typed query finds among the snapshots this window holds, best first:
+ * live work, the open workspace's files, documents, todos, artifacts, and
+ * other shared Surfaces, each with its quick-search key. The better match
+ * comes first whatever it is; among equals, what the sidebar lists or the
+ * reader joined, then what they opened last, then what changed last.
+ */
+function localFound(input: CommandPaletteInput, offers: readonly WorkOffer[]): Ranked[] {
+    const query = input.query.trim().toLowerCase();
+    const surfaces = surfaceRows(input);
+    const work = workRanked(
+        offers.filter((offer) => offer.tier < 2),
+        input,
+        (offer) => rowRank(query, offer.row.title, ...offer.keywords),
+        Infinity,
+    );
+    return [
+        ...work,
+        ...tabRows(input),
+        ...surfaces.documents,
+        ...surfaces.todos,
+        ...artifactRows(input),
+        ...surfaces.shared,
+    ]
+        .sort(
+            (left, right) =>
+                left.rank - right.rank ||
+                (left.tier ?? 0) - (right.tier ?? 0) ||
+                (left.visit ?? Infinity) - (right.visit ?? Infinity) ||
+                right.updatedAt - left.updatedAt,
+        )
+        .slice(0, FOUND_LIMIT);
+}
+
+/**
+ * A found row, with the text a content match was found in when the Happy
+ * Agent says, which is then the row's second line.
+ */
+interface FoundRow {
+    readonly row: CommandPaletteCommandRow;
+    readonly snippet?: string;
+}
+
+/** A row the Happy Agent found by its text, saying the words where its second line was. */
+function snippetShown(found: FoundRow): FoundRow {
+    return found.snippet === undefined
+        ? found
+        : { ...found, row: { ...found.row, meta: found.snippet } };
+}
+
+const ARTIFACT_TYPES: ReadonlySet<string> = new Set<HappyAgentArtifactType>([
+    "markdown",
+    "html",
+    "image",
+    "image_series",
+    "video",
+    "document",
+    "unknown",
+]);
+
+/** The artifact type the Happy Agent named, or `unknown` for one this build does not know. */
+function artifactTypeOf(type: string): HappyAgentArtifactType {
+    return ARTIFACT_TYPES.has(type) ? (type as HappyAgentArtifactType) : "unknown";
+}
+
+/** A calendar event's next day, as a row's second line says it. */
+function eventDayText(start: number, allDay: boolean): string {
+    const date = new Date(start);
+    return allDay
+        ? date.toLocaleDateString(undefined, { month: "short", day: "numeric" })
+        : date.toLocaleString(undefined, {
+              month: "short",
+              day: "numeric",
+              hour: "numeric",
+              minute: "2-digit",
+          });
+}
+
+/**
+ * One thing the Happy Agent found, as the row that opens it here. A chat,
+ * task, or bot opens only where this window holds it, since that is where its
+ * workspace is known; one it does not hold, and anything archived, which the
+ * palette lists apart, is left out.
+ */
+function remoteRow(
+    hit: HappyAgentQuickSearchHit,
+    input: CommandPaletteInput,
+    work: ReadonlyMap<string, WorkOffer>,
+): FoundRow | undefined {
+    const happyAgentId = input.happyAgentId;
+    const surfaceOf = (surfaceId: string) =>
+        input.surfaces?.surfaces.find((surface) => surface.id === surfaceId);
+    const surfaceOpen = (surfaceId: string): CommandPaletteCommand => ({
+        kind: "surfaceOpen",
+        happyAgentId,
+        surfaceId,
+    });
+    const snippet = (text: string | null) => (text === null ? {} : { snippet: text });
+    switch (hit.type) {
+        case "vault_file":
+        case "vault_folder": {
+            const vault = surfaceOf(hit.surfaceId)?.name;
+            const path = happyAgentVaultPathShown(hit.path);
+            const where = vault === undefined ? path : `${vault} · ${path}`;
+            const itemId = hit.type === "vault_file" ? hit.fileId : hit.folderId;
+            return {
+                row: {
+                    kind: "command",
+                    id: hit.key,
+                    title: happyAgentVaultNameShown(hit.name),
+                    meta: where,
+                    glyph: {
+                        kind: "icon",
+                        name:
+                            hit.type === "vault_folder"
+                                ? "files"
+                                : hit.kind === "artifact"
+                                  ? "globe"
+                                  : "doc",
+                    },
+                    command: {
+                        kind: "vaultItemOpen",
+                        happyAgentId,
+                        surfaceId: hit.surfaceId,
+                        itemId,
+                    },
+                },
+                ...(hit.type === "vault_file" && hit.match === "content"
+                    ? snippet(hit.snippet)
+                    : {}),
+            };
+        }
+        case "document": {
+            const surface = surfaceOf(hit.surfaceId);
+            return {
+                row: {
+                    kind: "command",
+                    id: hit.key,
+                    title: hit.name,
+                    meta: "Document",
+                    glyph: surface ? surfaceGlyph(surface) : { kind: "icon", name: "doc" },
+                    command: surfaceOpen(hit.surfaceId),
+                },
+                ...(hit.match === "content" ? snippet(hit.snippet) : {}),
+            };
+        }
+        case "todo": {
+            const list = surfaceOf(hit.surfaceId)?.name;
+            return {
+                row: {
+                    kind: "command",
+                    id: hit.key,
+                    title: hit.text,
+                    meta: [hit.status === "completed" ? "Done" : undefined, list]
+                        .filter((part) => part !== undefined)
+                        .join(" · "),
+                    glyph: { kind: "icon", name: "check" },
+                    command: surfaceOpen(hit.surfaceId),
+                },
+            };
+        }
+        case "calendar_event": {
+            const calendar = surfaceOf(hit.surfaceId)?.name;
+            const day = eventDayText(hit.start, hit.allDay);
+            return {
+                row: {
+                    kind: "command",
+                    id: hit.key,
+                    title: hit.title,
+                    meta: calendar === undefined ? day : `${calendar} · ${day}`,
+                    glyph: { kind: "icon", name: "calendar" },
+                    command: surfaceOpen(hit.surfaceId),
+                },
+            };
+        }
+        case "artifact": {
+            const type = artifactTypeOf(hit.artifactType);
+            return {
+                row: {
+                    kind: "command",
+                    id: hit.key,
+                    title: hit.title,
+                    meta: happyAgentArtifactTypeLabel(type),
+                    glyph: { kind: "icon", name: artifactGlyph(type) },
+                    command: { kind: "artifactOpen", happyAgentId, artifactId: hit.artifactId },
+                },
+                ...(hit.match === "content" ? snippet(hit.snippet) : {}),
+            };
+        }
+        case "surface": {
+            const surface = surfaceOf(hit.surfaceId);
+            return {
+                row: {
+                    kind: "command",
+                    id: hit.key,
+                    title: hit.name,
+                    meta: surface ? surfaceTypeLabel(surface.type) : "Shared",
+                    glyph: surface ? surfaceGlyph(surface) : { kind: "icon", name: "list" },
+                    command: surfaceOpen(hit.surfaceId),
+                },
+            };
+        }
+        case "agent":
+        case "project":
+        case "workspace": {
+            if (hit.archived) return undefined;
+            const offer = work.get(hit.key);
+            if (offer !== undefined) return offer.tier < 2 ? { row: offer.row } : undefined;
+            if (hit.type === "agent") return undefined;
+            const groupId = hit.type === "project" ? hit.projectId : hit.workspaceId;
+            const project =
+                hit.type === "workspace"
+                    ? input.projects.find((group) => group.id === hit.projectId)
+                    : undefined;
+            return {
+                row: {
+                    kind: "command",
+                    id: hit.key,
+                    title: hit.name,
+                    ...(project === undefined ? {} : { meta: project.name }),
+                    glyph: { kind: "icon", name: hit.type === "project" ? "files" : "branch" },
+                    command: { kind: "workspaceOpen", happyAgentId, groupId },
+                },
+            };
+        }
+    }
+}
+
+/**
+ * The rows a typed query finds: this window's answer, fused with the Happy
+ * Agent's once it arrives, with the rows the reader has already passed kept
+ * where they were. A thing both found keeps this window's row, and its
+ * identity, saying where a content match was found when the Happy Agent says.
+ */
+function foundRows(
+    input: CommandPaletteInput,
+    offers: readonly WorkOffer[],
+): { readonly rows: CommandPaletteCommandRow[]; readonly keys: string[]; readonly best: number } {
+    const local = localFound(input, offers);
+    const localEntries: QuickSearchEntry<FoundRow>[] = local.flatMap((entry) =>
+        entry.key === undefined || entry.row.kind !== "command"
+            ? []
+            : [{ key: entry.key, row: { row: entry.row } }],
+    );
+    let remote: QuickSearchRemoteEntry<FoundRow>[] | undefined;
+    if (input.remote !== undefined) {
+        const work = new Map(offers.map((offer) => [offer.key, offer]));
+        remote = input.remote.flatMap((hit) => {
+            const row = remoteRow(hit, input, work);
+            return row === undefined
+                ? []
+                : [{ key: hit.key, rank: hit.rank, row: snippetShown(row) }];
+        });
+    }
+    const fused = quickSearchFuse<FoundRow>({
+        local: localEntries,
+        ...(remote === undefined ? {} : { remote }),
+        held: input.held ?? [],
+        merge: (mine, theirs) =>
+            snippetShown({
+                row: mine.row,
+                ...(theirs.snippet === undefined ? {} : { snippet: theirs.snippet }),
+            }),
+    }).slice(0, Math.max(FOUND_LIMIT, input.held?.length ?? 0));
+    return {
+        rows: fused.map((entry) => entry.row.row),
+        keys: fused.map((entry) => entry.key),
+        // Only this window's own matches place the list among the sections, so the
+        // Happy Agent's answer arriving never moves it.
+        best: local.length > 0 ? Math.min(...local.map((entry) => entry.rank)) : Infinity,
+    };
+}
+
 /**
  * Everything the palette is currently offering, as the flat list its highlight
  * addresses and as the sections it draws.
  *
- * An empty query answers with what the reader is likely to open next; anything
- * typed searches the whole machine — its work, the open workspace's files,
- * its documents, todos, artifacts, and other shared Surfaces, the window's
- * acts and its settings. The sections a query finds are listed by their best
- * answer, so a typed act ("fold sidebar") is not left under work that merely
- * contains one of its words, while equal answers keep the order work, files,
- * documents, todos, artifacts, shared, actions, settings.
+ * An empty query answers with what the reader is likely to open next. Anything
+ * typed searches the whole machine: one list of what it finds — its work, the
+ * open workspace's files, documents, todos, artifacts, shared Surfaces, and
+ * whatever the Happy Agent's quick search adds, vault files and calendar
+ * events among them — then the window's acts and its settings. Those three
+ * are listed by their best answer, so a typed act ("fold sidebar") is not left
+ * under work that merely contains one of its words. Work that is over comes
+ * last.
  */
 export function commandPaletteResults(input: CommandPaletteInput): CommandPaletteResults {
     const query = input.query.trim().toLowerCase();
     const sections: CommandPaletteSection[] = [];
+    let found: readonly string[] = [];
     if (query.length === 0) {
         for (const section of commandPaletteSuggestionSections(input))
             if (section.rows.length > 0) sections.push(section);
     } else {
         const offers = workOffers(input);
-        const surfaces = surfaceRows(input);
+        const results = foundRows(input, offers);
+        found = results.keys;
         const workRank = (offer: WorkOffer) => rowRank(query, offer.row.title, ...offer.keywords);
         const offered: readonly {
             readonly id: CommandPaletteSectionId;
             readonly label: string;
-            readonly rows: readonly Ranked[];
+            readonly rows: readonly CommandPaletteRow[];
+            readonly best: number;
         }[] = [
-            {
-                id: "work",
-                label: "Work",
-                rows: workRanked(
-                    offers.filter((offer) => offer.tier < 2),
-                    input,
-                    workRank,
-                    SECTION_LIMIT,
-                ),
-            },
-            { id: "tabs", label: "Files", rows: rankedOf(tabRows(input), SECTION_LIMIT) },
-            {
-                id: "documents",
-                label: "Documents",
-                rows: rankedOf(surfaces.documents, SECTION_LIMIT),
-            },
-            { id: "todos", label: "Todos", rows: rankedOf(surfaces.todos, SECTION_LIMIT) },
-            {
-                id: "artifacts",
-                label: "Artifacts",
-                rows: rankedOf(artifactRows(input), SECTION_LIMIT),
-            },
-            { id: "shared", label: "Shared", rows: rankedOf(surfaces.shared, SECTION_LIMIT) },
-            {
-                id: "actions",
-                label: "Actions",
-                rows: rankedOf(
-                    actionOffers(input, updateRow(input)).flatMap((offer) => {
-                        const rank = rowRank(
-                            query,
-                            offer.row.title,
-                            offer.row.meta,
-                            offer.keywords,
-                        );
-                        return rank === undefined ? [] : [{ rank, updatedAt: 0, row: offer.row }];
-                    }),
-                    SECTION_LIMIT,
-                ),
-            },
-            {
-                id: "settings",
-                label: "Settings",
-                rows: rankedOf(settingsSectionRows(input), SECTION_LIMIT),
-            },
-        ];
-        const best = (rows: readonly Ranked[]) => Math.min(...rows.map((row) => row.rank));
-        for (const section of offered
-            .filter((candidate) => candidate.rows.length > 0)
-            .sort((left, right) => best(left.rows) - best(right.rows)))
-            sections.push({
+            { id: "results", label: "Results", rows: results.rows, best: results.best },
+            ...[
+                {
+                    id: "actions" as const,
+                    label: "Actions",
+                    rows: rankedOf(
+                        actionOffers(input, updateRow(input)).flatMap((offer) => {
+                            const rank = rowRank(
+                                query,
+                                offer.row.title,
+                                offer.row.meta,
+                                offer.keywords,
+                            );
+                            return rank === undefined
+                                ? []
+                                : [{ rank, updatedAt: 0, row: offer.row }];
+                        }),
+                        SECTION_LIMIT,
+                    ),
+                },
+                {
+                    id: "settings" as const,
+                    label: "Settings",
+                    rows: rankedOf(settingsSectionRows(input), SECTION_LIMIT),
+                },
+            ].map((section) => ({
                 id: section.id,
                 label: section.label,
                 rows: section.rows.map((entry) => entry.row),
-            });
+                best: Math.min(...section.rows.map((entry) => entry.rank)),
+            })),
+        ];
+        for (const section of offered
+            .filter((candidate) => candidate.rows.length > 0)
+            .sort((left, right) => left.best - right.best))
+            sections.push({ id: section.id, label: section.label, rows: section.rows });
         // Work that is over answers last, below every live answer, however
         // well its title matches.
         const archived = workRanked(
@@ -1486,18 +1806,13 @@ export function commandPaletteResults(input: CommandPaletteInput): CommandPalett
         if (archived.length > 0)
             sections.push({ id: "archived", label: "Archived", rows: archived });
     }
-    return numberedResults(sections);
+    return numberedResults(sections, found);
 }
 
 /** The sections whose rows go somewhere, and so are numbered for ⌘1…⌘9. */
 const NUMBERED_SECTIONS: ReadonlySet<CommandPaletteSectionId> = new Set([
     "recent",
-    "work",
-    "tabs",
-    "documents",
-    "todos",
-    "artifacts",
-    "shared",
+    "results",
     "archived",
 ]);
 
@@ -1509,7 +1824,10 @@ const NUMBER_SHORTCUTS = Array.from({ length: 9 }, (_, index) =>
  * The flat result list, with the first nine rows that open something wearing
  * the ⌘-number that opens them, counted down the list as the reader sees it.
  */
-function numberedResults(sections: readonly CommandPaletteSection[]): CommandPaletteResults {
+function numberedResults(
+    sections: readonly CommandPaletteSection[],
+    found: readonly string[],
+): CommandPaletteResults {
     const numbered: number[] = [];
     let index = 0;
     const shown = sections.map((section) => ({
@@ -1527,7 +1845,17 @@ function numberedResults(sections: readonly CommandPaletteSection[]): CommandPal
             return { ...row, shortcut };
         }),
     }));
-    return { sections: shown, rows: shown.flatMap((section) => section.rows), numbered };
+    let start = 0;
+    for (const section of shown) {
+        if (section.id === "results") break;
+        start += section.rows.length;
+    }
+    return {
+        sections: shown,
+        rows: shown.flatMap((section) => section.rows),
+        numbered,
+        found: { start, keys: found },
+    };
 }
 
 /**
