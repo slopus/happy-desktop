@@ -5582,6 +5582,11 @@ function artifactSourceChoices(
  * one artifact the address opens. The places come from the directory the
  * window already holds, so a bot or a project is called here what the sidebar
  * calls it.
+ *
+ * The catalog stays mounted out of sight while an artifact opened from it is
+ * shown, so Back reveals the list where the reader left it — scrolled where it
+ * was, with the pages it had read. A window that reaches an artifact some
+ * other way has drawn no catalog, and draws none behind the viewer.
  */
 function HappyAgentArtifactsSurface(props: {
     artifacts: HappyAgentArtifacts;
@@ -5596,23 +5601,43 @@ function HappyAgentArtifactsSurface(props: {
     const peopleStore = props.artifacts.people();
     const people = useSyncExternalStore(peopleStore.subscribe, peopleStore.get, peopleStore.get);
     const labels = artifactLabels(props.places, people);
-    if (props.artifactId !== undefined)
-        return (
-            <HappyAgentArtifactViewerSurface
-                artifactId={props.artifactId}
-                {...(props.artifactPage ? { artifactPage: props.artifactPage } : {})}
-                artifacts={props.artifacts}
-                labels={labels}
-                onClose={props.onArtifactClose}
-                surfaces={props.surfaces ?? happyAgentSurfaceCatalogStoreNoop}
-            />
-        );
+    // Only the view on screen is given content: the catalog out of sight keeps
+    // what it last drew, or nothing when it was never on screen.
+    const views =
+        props.artifactId === undefined
+            ? [
+                  {
+                      id: "catalog",
+                      content: (
+                          <HappyAgentArtifactCatalogSurface
+                              artifacts={props.artifacts}
+                              labels={labels}
+                              onArtifactOpen={props.onArtifactOpen}
+                              places={props.places}
+                          />
+                      ),
+                  },
+              ]
+            : [
+                  { id: "catalog" },
+                  {
+                      id: "viewer",
+                      content: (
+                          <HappyAgentArtifactViewerSurface
+                              artifactId={props.artifactId}
+                              {...(props.artifactPage ? { artifactPage: props.artifactPage } : {})}
+                              artifacts={props.artifacts}
+                              labels={labels}
+                              onClose={props.onArtifactClose}
+                              surfaces={props.surfaces ?? happyAgentSurfaceCatalogStoreNoop}
+                          />
+                      ),
+                  },
+              ];
     return (
-        <HappyAgentArtifactCatalogSurface
-            artifacts={props.artifacts}
-            labels={labels}
-            onArtifactOpen={props.onArtifactOpen}
-            places={props.places}
+        <RetainedViews
+            activeId={props.artifactId === undefined ? "catalog" : "viewer"}
+            views={views}
         />
     );
 }

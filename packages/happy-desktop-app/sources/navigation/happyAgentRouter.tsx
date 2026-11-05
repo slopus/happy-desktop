@@ -970,10 +970,10 @@ export function happyAgentRouterSurfaceOpen(
 /**
  * Opens a Happy link the reader followed in a page the window shows — an
  * artifact or an HTML preview — on the Happy Agent on screen, exactly as the
- * same link in a message opens: an artifact beside the conversation, an
- * agent on its conversation, a workspace or project where the reader left
- * it, a Surface as its sidebar row does, and a file read-only beside the
- * conversation at the lines it named. A malformed link, one naming something
+ * same link in a message opens: an artifact beside the conversation, or in
+ * the viewer when no conversation is on screen; an agent on its conversation,
+ * a workspace or project where the reader left it, a Surface as its sidebar
+ * row does, and a file read-only beside the conversation at the lines it named. A malformed link, one naming something
  * the reader's list does not hold, or a service or person does nothing.
  *
  * `happyAgentId` names the Happy Agent the link belongs to, as for a link from
@@ -1002,11 +1002,21 @@ export function happyAgentRouterHappyLinkOpen(
     const reference = link.reference;
     switch (reference.kind) {
         case "artifact":
-            if (session.artifacts !== undefined)
+            if (session.artifacts === undefined) return;
+            // Beside the conversation on screen. With none on screen the panel
+            // would open out of sight, so the artifact opens in the viewer as
+            // a step of its own, and Back returns to the page it was followed
+            // from. The viewer's address names no version; it shows the latest.
+            if (happyAgentRouterWorkspaceVisible(router))
                 session.workspace.panel.artifactViewOpen(
                     reference.id as HappyAgentArtifactId,
                     reference.version,
                 );
+            else
+                void router.navigate({
+                    params: { artifactId: reference.id, happyAgentId },
+                    to: "/artifacts/$happyAgentId/$artifactId",
+                });
             return;
         case "surface": {
             const catalog = session.surfaces?.catalog().get();
@@ -1061,17 +1071,14 @@ export function happyAgentRouterConversationOpen(
 }
 
 /** The conversation addresses, the workspace proper rather than the window's other pages. */
-const CONVERSATION_ROUTE_IDS = new Set<string>([
-    chatsIndexRoute.id,
-    groupRoute.id,
-    chatRoute.id,
-    groupFileRoute.id,
-    chatFileRoute.id,
-]);
+const CONVERSATION_ROUTES = [chatsIndexRoute, groupRoute, chatRoute, groupFileRoute, chatFileRoute];
 
 /** Uses the router's explicit route identity, never a pathname convention. */
 export function happyAgentRouterWorkspaceVisible(router: HappyAgentRouter): boolean {
-    return router.state.matches.some((match) => CONVERSATION_ROUTE_IDS.has(match.routeId));
+    // A route's id is given when a router builds the tree, not when the module
+    // loads, so it is read at the call.
+    const ids = new Set<string>(CONVERSATION_ROUTES.map((route) => route.id));
+    return router.state.matches.some((match) => ids.has(match.routeId));
 }
 
 /**
