@@ -317,8 +317,8 @@ const glyphs: Record<IconName, IconGlyph> = {
     dice: { set: "ionicons", name: "dice-outline" },
     dot: { set: "ionicons", name: "ellipse" },
     pulse: { set: "ionicons", name: "pulse-outline" },
-    // What happened on the installation, as a paper reads it: the Feed.
-    feed: { set: "ionicons", name: "newspaper-outline" },
+    // What happened on the installation: Activity, as GitHub draws its pulse.
+    feed: { set: "octicons", name: "pulse" },
 };
 export const iconNames = Object.keys(glyphs) as IconName[];
 function glyphContent(glyph: IconGlyph) {

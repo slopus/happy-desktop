@@ -3218,7 +3218,7 @@ const FEED_SIDEBAR_ITEM: SidebarItem = {
     tint: "red",
     id: FEED_ITEM,
     kind: "project",
-    label: "Feed",
+    label: "Activity",
     reorderable: false,
 };
 
@@ -4380,10 +4380,10 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
             if (!session.feed)
                 return (
                     <EmptyState
-                        description="This Happy Agent does not keep a feed. Updating it adds one."
+                        description="This Happy Agent does not track activity yet. Update it to see activity here."
                         icon="feed"
                         size="panel"
-                        title="No feed here"
+                        title="No activity here"
                     />
                 );
             return (

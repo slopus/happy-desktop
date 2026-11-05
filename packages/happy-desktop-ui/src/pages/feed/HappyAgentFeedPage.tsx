@@ -101,7 +101,7 @@ export function HappyAgentFeedPage(props: HappyAgentFeedPageProps) {
             <ArtifactHeader
                 className="happy-agent-feed__header"
                 subtitle={subtitle}
-                title="Feed"
+                title="Activity"
                 trailing={
                     <Button
                         disabled={props.unread === 0 || props.unavailable !== undefined}
@@ -204,7 +204,7 @@ function FeedActivity(props: HappyAgentFeedPageProps) {
     const feed = props.feed;
     return (
         <>
-            <FeedNotice error={feed.error} title="The feed may be out of date" />
+            <FeedNotice error={feed.error} title="Activity may be out of date" />
             <FeedEntryCards
                 empty={{
                     loading: "Reading what happened on this Happy Agent.",
@@ -212,9 +212,9 @@ function FeedActivity(props: HappyAgentFeedPageProps) {
                     description:
                         "New tasks, bots, documents, todo lists, and artifacts appear here, with every change to them.",
                 }}
-                label="Feed"
+                label="Activity"
                 list={feed}
-                loadingTitle="Loading the feed…"
+                loadingTitle="Loading activity…"
                 now={props.now}
                 onLoadMore={props.onLoadMore}
                 onOpen={props.onEntryOpen}

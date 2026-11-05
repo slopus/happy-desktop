@@ -401,10 +401,10 @@ export function HappyAgentFeedSurface(props: {
     if (page.availability === "unsupported")
         return (
             <EmptyState
-                description="This Happy Agent does not keep a feed. Updating it adds one."
+                description="This Happy Agent does not track activity yet. Update it to see activity here."
                 icon="feed"
                 size="panel"
-                title="No feed here"
+                title="No activity here"
             />
         );
     const list = workspace.list;

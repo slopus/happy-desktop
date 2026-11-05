@@ -24,7 +24,7 @@ const SECTIONS: readonly SidebarSection[] = [
         id: "top",
         items: [
             { icon: "doc", id: "artifacts", kind: "project", label: "Artifacts", tint: "purple" },
-            { icon: "feed", id: "feed", kind: "project", label: "Feed", tint: "red" },
+            { icon: "feed", id: "feed", kind: "project", label: "Activity", tint: "red" },
             surface("todo", "Groceries", { kind: "todo" }),
             surface("document", "Launch notes", { kind: "document" }),
             surface("calendar", "Family calendar", { kind: "calendar" }),

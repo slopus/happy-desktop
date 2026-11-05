@@ -258,7 +258,7 @@ export function HappyAgentFeedBlueprintPage() {
         <ComponentPage
             contract="Props only"
             number={componentNumber}
-            summary="What happened on a Happy Agent, for one reader: new tasks, bots, Surfaces, and artifacts, and changes to them, newest change first. Unseen changes fold into one entry per subject; the places the feed gathers from can be muted, followed, or peeked into."
+            summary="What happened on a Happy Agent, for one reader: new tasks, bots, Surfaces, and artifacts, and changes to them, newest change first. Unseen changes fold into one entry per subject; the places activity gathers from can be muted, followed, or peeked into."
             title="HappyAgentFeed"
         >
             <FullScreenSpecimen
@@ -272,7 +272,7 @@ export function HappyAgentFeedBlueprintPage() {
             </FullScreenSpecimen>
 
             <FullScreenSpecimen
-                detail="The same feed at the window's minimum size."
+                detail="The same activity at the window's minimum size."
                 label="Activity, narrow"
                 number="02"
                 screen="02-activity-720x640"
@@ -334,7 +334,7 @@ export function HappyAgentFeedBlueprintPage() {
             </FullScreenSpecimen>
 
             <FullScreenSpecimen
-                detail="Where the feed gathers from. A muted cluster reads quieter; one whose change is on its way holds its switch."
+                detail="Where activity gathers from. A muted cluster reads quieter; one whose change is on its way holds its switch."
                 label="Following"
                 number="07"
                 screen="07-following-1100x760"
