@@ -145,9 +145,7 @@ it("records trusted wheel movement during a growing response", async () => {
         let ticks = 0;
         timer = window.setInterval(() => {
             ticks += 1;
-            flushSync(() =>
-                update(`Streaming begins. ${"additional streamed text ".repeat(ticks)}`),
-            );
+            update(`Streaming begins. ${"additional streamed text ".repeat(ticks)}`);
         }, 100);
         await delay(350);
         await commands.scrollReproWheel(-100 * devicePixelRatio);
