@@ -1222,6 +1222,9 @@ export function MessageList(props: MessageListProps) {
     const wheelScrollPending = useRef(false);
     /* Scrollbar or keyboard input whose native scroll has not been reported. */
     const nativeInputPending = useRef(false);
+    /* The end, as the maximum scrollTop, when the reader last wheeled or keyed
+       down: their animation is headed for it even after streaming moves it. */
+    const readerEndTop = useRef<number | undefined>(undefined);
     footerFollowed.current = props.footerFollowed === true;
     const pendingFollowerTop = useRef<number | undefined>(undefined);
     const readerAnchor = useRef<MessageListVirtualAnchor | undefined>(undefined);
@@ -1256,7 +1259,12 @@ export function MessageList(props: MessageListProps) {
         wheelScrollPending.current = false;
         // Reassigning WebKit's reported offset at fractional zoom can round
         // its native position down a pixel, even though the value is equal.
-        if (element.scrollTop !== value) element.scrollTop = value;
+        if (element.scrollTop !== value) {
+            element.scrollTop = value;
+            // A model write moves the end the reader was headed for, and
+            // stops any animation that was taking them there.
+            readerEndTop.current = undefined;
+        }
         expectedScrollTop.current = element.scrollTop;
         readerScrollTop.current = element.scrollTop;
         placed?.(element.scrollTop);
@@ -3440,6 +3448,7 @@ export function MessageList(props: MessageListProps) {
             wheelDirection = 0;
             wheelScrollPending.current = false;
             expectedScrollTop.current = undefined;
+            readerEndTop.current = undefined;
             overscanRequireCurrent.current();
         };
         const onWheel = (event: WheelEvent) => {
@@ -3451,9 +3460,7 @@ export function MessageList(props: MessageListProps) {
              * the reader immediately so a streaming commit in the same frame
              * cannot pin them back to the tail before that scroll is reported.
              */
-            /* A wheel that cannot move the transcript, as in one that does not
-               fill its viewport yet, leaves a follower following. */
-            if (event.deltaY < 0 && element.scrollTop > 0) {
+            if (event.deltaY < 0) {
                 wheelScrollPending.current = true;
                 geometryFollowInset.current = 0;
                 escapedFromFollow.current = true;
@@ -3494,7 +3501,7 @@ export function MessageList(props: MessageListProps) {
                     sparseInsetRelease();
                     scrollToBottom();
                     positionReport();
-                }
+                } else readerEndTop.current = element.scrollHeight - element.clientHeight;
             }
         };
         if (viewportGeometry.current.height === 0) {
@@ -3592,6 +3599,15 @@ export function MessageList(props: MessageListProps) {
             readerScrollTop.current = element.scrollTop;
             scrollHeightBaseline.current = currentScrollHeight;
             geometryExtentOffscreenRelease(readerScrollTop.current, viewportHeight);
+            /* A wheel or key animation lands on the end as it was when the
+               reader asked for it; streaming may have moved it since. Landing
+               there is reaching the end. */
+            const headedEnd = readerEndTop.current;
+            const atEnd =
+                bottomOffset <= FOLLOW_BOTTOM_THRESHOLD ||
+                (wheelDirection > 0 &&
+                    headedEnd !== undefined &&
+                    element.scrollTop >= headedEnd - FOLLOW_BOTTOM_THRESHOLD);
             if (scrollDelta < 0) escapedFromFollow.current = true;
             else if (
                 scrollDelta > 0 &&
@@ -3603,11 +3619,11 @@ export function MessageList(props: MessageListProps) {
                 (!contentHeightChanged ||
                     wheelDirection > 0 ||
                     element.parentElement?.hasAttribute("data-scrollbar-dragging") === true) &&
-                bottomOffset <= FOLLOW_BOTTOM_THRESHOLD
+                atEnd
             )
                 escapedFromFollow.current = false;
-            following.current =
-                !escapedFromFollow.current && bottomOffset <= FOLLOW_BOTTOM_THRESHOLD;
+            following.current = !escapedFromFollow.current && atEnd;
+            if (following.current) readerEndTop.current = undefined;
             if (following.current) {
                 sparseInsetRelease();
                 scrollToBottom();
@@ -3666,7 +3682,9 @@ export function MessageList(props: MessageListProps) {
                 sparseInsetRelease();
                 scrollToBottom();
                 positionReport();
-            }
+            } else
+                readerEndTop.current =
+                    wheelDirection > 0 ? element.scrollHeight - element.clientHeight : undefined;
         };
         element.addEventListener("keydown", onKeyDown);
         element.addEventListener("touchstart", onGeometryScrollIntent, { passive: true });
