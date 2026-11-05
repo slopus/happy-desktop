@@ -167,7 +167,9 @@ it("records trusted wheel movement during a growing response", async () => {
         };
         frame = requestAnimationFrame(capture);
         let ticks = 0;
+        let streaming = true;
         timer = window.setInterval(() => {
+            if (!streaming) return;
             ticks += 1;
             update(`Streaming begins. ${"additional streamed text ".repeat(ticks)}`);
         }, 100);
@@ -186,19 +188,29 @@ it("records trusted wheel movement during a growing response", async () => {
         await delay(600);
         // Position the fixture at the tail, then use trusted reader input to
         // re-arm following before measuring an independent input scenario.
+        streaming = false;
         viewport.scrollTop = viewport.scrollHeight;
         await delay(100);
         await commands.scrollReproWheel(4 * devicePixelRatio);
+        expect(
+            viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight,
+        ).toBeLessThanOrEqual(1);
         events.push({ type: "drag-up-start", time: performance.now() - started });
+        streaming = true;
         await commands.scrollReproDrag("up");
         await delay(400);
         events.push({ type: "drag-down-start", time: performance.now() - started });
         await commands.scrollReproDrag("down");
         await delay(400);
+        streaming = false;
         viewport.scrollTop = viewport.scrollHeight;
         await delay(100);
         await commands.scrollReproWheel(4 * devicePixelRatio);
+        expect(
+            viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight,
+        ).toBeLessThanOrEqual(1);
         events.push({ type: "keyboard-up-start", time: performance.now() - started });
+        streaming = true;
         await commands.scrollReproKey("PageUp");
         for (let i = 0; i < 5; i += 1) await commands.scrollReproKey("ArrowUp");
         await delay(400);
