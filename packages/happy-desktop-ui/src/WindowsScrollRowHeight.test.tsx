@@ -36,8 +36,9 @@ it("reports settled predicted and painted row heights for representative scripts
     let update!: (state: { name: string; text: string }) => void;
     let content = "";
     let kind = "";
+    let prefix = 0;
     const stop = messageListRowHeightCheckInstall((mismatch) => {
-        console.log("ROW_HEIGHT_DIAGNOSTIC " + JSON.stringify({ ...mismatch, dpr: window.devicePixelRatio, kind, sample: content.slice(0, 200) }));
+        console.log("ROW_HEIGHT_DIAGNOSTIC " + JSON.stringify({ ...mismatch, dpr: window.devicePixelRatio, kind, prefix, sample: content.slice(0, 200) }));
     });
     function Harness() {
         const [{ name, text }, setContent] = useState({ name: "initial", text: "" });
@@ -57,11 +58,14 @@ it("reports settled predicted and painted row heights for representative scripts
         await document.fonts.ready;
         for (const [name, text] of payloads) {
             kind = name;
-            content = text;
-            flushSync(() => update({ name, text }));
-            await new Promise((resolve) => setTimeout(resolve, 650));
-            expect(container.querySelector(".happy-message-list__virtual-row")).not.toBeNull();
-            console.log("ROW_HEIGHT_CASE " + JSON.stringify({ kind, dpr: window.devicePixelRatio }));
+            for (const fraction of [0.5, 1]) {
+                prefix = fraction;
+                content = text.slice(0, Math.ceil(text.length * fraction));
+                flushSync(() => update({ name, text: content }));
+                await new Promise((resolve) => setTimeout(resolve, 650));
+                expect(container.querySelector(".happy-message-list__virtual-row")).not.toBeNull();
+                console.log("ROW_HEIGHT_CASE " + JSON.stringify({ kind, prefix, dpr: window.devicePixelRatio }));
+            }
         }
     } finally {
         stop();

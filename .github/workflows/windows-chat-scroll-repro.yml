@@ -73,10 +73,12 @@ jobs:
             - name: Run Electron workloads
               run: |
                   mkdir -p .context/windows-electron
+                  failed=0
                   for workload in streaming long-chat-scroll jump-shimmer mixed-replay; do
                     echo "Running $workload"
-                    pnpm --dir packages/happy-desktop-gym gym:electron run --profile realistic --workload "$workload" --artifact-dir "$(cygpath -w "$PWD/.context/windows-electron/$workload")" > ".context/windows-electron/$workload.log" 2>&1 || echo "$workload failed; see log"
+                    pnpm --dir packages/happy-desktop-gym gym:electron run --profile realistic --workload "$workload" --artifact-dir "$(cygpath -w "$PWD/.context/windows-electron/$workload")" > ".context/windows-electron/$workload.log" 2>&1 || { echo "$workload failed; see log"; failed=1; }
                   done
+                  exit "$failed"
             - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
               if: always()
               with:
