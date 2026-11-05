@@ -1,3 +1,4 @@
+import type { ConversationFailureKind } from "../conversation/conversationEntry.js";
 import type { HappyAgentActionResult } from "./happyAgentSupport.js";
 import type { HappyAgentThinkingLevel } from "./happyAgentTypes.js";
 
@@ -10,11 +11,6 @@ export type HappyAgentConversationSource = "workspace" | "command_palette" | "sh
 
 /** The model a conversation started on or a message was sent with, as the host names it. */
 export interface HappyAgentActivityModel {
-    /**
-     * The catalog provider the reader configured, by id. It is the owner's to
-     * turn into something that tells two accounts apart without naming either.
-     */
-    readonly providerId?: string;
     /** The catalog provider's `type` (`claude`, `codex`, `bedrock`, …). */
     readonly providerType?: string;
     readonly modelId?: string;
@@ -51,6 +47,9 @@ export type HappyAgentActivity =
           /** `new_session` is the message that started its conversation. */
           readonly source: "chat" | "new_session" | "voice";
           readonly model: HappyAgentActivityModel;
+          readonly hasAttachment: boolean;
+          /** Sent while the conversation's agent was still working. */
+          readonly steering: boolean;
       })
     | {
           readonly kind: "projectAdded";
@@ -58,6 +57,14 @@ export type HappyAgentActivity =
           readonly result: HappyAgentActionResult;
       }
     | { readonly kind: "workspaceCreated"; readonly result: HappyAgentActionResult }
+    | { readonly kind: "taskCreated"; readonly result: HappyAgentActionResult }
+    | {
+          readonly kind: "failureActionClicked";
+          /** Retry, Switch to another account, or Ask Chief of Staff. */
+          readonly action: "retry" | "switch" | "assistance";
+          /** The failure's typed kind; absent for a failure that came without one. */
+          readonly failure?: ConversationFailureKind;
+      }
     | {
           readonly kind: "botCreated";
           readonly source: "sidebar" | "voice";

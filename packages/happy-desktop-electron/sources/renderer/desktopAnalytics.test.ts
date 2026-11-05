@@ -4,6 +4,7 @@ vi.hoisted(() => {
     const globals = globalThis as Record<string, unknown>;
     globals.__HAPPY_RENDERER_VERSION__ = "0.0.0-test";
     globals.__HAPPY_POSTHOG_API_KEY__ = null;
+    globals.__HAPPY_POSTHOG_HOST__ = null;
     globals.__HAPPY_LOCAL_WEB_BUILD_ID__ = null;
     globals.__HAPPY_LOCAL_WEB_VERSION__ = null;
 });
@@ -354,7 +355,7 @@ it("drops every property the catalog does not name", () => {
             token: "phc_test",
             distinct_id: "install",
             launch_count: 3,
-            os_version: "15.6.0",
+            os_version: "15.6",
             arch: "arm64",
             $current_url: "file:///Users/alice/Happy.app/index.html",
             $host: "alice-macbook.local",
@@ -374,14 +375,14 @@ it("drops every property the catalog does not name", () => {
         token: "phc_test",
         distinct_id: "install",
         launch_count: 3,
-        os_version: "15.6.0",
+        os_version: "15.6",
         arch: "arm64",
         $ip: null,
         $geoip_disable: true,
     });
 });
 
-it("never sends free text, whatever the machine says about its failures", async () => {
+it("never sends free text, whatever the machine says about its failures", () => {
     const client = clientCreate();
     const directory = directoryCreate([
         {
@@ -458,28 +459,23 @@ it("never sends free text, whatever the machine says about its failures", async 
             taskDepth: 1,
             source: "chat",
             model: {
-                providerId: "claude_extra",
                 providerType: "claude",
                 modelId: "claude_extra:anthropic/opus-5",
                 effort: "high",
             },
+            hasAttachment: true,
+            steering: false,
         },
         {
             kind: "conversationCreated",
             source: "workspace",
-            model: { providerId: "claude_extra", providerType: "claude" },
+            model: { providerType: "claude", modelId: "custom/alice-private-model" },
         },
         { kind: "projectAdded", source: "open_folder", result: { ok: false, failure: "refused" } },
         { kind: "workspaceCreated", result: { ok: true } },
         { kind: "botCreated", source: "voice", result: { ok: false, failure: "offline" } },
     ];
     for (const activity of activities) analytics.activity("local", activity);
-    // The account hash is a real digest, so its events arrive a moment later.
-    await vi.waitFor(() =>
-        expect(client.captured.map((captured) => captured.event)).toEqual(
-            expect.arrayContaining(["message_sent", "conversation_created"]),
-        ),
-    );
     window.dispatchEvent(new Event("pagehide"));
     unsubscribe();
     analytics.dispose();
@@ -517,7 +513,6 @@ it("never sends free text, whatever the machine says about its failures", async 
     const allowedString = [
         /^[a-z][a-z0-9_]*$/, // enums
         /^[0-9]+(\.[0-9]+){0,3}(-[a-z0-9.]+)?$/, // versions
-        /^[0-9a-f]{12}$/, // provider account hash
         /^[a-z0-9-]+\/[a-z0-9.-]+$/, // vendor-qualified model id
     ];
     for (const captured of client.captured) {

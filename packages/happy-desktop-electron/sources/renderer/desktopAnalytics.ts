@@ -1,14 +1,24 @@
 import {
+    analyticsBucket,
     analyticsClientCreate,
+    analyticsErrorThrottleCreate,
     analyticsModel,
+    analyticsOutageTrackerCreate,
+    analyticsSeenCreate,
+    analyticsOsVersion,
     analyticsProviderKind,
     type AnalyticsAssistantStatus,
     type AnalyticsClient,
     type AnalyticsCommonProperties,
+    type AnalyticsDesktopOs,
+    type AnalyticsErrorArea,
+    type AnalyticsErrorCode,
     type AnalyticsEventName,
     type AnalyticsEvents,
+    type AnalyticsFailureAction,
     type AnalyticsFlag,
-    type AnalyticsOs,
+    type AnalyticsMemory,
+    type AnalyticsModelProperties,
     type AnalyticsOutcome,
     type AnalyticsSetupDownloadFailure,
     type AnalyticsSetupErrorCode,
@@ -16,8 +26,6 @@ import {
     type AnalyticsTrackOptions,
 } from "happy-desktop-analytics";
 import {
-    happyAgentBotSubtasks,
-    happyAgentTaskDepths,
     usageAnalyticsStoreCreate,
     type MobilePairingMethodOutput,
     type HappyAgentActionResult,
@@ -46,14 +54,23 @@ import {
     type MobilePairingReport,
 } from "./desktopMobilePairingAnalytics";
 import type { DesktopSystem } from "../shared/desktopContract";
+import type { AppHappyAgentUpdateStore } from "happy-desktop-app";
+import type { DesktopAgentBrokenStore } from "./desktopAgentBroken";
+import {
+    analyticsFailureKindOf,
+    conversationAnalyticsCreate,
+} from "./desktopConversationAnalytics";
 import { localWebBuild } from "./localWebBuild";
 
 declare const __HAPPY_RENDERER_VERSION__: string;
 declare const __HAPPY_POSTHOG_API_KEY__: string | null;
+declare const __HAPPY_POSTHOG_HOST__: string | null;
 
 const INSTALL_ID_KEY = "happy.analytics.install-id.v1";
 const LAUNCH_COUNT_KEY = "happy.analytics.launch-count.v1";
 const USAGE_ANALYTICS_KEY = "happy.usage-analytics.v1";
+const ERROR_THROTTLE_KEY = "happy.analytics.error-shown.v1";
+const FAILURES_SEEN_KEY = "happy.analytics.failures-seen.v1";
 /** How long `app_opened` waits for the Happy Agent's version before going without it. */
 const APP_OPENED_VERSION_WAIT_MS = 10_000;
 
@@ -77,6 +94,13 @@ export interface DesktopAnalytics {
     mobilePairingReport(happyAgentId: string): MobilePairingReport;
     /** The person picked a pairing method. */
     mobilePairingMethodSelected(output: MobilePairingMethodOutput): void;
+    /**
+     * Wraps the full-window recovery screen's store so its showing and its
+     * Restart count toward the outage they belong to, exactly while it is shown.
+     */
+    agentBrokenObserve(store: DesktopAgentBrokenStore): DesktopAgentBrokenStore;
+    /** Wraps the Happy Agent update card's store so a failed update it shows is counted. */
+    agentUpdateObserve(store: AppHappyAgentUpdateStore): AppHappyAgentUpdateStore;
     /** Follows one PostHog feature flag; silent while analytics is off or unavailable. */
     flagFollow(flag: AnalyticsFlag, listener: (enabled: boolean) => void): () => void;
     /** Stops following the directory and the window's closing. */
@@ -108,6 +132,29 @@ function installId(): string {
     return created;
 }
 
+function memoryOf(key: string): AnalyticsMemory {
+    return { read: () => storageRead(key), write: (value) => storageWrite(key, value) };
+}
+
+/** On screen and holding the keyboard; a window with no document is neither. */
+function windowFocused(): boolean {
+    return (
+        typeof document !== "undefined" &&
+        document.visibilityState === "visible" &&
+        document.hasFocus()
+    );
+}
+
+function windowVisible(): boolean {
+    return typeof document !== "undefined" && document.visibilityState === "visible";
+}
+
+const FAILURE_ACTIONS = {
+    retry: "retry",
+    switch: "switch_model",
+    assistance: "ask_chief",
+} as const satisfies Record<string, AnalyticsFailureAction>;
+
 function usageAnalyticsPersistence(): UsageAnalyticsPersistence {
     return {
         read() {
@@ -122,39 +169,21 @@ function usageAnalyticsPersistence(): UsageAnalyticsPersistence {
 
 /**
  * The operating system this window runs on. The browser is not ours and gives
- * no typed answer, so this boundary reads its platform string once.
+ * no typed answer, so this boundary reads its platform string once. Electron
+ * ships for these three only, and the rest of its builds are Linux ones.
  */
-function desktopOs(): AnalyticsOs {
+function desktopOs(): AnalyticsDesktopOs {
     const platform = (
         (navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData
             ?.platform ?? navigator.platform
     ).toLowerCase();
     if (platform.startsWith("mac")) return "mac";
     if (platform.startsWith("win")) return "win";
-    if (platform.startsWith("linux")) return "linux";
-    return "other";
+    return "linux";
 }
 
 function outcomeOf(result: HappyAgentActionResult): AnalyticsOutcome {
     return result.ok ? { result: "ok" } : { result: "failed", error_code: result.failure };
-}
-
-/** How many hex characters of the digest an account hash keeps. */
-const PROVIDER_ACCOUNT_HASH_LENGTH = 12;
-
-/**
- * A short digest that tells two configured providers of one kind apart
- * without naming either. It is salted with this installation's random id, so
- * the same account hashes differently on every installation.
- */
-async function providerAccountHash(installation: string, providerId: string): Promise<string> {
-    const digest = await crypto.subtle.digest(
-        "SHA-256",
-        new TextEncoder().encode(`${installation}:${providerId}`),
-    );
-    return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0"))
-        .join("")
-        .slice(0, PROVIDER_ACCOUNT_HASH_LENGTH);
 }
 
 function stepOf(
@@ -308,7 +337,12 @@ export function desktopAnalyticsCreate(options: {
     const client: AnalyticsClient =
         options.client ??
         analyticsClientCreate({
-            apiKey: options.development ? undefined : (__HAPPY_POSTHOG_API_KEY__ ?? undefined),
+            // Development windows send nothing, except to a local capture endpoint.
+            apiKey:
+                options.development && __HAPPY_POSTHOG_HOST__ === null
+                    ? undefined
+                    : (__HAPPY_POSTHOG_API_KEY__ ?? undefined),
+            ...(__HAPPY_POSTHOG_HOST__ === null ? {} : { host: __HAPPY_POSTHOG_HOST__ }),
             distinctId: installation,
             enabled: () => preference.get().usageAnalyticsEnabled,
         });
@@ -328,10 +362,12 @@ export function desktopAnalyticsCreate(options: {
             .happyAgents.find((item) => item.id === happyAgentId);
         const local = happyAgentId === LOCAL_HAPPY_AGENT_ID;
         return {
+            client: "desktop",
+            device_class: "desktop",
             app_version: __HAPPY_RENDERER_VERSION__,
             flavor: localWebBuild ? "nightly" : "standard",
             os,
-            os_version: options.system?.osVersion ?? null,
+            os_version: analyticsOsVersion(options.system?.osVersion),
             arch: options.system?.arch ?? null,
             agent_os: local ? os : null,
             agent_location: entry ? (local ? "local" : "remote") : null,
@@ -353,57 +389,107 @@ export function desktopAnalyticsCreate(options: {
     };
     window.addEventListener("pagehide", closing);
 
-    const accountHashes = new Map<string, Promise<string | null>>();
-    const accountHash = (providerId: string | undefined): Promise<string | null> => {
-        if (providerId === undefined) return Promise.resolve(null);
-        let hash = accountHashes.get(providerId);
-        if (!hash) {
-            hash = providerAccountHash(installation, providerId).catch(() => null);
-            accountHashes.set(providerId, hash);
-        }
-        return hash;
-    };
-    /** The model fields of an event, once its account hash is known. */
-    const modelOf = (model: HappyAgentActivityModel) =>
-        accountHash(model.providerId).then((hash) => ({
-            model: analyticsModel(model.modelId),
-            model_provider_kind: analyticsProviderKind(model.providerType),
-            provider_account_hash: hash,
-            effort: model.effort ?? null,
-        }));
+    const modelOf = (model: HappyAgentActivityModel): AnalyticsModelProperties => ({
+        model: analyticsModel(model.modelId),
+        model_provider_kind: analyticsProviderKind(model.providerType),
+        effort: model.effort ?? null,
+    });
 
-    // A subtask is made by an agent, not by a control here, so it is counted
-    // the first time this window sees it. What a Happy Agent already had when
-    // its list first arrived is not new.
-    const subtasksSeen = new Map<string, Set<string>>();
-    const subtasksFollow = (): void => {
-        for (const entry of options.happyAgents.get().happyAgents) {
-            if (entry.projectsStatus !== "ready") continue;
-            const ids = happyAgentBotSubtasks(entry.bots).map((task) => task.conversation.id);
-            let depths: ReadonlyMap<string, number> | undefined;
-            const seen = subtasksSeen.get(entry.id);
-            if (!seen) {
-                subtasksSeen.set(entry.id, new Set(ids));
-                continue;
-            }
-            for (const id of ids) {
-                if (seen.has(id)) continue;
-                seen.add(id);
-                depths ??= happyAgentTaskDepths(entry.bots);
-                track(entry.id, "subtask_created", {
-                    result: "ok",
-                    task_depth: depths.get(id) ?? null,
+    const errorThrottle = analyticsErrorThrottleCreate(memoryOf(ERROR_THROTTLE_KEY));
+    const failuresSeen = analyticsSeenCreate(memoryOf(FAILURES_SEEN_KEY));
+    const errorShown = (
+        happyAgentId: string,
+        area: AnalyticsErrorArea,
+        code: AnalyticsErrorCode,
+    ): void => {
+        // Nothing is remembered for a window that does not report.
+        if (!preference.get().usageAnalyticsEnabled) return;
+        const repeatCount = errorThrottle.occurred(area, code, Date.now());
+        if (repeatCount !== undefined)
+            track(happyAgentId, "error_shown", { area, code, repeat_count: repeatCount });
+    };
+
+    const outages = analyticsOutageTrackerCreate();
+    const activeId = (): string =>
+        options.happyAgents.get().activeHappyAgentId ?? LOCAL_HAPPY_AGENT_ID;
+    /** The Happy Agent an open outage is on, so its end is reported there. */
+    let outageAgent = LOCAL_HAPPY_AGENT_ID;
+    const connectionCheck = (): void => {
+        const id = activeId();
+        const entry = options.happyAgents.get().happyAgents.find((item) => item.id === id);
+        const ended = outages.observe(
+            {
+                agentId: entry?.id,
+                transport: id === LOCAL_HAPPY_AGENT_ID ? "local" : "remote",
+                down:
+                    entry === undefined || entry.status === "connected"
+                        ? undefined
+                        : entry.protocolMismatch !== undefined
+                          ? "version_mismatch"
+                          : entry.signIn !== undefined
+                            ? "auth_expired"
+                            : entry.status === "disconnected"
+                              ? "unreachable"
+                              : "unknown",
+                visible: windowVisible(),
+            },
+            Date.now(),
+        );
+        if (ended) track(outageAgent, "agent_connection_lost", ended);
+        outageAgent = id;
+    };
+    const outageClose = (): void => {
+        const ended = outages.close(Date.now());
+        if (ended) track(outageAgent, "agent_connection_lost", ended, { beacon: true });
+    };
+    closers.add(outageClose);
+
+    // The conversation the person is looking at: the active Happy Agent's open one.
+    let followed:
+        | { readonly workspace: unknown; readonly check: () => void; readonly stop: () => void }
+        | undefined;
+    const conversationFollow = (): void => {
+        const id = activeId();
+        const session = options.happyAgents
+            .get()
+            .happyAgents.find((item) => item.id === id)?.session;
+        if (followed?.workspace !== session?.workspace) {
+            followed?.stop();
+            followed = undefined;
+            if (session) {
+                const check = conversationAnalyticsCreate({
+                    workspace: session.workspace,
+                    models: session.models,
+                    seen: failuresSeen,
+                    focused: windowFocused,
+                    chatFailureShown: (properties) => track(id, "chat_failure_shown", properties),
+                    errorShown: (area, code) => errorShown(id, area, code),
                 });
+                followed = {
+                    workspace: session.workspace,
+                    check,
+                    stop: session.workspace.subscribe(check),
+                };
             }
         }
+        followed?.check();
     };
-    const directoryUnsubscribe = options.happyAgents.subscribe(subtasksFollow);
+    const directoryChanged = (): void => {
+        connectionCheck();
+        conversationFollow();
+    };
+    const directoryUnsubscribe = options.happyAgents.subscribe(directoryChanged);
+    const windowChanged = (): void => directoryChanged();
+    if (typeof document !== "undefined")
+        document.addEventListener("visibilitychange", windowChanged);
+    window.addEventListener("focus", windowChanged);
+    directoryChanged();
+
     let appOpenedCancel = (): void => undefined;
     /** Whether the local Happy Agent's protocol is one this window cannot use. */
     const localProtocolMismatch = (): boolean =>
         options.happyAgents.get().happyAgents.find((item) => item.id === LOCAL_HAPPY_AGENT_ID)
             ?.protocolMismatch !== undefined;
-    subtasksFollow();
 
     const pairingReport =
         (happyAgentId: string): MobilePairingReport =>
@@ -412,6 +498,43 @@ export function desktopAnalyticsCreate(options: {
 
     return {
         preference,
+        agentBrokenObserve(store) {
+            return {
+                ...store,
+                subscribe(listener) {
+                    return store.subscribe(() => {
+                        if (store.get().visible) outages.recoveryScreenShown();
+                        listener();
+                    });
+                },
+                restart() {
+                    outages.restartRequested();
+                    store.restart();
+                },
+            };
+        },
+        agentUpdateObserve(store) {
+            let failed = false;
+            return {
+                ...store,
+                subscribe(listener) {
+                    return store.subscribe(() => {
+                        const snapshot = store.get();
+                        const progress = snapshot?.progress;
+                        const failing = progress?.kind === "failed" && snapshot?.revealed === true;
+                        // A restart that never came back is the one failure with a cause of its own.
+                        if (failing && !failed)
+                            errorShown(
+                                LOCAL_HAPPY_AGENT_ID,
+                                "update",
+                                progress.failedAt === "reconnecting" ? "timeout" : "unknown",
+                            );
+                        failed = failing;
+                        listener();
+                    });
+                },
+            };
+        },
         mobilePairingReport: pairingReport,
         flagFollow: (flag, listener) => client.flagFollow(flag, listener),
         mobilePairingMethodSelected: (output) =>
@@ -427,8 +550,6 @@ export function desktopAnalyticsCreate(options: {
             // Reported on the Happy Agent the window is using, once its
             // version is known: a launch reported before the first connection
             // could only ever say it did not know which agent it ran.
-            const activeId = (): string =>
-                options.happyAgents.get().activeHappyAgentId ?? LOCAL_HAPPY_AGENT_ID;
             let sent = false;
             let timeout: ReturnType<typeof setTimeout> | undefined;
             let unsubscribe = (): void => undefined;
@@ -441,7 +562,18 @@ export function desktopAnalyticsCreate(options: {
                 if (sent) return;
                 sent = true;
                 stop();
-                track(activeId(), "app_opened", { launch_count: launchCount }, trackOptions);
+                track(
+                    activeId(),
+                    "app_opened",
+                    {
+                        launch_count: launchCount,
+                        is_cold_start: true,
+                        agents_connected: analyticsBucket(
+                            options.happyAgents.get().happyAgents.length,
+                        ),
+                    },
+                    trackOptions,
+                );
             };
             const close = (): void => send({ beacon: true });
             const versionWait = (): void => {
@@ -459,26 +591,23 @@ export function desktopAnalyticsCreate(options: {
         activity(happyAgentId, activity) {
             switch (activity.kind) {
                 case "conversationCreated":
-                    void modelOf(activity.model).then((model) =>
-                        track(happyAgentId, "conversation_created", {
-                            source: activity.source,
-                            ...model,
-                        }),
-                    );
+                    track(happyAgentId, "conversation_created", {
+                        source: activity.source,
+                        ...modelOf(activity.model),
+                    });
                     return;
                 case "messageSent":
-                    void modelOf(activity.model).then((model) =>
-                        client.track("message_sent", {
-                            ...common(happyAgentId),
-                            client: "desktop",
-                            target: activity.target,
-                            session_client: "happy_agent",
-                            bot_system_key: activity.botSystemKey,
-                            task_depth: activity.taskDepth,
-                            source: activity.source,
-                            ...model,
-                        }),
-                    );
+                    track(happyAgentId, "message_sent", {
+                        target: activity.target,
+                        session_client: "happy_agent",
+                        bot_system_key:
+                            activity.botSystemKey === "chief_of_staff" ? "chief_of_staff" : null,
+                        task_depth: activity.taskDepth,
+                        source: activity.source,
+                        has_attachment: activity.hasAttachment,
+                        is_steering: activity.steering,
+                        ...modelOf(activity.model),
+                    });
                     return;
                 case "projectAdded":
                     track(happyAgentId, "project_added", {
@@ -488,6 +617,15 @@ export function desktopAnalyticsCreate(options: {
                     return;
                 case "workspaceCreated":
                     track(happyAgentId, "workspace_created", outcomeOf(activity.result));
+                    return;
+                case "taskCreated":
+                    track(happyAgentId, "task_created", outcomeOf(activity.result));
+                    return;
+                case "failureActionClicked":
+                    track(happyAgentId, "chat_failure_action_clicked", {
+                        kind: analyticsFailureKindOf(activity.failure),
+                        action: FAILURE_ACTIONS[activity.action],
+                    });
                     return;
                 case "botCreated":
                     track(happyAgentId, "bot_created", {
@@ -695,6 +833,10 @@ export function desktopAnalyticsCreate(options: {
         },
         dispose() {
             directoryUnsubscribe();
+            followed?.stop();
+            if (typeof document !== "undefined")
+                document.removeEventListener("visibilitychange", windowChanged);
+            window.removeEventListener("focus", windowChanged);
             appOpenedCancel();
             window.removeEventListener("pagehide", closing);
             closers.clear();

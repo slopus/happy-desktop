@@ -665,6 +665,8 @@ export interface ConversationServiceNoticeEntry extends ConversationNoticeEntryB
         readonly maxAttempts?: number;
     };
     readonly title?: string;
+    /** When a failure row happened, in Unix milliseconds; absent from every other notice. */
+    readonly occurredAt?: number;
     /** Explicit durable provenance for a user-requested diagnostic handoff. */
     readonly source?: { readonly messageId: string; readonly runId: string };
     /** Execution facts and manual recovery supplied by the daemon, never the composer. */

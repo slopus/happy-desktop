@@ -2,85 +2,66 @@
 
 ## Where we are going
 
-Basic PostHog events from the desktop app that show how people get through
-onboarding and how they create and use things. Nothing else.
+A small set of PostHog events, shared by the desktop and the phones, that
+first shows which failures people hit and whether they recover, and then how
+they use Happy. Fewer events and more privacy win every tie: an event earns its
+place only if it answers a question no other event answers, and anything
+`message_sent` already says is not its own event. Opening, viewing, or
+navigating is never sent, and nothing is counted on the device.
+
+## Source of truth
+
+- `packages/happy-desktop-analytics/catalog.json` is the contract: every event,
+  property, and allowed value any client may send. It is a byte-identical copy
+  of the shared catalog the phones use. It is never edited here; a change is
+  made to the master copy and copied in.
+- The shared taxonomy spec (`analytics-taxonomy.md`, kept with the catalog's
+  master copy) explains it. Where they disagree, the catalog wins.
+- `analyticsCatalog.ts` is the desktop's typed part of the catalog, and
+  `catalog.test.ts` holds it to `catalog.json`: the same desktop events,
+  properties, types, and values, with every event, property, or value the
+  desktop does not send listed there with its reason.
 
 ## Privacy
 
-- Only the user ID and enum or count fields defined in the table below. Anything else does not typecheck.
-- No IP from the desktop: events set `$ip: null` and `$geoip_disable: true`. The project's "Discard client IP data" stays off, so PostHog still receives and may keep the request's IP. Settings says so: "Our analytics provider, PostHog, receives your IP address with each event and may keep it; we turn off its location lookup and don't use your IP."
-- No `$current_url`, no paths, no project, repo, branch or bot names, no prompts or message text, no emails, display names or hostnames.
-- No autocapture, pageviews, session recording or person properties.
-- Every event carries only `app_version`, `flavor` (`standard | nightly`), `os` (`mac | win | linux`, where the desktop runs), `os_version` (the bare OS version number, e.g. `15.6.0` or `10.0.26100`; null on Linux, which reports only a kernel release, and on older shells), `arch` (`arm64 | x64 | other`, the desktop app's own architecture; null on older shells), and for the connected Happy Agent `agent_os` (`mac | win | linux`), `agent_location` (`local | remote`) and `happy_agent_version`.
-- Only the desktop app sends events. Happy Agent sends none; it only hands the desktop the phone-matching user ID. The phone keeps its own events. `message_sent` is one event shared with the phone and web, with the same name and properties (see below).
-- Default on, with an off switch in Settings. `DO_NOT_TRACK=1` turns it off too.
+- Only closed enums, counts, booleans, version strings, and allowlisted model
+  ids leave the window. No text anyone wrote, no names, ids, paths, URLs, hosts,
+  error messages, or stacks. Anything else does not typecheck, and
+  `analyticsBeforeSend` drops any property the catalog does not name for that
+  event, or whose value its rule does not allow.
+- `model` is a first-party vendor-qualified id (`anthropic/…`, `openai/…`,
+  `xai/…`, `google/…`, `zai/…`, `moonshotai/…`), else `other`. `os_version` is
+  major.minor only. There is no per-account hash.
+- No IP from the desktop: events set `$ip: null` and `$geoip_disable: true`.
+  PostHog still receives the request's IP unless the project's "Discard client
+  IP data" is on, and Settings says so.
+- No autocapture, pageviews, session recording, or person properties.
 
 ## Identity
 
-A random install ID until the phone is paired. After pairing, alias it to the
-phone's `anonID`, so desktop and phone are one person. Happy Agent has to
-provide that ID.
+A random install ID per installation. It is never derived from, or aliased to,
+an account, a Happy Agent, or the phone's `anonID`.
 
-## Events
+## Switching it off
 
-| event | fires when | payload |
-|---|---|---|
-| `app_opened` | once per launch, when the active Happy Agent's version is known, or after 10 s without it (or at close, whichever is first) | `launch_count: number` |
-| `onboarding_step_viewed` | the step changes | `step: setup \| subscriptions \| get_app \| connect_phone` |
-| `onboarding_setup_result` | the Setup step ends: Happy Agent answers and setup moves on, or the window closes while Setup is still running (once per pass through Setup in a window) | `result: ok \| failed`, `error_code?: node_missing \| download_failed \| start_failed \| start_timeout \| version_mismatch \| connect_failed \| state_unreadable \| closed_during_setup` (on close, the last failure Setup met, else `closed_during_setup`), `duration_ms: number`; with `download_failed` from a shell that codes it, also `error_detail: release_lookup_rate_limited \| release_lookup_failed \| release_unavailable \| network_unreachable \| transfer_interrupted \| transfer_timeout \| transfer_http_error \| integrity_mismatch \| disk_full \| filesystem_locked \| extract_failed \| install_lock_timeout \| unclassified`, `attempt_count: number` (requests made for the archive, resumes included), `transfer_percent_bucket: none \| under_half \| over_half \| complete` |
-| `onboarding_assistant_status` | Subscriptions continues | `assistant: claude \| codex \| grok \| custom`, `status: signed_in \| not_signed_in \| not_installed \| check_failed` (one event per card; for `custom`, `signed_in` means a valid custom configuration), `path_refreshed: boolean` (the command was found only on a PATH entry added after the desktop started, or at its installer's default location; false for `custom` and `not_installed`) |
-| `onboarding_command_copied` | a Subscriptions card's command or prompt is copied | `assistant: claude \| codex \| grok \| custom`, `kind: install \| sign_in \| agent_prompt`, `shell: powershell \| posix` (which variant of the commands was shown; never the copied text) |
-| `onboarding_local_apps` | Subscriptions first shows in a window | `claude_desktop_app`, `codex_desktop_app`, `antigravity_app`, `agy_cli`: each `boolean`, or null when unknown or when there is no verified signal on that OS |
-| `onboarding_subscriptions_exit` | the window closes on Subscriptions without continuing | `claude_status`, `codex_status`, `grok_status`, `custom_status`: the `onboarding_assistant_status` enum, or null while a card is still checking |
-| `onboarding_mobile` | mobile step ends | `action: paired \| skipped` |
-| `onboarding_completed` | onboarding reaches `complete` | none |
-| `conversation_created` | a new conversation starts | `model`, `model_provider_kind`, `provider_account_hash`, `effort` (as in `message_sent`), `source: workspace \| command_palette \| shortcut \| voice` |
-| `project_added` | a project is added | `source: open_folder \| clone_github`, `result: ok \| failed`, `error_code?` |
-| `workspace_created` | a worktree is created | `result`, `error_code?` |
-| `bot_created` | a bot is created | `source: sidebar \| voice`, `result`, `error_code?` |
-| `subtask_created` | a subtask first appears | `result`, `task_depth` (the new subtask's depth, as in `message_sent`) |
-| `message_sent` | the user sends a message | the shared properties below |
+Everything lives in `packages/happy-desktop-analytics` and the renderer facade
+`desktopAnalytics.ts` with its two observers (`desktopConversationAnalytics.ts`,
+`desktopMobilePairingAnalytics.ts`). Deleting them and their call sites in
+`renderer.tsx` removes analytics. A build without a PostHog key sends nothing,
+nor does a development window. The Settings switch stops the next event at
+once; events are sent as they are captured, so no batch is left to go out.
 
-Events fired as the window closes (`onboarding_setup_result` with a close, `onboarding_subscriptions_exit`, a pending `app_opened`) are sent at once by `sendBeacon`. That is best effort; the library is loaded at startup when analytics is on so it is ready by then. A window driven by automation (`navigator.webdriver`, as Playwright makes CI's boot checks) has its events dropped by PostHog itself, so CI sends none.
+## The desktop's part
 
-`onboarding_setup_result.error_code` comes only from fixed facts: the setup stage, which of the window's own requests failed, the shell's `start_timeout` code (a start command killed by its timeout, or an agent that never answered), and the local connection's protocol check (`version_mismatch`). No error message is classified or sent. An older shell sends no code, and its failures keep the stage-based code. `node_missing` is reachable only with an externally managed daemon; a managed Happy Agent brings its own Node. There is no `port_in_use`: Happy Agent reports a busy port only as message text, so it cannot be told apart without parsing it.
-
-`onboarding_local_apps` comes from the desktop shell's bounded, read-only file checks at each vendor's installer locations (on macOS also the app bundle's identifier, read from its `Info.plist`); nothing is started and no path, version or name leaves the shell, only the booleans. The Codex desktop app is the ChatGPT app with bundle `com.openai.codex`; ChatGPT Classic does not count. Antigravity counts Antigravity and Antigravity IDE. An older shell, which does not look, sends all four as null.
-
-`error_detail` is the shell's own code for a failed Happy Agent download, set where the failure is raised: the GitHub API's status and rate-limit header for the release lookup, whether any response or any byte arrived for the archive, the size and checksum checks, the Node system error code of a filesystem step (`ENOSPC` is `disk_full`; `EPERM`, `EBUSY`, and `EACCES` are `filesystem_locked`), and the unpacking step. It is sent only beside `download_failed`, and an older shell sends none of the three download fields. No message, URL, or path is read to choose it.
-
-### Shared `message_sent`
-
-`message_sent` is one event across phone, web and desktop. The event name and
-its properties are shared with the phone (happy-app
-`packages/happy-app/sources/track/messageSentProperties.ts`).
-
-| property | type | desktop value |
-|---|---|---|
-| `client` | `ios \| android \| web \| desktop` | `desktop` |
-| `target` | `chief_of_staff \| bot \| session` or null | from the bot that owns the conversation |
-| `session_client` | `happy_agent \| cli` or null | `happy_agent` |
-| `happy_agent_version` | string or null | the connected Happy Agent's version |
-| `model` | string or null | the Happy Agent model id, e.g. `anthropic/opus-5`; never `providerId:modelId`; null is the agent default |
-| `model_provider_kind` | string or null | the provider's configured type (`claude`, `codex`, `grok`, `bedrock`, …), never its account id and never `custom` |
-| `provider_account_hash` | string or null | first 12 hex characters of SHA-256(install ID + `:` + provider ID), so two accounts of one kind read apart; never the provider ID or account name; null when unknown |
-| `effort` | string or null | the effort level sent, lowercase; null is the default |
-| `agent_os` | `mac \| win \| linux \| other` or null | as in the common fields |
-| `bot_system_key` | string or null | the addressed bot's raw `systemKey` (`chief_of_staff`, …); null for user bots and other sessions; never a bot name or ID |
-| `task_depth` | number or null | 0 top-level conversation or bot, 1 subtask, 2 sub-subtask; null when unknown; never parent IDs or titles |
-
-`error_code` is an enum. It never holds message text. `chief_of_staff` means
-`systemKey === "chief_of_staff"`. Every other bot is just `bot`.
-
-## Package
-
-A new `packages/happy-desktop-analytics` package. One `track(event, payload)`
-call over a closed, typed catalog, sent from the renderer with `posthog-js` to
-PostHog project 202516 (`us.i.posthog.com`). No sampling.
-
-## Open questions
-
-- Is it OK to change Happy Agent so desktop and phone share one person (it would expose the phone's `anonID`)? If not, the desktop stays on its own install ID.
-- Subtasks are created by agents, not by a desktop button. Should we count them on the desktop when one first appears, or in Happy Agent?
-- Should `model_id` be sent as is, or mapped to a fixed list of models?
-- `agent_os` needs Happy Agent's `GET /v0/health` to report its OS family (`mac | win | linux`, no hostname). Is that change OK? Until it ships, `agent_os` is left out rather than guessed.
+- Errors first: `chat_failure_shown` (a fresh failure card in the focused
+  conversation, counted once per failure on this device), `chat_failure_action_clicked`,
+  `agent_connection_lost` (one per outage of 10 s or more while the window is
+  on screen, sent when it ends), `error_shown` (at most once per area and code
+  every 10 minutes, with `repeat_count`), `onboarding_setup_result`, and the
+  `mobile_pairing_*` results.
+- Then use: `app_opened`, `message_sent`, `conversation_created`,
+  `project_added`, `workspace_created`, `bot_created`, `task_created`, and the
+  `onboarding_*` events.
+- Not yet: `app_crashed`, which needs the main process to leave a marker for
+  the next launch, and the voice events, which need the voice store to keep a
+  typed reason instead of an error string.

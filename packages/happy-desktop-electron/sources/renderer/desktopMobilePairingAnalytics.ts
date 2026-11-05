@@ -156,7 +156,8 @@ function relayFollow(
                     failureQueued = false;
                     if (!current.shown || current.phase !== "failed" || method() !== "relay")
                         return;
-                    report("mobile_pairing_failed", { method: "relay" });
+                    // A relay pairing says only that it stopped, never why.
+                    report("mobile_pairing_failed", { method: "relay", error_code: "unknown" });
                     attempted = false;
                 });
             }
@@ -188,7 +189,8 @@ function directFollow(
             (read.kind === "read-failed" ||
                 (read.kind === "ready" && read.connector.status === "failed") ||
                 snapshot.actionError !== undefined);
-        if (failing && !noCode) report("mobile_pairing_failed", { method: "direct" });
+        if (failing && !noCode)
+            report("mobile_pairing_failed", { method: "direct", error_code: "unavailable" });
         noCode = failing;
         if (!pairing) return;
         if (pairing.status === "waiting" || pairing.status === "verifying") {
@@ -209,10 +211,12 @@ function directFollow(
             case "completed":
                 report("mobile_pairing_completed", { method: "direct" });
                 return;
-            case "failed":
             case "rejected":
             case "expired":
-                report("mobile_pairing_failed", { method: "direct" });
+                report("mobile_pairing_failed", { method: "direct", error_code: pairing.status });
+                return;
+            case "failed":
+                report("mobile_pairing_failed", { method: "direct", error_code: "unknown" });
                 return;
             case "cancelled":
                 report("mobile_pairing_cancelled", { method: "direct" });

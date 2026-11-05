@@ -2316,6 +2316,18 @@ export function happyAgentWorkspaceStoreCreate(
     const output = deps.output ?? (() => undefined);
     const activityRecord = (activity: HappyAgentActivity): void =>
         output({ type: "activityRecorded", activity });
+    /** The reader acted on a failure row of the open conversation. */
+    const failureActionRecord = (
+        entryId: string,
+        action: Extract<HappyAgentActivity, { kind: "failureActionClicked" }>["action"],
+    ): void => {
+        if (conversation.type !== "ready") return;
+        const entry = conversation.value.entries.find(
+            (candidate) => candidate.kind === "notice" && candidate.id === entryId,
+        );
+        if (entry?.kind !== "notice" || entry.variant !== "notice") return;
+        activityRecord({ kind: "failureActionClicked", action, failure: entry.failure?.kind });
+    };
     /**
      * Names a model the way activity reports it: the provider by the kind of
      * service its catalog entry says it is, so two accounts with one service
@@ -2333,9 +2345,7 @@ export function happyAgentWorkspaceStoreCreate(
                       ?.type
                 : undefined;
         return {
-            ...(selection.providerId === undefined || providerType === undefined
-                ? {}
-                : { providerId: selection.providerId, providerType }),
+            ...(providerType === undefined ? {} : { providerType }),
             ...(selection.modelId === undefined ? {} : { modelId: selection.modelId }),
             ...(selection.effort === undefined ? {} : { effort: selection.effort }),
         };
@@ -5206,6 +5216,7 @@ export function happyAgentWorkspaceStoreCreate(
                                 const state = target?.get();
                                 if (!target || state?.session.type !== "ready")
                                     throw new Error("The conversation is not ready.");
+                                const steering = state.runStatus === "running";
                                 await target.voiceMessageSendConfirmed(
                                     event.text,
                                     state.session.value.permissionMode,
@@ -5215,6 +5226,8 @@ export function happyAgentWorkspaceStoreCreate(
                                     ...activityAddress(conversationId),
                                     source: "voice",
                                     model: activityModel(state.session.value),
+                                    hasAttachment: false,
+                                    steering,
                                 });
                             });
                             return;
@@ -5247,6 +5260,7 @@ export function happyAgentWorkspaceStoreCreate(
                                         event.text,
                                         event.attachments,
                                     );
+                                    const steering = store.get().runStatus === "running";
                                     await store.messageSend(text, images, () => {
                                         // Refused after it left the composer,
                                         // as a send racing the start of a drain
@@ -5301,6 +5315,8 @@ export function happyAgentWorkspaceStoreCreate(
                                             session.type === "ready"
                                                 ? activityModel(session.value)
                                                 : {},
+                                        hasAttachment: event.attachments.length > 0,
+                                        steering,
                                     });
                                     fileCommentsSpend(event.attachments);
                                 }),
@@ -5776,6 +5792,8 @@ export function happyAgentWorkspaceStoreCreate(
                     taskDepth: 0,
                     source: "new_session",
                     model,
+                    hasAttachment: attachments.length > 0,
+                    steering: false,
                 });
                 return location;
             });
@@ -5974,23 +5992,25 @@ export function happyAgentWorkspaceStoreCreate(
                           ...(selection === undefined ? {} : { selection }),
                       });
         } catch (error) {
-            if (kind === "bot")
-                activityRecord({
-                    kind: "botCreated",
-                    source: "sidebar",
-                    result: happyAgentActionFailed(error),
-                });
+            activityRecord(
+                kind === "bot"
+                    ? {
+                          kind: "botCreated",
+                          source: "sidebar",
+                          result: happyAgentActionFailed(error),
+                      }
+                    : { kind: "taskCreated", result: happyAgentActionFailed(error) },
+            );
             if (disposed) return;
             botCreateDraft = { ...pending, submitting: false };
             recompute();
             throw happyAgentUserError(error);
         }
-        if (kind === "bot")
-            activityRecord({
-                kind: "botCreated",
-                source: "sidebar",
-                result: HAPPY_AGENT_ACTION_OK,
-            });
+        activityRecord(
+            kind === "bot"
+                ? { kind: "botCreated", source: "sidebar", result: HAPPY_AGENT_ACTION_OK }
+                : { kind: "taskCreated", result: HAPPY_AGENT_ACTION_OK },
+        );
         if (disposed) return;
         // The next new session starts the way this one did.
         if (selection) client.models.selectionStarted(selection);
@@ -6049,6 +6069,8 @@ export function happyAgentWorkspaceStoreCreate(
                 taskDepth: 0,
                 source: "new_session",
                 model: activityModel(selection ?? {}),
+                hasAttachment: message.attachments.length > 0,
+                steering: false,
             });
         } catch (error) {
             // The bot exists but its first message did not go. It cannot be
@@ -7301,6 +7323,7 @@ export function happyAgentWorkspaceStoreCreate(
                 list.groupConversationRefusal(chief.workspaceId)
             )
                 return;
+            failureActionRecord(entryId, "assistance");
             let attempts = errorAssistanceAttempts.get(sourceSessionId);
             if (!attempts) {
                 attempts = new Map();
@@ -8243,13 +8266,15 @@ export function happyAgentWorkspaceStoreCreate(
         compact: () =>
             writeGuard(openGroupConversationRefusal(), () => withChat((store) => store.compact())),
         failureRetry: (entryId) =>
-            writeGuard(openGroupConversationRefusal(), () =>
-                withChat((store) => store.failureRetry(entryId)),
-            ),
+            writeGuard(openGroupConversationRefusal(), () => {
+                failureActionRecord(entryId, "retry");
+                return withChat((store) => store.failureRetry(entryId));
+            }),
         failureSwitch: (entryId, target) =>
-            writeGuard(openGroupConversationRefusal(), () =>
-                withChat((store) => store.failureSwitch(entryId, target)),
-            ),
+            writeGuard(openGroupConversationRefusal(), () => {
+                failureActionRecord(entryId, "switch");
+                return withChat((store) => store.failureSwitch(entryId, target));
+            }),
         historyLoadMore: () => chatStore?.historyLoadMore(),
         usageGet: () => withChat((store) => store.usageGet()),
         usagePanelOpen: () => panel.usageSelect(),

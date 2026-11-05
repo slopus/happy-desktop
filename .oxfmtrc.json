@@ -1,6 +1,9 @@
 {
     "$schema": "./node_modules/oxfmt/configuration_schema.json",
-    "ignorePatterns": ["packages/happy-desktop-ui/src/assets/animations/*.json"],
+    "ignorePatterns": [
+        "packages/happy-desktop-ui/src/assets/animations/*.json",
+        "packages/happy-desktop-analytics/catalog.json"
+    ],
     "tabWidth": 4,
     "useTabs": false
 }

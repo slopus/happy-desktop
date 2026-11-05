@@ -1,7 +1,8 @@
 {
     "extends": "../../tsconfig.base.json",
     "compilerOptions": {
-        "lib": ["ES2022", "DOM", "DOM.Iterable"]
+        "lib": ["ES2022", "DOM", "DOM.Iterable"],
+        "resolveJsonModule": true
     },
-    "include": ["src"]
+    "include": ["src", "catalog.json"]
 }

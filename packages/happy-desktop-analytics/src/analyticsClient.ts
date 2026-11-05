@@ -1,7 +1,8 @@
 import type { CaptureResult, PostHog } from "posthog-js";
 import {
     ANALYTICS_EVENT_NAMES,
-    ANALYTICS_PROPERTY_NAMES,
+    analyticsRuleOf,
+    analyticsValueAllowed,
     type AnalyticsEventName,
     type AnalyticsFlag,
     type AnalyticsEventProperties,
@@ -53,6 +54,8 @@ export interface AnalyticsClient {
 export interface AnalyticsClientOptions {
     /** The project's public key. Absent means nothing is ever loaded or sent. */
     readonly apiKey: string | undefined;
+    /** Where events go instead of PostHog: a local capture endpoint, for checking them. */
+    readonly host?: string;
     /** This installation's random identity; never derived from anything about the person. */
     readonly distinctId: string;
     /** Read before every event, so turning analytics off stops the next one. */
@@ -64,14 +67,19 @@ export interface AnalyticsClientOptions {
  * its own — the page URL, which in a packaged app is a file path under the
  * person's home directory, the referrer, screen, browser, or session — and no
  * person property ever leaves the window. An event the catalog does not name,
- * such as `$feature_flag_called`, does not leave at all.
+ * such as `$feature_flag_called`, does not leave at all, and a catalog
+ * property leaves only on its own event and with a value its rule allows.
  */
 export function analyticsBeforeSend(capture: CaptureResult | null): CaptureResult | null {
     if (capture === null || !ANALYTICS_EVENT_NAMES.has(capture.event)) return null;
     const properties: Record<string, unknown> = {};
     for (const [name, value] of Object.entries(capture.properties)) {
-        if (POSTHOG_PROPERTY_NAMES.has(name) || ANALYTICS_PROPERTY_NAMES.has(name))
+        if (POSTHOG_PROPERTY_NAMES.has(name)) {
             properties[name] = value;
+            continue;
+        }
+        const rule = analyticsRuleOf(capture.event, name);
+        if (rule && analyticsValueAllowed(rule, value)) properties[name] = value;
     }
     properties.$ip = null;
     properties.$geoip_disable = true;
@@ -97,7 +105,7 @@ export function analyticsClientCreate(options: AnalyticsClientOptions): Analytic
         loading ??= import("posthog-js").then(
             ({ default: posthog }) => {
                 posthog.init(key, {
-                    api_host: POSTHOG_HOST,
+                    api_host: options.host ?? POSTHOG_HOST,
                     bootstrap: { distinctID: options.distinctId },
                     person_profiles: "identified_only",
                     persistence: "memory",
@@ -122,6 +130,9 @@ export function analyticsClientCreate(options: AnalyticsClientOptions): Analytic
                     save_referrer: false,
                     save_campaign_params: false,
                     before_send: analyticsBeforeSend,
+                    // Each event leaves as it is captured, so turning analytics
+                    // off in Settings leaves no batch behind to go out after it.
+                    request_batching: false,
                 });
                 loaded = posthog;
                 return posthog;

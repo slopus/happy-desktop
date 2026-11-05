@@ -7,6 +7,7 @@
         ".": "./src/index.ts"
     },
     "scripts": {
+        "test": "vitest run",
         "typecheck": "tsc --project tsconfig.json",
         "format": "oxfmt --write .",
         "format:check": "oxfmt --check .",
@@ -16,6 +17,7 @@
         "posthog-js": "^1.438.3"
     },
     "devDependencies": {
-        "typescript": "^7.0.2"
+        "typescript": "^7.0.2",
+        "vitest": "^4.1.10"
     }
 }

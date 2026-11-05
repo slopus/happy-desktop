@@ -4,6 +4,7 @@ vi.hoisted(() => {
     const globals = globalThis as Record<string, unknown>;
     globals.__HAPPY_RENDERER_VERSION__ = "0.0.0-test";
     globals.__HAPPY_POSTHOG_API_KEY__ = null;
+    globals.__HAPPY_POSTHOG_HOST__ = null;
     globals.__HAPPY_LOCAL_WEB_BUILD_ID__ = null;
     globals.__HAPPY_LOCAL_WEB_VERSION__ = null;
 });
@@ -191,7 +192,7 @@ it("reports a relay code that failed, and one left by skipping", async () => {
     await settle();
     expect(reported).toEqual([
         shown("relay", "onboarding"),
-        { event: "mobile_pairing_failed", properties: { method: "relay" } },
+        { event: "mobile_pairing_failed", properties: { method: "relay", error_code: "unknown" } },
         { event: "mobile_pairing_cancelled", properties: { method: "relay" } },
     ]);
 });
@@ -298,9 +299,12 @@ it("reports how each direct pairing seen in progress ended", () => {
     leave();
     expect(reported).toEqual([
         { event: "mobile_pairing_completed", properties: { method: "direct" } },
-        { event: "mobile_pairing_failed", properties: { method: "direct" } },
-        { event: "mobile_pairing_failed", properties: { method: "direct" } },
-        { event: "mobile_pairing_failed", properties: { method: "direct" } },
+        {
+            event: "mobile_pairing_failed",
+            properties: { method: "direct", error_code: "rejected" },
+        },
+        { event: "mobile_pairing_failed", properties: { method: "direct", error_code: "expired" } },
+        { event: "mobile_pairing_failed", properties: { method: "direct", error_code: "unknown" } },
     ]);
 });
 
@@ -315,7 +319,10 @@ it("reports a direct page that could not get a code, once", () => {
     source.set(connector(directPairing("waiting")));
     leave();
     expect(reported).toEqual([
-        { event: "mobile_pairing_failed", properties: { method: "direct" } },
+        {
+            event: "mobile_pairing_failed",
+            properties: { method: "direct", error_code: "unavailable" },
+        },
     ]);
 });
 

@@ -1618,19 +1618,23 @@ if (mediaPreviewBridge) {
         for (const event of signInEventsEarly.splice(0)) notices.authEventReceive(event);
         // The update card outlives the main process's report of the update
         // until this window has reconnected and read the catalog again.
-        const agentUpdate = desktopAgentUpdateStoreCreate({
-            daemon: daemon ?? unavailableDaemonStore,
-            happyAgents,
-        });
+        const agentUpdate = analytics.agentUpdateObserve(
+            desktopAgentUpdateStoreCreate({
+                daemon: daemon ?? unavailableDaemonStore,
+                happyAgents,
+            }),
+        );
         const agentReleaseNotes = desktopAgentReleaseNotesStoreCreate({
             daemon: daemon ?? unavailableDaemonStore,
             fetch: (url, init) => fetch(url, init),
         });
-        const agentBroken = desktopAgentBrokenStoreCreate({
-            daemon: daemon ?? unavailableDaemonStore,
-            happyAgents,
-            runtime: runtimeStore,
-        });
+        const agentBroken = analytics.agentBrokenObserve(
+            desktopAgentBrokenStoreCreate({
+                daemon: daemon ?? unavailableDaemonStore,
+                happyAgents,
+                runtime: runtimeStore,
+            }),
+        );
         function activeRouter(): HappyAgentRouter {
             return (
                 connectionUis.get(happyAgents.get().activeHappyAgentId ?? LOCAL_HAPPY_AGENT_ID)
