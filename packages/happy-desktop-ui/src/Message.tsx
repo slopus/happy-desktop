@@ -1070,6 +1070,30 @@ const MESSAGE_LIST_HEADER_KEY = "__happy_message_list_header__";
 function messageListScrollOffsetMoved(next: number, previous: number): boolean {
     return Math.abs(next - previous) >= 1;
 }
+/** How far one wheel event asks to scroll, in CSS pixels. */
+function messageListWheelPixels(event: WheelEvent, element: HTMLElement): number {
+    if (event.deltaMode === WheelEvent.DOM_DELTA_LINE) return event.deltaY * 16;
+    if (event.deltaMode === WheelEvent.DOM_DELTA_PAGE) return event.deltaY * element.clientHeight;
+    return event.deltaY;
+}
+/** Which way a key scrolls the transcript: 1 down, -1 up, 0 not at all. */
+function messageListKeyDirection(event: KeyboardEvent): number {
+    if (event.altKey || event.ctrlKey || event.metaKey) return 0;
+    switch (event.key) {
+        case "ArrowDown":
+        case "PageDown":
+        case "End":
+            return 1;
+        case "ArrowUp":
+        case "PageUp":
+        case "Home":
+            return -1;
+        case " ":
+            return event.shiftKey ? -1 : 1;
+        default:
+            return 0;
+    }
+}
 /** The padding/border-free viewport uses an overlaid scrollbar, so its resolved
  * CSS width is also its content width. Unlike clientWidth, this retains flex
  * layout's fractions without including ancestor zoom or transforms. */
@@ -1190,6 +1214,8 @@ export function MessageList(props: MessageListProps) {
     const followSentHold = useRef<number | undefined>(undefined);
     const followSeen = useRef(props.followKey);
     const wheelScrollPending = useRef(false);
+    /* Scrollbar or keyboard input whose native scroll has not been reported. */
+    const nativeInputPending = useRef(false);
     footerFollowed.current = props.footerFollowed === true;
     const pendingFollowerTop = useRef<number | undefined>(undefined);
     const readerAnchor = useRef<MessageListVirtualAnchor | undefined>(undefined);
@@ -1233,6 +1259,49 @@ export function MessageList(props: MessageListProps) {
         // scrolling guard mistake this model write for a duplicate event.
         // Activity reattachment still needs the cache when no observer exists.
         virtualizer.scrollOffset = element.scrollTop;
+    };
+    /*
+     * A thumb drag, a track click or wheel, and keyboard scrolling write the
+     * native offset in a task of their own, and its scroll event waits for the
+     * next frame. A commit in between, as streaming makes, would read the
+     * model's older offset and put the reader back: following would write the
+     * end again, and a parked anchor would restore its row. Adopt the native
+     * offset as the reader's first, but only after such input: zoom, resize,
+     * and hiding move it too, and their commits hold the reader themselves. A
+     * clamp is not the reader's either: content that shrank under the end is
+     * held by the commit that shrank it.
+     */
+    const nativeReaderMoveAdopt = (element: HTMLElement): boolean => {
+        if (
+            !initialPositionApplied.current ||
+            pendingFollowerTop.current !== undefined ||
+            !(
+                nativeInputPending.current ||
+                element.parentElement?.hasAttribute("data-scrollbar-dragging") === true
+            )
+        )
+            return false;
+        const top = element.scrollTop;
+        if (!messageListScrollOffsetMoved(top, readerScrollTop.current)) return false;
+        const expected = expectedScrollTop.current;
+        if (expected !== undefined && !messageListScrollOffsetMoved(top, expected)) return false;
+        if (top < readerScrollTop.current && element.scrollHeight - element.clientHeight - top <= 1)
+            return false;
+        if (following.current) {
+            // A follower carried further down is still at the end.
+            if (top > readerScrollTop.current) return false;
+            escapedFromFollow.current = true;
+            following.current = false;
+            geometryFollowInset.current = 0;
+        }
+        wheelScrollPending.current = false;
+        readerScrollTop.current = top;
+        pendingAnchor.current = undefined;
+        readerAnchor.current = modelAnchorCapture(viewportGeometry.current.height, top) ?? {
+            scrollTop: top,
+            type: "scrollTop",
+        };
+        return true;
     };
     const scrollBottomFollow = (
         element: HTMLElement,
@@ -1521,7 +1590,8 @@ export function MessageList(props: MessageListProps) {
                 element.scrollTop,
             );
             focus = readerFocus(viewportGeometry.current.height);
-        }
+        } else if (element && nativeReaderMoveAdopt(element))
+            focus = readerFocus(viewportGeometry.current.height);
         if (props.followKey !== followSeen.current) {
             followSeen.current = props.followKey;
             const bottom =
@@ -3091,6 +3161,7 @@ export function MessageList(props: MessageListProps) {
         const element = list.current;
         if (!element || !modelRendered) return;
         if (!rowModelCurrent()) return;
+        nativeReaderMoveAdopt(element);
         visibleRowsReport(element);
         endAwayUpdate(element);
         const actualHeight = messageListViewportHeight(element);
@@ -3374,7 +3445,9 @@ export function MessageList(props: MessageListProps) {
              * the reader immediately so a streaming commit in the same frame
              * cannot pin them back to the tail before that scroll is reported.
              */
-            if (event.deltaY < 0) {
+            /* A wheel that cannot move the transcript, as in one that does not
+               fill its viewport yet, leaves a follower following. */
+            if (event.deltaY < 0 && element.scrollTop > 0) {
                 wheelScrollPending.current = true;
                 geometryFollowInset.current = 0;
                 escapedFromFollow.current = true;
@@ -3401,8 +3474,15 @@ export function MessageList(props: MessageListProps) {
                     0,
                     element.scrollHeight - element.scrollTop - element.clientHeight,
                 );
-                if (!event.ctrlKey && bottomOffset <= BOTTOM_WHEEL_EPSILON) event.preventDefault();
-                if (bottomOffset <= FOLLOW_BOTTOM_THRESHOLD) {
+                /* A notch that reaches the end is the reader going to it. A
+                   mouse wheel animates each notch over several frames, and the
+                   end that streaming moves meanwhile lands the animation short
+                   of it, so the reader is taken there now rather than left a
+                   line above a live end that every later notch chases. */
+                const reach = messageListWheelPixels(event, element);
+                if (!event.ctrlKey && bottomOffset <= Math.max(BOTTOM_WHEEL_EPSILON, reach))
+                    event.preventDefault();
+                if (bottomOffset <= Math.max(FOLLOW_BOTTOM_THRESHOLD, reach)) {
                     escapedFromFollow.current = false;
                     following.current = true;
                     sparseInsetRelease();
@@ -3420,7 +3500,17 @@ export function MessageList(props: MessageListProps) {
         }
         let previousScrollTop = element.scrollTop;
         scrollHeightBaseline.current = element.scrollHeight;
+        /* The scrollbar's track sits beside the scrollport, so its clicks,
+           drags, and wheels reach the host but never the scrollport itself. */
+        const host = element.parentElement;
+        const onTrackInput = (event: Event) => {
+            if (event.target instanceof Element && event.target.closest("[data-scrollbar-track]"))
+                nativeInputPending.current = true;
+        };
+        host?.addEventListener("pointerdown", onTrackInput, { capture: true });
+        host?.addEventListener("wheel", onTrackInput, { capture: true, passive: true });
         const onScroll = () => {
+            nativeInputPending.current = false;
             const currentScrollHeight = element.scrollHeight;
             const expected = expectedScrollTop.current;
             if (
@@ -3501,7 +3591,12 @@ export function MessageList(props: MessageListProps) {
                 scrollDelta > 0 &&
                 // Geometry compensation must not resume following against an upward wheel.
                 wheelDirection >= 0 &&
-                !contentHeightChanged &&
+                /* A live end moves between any two scroll events, so changed
+                   content blocks only a move nobody asked for: a reader who
+                   wheels, keys, or drags down to the end follows it. */
+                (!contentHeightChanged ||
+                    wheelDirection > 0 ||
+                    element.parentElement?.hasAttribute("data-scrollbar-dragging") === true) &&
                 bottomOffset <= FOLLOW_BOTTOM_THRESHOLD
             )
                 escapedFromFollow.current = false;
@@ -3529,10 +3624,26 @@ export function MessageList(props: MessageListProps) {
            read the next scroll event as the reader's. */
         const onKeyDown = (event: KeyboardEvent) => {
             wheelExpiryCancel();
-            wheelDirection = 0;
             wheelScrollPending.current = false;
             expectedScrollTop.current = undefined;
             overscanRequireCurrent.current();
+            const editing =
+                event.target instanceof HTMLElement &&
+                event.target.closest("input, textarea, select, [contenteditable]") !== null;
+            wheelDirection = editing || event.defaultPrevented ? 0 : messageListKeyDirection(event);
+            if (wheelDirection !== 0) nativeInputPending.current = true;
+            /* Keyboard scrolling animates too, and a follower's next streaming
+               commit would write the end and cancel it: like an upward wheel,
+               an upward key hands the position to the reader before it moves. */
+            if (wheelDirection < 0 && following.current && element.scrollTop > 0) {
+                geometryFollowInset.current = 0;
+                escapedFromFollow.current = true;
+                following.current = false;
+                readerAnchor.current = modelAnchorCaptureCurrent.current(
+                    messageListViewportHeight(element),
+                    element.scrollTop,
+                ) ?? { scrollTop: element.scrollTop, type: "scrollTop" };
+            }
             if (
                 event.key === "End" &&
                 !event.defaultPrevented &&
@@ -3587,6 +3698,9 @@ export function MessageList(props: MessageListProps) {
             element.removeEventListener("keydown", onKeyDown);
             element.removeEventListener("touchstart", onGeometryScrollIntent);
             element.removeEventListener("wheel", onWheel);
+            host?.removeEventListener("pointerdown", onTrackInput, { capture: true });
+            host?.removeEventListener("wheel", onTrackInput, { capture: true });
+            nativeInputPending.current = false;
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps -- current capture refs read the latest modeled rows while this effect owns one scrollport-listener lifetime
     }, [virtualized, virtualizer]);
