@@ -92,6 +92,7 @@ jobs:
                   PS
                   powershell.exe -NoLogo -NoProfile -NonInteractive -File "$(cygpath -w "$PWD/.context/acl-probe.ps1")" > .context/windows-electron/acl-probe.log 2>&1 || cat .context/windows-electron/acl-probe.log
             - name: Run Electron workloads
+              timeout-minutes: 20
               run: |
                   mkdir -p .context/windows-electron
                   failed=0
