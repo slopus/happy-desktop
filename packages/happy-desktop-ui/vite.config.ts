@@ -71,9 +71,31 @@ export default defineConfig({
                     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
                     await page.mouse.wheel(0, deltaY);
                 },
+                scrollReproDrag: async ({ page, iframe }, direction: "up" | "down") => {
+                    const thumb = iframe
+                        .locator(
+                            '[data-scrollbar-track][data-axis="vertical"] .happy-scrollbar__thumb',
+                        )
+                        .first();
+                    const box = await thumb.boundingBox();
+                    if (!box) throw new Error("Scroll repro thumb is missing");
+                    const x = box.x + box.width / 2;
+                    const y = box.y + box.height / 2;
+                    await page.mouse.move(x, y);
+                    await page.mouse.down();
+                    for (let i = 1; i <= 10; i += 1) {
+                        await page.mouse.move(x, y + (direction === "up" ? -30 : 30) * i);
+                        await new Promise((resolve) => setTimeout(resolve, 40));
+                    }
+                    await page.mouse.up();
+                },
+                scrollReproKey: async ({ page, iframe }, key: string) => {
+                    await iframe.locator("[data-scrollbar-viewport]").first().focus();
+                    await page.keyboard.press(key);
+                },
             },
             enabled: true,
-            headless: true,
+            headless: process.env.HAPPY_SCROLL_REPRO_HEADED !== "1",
             instances: browsers.map((browser) => ({ browser })),
             provider: playwright({
                 launchOptions: {

@@ -15,6 +15,8 @@ import { ConversationView } from "./ConversationView";
 declare module "vitest/browser" {
     interface BrowserCommands {
         scrollReproWheel: (deltaY: number) => Promise<void>;
+        scrollReproDrag: (direction: "up" | "down") => Promise<void>;
+        scrollReproKey: (key: string) => Promise<void>;
     }
 }
 
@@ -116,6 +118,28 @@ it("records trusted wheel movement during a growing response", async () => {
                 scrollTop: viewport.scrollTop,
             }),
         );
+        const track = container.querySelector<HTMLElement>(
+            '[data-scrollbar-track][data-axis="vertical"]',
+        );
+        expect(track).not.toBeNull();
+        for (const type of ["pointerdown", "pointermove", "pointerup"] as const) {
+            track?.addEventListener(type, (event) =>
+                events.push({
+                    type,
+                    time: performance.now() - started,
+                    y: event.clientY,
+                    trusted: event.isTrusted,
+                }),
+            );
+        }
+        viewport.addEventListener("keydown", (event) =>
+            events.push({
+                type: "keydown",
+                time: performance.now() - started,
+                key: event.key,
+                trusted: event.isTrusted,
+            }),
+        );
         const capture = () => {
             const rect = viewport.getBoundingClientRect();
             const rows = [
@@ -160,6 +184,28 @@ it("records trusted wheel movement during a growing response", async () => {
             await delay(75);
         }
         await delay(600);
+        // Position the fixture at the tail, then use trusted reader input to
+        // re-arm following before measuring an independent input scenario.
+        viewport.scrollTop = viewport.scrollHeight;
+        await delay(100);
+        await commands.scrollReproWheel(4 * devicePixelRatio);
+        events.push({ type: "drag-up-start", time: performance.now() - started });
+        await commands.scrollReproDrag("up");
+        await delay(400);
+        events.push({ type: "drag-down-start", time: performance.now() - started });
+        await commands.scrollReproDrag("down");
+        await delay(400);
+        viewport.scrollTop = viewport.scrollHeight;
+        await delay(100);
+        await commands.scrollReproWheel(4 * devicePixelRatio);
+        events.push({ type: "keyboard-up-start", time: performance.now() - started });
+        await commands.scrollReproKey("PageUp");
+        for (let i = 0; i < 5; i += 1) await commands.scrollReproKey("ArrowUp");
+        await delay(400);
+        events.push({ type: "keyboard-down-start", time: performance.now() - started });
+        await commands.scrollReproKey("PageDown");
+        await commands.scrollReproKey("End");
+        await delay(600);
         console.log(
             "NOTCHED_WHEEL_TRACE " + JSON.stringify({ dpr: devicePixelRatio, samples, events }),
         );
@@ -170,4 +216,4 @@ it("records trusted wheel movement during a growing response", async () => {
         root.unmount();
         container.remove();
     }
-});
+}, 90_000);

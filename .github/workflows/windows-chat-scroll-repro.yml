@@ -113,6 +113,11 @@ jobs:
             matrix:
                 os: [windows-2025, ubuntu-latest]
                 dpr: [1, 1.25, 1.5]
+                headed: ["0"]
+                include:
+                    - os: windows-2025
+                      dpr: 1.25
+                      headed: "1"
         runs-on: ${{ matrix.os }}
         timeout-minutes: 30
         defaults:
@@ -140,12 +145,15 @@ jobs:
               env:
                   HAPPY_SCROLL_REPRO_DPR: ${{ matrix.dpr }}
                   HAPPY_SCROLL_REPRO_SMOOTH: "1"
+                  HAPPY_SCROLL_REPRO_HEADED: ${{ matrix.headed }}
               run: |
                   set -o pipefail
-                  pnpm --dir packages/happy-desktop-ui exec vitest run --project chromium src/WindowsNotchedWheel.test.tsx 2>&1 | tee .context/row-height/wheel.log
+                  for iteration in 1 2 3; do
+                    pnpm --dir packages/happy-desktop-ui exec vitest run --project chromium src/WindowsNotchedWheel.test.tsx 2>&1 | tee ".context/row-height/wheel-$iteration.log" || exit 1
+                  done
             - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
               if: always()
               with:
-                  name: row-height-${{ matrix.os }}-${{ matrix.dpr }}
+                  name: row-height-${{ matrix.os }}-${{ matrix.dpr }}-headed-${{ matrix.headed }}
                   path: .context/row-height
                   if-no-files-found: warn
