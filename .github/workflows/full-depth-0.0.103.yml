@@ -9,7 +9,7 @@ permissions:
     contents: read
 
 concurrency:
-    group: full-depth-0.0.103-${{ github.ref }}
+    group: full-depth-0.0.103-${{ github.ref }}-${{ github.sha }}
     cancel-in-progress: false
 
 jobs:
