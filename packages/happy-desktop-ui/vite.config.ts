@@ -12,6 +12,7 @@ import { testDepthBrowsers, testDepthRead } from "happy-desktop-gym/test-depth";
 const depth = testDepthRead(process.env.HAPPY_TEST_DEPTH);
 const browsers = testDepthBrowsers(depth);
 const nativeWheelRepro = process.env.HAPPY_SCROLL_REPRO_NATIVE === "1";
+let parkedImageRelease: ((data: string) => void) | undefined;
 
 export default defineConfig({
     define: { "import.meta.env.HAPPY_TEST_DEPTH": JSON.stringify(depth) },
@@ -63,6 +64,33 @@ export default defineConfig({
             commands: {
                 reducedMotionEmulate: async ({ page }, reduce: boolean) => {
                     await page.emulateMedia({ reducedMotion: reduce ? "reduce" : "no-preference" });
+                },
+                scrollReproImageGate: async (
+                    { page },
+                    action: "arm" | "release" | "clear",
+                    data: string,
+                ) => {
+                    const url = "https://parked-anchor.invalid/late.png";
+                    if (action === "arm") {
+                        const bytes = new Promise<string>((resolvePromise) => {
+                            parkedImageRelease = resolvePromise;
+                        });
+                        await page.route(url, async (route) => {
+                            const image = await bytes;
+                            await route.fulfill({
+                                status: 200,
+                                contentType: "image/png",
+                                body: Buffer.from(image, "base64"),
+                            });
+                        });
+                    } else if (action === "release") {
+                        if (!parkedImageRelease) throw new Error("Image gate was not armed");
+                        parkedImageRelease(data);
+                        parkedImageRelease = undefined;
+                    } else {
+                        await page.unroute(url);
+                        parkedImageRelease = undefined;
+                    }
                 },
                 scrollReproWheel: async ({ page, iframe }, deltaY: number, count: number) => {
                     const box = await iframe
