@@ -6,9 +6,11 @@
     max-width: 560px;
     color: var(--onboarding-foreground);
     font-family: var(--happy-font-ui);
-    /* The bar takes the backdrop's ink, dark on the light gradient and light
-       on the dark one, rather than the primary tint meant for a photograph. */
-    --happy-segmented-progress-inverse-ink: var(--onboarding-foreground);
+}
+
+/* The bar follows the backdrop's ink in both appearances. */
+.happy-onboarding-steps .happy-segmented-progress[data-tone="inverse"] {
+    color: var(--onboarding-foreground);
 }
 
 /* Five steps on one line: the bar is the whole report, so nothing counts them

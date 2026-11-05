@@ -82,16 +82,9 @@
     width: 100%;
 }
 
-/*
- * A fieldset is sized by its own contents rather than by its flex parent, so
- * without this the option rows would stop at the longest label and leave the
- * rest of the measure empty. Zeroing the intrinsic minimum lets the ordinary
- * stretch apply and the options run the full width of the column.
- */
 .happy-agent-input__question {
-    /* Block, not flex: WebKit sizes a flex fieldset as a flex item with its
-       legend's height counted twice, so the card grew 48px below its content. */
-    display: block;
+    display: flex;
+    flex-direction: column;
     margin: 0;
     padding: 0;
     box-sizing: border-box;
@@ -100,15 +93,10 @@
     border: none;
 }
 
-/*
- * Floated across the full width, the legend is not the fieldset's rendered
- * legend but an ordinary first block above the options, in every engine.
- */
 .happy-agent-input__legend {
     display: flex;
     flex-direction: column;
     gap: 4px;
-    float: left;
     padding: 0;
     width: 100%;
 }

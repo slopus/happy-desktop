@@ -1,4 +1,4 @@
-import { useState, type CSSProperties } from "react";
+import { useId, useState, type CSSProperties } from "react";
 import { userInputRuleText, type HappyAgentUserInputPromptVariant } from "./userInputRule";
 import type { HappyAgentUserInputRequest, UserError } from "happy-desktop-state";
 import { Banner } from "./Banner";
@@ -80,6 +80,7 @@ function toggleValue(current: readonly string[], value: string, multiSelect: boo
  */
 export function HappyAgentUserInputPrompt(props: HappyAgentUserInputPromptProps) {
     const { request } = props;
+    const questionPrefix = useId();
     const [ownAnswers, setOwnAnswers] = useState<HappyAgentUserInputAnswerMap>({});
     const resolved = props.resolvedAnswers !== undefined;
     const controlled = props.selection !== undefined || resolved;
@@ -125,7 +126,7 @@ export function HappyAgentUserInputPrompt(props: HappyAgentUserInputPromptProps)
                 </div>
             ) : null}
             <div className="happy-agent-input__questions">
-                {request.questions.map((question) => {
+                {request.questions.map((question, questionIndex) => {
                     const selected = answers[question.id] ?? [];
                     /* A settled answer no option names was given through the
                        message box; an unanswered free-form question says so. */
@@ -135,13 +136,18 @@ export function HappyAgentUserInputPrompt(props: HappyAgentUserInputPromptProps)
                     if (question.options.length === 0 && unoffered.length === 0)
                         unoffered.push(question.required ? "No answer" : "Skipped");
                     return (
-                        <fieldset
+                        <div
+                            aria-labelledby={`${questionPrefix}-${questionIndex}`}
                             className="happy-agent-input__question"
                             data-happy-desktop-ui="happy-agent-user-input-question"
                             data-question-id={question.id}
                             key={question.id}
+                            role="group"
                         >
-                            <legend className="happy-agent-input__legend">
+                            <div
+                                className="happy-agent-input__legend"
+                                id={`${questionPrefix}-${questionIndex}`}
+                            >
                                 <span className="happy-agent-input__eyebrow">
                                     <span
                                         className="happy-agent-input__header"
@@ -159,7 +165,7 @@ export function HappyAgentUserInputPrompt(props: HappyAgentUserInputPromptProps)
                                 <span className="happy-agent-input__prompt">
                                     {question.question}
                                 </span>
-                            </legend>
+                            </div>
                             <div className="happy-agent-input__options">
                                 {question.options.map((option, optionIndex) => {
                                     const descriptionId = `${request.requestId}-${question.id}-${optionIndex}-description`;
@@ -220,7 +226,7 @@ export function HappyAgentUserInputPrompt(props: HappyAgentUserInputPromptProps)
                                     ))}
                                 </div>
                             ) : null}
-                        </fieldset>
+                        </div>
                     );
                 })}
             </div>
