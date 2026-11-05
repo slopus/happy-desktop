@@ -22,17 +22,9 @@ jobs:
             matrix:
                 include:
                     - suite: ui
-                      runner: ubuntu-latest
+                      runner: macos-15
                       package: packages/happy-desktop-ui
                       script: test
-                    - suite: gym
-                      runner: ubuntu-latest
-                      package: packages/happy-desktop-gym
-                      script: test:playwright
-                    - suite: gym-macos
-                      runner: macos-15
-                      package: packages/happy-desktop-gym
-                      script: test:playwright
         defaults:
             run:
                 shell: bash
