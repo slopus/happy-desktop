@@ -1,6 +1,7 @@
 import type {
     HappyAgentCompletionSound,
     HappyAgentMenusSnapshot,
+    HappyAgentNewSessionStart,
     HappyAgentPermissionMode,
 } from "happy-desktop-state";
 import { Banner } from "../../Banner";
@@ -30,11 +31,15 @@ export type HappyAgentGeneralSettingsProps = {
     linkOpenPlacement: HappyAgentLinkOpenPlacementChoice;
     /**
      * The model and effort a new session starts on, in the composer's own model
-     * pill; starting a new session replaces both with that session's. Its account
-     * headers are read-only: a new session runs on the account last picked in a
-     * model menu. Absent once the catalog failed.
+     * pill; while `newSessionStart` is `lastStarted`, starting a new session
+     * replaces both with that session's. Its account headers are read-only: a
+     * new session runs on the account last picked in a model menu. Absent once
+     * the catalog failed.
      */
     defaultModel?: ComposerModelControlProps;
+    /** Whether a new session follows the last one started or stays on the default model. */
+    newSessionStart: HappyAgentNewSessionStart;
+    onNewSessionStartChange: (start: HappyAgentNewSessionStart) => void;
     /**
      * The default model's menus, whose access list the composer's own access
      * picker shows; absent until the catalog is read.
@@ -165,6 +170,11 @@ const completionSoundSegments = [
     { value: "always", label: "Always" },
     { value: "focused", label: "When focused" },
     { value: "never", label: "Never" },
+];
+
+const newSessionStartSegments = [
+    { value: "lastStarted", label: "Last session" },
+    { value: "default", label: "Default model" },
 ];
 
 const linkOpenSegments = [
@@ -356,6 +366,27 @@ export function HappyAgentGeneralSettings(props: HappyAgentGeneralSettingsProps)
             >
                 <FormRow
                     control={
+                        <SegmentedControl
+                            aria-label="New sessions start on"
+                            data-testid="happy-agent-settings-new-session-start"
+                            disabled={props.unavailable !== undefined}
+                            onChange={(value) =>
+                                props.onNewSessionStartChange(value as HappyAgentNewSessionStart)
+                            }
+                            segments={newSessionStartSegments}
+                            size="small"
+                            value={props.newSessionStart}
+                        />
+                    }
+                    description={
+                        props.newSessionStart === "lastStarted"
+                            ? "The model and effort of the last session you started"
+                            : "The model and effort chosen below"
+                    }
+                    label="New sessions start on"
+                />
+                <FormRow
+                    control={
                         props.loading ? (
                             <Box className="happy-agent-settings__pending">
                                 <Spinner size={16} />
@@ -372,7 +403,11 @@ export function HappyAgentGeneralSettings(props: HappyAgentGeneralSettingsProps)
                             />
                         ) : null
                     }
-                    description="Follows the last session you started"
+                    description={
+                        props.newSessionStart === "lastStarted"
+                            ? "Follows the last session you started, on the account you last picked"
+                            : "Runs on the account you last picked in a chat"
+                    }
                     label="Default model"
                 />
                 <FormRow

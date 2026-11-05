@@ -38,20 +38,28 @@ export interface HappyAgentModelPreferenceIdentity {
     readonly modelId: string;
 }
 
+/**
+ * What a new session's model and effort come from: the last new session
+ * started (`lastStarted`), or only what was chosen in Settings (`default`).
+ * Either way a new session runs on the provider picked last.
+ */
+export type HappyAgentNewSessionStart = "lastStarted" | "default";
+
 /** One person's model choices on this Happy Agent, supplied by its preference authority. */
 export interface HappyAgentModelPreferenceDocument {
     /**
-     * The model a new session starts on: the one the last new session started
-     * on, or chosen in Settings since. It names a model only: which account
-     * serves it is `lastPickedProviderId`'s to answer.
+     * The model a new session starts on: chosen in Settings, and replaced by
+     * the last new session's while `newSessionStart` is `lastStarted`. It names
+     * a model only: which account serves it is `lastPickedProviderId`'s to answer.
      */
     readonly defaultModelId?: string;
     /**
-     * Reasoning level a new session starts on, kept apart from the model: the
-     * one the last new session started on, or chosen in Settings since. A model
-     * without that level starts on its own default.
+     * Reasoning level a new session starts on, kept apart from the model and
+     * replaced alongside it. A model without that level starts on its own default.
      */
     readonly defaultEffort?: HappyAgentThinkingLevel;
+    /** Whether starting a new session replaces the default model and effort; absent is `lastStarted`. */
+    readonly newSessionStart?: HappyAgentNewSessionStart;
     /** Access mode configured for a new session, independent of its model. */
     readonly defaultPermissionMode?: HappyAgentPermissionMode;
     /**
@@ -119,10 +127,11 @@ export interface HappyAgentModelStore {
      */
     providerPicked(providerId: string): void;
     /**
-     * Records what a new session was just started on: its model, effort, and
-     * provider each become what the next new session starts on, and the
-     * model's effort and speed are remembered as `selectionUsed` does. A
-     * selection without an effort leaves the remembered effort as it was.
+     * Records what a new session was just started on. Its provider becomes the
+     * one new sessions start on and its model's effort and speed are remembered
+     * as `selectionUsed` does. While `newSessionStart` is `lastStarted`, its
+     * model and effort also become the defaults; a selection without an effort
+     * leaves the default effort as it was.
      */
     selectionStarted(selection: HappyAgentSelection): void;
     /** Selects a model with that model's last locally remembered effort and speed. */
@@ -380,10 +389,13 @@ export function happyAgentModelStoreCreate(
         },
         selectionStarted(selection) {
             if (snapshot.type !== "ready") return;
+            const follows = document.newSessionStart !== "default";
             documentWrite({
                 ...document,
-                defaultModelId: selection.modelId,
-                ...(selection.effort !== undefined ? { defaultEffort: selection.effort } : {}),
+                ...(follows ? { defaultModelId: selection.modelId } : {}),
+                ...(follows && selection.effort !== undefined
+                    ? { defaultEffort: selection.effort }
+                    : {}),
                 lastPickedProviderId: selection.providerId,
                 preferences: preferencesUsed(preferences, selection),
             });
@@ -461,9 +473,9 @@ function preferencesUsed(
 }
 
 /**
- * What a new session starts on. The model is the last new session's, or the
- * one chosen in Settings since, or the catalog's own default until either
- * happens; the provider is the one picked last whenever it serves that model.
+ * What a new session starts on. The model is the default one — chosen in
+ * Settings or, while new sessions follow the last one, started on last — or
+ * the catalog's own default until there is one; the provider is the one picked last whenever it serves that model.
  * A provider that does not is passed over for the catalog's default provider
  * and then the first usable one serving the same model, so a provider choice
  * never silently changes the model.

@@ -4,6 +4,7 @@ import type {
     HappyAgentModelPreferenceDocument,
     HappyAgentModelPreferenceIdentity,
     HappyAgentModelPreferencePersistence,
+    HappyAgentNewSessionStart,
 } from "./happyAgentModelStore.js";
 import { deepEqual } from "./happyAgentSupport.js";
 import {
@@ -25,7 +26,8 @@ const DEFAULT_EFFORT = "happy-desktop.model.effort";
 const DEFAULT_ACCESS = "happy-desktop.model.access";
 const PROVIDER = "happy-desktop.model.provider";
 const MEMORY = "happy-desktop.model.memory";
-const KEYS = new Set([DEFAULT_MODEL, DEFAULT_EFFORT, DEFAULT_ACCESS, PROVIDER, MEMORY]);
+const START = "happy-desktop.model.start";
+const KEYS = new Set([DEFAULT_MODEL, DEFAULT_EFFORT, DEFAULT_ACCESS, PROVIDER, MEMORY, START]);
 const EMPTY: HappyAgentModelPreferenceDocument = {
     defaultEffort: HAPPY_AGENT_DEFAULT_THINKING_LEVEL,
     defaultPermissionMode: "auto",
@@ -65,6 +67,9 @@ function accessParse(value: unknown): HappyAgentPermissionMode | undefined {
             return undefined;
     }
 }
+function startParse(value: unknown): HappyAgentNewSessionStart | undefined {
+    return value === "lastStarted" || value === "default" ? value : undefined;
+}
 function identityParse(value: unknown): HappyAgentModelPreferenceIdentity | undefined {
     const entry = object(value);
     if (
@@ -94,6 +99,7 @@ function documentParse(value: unknown): HappyAgentModelPreferenceDocument {
         effortParse(object(entry["defaultSelection"])?.["effort"]) ??
         effortParse(entry["defaultEffort"]);
     const defaultPermissionMode = accessParse(entry["defaultPermissionMode"]);
+    const newSessionStart = startParse(entry["newSessionStart"]);
     const preferences: Record<string, Record<string, HappyAgentModelPreference>> = Object.create(
         null,
     );
@@ -116,6 +122,7 @@ function documentParse(value: unknown): HappyAgentModelPreferenceDocument {
         ...(lastPickedProviderId ? { lastPickedProviderId } : {}),
         defaultEffort: defaultEffort ?? HAPPY_AGENT_DEFAULT_THINKING_LEVEL,
         defaultPermissionMode: defaultPermissionMode ?? "auto",
+        ...(newSessionStart === "default" ? { newSessionStart } : {}),
         preferences,
     };
 }
@@ -161,6 +168,7 @@ function encode(
         ],
         [PROVIDER, document.lastPickedProviderId ?? null],
         [MEMORY, memoryValue(document)],
+        [START, document.newSessionStart === "default" ? "default" : null],
     ]);
 }
 function decode(values: ReadonlyMap<string, UserSettingValue>): HappyAgentModelPreferenceDocument {
@@ -182,6 +190,7 @@ function decode(values: ReadonlyMap<string, UserSettingValue>): HappyAgentModelP
         defaultEffort: values.get(DEFAULT_EFFORT),
         defaultPermissionMode: values.get(DEFAULT_ACCESS),
         lastPickedProviderId: values.get(PROVIDER),
+        newSessionStart: values.get(START),
         preferences,
     });
 }

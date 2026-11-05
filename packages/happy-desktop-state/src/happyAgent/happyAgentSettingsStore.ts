@@ -3,7 +3,10 @@ import {
     type HappyAgentPermissionMode,
     type HappyAgentThinkingLevel,
 } from "./happyAgentTypes.js";
-import type { HappyAgentModelPreferenceDocument } from "./happyAgentModelStore.js";
+import type {
+    HappyAgentModelPreferenceDocument,
+    HappyAgentNewSessionStart,
+} from "./happyAgentModelStore.js";
 
 declare const happyAgentModelKeyBrand: unique symbol;
 
@@ -27,12 +30,15 @@ export type HappyAgentLinkOpenPlacement = "panel" | "browser";
 export interface HappyAgentSettingsSnapshot {
     /**
      * Unset until the reader picks a model here or starts a new session; the
-     * catalog's own default stands in. Starting a new session replaces it, and
-     * `defaultEffort`, with that session's. A model only: the provider a new
-     * session uses is the one picked last.
+     * catalog's own default stands in. While `newSessionStart` is
+     * `lastStarted`, starting a new session replaces it, and `defaultEffort`,
+     * with that session's. A model only: the provider a new session uses is
+     * the one picked last.
      */
     readonly defaultModelId?: string;
     readonly defaultEffort: HappyAgentThinkingLevel;
+    /** Whether a new session follows the last one started or stays on the default model. */
+    readonly newSessionStart: HappyAgentNewSessionStart;
     /** Access granted to a new session before its composer overrides the choice. */
     readonly defaultPermissionMode: HappyAgentPermissionMode;
     /** Where a plain click on a web link goes. A link's own menu can still choose either. */
@@ -56,6 +62,7 @@ export interface HappyAgentSettingsStore {
     /** Chooses the model a new session starts on, on whichever provider was picked last. */
     defaultModelUpdate(modelId: string): void;
     defaultEffortUpdate(effort: HappyAgentThinkingLevel): void;
+    newSessionStartUpdate(start: HappyAgentNewSessionStart): void;
     defaultPermissionModeUpdate(mode: HappyAgentPermissionMode): void;
     linkOpenPlacementUpdate(placement: HappyAgentLinkOpenPlacement): void;
     previewUpdatesUpdate(enabled: boolean): void;
@@ -68,6 +75,7 @@ const EMPTY_DISABLED: ReadonlySet<HappyAgentModelKey> = new Set<HappyAgentModelK
 export interface HappyAgentSettingsInitial {
     readonly defaultModelId?: string;
     readonly defaultEffort?: HappyAgentThinkingLevel;
+    readonly newSessionStart?: HappyAgentNewSessionStart;
     readonly defaultPermissionMode?: HappyAgentPermissionMode;
     readonly linkOpenPlacement?: HappyAgentLinkOpenPlacement;
     readonly previewUpdatesEnabled?: boolean;
@@ -97,6 +105,7 @@ export function happyAgentSettingsStoreOwnedCreate(initial: HappyAgentSettingsIn
     let snapshot: HappyAgentSettingsSnapshot = {
         ...initial,
         defaultEffort: initial.defaultEffort ?? HAPPY_AGENT_DEFAULT_THINKING_LEVEL,
+        newSessionStart: initial.newSessionStart ?? "lastStarted",
         defaultPermissionMode: initial.defaultPermissionMode ?? "auto",
         linkOpenPlacement: initial.linkOpenPlacement ?? "panel",
         previewUpdatesEnabled: initial.previewUpdatesEnabled ?? false,
@@ -121,6 +130,10 @@ export function happyAgentSettingsStoreOwnedCreate(initial: HappyAgentSettingsIn
         defaultEffortUpdate(effort) {
             if (snapshot.defaultEffort === effort) return;
             publish({ ...snapshot, defaultEffort: effort });
+        },
+        newSessionStartUpdate(start) {
+            if (snapshot.newSessionStart === start) return;
+            publish({ ...snapshot, newSessionStart: start });
         },
         defaultPermissionModeUpdate(mode) {
             if (snapshot.defaultPermissionMode === mode) return;
@@ -158,13 +171,21 @@ export function happyAgentSettingsStoreOwnedCreate(initial: HappyAgentSettingsIn
             const defaultModelId = document.defaultModelId;
             const defaultEffort = document.defaultEffort ?? HAPPY_AGENT_DEFAULT_THINKING_LEVEL;
             const defaultPermissionMode = document.defaultPermissionMode ?? "auto";
+            const newSessionStart = document.newSessionStart ?? "lastStarted";
             if (
                 snapshot.defaultModelId === defaultModelId &&
                 snapshot.defaultEffort === defaultEffort &&
+                snapshot.newSessionStart === newSessionStart &&
                 snapshot.defaultPermissionMode === defaultPermissionMode
             )
                 return;
-            publish({ ...snapshot, defaultModelId, defaultEffort, defaultPermissionMode });
+            publish({
+                ...snapshot,
+                defaultModelId,
+                defaultEffort,
+                newSessionStart,
+                defaultPermissionMode,
+            });
         },
     };
 }

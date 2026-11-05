@@ -658,6 +658,8 @@ export function HappyAgentSettingsBlueprintPage() {
                             onUsageAnalyticsChange={noop}
                             usageAnalyticsEnabled
                             onPermissionModeChange={noop}
+                            newSessionStart="lastStarted"
+                            onNewSessionStartChange={noop}
                             onScrollbarVisibilityChange={noop}
                             onLinkOpenPlacementChange={noop}
                             linkOpenPlacement="panel"
@@ -1201,6 +1203,8 @@ export function HappyAgentSettingsBlueprintPage() {
                         {...settingsDefaultModel(false)}
                         onAppearanceChange={noop}
                         onPermissionModeChange={noop}
+                        newSessionStart="default"
+                        onNewSessionStartChange={noop}
                         onScrollbarVisibilityChange={noop}
                         onLinkOpenPlacementChange={noop}
                         linkOpenPlacement="panel"

@@ -279,6 +279,40 @@ it("starts new sessions on the model, effort, and provider the last new session 
     expect(selection()).toMatchObject({ providerId: "codex", modelId: "sol", effort: "medium" });
 });
 
+it("keeps the default model and effort when new sessions start on it, remembering the provider", async () => {
+    const { models, selection, document } = await stickyStoreOpen({
+        defaultModelId: "astra",
+        defaultEffort: "low",
+        newSessionStart: "default",
+        preferences: {},
+    });
+    models.selectionStarted({
+        providerId: "codex",
+        modelId: "sol",
+        effort: "high",
+        permissionMode: "auto",
+    });
+    expect(document()).toMatchObject({
+        defaultModelId: "astra",
+        defaultEffort: "low",
+        lastPickedProviderId: "codex",
+    });
+    // The started model's own effort is still remembered for its picker.
+    expect(models.effortRemembered("codex", "sol")).toBe("high");
+
+    models.selectionStarted({
+        providerId: "codex_other",
+        modelId: "astra",
+        effort: "high",
+        permissionMode: "auto",
+    });
+    expect(selection()).toMatchObject({
+        providerId: "codex_other",
+        modelId: "astra",
+        effort: "low",
+    });
+});
+
 it("falls back per field when the last started model, effort, or provider is no longer offered", async () => {
     const { selection } = await stickyStoreOpen({
         // A model this catalog does not have, an effort it does not offer, and

@@ -92,6 +92,7 @@ export function desktopConnectionUiCreate(input: {
         : happyAgentSettingsStoreOwnedCreate({
               ...(stored?.defaultModelId ? { defaultModelId: stored.defaultModelId } : {}),
               ...(stored?.defaultEffort ? { defaultEffort: stored.defaultEffort } : {}),
+              ...(stored?.newSessionStart ? { newSessionStart: stored.newSessionStart } : {}),
               ...(stored?.defaultPermissionMode
                   ? { defaultPermissionMode: stored.defaultPermissionMode }
                   : {}),
@@ -118,6 +119,7 @@ export function desktopConnectionUiCreate(input: {
         if (
             defaultModelId === current?.defaultModelId &&
             value.defaultEffort === current?.defaultEffort &&
+            value.newSessionStart === (current?.newSessionStart ?? "lastStarted") &&
             value.defaultPermissionMode === current?.defaultPermissionMode
         )
             return;
@@ -126,6 +128,7 @@ export function desktopConnectionUiCreate(input: {
             preferences: current?.preferences ?? {},
             ...(defaultModelId ? { defaultModelId } : {}),
             defaultEffort: value.defaultEffort,
+            newSessionStart: value.newSessionStart,
             defaultPermissionMode: value.defaultPermissionMode,
         });
     });

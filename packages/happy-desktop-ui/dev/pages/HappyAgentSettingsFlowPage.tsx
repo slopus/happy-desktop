@@ -143,6 +143,8 @@ function General(props: { pickerOpen?: boolean }) {
             onUsageAnalyticsChange={noop}
             usageAnalyticsEnabled
             onPermissionModeChange={noop}
+            newSessionStart="lastStarted"
+            onNewSessionStartChange={noop}
             onScrollbarVisibilityChange={noop}
             onLinkOpenPlacementChange={noop}
             linkOpenPlacement="panel"

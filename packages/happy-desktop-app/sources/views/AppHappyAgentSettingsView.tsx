@@ -1417,6 +1417,10 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                               },
                           }
                         : {})}
+                    newSessionStart={settings.newSessionStart}
+                    onNewSessionStartChange={(start) => {
+                        if (happyAgentOnline()) props.settings.newSessionStartUpdate(start);
+                    }}
                     error={models.type === "error" ? models.error.message : undefined}
                     {...(props.usageAnalytics
                         ? {
