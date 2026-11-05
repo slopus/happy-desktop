@@ -8,6 +8,7 @@ import type {
 } from "../../src/pages/feed/feedPresentation";
 import {
     HappyAgentFeedPage,
+    type HappyAgentFeedFilter,
     type HappyAgentFeedView,
 } from "../../src/pages/feed/HappyAgentFeedPage";
 import { ComponentPage, FullScreenSpecimen } from "../kit";
@@ -45,6 +46,21 @@ const research: HappyAgentFeedActor = {
     face: { type: "agent", initials: "MR", placeholderSeed: "bot-research" },
 };
 
+/** Covers drawn for this page, in the two shapes covers come in: wide (16:9) and square. */
+const coverRevenue = {
+    url: new URL("../assets/feed-cover-revenue.webp", import.meta.url).href,
+    aspect: "wide",
+} as const;
+const coverSignups = {
+    url: new URL("../assets/feed-cover-signups.webp", import.meta.url).href,
+    aspect: "square",
+    background: "#16171c",
+} as const;
+const coverLaunch = {
+    url: new URL("../assets/feed-cover-launch.webp", import.meta.url).href,
+    aspect: "wide",
+} as const;
+
 const lead: readonly HappyAgentFeedEntry[] = [
     {
         id: "e-report",
@@ -55,6 +71,8 @@ const lead: readonly HappyAgentFeedEntry[] = [
         actorCount: 2,
         created: true,
         updates: 49,
+        cover: coverRevenue,
+        summary: "Revenue up 18% QoQ, driven by enterprise seats.",
         lastAt: NOW - 2 * MINUTE,
         unread: true,
     },
@@ -81,6 +99,19 @@ const lead: readonly HappyAgentFeedEntry[] = [
         updates: 0,
         lastAt: NOW - 52 * MINUTE,
         unread: true,
+    },
+    {
+        id: "e-signups",
+        subject: "artifact",
+        artifactType: "image",
+        title: "Signups by channel",
+        actors: [research],
+        actorCount: 1,
+        created: true,
+        updates: 0,
+        cover: coverSignups,
+        lastAt: NOW - 70 * MINUTE,
+        unread: false,
     },
     {
         id: "e-bot",
@@ -114,6 +145,9 @@ const lead: readonly HappyAgentFeedEntry[] = [
         actorCount: 1,
         created: false,
         updates: 1,
+        cover: coverLaunch,
+        summary:
+            "The hero, pricing, and FAQ sections for launch week, with the new pastel palette and the signup form moved above the fold so it is the first thing a visitor sees.",
         lastAt: NOW - 26 * 60 * MINUTE,
         unread: false,
     },
@@ -150,6 +184,11 @@ const history: readonly HappyAgentFeedEntry[] = Array.from({ length: 400 }, (_, 
 }));
 
 const entries = [...lead, ...history];
+
+/** The artifacts and tasks, as the Highlights filter keeps them. */
+const highlights = entries.filter(
+    (entry) => entry.subject === "artifact" || entry.subject === "task",
+);
 
 const ready = <Item,>(items: readonly Item[]): HappyAgentFeedListState<Item> => ({
     items,
@@ -193,6 +232,7 @@ const handlers = {
     onPeekClose: () => undefined,
     onPeekEntryOpen: () => undefined,
     onPeekLoadMore: () => undefined,
+    onFilterChange: () => undefined,
     onReadAll: () => undefined,
     onViewChange: () => undefined,
 };
@@ -201,6 +241,7 @@ const base = {
     ...handlers,
     clusters: ready(clusters),
     feed: { ...ready(entries), hasMore: true },
+    filter: "all" as HappyAgentFeedFilter,
     now: NOW,
     unread: 3,
     view: "activity" as HappyAgentFeedView,
@@ -209,11 +250,17 @@ const base = {
 
 /**
  * The feed as a reader would live with it: folding a change into an entry
- * lifts it to the top, opening one reads it, and the view switch works.
+ * lifts it to the top, opening one reads it, and the view and filter switches
+ * work.
  */
 function LiveFeed() {
     const [items, itemsSet] = useState<readonly HappyAgentFeedEntry[]>(entries.slice(0, 24));
     const [view, viewSet] = useState<HappyAgentFeedView>("activity");
+    const [filter, filterSet] = useState<HappyAgentFeedFilter>("all");
+    const shown =
+        filter === "all"
+            ? items
+            : items.filter((item) => item.subject === "artifact" || item.subject === "task");
     const [peek, peekSet] = useState<string | undefined>(undefined);
     const [turn, turnSet] = useState(0);
     const fold = () => {
@@ -237,16 +284,18 @@ function LiveFeed() {
             </div>
             <HappyAgentFeedPage
                 {...base}
-                feed={ready(items)}
+                feed={ready(shown)}
+                filter={filter}
                 onClusterPeek={peekSet}
                 onEntryOpen={open}
+                onFilterChange={filterSet}
                 onPeekClose={() => peekSet(undefined)}
                 onReadAll={() => itemsSet(items.map((item) => ({ ...item, unread: false })))}
                 onViewChange={viewSet}
                 {...(peeked
                     ? { peek: { label: peeked.label, list: ready(lead.slice(0, 3)) } }
                     : {})}
-                unread={items.filter((item) => item.unread).length}
+                unread={shown.filter((item) => item.unread).length}
                 view={view}
             />
         </div>
@@ -258,11 +307,11 @@ export function HappyAgentFeedBlueprintPage() {
         <ComponentPage
             contract="Props only"
             number={componentNumber}
-            summary="What happened on a Happy Agent, for one reader: new tasks, bots, Surfaces, and artifacts, and changes to them, newest change first. Unseen changes fold into one entry per subject; the places activity gathers from can be muted, followed, or peeked into."
+            summary="What happened on a Happy Agent, for one reader: new tasks, bots, Surfaces, and artifacts, and changes to them, newest change first. Unseen changes fold into one entry per subject; an artifact with a cover is a post; Highlights keeps the artifacts and tasks; the places activity gathers from can be muted, followed, or peeked into."
             title="HappyAgentFeed"
         >
             <FullScreenSpecimen
-                detail="Three unread entries over a long, virtualized history, in one card per date. Each row: the subject's avatar, its title and when, and the faces of who changed it beside what they did. Unread rows are set heavier and carry a dot in a lane every row reserves."
+                detail="Three unread entries over a long, virtualized history, in one card per date. Each row: the subject's avatar, its title and when, and the faces of who changed it beside what they did. Unread rows are set heavier and carry a dot in a lane every row reserves. An artifact with a cover is a post: its row, its summary, then the cover across the card at exactly its shape — wide (16:9) or square, here on the artifact's own dark background."
                 label="Activity"
                 number="01"
                 screen="01-activity-1100x760"
@@ -279,6 +328,65 @@ export function HappyAgentFeedBlueprintPage() {
                 window={{ width: 720, height: 640 }}
             >
                 <HappyAgentFeedPage {...base} />
+            </FullScreenSpecimen>
+
+            <FullScreenSpecimen
+                detail="Highlights: only the artifacts and tasks, covered artifacts as posts."
+                label="Highlights"
+                number="10"
+                screen="10-highlights-1100x760"
+                window={{ width: 1100, height: 760 }}
+            >
+                <HappyAgentFeedPage
+                    {...base}
+                    feed={ready(highlights)}
+                    filter="highlights"
+                    unread={highlights.filter((entry) => entry.unread).length}
+                />
+            </FullScreenSpecimen>
+
+            <FullScreenSpecimen
+                detail="Highlights at the window's minimum size: every post's height follows the narrower card."
+                label="Highlights, narrow"
+                number="11"
+                screen="11-highlights-720x640"
+                window={{ width: 720, height: 640 }}
+            >
+                <HappyAgentFeedPage
+                    {...base}
+                    feed={ready(highlights)}
+                    filter="highlights"
+                    unread={highlights.filter((entry) => entry.unread).length}
+                />
+            </FullScreenSpecimen>
+
+            <FullScreenSpecimen
+                detail="A square cover, drawn as wide as the card and as tall, on the artifact's own dark background; then a wide cover whose summary is longer than its line."
+                label="Highlights, square and wide"
+                number="13"
+                screen="13-highlights-posts-1100x760"
+                window={{ width: 1100, height: 760 }}
+            >
+                <HappyAgentFeedPage
+                    {...base}
+                    feed={ready(
+                        highlights.filter(
+                            (entry) => entry.id === "e-signups" || entry.id === "e-landing",
+                        ),
+                    )}
+                    filter="highlights"
+                    unread={0}
+                />
+            </FullScreenSpecimen>
+
+            <FullScreenSpecimen
+                detail="No artifacts or tasks yet."
+                label="Highlights, empty"
+                number="12"
+                screen="12-highlights-empty-1100x760"
+                window={{ width: 1100, height: 760 }}
+            >
+                <HappyAgentFeedPage {...base} feed={ready([])} filter="highlights" unread={0} />
             </FullScreenSpecimen>
 
             <FullScreenSpecimen

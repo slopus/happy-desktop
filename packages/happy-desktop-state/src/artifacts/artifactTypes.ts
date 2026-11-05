@@ -51,6 +51,32 @@ export interface HappyAgentArtifactFile {
     readonly sha256: string;
 }
 
+/** The raster formats a cover arrives in; the daemon turns an SVG cover into PNG. */
+export type HappyAgentArtifactCoverMimeType =
+    | "image/png"
+    | "image/jpeg"
+    | "image/webp"
+    | "image/gif";
+
+/**
+ * The picture that stands for an artifact where it is shown as a post: one
+ * file of its latest version, which carries its headline, key number, or main
+ * chart. It comes in one of two shapes, so a client lays out the picture's
+ * box before a byte of it has arrived.
+ */
+export interface HappyAgentArtifactCover {
+    /** One file of the latest version. */
+    readonly path: string;
+    readonly mimeType: HappyAgentArtifactCoverMimeType;
+    readonly width: number;
+    readonly height: number;
+    /** The cover's shape, which it is drawn at exactly. */
+    readonly aspect: HappyAgentArtifactCoverAspect;
+}
+
+/** The two shapes a cover comes in: 16:9, or square. */
+export type HappyAgentArtifactCoverAspect = "wide" | "square";
+
 /**
  * Where an artifact, or one of its versions, was made. `agentId` names the
  * conversation it came from and is `null` when a person made it outside one.

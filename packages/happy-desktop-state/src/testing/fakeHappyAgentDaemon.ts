@@ -14,6 +14,9 @@ import {
     type LiveSession,
     type EventStreamFrame,
     type EventStreamOptions,
+    type FeedItem,
+    type FeedReadAllRequest,
+    type FeedSeenRequest,
     type FailureResolutionResponse,
     type HappyAgentEvent,
     type HistoryRun,
@@ -160,6 +163,22 @@ export interface FakeHappyAgentDaemon {
      * Turned off, it is a daemon from before that, whose health is only on its own route.
      */
     bootstrapHealthSet(carried: boolean): void;
+
+    /**
+     * Replace the viewer's feed. Until the first call the daemon keeps none,
+     * and health does not report `capabilities.feed`.
+     */
+    feedSeed(items: readonly FeedItem[]): void;
+    /** The viewer's feed as held now, entries seen or read included, newest first. */
+    feedItems(): readonly FeedItem[];
+    /**
+     * Whether this daemon reads the feed for some kinds of subject only:
+     * health reports `capabilities.feedSubjectFilter`, `getFeed` and
+     * read-all honour `subjects`, and `getFeed` answers `filteredUnread`.
+     * Turned off, as by default, `subjects` is ignored as an older daemon's
+     * would be.
+     */
+    feedSubjectFilterSet(supported: boolean): void;
 
     /** Toggle daemon health readiness, protocol number, and product version. */
     healthSet(options: {
@@ -397,6 +416,8 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
     };
 
     let usage: DaemonUsageResponse = { hour: {}, day: {}, week: {}, month: {} };
+    let feed: FeedItem[] | undefined;
+    let feedSubjectFilter = false;
     let usageRefreshSupported = true;
 
     const calls: FakeDaemonCall[] = [];
@@ -670,13 +691,36 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
         return event;
     };
 
-    const health = () => ({
-        healthy: true,
-        ready: healthReady,
-        status: healthReady ? ("ready" as const) : ("starting" as const),
-        version: { daemon: daemonVersion, protocol },
-        ...(desktopLiveControl === undefined ? {} : { capabilities: { desktopLiveControl } }),
-    });
+    const health = () => {
+        const capabilities = {
+            ...(desktopLiveControl === undefined ? {} : { desktopLiveControl }),
+            ...(feed === undefined ? {} : { feed: true }),
+            ...(feedSubjectFilter ? { feedSubjectFilter: true } : {}),
+        };
+        return {
+            healthy: true,
+            ready: healthReady,
+            status: healthReady ? ("ready" as const) : ("starting" as const),
+            version: { daemon: daemonVersion, protocol },
+            ...(Object.keys(capabilities).length === 0 ? {} : { capabilities }),
+        };
+    };
+
+    const feedRequired = (): FeedItem[] => {
+        if (feed === undefined) throw new HappyAgentApiError(404, "Not found.", "not_found", null);
+        return feed;
+    };
+    /** Whether an entry is one `subjects` names, when this daemon honours the list. */
+    const feedMatches = (item: FeedItem, subjects: readonly string[] | undefined): boolean =>
+        !feedSubjectFilter || subjects === undefined || subjects.includes(item.subject.type);
+    const feedUnread = (subjects?: readonly string[]): number =>
+        feedRequired().filter((item) => item.seenAt === null && feedMatches(item, subjects)).length;
+    /** Closes an open entry, as the daemon's seen and read-all do. */
+    const feedClose = (item: FeedItem): FeedItem => {
+        const closed = { ...item, seenAt: 1, version: versionOf((versionCounter += 1)) };
+        feed = feedRequired().map((each) => (each.id === item.id ? closed : each));
+        return closed;
+    };
 
     const client = {
         endpoint: "http://fake-happy-agent.test/",
@@ -693,6 +737,62 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
         async getHealth(...args: unknown[]) {
             await record("getHealth", args);
             return health();
+        },
+        async getFeed(
+            query: {
+                readonly before?: string;
+                readonly limit?: number;
+                readonly subjects?: readonly string[];
+            } = {},
+            ...rest: unknown[]
+        ) {
+            await record("getFeed", [query, ...rest]);
+            const matching = [...feedRequired()]
+                .sort((left, right) => right.cursor.localeCompare(left.cursor))
+                .filter(
+                    (item) =>
+                        feedMatches(item, query.subjects) &&
+                        (query.before === undefined || item.cursor < query.before),
+                );
+            const limit = query.limit ?? 50;
+            return {
+                items: matching.slice(0, limit),
+                hasMore: matching.length > limit,
+                unread: feedUnread(),
+                ...(feedSubjectFilter && query.subjects !== undefined
+                    ? { filteredUnread: feedUnread(query.subjects) }
+                    : {}),
+                cursor: latestCursor,
+            };
+        },
+        async markFeedSeen(request: FeedSeenRequest, ...rest: unknown[]) {
+            await record("markFeedSeen", [request, ...rest]);
+            const closed: FeedItem[] = [];
+            for (const subject of request.subjects) {
+                const open = feedRequired().find(
+                    (item) =>
+                        item.seenAt === null &&
+                        item.subject.type === subject.type &&
+                        item.subject.id === subject.id &&
+                        (subject.through === undefined || item.cursor <= subject.through),
+                );
+                if (open !== undefined) closed.push(feedClose(open));
+            }
+            return { items: closed, unread: feedUnread() };
+        },
+        async markFeedReadAll(
+            request: FeedReadAllRequest & { readonly subjects?: readonly string[] } = {},
+            ...rest: unknown[]
+        ) {
+            await record("markFeedReadAll", [request, ...rest]);
+            for (const item of feedRequired())
+                if (
+                    item.seenAt === null &&
+                    feedMatches(item, request.subjects) &&
+                    (request.through === undefined || item.cursor <= request.through)
+                )
+                    feedClose(item);
+            return { unread: feedUnread() };
         },
         async getConfig(...args: unknown[]) {
             await record("getConfig", args);
@@ -1512,6 +1612,14 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
         },
         onboardingSet(state) {
             onboarding = state;
+        },
+        feedSeed(items) {
+            feed = [...items];
+        },
+        feedItems: () =>
+            [...(feed ?? [])].sort((left, right) => right.cursor.localeCompare(left.cursor)),
+        feedSubjectFilterSet(supported) {
+            feedSubjectFilter = supported;
         },
         healthSet(options) {
             if (options.ready !== undefined) healthReady = options.ready;

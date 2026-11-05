@@ -5,8 +5,24 @@ import {
     HAPPY_AGENT_ARTIFACT_EVENT_TYPES,
     happyAgentArtifactEventProject,
 } from "./artifactCatalog.js";
-import { happyAgentArtifactTypeProject } from "./artifactProject.js";
-import type { HappyAgentArtifactId, HappyAgentArtifactType } from "./artifactTypes.js";
+import { happyAgentHealthCapability } from "../happyAgentConnection/happyAgentHealthCapability.js";
+import {
+    happyAgentArtifactBackground,
+    happyAgentArtifactCoverProject,
+    happyAgentArtifactSummaryProject,
+    happyAgentArtifactTypeProject,
+} from "./artifactProject.js";
+import type {
+    HappyAgentArtifactCover,
+    HappyAgentArtifactId,
+    HappyAgentArtifactType,
+} from "./artifactTypes.js";
+
+/** An artifact's cover, and the address its picture is read from. */
+export interface HappyAgentArtifactTitleCover extends HappyAgentArtifactCover {
+    /** The cover file of the latest version, through the client's authenticated file route. */
+    readonly url: string;
+}
 
 /** What one artifact a message names reads as, once it has been read. */
 export type HappyAgentArtifactTitle =
@@ -16,6 +32,17 @@ export type HappyAgentArtifactTitle =
           /** What kind of artifact it is, which it stays for its whole life. */
           readonly artifactType: HappyAgentArtifactType;
           readonly status: "active" | "deleted";
+          /** The number of the latest version, which the cover and summary belong to. */
+          readonly latestVersion: number;
+          /**
+           * The picture the artifact is shown by as a post, or `null`: none
+           * named, or a daemon without `capabilities.artifactCovers`.
+           */
+          readonly cover: HappyAgentArtifactTitleCover | null;
+          /** One plain line about the artifact, or `null`. */
+          readonly summary: string | null;
+          /** The colour the latest version asks to be shown on, or `null` for none. */
+          readonly background: string | null;
       }
     /** No artifact has this id on this Happy Agent, or this reader cannot see it. */
     | { readonly type: "missing" };
@@ -23,7 +50,8 @@ export type HappyAgentArtifactTitle =
 /**
  * Every artifact asked for and read so far, by id; an absent one is still
  * being read. A reference always reads as the artifact's current title, even
- * when it pins an older version, so versions are never read here.
+ * when it pins an older version, so versions are never read here; the cover
+ * and summary are always the latest version's.
  */
 export type HappyAgentArtifactTitlesSnapshot = ReadonlyMap<
     HappyAgentArtifactId,
@@ -52,7 +80,7 @@ export interface HappyAgentArtifactTitlesStore {
 }
 
 export interface HappyAgentArtifactTitlesDeps {
-    readonly client: Pick<HappyAgentClient, "getArtifact">;
+    readonly client: Pick<HappyAgentClient, "getArtifact" | "artifactFileUrl">;
     readonly sync: HappyAgentSync;
 }
 
@@ -65,6 +93,30 @@ function notFound(error: unknown): boolean {
 
 const EMPTY: HappyAgentArtifactTitlesSnapshot = new Map();
 
+const sameCover = (
+    left: HappyAgentArtifactTitleCover | null,
+    right: HappyAgentArtifactTitleCover | null,
+): boolean =>
+    left === right ||
+    (left !== null &&
+        right !== null &&
+        left.url === right.url &&
+        left.mimeType === right.mimeType &&
+        left.width === right.width &&
+        left.height === right.height &&
+        left.aspect === right.aspect);
+
+const sameTitle = (left: HappyAgentArtifactTitle, right: HappyAgentArtifactTitle): boolean =>
+    left.type === "missing" || right.type === "missing"
+        ? left.type === right.type
+        : left.title === right.title &&
+          left.artifactType === right.artifactType &&
+          left.status === right.status &&
+          left.latestVersion === right.latestVersion &&
+          sameCover(left.cover, right.cover) &&
+          left.summary === right.summary &&
+          left.background === right.background;
+
 export function happyAgentArtifactTitlesStoreCreate(
     deps: HappyAgentArtifactTitlesDeps,
 ): HappyAgentArtifactTitlesStore {
@@ -74,6 +126,11 @@ export function happyAgentArtifactTitlesStoreCreate(
     const wanted = new Set<HappyAgentArtifactId>();
     /** Reads in flight under the current follow, so one is never started twice. */
     const reading = new Set<HappyAgentArtifactId>();
+    /**
+     * Artifacts that changed while their read was in flight: that read may
+     * answer from before the change, so another follows it.
+     */
+    const stale = new Set<HappyAgentArtifactId>();
     let following: AbortController | undefined;
     let retry: ReturnType<typeof setTimeout> | undefined;
     let disposed = false;
@@ -84,22 +141,16 @@ export function happyAgentArtifactTitlesStoreCreate(
     };
     const artifactSet = (artifactId: HappyAgentArtifactId, title: HappyAgentArtifactTitle) => {
         const held = snapshot.get(artifactId);
-        if (
-            held !== undefined &&
-            held.type === title.type &&
-            (held.type === "missing" ||
-                (title.type === "ready" &&
-                    held.title === title.title &&
-                    held.artifactType === title.artifactType &&
-                    held.status === title.status))
-        )
-            return;
+        if (held !== undefined && sameTitle(held, title)) return;
         const next = new Map(snapshot);
         next.set(artifactId, title);
         publish(next);
     };
     const artifactRead = (artifactId: HappyAgentArtifactId, signal: AbortSignal): void => {
-        if (reading.has(artifactId)) return;
+        if (reading.has(artifactId)) {
+            stale.add(artifactId);
+            return;
+        }
         reading.add(artifactId);
         void happyAgentSyncRead(
             signal,
@@ -115,20 +166,39 @@ export function happyAgentArtifactTitlesStoreCreate(
         )
             .then((artifact) => {
                 if (signal.aborted) return;
-                artifactSet(
-                    artifactId,
-                    artifact === undefined
-                        ? { type: "missing" }
-                        : {
-                              type: "ready",
-                              title: artifact.title,
-                              artifactType: happyAgentArtifactTypeProject(artifact.type),
-                              status: artifact.status,
-                          },
-                );
+                if (artifact === undefined) {
+                    artifactSet(artifactId, { type: "missing" });
+                    return;
+                }
+                const cover = happyAgentHealthCapability(deps.sync.health(), "artifactCovers")
+                    ? happyAgentArtifactCoverProject(artifact)
+                    : null;
+                artifactSet(artifactId, {
+                    type: "ready",
+                    title: artifact.title,
+                    artifactType: happyAgentArtifactTypeProject(artifact.type),
+                    status: artifact.status,
+                    latestVersion: artifact.latestVersion,
+                    cover:
+                        cover === null
+                            ? null
+                            : {
+                                  ...cover,
+                                  url: deps.client.artifactFileUrl(
+                                      artifact.id,
+                                      artifact.latestVersion,
+                                      cover.path,
+                                  ),
+                              },
+                    summary: happyAgentArtifactSummaryProject(artifact),
+                    background: happyAgentArtifactBackground(artifact.background) ?? null,
+                });
             })
             .catch(() => undefined)
-            .finally(() => reading.delete(artifactId));
+            .finally(() => {
+                reading.delete(artifactId);
+                if (stale.delete(artifactId) && !signal.aborted) artifactRead(artifactId, signal);
+            });
     };
     /** Reads every artifact held again. */
     const reconcile = (signal: AbortSignal): void => {
@@ -161,26 +231,26 @@ export function happyAgentArtifactTitlesStoreCreate(
                 if (input.kind !== "update" || input.update.kind !== "event") continue;
                 const event = happyAgentArtifactEventProject(input.update.event);
                 if (event === undefined) continue;
+                // A new artifact is read rather than taken from its event, which
+                // does not carry its cover: it shows once, with everything.
                 if (event.type === "created") {
-                    if (!wanted.has(event.artifact.id)) continue;
-                    artifactSet(event.artifact.id, {
-                        type: "ready",
-                        title: event.artifact.title,
-                        artifactType: event.artifact.type,
-                        status: event.artifact.status,
-                    });
+                    if (wanted.has(event.artifact.id))
+                        artifactRead(event.artifact.id, active.signal);
                     continue;
                 }
                 const held = snapshot.get(event.artifactId);
                 // An event about an artifact not read yet is answered by the
                 // read already in flight for it.
                 if (held?.type !== "ready") continue;
-                artifactSet(
-                    event.artifactId,
-                    event.type === "updated"
-                        ? { ...held, title: event.changes.title }
-                        : { ...held, status: "deleted" },
-                );
+                if (event.type === "deleted") {
+                    artifactSet(event.artifactId, { ...held, status: "deleted" });
+                    continue;
+                }
+                artifactSet(event.artifactId, { ...held, title: event.changes.title });
+                // A new version may name another cover or summary, which the
+                // event does not carry; the old ones stay until it is read.
+                if (event.changes.latestVersion !== held.latestVersion)
+                    artifactRead(event.artifactId, active.signal);
             }
         })()
             .catch(() => undefined)
@@ -194,6 +264,7 @@ export function happyAgentArtifactTitlesStoreCreate(
         following?.abort();
         following = undefined;
         reading.clear();
+        stale.clear();
         if (retry) clearTimeout(retry);
         retry = undefined;
     };

@@ -192,6 +192,7 @@ export type {
 export type { HappyAgentSurfaces } from "./surfaces/surfaces.js";
 export type {
     HappyAgentArtifactTitle,
+    HappyAgentArtifactTitleCover,
     HappyAgentArtifactTitlesSnapshot,
     HappyAgentArtifactTitlesStore,
 } from "./artifacts/artifactTitlesStore.js";

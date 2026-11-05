@@ -175,6 +175,9 @@ interface FeedSubjectShown {
     readonly title: string;
     readonly face?: HappyAgentFeedFace;
     readonly artifactType?: HappyAgentFeedEntry["artifactType"];
+    /** An artifact's cover, which makes its entry a post, and its summary. */
+    readonly cover?: HappyAgentFeedEntry["cover"];
+    readonly summary?: string;
 }
 
 /**
@@ -220,7 +223,24 @@ function feedSubjectOf(subject: FeedSubject, world: FeedWorld): FeedSubjectShown
         case "artifact": {
             const artifact = world.titles.get(id as HappyAgentArtifactId);
             if (artifact?.type !== "ready") return undefined;
-            return { kind: "artifact", title: artifact.title, artifactType: artifact.artifactType };
+            const cover = artifact.cover;
+            return {
+                kind: "artifact",
+                title: artifact.title,
+                artifactType: artifact.artifactType,
+                ...(cover === null
+                    ? {}
+                    : {
+                          cover: {
+                              url: cover.url,
+                              aspect: cover.aspect,
+                              ...(artifact.background === null
+                                  ? {}
+                                  : { background: artifact.background }),
+                          },
+                          ...(artifact.summary === null ? {} : { summary: artifact.summary }),
+                      }),
+            };
         }
         default:
             return undefined;
@@ -254,6 +274,8 @@ function feedEntryOf(
         created: entry.created,
         updates: entry.updates,
         ...(detail === undefined ? {} : { detail }),
+        ...(subject.cover ? { cover: subject.cover } : {}),
+        ...(subject.summary === undefined ? {} : { summary: subject.summary }),
         lastAt: entry.lastAt,
         unread,
     };
@@ -474,6 +496,8 @@ export function HappyAgentFeedSurface(props: {
             onPeekLoadMore={() => undefined}
             onReadAll={pageStore.readAll}
             onViewChange={pageStore.viewUpdate}
+            filter={page.filter}
+            onFilterChange={pageStore.filterUpdate}
             {...(peek && peekShown
                 ? {
                       peek: {
@@ -491,7 +515,7 @@ export function HappyAgentFeedSurface(props: {
                       },
                   }
                 : {})}
-            unread={unread.unread}
+            unread={page.filteredUnread ?? unread.unread}
             {...(props.unavailable === undefined ? {} : { unavailable: props.unavailable })}
             view={page.view}
         />

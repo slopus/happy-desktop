@@ -12,9 +12,9 @@ import {
 } from "./HappyAgentFeedClusterRow";
 import {
     HAPPY_AGENT_FEED_HEADING_HEIGHT,
-    HAPPY_AGENT_FEED_ROW_HEIGHT,
     HappyAgentFeedHeading,
     HappyAgentFeedRow,
+    happyAgentFeedEntryHeight,
 } from "./HappyAgentFeedRow";
 import {
     feedSlotsByDate,
@@ -27,12 +27,18 @@ import {
 /** Which of the page's two lists is on screen. */
 export type HappyAgentFeedView = "activity" | "following";
 
+/** Which entries Activity shows: every one, or the highlights — artifacts and tasks. */
+export type HappyAgentFeedFilter = "all" | "highlights";
+
 export interface HappyAgentFeedPageProps {
     view: HappyAgentFeedView;
     onViewChange: (view: HappyAgentFeedView) => void;
-    /** The reader's feed, newest change first. */
+    /** Which entries `feed` holds; the owner applies it and keeps the reader's choice. */
+    filter: HappyAgentFeedFilter;
+    onFilterChange: (filter: HappyAgentFeedFilter) => void;
+    /** The reader's feed under the filter, newest change first. */
     feed: HappyAgentFeedListState<HappyAgentFeedEntry>;
-    /** How many entries the reader has not looked at, as the daemon counts them. */
+    /** How many entries under the filter the reader has not looked at. */
     unread: number;
     /** The places the feed gathers from, and whether the reader follows each. */
     clusters: HappyAgentFeedListState<HappyAgentFeedCluster>;
@@ -71,12 +77,19 @@ const VIEWS = [
     { value: "following", label: "Following" },
 ];
 
+const FILTERS = [
+    { value: "all", label: "All" },
+    { value: "highlights", label: "Highlights" },
+];
+
 /**
  * HappyAgentFeedPage — what happened on the installation, for one reader:
  * new tasks, bots, documents, todo lists, and artifacts, and changes to them,
  * newest change first, in inset grouped cards under the day they happened —
  * the card lists Happy's phones draw. Changes the reader has not looked at
- * fold into one entry per subject, which rises as it takes in more.
+ * fold into one entry per subject, which rises as it takes in more. An
+ * artifact with a cover is drawn as a post, its cover across the card, and
+ * Highlights narrows the list to artifacts and tasks.
  *
  * Beside it, the places the feed gathers from, which the reader can mute,
  * follow again, or peek into without following.
@@ -123,6 +136,15 @@ export function HappyAgentFeedPage(props: HappyAgentFeedPageProps) {
                     size="small"
                     value={props.view}
                 />
+                {props.view === "activity" ? (
+                    <SegmentedControl
+                        aria-label="Filter"
+                        onChange={(value) => props.onFilterChange(value as HappyAgentFeedFilter)}
+                        segments={FILTERS}
+                        size="small"
+                        value={props.filter}
+                    />
+                ) : null}
             </div>
             {props.view === "activity" ? (
                 <FeedActivity {...props} />
@@ -146,13 +168,13 @@ function FeedNotice(props: { title: string; error: string | undefined }) {
     );
 }
 
-/** A row's height or a heading's, for every slot of the feed's card lists. */
-function slotHeight(rowHeight: number) {
-    return (slot: HappyAgentFeedSlot<unknown>): number =>
-        slot.kind === "heading" ? HAPPY_AGENT_FEED_HEADING_HEIGHT : rowHeight;
-}
-const entrySlotHeight = slotHeight(HAPPY_AGENT_FEED_ROW_HEIGHT);
-const clusterSlotHeight = slotHeight(HAPPY_AGENT_FEED_CLUSTER_ROW_HEIGHT);
+/** An entry's height at the card's width, or a heading's. */
+const entrySlotHeight = (slot: HappyAgentFeedSlot<HappyAgentFeedEntry>, width: number): number =>
+    slot.kind === "heading"
+        ? HAPPY_AGENT_FEED_HEADING_HEIGHT
+        : happyAgentFeedEntryHeight(slot.row, width);
+const clusterSlotHeight = (slot: HappyAgentFeedSlot<HappyAgentFeedCluster>): number =>
+    slot.kind === "heading" ? HAPPY_AGENT_FEED_HEADING_HEIGHT : HAPPY_AGENT_FEED_CLUSTER_ROW_HEIGHT;
 
 /** Entries as their date's cards, newest first. */
 function FeedEntryCards(props: {
@@ -177,8 +199,10 @@ function FeedEntryCards(props: {
                     title={list.loading ? props.loadingTitle : props.empty.title}
                 />
             }
-            hasMore={list.hasMore}
-            loadingMore={list.loadingMore}
+            // While the list is still being read, it shows as loading rather
+            // than as a list with nothing in it yet.
+            hasMore={list.loading ? false : list.hasMore}
+            loadingMore={list.loading ? false : list.loadingMore}
             onLoadMore={props.onLoadMore}
             renderSlot={(slot) =>
                 slot.kind === "heading" ? (
@@ -206,12 +230,21 @@ function FeedActivity(props: HappyAgentFeedPageProps) {
         <>
             <FeedNotice error={feed.error} title="Activity may be out of date" />
             <FeedEntryCards
-                empty={{
-                    loading: "Reading what happened on this Happy Agent.",
-                    title: "Nothing has happened yet",
-                    description:
-                        "New tasks, bots, documents, todo lists, and artifacts appear here, with every change to them.",
-                }}
+                empty={
+                    props.filter === "highlights"
+                        ? {
+                              loading: "Reading the highlights on this Happy Agent.",
+                              title: "No highlights yet",
+                              description:
+                                  "Artifacts and new tasks appear here, with every change to them.",
+                          }
+                        : {
+                              loading: "Reading what happened on this Happy Agent.",
+                              title: "Nothing has happened yet",
+                              description:
+                                  "New tasks, bots, documents, todo lists, and artifacts appear here, with every change to them.",
+                          }
+                }
                 label="Activity"
                 list={feed}
                 loadingTitle="Loading activity…"

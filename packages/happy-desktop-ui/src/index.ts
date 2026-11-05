@@ -871,6 +871,7 @@ export {
     type HappyAgentFeedCluster,
     type HappyAgentFeedClusterKind,
     type HappyAgentFeedClusterState,
+    type HappyAgentFeedCover,
     type HappyAgentFeedEntry,
     type HappyAgentFeedFace,
     type HappyAgentFeedListState,
@@ -878,6 +879,7 @@ export {
 } from "./pages/feed/feedPresentation";
 export {
     HappyAgentFeedPage,
+    type HappyAgentFeedFilter,
     type HappyAgentFeedPageProps,
     type HappyAgentFeedView,
 } from "./pages/feed/HappyAgentFeedPage";

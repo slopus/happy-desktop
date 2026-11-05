@@ -3,11 +3,15 @@ import type {
     FeedCluster,
     FeedEntry,
     FeedItem,
+    FeedQuery,
+    FeedReadAllRequest,
+    FeedResponse,
     FeedSubject,
     HappyAgentClient,
 } from "@slopus/happy-agent-client";
 import type { HappyAgentArtifactTitlesStore } from "../artifacts/artifactTitlesStore.js";
 import type { HappyAgentArtifactId } from "../artifacts/artifactTypes.js";
+import { happyAgentHealthCapability } from "../happyAgentConnection/happyAgentHealthCapability.js";
 import type { HappyAgentSync } from "../happyAgentConnection/happyAgentSync.js";
 import { happyAgentSyncRead } from "../happyAgentConnection/happyAgentSyncRead.js";
 import { happyAgentUserError } from "../happyAgent/happyAgentSupport.js";
@@ -124,10 +128,45 @@ export interface HappyAgentFeedUnreadSnapshot {
 /** Which of the Feed page's two lists is on screen. */
 export type HappyAgentFeedView = "activity" | "following";
 
+/**
+ * Which entries the Activity list shows: every one, or the highlights — the
+ * artifacts and tasks, which are the work someone would want to see.
+ */
+export type HappyAgentFeedFilter = "all" | "highlights";
+
+/** The kinds of subject the Highlights filter keeps, as the daemon names them. */
+export const HAPPY_AGENT_FEED_HIGHLIGHT_SUBJECTS: readonly string[] = ["artifact", "task"];
+
+/** Whether an entry about `subject` belongs in the list `filter` shows. */
+export function happyAgentFeedFilterHas(
+    filter: HappyAgentFeedFilter,
+    subject: FeedSubject,
+): boolean {
+    return filter === "all" || HAPPY_AGENT_FEED_HIGHLIGHT_SUBJECTS.includes(subject.type);
+}
+
+/** Where the reader's filter for one Happy Agent is kept between runs. */
+export interface HappyAgentFeedFilterPersistence {
+    /** What was kept; anything that is not a filter means none. */
+    read(): unknown;
+    write(filter: HappyAgentFeedFilter): void;
+}
+
+const feedFilterParse = (value: unknown): HappyAgentFeedFilter | undefined =>
+    value === "all" || value === "highlights" ? value : undefined;
+
 /** The reader's feed as the Feed page shows it. */
 export interface HappyAgentFeedPageSnapshot {
     readonly availability: HappyAgentFeedAvailability;
     readonly view: HappyAgentFeedView;
+    /** Which entries `items` holds; the reader's choice, kept for this Happy Agent. */
+    readonly filter: HappyAgentFeedFilter;
+    /**
+     * Under a filter, how many of its entries the reader has not looked at:
+     * the daemon's count where it filters, else those held. `null` for All,
+     * whose count is the unread store's.
+     */
+    readonly filteredUnread: number | null;
     /**
      * Newest `cursor` first; an entry that takes in a change keeps its object
      * identity only while unchanged. An entry is here only once everything it
@@ -178,6 +217,8 @@ export interface HappyAgentFeedPageStore {
     get(): HappyAgentFeedPageSnapshot;
     subscribe(listener: () => void): () => void;
     viewUpdate(view: HappyAgentFeedView): void;
+    /** Shows every entry, or only the highlights; the choice is kept. */
+    filterUpdate(filter: HappyAgentFeedFilter): void;
     /** Reads the next page of older entries. */
     pageNextLoad(): void;
     /**
@@ -186,8 +227,10 @@ export interface HappyAgentFeedPageStore {
      */
     entryOpen(itemId: string): void;
     /**
-     * Marks every entry seen up to the newest one on screen, older pages not
-     * read yet included.
+     * Marks every entry under the filter seen up to the newest one on screen,
+     * older pages not read yet included. A daemon that cannot close only
+     * highlights has the ones held closed by name instead, so nothing outside
+     * the filter is ever closed.
      */
     readAll(): void;
 }
@@ -248,10 +291,31 @@ export interface HappyAgentFeedDeps {
     readonly sync: HappyAgentSync;
     /** The live titles of artifacts by id, which artifact entries are named by. */
     readonly artifactTitles: () => HappyAgentArtifactTitlesStore;
+    /** Where the reader's filter is kept; omitted keeps it for this run only. */
+    readonly filterPersistence?: HappyAgentFeedFilterPersistence;
+}
+
+/**
+ * A feed read, with the kinds of subject the daemon keeps. The pinned client
+ * predates `subjects` and `filteredUnread`; a daemon with
+ * `capabilities.feedSubjectFilter` takes and answers them.
+ */
+type HappyAgentFeedQuery = FeedQuery & { subjects?: string[] };
+type HappyAgentFeedReadAllRequest = FeedReadAllRequest & { subjects?: string[] };
+
+/** The daemon's count of unread entries under the filter it was asked for, when it gave one. */
+function filteredUnreadOf(response: FeedResponse): number | undefined {
+    const count: unknown = "filteredUnread" in response ? response.filteredUnread : undefined;
+    return typeof count === "number" ? count : undefined;
 }
 
 /** How many entries one read takes. */
 const PAGE = 50;
+/**
+ * How many entries fill a screen. Under a filter the daemon cannot apply,
+ * older pages are read until this many show or none are left.
+ */
+const SCREEN = 20;
 /** How long the clusters wait after the last change before being read again. */
 const CLUSTERS_SETTLE_MS = 1_500;
 const PEEK_LIMIT = 200;
@@ -404,9 +468,18 @@ export function happyAgentFeedCreate(deps: HappyAgentFeedDeps): HappyAgentFeed {
 
     function pageCreate() {
         const listeners = new Set<() => void>();
+        const filterKept = (() => {
+            try {
+                return feedFilterParse(deps.filterPersistence?.read());
+            } catch {
+                return undefined;
+            }
+        })();
         let snapshot: HappyAgentFeedPageSnapshot = {
             availability: "unknown",
             view: "activity",
+            filter: filterKept ?? "all",
+            filteredUnread: null,
             items: [],
             loading: true,
             hasMore: false,
@@ -416,9 +489,21 @@ export function happyAgentFeedCreate(deps: HappyAgentFeedDeps): HappyAgentFeed {
         };
         /**
          * Every entry read, newest first, whether or not what it names has
-         * been read yet; `items` is the settled part of it.
+         * been read yet; `items` is the settled part of it under the filter.
          */
         let held: readonly HappyAgentFeedItem[] = [];
+        /**
+         * Which list `held` is: every entry, or the highlights as the daemon
+         * filtered them. Under a filter the daemon cannot apply, `held` is
+         * every entry and the filter is applied here.
+         */
+        let heldQuery: HappyAgentFeedFilter = "all";
+        /** Bumped whenever `held` starts over as another list; answers for the old one are dropped. */
+        let generation = 0;
+        /** The daemon's count of unread highlights, from its last answer about them. */
+        let highlightsUnread: number | undefined;
+        let highlightsCounting = false;
+        let highlightsCountAgain = false;
         /** The first read has answered, but what its entries name has not been read yet. */
         let firstSettling = true;
         let firstAnswered = false;
@@ -428,19 +513,54 @@ export function happyAgentFeedCreate(deps: HappyAgentFeedDeps): HappyAgentFeed {
         let readingAll = false;
         let following: AbortController | undefined;
         let cursor: string | undefined;
+        /** The list the daemon is asked for under `filter`. */
+        const queryOf = (filter: HappyAgentFeedFilter): HappyAgentFeedFilter =>
+            filter === "highlights" &&
+            happyAgentHealthCapability(sync.health(), "feedSubjectFilter")
+                ? "highlights"
+                : "all";
+        const feedQuery = (
+            query: HappyAgentFeedFilter,
+            page: { readonly before?: string; readonly limit: number },
+        ): HappyAgentFeedQuery =>
+            query === "all"
+                ? page
+                : { ...page, subjects: [...HAPPY_AGENT_FEED_HIGHLIGHT_SUBJECTS] };
+        const shownOf = (filter: HappyAgentFeedFilter): readonly HappyAgentFeedItem[] =>
+            filter === "all"
+                ? held
+                : held.filter((item) => happyAgentFeedFilterHas(filter, item.subject));
+        /** Whether older pages are still to be read before a filtered list fills a screen. */
+        const filling = (
+            filter: HappyAgentFeedFilter,
+            shown: readonly HappyAgentFeedItem[],
+            hasMore: boolean,
+        ): boolean => filter !== "all" && hasMore && shown.length < SCREEN;
         const publish = (next: Partial<HappyAgentFeedPageSnapshot>): void => {
-            const settled = held.filter(entrySettled);
+            const merged = { ...snapshot, ...next };
+            const shown = shownOf(merged.filter);
+            const settled = shown.filter(entrySettled);
             // The first page shows at once, with every name it needs.
-            if (firstSettling && firstAnswered && settled.length === held.length)
+            if (firstSettling && firstAnswered && settled.length === shown.length)
                 firstSettling = false;
             const items = sameEntries(settled, snapshot.items) ? snapshot.items : settled;
-            const loading = !firstAnswered || firstSettling;
-            snapshot = { ...snapshot, ...next, items, loading };
+            const loading =
+                !firstAnswered ||
+                firstSettling ||
+                (items.length === 0 && filling(merged.filter, shown, merged.hasMore));
+            const filteredUnread =
+                merged.filter === "all"
+                    ? null
+                    : heldQuery !== "all" && highlightsUnread !== undefined
+                      ? highlightsUnread
+                      : shown.filter((item) => item.seenAt === null && !pending.has(item.id))
+                            .length;
+            snapshot = { ...merged, items, loading, filteredUnread };
             for (const listener of listeners) listener();
         };
         /** Something an entry names was read: the entries it held back may show now. */
         const referencesChanged = (): void => {
-            const settled = held.filter(entrySettled);
+            const settled = shownOf(snapshot.filter).filter(entrySettled);
             if (sameEntries(settled, snapshot.items) && !firstSettling) return;
             publish({});
         };
@@ -489,17 +609,43 @@ export function happyAgentFeedCreate(deps: HappyAgentFeedDeps): HappyAgentFeed {
             publish(seenPendingNow());
         };
         /**
+         * Makes `held` the list the daemon is asked for under `filter`. Going
+         * to the daemon's highlights keeps the highlights held, which are
+         * exactly its list down to the last one, so they show at once; going
+         * back to every entry starts over, since the filtered list has gaps
+         * for every other kind. Answers whether `held` is now another list.
+         */
+        const queryAdopt = (filter: HappyAgentFeedFilter): boolean => {
+            const query = queryOf(filter);
+            if (query === heldQuery) return false;
+            generation += 1;
+            highlightsUnread = undefined;
+            heldQuery = query;
+            if (query === "all") {
+                heldSet([]);
+                firstAnswered = false;
+                firstSettling = true;
+                snapshot = { ...snapshot, hasMore: false, loadingMore: false };
+            } else {
+                heldSet(shownOf(query));
+                snapshot = { ...snapshot, loadingMore: false };
+            }
+            return true;
+        };
+        /**
          * Reads the newest page and lays it over what is held: entries newer
          * than its last one are exactly the page, and older ones already read
          * stay, so a reader scrolled down keeps their place.
          */
         const firstRead = async (signal: AbortSignal): Promise<void> => {
+            const query = heldQuery;
+            const at = generation;
             const response = await happyAgentSyncRead(
                 signal,
-                () => client.getFeed({ limit: PAGE }, { signal }),
+                () => client.getFeed(feedQuery(query, { limit: PAGE }), { signal }),
                 (error) => publish({ error: happyAgentUserError(error) }),
             );
-            if (signal.aborted) return;
+            if (signal.aborted || at !== generation) return;
             cursor = response.cursor;
             const items = response.items.map(feedItemOf);
             const floor = items.at(-1)?.cursor;
@@ -515,6 +661,7 @@ export function happyAgentFeedCreate(deps: HappyAgentFeedDeps): HappyAgentFeed {
                     false,
                 ),
             );
+            if (query !== "all") highlightsUnread = filteredUnreadOf(response);
             firstAnswered = true;
             publish({
                 hasMore: older.length > 0 ? snapshot.hasMore : response.hasMore,
@@ -522,16 +669,49 @@ export function happyAgentFeedCreate(deps: HappyAgentFeedDeps): HappyAgentFeed {
                 ...seenPendingNow(),
             });
             unreadStore?.unreadReceived(response.unread);
+            fill();
+        };
+        /** Reads the daemon's count of unread highlights again, one read at a time. */
+        const highlightsCount = (signal: AbortSignal): void => {
+            if (heldQuery === "all") return;
+            if (highlightsCounting) {
+                highlightsCountAgain = true;
+                return;
+            }
+            highlightsCounting = true;
+            const at = generation;
+            client
+                .getFeed(feedQuery(heldQuery, { limit: 1 }), { signal })
+                .then((response) => {
+                    const count = filteredUnreadOf(response);
+                    if (signal.aborted || at !== generation || count === highlightsUnread) return;
+                    highlightsUnread = count;
+                    publish({});
+                }, noop)
+                .finally(() => {
+                    highlightsCounting = false;
+                    if (!highlightsCountAgain || signal.aborted) return;
+                    highlightsCountAgain = false;
+                    highlightsCount(signal);
+                });
         };
         const followLoop = async (signal: AbortSignal): Promise<void> => {
             for await (const input of sync.follow({
                 signal,
-                events: ["feed.item.created", "feed.item.updated", "feed.item.removed"],
+                events: [
+                    "feed.item.created",
+                    "feed.item.updated",
+                    "feed.item.removed",
+                    "feed.unread.updated",
+                ],
             })) {
                 if (input.kind === "bootstrap" || input.kind === "reconcile") {
                     const available = availability();
-                    if (available === "available") void firstRead(signal).catch(noop);
-                    else firstAnswered = available === "unsupported";
+                    if (available === "available") {
+                        // What the daemon can filter is known only now.
+                        queryAdopt(snapshot.filter);
+                        void firstRead(signal).catch(noop);
+                    } else firstAnswered = available === "unsupported";
                     publish({ availability: available });
                     continue;
                 }
@@ -542,21 +722,26 @@ export function happyAgentFeedCreate(deps: HappyAgentFeedDeps): HappyAgentFeed {
                 )
                     continue;
                 const { event } = input.update;
+                cursor = input.update.cursor;
                 if (event.type === "feed.item.created" || event.type === "feed.item.updated") {
-                    const next = upsert(held, [feedItemOf(event.payload.item)], snapshot.hasMore);
+                    const item = feedItemOf(event.payload.item);
+                    // The daemon's filtered list never holds another kind.
+                    if (!happyAgentFeedFilterHas(heldQuery, item.subject)) continue;
+                    const next = upsert(held, [item], snapshot.hasMore);
                     if (next !== held) {
                         heldSet(next);
                         publish(seenPendingNow());
                     }
                 } else if (event.type === "feed.item.removed") remove(event.payload.itemId);
-                cursor = input.update.cursor;
+                else if (event.type === "feed.unread.updated") highlightsCount(signal);
             }
         };
         /**
-         * The daemon answered a read-all: by its contract every entry that was
-         * open at or before `through` is now closed, whether or not its own
-         * event has arrived yet. The held copies say so; a later change to one
-         * arrives with a greater version and replaces it.
+         * The daemon answered a read-all: by its contract every entry of the
+         * list asked about that was open at or before `through` is now
+         * closed, whether or not its own event has arrived yet. The held
+         * copies say so; a later change to one arrives with a greater version
+         * and replaces it.
          */
         const readAllConfirmed = (through: string, at: number): void => {
             let changed = false;
@@ -574,6 +759,61 @@ export function happyAgentFeedCreate(deps: HappyAgentFeedDeps): HappyAgentFeed {
             for (const id of ids) pending.delete(id);
             publish({ error: happyAgentUserError(error), ...seenPendingNow() });
         };
+        /**
+         * The daemon closed the entries asked about by name that it could: one
+         * a newer change kept open reads unread again.
+         */
+        const seenAnswered = (
+            asked: readonly string[],
+            response: { readonly items: readonly FeedItem[]; readonly unread: number },
+        ): void => {
+            const closed = new Set(response.items.map((item) => item.id));
+            for (const id of asked) if (!closed.has(id)) pending.delete(id);
+            heldSet(upsert(held, response.items.map(feedItemOf), false));
+            publish(seenPendingNow());
+            unreadStore?.unreadReceived(response.unread);
+            if (following) highlightsCount(following.signal);
+        };
+        /** Reads the next page of older entries of the list held. */
+        const pageNextLoad = (): void => {
+            const last = held.at(-1);
+            const signal = following?.signal;
+            if (!signal || !last || !snapshot.hasMore || snapshot.loadingMore) return;
+            const query = heldQuery;
+            const at = generation;
+            publish({ loadingMore: true });
+            client.getFeed(feedQuery(query, { before: last.cursor, limit: PAGE }), { signal }).then(
+                (response) => {
+                    if (signal.aborted || at !== generation) return;
+                    const items = response.items.map(feedItemOf);
+                    const merged = [...held];
+                    const ids = new Set(merged.map((item) => item.id));
+                    for (const item of items) if (!ids.has(item.id)) merged.push(item);
+                    heldSet(upsert(merged.sort(byCursor), items, false));
+                    if (query !== "all")
+                        highlightsUnread = filteredUnreadOf(response) ?? highlightsUnread;
+                    publish({
+                        hasMore: response.hasMore,
+                        loadingMore: false,
+                        error: null,
+                    });
+                    fill();
+                },
+                (error: unknown) => {
+                    if (signal.aborted || at !== generation) return;
+                    publish({ loadingMore: false, error: happyAgentUserError(error) });
+                },
+            );
+        };
+        /**
+         * Under a filter, a page of every entry may hold few of the filtered
+         * ones, and the reader has nothing to scroll to read more: older pages
+         * are read until a screen of them shows.
+         */
+        function fill(): void {
+            if (filling(snapshot.filter, shownOf(snapshot.filter), snapshot.hasMore))
+                pageNextLoad();
+        }
         return {
             store: {
                 get: () => snapshot,
@@ -590,31 +830,20 @@ export function happyAgentFeedCreate(deps: HappyAgentFeedDeps): HappyAgentFeed {
                 viewUpdate(view: HappyAgentFeedView) {
                     if (view !== snapshot.view) publish({ view });
                 },
-                pageNextLoad() {
-                    const last = held.at(-1);
+                filterUpdate(filter: HappyAgentFeedFilter) {
+                    if (filter === snapshot.filter) return;
+                    try {
+                        deps.filterPersistence?.write(filter);
+                    } catch {
+                        // A choice that cannot be kept still holds for this run.
+                    }
+                    const restarted = availability() === "available" && queryAdopt(filter);
+                    publish({ filter, ...seenPendingNow() });
                     const signal = following?.signal;
-                    if (!signal || !last || !snapshot.hasMore || snapshot.loadingMore) return;
-                    publish({ loadingMore: true });
-                    client.getFeed({ before: last.cursor, limit: PAGE }, { signal }).then(
-                        (response) => {
-                            if (signal.aborted) return;
-                            const items = response.items.map(feedItemOf);
-                            const merged = [...held];
-                            const ids = new Set(merged.map((item) => item.id));
-                            for (const item of items) if (!ids.has(item.id)) merged.push(item);
-                            heldSet(upsert(merged.sort(byCursor), items, false));
-                            publish({
-                                hasMore: response.hasMore,
-                                loadingMore: false,
-                                error: null,
-                            });
-                        },
-                        (error: unknown) => {
-                            if (signal.aborted) return;
-                            publish({ loadingMore: false, error: happyAgentUserError(error) });
-                        },
-                    );
+                    if (restarted && signal) void firstRead(signal).catch(noop);
+                    else fill();
                 },
+                pageNextLoad,
                 entryOpen(itemId: string) {
                     const item = held.find((entry) => entry.id === itemId);
                     if (!item || item.seenAt !== null || pending.has(itemId)) return;
@@ -626,15 +855,7 @@ export function happyAgentFeedCreate(deps: HappyAgentFeedDeps): HappyAgentFeed {
                             mutationId: mutationIdCreate(),
                         })
                         .then(
-                            (response) => {
-                                // A newer change kept the entry open: nothing closed, so
-                                // it reads unread again.
-                                if (!response.items.some((closed) => closed.id === itemId))
-                                    pending.delete(itemId);
-                                heldSet(upsert(held, response.items.map(feedItemOf), false));
-                                publish(seenPendingNow());
-                                unreadStore?.unreadReceived(response.unread);
-                            },
+                            (response) => seenAnswered([itemId], response),
                             (error: unknown) => seenFailed([itemId], error),
                         );
                 },
@@ -644,31 +865,76 @@ export function happyAgentFeedCreate(deps: HappyAgentFeedDeps): HappyAgentFeed {
                     const open = snapshot.items.filter(
                         (item) => item.seenAt === null && !pending.has(item.id),
                     );
+                    const unread = snapshot.filteredUnread ?? unreadStore?.store.get().unread ?? 0;
                     // Open entries may lie only on pages not read yet; the count knows of them.
-                    if (open.length === 0 && (unreadStore?.store.get().unread ?? 0) === 0) return;
+                    if (open.length === 0 && unread === 0) return;
+                    const asked = open.map((item) => item.id);
+                    if (snapshot.filter !== "all" && heldQuery === "all") {
+                        // This daemon cannot close only the filtered entries, so
+                        // the ones shown are closed by name.
+                        if (open.length === 0) return;
+                        readingAll = true;
+                        for (const item of open) pending.set(item.id, item.version);
+                        pendingPublish();
+                        client
+                            .markFeedSeen({
+                                subjects: open.map((item) => ({
+                                    ...item.subject,
+                                    through: item.cursor,
+                                })),
+                                mutationId: mutationIdCreate(),
+                            })
+                            .then(
+                                (response) => {
+                                    readingAll = false;
+                                    seenAnswered(asked, response);
+                                },
+                                (error: unknown) => {
+                                    readingAll = false;
+                                    seenFailed(asked, error);
+                                },
+                            );
+                        return;
+                    }
                     readingAll = true;
                     for (const item of open) pending.set(item.id, item.version);
                     pendingPublish();
                     const through = newest.cursor;
-                    client.markFeedReadAll({ through, mutationId: mutationIdCreate() }).then(
+                    const query = heldQuery;
+                    const at = generation;
+                    const request: HappyAgentFeedReadAllRequest = {
+                        through,
+                        mutationId: mutationIdCreate(),
+                        ...(query === "all"
+                            ? {}
+                            : { subjects: [...HAPPY_AGENT_FEED_HIGHLIGHT_SUBJECTS] }),
+                    };
+                    client.markFeedReadAll(request).then(
                         (response) => {
                             readingAll = false;
-                            readAllConfirmed(through, Date.now());
                             unreadStore?.unreadReceived(response.unread);
+                            // The list asked about is gone: its own read says where it stands.
+                            if (at !== generation) return;
+                            if (query !== "all") highlightsUnread = undefined;
+                            readAllConfirmed(through, Date.now());
+                            if (query !== "all" && following) highlightsCount(following.signal);
                         },
                         (error: unknown) => {
                             readingAll = false;
-                            seenFailed(
-                                open.map((item) => item.id),
-                                error,
-                            );
+                            seenFailed(asked, error);
                         },
                     );
                 },
             } satisfies HappyAgentFeedPageStore,
             /** Entries a mutation elsewhere closed, as the daemon answered it. */
             itemsReceived(items: readonly FeedItem[]): void {
-                const next = upsert(held, items.map(feedItemOf), false);
+                const next = upsert(
+                    held,
+                    items
+                        .map(feedItemOf)
+                        .filter((item) => happyAgentFeedFilterHas(heldQuery, item.subject)),
+                    false,
+                );
                 if (next === held) return;
                 heldSet(next);
                 publish(seenPendingNow());

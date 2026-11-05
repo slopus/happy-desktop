@@ -44,6 +44,22 @@ export interface HappyAgentFeedActor {
 }
 
 /**
+ * The picture an artifact is shown by in the feed: its headline, key number,
+ * or chart, drawn by the agent that made it. The feed draws only the picture.
+ */
+export interface HappyAgentFeedCover {
+    /** Where the picture is read from. */
+    readonly url: string;
+    /** The picture's shape, 16:9 or square, which lays out its box before it loads. */
+    readonly aspect: "wide" | "square";
+    /**
+     * The colour the artifact asks to be shown on, painted behind the picture
+     * while it loads and around it; without one, a neutral placeholder.
+     */
+    readonly background?: string;
+}
+
+/**
  * One entry of the reader's feed, as the owner has put it into words: what it
  * is about, who changed it, how often, and whether the reader has looked.
  */
@@ -69,6 +85,13 @@ export interface HappyAgentFeedEntry {
     readonly updates: number;
     /** A few words about the newest change, such as a new todo's text. */
     readonly detail?: string;
+    /**
+     * An artifact's cover: with one, the entry is a post, its row followed by
+     * the summary and then the picture across the card.
+     */
+    readonly cover?: HappyAgentFeedCover;
+    /** An artifact's one line about itself, shown in its post under the row. */
+    readonly summary?: string;
     /** When the latest change happened. */
     readonly lastAt: number;
     readonly unread: boolean;

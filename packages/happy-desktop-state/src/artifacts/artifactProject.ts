@@ -8,6 +8,9 @@ import type {
 import type {
     HappyAgentArtifact,
     HappyAgentArtifactAuthor,
+    HappyAgentArtifactCover,
+    HappyAgentArtifactCoverAspect,
+    HappyAgentArtifactCoverMimeType,
     HappyAgentArtifactFile,
     HappyAgentArtifactId,
     HappyAgentArtifactSource,
@@ -131,6 +134,44 @@ const ARTIFACT_BACKGROUND = /^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/iu;
  */
 export function happyAgentArtifactBackground(value: unknown): string | undefined {
     return typeof value === "string" && ARTIFACT_BACKGROUND.test(value) ? value : undefined;
+}
+
+const ARTIFACT_COVER_MIME_TYPES: ReadonlySet<string> = new Set<HappyAgentArtifactCoverMimeType>([
+    "image/png",
+    "image/jpeg",
+    "image/webp",
+    "image/gif",
+]);
+
+/**
+ * The cover the artifact's latest version names. The pinned client predates
+ * covers and hands the daemon's JSON over unparsed, so the field is read from
+ * the object as the daemon sent it: an older daemon sends none, and a cover in
+ * a format or of a shape this build does not know is no cover, so the
+ * artifact keeps its compact row rather than a guess at its shape.
+ */
+export function happyAgentArtifactCoverProject(artifact: Artifact): HappyAgentArtifactCover | null {
+    const cover: unknown = "cover" in artifact ? artifact.cover : undefined;
+    if (typeof cover !== "object" || cover === null) return null;
+    const { path, mimeType, width, height, aspect } = cover as Record<string, unknown>;
+    if (typeof path !== "string" || path === "") return null;
+    if (typeof mimeType !== "string" || !ARTIFACT_COVER_MIME_TYPES.has(mimeType)) return null;
+    if (typeof width !== "number" || !Number.isInteger(width) || width <= 0) return null;
+    if (typeof height !== "number" || !Number.isInteger(height) || height <= 0) return null;
+    if (aspect !== "wide" && aspect !== "square") return null;
+    return {
+        path,
+        mimeType: mimeType as HappyAgentArtifactCoverMimeType,
+        width,
+        height,
+        aspect: aspect satisfies HappyAgentArtifactCoverAspect,
+    };
+}
+
+/** The artifact's one-line summary, read as `happyAgentArtifactCoverProject` reads its cover. */
+export function happyAgentArtifactSummaryProject(artifact: Artifact): string | null {
+    const summary: unknown = "summary" in artifact ? artifact.summary : undefined;
+    return typeof summary === "string" && summary.trim() !== "" ? summary : null;
 }
 
 export function happyAgentArtifactVersionProject(

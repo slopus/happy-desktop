@@ -128,7 +128,11 @@ import {
 } from "./happyAgentCloudStore.js";
 import { happyAgentTeamsStoreCreate, type HappyAgentTeamsStore } from "./happyAgentTeamsStore.js";
 import { happyAgentArtifactsCreate, type HappyAgentArtifacts } from "../artifacts/artifacts.js";
-import { happyAgentFeedCreate, type HappyAgentFeed } from "../feed/feed.js";
+import {
+    happyAgentFeedCreate,
+    type HappyAgentFeed,
+    type HappyAgentFeedFilterPersistence,
+} from "../feed/feed.js";
 import { happyAgentSurfaceChatGroupsCreate } from "../surfaces/surfaceChatGroups.js";
 import { happyAgentSurfacesCreate, type HappyAgentSurfaces } from "../surfaces/surfaces.js";
 import {
@@ -442,6 +446,8 @@ export interface HappyAgentWorkspaceClientDeps {
     readonly modelPreferencePersistence?: HappyAgentModelPreferencePersistence;
     /** Where this Happy Agent's tab and read memory is kept; omitted keeps it in memory. */
     readonly workspaceMemoryPersistence?: HappyAgentWorkspaceMemoryPersistence;
+    /** Where the reader's Activity filter for this Happy Agent is kept; omitted keeps it in memory. */
+    readonly feedFilterPersistence?: HappyAgentFeedFilterPersistence;
     /**
      * Builds the driver behind a terminal: the app-layer machinery that owns the
      * terminal protocol client and the VT emulator. Omitting it leaves terminals
@@ -598,6 +604,9 @@ export function happyAgentWorkspaceClientCreate(
             sync: deps.connection.sync,
             // Artifact entries are named by their live titles, which the artifacts own.
             artifactTitles: () => workspace.artifacts().titles(),
+            ...(deps.feedFilterPersistence
+                ? { filterPersistence: deps.feedFilterPersistence }
+                : {}),
         }));
     let surfaces: HappyAgentSurfaces | undefined;
     let toolMediaDocument: HappyAgentToolMediaDocumentStore | undefined;

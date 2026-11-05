@@ -1,5 +1,5 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { ScrollArea } from "../../Scrollbar";
 import { Spinner } from "../../Spinner";
 
@@ -16,8 +16,11 @@ const ANCHOR_SPAN = 24;
 
 export interface FeedVirtualListProps<Slot extends { readonly id: string }> {
     slots: readonly Slot[];
-    /** Every slot's height, known ahead; the list never measures one. */
-    slotHeight: (slot: Slot) => number;
+    /**
+     * Every slot's height at the list's width, known ahead: the list measures
+     * its own width, never a slot.
+     */
+    slotHeight: (slot: Slot, width: number) => number;
     renderSlot: (slot: Slot) => ReactNode;
     /** Older slots exist beyond the last one held. */
     hasMore: boolean;
@@ -44,8 +47,9 @@ function startsOf<Slot extends { readonly id: string }>(
 }
 
 /**
- * The scrolled column of a feed: every slot of a height known ahead, only the
- * ones on screen drawn, and older ones read as the reader comes near the end.
+ * The scrolled column of a feed: every slot of a height known ahead from the
+ * column's width, only the ones on screen drawn, and older ones read as the
+ * reader comes near the end.
  *
  * Slots are keyed by their own id, so a row that takes a new place keeps its
  * element. While the reader is at the top, a row that moves glides to its new
@@ -61,6 +65,21 @@ export function FeedVirtualList<Slot extends { readonly id: string }>(
     // Whether the reader has scrolled into the list, kept from their own
     // scrolling so the slots of the next render already know whether to glide.
     const [parked, parkedSet] = useState(false);
+    // The list's own width, which a slot's height may follow, such as a
+    // picture's at its aspect ratio. Read as the list appears, before it is
+    // painted, and again whenever the column is resized.
+    const [width, widthSet] = useState(0);
+    // Stable so the observer is made once for the list's element rather than
+    // again at every render.
+    const listMeasure = useCallback((element: HTMLDivElement | null) => {
+        if (element === null) return;
+        widthSet(element.clientWidth);
+        const observer = new ResizeObserver(() => widthSet(element.clientWidth));
+        observer.observe(element);
+        return () => observer.disconnect();
+    }, []);
+    const heightAt = props.slotHeight;
+    const slotHeight = (slot: Slot): number => heightAt(slot, width);
     const count = props.slots.length;
     const loadNear = (last: number | undefined) => {
         if (last === undefined || !props.hasMore || props.loadingMore) return;
@@ -74,7 +93,7 @@ export function FeedVirtualList<Slot extends { readonly id: string }>(
         count,
         estimateSize: (index) => {
             const slot = props.slots[index];
-            return slot === undefined ? 0 : props.slotHeight(slot);
+            return slot === undefined ? 0 : slotHeight(slot);
         },
         getItemKey: (index) => props.slots[index]?.id ?? index,
         getScrollElement: () => scrollElement.current,
@@ -101,7 +120,7 @@ export function FeedVirtualList<Slot extends { readonly id: string }>(
     // eslint-disable-next-line happy-react/no-layout-effect -- Scroll anchoring for positioned slots must correct scrollTop after the new offsets commit and before they paint; no declarative boundary sees both.
     useLayoutEffect(() => {
         const before = held.current;
-        const starts = startsOf(props.slots, props.slotHeight);
+        const starts = startsOf(props.slots, (slot) => heightAt(slot, width));
         held.current = { order: props.slots.map((slot) => slot.id), starts };
         const element = scrollElement.current;
         if (element === null || element.scrollTop <= 0 || before.order.length === 0) return;
@@ -125,7 +144,7 @@ export function FeedVirtualList<Slot extends { readonly id: string }>(
             return;
         }
         if (fallback) element.scrollTop += fallback;
-    }, [props.slots, props.slotHeight]);
+    }, [props.slots, heightAt, width]);
     const drawn = virtualizer.getVirtualItems();
     return (
         <ScrollArea
@@ -146,6 +165,7 @@ export function FeedVirtualList<Slot extends { readonly id: string }>(
                         className="happy-agent-feed__list"
                         data-glide={parked ? undefined : ""}
                         data-happy-desktop-ui="happy-agent-feed-list"
+                        ref={listMeasure}
                         role="list"
                         style={{ height: virtualizer.getTotalSize() }}
                     >

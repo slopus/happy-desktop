@@ -45,6 +45,7 @@ import {
     type HappyAgentSurfaces,
     type HappyAgentSessionLocation,
     type HappyAgentWorkspaceMemoryDocument,
+    type HappyAgentFeedFilterPersistence,
     type HappyAgentWorkspaceMemoryPersistence,
     type HappyAgentWorkspaceStore,
     type ServerCompatibility,
@@ -79,6 +80,7 @@ function protocolMismatchOf(
 }
 
 const WORKSPACE_MEMORY_PREFIX = "happy.happy-agent.workspace-memory.v1:";
+const FEED_FILTER_PREFIX = "happy.happy-agent.feed-filter.v1:";
 const RETRY_MS = 1_000;
 const PRELOADED_SESSIONS = 12;
 
@@ -98,6 +100,27 @@ function workspaceMemoryPersistence(happyAgentId: string): HappyAgentWorkspaceMe
                 localStorage.setItem(key, JSON.stringify(document));
             } catch {
                 // Storage-denied windows retain the in-memory store for this run.
+            }
+        },
+    };
+}
+
+/** The reader's Activity filter, kept for each Happy Agent this window connects to. */
+function feedFilterPersistence(happyAgentId: string): HappyAgentFeedFilterPersistence {
+    const key = `${FEED_FILTER_PREFIX}${happyAgentId}`;
+    return {
+        read() {
+            try {
+                return localStorage.getItem(key);
+            } catch {
+                return undefined;
+            }
+        },
+        write(filter) {
+            try {
+                localStorage.setItem(key, filter);
+            } catch {
+                // A storage-denied window keeps the choice for this run.
             }
         },
     };
@@ -451,6 +474,7 @@ export function happyAgentConnectionOpen(input: {
         hostServices,
         modelPreferencePersistence: input.modelPreferencePersistence,
         workspaceMemoryPersistence: workspaceMemoryPersistence(input.happyAgentId),
+        feedFilterPersistence: feedFilterPersistence(input.happyAgentId),
         catalogSource,
         profileActions: profile.actions,
         profilePhotoCodec: { open: imageCropOpen },
