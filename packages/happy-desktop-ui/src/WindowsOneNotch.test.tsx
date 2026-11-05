@@ -88,6 +88,7 @@ it("records one real downward notch from controlled distances while streaming", 
         );
     }
     let streaming = false;
+    let nextUpdate = 0;
     let ticks = 0;
     let timer = 0;
     let animation = 0;
@@ -146,13 +147,19 @@ it("records one real downward notch from controlled distances while streaming", 
         };
         animation = requestAnimationFrame(capture);
         timer = window.setInterval(() => {
-            if (!streaming) return;
+            if (!streaming || performance.now() < nextUpdate) return;
+            nextUpdate = performance.now() + 200;
             ticks += 1;
             update(
                 `A response is streaming. ${"A new wrapped line appears while the reader follows this response. ".repeat(ticks)}`,
             );
-        }, 200);
+        }, 20);
         targetWindow.__happyOneNotchPrepare = async (distance) => {
+            // Establish the requested parked position with an upward scroll
+            // from the end, so the list observes reader escape before input.
+            viewport.scrollTop = viewport.scrollHeight;
+            await frame();
+            await frame();
             viewport.scrollTop = Math.max(
                 0,
                 viewport.scrollHeight - viewport.clientHeight - distance,
@@ -164,6 +171,7 @@ it("records one real downward notch from controlled distances while streaming", 
                 type: "prepared",
                 bottomDistance: bottomDistance(),
             });
+            nextUpdate = performance.now() + 200;
             streaming = true;
         };
         for (const distance of [40, 70, 95, 500]) {
@@ -175,7 +183,9 @@ it("records one real downward notch from controlled distances while streaming", 
                 await commands.scrollReproNativeOneNotch(distance);
                 await delay(1500);
                 streaming = false;
-                const wheels = events.filter((event) => event.type === "wheel");
+                const wheels = events.filter(
+                    (event) => event.type === "wheel" && (event.deltaY ?? 0) > 0,
+                );
                 console.log(
                     "ONE_NOTCH_CASE " +
                         JSON.stringify({
