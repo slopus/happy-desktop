@@ -72,19 +72,22 @@ export default defineConfig({
                     await page.mouse.wheel(0, deltaY);
                 },
                 scrollReproDrag: async ({ page, iframe }, direction: "up" | "down") => {
-                    const thumb = iframe
-                        .locator(
-                            '[data-scrollbar-track][data-axis="vertical"] .happy-scrollbar__thumb',
-                        )
+                    const track = iframe
+                        .locator('[data-scrollbar-track][data-axis="vertical"]')
                         .first();
+                    const thumb = track.locator(".happy-scrollbar__thumb");
                     const box = await thumb.boundingBox();
-                    if (!box) throw new Error("Scroll repro thumb is missing");
+                    const trackBox = await track.boundingBox();
+                    if (!box || !trackBox)
+                        throw new Error("Scroll repro thumb or track is missing");
                     const x = box.x + box.width / 2;
                     const y = box.y + box.height / 2;
+                    const distance =
+                        direction === "up" ? -300 : trackBox.y + trackBox.height + box.height - y;
                     await page.mouse.move(x, y);
                     await page.mouse.down();
                     for (let i = 1; i <= 10; i += 1) {
-                        await page.mouse.move(x, y + (direction === "up" ? -30 : 30) * i);
+                        await page.mouse.move(x, y + (distance * i) / 10);
                         await new Promise((resolve) => setTimeout(resolve, 40));
                     }
                     await page.mouse.up();
