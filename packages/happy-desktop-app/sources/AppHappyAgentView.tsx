@@ -4398,6 +4398,9 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                         {...(props.artifactId === undefined
                             ? {}
                             : { artifactId: props.artifactId as HappyAgentArtifactId })}
+                        {...(active.instanceId === undefined
+                            ? {}
+                            : { instanceId: active.instanceId })}
                         onArtifactClose={() => props.onArtifactClose?.(active.id)}
                         onArtifactOpen={(artifactId) =>
                             props.onArtifactOpen?.(active.id, artifactId)
@@ -5592,6 +5595,8 @@ function HappyAgentArtifactsSurface(props: {
     artifacts: HappyAgentArtifacts;
     artifactPage?: HtmlPreviewRenderer;
     artifactId?: HappyAgentArtifactId;
+    /** The instance this machine's health named, which a link naming an instance must match. */
+    instanceId?: string;
     /** The Happy Agent's Surfaces, which an open artifact can be kept among. */
     surfaces?: HappyAgentSurfaceCatalogStore;
     places: HappyAgentArtifactPlaces;
@@ -5627,7 +5632,11 @@ function HappyAgentArtifactsSurface(props: {
                               artifactId={props.artifactId}
                               {...(props.artifactPage ? { artifactPage: props.artifactPage } : {})}
                               artifacts={props.artifacts}
+                              {...(props.instanceId === undefined
+                                  ? {}
+                                  : { instanceId: props.instanceId })}
                               labels={labels}
+                              onArtifactOpen={props.onArtifactOpen}
                               onClose={props.onArtifactClose}
                               surfaces={props.surfaces ?? happyAgentSurfaceCatalogStoreNoop}
                           />
@@ -5678,6 +5687,10 @@ function HappyAgentArtifactViewerSurface(props: {
     artifactPage?: HtmlPreviewRenderer;
     artifactId: HappyAgentArtifactId;
     labels: HappyAgentArtifactLabels;
+    /** The instance this machine's health named, which a link naming an instance must match. */
+    instanceId?: string;
+    /** Opens another artifact a Markdown version links to, as a step Back returns from. */
+    onArtifactOpen(artifactId: string): void;
     onClose(): void;
     surfaces: HappyAgentSurfaceCatalogStore;
 }) {
@@ -5687,6 +5700,17 @@ function HappyAgentArtifactViewerSurface(props: {
         props.surfaces.get,
         props.surfaces.get,
     );
+    const titlesStore = props.artifacts.titles();
+    const titles = useSyncExternalStore(titlesStore.subscribe, titlesStore.get, titlesStore.get);
+    // Only links to artifacts open from here; every other reference is named.
+    const entities = messageReferencesCreate({
+        instanceId: props.instanceId,
+        titles,
+        titlesStore,
+        people: props.artifacts.people(),
+        entities: messageReferenceEntities(undefined),
+        onArtifactOpen: props.onArtifactOpen,
+    });
     const reference = { kind: "artifact", id: props.artifactId } as const;
     const kept = happyAgentSurfaceReferenceFind(surfaces.joined, reference);
     // The address decides which artifact the viewer holds, for exactly as long
@@ -5699,6 +5723,7 @@ function HappyAgentArtifactViewerSurface(props: {
     const viewer = useSyncExternalStore(store.subscribe, store.get, store.get);
     return (
         <HappyAgentArtifactViewer
+            entities={entities}
             labels={props.labels}
             onBack={props.onClose}
             onDeletionCancel={store.deletionCancel}
