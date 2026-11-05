@@ -230,6 +230,12 @@ interface UploadRecord {
     /** The item a new file is made as, so a repeated placement makes it once. */
     readonly itemId: HappyAgentVaultItemId;
     readonly mutationId: string;
+    /**
+     * The upload as one operation: every attempt at making it a new version,
+     * a retry with a fresh upload included, carries it, so the Happy Agent
+     * makes that version once and answers a repeat with its first answer.
+     */
+    readonly operationId: string;
     controller: AbortController;
 }
 
@@ -1441,9 +1447,14 @@ export function happyAgentVaultStoreCreate(deps: HappyAgentVaultDeps): HappyAgen
                     const response = await client.createVaultVersion(
                         surfaceId,
                         held.id,
-                        { uploadId, mutationId: record.mutationId },
+                        {
+                            uploadId,
+                            mutationId: record.mutationId,
+                            operationId: record.operationId,
+                        },
                         { ifMatch: held.version, signal },
                     );
+                    // A `null` version is the same content as the newest: placed all the same.
                     entryAdopt(happyAgentVaultFileProject(response.file));
                     return held.id;
                 }
@@ -1654,6 +1665,8 @@ export function happyAgentVaultStoreCreate(deps: HappyAgentVaultDeps): HappyAgen
             )
                 return;
             const mutationId = idCreate();
+            // One restore the reader asked for, however many times it is sent.
+            const operationId = idCreate();
             void (async () => {
                 let ifMatch = entry.version;
                 for (let attempt = 0; attempt <= CONFLICT_RETRIES; attempt += 1) {
@@ -1661,9 +1674,10 @@ export function happyAgentVaultStoreCreate(deps: HappyAgentVaultDeps): HappyAgen
                         const response = await client.createVaultVersion(
                             surfaceId,
                             entry.id,
-                            { fromVersion: number, mutationId },
+                            { fromVersion: number, mutationId, operationId },
                             { ifMatch, signal: life.signal },
                         );
+                        // A `null` version means the newest already held it: restored all the same.
                         entryAdopt(happyAgentVaultFileProject(response.file));
                         if (snapshot.preview?.itemId === entry.id) {
                             const { versionSelected: _version, ...rest } = snapshot.preview;
@@ -1888,6 +1902,7 @@ export function happyAgentVaultStoreCreate(deps: HappyAgentVaultDeps): HappyAgen
                     folders: foldersOf(picked.relativePath),
                     itemId: idCreate() as HappyAgentVaultItemId,
                     mutationId: idCreate(),
+                    operationId: idCreate(),
                     controller: new AbortController(),
                 };
             });

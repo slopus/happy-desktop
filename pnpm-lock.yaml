@@ -257,8 +257,8 @@ importers:
   packages/happy-desktop-gym:
     dependencies:
       '@slopus/happy-agent-client':
-        specifier: 0.0.153
-        version: 0.0.153
+        specifier: 0.0.154
+        version: 0.0.154
       happy-desktop-state:
         specifier: workspace:*
         version: link:../happy-desktop-state
@@ -297,8 +297,8 @@ importers:
         specifier: ^0.34.49
         version: 0.34.52
       '@slopus/happy-agent-client':
-        specifier: 0.0.153
-        version: 0.0.153
+        specifier: 0.0.154
+        version: 0.0.154
       picomatch:
         specifier: 4.0.5
         version: 4.0.5
@@ -2123,8 +2123,8 @@ packages:
     resolution: {integrity: sha512-TwID1zuAPg8A001kSIP2c7e0rDLIIEmJ7uSuQLXz1O1j/6XpeCLBYu5mDtJB1Ow5hReGrXWbOF45khlYoNqctw==}
     engines: {node: '>=20'}
 
-  '@slopus/happy-agent-client@0.0.153':
-    resolution: {integrity: sha512-rbISBlYjY3Cn4OXJhwag/S1jKbdMehqj84/nXOLx2ysr48Y+PwFKiXrNX+2mzkg2C3VhKfGHutYxDP2DXY3tEw==}
+  '@slopus/happy-agent-client@0.0.154':
+    resolution: {integrity: sha512-oX4swliCb/x1TjPmRc4HdCivG/k03C+dI2NYkR4UMmZrxntWWJkmuvZFHqj8lvd96qUnUZB5GaJUUNF+auJEqg==}
     engines: {node: '>=20'}
 
   '@standard-schema/spec@1.1.0':
@@ -7475,7 +7475,7 @@ snapshots:
       '@sinclair/typebox': 0.34.52
       parse5: 8.0.1
 
-  '@slopus/happy-agent-client@0.0.153':
+  '@slopus/happy-agent-client@0.0.154':
     dependencies:
       '@sinclair/typebox': 0.34.52
       parse5: 8.0.1
