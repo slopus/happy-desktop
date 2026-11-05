@@ -20,6 +20,11 @@ public static class ScrollReproNative {
     }
     [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hwnd);
     [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
+    [StructLayout(LayoutKind.Sequential)] public struct POINT { public int X; public int Y; }
+    [DllImport("user32.dll")] public static extern bool GetCursorPos(out POINT point);
+    [DllImport("user32.dll")] public static extern IntPtr WindowFromPoint(POINT point);
+    [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint pid);
     [DllImport("user32.dll", SetLastError = true)] public static extern uint SendInput(uint count, INPUT[] input, int size);
 }
 '@
@@ -27,6 +32,12 @@ $window = Get-Process -Name chrome -ErrorAction Stop | Where-Object { $_.MainWin
 if (-not $window) { throw 'No visible Chromium window was found for native wheel input.' }
 if (-not [ScrollReproNative]::SetForegroundWindow($window.MainWindowHandle)) { throw 'Could not foreground the Chromium window.' }
 if (-not [ScrollReproNative]::SetCursorPos($ScreenX, $ScreenY)) { throw 'Could not move the pointer over the transcript.' }
+$point = [ScrollReproNative+POINT]::new()
+[void][ScrollReproNative]::GetCursorPos([ref]$point)
+$targetWindow = [ScrollReproNative]::WindowFromPoint($point)
+$targetPid = [uint32]0
+[void][ScrollReproNative]::GetWindowThreadProcessId($targetWindow, [ref]$targetPid)
+Write-Output "NATIVE_WHEEL_TARGET requested=$ScreenX,$ScreenY actual=$($point.X),$($point.Y) foreground=$([ScrollReproNative]::GetForegroundWindow()) selected=$($window.MainWindowHandle) target=$targetWindow targetPid=$targetPid delta=$Delta"
 $inputEvent = [ScrollReproNative+INPUT]::new()
 $inputEvent.type = 0
 $mouse = [ScrollReproNative+MOUSEINPUT]::new()

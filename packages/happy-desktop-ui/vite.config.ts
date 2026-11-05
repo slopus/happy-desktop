@@ -79,10 +79,17 @@ export default defineConfig({
                                 window.outerHeight -
                                 window.innerHeight -
                                 (window.outerWidth - window.innerWidth) / 2,
+                            screenWidth: window.screen.width,
+                            screenHeight: window.screen.height,
+                            devicePixelRatio: window.devicePixelRatio,
+                            outerWidth: window.outerWidth,
+                            outerHeight: window.outerHeight,
+                            innerWidth: window.innerWidth,
+                            innerHeight: window.innerHeight,
                         }));
                         const x = Math.round(windowGeometry.x + box.x + box.width / 2);
                         const y = Math.round(windowGeometry.y + box.y + box.height / 2);
-                        execFileSync(
+                        const output = execFileSync(
                             "powershell.exe",
                             [
                                 "-NoLogo",
@@ -101,6 +108,11 @@ export default defineConfig({
                                 String(deltaY < 0 ? 120 : -120),
                             ],
                             { stdio: "pipe" },
+                        );
+                        console.log(
+                            "NATIVE_WHEEL_GEOMETRY",
+                            JSON.stringify({ windowGeometry, box, x, y }),
+                            output.toString(),
                         );
                         return;
                     }
