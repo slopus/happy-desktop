@@ -1,0 +1,85 @@
+name: Windows chat scroll repro
+
+on:
+    push:
+        branches: ["windows-scroll-repro**", "worktree/windows-scroll-repro**", "worktree/windows-chat-scroll-fixes**"]
+    workflow_dispatch:
+
+permissions:
+    contents: read
+
+jobs:
+    browser:
+        runs-on: windows-2025
+        timeout-minutes: 45
+        defaults:
+            run:
+                shell: bash
+        steps:
+            - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+            - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+            - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+              with:
+                  node-version: "24"
+                  cache: pnpm
+            - run: pnpm config set script-shell "C:\Program Files\Git\bin\bash.exe"
+            - run: pnpm install --frozen-lockfile
+            - run: pnpm --dir packages/happy-desktop-ui exec playwright install chromium
+            - name: Run Chromium transcript suites
+              run: |
+                  mkdir -p .context/windows-browser
+                  set -o pipefail
+                  pnpm --dir packages/happy-desktop-ui exec vitest run --project chromium 'src/Conversation*.test.tsx' 'src/MessageList*.test.tsx' 2>&1 | tee .context/windows-browser/vitest.log
+            - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+              if: always()
+              with:
+                  name: windows-chat-browser
+                  path: |
+                      .context/windows-browser
+                      packages/happy-desktop-ui/**/__screenshots__/**
+                      packages/happy-desktop-ui/**/__diffs__/**
+                  if-no-files-found: warn
+
+    electron:
+        runs-on: windows-2025
+        timeout-minutes: 90
+        defaults:
+            run:
+                shell: bash
+        steps:
+            - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+            - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+            - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+              with:
+                  node-version: "24"
+                  cache: pnpm
+            - run: pnpm config set script-shell "C:\Program Files\Git\bin\bash.exe"
+            - run: pnpm install --frozen-lockfile
+            - name: Install matching Agent preview
+              env:
+                  GH_TOKEN: ${{ github.token }}
+              run: |
+                  set -euo pipefail
+                  tag=v0.4.110-preview.12
+                  version=${tag#v}
+                  mkdir -p "$RUNNER_TEMP/happy-agent"
+                  gh release download "$tag" --repo slopus/happy-agent --pattern "happy-agent-${version}-win32-x64.tar.gz" --dir "$RUNNER_TEMP/happy-agent"
+                  tar -xzf "$RUNNER_TEMP/happy-agent/happy-agent-${version}-win32-x64.tar.gz" -C "$RUNNER_TEMP/happy-agent"
+                  exe="$RUNNER_TEMP/happy-agent/happy-agent-win32-x64.exe"
+                  "$exe" --version
+                  printf 'HAPPY_DESKTOP_AGENT_EXECUTABLE=%s\n' "$(cygpath -w "$exe")" >> "$GITHUB_ENV"
+                  printf 'HAPPY_DESKTOP_GYM_EXPECTED_AGENT_VERSION=%s\n' "$version" >> "$GITHUB_ENV"
+            - run: pnpm --dir packages/happy-desktop-electron build:profile:optimized
+            - name: Run Electron workloads
+              run: |
+                  mkdir -p .context/windows-electron
+                  for workload in streaming long-chat-scroll jump-shimmer mixed-replay; do
+                    echo "Running $workload"
+                    pnpm --dir packages/happy-desktop-gym gym:electron run --profile realistic --workload "$workload" --artifact-dir "$(cygpath -w "$PWD/.context/windows-electron/$workload")" > ".context/windows-electron/$workload.log" 2>&1 || echo "$workload failed; see log"
+                  done
+            - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+              if: always()
+              with:
+                  name: windows-chat-electron
+                  path: .context/windows-electron
+                  if-no-files-found: warn
