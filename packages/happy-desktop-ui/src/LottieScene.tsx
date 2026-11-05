@@ -117,6 +117,18 @@ const SOURCES: Record<LottieSceneName, string> = {
     wand: wandUrl,
 };
 
+/**
+ * Frames are relative to the animation's in-point. The spider's source starts
+ * at 120: source frame 250 (relative 130) holds the spider down with the bug
+ * still caught and both wing rotations at their folded 0° keyframe, before
+ * the bug's departure beginning at source frame 254.
+ * Keep the original asset and end every play, replay, and reduced-motion hold
+ * at this pose through the renderer's segment contract.
+ */
+const PLAYBACK_SEGMENTS: Partial<Record<LottieSceneName, [number, number]>> = {
+    "spider-catching-bug": [0, 130],
+};
+
 type Player = DotLottieWorker;
 
 export type LottieSceneProps = {
@@ -155,8 +167,8 @@ export type LottieSceneProps = {
  * and no React render per frame. All scenes share one worker.
  *
  * It never loops unless its host passes `loop`. The scene plays once when the state it illustrates appears,
- * and then holds its last frame — which for all nineteen animations is the pose
- * they were drawn to return to, so the held picture is a picture worth holding.
+ * and then holds its playback range's last frame. Most scenes use the complete
+ * animation; the spider ends on its selected caught-bug pose.
  * After that it only moves when a reader asks: a click or tap, a fresh hover
  * entry, or Enter/Space while it has keyboard focus. A replay is refused while
  * one is already running, so a pointer resting inside cannot turn "again" into
@@ -284,6 +296,7 @@ export function LottieScene(props: LottieSceneProps) {
         // Whether the play repeats. Read when the player is built and kept
         // current by `loopApply`, so a change never rebuilds the player.
         let looping = loop;
+        const segment = PLAYBACK_SEGMENTS[props.name];
 
         /*
          * Subscribed now, not after the runtime resolves. Scrolling away,
@@ -356,6 +369,7 @@ export function LottieScene(props: LottieSceneProps) {
                     // the whole contract, and a second one is always
                     // something a reader asked for.
                     loop: looping,
+                    ...(segment === undefined ? {} : { segment }),
                     renderConfig: {
                         autoResize: false,
                         devicePixelRatio: ratio,
@@ -442,7 +456,13 @@ export function LottieScene(props: LottieSceneProps) {
                         void instance.destroy();
                         return;
                     }
-                    rest = Math.max(instance.totalFrames - 1, 0);
+                    rest = Math.max(
+                        Math.min(
+                            segment?.[1] ?? instance.totalFrames - 1,
+                            instance.totalFrames - 1,
+                        ),
+                        0,
+                    );
                     if (play === "on-appear" && !reduced) {
                         setPainted(true);
                         start();

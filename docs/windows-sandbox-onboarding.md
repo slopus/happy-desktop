@@ -5,7 +5,9 @@ The UI review is in Blueprint → Onboarding flow (`#onboarding-flow`), under
 `windows-sandbox-unfinished`, immediately after Subscriptions.
 `WindowsSandboxSetup` reuses the same `SetupPage` as the other onboarding steps.
 It does not invoke setup on mount. The supplied spider-catching-a-bug animation
-plays once when the step appears, then holds its final frame. The heading is
+plays once when the step appears, then holds source frame 250: the spider is
+down and the bug is still caught with its wings folded. Replays end on the same
+pose. Its 80×80px scene matches the other onboarding steps. The heading is
 “Set up a safety net for agents”; the copy explains fewer interruptions and
 Auto review checking requests for more access to help catch unintended actions.
 

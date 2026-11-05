@@ -15,8 +15,12 @@ Its decompressed payload is byte-identical to this JSON.
 The supplied file records no author or upstream license metadata.
 
 The scene means **a safety net helps catch unintended agent actions**. Windows
-sandbox setup plays it once on appearance and holds the final frame, using the
-existing worker renderer and reduced-motion behavior.
+sandbox setup plays it once on appearance through source frame 250 (relative
+frame 130, because the source in-point is 120), then holds the spider down with
+the bug still caught and its wings folded. Both wing rotations are at their 0°
+keyframe, before the bug's departure begins at source frame 254.
+The existing worker renderer clips playback with a segment;
+replays and reduced-motion holds use the same end frame. The asset is unchanged.
 
 ## Where these came from
 
