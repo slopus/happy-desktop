@@ -4,8 +4,10 @@ The UI review is in Blueprint → Onboarding flow (`#onboarding-flow`), under
 `windows-sandbox-before`, `windows-sandbox-waiting`, and
 `windows-sandbox-unfinished`, immediately after Subscriptions.
 `WindowsSandboxSetup` reuses the same `SetupPage` as the other onboarding steps.
-It does not invoke setup on mount. Its flat illustration has one sandbox outline,
-with the rest of the PC outside it.
+It does not invoke setup on mount. The supplied spider-catching-a-bug animation
+plays once when the step appears, then holds its final frame. The heading is
+“Set up a safety net for agents”; the copy explains fewer interruptions and
+Auto review checking requests for more access to help catch unintended actions.
 
 **The step is not connected to live onboarding yet.** Correct integration needs
 Electron host changes, which require two human confirmations under `AGENTS.md`.
@@ -56,7 +58,8 @@ is lazy, but restricted command execution still fails closed. Proceeding past
 onboarding would therefore not establish a working sandbox.
 
 The page offers no skip: without setup, restricted agent commands cannot work.
-Cancellation and failure share the calm “That didn’t finish. Try again?” line.
+Cancellation and failure share the calm “Sandbox setup didn’t finish.” line
+and an explicit “Try again” action.
 The benefit copy stays visible while the Windows prompt is open or setup needs
 another attempt. It explains autonomous work and automatic checks in plain words.
 

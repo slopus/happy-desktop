@@ -5,39 +5,3 @@
 .happy-windows-sandbox .happy-setup-page__copy {
     max-width: 600px;
 }
-
-.happy-windows-sandbox__diagram {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 32px;
-    width: 100%;
-    color: var(--onboarding-foreground);
-    font-size: 14px;
-    line-height: 20px;
-}
-
-.happy-windows-sandbox__boundary {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 8px;
-    padding: 12px;
-    border: 1px solid currentColor;
-    border-radius: var(--happy-radius-window);
-}
-
-.happy-windows-sandbox__label {
-    font-weight: 600;
-}
-
-.happy-windows-sandbox__item,
-.happy-windows-sandbox__private {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.happy-windows-sandbox__private {
-    flex-direction: column;
-}

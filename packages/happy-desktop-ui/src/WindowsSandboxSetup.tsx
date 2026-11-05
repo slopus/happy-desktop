@@ -1,4 +1,3 @@
-import { Ionicon } from "./vectorIcons/VectorIcon";
 import { OnboardingSteps } from "./OnboardingSteps";
 import { SetupPage } from "./SetupPage";
 import type { ThemeMode } from "./ThemeScope";
@@ -18,8 +17,8 @@ export function WindowsSandboxSetup(props: WindowsSandboxSetupProps) {
     const status = waiting
         ? "Waiting for Windows…"
         : props.state === "unfinished"
-          ? "That didn’t finish. Try again?"
-          : "Windows will ask once. Choose Yes.";
+          ? "Sandbox setup didn’t finish."
+          : "Windows needs administrator permission to set up the sandbox.";
     return (
         <SetupPage
             backdrop={{ appearance: props.appearance, kind: "sky" }}
@@ -27,28 +26,15 @@ export function WindowsSandboxSetup(props: WindowsSandboxSetupProps) {
             data-testid="windows-sandbox-setup"
             transitionKey="windows-sandbox"
             steps={<OnboardingSteps scope="desktop" stage="sandbox" />}
-            title="Let Happy work safely on its own"
-            copy="Happy keeps agents in a safe space where they can only change your project. Anything riskier gets checked first."
+            scene="spider-catching-bug"
+            title="Set up a safety net for agents"
+            copy="Happy’s sandbox lets agents work with fewer interruptions. Auto review helps catch unintended actions when they request access beyond it."
             status={{ label: status }}
-            action={{ label: "Set up", busy: waiting, onSelect: props.onContinue }}
-        >
-            <div
-                aria-label="Agents work with your project inside the sandbox. Changes to the rest of your PC need a separate check."
-                className="happy-windows-sandbox__diagram"
-                role="img"
-            >
-                <div className="happy-windows-sandbox__boundary" aria-hidden="true">
-                    <span className="happy-windows-sandbox__label">Sandbox</span>
-                    <span className="happy-windows-sandbox__item">
-                        <Ionicon name="terminal-outline" size={20} />
-                        <span>Agent + your project</span>
-                    </span>
-                </div>
-                <div className="happy-windows-sandbox__private" aria-hidden="true">
-                    <Ionicon name="lock-closed-outline" size={24} />
-                    <span>Rest of your PC</span>
-                </div>
-            </div>
-        </SetupPage>
+            action={{
+                label: props.state === "unfinished" ? "Try again" : "Set up sandbox",
+                busy: waiting,
+                onSelect: props.onContinue,
+            }}
+        />
     );
 }

@@ -1,5 +1,19 @@
 # Animation provenance
 
+## Spider catching a bug
+
+`spider-catching-bug.json` was supplied by the project owner as
+`spider catch bug.tgs`. The JSON is the original TGS payload decompressed without
+editing or retiming. It is Lottie 5.5.2, 512×512, 60fps, frames 120–300 (three
+seconds), 39 vector layers, and has no raster or external image assets. The
+decompressed file is 363,723 bytes; its SHA-256 is
+`565ab5c14c9aab8f216daaf594bfc846296bd61ee73c6c83ad405848ef84ca32`.
+The supplied file records no author or upstream license metadata.
+
+The scene means **a safety net helps catch unintended agent actions**. Windows
+sandbox setup plays it once on appearance and holds the final frame, using the
+existing worker renderer and reduced-motion behavior.
+
 ## Where these came from
 
 The original five files were copied from `happy-list` (the Happy Coder React

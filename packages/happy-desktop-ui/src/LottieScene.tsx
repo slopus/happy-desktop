@@ -34,6 +34,7 @@ import partyUrl from "./assets/animations/party.json?url";
 import robotUrl from "./assets/animations/robot.json?url";
 import snailUrl from "./assets/animations/snail.json?url";
 import sparklesUrl from "./assets/animations/sparkles.json?url";
+import spiderCatchingBugUrl from "./assets/animations/spider-catching-bug.json?url";
 import wandUrl from "./assets/animations/wand.json?url";
 
 /**
@@ -58,6 +59,7 @@ import wandUrl from "./assets/animations/wand.json?url";
  * - `robot` — an agent is ready to work, and waiting to be told what to do.
  * - `snail` — something is being read right now, and it is taking a moment.
  * - `sparkles` — the absence is the good outcome; there is nothing left to do.
+ * - `spider-catching-bug` — a safety net helps catch unintended agent actions.
  * - `wand` — the thing that is missing is one you can make right here.
  *
  * See `assets/animations/PROVENANCE.md` for where they came from and what was
@@ -81,6 +83,7 @@ export type LottieSceneName =
     | "robot"
     | "snail"
     | "sparkles"
+    | "spider-catching-bug"
     | "wand";
 
 /**
@@ -110,6 +113,7 @@ const SOURCES: Record<LottieSceneName, string> = {
     robot: robotUrl,
     snail: snailUrl,
     sparkles: sparklesUrl,
+    "spider-catching-bug": spiderCatchingBugUrl,
     wand: wandUrl,
 };
 
@@ -151,7 +155,7 @@ export type LottieSceneProps = {
  * and no React render per frame. All scenes share one worker.
  *
  * It never loops unless its host passes `loop`. The scene plays once when the state it illustrates appears,
- * and then holds its last frame — which for all eighteen animations is the pose
+ * and then holds its last frame — which for all nineteen animations is the pose
  * they were drawn to return to, so the held picture is a picture worth holding.
  * After that it only moves when a reader asks: a click or tap, a fresh hover
  * entry, or Enter/Space while it has keyboard focus. A replay is refused while
