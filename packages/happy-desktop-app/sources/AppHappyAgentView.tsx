@@ -1387,22 +1387,67 @@ const BOTS_MENU_SHOW_PREFIX = "show:";
 const BOTS_MENU_SHOW_ALL = "show-all";
 const ROW_MENU_SURFACE_ADD = "surface-add";
 const ROW_MENU_SURFACE_REMOVE = "surface-remove";
-/** Puts the agent a row or tab stands for on the clipboard, as its instance link. */
-const MENU_AGENT_ID_COPY = "agent-id-copy";
+/** Puts the bot, task, or session a row or tab stands for on the clipboard, as its instance link. */
+const MENU_AGENT_LINK_COPY = "agent-link-copy";
+/** Puts the artifact a row stands for on the clipboard, as its instance link. */
+const MENU_ARTIFACT_LINK_COPY = "artifact-link-copy";
 
 /**
- * The link another agent is given to name this one, as iOS's Copy Link writes
- * it: `happy://<instanceId>/agents/<agentId>`. A daemon that reports no
- * instance has no link that leaves the app, so it is offered nothing.
+ * The link another agent is given to name something on this machine, as iOS's
+ * Copy Link writes it: `happy://<instanceId>/agents/<agentId>`, or
+ * `.../artifacts/<artifactId>`. A daemon that reports no instance has no link
+ * that leaves the app, so it is offered nothing.
  */
-function agentLink(instanceId: string | undefined, agentId: string): string | undefined {
+function instanceLink(instanceId: string | undefined, internal: string): string | undefined {
     if (instanceId === undefined) return undefined;
-    const link = happyExternalLinkFormat(instanceId, `happy://agents/${agentId}`);
-    return link.startsWith("happy://agents/") ? undefined : link;
+    const link = happyExternalLinkFormat(instanceId, internal);
+    return link === internal ? undefined : link;
 }
 
-function agentIdCopyMenuItem(): MenuItem {
-    return { kind: "item", id: MENU_AGENT_ID_COPY, label: "Copy agent ID", icon: "link" };
+function agentLink(instanceId: string | undefined, agentId: string): string | undefined {
+    return instanceLink(instanceId, `happy://agents/${agentId}`);
+}
+
+function artifactLink(instanceId: string | undefined, artifactId: string): string | undefined {
+    return instanceLink(instanceId, `happy://artifacts/${artifactId}`);
+}
+
+/**
+ * What the reader calls the agent a conversation is, as its row or tab names
+ * it: a bot, a task, a bot's or task's subtask, a subagent another session
+ * runs, or a project's session.
+ */
+type AgentNoun = "bot" | "task" | "subtask" | "subagent" | "session";
+
+function agentNounOf(
+    bots: readonly HappyAgentBot[],
+    tasks: readonly HappyAgentTask[],
+    conversationId: string,
+    /** The conversation is run by another session rather than listed in this group. */
+    delegated: boolean,
+): AgentNoun {
+    if (bots.some((bot) => bot.conversation.id === conversationId)) return "bot";
+    if (tasks.some((task) => task.conversation.id === conversationId)) return "task";
+    if (
+        happyAgentBotSubtasks([...bots, ...tasks]).some(
+            (subtask) => subtask.conversation.id === conversationId,
+        )
+    )
+        return "subtask";
+    return delegated ? "subagent" : "session";
+}
+
+function agentLinkCopyMenuItem(noun: AgentNoun): MenuItem {
+    return { kind: "item", id: MENU_AGENT_LINK_COPY, label: `Copy link to ${noun}`, icon: "link" };
+}
+
+function artifactLinkCopyMenuItem(): MenuItem {
+    return {
+        kind: "item",
+        id: MENU_ARTIFACT_LINK_COPY,
+        label: "Copy link to artifact",
+        icon: "link",
+    };
 }
 
 /**
@@ -1463,17 +1508,12 @@ function rowMenuItems(
      * the window keeps no such record, and the row offers neither act.
      */
     botAttention: ((bot: HappyAgentBot) => HappyAgentBotAttention) | undefined,
-    /** Whether the row's agent has a link to copy: its daemon names its instance. */
-    agentLinked: boolean,
 ): MenuItem[] {
-    // The agent's link sits in its own section just above archiving.
-    const agentCopy: MenuItem[] = agentLinked ? [agentIdCopyMenuItem(), { kind: "separator" }] : [];
     // A subtask's title is the daemon's to write, so archiving is all its row
     // offers. The task stops and leaves its bot; its history and its worktree
     // stay, and the worktree is listed under its project again.
     if (happyAgentBotSubtasks([...bots, ...tasks]).some((task) => task.conversation.id === item.id))
         return [
-            ...agentCopy,
             {
                 kind: "item",
                 id: ROW_MENU_ARCHIVE,
@@ -1494,7 +1534,6 @@ function rowMenuItems(
                   ] as const)
                 : []),
             { kind: "item", id: ROW_MENU_LEAVE, label: "Leave task", icon: "close" },
-            ...(agentLinked ? ([{ kind: "separator" }, agentIdCopyMenuItem()] as const) : []),
             ...(task.canArchive
                 ? ([
                       { kind: "separator" },
@@ -1526,7 +1565,6 @@ function rowMenuItems(
             ...(botAttention
                 ? [...botAttentionMenuItems(botAttention(bot)), { kind: "separator" } as const]
                 : []),
-            ...agentCopy,
             {
                 kind: "item",
                 id: ROW_MENU_ARCHIVE,
@@ -2813,8 +2851,9 @@ function rowReferenceOf(
 }
 
 /**
- * The bot's or task's row menu, with keeping it among the Surfaces first —
- * or taking it out again — where the Happy Agent has Surfaces.
+ * The bot's, task's, or subtask's row menu, led by what shares it: keeping it
+ * among the Surfaces — or taking it out again — where the Happy Agent has
+ * Surfaces, and right under that the link to its agent.
  */
 function rowSurfaceMenuItems(
     happyAgent: AppHappyAgentEntry,
@@ -2823,25 +2862,60 @@ function rowSurfaceMenuItems(
 ): MenuItem[] {
     const found = rowReferenceOf(happyAgent, rowId);
     const catalog = happyAgent.session?.surfaces?.catalog().get();
-    if (found === undefined || catalog?.availability !== "available") return items;
-    const kept = happyAgentSurfaceReferenceFind(catalog.joined, found.reference) !== undefined;
-    return [
-        kept
-            ? {
-                  kind: "item",
-                  id: ROW_MENU_SURFACE_REMOVE,
-                  label: "Remove from top of sidebar",
-                  icon: "close",
-              }
-            : {
-                  kind: "item",
-                  id: ROW_MENU_SURFACE_ADD,
-                  label: "Add to top of sidebar",
-                  icon: "plus",
-              },
-        ...(items.length > 0 ? ([{ kind: "separator" }] as const) : []),
-        ...items,
+    const surface: MenuItem[] =
+        found === undefined || catalog?.availability !== "available"
+            ? []
+            : happyAgentSurfaceReferenceFind(catalog.joined, found.reference) !== undefined
+              ? [
+                    {
+                        kind: "item",
+                        id: ROW_MENU_SURFACE_REMOVE,
+                        label: "Remove from top of sidebar",
+                        icon: "close",
+                    },
+                ]
+              : [
+                    {
+                        kind: "item",
+                        id: ROW_MENU_SURFACE_ADD,
+                        label: "Add to top of sidebar",
+                        icon: "plus",
+                    },
+                ];
+    const tasks = happyAgent.tasks ?? [];
+    const agentId = rowAgentId(happyAgent.bots, tasks, rowId);
+    const lead: MenuItem[] = [
+        ...surface,
+        ...(agentId !== undefined && agentLink(happyAgent.instanceId, agentId) !== undefined
+            ? [agentLinkCopyMenuItem(agentNounOf(happyAgent.bots, tasks, agentId, false))]
+            : []),
     ];
+    if (lead.length === 0) return items;
+    return [...lead, ...(items.length > 0 ? ([{ kind: "separator" }] as const) : []), ...items];
+}
+
+/**
+ * What copying the link of a Surface that points at something writes: the
+ * artifact's link, or the link to the bot's or task's agent. A Surface that
+ * points at nothing this window can name has none.
+ */
+function surfaceTargetLink(
+    happyAgent: AppHappyAgentEntry,
+    surface: HappyAgentSurface,
+): { readonly item: MenuItem; readonly link: string } | undefined {
+    const target = surface.target;
+    if (target?.state !== "available") return undefined;
+    if (target.kind === "artifact") {
+        const link = artifactLink(happyAgent.instanceId, target.id);
+        return link === undefined ? undefined : { item: artifactLinkCopyMenuItem(), link };
+    }
+    const place =
+        target.kind === "bot"
+            ? happyAgent.bots.find((bot) => bot.id === target.id)
+            : happyAgent.tasks?.find((task) => task.id === target.id);
+    const link =
+        place === undefined ? undefined : agentLink(happyAgent.instanceId, place.conversation.id);
+    return link === undefined ? undefined : { item: agentLinkCopyMenuItem(target.kind), link };
 }
 
 /**
@@ -3822,13 +3896,22 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                 const row = happyAgentItemParse(item.id);
                 const happyAgent = happyAgentOf(row.happyAgentId);
                 if (!happyAgent) return [];
-                // A joined Surface is left from its menu, as a task is; there
-                // is nothing else to do to one from here.
+                // A joined Surface is left from its menu, as a task is.
                 const surfaceId = surfaceRowParse(row.id);
-                if (surfaceId !== undefined)
-                    return surfaceCatalog.joined.some((surface) => surface.id === surfaceId)
-                        ? [{ kind: "item", id: ROW_MENU_LEAVE, label: "Leave", icon: "close" }]
-                        : [];
+                if (surfaceId !== undefined) {
+                    const surface = surfaceCatalog.joined.find((entry) => entry.id === surfaceId);
+                    if (surface === undefined) return [];
+                    // A Surface that points at an artifact, a bot, or a task
+                    // also shares it, right under taking it off the sidebar.
+                    const shared =
+                        happyAgent.status === "connected"
+                            ? surfaceTargetLink(happyAgent, surface)
+                            : undefined;
+                    return [
+                        { kind: "item", id: ROW_MENU_LEAVE, label: "Leave", icon: "close" },
+                        ...(shared ? [shared.item] : []),
+                    ];
+                }
                 if (happyAgent.status !== "connected") {
                     // Muting and hiding are this window's own record, so a
                     // bot keeps offering them while its machine is away.
@@ -3851,7 +3934,6 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                         props.attention
                             ? (bot) => happyAgentBotAttention(attention, happyAgent.id, bot.id)
                             : undefined,
-                        happyAgent.instanceId !== undefined,
                     ),
                 );
             }}
@@ -3938,19 +4020,26 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                     return;
                 }
                 if (happyAgent.status !== "connected") return;
-                if (actionId === MENU_AGENT_ID_COPY) {
+                const surfaceId = surfaceRowParse(row.id);
+                if (surfaceId !== undefined) {
+                    if (actionId === ROW_MENU_LEAVE)
+                        happyAgent.session?.surfaces?.catalog().surfaceLeave(surfaceId);
+                    if (actionId === MENU_AGENT_LINK_COPY || actionId === MENU_ARTIFACT_LINK_COPY) {
+                        const surface = surfaceCatalog.joined.find(
+                            (entry) => entry.id === surfaceId,
+                        );
+                        const shared = surface && surfaceTargetLink(happyAgent, surface);
+                        if (shared) void navigator.clipboard?.writeText(shared.link);
+                    }
+                    return;
+                }
+                if (actionId === MENU_AGENT_LINK_COPY) {
                     const agentId = rowAgentId(happyAgent.bots, happyAgent.tasks ?? [], row.id);
                     const link =
                         agentId === undefined
                             ? undefined
                             : agentLink(happyAgent.instanceId, agentId);
                     if (link !== undefined) void navigator.clipboard?.writeText(link);
-                    return;
-                }
-                const surfaceId = surfaceRowParse(row.id);
-                if (surfaceId !== undefined) {
-                    if (actionId === ROW_MENU_LEAVE)
-                        happyAgent.session?.surfaces?.catalog().surfaceLeave(surfaceId);
                     return;
                 }
                 if (actionId === ROW_MENU_SURFACE_ADD || actionId === ROW_MENU_SURFACE_REMOVE) {
@@ -8138,7 +8227,20 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                                 const agentCopy: MenuItem[] =
                                     tabAgentLink(tab.id) === undefined
                                         ? []
-                                        : [agentIdCopyMenuItem(), { kind: "separator" }];
+                                        : [
+                                              agentLinkCopyMenuItem(
+                                                  agentNounOf(
+                                                      workspace.list.bots,
+                                                      [
+                                                          ...workspace.list.tasks,
+                                                          ...workspace.list.tasksArchived,
+                                                      ],
+                                                      tab.id,
+                                                      tab.id === detachedConversationId,
+                                                  ),
+                                              ),
+                                              { kind: "separator" },
+                                          ];
                                 const index = sweepableTabs.findIndex(
                                     (entry) => entry.id === tab.id,
                                 );
@@ -8159,7 +8261,7 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                                 ];
                             }}
                             onTabMenuSelect={(tab, actionId) => {
-                                if (actionId === MENU_AGENT_ID_COPY) {
+                                if (actionId === MENU_AGENT_LINK_COPY) {
                                     const link = tabAgentLink(tab.id);
                                     if (link !== undefined)
                                         void navigator.clipboard?.writeText(link);

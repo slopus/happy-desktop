@@ -1,8 +1,10 @@
-import { Fragment } from "react";
+import { Fragment, useContext, useState } from "react";
 import type { HappyAgentArtifact, HappyAgentArtifactId } from "happy-desktop-state";
 import { happyAgentArtifactTypeLabel } from "happy-desktop-state";
 import { Badge } from "../../Badge";
+import { ContextMenu } from "../../ContextMenu";
 import { MediaImageTile } from "../../ConversationMedia";
+import { LinkCopyContext } from "../../LinkContextMenu";
 import { thumbhashDataUrl } from "../../thumbhashDataUrl";
 import { ArtifactTypeGlyph, type HappyAgentArtifactLabels } from "./artifactPresentation";
 
@@ -25,7 +27,7 @@ const THUMBNAIL = {
 /**
  * One artifact in a list: its picture, what it is called, where it was made and
  * by whom, when it last changed, and how many versions it has. The whole row
- * opens it. A deleted artifact stays readable as a record of what was there,
+ * opens it, and its context menu copies its link. A deleted artifact stays readable as a record of what was there,
  * in secondary type and marked as gone.
  *
  * Every row leads with the same 16:9 slot, so every row is one height: a wide
@@ -38,6 +40,8 @@ const THUMBNAIL = {
  */
 export function HappyAgentArtifactRow(props: HappyAgentArtifactRowProps) {
     const artifact = props.artifact;
+    const linkCopy = useContext(LinkCopyContext);
+    const [menu, setMenu] = useState<{ readonly x: number; readonly y: number } | undefined>();
     const deleted = artifact.status === "deleted";
     const thumbnail = THUMBNAIL[props.density];
     const picture = deleted ? null : artifact.thumbnail;
@@ -63,78 +67,111 @@ export function HappyAgentArtifactRow(props: HappyAgentArtifactRowProps) {
               ]
             : [place];
     return (
-        <button
-            aria-current={props.selected ? "true" : undefined}
-            className="happy-agent-artifact-row"
-            data-artifact-id={artifact.id}
-            data-density={props.density}
-            data-happy-desktop-ui="happy-agent-artifact-row"
-            data-status={artifact.status}
-            onClick={() => props.onOpen(artifact.id)}
-            type="button"
-        >
-            <span
-                aria-hidden="true"
-                className="happy-agent-artifact-row__thumbnail"
-                data-aspect={picture?.kind === "cover" ? picture.aspect : undefined}
-                data-happy-desktop-ui="happy-agent-artifact-row-thumbnail"
-                data-type={artifact.type}
-                style={
-                    picture?.kind === "cover" && artifact.background !== null
-                        ? { background: artifact.background }
-                        : undefined
-                }
+        <>
+            <button
+                aria-current={props.selected ? "true" : undefined}
+                className="happy-agent-artifact-row"
+                data-artifact-id={artifact.id}
+                data-density={props.density}
+                data-happy-desktop-ui="happy-agent-artifact-row"
+                data-status={artifact.status}
+                onClick={() => props.onOpen(artifact.id)}
+                onContextMenu={(event) => {
+                    event.preventDefault();
+                    setMenu({ x: event.clientX, y: event.clientY });
+                }}
+                type="button"
             >
-                {picture === null ? (
-                    <ArtifactTypeGlyph size={thumbnail.glyph} type={artifact.type} />
-                ) : (
-                    <MediaImageTile
-                        alt=""
-                        className="happy-agent-artifact-row__cover"
-                        fit={square ? "contain" : "cover"}
-                        height={thumbnail.height}
-                        {...(placeholderUrl === undefined ? {} : { placeholderUrl })}
-                        still={picture.kind === "cover" && !picture.preview}
-                        url={picture.url}
-                        width={square ? thumbnail.height : thumbnail.width}
-                    />
-                )}
-            </span>
-            <span className="happy-agent-artifact-row__text">
-                <span className="happy-agent-artifact-row__headline">
-                    <span className="happy-agent-artifact-row__title">
-                        {artifact.title || "Untitled"}
+                <span
+                    aria-hidden="true"
+                    className="happy-agent-artifact-row__thumbnail"
+                    data-aspect={picture?.kind === "cover" ? picture.aspect : undefined}
+                    data-happy-desktop-ui="happy-agent-artifact-row-thumbnail"
+                    data-type={artifact.type}
+                    style={
+                        picture?.kind === "cover" && artifact.background !== null
+                            ? { background: artifact.background }
+                            : undefined
+                    }
+                >
+                    {picture === null ? (
+                        <ArtifactTypeGlyph size={thumbnail.glyph} type={artifact.type} />
+                    ) : (
+                        <MediaImageTile
+                            alt=""
+                            className="happy-agent-artifact-row__cover"
+                            fit={square ? "contain" : "cover"}
+                            height={thumbnail.height}
+                            {...(placeholderUrl === undefined ? {} : { placeholderUrl })}
+                            still={picture.kind === "cover" && !picture.preview}
+                            url={picture.url}
+                            width={square ? thumbnail.height : thumbnail.width}
+                        />
+                    )}
+                </span>
+                <span className="happy-agent-artifact-row__text">
+                    <span className="happy-agent-artifact-row__headline">
+                        <span className="happy-agent-artifact-row__title">
+                            {artifact.title || "Untitled"}
+                        </span>
+                        {deleted ? <Badge label="Deleted" variant="danger" /> : null}
+                        <span
+                            className="happy-agent-artifact-row__version"
+                            title={`Version ${String(artifact.latestVersion)}`}
+                        >
+                            v{artifact.latestVersion}
+                        </span>
                     </span>
-                    {deleted ? <Badge label="Deleted" variant="danger" /> : null}
-                    <span
-                        className="happy-agent-artifact-row__version"
-                        title={`Version ${String(artifact.latestVersion)}`}
-                    >
-                        v{artifact.latestVersion}
+                    <span className="happy-agent-artifact-row__meta">
+                        {meta.map((part, index) => (
+                            // A fixed sequence of facts, never reordered.
+                            <Fragment key={index}>
+                                {index > 0 ? (
+                                    <span
+                                        aria-hidden="true"
+                                        className="happy-agent-artifact-row__meta-dot"
+                                    >
+                                        ·
+                                    </span>
+                                ) : null}
+                                <span className="happy-agent-artifact-row__meta-part">{part}</span>
+                            </Fragment>
+                        ))}
+                        <span aria-hidden="true" className="happy-agent-artifact-row__meta-dot">
+                            ·
+                        </span>
+                        {/* When is the one fact a narrow row must keep whole. */}
+                        <span className="happy-agent-artifact-row__meta-time">{changed}</span>
                     </span>
                 </span>
-                <span className="happy-agent-artifact-row__meta">
-                    {meta.map((part, index) => (
-                        // A fixed sequence of facts, never reordered.
-                        <Fragment key={index}>
-                            {index > 0 ? (
-                                <span
-                                    aria-hidden="true"
-                                    className="happy-agent-artifact-row__meta-dot"
-                                >
-                                    ·
-                                </span>
-                            ) : null}
-                            <span className="happy-agent-artifact-row__meta-part">{part}</span>
-                        </Fragment>
-                    ))}
-                    <span aria-hidden="true" className="happy-agent-artifact-row__meta-dot">
-                        ·
-                    </span>
-                    {/* When is the one fact a narrow row must keep whole. */}
-                    <span className="happy-agent-artifact-row__meta-time">{changed}</span>
-                </span>
-            </span>
-        </button>
+            </button>
+            {/* Beside the row rather than in it, so a choice in the menu is
+                never also a click on the row. */}
+            {menu ? (
+                <ContextMenu
+                    data-testid="happy-agent-artifact-row-menu"
+                    items={[
+                        {
+                            kind: "item",
+                            id: ARTIFACT_LINK_COPY,
+                            label: "Copy link to artifact",
+                            icon: "link",
+                        },
+                    ]}
+                    onClose={() => setMenu(undefined)}
+                    onSelect={(id) => {
+                        setMenu(undefined);
+                        if (id !== ARTIFACT_LINK_COPY) return;
+                        void navigator.clipboard
+                            .writeText(linkCopy(`happy://artifacts/${artifact.id}`))
+                            .catch(() => undefined);
+                    }}
+                    x={menu.x}
+                    y={menu.y}
+                />
+            ) : null}
+        </>
     );
 }
+
+const ARTIFACT_LINK_COPY = "artifact-link-copy";

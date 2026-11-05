@@ -1,4 +1,4 @@
-import { useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useContext, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import {
     happyAgentArtifactBackground,
     happyAgentArtifactMarkdownDiffOffered,
@@ -8,6 +8,7 @@ import {
     type HappyAgentArtifactContent,
     type HappyAgentArtifactDeletion,
     type HappyAgentArtifactFileLink,
+    type HappyAgentArtifactId,
     type HappyAgentArtifactMarkdownView,
     type HappyAgentArtifactVersion,
     type HappyAgentArtifactViewerSnapshot,
@@ -20,6 +21,7 @@ import { EmptyState } from "../../EmptyState";
 import { HtmlPreviewFrame } from "../../HtmlPreviewFrame";
 import type { HtmlPreviewRenderer } from "../../htmlPreview";
 import { ImageViewer } from "../../ImageViewer";
+import { LinkCopyContext } from "../../LinkContextMenu";
 import { MarkdownDiff } from "../../MarkdownDiff";
 import { markdownDiffCompute } from "../../markdownDiffModel";
 import { MarkdownDocument, type MarkdownDocumentReferences } from "../../MarkdownDocument";
@@ -263,6 +265,9 @@ export function HappyAgentArtifactViewer(props: HappyAgentArtifactViewerProps) {
                                     </Button>
                                 ) : null}
                                 {artifact.status === "active" ? (
+                                    <ArtifactLinkCopy artifactId={artifact.id} />
+                                ) : null}
+                                {artifact.status === "active" ? (
                                     <Button
                                         data-testid="happy-agent-artifact-delete"
                                         disabled={viewer.deletion.phase !== "idle"}
@@ -387,6 +392,45 @@ export function HappyAgentArtifactViewer(props: HappyAgentArtifactViewerProps) {
                 </>
             )}
         </div>
+    );
+}
+
+/** How long the copied check stays before the button offers the link again. */
+const LINK_COPIED_MS = 1_600;
+
+/**
+ * Copies the artifact's link, in the form the window writes for a link that
+ * leaves it. The check confirms the copy for a moment; the label stays, so
+ * the controls beside it never move.
+ */
+function ArtifactLinkCopy(props: { artifactId: HappyAgentArtifactId }) {
+    const linkCopy = useContext(LinkCopyContext);
+    const [copied, setCopied] = useState(false);
+    const copiedTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+    const copy = async () => {
+        try {
+            await navigator.clipboard.writeText(linkCopy(`happy://artifacts/${props.artifactId}`));
+            setCopied(true);
+            if (copiedTimer.current !== undefined) clearTimeout(copiedTimer.current);
+            copiedTimer.current = setTimeout(() => {
+                copiedTimer.current = undefined;
+                setCopied(false);
+            }, LINK_COPIED_MS);
+        } catch {
+            // The browser owns clipboard permission; keep the action retryable.
+        }
+    };
+    return (
+        <Button
+            data-testid="happy-agent-artifact-link-copy"
+            icon={copied ? "check" : "link"}
+            onClick={() => void copy()}
+            size="small"
+            title={copied ? "Copied" : "Copy link to artifact"}
+            variant="ghost"
+        >
+            Copy link
+        </Button>
     );
 }
 
