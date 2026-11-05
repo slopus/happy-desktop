@@ -1,19 +1,21 @@
 /*
- * P-032 Happy Agent Vault: one shared vault Surface, browsed as Finder browses
- * a disk.
+ * P-032 Happy Agent Vault: one shared vault Surface, browsed as the phone
+ * browses it.
  *
- * The page is the shared Surface header over a 48px section toolbar and a
- * body of up to three panes that meet on hairlines: the folder tree, the
- * listing with its uploads at its foot, and the preview. A file browser is
- * two-dimensional, so the page takes the whole lane rather than the content
- * column, and its header goes across the lane with it.
+ * The page is the shared Surface header over the grouped background, and
+ * under it the content column every page of the main lane reads down: a bar
+ * that says where you are and goes back, once you are anywhere but the root,
+ * then the folder as one inset grouped card with its uploads under it, or the
+ * file or app that is open, in the folder's place. The card is the feed's:
+ * rows of one fixed height, a 36px tile, a rule under every row but the last
+ * from where the text starts.
  *
- * Rows, toolbars, panes, and dialogs are flexbox. Only the rows of a
- * virtualized listing leave the flow, each such rule says why. A drop target
- * is marked by an outline inside its own box, which moves nothing.
+ * Rows, bars, and dialogs are flexbox. Only the rows of the virtualized card
+ * leave the flow, each such rule says why. A drop target is marked by an
+ * outline inside its own box, which moves nothing.
  *
- * Colors, radii, and type come only from theme roles; a file's colour is its
- * family's, from file-family.css.
+ * Colors, radii, and type come only from theme roles; a tile's hue is the
+ * phone's, from the --happy-tile-* roles.
  */
 
 .happy-vault,
@@ -22,14 +24,15 @@
 }
 
 .happy-vault {
-    --happy-agent-surface-column: 100%;
+    --happy-agent-surface-column: var(--happy-content-measure);
+    --happy-agent-surface-column-inset: var(--happy-content-gutter);
     display: flex;
     flex: 1 1 0%;
     flex-direction: column;
     min-width: 0;
     min-height: 0;
     width: 100%;
-    background: var(--surface);
+    background: var(--groupped-background);
     color: var(--text);
     font-family: var(--happy-font-ui);
     font-synthesis: none;
@@ -45,15 +48,36 @@
     color: var(--text);
 }
 
-/* ---- Toolbar ------------------------------------------------------------ */
+/* ---- Body --------------------------------------------------------------- */
 
-.happy-vault__toolbar {
+.happy-vault__body {
+    display: flex;
+    flex: 1 1 0%;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+}
+
+/* ---- Where you are ------------------------------------------------------ */
+
+/* On the column's edges, as the header's title is. Back docks 4px nearer the
+   edge than the crumbs, so its glyph rather than its hover box is on the
+   gutter, as the feed's back does. */
+.happy-vault__bar {
     display: flex;
     flex: none;
     align-items: center;
-    gap: 8px;
-    height: 48px;
-    padding: 0 16px;
+    gap: 4px;
+    width: 100%;
+    max-width: var(--happy-agent-surface-column);
+    height: 40px;
+    margin-inline: auto;
+    padding: 0 var(--happy-agent-surface-column-inset) 0
+        calc(var(--happy-agent-surface-column-inset) - 4px);
+}
+
+.happy-vault__back {
+    flex: none;
 }
 
 /* The breadcrumb takes the free space; a long path gives way from its middle
@@ -130,10 +154,10 @@
     outline-offset: -2px;
 }
 
-.happy-vault__search {
-    display: flex;
-    flex: 0 1 240px;
-    min-width: 120px;
+.happy-vault__crumb[data-vault-drop-over] {
+    background: var(--surface-selected);
+    outline: 2px solid var(--radio-active);
+    outline-offset: -2px;
 }
 
 .happy-vault__notices {
@@ -141,56 +165,15 @@
     flex: none;
     flex-direction: column;
     gap: 8px;
-    padding: 0 16px 8px;
-}
-
-/* ---- Body --------------------------------------------------------------- */
-
-.happy-vault__body {
-    display: flex;
-    flex: 1 1 0%;
-    min-width: 0;
-    min-height: 0;
-}
-
-.happy-vault__tree-pane {
-    display: flex;
-    flex: 0 1 clamp(200px, 22%, 280px);
-    flex-direction: column;
-    min-width: 160px;
-    min-height: 0;
-    border-right: 1px solid var(--divider);
-}
-
-.happy-vault-tree {
-    display: flex;
-    flex: 1 1 0%;
-    flex-direction: column;
-    min-height: 0;
-}
-
-.happy-vault-tree .happy-file-tree__row[data-vault-drop-over] {
-    background: var(--surface-selected);
-    outline: 2px solid var(--radio-active);
-    outline-offset: -2px;
-}
-
-.happy-vault__main {
-    position: relative;
-    display: flex;
-    flex: 1 1 0%;
-    flex-direction: column;
-    min-width: 200px;
-    min-height: 0;
 }
 
 .happy-vault__trash-note {
     flex: none;
     margin: 0;
-    padding: 0 16px 8px;
-    color: var(--text-secondary);
-    font-size: 12px;
-    line-height: 16px;
+    padding: 0 16px;
+    color: var(--groupped-section-title);
+    font-size: 13px;
+    line-height: 18px;
 }
 
 /* A quiet word beside a name: the default policy, the newest or a pinned version. */
@@ -205,310 +188,56 @@
     line-height: 16px;
 }
 
-/* ---- Glyph -------------------------------------------------------------- */
+/* ---- Tile -------------------------------------------------------------- */
 
-.happy-vault-glyph {
-    width: 16px;
-    height: 16px;
-}
-
-.happy-vault-glyph[data-size="20"] {
-    width: 20px;
-    height: 20px;
-}
-
-.happy-vault-glyph[data-size="32"] {
-    width: 32px;
-    height: 32px;
-}
-
-/* ---- Listing ------------------------------------------------------------ */
-
-/* A size container, so the columns a narrow listing has no room for step
-   aside rather than squeezing the name. */
-.happy-vault-list {
-    position: relative;
-    container-type: inline-size;
-    display: flex;
-    flex: 1 1 0%;
-    flex-direction: column;
-    min-width: 0;
-    min-height: 0;
-}
-
-/* The listing's own space takes a drop for the folder it shows; the outline
-   is drawn over the panes' content rather than around it. */
-.happy-vault-list[data-vault-drop-over]::after {
-    content: "";
-    /* Absolute: an outline laid over the whole listing, above the rows that are themselves out of flow. */
-    position: absolute;
-    inset: 0;
-    z-index: 3;
-    border: 2px solid var(--radio-active);
-    border-radius: var(--happy-radius-sm);
-    pointer-events: none;
-}
-
-.happy-vault-list__header {
-    display: flex;
-    flex: none;
-    align-items: center;
-    gap: 8px;
-    height: 28px;
-    padding: 0 16px;
-    color: var(--text-secondary);
-    font-size: 12px;
-    line-height: 16px;
-}
-
-.happy-vault-list__heading {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    min-width: 0;
-    height: 24px;
-    padding: 0;
-    border: 0;
-    background: transparent;
-    color: inherit;
-    font: inherit;
-    text-align: left;
-}
-
-button.happy-vault-list__heading {
-    cursor: pointer;
-}
-
-.happy-vault-list__heading:hover,
-.happy-vault-list__heading[data-active] {
-    color: var(--text);
-}
-
-.happy-vault-list__heading-label {
-    flex: 0 1 auto;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-/* The arrow's place is held on every heading, so choosing one moves no label. */
-.happy-vault-list__heading-mark {
-    display: flex;
-    flex: none;
-    align-items: center;
-    justify-content: center;
-    width: 12px;
-}
-
-/* One width per column, shared by the headings and every row's cells. */
-.happy-vault-list__heading[data-column="name"],
-.happy-vault-row__name-cell {
-    flex: 1 1 0%;
-}
-
-.happy-vault-list__heading[data-column="updatedAt"],
-.happy-vault-list__heading[data-column="deleted"],
-.happy-vault-row__cell[data-column="updatedAt"],
-.happy-vault-row__cell[data-column="deleted"] {
-    flex: 0 0 152px;
-}
-
-.happy-vault-list__heading[data-column="size"],
-.happy-vault-row__cell[data-column="size"] {
-    flex: 0 0 72px;
-    justify-content: flex-end;
-}
-
-.happy-vault-list__heading[data-column="kind"],
-.happy-vault-row__cell[data-column="kind"] {
-    flex: 0 0 120px;
-}
-
-.happy-vault-list__heading[data-column="restore"],
-.happy-vault-row__cell[data-column="restore"] {
-    flex: 0 0 72px;
-    justify-content: flex-end;
-}
-
-@container (max-width: 560px) {
-    .happy-vault-list__heading[data-column="kind"],
-    .happy-vault-row__cell[data-column="kind"] {
-        display: none;
-    }
-}
-
-@container (max-width: 400px) {
-    .happy-vault-list__heading[data-column="updatedAt"],
-    .happy-vault-row__cell[data-column="updatedAt"],
-    .happy-vault-list__heading[data-column="deleted"],
-    .happy-vault-row__cell[data-column="deleted"] {
-        display: none;
-    }
-}
-
-/* Scrollport: edge to edge, with no spacing of its own. */
-.happy-vault-list__scroll {
-    flex: 1 1 0%;
-    width: 100%;
-    min-height: 0;
-}
-
-.happy-vault-list__viewport {
-    overflow-x: hidden;
-    overflow-y: auto;
-    outline: none;
-}
-
-.happy-vault-list__viewport:focus-visible .happy-vault-row[data-selected],
-.happy-vault-list__viewport:focus-visible .happy-vault-tile[data-selected] {
-    outline: 2px solid var(--radio-active);
-    outline-offset: -2px;
-}
-
-.happy-vault-list__empty {
-    display: flex;
-    flex-direction: column;
-    min-height: 100%;
-    padding: 16px;
-}
-
-/* The inner wrapper carries the listing's inset, so the scrollport stays flush. */
-.happy-vault-list__content {
-    display: flex;
-    flex-direction: column;
-    width: 100%;
-    padding: 0 8px 8px;
-}
-
-.happy-vault-list__sizer {
-    position: relative;
-    flex: none;
-    width: 100%;
-}
-
-/* Rows leave the flow deliberately: their position is the virtualizer's
-   answer to where the row would be if every row existed. */
-.happy-vault-list__slot {
-    position: absolute;
-    top: 0;
-    left: 0;
-    display: flex;
-    gap: 8px;
-    width: 100%;
-}
-
-/* ---- List and Trash rows ----------------------------------------------- */
-
-.happy-vault-row {
-    display: flex;
-    flex: 1 1 0%;
-    align-items: center;
-    gap: 8px;
-    min-width: 0;
-    height: 32px;
-    padding: 0 8px;
-    border-radius: var(--happy-radius-sm);
-    font-size: 13px;
-    line-height: 20px;
-    cursor: default;
-    -webkit-user-select: none;
-    user-select: none;
-}
-
-.happy-vault-row[data-trash] {
-    height: 40px;
-}
-
-.happy-vault-row:hover {
-    background: var(--surface-ripple);
-}
-
-.happy-vault-row[data-selected] {
-    background: var(--surface-selected);
-}
-
-.happy-vault-row[data-vault-drop-over],
-.happy-vault-tile[data-vault-drop-over] {
-    background: var(--surface-selected);
-    outline: 2px solid var(--radio-active);
-    outline-offset: -2px;
-}
-
-.happy-vault-row__name-cell {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    min-width: 0;
-}
-
-.happy-vault-row__name {
-    flex: 0 1 auto;
-    min-width: 0;
-    overflow: hidden;
-    color: var(--text);
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-/* Where a Trash item was: gray, and the first thing to give way. */
-.happy-vault-row__path {
-    flex: 0 4 auto;
-    min-width: 0;
-    overflow: hidden;
-    color: var(--file-path-text);
-    font-size: 12px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.happy-vault-row__cell {
-    display: flex;
-    align-items: center;
-    min-width: 0;
-    overflow: hidden;
-    color: var(--text-secondary);
-    font-size: 12px;
-    font-variant-numeric: tabular-nums;
-    white-space: nowrap;
-}
-
-/* ---- Grid tiles --------------------------------------------------------- */
-
-/* Each tile is one column's share of the row, so every row's tiles line up
-   with the row above whatever the last row holds. */
+/* An item's mark in a card row: its glyph in its hue on the same hue very
+   light, the shape of an agent's avatar, as the feed's tiles are. */
 .happy-vault-tile {
     display: flex;
     flex: none;
-    flex-direction: column;
-    align-items: center;
-    gap: 8px;
-    width: calc((100% - (var(--happy-vault-columns) - 1) * 8px) / var(--happy-vault-columns));
-    height: 120px;
-    padding: 8px;
-    border-radius: var(--happy-radius-md);
-    cursor: default;
-    -webkit-user-select: none;
-    user-select: none;
-}
-
-.happy-vault-tile:hover {
-    background: var(--surface-ripple);
-}
-
-.happy-vault-tile[data-selected] {
-    background: var(--surface-selected);
-}
-
-.happy-vault-tile__picture {
-    display: flex;
-    flex: none;
     align-items: center;
     justify-content: center;
-    width: 64px;
-    height: 64px;
+    width: 36px;
+    height: 36px;
     overflow: hidden;
-    border-radius: var(--happy-radius-sm);
+    border-radius: 9px;
+    background: var(--surface-ripple);
+    color: var(--text-secondary);
+}
+
+.happy-vault-tile[data-tint="blue"] {
+    background: var(--happy-tile-blue-fill);
+    color: var(--happy-tile-blue);
+}
+
+.happy-vault-tile[data-tint="teal"] {
+    background: var(--happy-tile-teal-fill);
+    color: var(--happy-tile-teal);
+}
+
+.happy-vault-tile[data-tint="purple"] {
+    background: var(--happy-tile-purple-fill);
+    color: var(--happy-tile-purple);
+}
+
+.happy-vault-tile[data-tint="red"] {
+    background: var(--happy-tile-red-fill);
+    color: var(--happy-tile-red);
+}
+
+.happy-vault-tile[data-tint="orange"] {
+    background: var(--happy-tile-orange-fill);
+    color: var(--happy-tile-orange);
+}
+
+.happy-vault-tile[data-tint="indigo"] {
+    background: var(--happy-tile-indigo-fill);
+    color: var(--happy-tile-indigo);
+}
+
+.happy-vault-tile[data-tint="green"] {
+    background: var(--happy-tile-green-fill);
+    color: var(--happy-tile-green);
 }
 
 .happy-vault-tile__thumbnail {
@@ -517,213 +246,216 @@ button.happy-vault-list__heading {
     object-fit: cover;
 }
 
-.happy-vault-tile__name {
-    display: -webkit-box;
-    max-width: 100%;
-    overflow: hidden;
-    color: var(--text);
-    font-size: 12px;
-    line-height: 16px;
-    text-align: center;
-    overflow-wrap: anywhere;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-}
+/* ---- Listing ------------------------------------------------------------ */
 
-/* ---- Search ------------------------------------------------------------- */
-
-.happy-vault-search {
+.happy-vault-list {
+    position: relative;
+    display: flex;
     flex: 1 1 0%;
-    width: 100%;
+    flex-direction: column;
+    min-width: 0;
     min-height: 0;
 }
 
-.happy-vault-search__viewport {
+.happy-vault-list__viewport {
+    display: flex;
+    flex-direction: column;
     overflow-x: hidden;
     overflow-y: auto;
 }
 
-.happy-vault-search__content {
+.happy-vault-list__viewport:focus-visible {
+    outline: none;
+}
+
+/* The column: the notices, the card, then the uploads, 12px apart. */
+.happy-vault-list__content {
     display: flex;
+    flex: 1 0 auto;
     flex-direction: column;
-    gap: 16px;
-    padding: 0 8px 16px;
-}
-
-.happy-vault-search__section {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-}
-
-.happy-vault-search__heading,
-.happy-vault-history__heading,
-.happy-vault-uploads__heading,
-.happy-vault-settings__heading {
-    margin: 0;
-    color: var(--text-secondary);
-    font-size: 12px;
-    font-weight: 600;
-    line-height: 16px;
-}
-
-.happy-vault-search__heading {
-    padding: 4px 8px;
-}
-
-.happy-vault-search__list,
-.happy-vault-history__list,
-.happy-vault-uploads__list {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    margin: 0;
-    padding: 0;
-    list-style: none;
-}
-
-.happy-vault-search__result {
-    display: flex;
-    align-items: flex-start;
-    gap: 8px;
+    gap: 12px;
     width: 100%;
-    padding: 6px 8px;
-    border: 0;
-    border-radius: var(--happy-radius-sm);
-    background: transparent;
+    max-width: var(--happy-agent-surface-column);
+    margin-inline: auto;
+    padding: 8px var(--happy-agent-surface-column-inset) 48px;
+}
+
+/* The listing's own space takes a drop for the folder it shows; the outline
+   is drawn over the column rather than around it. */
+.happy-vault-list[data-vault-drop-over]::after {
+    content: "";
+    /* Absolute: an outline laid over the whole listing, above the rows that are themselves out of flow. */
+    position: absolute;
+    inset: 4px;
+    z-index: 3;
+    border: 2px solid var(--radio-active);
+    border-radius: var(--happy-radius-md);
+    pointer-events: none;
+}
+
+.happy-vault-list__empty {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+}
+
+/* The card: as tall as all its rows, of which only the drawn ones exist. */
+.happy-vault-list__card {
+    position: relative;
+    flex: none;
+    width: 100%;
+}
+
+/* Positioned rather than flowed: a virtualized slot sits at its own computed
+   offset in a column of thousands, and only the drawn slots exist, so no flex
+   flow can place them. */
+.happy-vault-list__slot {
+    position: absolute;
+    top: 0;
+    left: 0;
+    display: flex;
+    width: 100%;
+    min-width: 0;
+}
+
+/* ---- Card row ----------------------------------------------------------- */
+
+/* One row of the card. The card is its rows: the first rounds its top, the
+   last its bottom, and every row but the last draws a rule under its text.
+   Its 64px is `ROW_HEIGHT` in VaultItemList.tsx. */
+.happy-vault-card-row {
+    position: relative;
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+    height: 100%;
+    padding: 0 12px 0 16px;
+    background: var(--surface);
     color: var(--text);
-    font: inherit;
-    text-align: left;
     cursor: pointer;
+    user-select: none;
 }
 
-.happy-vault-search__result:hover {
-    background: var(--surface-ripple);
+.happy-vault-card-row[data-first] {
+    border-top-left-radius: var(--happy-radius-md);
+    border-top-right-radius: var(--happy-radius-md);
 }
 
-.happy-vault-search__result:focus-visible {
+.happy-vault-card-row[data-last] {
+    border-bottom-left-radius: var(--happy-radius-md);
+    border-bottom-right-radius: var(--happy-radius-md);
+}
+
+.happy-vault-card-row:hover {
+    background: var(--surface-pressed);
+}
+
+.happy-vault-card-row[data-selected] {
+    background: var(--surface-selected);
+}
+
+.happy-vault-card-row[data-vault-drop-over] {
+    background: var(--surface-selected);
     outline: 2px solid var(--radio-active);
     outline-offset: -2px;
 }
 
-.happy-vault-search__result > .happy-vault-glyph {
-    height: 20px;
+/* The rule is drawn over the row's foot rather than taking a line of the
+   column, so every row stays the one fixed height the card is laid out by;
+   it starts where the text does, past the tile, and runs to the card's edge. */
+.happy-vault-card-row:not([data-last])::after {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: 64px;
+    height: 1px;
+    background: var(--divider);
+    content: "";
+    pointer-events: none;
 }
 
-.happy-vault-search__text {
+.happy-vault-card-row__text {
     display: flex;
-    flex: 1 1 0%;
+    flex: 1 1 auto;
     flex-direction: column;
     gap: 2px;
     min-width: 0;
 }
 
-.happy-vault-search__line {
-    display: flex;
-    align-items: baseline;
-    gap: 8px;
-    min-width: 0;
-}
-
-.happy-vault-search__name {
-    flex: 0 1 auto;
+.happy-vault-card-row__name {
     min-width: 0;
     overflow: hidden;
-    font-size: 13px;
-    line-height: 20px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.happy-vault-search__path {
-    flex: 0 4 auto;
-    min-width: 0;
-    overflow: hidden;
-    color: var(--file-path-text);
-    font-size: 12px;
-    line-height: 16px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.happy-vault-search__snippet {
-    overflow: hidden;
-    color: var(--text-secondary);
-    font-family: var(--happy-font-mono);
-    font-size: 12px;
-    line-height: 18px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.happy-vault-search__mark {
-    border-radius: 2px;
-    background: var(--box-warning-background);
     color: var(--text);
-    font-weight: 600;
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 20px;
+    letter-spacing: -0.01em;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
-.happy-vault-search__note {
-    margin: 0;
-    padding: 0 8px;
-    color: var(--text-secondary);
-    font-size: 12px;
-    line-height: 16px;
-}
-
-.happy-vault-search__notice {
-    display: flex;
-    flex-direction: column;
-    padding: 0 16px;
-}
-
-.happy-vault-search__waiting {
-    display: flex;
-    flex: 1 1 0%;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
+.happy-vault-card-row__detail {
+    min-width: 0;
+    overflow: hidden;
     color: var(--text-secondary);
     font-size: 13px;
+    line-height: 18px;
+    font-variant-numeric: tabular-nums lining-nums;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 /* ---- Uploads ------------------------------------------------------------ */
 
+/* A section under the folder's card: a small heading over a card of its own,
+   one row per file. */
 .happy-vault-uploads {
     display: flex;
     flex: none;
     flex-direction: column;
-    gap: 4px;
-    max-height: 176px;
-    padding-top: 8px;
-    border-top: 1px solid var(--divider);
+    gap: 7px;
 }
 
 .happy-vault-uploads__heading {
+    margin: 0;
     padding: 0 16px;
-}
-
-.happy-vault-uploads__scroll {
-    flex: 0 1 auto;
-    width: 100%;
-    min-height: 0;
-}
-
-.happy-vault-uploads__viewport {
-    overflow-x: hidden;
-    overflow-y: auto;
+    color: var(--groupped-section-title);
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 18px;
 }
 
 .happy-vault-uploads__list {
-    padding: 0 8px 8px;
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    border-radius: var(--happy-radius-md);
+    background: var(--surface);
+    list-style: none;
 }
 
 .happy-vault-upload {
+    position: relative;
     display: flex;
     align-items: center;
-    gap: 8px;
-    min-height: 40px;
-    padding: 0 8px;
+    gap: 12px;
+    min-height: 52px;
+    padding: 0 12px 0 16px;
+}
+
+.happy-vault-upload:not(:last-child)::after {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: 44px;
+    height: 1px;
+    background: var(--divider);
+    content: "";
+    pointer-events: none;
 }
 
 .happy-vault-upload__glyph {
@@ -803,15 +535,31 @@ button.happy-vault-list__heading {
     gap: 4px;
 }
 
-/* ---- Preview pane ------------------------------------------------------- */
+/* ---- Preview ------------------------------------------------------------ */
+
+/* The file or app open in its folder's place, on the column: notices over a
+   card that holds the pane. */
+.happy-vault__preview {
+    display: flex;
+    flex: 1 1 0%;
+    flex-direction: column;
+    gap: 12px;
+    width: 100%;
+    max-width: var(--happy-agent-surface-column);
+    min-height: 0;
+    margin-inline: auto;
+    padding: 0 var(--happy-agent-surface-column-inset) 16px;
+}
 
 .happy-vault-preview {
     display: flex;
-    flex: 0 1 clamp(300px, 40%, 560px);
+    flex: 1 1 0%;
     flex-direction: column;
-    min-width: 260px;
+    min-width: 0;
     min-height: 0;
-    border-left: 1px solid var(--divider);
+    overflow: hidden;
+    border-radius: var(--happy-radius-md);
+    background: var(--surface);
 }
 
 .happy-vault-preview__bar {

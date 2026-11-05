@@ -6231,17 +6231,12 @@ function HappyAgentVaultSurface(props: {
             onFolderCreate={store.folderCreate}
             onFolderOpen={store.folderOpen}
             onHistoryMoreLoad={store.historyMoreLoad}
-            onLayoutChange={store.layoutUpdate}
             onPreviewClose={store.previewClose}
             onPreviewPanelChange={store.previewPanelUpdate}
             onPreviewVersionSelect={store.previewVersionSelect}
             onRetentionChange={store.retentionUpdate}
-            onSearchQueryChange={store.searchQueryUpdate}
-            onSortChange={store.sortUpdate}
             onTrashRestore={store.trashRestore}
             onTrashShow={store.trashShow}
-            onTreeFolderExpandedChange={store.treeFolderExpandedUpdate}
-            onTreeShownChange={store.treeShownUpdate}
             onUploadDismiss={store.uploadDismiss}
             onUploadRetry={store.uploadRetry}
             onVersionPinnedChange={store.versionPinnedUpdate}

@@ -162,64 +162,11 @@ export type HappyAgentVaultLocation =
     | { readonly kind: "folder"; readonly folderId: HappyAgentVaultItemId | null }
     | { readonly kind: "trash" };
 
-export type HappyAgentVaultSortKey = "name" | "updatedAt" | "size";
-
-/** How a folder's contents are ordered; folders always come first. */
-export interface HappyAgentVaultSort {
-    readonly key: HappyAgentVaultSortKey;
-    readonly order: "asc" | "desc";
-}
-
-export type HappyAgentVaultLayout = "list" | "grid";
-
 /** One step of the breadcrumb, the root first. */
 export interface HappyAgentVaultCrumb {
     /** `null` is the vault's root. */
     readonly id: HappyAgentVaultItemId | null;
     readonly name: string;
-}
-
-/** One search hit: a name match, or a line of text inside a file or an artifact's file. */
-export type HappyAgentVaultSearchResult =
-    | {
-          readonly match: "name";
-          readonly item: HappyAgentVaultItem;
-          readonly path: string;
-      }
-    | {
-          readonly match: "content";
-          /** A content match is always a file. */
-          readonly item: HappyAgentVaultFile;
-          readonly path: string;
-          /** The artifact file holding the text, or `null` for a plain file. */
-          readonly innerPath: string | null;
-          /** 1-based. */
-          readonly line: number;
-          /** At most 200 characters around the match. */
-          readonly snippet: string;
-      };
-
-/**
- * What the search field has found. A query being answered keeps the results
- * of the one before it on screen, so typing never empties the list.
- */
-export type HappyAgentVaultSearchAnswer =
-    | { readonly status: "searching"; readonly results: readonly HappyAgentVaultSearchResult[] }
-    | {
-          readonly status: "ready";
-          readonly results: readonly HappyAgentVaultSearchResult[];
-          /** More matched than were returned; a narrower query finds them. */
-          readonly truncated: boolean;
-      }
-    | { readonly status: "failed"; readonly error: UserError };
-
-/**
- * The search field and what it found. `answer` is `null` exactly when the
- * field is empty, and the browser shows the folder.
- */
-export interface HappyAgentVaultSearch {
-    readonly query: string;
-    readonly answer: HappyAgentVaultSearchAnswer | null;
 }
 
 /** One Trash item: a deleted folder or file whose folders are all live, and where it was. */
@@ -357,16 +304,10 @@ export interface HappyAgentVaultSnapshot {
     readonly location: HappyAgentVaultLocation;
     /** From the root to the folder shown; just the root in the Trash. */
     readonly crumbs: readonly HappyAgentVaultCrumb[];
-    /** The folder's contents in the chosen order, folders first. */
+    /** The folder's contents: its folders, then its files, each by name. */
     readonly listing: readonly HappyAgentVaultItem[];
-    readonly sort: HappyAgentVaultSort;
-    readonly layout: HappyAgentVaultLayout;
-    readonly treeShown: boolean;
-    /** Folders open in the tree. */
-    readonly treeExpanded: ReadonlySet<HappyAgentVaultItemId>;
-    /** The item picked in the listing, the tree, or the Trash. */
+    /** The item picked in the listing or the Trash. */
     readonly selectedId?: HappyAgentVaultItemId;
-    readonly search: HappyAgentVaultSearch;
     /** Read while the Trash is shown. */
     readonly trash: HappyAgentVaultTrash;
     readonly preview?: HappyAgentVaultPreview;

@@ -29,7 +29,6 @@ import {
     happyAgentVaultEventSurface,
     happyAgentVaultRetentionProject,
     happyAgentVaultRetentionWire,
-    happyAgentVaultSearchResultProject,
     happyAgentVaultVersionProject,
     type HappyAgentVaultEvent,
 } from "./surfaceVaultProject.js";
@@ -38,7 +37,6 @@ import {
     vaultChildren,
     vaultContains,
     vaultCrumbs,
-    vaultListing,
     vaultLive,
     happyAgentVaultArtifactNamed,
     happyAgentVaultNameProblem,
@@ -56,10 +54,8 @@ import type {
     HappyAgentVaultDownload,
     HappyAgentVaultItem,
     HappyAgentVaultItemId,
-    HappyAgentVaultLayout,
     HappyAgentVaultRetention,
     HappyAgentVaultSnapshot,
-    HappyAgentVaultSort,
     HappyAgentVaultUpload,
     HappyAgentVaultUploadFile,
     HappyAgentVaultVersion,
@@ -68,19 +64,15 @@ import type {
 export interface HappyAgentVaultStore {
     get(): HappyAgentVaultSnapshot;
     subscribe(listener: () => void): () => void;
-    /** Shows a folder's contents; `null` is the root. Clears the search. */
+    /** Shows a folder's contents; `null` is the root. Closes the preview. */
     folderOpen(folderId: HappyAgentVaultItemId | null): void;
     /** Shows the Trash. */
     trashShow(): void;
-    layoutUpdate(layout: HappyAgentVaultLayout): void;
-    sortUpdate(sort: HappyAgentVaultSort): void;
-    treeShownUpdate(shown: boolean): void;
-    treeFolderExpandedUpdate(folderId: HappyAgentVaultItemId, expanded: boolean): void;
     /** Picks one item, or none. */
     itemSelect(itemId: HappyAgentVaultItemId | undefined): void;
     /**
      * Opens an item: a folder is shown, a file or an artifact opens in the
-     * preview beside its folder. An item in the Trash opens in the preview.
+     * preview in its folder's place. An item in the Trash opens in the preview.
      */
     itemOpen(itemId: HappyAgentVaultItemId): void;
     previewClose(): void;
@@ -92,7 +84,6 @@ export interface HappyAgentVaultStore {
     /** Makes an earlier version of the open item its newest, as a new version. */
     versionRestore(number: number): void;
     versionPinnedUpdate(number: number, pinned: boolean): void;
-    searchQueryUpdate(query: string): void;
     dialogOpen(dialog: HappyAgentVaultDialog): void;
     dialogClose(): void;
     /** Makes a folder in the folder shown. */
@@ -144,7 +135,6 @@ export interface HappyAgentVaultDeps {
             | "getVaultFolder"
             | "getVaultFile"
             | "listVaultTrash"
-            | "searchVault"
             | "createVaultFolder"
             | "createVaultFile"
             | "updateVaultFolder"
@@ -190,7 +180,6 @@ const NO_CHILDREN: ReadonlyMap<HappyAgentVaultItemId | null, readonly HappyAgent
     new Map();
 const NO_PEOPLE: ReadonlyMap<string, HappyAgentSurfacePerson> = new Map();
 const NO_AGENTS: ReadonlyMap<string, string> = new Map();
-const NO_EXPANDED: ReadonlySet<HappyAgentVaultItemId> = new Set();
 
 /** One change this window asked for, held over the tree until the Happy Agent answers. */
 type VaultOp =
@@ -393,8 +382,6 @@ export function happyAgentVaultStoreCreate(deps: HappyAgentVaultDeps): HappyAgen
         versions: null,
         activity: null,
     };
-    let searchTimer: ReturnType<typeof setTimeout> | undefined;
-    let searchRead: AbortController | undefined;
     let trashTimer: ReturnType<typeof setTimeout> | undefined;
     let trashRead: AbortController | undefined;
     const agentsAsked = new Set<string>();
@@ -407,11 +394,6 @@ export function happyAgentVaultStoreCreate(deps: HappyAgentVaultDeps): HappyAgen
         location: { kind: "folder", folderId: null },
         crumbs: [{ id: null, name: ROOT_NAME }],
         listing: [],
-        sort: { key: "name", order: "asc" },
-        layout: "list",
-        treeShown: true,
-        treeExpanded: NO_EXPANDED,
-        search: { query: "", answer: null },
         trash: { status: "loading" },
         uploads: [],
         settings: { status: "loading" },
@@ -517,10 +499,7 @@ export function happyAgentVaultStoreCreate(deps: HappyAgentVaultDeps): HappyAgen
             location = { kind: "folder", folderId: id };
         }
         const folderId = location.kind === "folder" ? location.folderId : null;
-        const listing =
-            location.kind === "folder"
-                ? vaultListing(children.get(folderId) ?? [], snapshot.sort)
-                : [];
+        const listing = location.kind === "folder" ? (children.get(folderId) ?? []) : [];
         let preview = snapshot.preview;
         if (preview !== undefined) {
             const entry = all.get(preview.itemId);
@@ -751,7 +730,8 @@ export function happyAgentVaultStoreCreate(deps: HappyAgentVaultDeps): HappyAgen
         republish();
     };
 
-    const previewClose = (): void => {
+    /** Lets the preview go, and what it was reading, without telling anyone yet. */
+    const previewDrop = (): void => {
         if (snapshot.preview === undefined) return;
         contentRead?.abort();
         historyRead?.abort();
@@ -759,69 +739,15 @@ export function happyAgentVaultStoreCreate(deps: HappyAgentVaultDeps): HappyAgen
         contentKey = undefined;
         const { preview: _preview, ...rest } = snapshot;
         snapshot = rest;
+    };
+
+    const previewClose = (): void => {
+        if (snapshot.preview === undefined) return;
+        previewDrop();
         notify();
     };
 
-    // ---- Search and Trash ----------------------------------------------------------------
-
-    const searchRun = (): void => {
-        if (searchTimer) clearTimeout(searchTimer);
-        searchTimer = undefined;
-        const search = snapshot.search;
-        if (search.query === "") return;
-        const q = search.query.trim();
-        if (q.length === 0) {
-            snapshot = {
-                ...snapshot,
-                search: {
-                    query: search.query,
-                    answer: { status: "ready", results: [], truncated: false },
-                },
-            };
-            notify();
-            return;
-        }
-        searchRead?.abort();
-        const controller = new AbortController();
-        searchRead = controller;
-        const signal = AbortSignal.any([controller.signal, life.signal]);
-        void client
-            .searchVault(surfaceId, { q: q.slice(0, 256), kind: "all", limit: 50 }, { signal })
-            .then(
-                (response) => {
-                    if (signal.aborted || snapshot.search.query === "") return;
-                    snapshot = {
-                        ...snapshot,
-                        search: {
-                            query: snapshot.search.query,
-                            answer: {
-                                status: "ready",
-                                results: response.results.map(happyAgentVaultSearchResultProject),
-                                truncated: response.truncated,
-                            },
-                        },
-                    };
-                    notify();
-                },
-                (error: unknown) => {
-                    if (signal.aborted || snapshot.search.query === "") return;
-                    snapshot = {
-                        ...snapshot,
-                        search: {
-                            query: snapshot.search.query,
-                            answer: { status: "failed", error: happyAgentUserError(error) },
-                        },
-                    };
-                    notify();
-                },
-            );
-    };
-
-    const searchSchedule = (delay: number): void => {
-        if (snapshot.search.query === "") return;
-        if (searchTimer) clearTimeout(searchTimer);
-        searchTimer = setTimeout(searchRun, delay);
-    };
+    // ---- Trash ---------------------------------------------------------------------------
 
     const trashLoad = (): void => {
         if (trashTimer) clearTimeout(trashTimer);
@@ -1021,22 +947,18 @@ export function happyAgentVaultStoreCreate(deps: HappyAgentVaultDeps): HappyAgen
                 if (event.payload.changes.deletedAt !== undefined) trashSchedule();
                 if (event.type === "vault.file.updated" && preview?.itemId === event.payload.fileId)
                     historyLoad(false);
-                searchSchedule(400);
                 actorsRequest([event.payload.changes.updatedBy]);
                 return;
             }
             case "vault.folder.created":
-                searchSchedule(400);
                 actorsRequest([event.payload.folder.createdBy]);
                 return;
             case "vault.file.created":
-                searchSchedule(400);
                 actorsRequest([event.payload.file.createdBy]);
                 return;
             case "vault.folder.removed":
             case "vault.file.removed":
                 trashSchedule();
-                searchSchedule(400);
                 return;
             case "vault.version.updated": {
                 if (preview?.itemId !== event.payload.fileId || preview.history.status !== "ready")
@@ -1154,7 +1076,6 @@ export function happyAgentVaultStoreCreate(deps: HappyAgentVaultDeps): HappyAgen
                 republish({ status: "ready" });
                 if (snapshot.preview !== undefined) historyLoad(false);
                 trashSchedule();
-                searchSchedule(0);
             })
             .catch(() => undefined)
             .finally(end);
@@ -1217,8 +1138,6 @@ export function happyAgentVaultStoreCreate(deps: HappyAgentVaultDeps): HappyAgen
         retry = undefined;
         if (trashTimer) clearTimeout(trashTimer);
         trashTimer = undefined;
-        if (searchTimer) clearTimeout(searchTimer);
-        searchTimer = undefined;
     };
 
     // ---- Changes -------------------------------------------------------------------------
@@ -1556,50 +1475,18 @@ export function happyAgentVaultStoreCreate(deps: HappyAgentVaultDeps): HappyAgen
         folderOpen(folderId) {
             if (disposed) return;
             if (folderId !== null && !snapshot.items.has(folderId)) return;
-            const expanded = new Set(snapshot.treeExpanded);
-            for (const crumb of vaultCrumbs(projected(), folderId, ROOT_NAME))
-                if (crumb.id !== null) expanded.add(crumb.id);
-            if (searchTimer) clearTimeout(searchTimer);
-            searchRead?.abort();
             const { selectedId: _selected, ...rest } = snapshot;
             snapshot = rest;
-            republish({
-                location: { kind: "folder", folderId },
-                search: { query: "", answer: null },
-                treeExpanded: expanded,
-            });
+            previewDrop();
+            republish({ location: { kind: "folder", folderId } });
         },
         trashShow() {
             if (disposed || snapshot.location.kind === "trash") return;
-            if (searchTimer) clearTimeout(searchTimer);
-            searchRead?.abort();
             const { selectedId: _selected, ...rest } = snapshot;
             snapshot = rest;
-            republish({ location: { kind: "trash" }, search: { query: "", answer: null } });
+            previewDrop();
+            republish({ location: { kind: "trash" } });
             trashLoad();
-        },
-        layoutUpdate(layout) {
-            if (disposed || layout === snapshot.layout) return;
-            snapshot = { ...snapshot, layout };
-            notify();
-        },
-        sortUpdate(sort) {
-            if (disposed || (sort.key === snapshot.sort.key && sort.order === snapshot.sort.order))
-                return;
-            republish({ sort });
-        },
-        treeShownUpdate(shown) {
-            if (disposed || shown === snapshot.treeShown) return;
-            snapshot = { ...snapshot, treeShown: shown };
-            notify();
-        },
-        treeFolderExpandedUpdate(folderId, expanded) {
-            if (disposed || snapshot.treeExpanded.has(folderId) === expanded) return;
-            const next = new Set(snapshot.treeExpanded);
-            if (expanded) next.add(folderId);
-            else next.delete(folderId);
-            snapshot = { ...snapshot, treeExpanded: next };
-            notify();
         },
         itemSelect(itemId) {
             if (disposed || itemId === snapshot.selectedId) return;
@@ -1617,6 +1504,10 @@ export function happyAgentVaultStoreCreate(deps: HappyAgentVaultDeps): HappyAgen
                 return;
             }
             if (live !== undefined) {
+                // The preview stands in its folder's place, so the folder is the one it is in.
+                const location = snapshot.location;
+                if (location.kind !== "folder" || location.folderId !== live.parentId)
+                    republish({ location: { kind: "folder", folderId: live.parentId } });
                 previewOpen(live, vaultPath(projected(), itemId), false);
                 return;
             }
@@ -1737,21 +1628,6 @@ export function happyAgentVaultStoreCreate(deps: HappyAgentVaultDeps): HappyAgen
                     notify();
                 },
             );
-        },
-        searchQueryUpdate(query) {
-            if (disposed || query === snapshot.search.query) return;
-            if (query === "") {
-                if (searchTimer) clearTimeout(searchTimer);
-                searchRead?.abort();
-                snapshot = { ...snapshot, search: { query: "", answer: null } };
-                notify();
-                return;
-            }
-            const held = snapshot.search.answer;
-            const results = held !== null && held.status !== "failed" ? held.results : [];
-            snapshot = { ...snapshot, search: { query, answer: { status: "searching", results } } };
-            notify();
-            searchSchedule(150);
         },
         dialogOpen(dialog: HappyAgentVaultDialog) {
             if (disposed) return;
@@ -2024,7 +1900,6 @@ export function happyAgentVaultStoreCreate(deps: HappyAgentVaultDeps): HappyAgen
             stop();
             contentRead?.abort();
             historyRead?.abort();
-            searchRead?.abort();
             trashRead?.abort();
             contentReleaseNow();
             for (const record of uploads) record.controller.abort();

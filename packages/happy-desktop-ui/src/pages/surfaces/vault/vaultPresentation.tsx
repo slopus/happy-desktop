@@ -1,7 +1,6 @@
 import type {
     HappyAgentVaultActor,
     HappyAgentVaultItem,
-    HappyAgentVaultItemId,
     HappyAgentVaultUploadFile,
 } from "happy-desktop-state";
 import { FileTreeFamilyIcon, fileTreeFamily, type FileTreeFamily } from "../../../FileTree";
@@ -54,24 +53,6 @@ export function vaultTimeText(at: number, now: number, zone: LocalTimeZone): str
     return `${localShortDate(at, now, zone)}, ${localClockTime(at, zone)}`;
 }
 
-/** What an entry is, in a word or two, for the listing's kind column. */
-export function vaultKindText(entry: HappyAgentVaultItem): string {
-    if (entry.kind === "folder") return "Folder";
-    if (entry.kind === "artifact") return "App";
-    const type = entry.mediaType;
-    const dot = entry.name.lastIndexOf(".");
-    const extension = dot > 0 ? entry.name.slice(dot + 1).toUpperCase() : "";
-    if (type.startsWith("image/")) return extension ? `${extension} image` : "Image";
-    if (type.startsWith("video/")) return "Video";
-    if (type.startsWith("audio/")) return "Audio";
-    if (type === "application/pdf") return "PDF document";
-    if (type === "text/markdown") return "Markdown";
-    if (type === "application/zip") return "Zip archive";
-    if (type.startsWith("text/") || type === "application/json")
-        return extension ? `${extension} text` : "Text";
-    return extension ? `${extension} file` : "Document";
-}
-
 /**
  * The colour family an entry wears. A folder and a file take the file tree's
  * own; an artifact is an app whatever it is written in, so every one wears
@@ -83,11 +64,6 @@ export function vaultItemFamily(entry: HappyAgentVaultItem): FileTreeFamily {
     return fileTreeFamily({ kind: "file", name: entry.name });
 }
 
-/** Whether the listing may draw a picture's thumbnail in place of its glyph. */
-export function vaultItemIsImage(entry: HappyAgentVaultItem): boolean {
-    return entry.kind === "file" && entry.mediaType.startsWith("image/");
-}
-
 /**
  * The glyph an artifact wears in place of a file's: one app glyph, the same
  * for an HTML app and a Markdown one, so an app reads as one kind of thing.
@@ -96,29 +72,74 @@ export function vaultItemIsImage(entry: HappyAgentVaultItem): boolean {
  */
 export const VAULT_APP_GLYPH: IoniconName = "globe-outline";
 
-/** An entry's glyph in its family's colour: the file tree's for folders and files. */
-export function VaultItemGlyph(props: { item: HappyAgentVaultItem; size: 16 | 20 | 32 }) {
+/**
+ * The hue of an item's tile, the phone vault's: blue folders, teal apps,
+ * purple prose, red PDFs, and so on by family; anything else is neutral.
+ */
+export type VaultTileTint =
+    | "blue"
+    | "teal"
+    | "purple"
+    | "red"
+    | "orange"
+    | "indigo"
+    | "green"
+    | "neutral";
+
+export function vaultItemTint(entry: HappyAgentVaultItem): VaultTileTint {
+    if (entry.kind === "folder") return "blue";
+    if (entry.kind === "artifact") return "teal";
+    if (entry.mediaType === "application/pdf") return "red";
+    switch (vaultItemFamily(entry)) {
+        case "prose":
+            return "purple";
+        case "image":
+        case "archive":
+            return "orange";
+        case "video":
+            return "red";
+        case "audio":
+            return "indigo";
+        case "data":
+            return "green";
+        case "code":
+            return "teal";
+        default:
+            return "neutral";
+    }
+}
+
+/**
+ * An item's mark in a card row: its glyph on a softly tinted 36px tile, or a
+ * picture's own thumbnail filling the tile.
+ */
+export function VaultItemTile(props: { item: HappyAgentVaultItem; thumbnail?: string }) {
     const family = vaultItemFamily(props.item);
     return (
         <span
             aria-hidden="true"
-            className="happy-file-family happy-vault-glyph"
-            data-family={family}
-            data-happy-desktop-ui="vault-glyph"
-            data-size={props.size}
+            className="happy-vault-tile"
+            data-happy-desktop-ui="vault-tile"
+            data-thumbnail={props.thumbnail ? "" : undefined}
+            data-tint={vaultItemTint(props.item)}
         >
-            {props.item.kind === "artifact" ? (
-                <Ionicon name={VAULT_APP_GLYPH} size={props.size} />
+            {props.thumbnail ? (
+                <img
+                    alt=""
+                    className="happy-vault-tile__thumbnail"
+                    draggable={false}
+                    loading="lazy"
+                    src={props.thumbnail}
+                />
+            ) : props.item.kind === "folder" ? (
+                <Ionicon name="folder-sharp" size={20} />
+            ) : props.item.kind === "artifact" ? (
+                <Ionicon name={VAULT_APP_GLYPH} size={20} />
             ) : (
-                <FileTreeFamilyIcon family={family} size={props.size} />
+                <FileTreeFamilyIcon family={family} size={20} />
             )}
         </span>
     );
-}
-
-/** The folder a drop lands in, keyed for the drop highlight: `root` is the vault's root. */
-export function vaultDropKey(folderId: HappyAgentVaultItemId | null): string {
-    return folderId ?? "root";
 }
 
 /** What is being dragged over a target: an entry of this vault, files from the computer, or neither. */

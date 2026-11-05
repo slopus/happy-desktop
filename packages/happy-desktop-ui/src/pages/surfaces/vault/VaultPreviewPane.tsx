@@ -40,7 +40,6 @@ export interface VaultPreviewPaneProps {
     now: number;
     zone: LocalTimeZone;
     renderPage?: HtmlPreviewRenderer;
-    onClose: () => void;
     onPanelChange: (panel: "preview" | "history") => void;
     onVersionSelect: (number: number | undefined) => void;
     onHistoryMoreLoad: () => void;
@@ -96,15 +95,6 @@ export function VaultPreviewPane(props: VaultPreviewPaneProps) {
                     ]}
                     size="small"
                     value={preview.panel}
-                />
-                <Button
-                    aria-label="Close the preview"
-                    icon="close"
-                    iconOnly
-                    onClick={props.onClose}
-                    size="small"
-                    title="Close the preview"
-                    variant="ghost"
                 />
             </div>
             {preview.inTrash || entry === undefined || older ? (

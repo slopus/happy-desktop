@@ -3,7 +3,6 @@ import type {
     HappyAgentVaultCrumb,
     HappyAgentVaultItem,
     HappyAgentVaultItemId,
-    HappyAgentVaultSort,
 } from "./surfaceVaultTypes.js";
 
 type Entries = ReadonlyMap<HappyAgentVaultItemId, HappyAgentVaultItem>;
@@ -65,30 +64,6 @@ export function vaultChildren(
                 nameCompare(left, right),
         );
     return children;
-}
-
-/** A folder's contents in the reader's order; folders always come first. */
-export function vaultListing(
-    children: readonly HappyAgentVaultItem[],
-    sort: HappyAgentVaultSort,
-): readonly HappyAgentVaultItem[] {
-    if (sort.key === "name" && sort.order === "asc") return children;
-    const sign = sort.order === "asc" ? 1 : -1;
-    const size = (entry: HappyAgentVaultItem) => (entry.kind === "folder" ? 0 : entry.size);
-    return [...children].sort(
-        (left, right) =>
-            Number(right.kind === "folder") - Number(left.kind === "folder") ||
-            sign *
-                (sort.key === "name"
-                    ? collator.compare(
-                          happyAgentVaultNameShown(left.name),
-                          happyAgentVaultNameShown(right.name),
-                      )
-                    : sort.key === "size"
-                      ? size(left) - size(right)
-                      : left.updatedAt - right.updatedAt) ||
-            nameCompare(left, right),
-    );
 }
 
 /** The folders from the root down to `folderId`, the root first. */

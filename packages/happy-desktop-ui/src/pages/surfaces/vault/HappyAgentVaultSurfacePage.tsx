@@ -4,11 +4,8 @@ import {
     type HappyAgentVaultDialog,
     type HappyAgentVaultItem,
     type HappyAgentVaultItemId,
-    type HappyAgentVaultLayout,
     type HappyAgentVaultRetention,
     type HappyAgentVaultSnapshot,
-    type HappyAgentVaultSort,
-    type HappyAgentVaultSortKey,
     type HappyAgentVaultUploadFile,
 } from "happy-desktop-state";
 import { Banner } from "../../../Banner";
@@ -19,9 +16,6 @@ import type { HtmlPreviewRenderer } from "../../../htmlPreview";
 import { Icon } from "../../../Icon";
 import type { LocalTimeZone } from "../../../localTime";
 import type { MenuItem } from "../../../Menu";
-import { MenuButton } from "../../../MenuButton";
-import { SegmentedControl } from "../../../SegmentedControl";
-import { SearchField } from "../../../TitleBar";
 import {
     HappyAgentSurfaceHeader,
     type HappyAgentSurfaceChatToggle,
@@ -30,8 +24,6 @@ import type { HappyAgentSurfaceView } from "../surfacePresentation";
 import { VaultNameDialog, VaultSettingsDialog } from "./VaultDialogs";
 import { VaultItemList } from "./VaultItemList";
 import { VaultPreviewPane } from "./VaultPreviewPane";
-import { VaultSearchResults } from "./VaultSearchResults";
-import { VaultTree } from "./VaultTree";
 import { VaultUploads } from "./VaultUploads";
 import {
     VAULT_ENTRY_DRAG_TYPE,
@@ -54,16 +46,12 @@ export interface HappyAgentVaultSurfacePageProps {
     zone?: LocalTimeZone;
     /** The host's engine for an app whose scripts run. */
     renderPage?: HtmlPreviewRenderer;
-    /** A picture's thumbnail for the grid. */
+    /** A picture's thumbnail for its tile. */
     thumbnailOf?: (entry: HappyAgentVaultItem) => string | undefined;
     /** Saves an entry, a folder or an artifact as a zip; `version` defaults to the newest. */
     onItemDownload: (itemId: HappyAgentVaultItemId, version?: number) => Promise<void>;
     onFolderOpen: (folderId: HappyAgentVaultItemId | null) => void;
     onTrashShow: () => void;
-    onLayoutChange: (layout: HappyAgentVaultLayout) => void;
-    onSortChange: (sort: HappyAgentVaultSort) => void;
-    onTreeShownChange: (shown: boolean) => void;
-    onTreeFolderExpandedChange: (folderId: HappyAgentVaultItemId, expanded: boolean) => void;
     onItemSelect: (itemId: HappyAgentVaultItemId | undefined) => void;
     onItemOpen: (itemId: HappyAgentVaultItemId) => void;
     onPreviewClose: () => void;
@@ -72,7 +60,6 @@ export interface HappyAgentVaultSurfacePageProps {
     onHistoryMoreLoad: () => void;
     onVersionRestore: (number: number) => void;
     onVersionPinnedChange: (number: number, pinned: boolean) => void;
-    onSearchQueryChange: (query: string) => void;
     onDialogOpen: (dialog: HappyAgentVaultDialog) => void;
     onDialogClose: () => void;
     onFolderCreate: (name: string) => void;
@@ -93,20 +80,14 @@ export interface HappyAgentVaultSurfacePageProps {
     style?: CSSProperties;
 }
 
-const SORT_LABEL: Record<HappyAgentVaultSortKey, string> = {
-    name: "Name",
-    updatedAt: "Date modified",
-    size: "Size",
-};
-
 /** Where a drop lands: a folder, `null` being the root, and the element that shows it. */
 interface DropTarget {
     readonly element: HTMLElement;
     readonly folderId: HappyAgentVaultItemId | null;
 }
 
-/** The nearest drop target under the pointer: a folder row, a tree folder, a crumb, or a pane's space. */
-const DROP_SELECTOR = '[data-vault-drop], .happy-vault-tree [data-kind="directory"][data-path]';
+/** The nearest drop target under the pointer: a folder row, a crumb, or the listing's own space. */
+const DROP_SELECTOR = "[data-vault-drop]";
 
 /** Whether a folder is the entry itself or lies somewhere inside it. */
 function folderWithin(
@@ -120,15 +101,15 @@ function folderWithin(
 }
 
 /**
- * HappyAgentVaultSurfacePage — one shared vault, browsed as Finder browses a
- * disk: a breadcrumb and the folder's contents as rows or tiles, the vault
- * as a tree beside them, and the file or app that is open on the right with
- * its history. Searching replaces the folder with what matched; the Trash
- * holds what was deleted until it is restored or its time runs out.
+ * HappyAgentVaultSurfacePage — one shared vault, browsed as the phone browses
+ * it: one inset grouped card of the folder's folders, then its files, on the
+ * grouped background. A click on a folder goes into it, and a click on a file
+ * opens it in the folder's place; a bar over the card says where you are and
+ * goes back. The Trash holds what was deleted until it is restored or its
+ * time runs out. Finding a file is the global search's job.
  *
- * Entries are carried by dragging them onto a folder: a row or tile, a
- * folder in the tree, a crumb, or the listing's own space for the folder
- * shown. Files dragged in from the computer are sent to wherever they are
+ * Entries are carried by dragging them onto a folder: a row, a crumb, or the
+ * listing's own space for the folder shown. Files dragged in from the computer are sent to wherever they are
  * dropped, a dropped folder with everything in it. A drop target is marked by
  * an outline drawn inside its own box, so nothing moves while something is
  * carried over it.
@@ -152,7 +133,7 @@ export function HappyAgentVaultSurfacePage(props: HappyAgentVaultSurfacePageProp
     };
     const inTrash = vault.location.kind === "trash";
     const folderId = vault.location.kind === "folder" ? vault.location.folderId : null;
-    const searching = vault.search.answer !== null;
+    const preview = vault.preview;
 
     const download = (itemId: HappyAgentVaultItemId) => {
         setDownloadFailure(undefined);
@@ -277,6 +258,43 @@ export function HappyAgentVaultSurfacePage(props: HappyAgentVaultSurfacePageProp
               ? "Items stay in the Trash until they are restored."
               : `Items are removed for good after ${String(trashDays)} ${trashDays === 1 ? "day" : "days"}.`;
 
+    const uploads = (
+        <VaultUploads
+            onDismiss={props.onUploadDismiss}
+            onRetry={props.onUploadRetry}
+            uploads={vault.uploads}
+        />
+    );
+    const notices =
+        vault.failure || vault.error || downloadFailure ? (
+            <div className="happy-vault__notices">
+                {vault.failure ? (
+                    <Banner
+                        data-testid="happy-vault-failure"
+                        icon="alert"
+                        onDismiss={props.onFailureDismiss}
+                        tone="warning"
+                    >
+                        {vault.failure.message}
+                    </Banner>
+                ) : null}
+                {downloadFailure ? (
+                    <Banner
+                        icon="alert"
+                        onDismiss={() => setDownloadFailure(undefined)}
+                        tone="warning"
+                    >
+                        {downloadFailure}
+                    </Banner>
+                ) : null}
+                {vault.error ? (
+                    <Banner icon="clock" tone="neutral">
+                        {`The vault could not be read: ${vault.error.message} Trying again…`}
+                    </Banner>
+                ) : null}
+            </div>
+        ) : null;
+
     const listing = () => {
         if (vault.status === "loading")
             return (
@@ -285,13 +303,6 @@ export function HappyAgentVaultSurfacePage(props: HappyAgentVaultSurfacePageProp
                     icon="vault"
                     size="panel"
                     title="Opening the vault…"
-                />
-            );
-        if (searching)
-            return (
-                <VaultSearchResults
-                    onOpen={(entry) => props.onItemOpen(entry.id)}
-                    search={vault.search}
                 />
             );
         if (inTrash) {
@@ -319,6 +330,14 @@ export function HappyAgentVaultSurfacePage(props: HappyAgentVaultSurfacePageProp
                     }
                     items={trash.items.map((held) => held.item)}
                     label="Trash"
+                    lead={
+                        <>
+                            {notices}
+                            {trashNote !== undefined && trash.items.length > 0 ? (
+                                <p className="happy-vault__trash-note">{trashNote}</p>
+                            ) : null}
+                        </>
+                    }
                     mode={{
                         kind: "trash",
                         paths: new Map(trash.items.map((held) => [held.item.id, held.path])),
@@ -329,7 +348,6 @@ export function HappyAgentVaultSurfacePage(props: HappyAgentVaultSurfacePageProp
                     onOpen={open}
                     onRestore={props.onTrashRestore}
                     onSelect={props.onItemSelect}
-                    onSortChange={props.onSortChange}
                     {...(vault.selectedId === undefined ? {} : { selectedId: vault.selectedId })}
                     zone={zone}
                 />
@@ -348,22 +366,40 @@ export function HappyAgentVaultSurfacePage(props: HappyAgentVaultSurfacePageProp
                 }
                 items={vault.listing}
                 label={vault.crumbs.at(-1)?.name ?? props.surface.name}
-                mode={
-                    vault.layout === "grid" ? { kind: "grid" } : { kind: "list", sort: vault.sort }
-                }
+                lead={notices}
+                mode={{ kind: "folder" }}
                 now={props.now}
                 onDelete={props.onItemDelete}
                 onMenu={(entry, x, y) => setMenu({ entry, x, y })}
                 onOpen={open}
                 onRestore={props.onTrashRestore}
                 onSelect={props.onItemSelect}
-                onSortChange={props.onSortChange}
                 {...(vault.selectedId === undefined ? {} : { selectedId: vault.selectedId })}
                 {...(props.thumbnailOf ? { thumbnailOf: props.thumbnailOf } : {})}
+                trail={uploads}
                 zone={zone}
             />
         );
     };
+
+    const crumbName = (crumb: HappyAgentVaultSnapshot["crumbs"][number]) =>
+        crumb.id === null ? props.surface.name : happyAgentVaultNameShown(crumb.name);
+    const parent = vault.crumbs.at(-2);
+    /** Where the bar's back goes: out of the file, out of the Trash, or up a folder. */
+    const back: { label: string; go: () => void } | undefined =
+        preview !== undefined
+            ? {
+                  label: inTrash ? "Back to the Trash" : "Back to the folder",
+                  go: props.onPreviewClose,
+              }
+            : inTrash
+              ? { label: "Leave the Trash", go: () => props.onFolderOpen(null) }
+              : folderId !== null
+                ? {
+                      label: `Back to ${parent ? crumbName(parent) : props.surface.name}`,
+                      go: () => props.onFolderOpen(parent?.id ?? null),
+                  }
+                : undefined;
 
     const dialog = vault.dialog;
     const renamed = dialog?.kind === "rename" ? vault.items.get(dialog.itemId) : undefined;
@@ -450,242 +486,113 @@ export function HappyAgentVaultSurfacePage(props: HappyAgentVaultSurfacePageProp
                     title="Vault not found"
                 />
             ) : (
-                <>
-                    <div className="happy-vault__toolbar" role="toolbar" aria-label="Vault">
-                        <Button
-                            aria-label={
-                                vault.treeShown ? "Hide the folder tree" : "Show the folder tree"
-                            }
-                            aria-pressed={vault.treeShown}
-                            className="happy-vault__toggle"
-                            icon={vault.treeShown ? "sidebar-collapse" : "sidebar-expand"}
-                            iconOnly
-                            onClick={() => props.onTreeShownChange(!vault.treeShown)}
-                            size="small"
-                            title={
-                                vault.treeShown ? "Hide the folder tree" : "Show the folder tree"
-                            }
-                            variant="ghost"
-                        />
-                        <nav aria-label="Where you are" className="happy-vault__crumbs">
-                            {vault.crumbs.map((crumb, index) => {
-                                const last = index === vault.crumbs.length - 1 && !inTrash;
-                                return (
-                                    <span className="happy-vault__crumb-step" key={crumb.id ?? ""}>
-                                        {index === 0 ? null : (
-                                            <span
-                                                aria-hidden="true"
-                                                className="happy-vault__crumb-separator"
-                                            >
-                                                <Icon name="chevron-right" size={12} />
-                                            </span>
-                                        )}
-                                        <button
-                                            aria-current={last ? "location" : undefined}
-                                            className="happy-vault__crumb"
-                                            data-vault-drop={crumb.id ?? ""}
-                                            onClick={() => props.onFolderOpen(crumb.id)}
-                                            title={
-                                                crumb.id === null ? props.surface.name : crumb.name
-                                            }
-                                            type="button"
+                <div
+                    className="happy-vault__body"
+                    onDragEnd={dragEnd}
+                    onDragLeave={(event) => {
+                        if (!event.currentTarget.contains(event.relatedTarget as Node | null))
+                            dropShow(null);
+                    }}
+                    onDragOver={(event) => {
+                        const target = dropTargetOf(event);
+                        dropShow(target?.element ?? null);
+                        if (!target) return;
+                        event.preventDefault();
+                        event.dataTransfer.dropEffect =
+                            vaultDragKind(event.dataTransfer) === "entry" ? "move" : "copy";
+                    }}
+                    onDragStart={(event) => {
+                        const row = (event.target as Element).closest<HTMLElement>(
+                            "[data-vault-entry]",
+                        );
+                        const id = row?.dataset.vaultEntry as HappyAgentVaultItemId | undefined;
+                        if (id === undefined) return;
+                        dragged.current = id;
+                        event.dataTransfer.effectAllowed = "move";
+                        event.dataTransfer.setData(VAULT_ENTRY_DRAG_TYPE, id);
+                    }}
+                    onDrop={(event) => {
+                        const target = dropTargetOf(event);
+                        const kind = vaultDragKind(event.dataTransfer);
+                        dragEnd();
+                        if (!target) return;
+                        event.preventDefault();
+                        if (kind === "entry") {
+                            const id = event.dataTransfer.getData(VAULT_ENTRY_DRAG_TYPE);
+                            if (id) props.onItemMove(id as HappyAgentVaultItemId, target.folderId);
+                            return;
+                        }
+                        void vaultDroppedFiles(event.dataTransfer).then((files) => {
+                            if (files.length > 0) props.onFilesUpload(target.folderId, files);
+                        });
+                    }}
+                >
+                    {back === undefined ? null : (
+                        <nav aria-label="Where you are" className="happy-vault__bar">
+                            <Button
+                                aria-label={back.label}
+                                className="happy-vault__back"
+                                icon="chevron-left"
+                                iconOnly
+                                onClick={back.go}
+                                size="small"
+                                title={back.label}
+                                variant="ghost"
+                            />
+                            <span className="happy-vault__crumbs">
+                                {vault.crumbs.map((crumb, index) => {
+                                    const current =
+                                        index === vault.crumbs.length - 1 &&
+                                        !inTrash &&
+                                        preview === undefined;
+                                    return (
+                                        <span
+                                            className="happy-vault__crumb-step"
+                                            key={crumb.id ?? ""}
                                         >
-                                            {crumb.id === null ? props.surface.name : crumb.name}
-                                        </button>
+                                            {index === 0 ? null : <CrumbSeparator />}
+                                            <button
+                                                aria-current={current ? "location" : undefined}
+                                                className="happy-vault__crumb"
+                                                data-vault-drop={crumb.id ?? ""}
+                                                onClick={() => props.onFolderOpen(crumb.id)}
+                                                title={crumbName(crumb)}
+                                                type="button"
+                                            >
+                                                {crumbName(crumb)}
+                                            </button>
+                                        </span>
+                                    );
+                                })}
+                                {inTrash || preview !== undefined ? (
+                                    <span className="happy-vault__crumb-step">
+                                        <CrumbSeparator />
+                                        <span
+                                            aria-current="location"
+                                            className="happy-vault__crumb"
+                                            data-static=""
+                                        >
+                                            {preview !== undefined
+                                                ? happyAgentVaultNameShown(
+                                                      preview.file?.name ??
+                                                          preview.path.slice(
+                                                              preview.path.lastIndexOf("/") + 1,
+                                                          ),
+                                                  )
+                                                : "Trash"}
+                                        </span>
                                     </span>
-                                );
-                            })}
-                            {inTrash ? (
-                                <span className="happy-vault__crumb-step">
-                                    <span
-                                        aria-hidden="true"
-                                        className="happy-vault__crumb-separator"
-                                    >
-                                        <Icon name="chevron-right" size={12} />
-                                    </span>
-                                    <span
-                                        aria-current="location"
-                                        className="happy-vault__crumb"
-                                        data-static=""
-                                    >
-                                        Trash
-                                    </span>
-                                </span>
-                            ) : null}
+                                ) : null}
+                            </span>
                         </nav>
-                        <div className="happy-vault__search">
-                            <SearchField
-                                onChange={props.onSearchQueryChange}
-                                placeholder="Search this vault"
-                                shortcutHint={false}
-                                value={vault.search.query}
-                            />
-                        </div>
-                        <MenuButton
-                            align="end"
-                            icon={vault.sort.order === "asc" ? "arrow-up" : "arrow-down"}
-                            items={[
-                                { kind: "label", label: "Sort by" },
-                                ...(["name", "updatedAt", "size"] as const).map((key) => ({
-                                    kind: "item" as const,
-                                    id: key,
-                                    label: SORT_LABEL[key],
-                                    checked: vault.sort.key === key,
-                                })),
-                                { kind: "separator" },
-                                {
-                                    kind: "item",
-                                    id: "asc",
-                                    label:
-                                        vault.sort.key === "name"
-                                            ? "A to Z"
-                                            : vault.sort.key === "size"
-                                              ? "Smallest first"
-                                              : "Oldest first",
-                                    checked: vault.sort.order === "asc",
-                                },
-                                {
-                                    kind: "item",
-                                    id: "desc",
-                                    label:
-                                        vault.sort.key === "name"
-                                            ? "Z to A"
-                                            : vault.sort.key === "size"
-                                              ? "Largest first"
-                                              : "Newest first",
-                                    checked: vault.sort.order === "desc",
-                                },
-                            ]}
-                            label="Sort"
-                            onSelect={(id) => {
-                                if (id === "asc" || id === "desc")
-                                    props.onSortChange({ key: vault.sort.key, order: id });
-                                else
-                                    props.onSortChange({
-                                        key: id as HappyAgentVaultSortKey,
-                                        order: vault.sort.order,
-                                    });
-                            }}
-                            overlay
-                            size="small"
-                            text={SORT_LABEL[vault.sort.key]}
-                            variant="ghost"
-                        />
-                        <SegmentedControl
-                            aria-label="Show as"
-                            data-testid="happy-vault-layout"
-                            onChange={(value) =>
-                                props.onLayoutChange(value as HappyAgentVaultLayout)
-                            }
-                            segments={[
-                                { value: "list", label: "List" },
-                                { value: "grid", label: "Grid" },
-                            ]}
-                            size="small"
-                            value={vault.layout}
-                        />
-                    </div>
-                    {vault.failure || vault.error || downloadFailure ? (
-                        <div className="happy-vault__notices">
-                            {vault.failure ? (
-                                <Banner
-                                    data-testid="happy-vault-failure"
-                                    icon="alert"
-                                    onDismiss={props.onFailureDismiss}
-                                    tone="warning"
-                                >
-                                    {vault.failure.message}
-                                </Banner>
-                            ) : null}
-                            {downloadFailure ? (
-                                <Banner
-                                    icon="alert"
-                                    onDismiss={() => setDownloadFailure(undefined)}
-                                    tone="warning"
-                                >
-                                    {downloadFailure}
-                                </Banner>
-                            ) : null}
-                            {vault.error ? (
-                                <Banner icon="clock" tone="neutral">
-                                    {`The vault could not be read: ${vault.error.message} Trying again…`}
-                                </Banner>
-                            ) : null}
-                        </div>
-                    ) : null}
-                    <div
-                        className="happy-vault__body"
-                        onDragEnd={dragEnd}
-                        onDragLeave={(event) => {
-                            if (!event.currentTarget.contains(event.relatedTarget as Node | null))
-                                dropShow(null);
-                        }}
-                        onDragOver={(event) => {
-                            const target = dropTargetOf(event);
-                            dropShow(target?.element ?? null);
-                            if (!target) return;
-                            event.preventDefault();
-                            event.dataTransfer.dropEffect =
-                                vaultDragKind(event.dataTransfer) === "entry" ? "move" : "copy";
-                        }}
-                        onDragStart={(event) => {
-                            const row = (event.target as Element).closest<HTMLElement>(
-                                "[data-vault-entry]",
-                            );
-                            const id = row?.dataset.vaultEntry as HappyAgentVaultItemId | undefined;
-                            if (id === undefined) return;
-                            dragged.current = id;
-                            event.dataTransfer.effectAllowed = "move";
-                            event.dataTransfer.setData(VAULT_ENTRY_DRAG_TYPE, id);
-                        }}
-                        onDrop={(event) => {
-                            const target = dropTargetOf(event);
-                            const kind = vaultDragKind(event.dataTransfer);
-                            dragEnd();
-                            if (!target) return;
-                            event.preventDefault();
-                            if (kind === "entry") {
-                                const id = event.dataTransfer.getData(VAULT_ENTRY_DRAG_TYPE);
-                                if (id)
-                                    props.onItemMove(id as HappyAgentVaultItemId, target.folderId);
-                                return;
-                            }
-                            void vaultDroppedFiles(event.dataTransfer).then((files) => {
-                                if (files.length > 0) props.onFilesUpload(target.folderId, files);
-                            });
-                        }}
-                    >
-                        {vault.treeShown ? (
-                            <div className="happy-vault__tree-pane">
-                                <VaultTree
-                                    onItemOpen={props.onItemOpen}
-                                    onFolderExpandedChange={props.onTreeFolderExpandedChange}
-                                    onFolderOpen={props.onFolderOpen}
-                                    vault={vault}
-                                />
-                            </div>
-                        ) : null}
-                        <div className="happy-vault__main">
-                            {inTrash &&
-                            trashNote !== undefined &&
-                            !searching &&
-                            vault.trash.status === "ready" &&
-                            vault.trash.items.length > 0 ? (
-                                <p className="happy-vault__trash-note">{trashNote}</p>
-                            ) : null}
-                            {listing()}
-                            <VaultUploads
-                                onDismiss={props.onUploadDismiss}
-                                onRetry={props.onUploadRetry}
-                                uploads={vault.uploads}
-                            />
-                        </div>
-                        {vault.preview ? (
+                    )}
+                    {preview ? (
+                        <div className="happy-vault__preview">
+                            {notices}
                             <VaultPreviewPane
                                 items={vault.items}
                                 names={names}
                                 now={props.now}
-                                onClose={props.onPreviewClose}
                                 onDownload={props.onItemDownload}
                                 onHistoryMoreLoad={props.onHistoryMoreLoad}
                                 onPanelChange={props.onPreviewPanelChange}
@@ -693,14 +600,16 @@ export function HappyAgentVaultSurfacePage(props: HappyAgentVaultSurfacePageProp
                                 onVersionPinnedChange={props.onVersionPinnedChange}
                                 onVersionRestore={props.onVersionRestore}
                                 onVersionSelect={props.onPreviewVersionSelect}
-                                preview={vault.preview}
+                                preview={preview}
                                 {...(props.renderPage ? { renderPage: props.renderPage } : {})}
                                 rootName={props.surface.name}
                                 zone={zone}
                             />
-                        ) : null}
-                    </div>
-                </>
+                        </div>
+                    ) : (
+                        listing()
+                    )}
+                </div>
             )}
             {menu ? (
                 <ContextMenu
@@ -741,5 +650,13 @@ export function HappyAgentVaultSurfacePage(props: HappyAgentVaultSurfacePageProp
                 />
             ) : null}
         </div>
+    );
+}
+
+function CrumbSeparator() {
+    return (
+        <span aria-hidden="true" className="happy-vault__crumb-separator">
+            <Icon name="chevron-right" size={12} />
+        </span>
     );
 }

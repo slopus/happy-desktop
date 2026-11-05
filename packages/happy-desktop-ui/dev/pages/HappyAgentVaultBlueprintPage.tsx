@@ -7,12 +7,10 @@ import {
     type HappyAgentVaultActor,
     type HappyAgentVaultContent,
     type HappyAgentVaultCrumb,
-    type HappyAgentVaultFile,
     type HappyAgentVaultItem,
     type HappyAgentVaultItemId,
     type HappyAgentVaultHistory,
     type HappyAgentVaultPreview,
-    type HappyAgentVaultSearchResult,
     type HappyAgentVaultSnapshot,
     type HappyAgentVaultUpload,
     type HappyAgentVaultVersion,
@@ -229,11 +227,6 @@ function childrenOf(items: readonly HappyAgentVaultItem[]) {
 const CHILDREN = childrenOf(ITEMS);
 const ITEM_MAP = new Map(ITEMS.map((entry) => [entry.id, entry]));
 const item = (itemId: string) => ITEM_MAP.get(id(itemId))!;
-const fileOf = (itemId: string): HappyAgentVaultFile => {
-    const held = item(itemId);
-    if (held.kind === "folder") throw new Error(`${itemId} is a folder.`);
-    return held;
-};
 
 function crumbsOf(folderId: HappyAgentVaultItemId | null): HappyAgentVaultCrumb[] {
     const crumbs: HappyAgentVaultCrumb[] = [];
@@ -262,13 +255,6 @@ function vaultOf(
         location: { kind: "folder", folderId: folder },
         crumbs: crumbsOf(folder),
         listing: CHILDREN.get(folder) ?? [],
-        sort: { key: "name", order: "asc" },
-        layout: "list",
-        treeShown: true,
-        treeExpanded: new Set(
-            folder === null ? [] : crumbsOf(folder).flatMap((c) => (c.id ? [c.id] : [])),
-        ),
-        search: { query: "", answer: null },
         trash: { status: "loading" },
         uploads: [],
         settings: {
@@ -406,36 +392,6 @@ main { padding: 24px 32px; }
 <main><div class="cards"><div class="card"><strong>Monday</strong><p>Vaults</p></div><div class="card"><strong>Tuesday</strong><p>Retention</p></div><div class="card"><strong>Wednesday</strong><p>Search</p></div></div></main>
 <script>document.body.dataset.ran = "yes";</script></body></html>`;
 
-const SEARCH_RESULTS: readonly HappyAgentVaultSearchResult[] = [
-    { match: "name", item: item("roadmap"), path: "/roadmap.txt" },
-    { match: "name", item: item("reports"), path: "/Reports" },
-    { match: "name", item: item("revenue"), path: "/Reports/Q3/revenue.json" },
-    {
-        match: "content",
-        item: fileOf("notes"),
-        path: "/Reports/notes.md",
-        innerPath: null,
-        line: 12,
-        snippet: "Revenue grew 18% in Q3; the roadmap moves mobile clients to November.",
-    },
-    {
-        match: "content",
-        item: fileOf("handbook"),
-        path: "/Sites/handbook.artifact",
-        innerPath: "index.md",
-        line: 9,
-        snippet: "- **Reports** holds every quarter's summary and the roadmap for the next one.",
-    },
-    {
-        match: "content",
-        item: fileOf("readme"),
-        path: "/README.md",
-        innerPath: null,
-        line: 3,
-        snippet: "See roadmap.txt for what ships when.",
-    },
-];
-
 const trashed = (source: HappyAgentVaultItem, deletedAt: number): HappyAgentVaultItem => ({
     ...source,
     deletedAt,
@@ -530,10 +486,6 @@ const handlers: Omit<HappyAgentVaultSurfacePageProps, "surface" | "vault" | "now
     onItemDownload: () => Promise.resolve(),
     onFolderOpen: noop,
     onTrashShow: noop,
-    onLayoutChange: noop,
-    onSortChange: noop,
-    onTreeShownChange: noop,
-    onTreeFolderExpandedChange: noop,
     onItemSelect: noop,
     onItemOpen: noop,
     onPreviewClose: noop,
@@ -542,7 +494,6 @@ const handlers: Omit<HappyAgentVaultSurfacePageProps, "surface" | "vault" | "now
     onHistoryMoreLoad: noop,
     onVersionRestore: noop,
     onVersionPinnedChange: noop,
-    onSearchQueryChange: noop,
     onDialogOpen: noop,
     onDialogClose: noop,
     onFolderCreate: noop,
@@ -580,32 +531,13 @@ const FRAME = {
 } as const;
 
 /**
- * The page with its own navigation live over the fixed fixtures: opening
- * folders, selecting, the layout and tree switches, and sorting redraw at once.
+ * The page with its own navigation live over the fixed fixtures: going into
+ * folders, back out of them, and selecting redraw at once.
  */
 function LivePage() {
     const [folderId, setFolderId] = useState<HappyAgentVaultItemId | null>(null);
     const [selectedId, setSelectedId] = useState<HappyAgentVaultItemId>();
-    const [layout, setLayout] = useState<"list" | "grid">("list");
-    const [treeShown, setTreeShown] = useState(true);
-    const [expanded, setExpanded] = useState<ReadonlySet<HappyAgentVaultItemId>>(new Set());
-    const [sort, setSort] = useState<HappyAgentVaultSnapshot["sort"]>({
-        key: "name",
-        order: "asc",
-    });
     const base = vaultOf(folderId);
-    const listing = [...base.listing].sort((left, right) => {
-        const folders = Number(right.kind === "folder") - Number(left.kind === "folder");
-        if (folders !== 0) return folders;
-        const size = (item: HappyAgentVaultItem) => (item.kind === "folder" ? 0 : item.size);
-        const by =
-            sort.key === "name"
-                ? left.name.localeCompare(right.name)
-                : sort.key === "size"
-                  ? size(left) - size(right)
-                  : left.updatedAt - right.updatedAt;
-        return sort.order === "asc" ? by : -by;
-    });
     return (
         <HappyAgentVaultSurfacePage
             {...handlers}
@@ -615,25 +547,8 @@ function LivePage() {
             }}
             onItemSelect={setSelectedId}
             onFolderOpen={setFolderId}
-            onLayoutChange={setLayout}
-            onSortChange={setSort}
-            onTreeFolderExpandedChange={(itemId, open) => {
-                const next = new Set(expanded);
-                if (open) next.add(itemId);
-                else next.delete(itemId);
-                setExpanded(next);
-            }}
-            onTreeShownChange={setTreeShown}
             surface={STUDIO}
-            vault={{
-                ...base,
-                layout,
-                listing,
-                sort,
-                treeExpanded: expanded,
-                treeShown,
-                ...(selectedId === undefined ? {} : { selectedId }),
-            }}
+            vault={{ ...base, ...(selectedId === undefined ? {} : { selectedId }) }}
         />
     );
 }
@@ -645,12 +560,12 @@ export function HappyAgentVaultBlueprintPage() {
         <ComponentPage
             contract="Props only"
             number={componentNumber}
-            summary="A shared vault Surface: a breadcrumb and the folder's contents as rows or tiles, a folder tree, search across names and text, the Trash, the preview of a file or site with its version history, uploads, and the vault's settings."
+            summary="A shared vault Surface: the folder's folders, then its files, as one inset grouped card, a bar that says where you are and goes back, the Trash, a file or app opened in the folder's place with its version history, uploads, and the vault's settings."
             title="HappyAgentVault"
         >
             <FullScreenSpecimen
-                detail="The vault's root with the tree open, as a list of folders first, then files. Opening folders, selecting, sorting by a column heading, the layout switch, and the tree toggle are live here."
-                label="Folder, list"
+                detail="The vault's root as one card: its folders, then its files, each by name. Going into folders and back out is live here."
+                label="Folder"
                 number="01"
                 screen="01-list-1100x760"
                 window={WINDOW}
@@ -659,51 +574,23 @@ export function HappyAgentVaultBlueprintPage() {
             </FullScreenSpecimen>
 
             <FullScreenSpecimen
-                detail="Photos as tiles with their thumbnails, the tree hidden. Sixty-four pictures, of which only the rows on screen exist."
-                label="Folder, grid"
+                detail="Photos, each picture's tile its own thumbnail. Sixty-four of them, of which only the rows on screen exist."
+                label="Folder of pictures"
                 number="02"
-                screen="02-grid-1100x760"
+                screen="02-pictures-1100x760"
                 window={WINDOW}
             >
-                <Page
-                    vault={vaultOf("photos", {
-                        layout: "grid",
-                        treeShown: false,
-                        selectedId: id("photo-3"),
-                    })}
-                />
+                <Page vault={vaultOf("photos", { selectedId: id("photo-3") })} />
             </FullScreenSpecimen>
 
             <FullScreenSpecimen
-                detail="Reports › Q3 opened from the tree, which shows the open folders down to it."
-                label="Tree"
+                detail="Reports › Q3, two folders down: the bar over the card says where it is and goes back up."
+                label="Inside a folder"
                 number="03"
-                screen="03-tree-1100x760"
+                screen="03-folder-1100x760"
                 window={WINDOW}
             >
-                <Page
-                    vault={vaultOf("q3", {
-                        treeExpanded: new Set([id("reports"), id("q3"), id("sites")]),
-                        selectedId: id("revenue"),
-                    })}
-                />
-            </FullScreenSpecimen>
-
-            <FullScreenSpecimen
-                detail="“roadmap” found in three names, then in lines of text inside a file and a site, with more matches than were returned."
-                label="Search"
-                number="04"
-                screen="04-search-1100x760"
-                window={WINDOW}
-            >
-                <Page
-                    vault={vaultOf(null, {
-                        search: {
-                            query: "roadmap",
-                            answer: { status: "ready", results: SEARCH_RESULTS, truncated: true },
-                        },
-                    })}
-                />
+                <Page vault={vaultOf("q3", { selectedId: id("revenue") })} />
             </FullScreenSpecimen>
 
             <FullScreenSpecimen

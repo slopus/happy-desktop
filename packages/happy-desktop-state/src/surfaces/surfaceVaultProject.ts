@@ -7,7 +7,6 @@ import type {
     VaultFolderUpdatedPayload,
     VaultItem,
     VaultRetention,
-    VaultSearchResult,
     VaultVersion,
 } from "@slopus/happy-agent-client";
 import type { HappyAgentSurfaceId } from "./surfaceTypes.js";
@@ -18,7 +17,6 @@ import type {
     HappyAgentVaultItem,
     HappyAgentVaultItemId,
     HappyAgentVaultRetention,
-    HappyAgentVaultSearchResult,
     HappyAgentVaultVersion,
 } from "./surfaceVaultTypes.js";
 
@@ -228,21 +226,6 @@ export function happyAgentVaultActivityProject(activity: VaultActivity): HappyAg
             void kind;
             return { ...fields, kind: "changed" };
     }
-}
-
-export function happyAgentVaultSearchResultProject(
-    result: VaultSearchResult,
-): HappyAgentVaultSearchResult {
-    if (result.match === "name")
-        return { match: "name", item: happyAgentVaultItemProject(result.item), path: result.path };
-    return {
-        match: "content",
-        item: happyAgentVaultFileProject(result.item),
-        path: result.path,
-        innerPath: result.innerPath,
-        line: result.line,
-        snippet: result.snippet,
-    };
 }
 
 export function happyAgentVaultRetentionProject(
