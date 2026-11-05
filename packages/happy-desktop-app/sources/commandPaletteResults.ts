@@ -1533,11 +1533,19 @@ function eventDayText(start: number, allDay: boolean): string {
           });
 }
 
+/** What a chat, task, subtask, or bot the Happy Agent found is, as its row says. */
+const AGENT_KIND_LABEL = {
+    chat: "Chat",
+    task: "Task",
+    subtask: "Subtask",
+    bot: "Bot",
+} as const;
+
 /**
- * One thing the Happy Agent found, as the row that opens it here. A chat,
- * task, or bot opens only where this window holds it, since that is where its
- * workspace is known; one it does not hold, and anything archived, which the
- * palette lists apart, is left out.
+ * One thing the Happy Agent found, as the row that opens it here. Work this
+ * window holds is its own row; other work opens in the workspace the Happy
+ * Agent names, and is left out when it names none. Anything archived, which
+ * the palette lists apart, is left out too.
  */
 function remoteRow(
     hit: HappyAgentQuickSearchHit,
@@ -1663,7 +1671,32 @@ function remoteRow(
             if (hit.archived) return undefined;
             const offer = work.get(hit.key);
             if (offer !== undefined) return offer.tier < 2 ? { row: offer.row } : undefined;
-            if (hit.type === "agent") return undefined;
+            if (hit.type === "agent") {
+                if (hit.workspaceId === null) return undefined;
+                const project =
+                    hit.projectId === null
+                        ? undefined
+                        : input.projects.find((group) => group.id === hit.projectId);
+                return {
+                    row: {
+                        kind: "command",
+                        id: hit.key,
+                        title: hit.title,
+                        meta:
+                            project === undefined
+                                ? AGENT_KIND_LABEL[hit.kind]
+                                : `${AGENT_KIND_LABEL[hit.kind]} · ${project.name}`,
+                        glyph: { kind: "icon", name: "chat" },
+                        command: {
+                            kind: "chatOpen",
+                            happyAgentId,
+                            groupId: hit.workspaceId,
+                            chatId: hit.agentId,
+                            archived: false,
+                        },
+                    },
+                };
+            }
             const groupId = hit.type === "project" ? hit.projectId : hit.workspaceId;
             const project =
                 hit.type === "workspace"

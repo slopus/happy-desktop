@@ -502,7 +502,7 @@ const REMOTE: readonly HappyAgentQuickSearchHit[] = [
         line: 12,
         snippet: "…ranking search results by…",
     },
-    // Neither archived work nor a chat this window does not hold is offered.
+    // Archived work is listed apart, and work in no known workspace cannot be opened.
     {
         type: "agent",
         key: "agent:ses_search_old",
@@ -511,15 +511,31 @@ const REMOTE: readonly HappyAgentQuickSearchHit[] = [
         title: "Search experiment, take one",
         kind: "task",
         archived: true,
+        workspaceId: "ws_search_old" as HappyAgentWorktreeId,
+        projectId: null,
     },
     {
         type: "agent",
-        key: "agent:ses_elsewhere",
+        key: "agent:ses_nowhere",
         rank: 4,
+        agentId: "ses_nowhere" as HappyAgentSessionId,
+        title: "Search nowhere",
+        kind: "subtask",
+        archived: false,
+        workspaceId: null,
+        projectId: null,
+    },
+    // A chat this window does not hold opens in the workspace the Happy Agent names.
+    {
+        type: "agent",
+        key: "agent:ses_elsewhere",
+        rank: 5,
         agentId: "ses_elsewhere" as HappyAgentSessionId,
         title: "Search elsewhere",
         kind: "chat",
         archived: false,
+        workspaceId: "prj_infra" as HappyAgentProjectId,
+        projectId: "prj_infra" as HappyAgentProjectId,
     },
 ];
 
@@ -556,7 +572,17 @@ it("fuses the Happy Agent's answer into the found rows, keeping the top row and 
             itemId: "vf_budget",
         },
     });
-    expect(ids(after)).not.toContain("agent:ses_elsewhere");
+    expect(ids(after)).not.toContain("agent:ses_nowhere");
+    expect(after.rows.find((row) => row.id === "agent:ses_elsewhere")).toMatchObject({
+        meta: "Chat · search-infra",
+        command: {
+            kind: "chatOpen",
+            happyAgentId: "local",
+            groupId: "prj_infra",
+            chatId: "ses_elsewhere",
+            archived: false,
+        },
+    });
     expect(ids(after).filter((id) => id === "task:search_old")).toHaveLength(1);
     expect(after.found.keys[0]).toBe(before.found.keys[0]);
 });

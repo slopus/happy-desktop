@@ -2,6 +2,7 @@ import type { HappyAgentClient, QuickSearchResult } from "@slopus/happy-agent-cl
 import type { HappyAgentArtifactId } from "../artifacts/artifactTypes.js";
 import type { HappyAgentSync } from "../happyAgentConnection/happyAgentSync.js";
 import type {
+    HappyAgentGroupId,
     HappyAgentProjectId,
     HappyAgentSessionId,
     HappyAgentWorktreeId,
@@ -124,6 +125,8 @@ function hitProject(result: QuickSearchResult): HappyAgentQuickSearchHit {
                 title: result.title,
                 kind: result.kind,
                 archived: result.archived,
+                workspaceId: result.workspaceId as HappyAgentGroupId | null,
+                projectId: result.projectId as HappyAgentProjectId | null,
             };
         case "project":
             return {

@@ -7,6 +7,7 @@
 
 import type { HappyAgentArtifactId } from "../artifacts/artifactTypes.js";
 import type {
+    HappyAgentGroupId,
     HappyAgentProjectId,
     HappyAgentSessionId,
     HappyAgentWorktreeId,
@@ -94,6 +95,10 @@ export type HappyAgentQuickSearchHit =
           readonly title: string;
           readonly kind: "chat" | "task" | "subtask" | "bot";
           readonly archived: boolean;
+          /** The workspace holding the conversation, a project's own for its root; `null` when unknown. */
+          readonly workspaceId: HappyAgentGroupId | null;
+          /** The project owning that workspace; `null` for bots, tasks, and their subtasks. */
+          readonly projectId: HappyAgentProjectId | null;
       })
     | (HappyAgentQuickSearchHitFields & {
           readonly type: "project";
