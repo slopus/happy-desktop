@@ -57,10 +57,6 @@ importers:
         version: 2.9.0
 
   packages/happy-desktop-analytics:
-    dependencies:
-      posthog-js:
-        specifier: ^1.438.3
-        version: 1.438.3(@types/react@19.2.14)(react@19.2.7)
     devDependencies:
       typescript:
         specifier: ^7.0.2

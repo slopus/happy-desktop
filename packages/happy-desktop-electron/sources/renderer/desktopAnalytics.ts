@@ -44,6 +44,7 @@ import {
     type HappyAgentMobileConnectorSnapshot,
     type HappyAgentMobileConnectorStore,
     type HappyAgentModelStore,
+    type HappyAgentTraceViewer,
     type HappyAgentWorkspaceSnapshot,
     type HappyAgentWorkspaceStore,
     type HappyDesktopMobileStep,
@@ -790,10 +791,6 @@ export function desktopAnalyticsCreate(options: {
             distinctId: installation,
             enabled: () => preference.get().usageAnalyticsEnabled,
         });
-    // Loaded now rather than on the first event, so an event sent as the
-    // window closes in its first seconds still has a library to send it.
-    client.preload();
-    const preferenceUnsubscribe = preference.subscribe(() => client.enabledChanged());
     const os = desktopOs();
 
     /**
@@ -894,6 +891,7 @@ export function desktopAnalyticsCreate(options: {
         | {
               readonly happyAgentId: string;
               readonly conversationId: string;
+              readonly viewer: HappyAgentTraceViewer;
               readonly entryIds: ReadonlySet<string>;
           }
         | undefined;
@@ -916,8 +914,13 @@ export function desktopAnalyticsCreate(options: {
                     seen: failuresSeen,
                     // Nothing is remembered for a window that does not report.
                     foreground: () => preference.get().usageAnalyticsEnabled && windowFocused(),
+                    // Rows reported by a list that has since unmounted, or is
+                    // hidden behind another surface such as Settings, are not
+                    // on screen; a list shown again still has them.
                     entriesOnScreen: (conversationId) =>
-                        onScreen?.happyAgentId === id && onScreen.conversationId === conversationId
+                        onScreen?.happyAgentId === id &&
+                        onScreen.conversationId === conversationId &&
+                        onScreen.viewer.live()
                             ? onScreen.entryIds
                             : undefined,
                     chatFailureShown: (properties) => track(id, "chat_failure_shown", properties),
@@ -1119,6 +1122,7 @@ export function desktopAnalyticsCreate(options: {
                     onScreen = {
                         happyAgentId,
                         conversationId: activity.conversationId,
+                        viewer: activity.viewer,
                         entryIds: activity.entryIds,
                     };
                     followed?.check();
@@ -1322,7 +1326,6 @@ export function desktopAnalyticsCreate(options: {
             };
         },
         dispose() {
-            preferenceUnsubscribe();
             directoryUnsubscribe();
             followed?.stop();
             if (typeof document !== "undefined")

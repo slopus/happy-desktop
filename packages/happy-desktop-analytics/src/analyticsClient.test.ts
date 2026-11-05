@@ -1,46 +1,91 @@
-// @vitest-environment jsdom
-import posthog, { type CaptureResult } from "posthog-js";
 import { afterEach, expect, it, vi } from "vitest";
-import { analyticsClientCreate } from "./analyticsClient";
+import { ANALYTICS_PROPERTY_NAMES } from "./analyticsCatalog";
+import { ANALYTICS_ENVELOPE_PROPERTY_NAMES, analyticsClientCreate } from "./analyticsClient";
+
+const INSTALL_ID = "00000000-0000-4000-8000-000000000000";
 
 afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
 });
 
-/**
- * Guards what the client does to the real library, so an SDK upgrade that
- * renames or brings back what it relies on fails here instead of sending
- * after the Settings switch is off.
- */
-it("starts PostHog without a retry queue, and sends nothing through it while analytics is off", async () => {
-    // Nothing leaves the test: the flags request and any capture answer here.
-    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 200 })));
+/** What `app_opened` carries, with fields the catalog does not allow mixed in. */
+const appOpened = {
+    client: "desktop",
+    device_class: "desktop",
+    app_version: "1.2.3",
+    launch_count: 3,
+    is_cold_start: true,
+    $current_url: "file:///Users/alice/Happy.app/index.html",
+    $referrer: "https://example.com",
+    message: "Alice's private note",
+} as never;
+
+it("sends a failed event once and never again, before or after analytics is turned off", async () => {
+    vi.useFakeTimers();
+    const fetch = vi.fn(async () => {
+        throw new TypeError("Failed to fetch");
+    });
+    vi.stubGlobal("fetch", fetch);
     let enabled = true;
     const client = analyticsClientCreate({
         apiKey: "phc_test",
-        host: "http://127.0.0.1:9",
-        distinctId: "00000000-0000-4000-8000-000000000000",
+        distinctId: INSTALL_ID,
         enabled: () => enabled,
     });
-    client.preload();
-    await vi.waitFor(() => expect(posthog.__loaded).toBe(true));
 
-    // A request that failed would otherwise be sent again later from this
-    // queue, past `before_send` and whether or not capturing was turned off.
-    expect(posthog._retryQueue).toBeUndefined();
-
-    const beforeSend = posthog.config.before_send;
-    if (typeof beforeSend !== "function") throw new Error("before_send is not the client's own");
-    const capture: CaptureResult = {
-        uuid: "00000000-0000-4000-8000-000000000001",
-        event: "app_opened",
-        properties: {
-            token: "phc_test",
-            distinct_id: "00000000-0000-4000-8000-000000000000",
-            launch_count: 1,
-        },
-    };
-    expect(beforeSend(capture)).not.toBeNull();
+    client.track("app_opened", appOpened);
+    await vi.advanceTimersByTimeAsync(1_000);
     enabled = false;
-    expect(beforeSend(capture)).toBeNull();
+    client.track("app_opened", appOpened);
+    // Longer than any retry backoff an SDK would wait.
+    await vi.advanceTimersByTimeAsync(60 * 60_000);
+
+    expect(fetch).toHaveBeenCalledTimes(1);
+});
+
+it("sends only catalog properties inside the fixed envelope, without cookies or a referrer", async () => {
+    const fetch = vi.fn(async (_url: string, _init: RequestInit) => new Response("{}"));
+    vi.stubGlobal("fetch", fetch);
+    const client = analyticsClientCreate({
+        apiKey: "phc_test",
+        distinctId: INSTALL_ID,
+        enabled: () => true,
+    });
+
+    client.track("app_opened", appOpened);
+
+    expect(fetch).toHaveBeenCalledTimes(1);
+    const [url, init] = fetch.mock.calls[0]!;
+    expect(url).toBe("https://us.i.posthog.com/batch/");
+    expect(init).toMatchObject({
+        method: "POST",
+        credentials: "omit",
+        referrerPolicy: "no-referrer",
+    });
+    const body = JSON.parse(init.body as string) as {
+        api_key: string;
+        batch: { event: string; timestamp: string; properties: Record<string, unknown> }[];
+    };
+    expect(Object.keys(body).sort()).toEqual(["api_key", "batch"]);
+    expect(body.batch).toHaveLength(1);
+    const [sent] = body.batch;
+    expect(Object.keys(sent!).sort()).toEqual(["event", "properties", "timestamp"]);
+    expect(sent!.event).toBe("app_opened");
+    for (const name of Object.keys(sent!.properties))
+        expect(
+            ANALYTICS_PROPERTY_NAMES.has(name) || ANALYTICS_ENVELOPE_PROPERTY_NAMES.has(name),
+            name,
+        ).toBe(true);
+    expect(sent!.properties).toMatchObject({
+        launch_count: 3,
+        distinct_id: INSTALL_ID,
+        $lib: "happy-desktop",
+        $process_person_profile: false,
+        $ip: null,
+        $geoip_disable: true,
+    });
+    expect(sent!.properties.$insert_id).toMatch(/^[0-9a-f-]{36}$/);
+    expect(JSON.stringify(body)).not.toContain("alice");
+    expect(JSON.stringify(body)).not.toContain("Alice");
 });

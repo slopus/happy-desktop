@@ -1,7 +1,7 @@
 /**
  * Every event the desktop may send, and every property it may carry: the
  * desktop's part of the shared `catalog.json`, which `catalog.test.ts` holds
- * it to. Anything not named here does not typecheck, and `analyticsBeforeSend`
+ * it to. Anything not named here does not typecheck, and `analyticsEnvelope`
  * drops any property it does not know, or whose value its rule does not allow,
  * before an event leaves the window.
  *
@@ -565,7 +565,7 @@ export const ANALYTICS_EVENT_RULES: {
     },
 };
 
-/** Every event name the catalog allows; `before_send` drops any other, including PostHog's own. */
+/** Every event name the catalog allows; `analyticsEnvelope` drops any other. */
 export const ANALYTICS_EVENT_NAMES: ReadonlySet<string> = new Set(
     Object.keys(ANALYTICS_EVENT_RULES),
 );

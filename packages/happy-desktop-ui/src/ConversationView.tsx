@@ -277,9 +277,11 @@ export type ConversationViewProps = {
     onTracesSeen?: (viewer: HappyAgentTraceViewer, turnIds: ReadonlySet<string>) => void;
     /**
      * Told which transcript entries are on screen, partly or wholly, by their
-     * `entryKey`, each time that range or the number of rows changes.
+     * `entryKey`, each time that range or the number of rows changes. The
+     * viewer says whether that list is still on screen at all: unmounted or
+     * hidden behind another surface, it is not.
      */
-    onEntriesSeen?: (entryIds: ReadonlySet<string>) => void;
+    onEntriesSeen?: (viewer: HappyAgentTraceViewer, entryIds: ReadonlySet<string>) => void;
     /** @deprecated Pending steering now renders as an ordered transcript message. */
     queued?: readonly { readonly id: string; readonly text: string }[];
     /** Opens one transcript image full size; the owner hosts the viewer in `overlay`. */
@@ -695,6 +697,12 @@ export function ConversationView(props: ConversationViewProps) {
     const traceList = useRef<HTMLElement | undefined>(undefined);
     const [traceViewer] = useState(() => ({
         live: () => traceList.current?.isConnected === true,
+    }));
+    const [entriesViewer] = useState(() => ({
+        live: () => {
+            const list = traceList.current;
+            return list?.isConnected === true && list.checkVisibility();
+        },
     }));
     /* Every change to an inline page's collapse or height is one generation,
        which re-sizes the rows; the values themselves live in module memory. */
@@ -1190,6 +1198,7 @@ export function ConversationView(props: ConversationViewProps) {
                                           conversationTracesOnScreen(traceSpans, first, last),
                                       );
                                       props.onEntriesSeen?.(
+                                          entriesViewer,
                                           conversationEntriesOnScreen(listEntries, first, last),
                                       );
                                   },

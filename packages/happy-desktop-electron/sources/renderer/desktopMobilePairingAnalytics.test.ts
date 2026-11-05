@@ -10,7 +10,7 @@ vi.hoisted(() => {
 });
 
 import {
-    analyticsBeforeSend,
+    analyticsEnvelope,
     ANALYTICS_PROPERTY_NAMES,
     type AnalyticsClient,
     type AnalyticsMobilePairingMethod,
@@ -356,10 +356,8 @@ it("reports a direct pairing cancelled when its page closes or Relay is chosen",
 it("reports a pairing page's choice of method", () => {
     const captured: { event: string; properties: Record<string, unknown> }[] = [];
     const client: AnalyticsClient = {
-        preload: () => undefined,
         track: (event, properties) => void captured.push({ event, properties: { ...properties } }),
         flagFollow: () => () => undefined,
-        enabledChanged: () => undefined,
     };
     const directory = {
         get: () => ({
@@ -397,10 +395,8 @@ it("reports a pairing page's choice of method", () => {
 it("sends pairing events with catalog fields only: no code, address, emoji, or device name", () => {
     const captured: { event: string; properties: Record<string, unknown> }[] = [];
     const client: AnalyticsClient = {
-        preload: () => undefined,
         track: (event, properties) => void captured.push({ event, properties: { ...properties } }),
         flagFollow: () => () => undefined,
-        enabledChanged: () => undefined,
     };
     const directory = {
         get: () => ({
@@ -438,11 +434,11 @@ it("sends pairing events with catalog fields only: no code, address, emoji, or d
     for (const item of captured) {
         for (const name of Object.keys(item.properties))
             expect(ANALYTICS_PROPERTY_NAMES.has(name), `${item.event}.${name}`).toBe(true);
-        const sent = analyticsBeforeSend({
-            uuid: "0190e0d4-0000-7000-8000-000000000000",
-            event: item.event,
-            properties: item.properties,
-        } as unknown as NonNullable<Parameters<typeof analyticsBeforeSend>[0]>);
+        const sent = analyticsEnvelope(item.event, item.properties, {
+            distinctId: "install",
+            insertId: "0190e0d4-0000-7000-8000-000000000000",
+            timestamp: "2026-01-01T00:00:00.000Z",
+        });
         const serialized = JSON.stringify(sent);
         for (const secret of SECRETS) expect(serialized).not.toContain(secret);
         expect(sent?.properties).toMatchObject({

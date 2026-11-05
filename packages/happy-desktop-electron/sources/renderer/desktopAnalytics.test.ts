@@ -10,14 +10,21 @@ vi.hoisted(() => {
 });
 
 import {
-    analyticsBeforeSend,
+    ANALYTICS_ENVELOPE_PROPERTY_NAMES,
+    analyticsEnvelope,
     type AnalyticsClient,
     type AnalyticsTrackOptions,
 } from "happy-desktop-analytics";
 import type { HappyAgentActivity, WelcomeStore } from "happy-desktop-state";
 import { desktopAnalyticsCreate, setupDownloadFailureOf, setupFailureOf } from "./desktopAnalytics";
 
-type CaptureResult = NonNullable<Parameters<typeof analyticsBeforeSend>[0]>;
+/** An event as it would leave the window. */
+const envelopeOf = (event: string, properties: Readonly<Record<string, unknown>>) =>
+    analyticsEnvelope(event, properties, {
+        distinctId: "install",
+        insertId: "0190e0d4-0000-7000-8000-000000000000",
+        timestamp: "2026-01-01T00:00:00.000Z",
+    });
 
 // The package index starts code-highlighting workers, which Node cannot run;
 // the step mapping is all this needs from it.
@@ -63,9 +70,7 @@ function clientCreate(): AnalyticsClient & { readonly captured: Captured[] } {
     const captured: Captured[] = [];
     return {
         captured,
-        preload: () => undefined,
         flagFollow: () => () => undefined,
-        enabledChanged: () => undefined,
         track(event, properties, options) {
             captured.push({
                 event,
@@ -349,35 +354,31 @@ it("sends a pending app_opened by beacon when the window closes first", () => {
 });
 
 it("drops every property the catalog does not name", () => {
-    const capture = {
-        uuid: "0190e0d4-0000-7000-8000-000000000000",
-        event: "app_opened",
-        properties: {
-            token: "phc_test",
-            distinct_id: "install",
-            launch_count: 3,
-            os_version: "15.6",
-            arch: "arm64",
-            $current_url: "file:///Users/alice/Happy.app/index.html",
-            $host: "alice-macbook.local",
-            $pathname: "/Users/alice",
-            $referrer: "https://example.com",
-            $screen_width: 3024,
-            $browser: "Chrome",
-            $session_id: "session",
-            message: PRIVATE_TEXT,
-            provider_id: "claude_extra",
-        },
-    } as unknown as CaptureResult;
-
-    const sent = analyticsBeforeSend(capture);
-
-    expect(sent?.properties).toEqual({
+    const sent = envelopeOf("app_opened", {
         token: "phc_test",
-        distinct_id: "install",
+        distinct_id: "someone-else",
         launch_count: 3,
         os_version: "15.6",
         arch: "arm64",
+        $current_url: "file:///Users/alice/Happy.app/index.html",
+        $host: "alice-macbook.local",
+        $pathname: "/Users/alice",
+        $referrer: "https://example.com",
+        $screen_width: 3024,
+        $browser: "Chrome",
+        $session_id: "session",
+        message: PRIVATE_TEXT,
+        provider_id: "claude_extra",
+    });
+
+    expect(sent?.properties).toEqual({
+        launch_count: 3,
+        os_version: "15.6",
+        arch: "arm64",
+        distinct_id: "install",
+        $insert_id: "0190e0d4-0000-7000-8000-000000000000",
+        $lib: "happy-desktop",
+        $process_person_profile: false,
         $ip: null,
         $geoip_disable: true,
     });
@@ -517,16 +518,12 @@ it("never sends free text, whatever the machine says about its failures", () => 
         /^[a-z0-9-]+\/[a-z0-9.-]+$/, // vendor-qualified model id
     ];
     for (const captured of client.captured) {
-        const sent = analyticsBeforeSend({
-            uuid: "0190e0d4-0000-7000-8000-000000000000",
-            event: captured.event,
-            properties: captured.properties,
-        } as unknown as CaptureResult);
+        const sent = envelopeOf(captured.event, captured.properties);
         const serialized = JSON.stringify(sent);
         for (const secret of PRIVATE) expect(serialized).not.toContain(secret);
         expect(serialized).not.toContain("alice");
         for (const [name, value] of Object.entries(sent?.properties ?? {})) {
-            if (name === "$ip") continue;
+            if (ANALYTICS_ENVELOPE_PROPERTY_NAMES.has(name)) continue;
             if (value === null || typeof value === "boolean" || typeof value === "number") continue;
             expect(typeof value, `${captured.event}.${name}`).toBe("string");
             expect(

@@ -1,4 +1,5 @@
 import type { ConversationFailureKind } from "../conversation/conversationEntry.js";
+import type { HappyAgentTraceViewer } from "./happyAgentChatStore.js";
 import type { HappyAgentActionResult } from "./happyAgentSupport.js";
 import type { HappyAgentThinkingLevel } from "./happyAgentTypes.js";
 
@@ -69,6 +70,8 @@ export type HappyAgentActivity =
     | {
           readonly kind: "conversationEntriesSeen";
           readonly conversationId: string;
+          /** Whether the view that saw them is still on screen. */
+          readonly viewer: HappyAgentTraceViewer;
           /** The entries on screen, partly or wholly, by their `entryKey`. */
           readonly entryIds: ReadonlySet<string>;
       }

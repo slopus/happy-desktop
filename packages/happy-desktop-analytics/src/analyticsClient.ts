@@ -1,4 +1,3 @@
-import type { CaptureResult, PostHog } from "posthog-js";
 import {
     ANALYTICS_EVENT_NAMES,
     analyticsRuleOf,
@@ -8,208 +7,175 @@ import {
     type AnalyticsEventProperties,
 } from "./analyticsCatalog";
 
-/** PostHog's US ingestion host, shared with the phone's project. */
+/** PostHog's US ingestion host, shared with the phones' project. */
 const POSTHOG_HOST = "https://us.i.posthog.com";
 
-/** What PostHog itself needs on every event; everything else it adds is dropped. */
-const POSTHOG_PROPERTY_NAMES: ReadonlySet<string> = new Set([
-    "token",
+/** Which client sent an event, as the shared spec names it. */
+const ANALYTICS_LIB = "happy-desktop";
+
+/** The PostHog fields every event carries beside its catalog properties, and nothing else. */
+export const ANALYTICS_ENVELOPE_PROPERTY_NAMES: ReadonlySet<string> = new Set([
     "distinct_id",
-    "$lib",
-    "$lib_version",
     "$insert_id",
-    "$time",
+    "$lib",
     "$process_person_profile",
+    "$ip",
+    "$geoip_disable",
 ]);
 
 export interface AnalyticsTrackOptions {
     /**
-     * Sends this one event at once by `sendBeacon` instead of queueing it, for
-     * the moment the window is going away. Best effort: a library that has not
-     * loaded yet cannot load in time.
+     * Sends this one event by `sendBeacon` instead of `fetch`, for the moment
+     * the window is going away and a request in flight would be cut off.
      */
     readonly beacon?: boolean;
 }
 
 export interface AnalyticsClient {
-    /**
-     * Loads the library now when there is a key and analytics is on, so an
-     * event sent as the window closes does not wait on a load that cannot
-     * finish. Does nothing otherwise.
-     */
-    preload(): void;
     track<E extends AnalyticsEventName>(
         event: E,
         properties: AnalyticsEventProperties<E>,
         options?: AnalyticsTrackOptions,
     ): void;
     /**
-     * Follows one feature flag for this installation: `listener` hears whether
-     * it is on each time PostHog answers, and false when it could not. With no
-     * key or analytics off it never hears anything, so the caller's default stands.
+     * Follows one feature flag for this installation: `listener` hears once
+     * whether it is on, and false when PostHog could not answer. With no key
+     * or analytics off it never hears anything, so the caller's default stands.
      */
     flagFollow(flag: AnalyticsFlag, listener: (enabled: boolean) => void): () => void;
-    /**
-     * Call when the Settings switch changes. Off stops a loaded library from
-     * capturing at once; on lets it capture again, loading it if it is not.
-     */
-    enabledChanged(): void;
 }
 
 export interface AnalyticsClientOptions {
-    /** The project's public key. Absent means nothing is ever loaded or sent. */
+    /** The project's public key. Absent means nothing is ever sent or asked. */
     readonly apiKey: string | undefined;
     /** Where events go instead of PostHog: a local capture endpoint, for checking them. */
     readonly host?: string;
     /** This installation's random identity; never derived from anything about the person. */
     readonly distinctId: string;
-    /**
-     * Read before every event and again as PostHog sends it, so turning
-     * analytics off stops the next one.
-     */
+    /** Read right before every request, so turning analytics off stops the next one. */
     readonly enabled: () => boolean;
 }
 
-/**
- * Rebuilds an outgoing event from the allowlists, so nothing PostHog adds on
- * its own — the page URL, which in a packaged app is a file path under the
- * person's home directory, the referrer, screen, browser, or session — and no
- * person property ever leaves the window. An event the catalog does not name,
- * such as `$feature_flag_called`, does not leave at all, and a catalog
- * property leaves only on its own event and with a value its rule allows.
- */
-export function analyticsBeforeSend(capture: CaptureResult | null): CaptureResult | null {
-    if (capture === null || !ANALYTICS_EVENT_NAMES.has(capture.event)) return null;
-    const properties: Record<string, unknown> = {};
-    for (const [name, value] of Object.entries(capture.properties)) {
-        if (POSTHOG_PROPERTY_NAMES.has(name)) {
-            properties[name] = value;
-            continue;
-        }
-        const rule = analyticsRuleOf(capture.event, name);
-        if (rule && analyticsValueAllowed(rule, value)) properties[name] = value;
-    }
-    properties.$ip = null;
-    properties.$geoip_disable = true;
-    return {
-        uuid: capture.uuid,
-        event: capture.event,
-        properties,
-        ...(capture.timestamp === undefined ? {} : { timestamp: capture.timestamp }),
-    };
+/** One event as `/batch/` takes it. */
+export interface AnalyticsBatchEvent {
+    readonly event: string;
+    readonly timestamp: string;
+    readonly properties: Readonly<Record<string, unknown>>;
 }
 
 /**
- * Sends catalog events to PostHog from this renderer. The library is loaded
- * only once there is a key and the first event is allowed, and is configured
- * to capture nothing by itself.
+ * The event as it leaves: only the catalog properties its rules allow on this
+ * event, inside the fixed envelope, which keeps the IP and location out and
+ * makes no person profile. Undefined for an event the catalog does not name.
+ */
+export function analyticsEnvelope(
+    event: string,
+    properties: Readonly<Record<string, unknown>>,
+    envelope: {
+        readonly distinctId: string;
+        readonly insertId: string;
+        readonly timestamp: string;
+    },
+): AnalyticsBatchEvent | undefined {
+    if (!ANALYTICS_EVENT_NAMES.has(event)) return undefined;
+    const allowed: Record<string, unknown> = {};
+    for (const [name, value] of Object.entries(properties)) {
+        const rule = analyticsRuleOf(event, name);
+        if (rule && analyticsValueAllowed(rule, value)) allowed[name] = value;
+    }
+    allowed.distinct_id = envelope.distinctId;
+    allowed.$insert_id = envelope.insertId;
+    allowed.$lib = ANALYTICS_LIB;
+    allowed.$process_person_profile = false;
+    allowed.$ip = null;
+    allowed.$geoip_disable = true;
+    return { event, timestamp: envelope.timestamp, properties: allowed };
+}
+
+/** The flags `/flags/?v=2` says are on; a v2 answer names each with `enabled`. */
+function flagsOf(answer: unknown): ReadonlySet<string> {
+    const flags =
+        typeof answer === "object" && answer !== null && "flags" in answer
+            ? answer.flags
+            : undefined;
+    if (typeof flags !== "object" || flags === null) return new Set();
+    return new Set(
+        Object.entries(flags)
+            .filter(
+                ([, flag]) =>
+                    typeof flag === "object" &&
+                    flag !== null &&
+                    "enabled" in flag &&
+                    flag.enabled === true,
+            )
+            .map(([key]) => key),
+    );
+}
+
+/**
+ * Sends catalog events to PostHog from this renderer, one request per event,
+ * without an SDK. A request that fails is dropped, never kept or sent again,
+ * so nothing is left to leave once analytics is off. No cookie or referrer
+ * goes with it, and a window driven by automation sends nothing unless it
+ * sends to a local capture endpoint.
  */
 export function analyticsClientCreate(options: AnalyticsClientOptions): AnalyticsClient {
-    const apiKey = options.apiKey;
-    let loading: Promise<PostHog | undefined> | undefined;
-    /** The library once it has loaded, so a closing window can send without waiting. */
-    let loaded: PostHog | undefined;
-    const load = (key: string): Promise<PostHog | undefined> => {
-        loading ??= import("posthog-js").then(
-            ({ default: posthog }) => {
-                // Turned off while the library was loading: it is not started,
-                // and the next allowed event loads it again.
-                if (!options.enabled()) {
-                    loading = undefined;
-                    return undefined;
-                }
-                posthog.init(key, {
-                    api_host: options.host ?? POSTHOG_HOST,
-                    bootstrap: { distinctID: options.distinctId },
-                    person_profiles: "identified_only",
-                    persistence: "memory",
-                    autocapture: false,
-                    capture_pageview: false,
-                    capture_pageleave: false,
-                    capture_dead_clicks: false,
-                    capture_heatmaps: false,
-                    capture_performance: false,
-                    capture_exceptions: false,
-                    rageclick: false,
-                    disable_session_recording: true,
-                    disable_surveys: true,
-                    disable_product_tours: true,
-                    disable_conversations: true,
-                    disable_web_experiments: true,
-                    disable_external_dependency_loading: true,
-                    // Flags are read for the rollouts in `AnalyticsFlag`;
-                    // `save_referrer` and `save_campaign_params` being off keeps
-                    // the page URL out of the flags request's person properties.
-                    advanced_disable_flags: false,
-                    save_referrer: false,
-                    save_campaign_params: false,
-                    before_send: (capture) =>
-                        options.enabled() ? analyticsBeforeSend(capture) : null,
-                    // Each event leaves as it is captured, so turning analytics
-                    // off in Settings leaves no batch behind to go out after it.
-                    request_batching: false,
-                });
-                // PostHog keeps a request that failed and sends it again later
-                // from this queue, after `before_send` has run and whether or
-                // not capturing was turned off since. Without the queue a
-                // failed event is lost instead.
-                posthog._retryQueue = undefined;
-                // PostHog remembers opting out in local storage; the Settings
-                // switch, not an earlier window, decides.
-                posthog.opt_in_capturing({ captureEventName: null });
-                loaded = posthog;
-                return posthog;
-            },
-            (error: unknown) => {
-                console.error("Could not load analytics.", error);
-                return undefined;
-            },
-        );
-        return loading;
+    const host = options.host ?? POSTHOG_HOST;
+    const sendable = (): string | undefined => {
+        const apiKey = options.apiKey;
+        if (apiKey === undefined || apiKey.length === 0 || !options.enabled()) return undefined;
+        if (options.host === undefined && typeof navigator !== "undefined" && navigator.webdriver)
+            return undefined;
+        return apiKey;
     };
-    const preload = (): void => {
-        if (apiKey === undefined || apiKey.length === 0 || !options.enabled()) return;
-        void load(apiKey);
-    };
+    /** This window's answer from `/flags`, asked once; undefined when PostHog gave none. */
+    let flags: Promise<ReadonlySet<string> | undefined> | undefined;
+    const flagsLoad = (apiKey: string): Promise<ReadonlySet<string> | undefined> =>
+        (flags ??= fetch(`${host}/flags/?v=2`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ api_key: apiKey, distinct_id: options.distinctId }),
+            credentials: "omit",
+            referrerPolicy: "no-referrer",
+        })
+            .then(async (response) => (response.ok ? flagsOf(await response.json()) : undefined))
+            .catch(() => undefined));
     return {
-        preload,
         track(event, properties, trackOptions) {
-            if (apiKey === undefined || apiKey.length === 0 || !options.enabled()) return;
-            if (trackOptions?.beacon && loaded) {
-                loaded.capture(event, { ...properties }, { transport: "sendBeacon" });
+            const apiKey = sendable();
+            if (apiKey === undefined) return;
+            const batch = analyticsEnvelope(event, properties, {
+                distinctId: options.distinctId,
+                insertId: crypto.randomUUID(),
+                timestamp: new Date().toISOString(),
+            });
+            if (!batch) return;
+            const url = `${host}/batch/`;
+            const body = JSON.stringify({ api_key: apiKey, batch: [batch] });
+            if (trackOptions?.beacon) {
+                // Best effort, like everything sent at close; a refused beacon is dropped.
+                navigator.sendBeacon(url, body);
                 return;
             }
-            void load(apiKey).then((posthog) => {
-                if (!options.enabled()) return;
-                posthog?.capture(event, { ...properties });
-            });
+            void fetch(url, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body,
+                credentials: "omit",
+                referrerPolicy: "no-referrer",
+            }).catch(() => undefined);
         },
         flagFollow(flag, listener) {
-            if (apiKey === undefined || apiKey.length === 0 || !options.enabled())
-                return () => undefined;
+            const apiKey = sendable();
+            if (apiKey === undefined) return () => undefined;
             let stopped = false;
-            let stop = (): void => undefined;
-            void load(apiKey).then((posthog) => {
-                if (stopped || !posthog) return;
-                stop = posthog.onFeatureFlags((_flags, _variants, context) => {
-                    listener(
-                        context?.errorsLoading !== true &&
-                            posthog.isFeatureEnabled(flag, { send_event: false }) === true,
-                    );
-                });
+            void flagsLoad(apiKey).then((on) => {
+                if (stopped || sendable() === undefined) return;
+                listener(on?.has(flag) === true);
             });
             return () => {
                 stopped = true;
-                stop();
             };
-        },
-        enabledChanged() {
-            if (!loaded) {
-                preload();
-                return;
-            }
-            if (options.enabled()) loaded.opt_in_capturing({ captureEventName: null });
-            else loaded.opt_out_capturing();
         },
     };
 }

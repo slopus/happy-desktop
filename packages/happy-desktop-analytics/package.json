@@ -13,9 +13,6 @@
         "format:check": "oxfmt --check .",
         "lint": "oxlint ."
     },
-    "dependencies": {
-        "posthog-js": "^1.438.3"
-    },
     "devDependencies": {
         "typescript": "^7.0.2",
         "vitest": "^4.1.10"

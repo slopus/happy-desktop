@@ -2170,9 +2170,10 @@ export interface HappyAgentWorkspaceStore {
     turnTracesSeen(viewer: HappyAgentTraceViewer, turnIds: ReadonlySet<string>): void;
     /**
      * Reports which entries of the open conversation its main view has on
-     * screen, to the owner only: nothing in the workspace changes.
+     * screen, to the owner only: nothing in the workspace changes. The viewer
+     * says whether that view is still on screen.
      */
-    conversationEntriesSeen(entryIds: ReadonlySet<string>): void;
+    conversationEntriesSeen(viewer: HappyAgentTraceViewer, entryIds: ReadonlySet<string>): void;
     /**
      * Records where one conversation is being read, so returning to it resumes
      * there rather than at the newest message. Kept for the workspace's lifetime
@@ -8861,11 +8862,12 @@ export function happyAgentWorkspaceStoreCreate(
         messageExpandedSet: (messageId, expanded) =>
             chatStore?.messageExpandedSet(messageId, expanded),
         turnTracesSeen: (viewer, turnIds) => chatStore?.turnTracesSeen(viewer, turnIds),
-        conversationEntriesSeen(entryIds) {
+        conversationEntriesSeen(viewer, entryIds) {
             if (conversation.type !== "ready") return;
             activityRecord({
                 kind: "conversationEntriesSeen",
                 conversationId: conversation.value.conversationId,
+                viewer,
                 entryIds,
             });
         },
