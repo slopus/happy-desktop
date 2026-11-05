@@ -32,6 +32,8 @@ import type {
 } from "../shared/desktopContract";
 
 const unsubscribes: (() => void)[] = [];
+/** Hands the window a new first-run snapshot, as the shell does on every change. */
+let onboardingPush: (next: LocalOnboardingSnapshot) => void = () => undefined;
 
 beforeEach(() => {
     for (const method of Object.values(daemon)) method.mockReset();
@@ -63,9 +65,9 @@ function daemonConfigSet(baseUrl: string) {
     });
 }
 
-/** Claude Code installed and signed in to something, at the subscriptions step. */
-function storeOpen() {
-    const onboarding: LocalOnboardingSnapshot = {
+/** The subscriptions step's snapshot, Claude Code found and the others missing. */
+function subscriptionsStep(): LocalOnboardingSnapshot {
+    return {
         assistants: [
             { command: "/opt/homebrew/bin/claude", id: "claude", status: "found" },
             { id: "codex", status: "missing" },
@@ -76,6 +78,11 @@ function storeOpen() {
         installShell: "posix",
         stage: "assistantsFound",
     } as LocalOnboardingSnapshot;
+}
+
+/** Claude Code installed and signed in to something, at the subscriptions step. */
+function storeOpen() {
+    const onboarding = subscriptionsStep();
     const runtime = {
         activeTarget: { happyAgentHttpUrl: "http://happy-agent.test", mode: "local" },
         activeTargetId: "local",
@@ -89,7 +96,10 @@ function storeOpen() {
         daemonGet: () => new Promise(() => undefined),
         daemonSubscribe: () => () => undefined,
         onboardingGet: async () => onboarding,
-        onboardingSubscribe: () => () => undefined,
+        onboardingSubscribe: (listener: (next: LocalOnboardingSnapshot) => void) => {
+            onboardingPush = listener;
+            return () => undefined;
+        },
         runtimeGet: async () => runtime,
         subscribe: () => () => undefined,
     } as unknown as HappyDesktopBridge;
@@ -184,6 +194,40 @@ it("re-verifies a changed custom configuration without waiting out the failure",
         }),
     );
     expect(verifiedIds()).toEqual(["claude", "work-proxy", "work-proxy"]);
+});
+
+it("checks a sign-in again at once when the check was cut short rather than answered", async () => {
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval", "Date"] });
+    daemon.getConfig.mockResolvedValue({ config: { providers: {} } });
+    // The first check is still running when the screen goes away; the next one passes.
+    daemon.verifyProvider
+        .mockImplementationOnce(
+            (_id: string, _request: unknown, options: { signal: AbortSignal }) =>
+                new Promise((_resolve, reject) => {
+                    options.signal.addEventListener("abort", () => reject(options.signal.reason));
+                }),
+        )
+        .mockResolvedValue({
+            performedLevel: "inference",
+            requestedLevel: "inference",
+            status: "passed",
+        });
+    const store = storeOpen();
+    await vi.waitFor(() => expect(verifiedIds()).toEqual(["claude"]));
+
+    // The step leaves the screen and comes back, abandoning that check.
+    onboardingPush({ ...subscriptionsStep(), stage: "examining" } as LocalOnboardingSnapshot);
+    onboardingPush(subscriptionsStep());
+    await vi.advanceTimersByTimeAsync(2_000);
+
+    // An abandoned check is not a failed one: the next poll checks again
+    // instead of reporting "Couldn't verify" for the next thirty seconds.
+    await vi.waitFor(() => expect(verifiedIds()).toEqual(["claude", "claude"]));
+    await vi.waitFor(() =>
+        expect(localOnboardingView(store.get())).toMatchObject({
+            assistants: [{ authentication: "valid", id: "claude" }, {}, {}],
+        }),
+    );
 });
 
 /** The settled screen as it is drawn, with the custom column's prompts open. */

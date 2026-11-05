@@ -732,38 +732,35 @@ export function localOnboardingStoreCreate(
                             return;
                         }
                         // Back off failures; the two-second poll is only local discovery.
-                        verificationRetryAt.set(
-                            assistant.id,
-                            Date.now() + providerVerificationRetryMs,
-                        );
+                        // A check abandoned because its screen went away is not a
+                        // failure, so only an answered one starts the wait: one cut
+                        // short by a sign-in landing must not read "Couldn't verify"
+                        // for the next thirty seconds.
                         try {
                             const result = await client.verifyProvider(
                                 assistant.id,
                                 { level: "inference" },
                                 { signal: within(providerVerificationTimeoutMs) },
                             );
-                            if (!current()) return;
-                            if (
-                                result.status === "passed" &&
-                                result.performedLevel === "inference"
-                            ) {
-                                verificationRetryAt.delete(assistant.id);
-                                resultPublish(assistant.id, "valid");
-                            } else {
-                                // The API's failed result includes outages and rate limits;
-                                // it does not prove that the person needs to sign in.
+                            const passed =
+                                result.status === "passed" && result.performedLevel === "inference";
+                            // The API's failed result includes outages and rate limits;
+                            // it does not prove that the person needs to sign in.
+                            if (passed) verificationRetryAt.delete(assistant.id);
+                            else
                                 verificationRetryAt.set(
                                     assistant.id,
                                     Date.now() + providerVerificationRetryMs,
                                 );
-                                resultPublish(assistant.id, "error");
-                            }
-                        } catch {
                             if (!current()) return;
+                            resultPublish(assistant.id, passed ? "valid" : "error");
+                        } catch {
+                            if (abort.signal.aborted) return;
                             verificationRetryAt.set(
                                 assistant.id,
                                 Date.now() + providerVerificationRetryMs,
                             );
+                            if (!current()) return;
                             resultPublish(assistant.id, "error");
                         }
                     }),

@@ -272,6 +272,13 @@ export class LocalOnboarding implements Disposable {
     /** The runtime connection the current freshness answer was read from. */
     private freshnessConnection?: number;
     /**
+     * The latest read of that answer, and the one still in flight. Only the
+     * latest may land, so a slow read can never put an older answer back over
+     * a newer one.
+     */
+    private freshnessReadId = 0;
+    private freshnessReading?: number;
+    /**
      * Whether the message on screen is only saying that Happy Agent is being asked what
      * happened. It stops being true the moment Happy Agent answers, so it is cleared then
      * rather than left standing over a step that has since moved on.
@@ -739,6 +746,28 @@ export class LocalOnboarding implements Disposable {
     }
 
     /**
+     * Asks the connected Happy Agent again while its last answer stays on screen.
+     *
+     * This is for a step that is waiting rather than one Happy can no longer
+     * vouch for. Dropping the answer first, as `freshnessInvalidate` does, makes
+     * the step read as "examining" until the new answer lands, so every tick of
+     * the waiting poll took Subscriptions off screen and put it back — and the
+     * window, seeing its screen go, abandoned the sign-in check it was running.
+     * A read already in flight is the one this would make, so none is added.
+     */
+    private freshnessRefresh(): void {
+        const runtime = this.options.runtime.get();
+        if (
+            runtime.phase !== "ready" ||
+            runtime.mode !== "local" ||
+            this.freshnessConnection !== runtime.connectionId ||
+            this.freshnessReading !== undefined
+        )
+            return;
+        void this.freshnessRead(runtime.connectionId);
+    }
+
+    /**
      * Asks one particular Happy Agent about itself again, and says whether it was asked.
      *
      * This is the connection half of ownership, deliberately separate from the
@@ -980,8 +1009,11 @@ export class LocalOnboarding implements Disposable {
      * archived one, because archiving work does not make the Happy Agent new again.
      */
     private async freshnessRead(connectionId: number): Promise<void> {
+        const read = (this.freshnessReadId += 1);
+        this.freshnessReading = read;
         let freshness: LocalOnboardingFreshness;
         let onboarding: LocalHappyAgentOnboardingState | undefined;
+        let failure: string | undefined;
         try {
             onboarding = await this.options.runtime.localOnboardingResolve(connectionId);
             freshness =
@@ -991,11 +1023,19 @@ export class LocalOnboarding implements Disposable {
         } catch (error) {
             freshness = "error";
             onboarding = undefined;
-            this.message = displayError(error);
+            failure = displayError(error);
+        } finally {
+            if (this.freshnessReading === read) this.freshnessReading = undefined;
         }
-        if (this.closed || this.freshnessConnection !== connectionId) return;
+        if (
+            this.closed ||
+            this.freshnessConnection !== connectionId ||
+            read !== this.freshnessReadId
+        )
+            return;
         this.freshness = freshness;
         this.happyAgentOnboarding = onboarding;
+        if (failure !== undefined) this.message = failure;
         if (onboarding) this.message = undefined;
         // Happy Agent has now said what happened — used, fresh, or unreadable — so a
         // message that existed only to say it was being asked has nothing left
@@ -1267,12 +1307,13 @@ export class LocalOnboarding implements Disposable {
      *
      * Which question that is depends on where the refusal came from, and the
      * two are not the same question. A connected Happy Agent reporting provider
-     * setup answers it itself, so its answer is dropped and read again. A daemon
-     * that refused to start for the same reason is not connected at all, and
-     * nothing it has said can change until something tries to start it again —
-     * so the connection is what is retried there. Without that, signing in to an
-     * assistant left this screen standing with nothing on it to press and
-     * nothing behind it looking, which is a dead end rather than a step.
+     * setup answers it itself, so it is asked again, with its last answer kept
+     * until the next one arrives. A daemon that refused to start for the same
+     * reason is not connected at all, and nothing it has said can change until
+     * something tries to start it again — so the connection is what is retried
+     * there. Without that, signing in to an assistant left this screen standing
+     * with nothing on it to press and nothing behind it looking, which is a dead
+     * end rather than a step.
      *
      * The attempt is deliberately not `connecting`: that flag means an install
      * Happy is seeing through, and borrowing it here would swap this screen for
@@ -1280,7 +1321,7 @@ export class LocalOnboarding implements Disposable {
      */
     private providersRecheck(): void {
         if (this.options.runtime.get().phase !== "error") {
-            this.freshnessInvalidate();
+            this.freshnessRefresh();
             return;
         }
         if (this.providersConnecting) return;
