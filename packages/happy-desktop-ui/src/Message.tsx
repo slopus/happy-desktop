@@ -3322,6 +3322,10 @@ export function MessageList(props: MessageListProps) {
             rowSizeModelLayout(rowWidth, from, readerFocus(viewportHeight));
             return;
         }
+        /* The commit's first effect skipped the visible rows while these inputs
+           were still the previous commit's. With nothing to lay out there is
+           no second commit to report them, so they are reported here. */
+        if (rowModelCurrent()) visibleRowsReport(element);
         /* A pending row TanStack has just rendered in view is laid out now,
            before this commit can paint it at its placeholder size. A pending
            overscan row stays offscreen until idle time or a scroll gesture. */
