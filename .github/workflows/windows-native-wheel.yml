@@ -39,6 +39,9 @@ jobs:
                   mkdir -p .context/native-wheel
                   set -o pipefail
                   pnpm --dir packages/happy-desktop-ui exec vitest run --project chromium src/WindowsOneNotch.test.tsx 2>&1 | tee .context/native-wheel/output.log
+            - name: Analyze visible row rebounds
+              if: always()
+              run: node scripts/scroll-rebound-report.mjs .context/native-wheel/output.log .context/native-wheel/rebounds.json
             - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
               if: always()
               with:

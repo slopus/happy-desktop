@@ -98,6 +98,7 @@ it("records one real downward notch from controlled distances while streaming", 
         scrollHeight: number;
         clientHeight: number;
         bottomDistance: number;
+        rows: { key: string; top: number }[];
     }[] = [];
     let events: {
         time: number;
@@ -139,12 +140,22 @@ it("records one real downward notch from controlled distances while streaming", 
             }),
         );
         const capture = () => {
+            const viewportRect = viewport.getBoundingClientRect();
             samples.push({
                 time: performance.now(),
                 scrollTop: viewport.scrollTop,
                 scrollHeight: viewport.scrollHeight,
                 clientHeight: viewport.clientHeight,
                 bottomDistance: bottomDistance(),
+                rows: Array.from(
+                    viewport.querySelectorAll<HTMLElement>(".happy-message-list__virtual-row[data-index]"),
+                ).flatMap((row) => {
+                    const rect = row.getBoundingClientRect();
+                    const key = row.dataset.index;
+                    return key && rect.bottom > viewportRect.top && rect.top < viewportRect.bottom
+                        ? [{ key, top: rect.top - viewportRect.top }]
+                        : [];
+                }),
             });
             animation = requestAnimationFrame(capture);
         };
