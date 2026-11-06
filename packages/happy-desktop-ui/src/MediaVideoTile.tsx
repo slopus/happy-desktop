@@ -83,20 +83,23 @@ function timeFormat(seconds: number): string {
  * around it. It is still drawn contained, never cropped: what is left of
  * rounding is under a pixel, beneath the hairline.
  *
- * The played fraction is painted on every frame straight into one custom
- * property, rather than through React at the element's coarse `timeupdate`
- * cadence, so the line glides instead of stepping.
+ * While it plays, the played fraction glides on the compositor: each fill is
+ * handed one linear transform from where the recording is to its end, timed
+ * by what remains of it at its rate, so the line glides instead of stepping
+ * at the element's coarse `timeupdate` cadence, and a busy page never stalls
+ * it. A pause, a seek, a rate change, or the end paints the exact fraction
+ * into one custom property and lets the glide go; `timeupdate` only moves the
+ * clock's seconds.
  */
 export function MediaVideoTile(props: MediaVideoTileProps) {
     const root = useRef<HTMLSpanElement>(null);
     const video = useRef<HTMLVideoElement>(null);
-    const frame = useRef(0);
     const rest = useRef<ReturnType<typeof setTimeout>>(undefined);
     const moved = useRef(0);
     const [held, setPlayback] = useState<MediaVideoTilePlayback>();
     const playback = held?.url === props.url ? held : playbackInitial(props.url);
-    /* Functional, and a no-op when nothing changed: the frame loop reports
-       the second on every frame, and only a new second is a new render. */
+    /* Functional, and a no-op when nothing changed: `timeupdate` reports
+       the second several times a second, and only a new second is a new render. */
     const update = (change: Partial<MediaVideoTilePlayback>) =>
         setPlayback((previous) => {
             const base = previous?.url === props.url ? previous : playbackInitial(props.url);
@@ -107,25 +110,36 @@ export function MediaVideoTile(props: MediaVideoTileProps) {
         });
     const known = Number.isFinite(playback.duration) && playback.duration > 0;
 
+    const progressFills = () =>
+        root.current?.querySelectorAll<HTMLElement>(".happy-media-video-tile__played") ?? [];
+    /* The exact fraction, painted once, with any glide let go. */
     const progressPaint = (element: HTMLVideoElement) => {
         const duration = element.duration;
         const fraction =
             Number.isFinite(duration) && duration > 0
                 ? Math.min(1, Math.max(0, element.currentTime / duration))
                 : 0;
+        for (const fill of progressFills())
+            for (const animation of fill.getAnimations()) animation.cancel();
         root.current?.style.setProperty("--happy-media-video-tile-progress", String(fraction));
         update({ second: Math.floor(element.currentTime) });
     };
-    /* Runs only while the recording does: it stops on its own at a pause, an
-       end, or when the element leaves the document, which pauses it. */
+    /* From where the recording is to its end, at its rate: one compositor
+       animation per fill instead of a paint on every frame. */
     const progressFollow = (element: HTMLVideoElement) => {
-        cancelAnimationFrame(frame.current);
-        const tick = () => {
-            progressPaint(element);
-            if (!element.paused && !element.ended && element.isConnected)
-                frame.current = requestAnimationFrame(tick);
-        };
-        tick();
+        progressPaint(element);
+        const duration = element.duration;
+        const rate = element.playbackRate;
+        if (element.paused || !Number.isFinite(duration) || duration <= 0 || rate <= 0) return;
+        const from = Math.min(1, Math.max(0, element.currentTime / duration));
+        const remainingMs = ((duration - element.currentTime) * 1000) / rate;
+        if (remainingMs <= 0) return;
+        for (const fill of progressFills())
+            fill.animate([{ transform: `scaleX(${String(from)})` }, { transform: "scaleX(1)" }], {
+                duration: remainingMs,
+                easing: "linear",
+                fill: "forwards",
+            });
     };
     /* The pointer reports dozens of times a second; one timer runs and re-arms
        itself for the time actually remaining rather than being reset on each. */
@@ -209,7 +223,10 @@ export function MediaVideoTile(props: MediaVideoTileProps) {
                 // A different recording is a different element: a new address
                 // on the same one would leave the old transfer running.
                 key={props.url}
-                onDurationChange={(event) => update({ duration: event.currentTarget.duration })}
+                onDurationChange={(event) => {
+                    update({ duration: event.currentTarget.duration });
+                    if (!event.currentTarget.paused) progressFollow(event.currentTarget);
+                }}
                 onEnded={(event) => {
                     progressPaint(event.currentTarget);
                     delete root.current?.dataset.resting;
@@ -224,6 +241,7 @@ export function MediaVideoTile(props: MediaVideoTileProps) {
                     update({ duration: element.duration });
                 }}
                 onPause={(event) => {
+                    progressPaint(event.currentTarget);
                     delete root.current?.dataset.resting;
                     if (!event.currentTarget.ended) update({ phase: "paused" });
                 }}
@@ -231,7 +249,21 @@ export function MediaVideoTile(props: MediaVideoTileProps) {
                     update({ phase: "playing" });
                     progressFollow(event.currentTarget);
                 }}
-                onSeeked={(event) => progressPaint(event.currentTarget)}
+                onRateChange={(event) => {
+                    if (!event.currentTarget.paused) progressFollow(event.currentTarget);
+                }}
+                onSeeked={(event) =>
+                    event.currentTarget.paused
+                        ? progressPaint(event.currentTarget)
+                        : progressFollow(event.currentTarget)
+                }
+                onTimeUpdate={(event) =>
+                    update({ second: Math.floor(event.currentTarget.currentTime) })
+                }
+                /* Buffering holds the line where the recording stopped;
+                   it glides again once frames flow. */
+                onWaiting={(event) => progressPaint(event.currentTarget)}
+                onPlaying={(event) => progressFollow(event.currentTarget)}
                 onVolumeChange={(event) => update({ muted: event.currentTarget.muted })}
                 playsInline
                 poster={props.posterUrl}
