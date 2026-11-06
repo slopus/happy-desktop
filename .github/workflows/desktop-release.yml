@@ -257,10 +257,11 @@ jobs:
                       packages/happy-desktop-electron/release/*/*.blockmap
                   if-no-files-found: error
 
+            # Nothing publishes this copy; local-web-pages.yml deploys the hosted
+            # renderer. Only a build users get carries the PostHog key.
             - name: Build hosted local renderer
               if: matrix.arch == 'arm64' && matrix.flavor == 'local-web'
               env:
-                  HAPPY_POSTHOG_API_KEY: ${{ secrets.HAPPY_POSTHOG_API_KEY }}
                   HAPPY_LOCAL_WEB_BUILD_ID: ${{ inputs.version }}-${{ github.sha }}
               run: pnpm desktop:local:web
 

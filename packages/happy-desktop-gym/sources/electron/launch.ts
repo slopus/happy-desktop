@@ -39,6 +39,14 @@ export interface GymElectronInvisibility {
     }[];
 }
 
+/**
+ * Marks every launch as driven by automation, so `navigator.webdriver` is true
+ * in its windows and the app's analytics sends nothing, even from a release
+ * build that carries the PostHog key. Chromium hands the switch to every
+ * renderer; it is not one of the debugging switches a packaged build refuses.
+ */
+const GYM_AUTOMATION_SWITCH = "--enable-automation";
+
 export async function gymElectronLaunch(
     options: GymElectronLaunchOptions,
 ): Promise<ElectronApplication> {
@@ -49,7 +57,7 @@ export async function gymElectronLaunch(
     if ("recordVideo" in options)
         throw new Error("Use gymElectronVideoRecord instead of Playwright recordVideo.");
     const app = await electron.launch({
-        args: [...options.args],
+        args: [...options.args, GYM_AUTOMATION_SWITCH],
         env: { ...options.env, HAPPY_DESKTOP_WINDOWS_HIDDEN: "1" },
         executablePath: options.executablePath,
         timeout: options.timeout ?? 60_000,
@@ -200,7 +208,7 @@ export async function gymElectronProcessRun(
 ): Promise<GymElectronProcessResult> {
     if (!options.args.some((argument) => argument.startsWith("--user-data-dir=")))
         throw new Error("gymElectronProcessRun requires an owned --user-data-dir.");
-    const child = spawn(options.executablePath, [...options.args], {
+    const child = spawn(options.executablePath, [...options.args, GYM_AUTOMATION_SWITCH], {
         env: { ...options.env, HAPPY_DESKTOP_WINDOWS_HIDDEN: "1" },
         stdio: ["ignore", "pipe", "pipe"],
         ...(options.cwd ? { cwd: options.cwd } : {}),
