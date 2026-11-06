@@ -65,6 +65,9 @@ export default defineConfig({
                 reducedMotionEmulate: async ({ page }, reduce: boolean) => {
                     await page.emulateMedia({ reducedMotion: reduce ? "reduce" : "no-preference" });
                 },
+                scrollReproQuestionSubmit: async ({ iframe }) => {
+                    await iframe.locator('[data-action="submit"]').click();
+                },
                 scrollReproImageGate: async (
                     { page },
                     action: "arm" | "release" | "clear",
