@@ -1,6 +1,7 @@
 import {
     HappyAgentClient,
     happyAgentConnectionsStoreCreate,
+    happyShareLinkParse,
     happyAgentNodeStoreCreate,
     happyAgentUserError,
     serverAuthenticationOutcome,
@@ -171,6 +172,12 @@ const CLOUD_SIGNED_IN_WAIT_MS = 15_000;
 
 export interface HappyAgentDirectoryDeps {
     readonly cloudHostFor: (id: string) => HappyAgentCloudHost;
+    /**
+     * Opens a link.happy.page share link a page or message asked to open as a
+     * web page: it carries a Happy instance link, which opens in the app on
+     * that instance rather than in a browser tab. Absent, it opens as a page.
+     */
+    readonly happyLinkReceive?: (url: string) => void;
     /**
      * Where a remote whose sign-in ended is signed in again. Absent on a host
      * that cannot, which leaves such a remote pointing at Settings.
@@ -1030,6 +1037,10 @@ export function happyAgentDirectoryStoreCreate(
                 runtimeUnsubscribe = runtime.subscribe(localReconcile);
                 sessionsUnsubscribe = deps.serverSessions?.subscribe(sessionsReconcile);
                 browserOpenUnsubscribe = bridge.browserOpenSubscribe((url) => {
+                    if (deps.happyLinkReceive && happyShareLinkParse(url) !== undefined) {
+                        deps.happyLinkReceive(url);
+                        return;
+                    }
                     snapshot.happyAgents
                         .find((entry) => entry.id === snapshot.activeHappyAgentId)
                         ?.session?.workspace.panel.browserAdd(url);

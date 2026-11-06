@@ -11,6 +11,8 @@ import {
     gptLiveStoreNoop,
     happyAgentBotSubtasks,
     happyExternalLinkFormat,
+    happyShareLinkFormat,
+    isHappyUrl,
     happyAgentClockStoreCreate,
     happyAgentSidebarTree,
     happyAgentTabsOrdered,
@@ -18,6 +20,7 @@ import {
     type ConversationFileDiff,
     type GptLiveVoiceFocus,
     type HappyAgentSidebarProject,
+    type HappyShareLinkRole,
 } from "happy-desktop-state";
 import { AppGptLivePhone } from "./gptLive/AppGptLivePhone";
 import { conversationInlinePagesCreate, inlineArtifactsStoreNoop } from "./conversationInlinePages";
@@ -1387,37 +1390,45 @@ const BOTS_MENU_SHOW_PREFIX = "show:";
 const BOTS_MENU_SHOW_ALL = "show-all";
 const ROW_MENU_SURFACE_ADD = "surface-add";
 const ROW_MENU_SURFACE_REMOVE = "surface-remove";
-/** Puts the bot, task, or session a row or tab stands for on the clipboard, as its instance link. */
+/** Puts the bot, task, or session a row or tab stands for on the clipboard, as its share link. */
 const MENU_AGENT_LINK_COPY = "agent-link-copy";
-/** Puts the artifact a row stands for on the clipboard, as its instance link. */
+/** Puts the artifact a row stands for on the clipboard, as its share link. */
 const MENU_ARTIFACT_LINK_COPY = "artifact-link-copy";
 
 /**
- * The link another agent is given to name something on this machine, as iOS's
- * Copy Link writes it: `happy://<instanceId>/agents/<agentId>`, or
- * `.../artifacts/<artifactId>`. A daemon that reports no instance has no link
- * that leaves the app, so it is offered nothing.
+ * The link someone with access to the same thing is given to open it: the
+ * instance link `happy://<instanceId>/agents/<agentId>`, or
+ * `.../artifacts/<artifactId>`, carried by a link.happy.page share link that
+ * says what an agent is. A daemon that reports no instance has no link that
+ * leaves the app, so it is offered nothing.
  */
-function instanceLink(instanceId: string | undefined, internal: string): string | undefined {
+function shareLink(
+    instanceId: string | undefined,
+    internal: string,
+    as?: AgentNoun,
+): string | undefined {
     if (instanceId === undefined) return undefined;
-    const link = happyExternalLinkFormat(instanceId, internal);
-    return link === internal ? undefined : link;
+    return happyShareLinkFormat(happyExternalLinkFormat(instanceId, internal), as);
 }
 
-function agentLink(instanceId: string | undefined, agentId: string): string | undefined {
-    return instanceLink(instanceId, `happy://agents/${agentId}`);
+function agentLink(
+    instanceId: string | undefined,
+    agentId: string,
+    noun: AgentNoun,
+): string | undefined {
+    return shareLink(instanceId, `happy://agents/${agentId}`, noun);
 }
 
 function artifactLink(instanceId: string | undefined, artifactId: string): string | undefined {
-    return instanceLink(instanceId, `happy://artifacts/${artifactId}`);
+    return shareLink(instanceId, `happy://artifacts/${artifactId}`);
 }
 
 /**
  * What the reader calls the agent a conversation is, as its row or tab names
  * it: a bot, a task, a bot's or task's subtask, a subagent another session
- * runs, or a project's session.
+ * runs, or a project's session. The share link says it too.
  */
-type AgentNoun = "bot" | "task" | "subtask" | "subagent" | "session";
+type AgentNoun = HappyShareLinkRole;
 
 function agentNounOf(
     bots: readonly HappyAgentBot[],
@@ -2884,10 +2895,14 @@ function rowSurfaceMenuItems(
                 ];
     const tasks = happyAgent.tasks ?? [];
     const agentId = rowAgentId(happyAgent.bots, tasks, rowId);
+    const noun =
+        agentId === undefined ? undefined : agentNounOf(happyAgent.bots, tasks, agentId, false);
     const lead: MenuItem[] = [
         ...surface,
-        ...(agentId !== undefined && agentLink(happyAgent.instanceId, agentId) !== undefined
-            ? [agentLinkCopyMenuItem(agentNounOf(happyAgent.bots, tasks, agentId, false))]
+        ...(agentId !== undefined &&
+        noun !== undefined &&
+        agentLink(happyAgent.instanceId, agentId, noun) !== undefined
+            ? [agentLinkCopyMenuItem(noun)]
             : []),
     ];
     if (lead.length === 0) return items;
@@ -2914,7 +2929,9 @@ function surfaceTargetLink(
             ? happyAgent.bots.find((bot) => bot.id === target.id)
             : happyAgent.tasks?.find((task) => task.id === target.id);
     const link =
-        place === undefined ? undefined : agentLink(happyAgent.instanceId, place.conversation.id);
+        place === undefined
+            ? undefined
+            : agentLink(happyAgent.instanceId, place.conversation.id, target.kind);
     return link === undefined ? undefined : { item: agentLinkCopyMenuItem(target.kind), link };
 }
 
@@ -4034,11 +4051,16 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                     return;
                 }
                 if (actionId === MENU_AGENT_LINK_COPY) {
-                    const agentId = rowAgentId(happyAgent.bots, happyAgent.tasks ?? [], row.id);
+                    const tasks = happyAgent.tasks ?? [];
+                    const agentId = rowAgentId(happyAgent.bots, tasks, row.id);
                     const link =
                         agentId === undefined
                             ? undefined
-                            : agentLink(happyAgent.instanceId, agentId);
+                            : agentLink(
+                                  happyAgent.instanceId,
+                                  agentId,
+                                  agentNounOf(happyAgent.bots, tasks, agentId, false),
+                              );
                     if (link !== undefined) void navigator.clipboard?.writeText(link);
                     return;
                 }
@@ -4795,11 +4817,12 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
         );
     };
 
-    // A Happy link copied out of the window names the server it is on, so it
-    // opens there and nowhere else; a server with no instance has no such link.
+    // A Happy link copied out of the window is its share link, which names the
+    // server it is on, so it opens there and nowhere else; a server with no
+    // instance has no such link. Anything else is copied as it is.
     const instanceId = active?.instanceId;
-    const linkCopy = (href: string) =>
-        instanceId === undefined ? href : happyExternalLinkFormat(instanceId, href);
+    const linkCopy = (href: string): string | undefined =>
+        isHappyUrl(href) ? shareLink(instanceId, href) : href;
     return (
         <HappyAgentVersionProvider lastKnownVersion={active?.version}>
             <LinkCopyContext.Provider value={linkCopy}>
@@ -7360,10 +7383,17 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
     const sweepableTabs = groupTabs.filter((entry) => entry.id !== detachedConversationId);
     // A tab is an agent when it is one of this group's chats, or the detached
     // one; a session's id is the daemon's agent id.
+    const tabAgentNoun = (tabId: string): AgentNoun =>
+        agentNounOf(
+            workspace.list.bots,
+            [...workspace.list.tasks, ...workspace.list.tasksArchived],
+            tabId,
+            tabId === detachedConversationId,
+        );
     const tabAgentLink = (tabId: string): string | undefined =>
         tabId === detachedConversationId ||
         openGroup?.conversations.some((summary) => summary.id === tabId)
-            ? agentLink(props.instanceId, tabId)
+            ? agentLink(props.instanceId, tabId, tabAgentNoun(tabId))
             : undefined;
     const previewTool = previewToolFind(conversation, panel.previewEntryId);
     const previewMedia = previewMediaFind(conversation, previewTool, panel.previewMediaIndex);
@@ -8228,17 +8258,7 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                                     tabAgentLink(tab.id) === undefined
                                         ? []
                                         : [
-                                              agentLinkCopyMenuItem(
-                                                  agentNounOf(
-                                                      workspace.list.bots,
-                                                      [
-                                                          ...workspace.list.tasks,
-                                                          ...workspace.list.tasksArchived,
-                                                      ],
-                                                      tab.id,
-                                                      tab.id === detachedConversationId,
-                                                  ),
-                                              ),
+                                              agentLinkCopyMenuItem(tabAgentNoun(tab.id)),
                                               { kind: "separator" },
                                           ];
                                 const index = sweepableTabs.findIndex(

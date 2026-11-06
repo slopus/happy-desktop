@@ -7,7 +7,7 @@ import {
     type ComponentPropsWithoutRef,
     type ReactNode,
 } from "react";
-import { isHappyUrl, type HappyReference } from "happy-desktop-state";
+import { happyShareLinkParse, isHappyUrl, type HappyReference } from "happy-desktop-state";
 import Markdown, { type Components, type ExtraProps, type UrlTransform } from "react-markdown";
 import type { Processor } from "unified";
 import { LinkContextMenu } from "./LinkContextMenu";
@@ -381,7 +381,12 @@ const MarkdownLink = ({
     // is not a place this product draws.
     const webUrl =
         safe !== undefined && !safe.toLowerCase().startsWith("mailto:") ? safe : undefined;
-    const menuOffered = onLinkOpen !== undefined && webUrl !== undefined;
+    // A share link to another server is not a page to open here or in the
+    // browser: the app opens it on that server, or says it is not connected.
+    const menuOffered =
+        onLinkOpen !== undefined &&
+        webUrl !== undefined &&
+        happyShareLinkParse(webUrl) === undefined;
     return (
         <>
             <a

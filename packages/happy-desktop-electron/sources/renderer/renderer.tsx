@@ -129,6 +129,7 @@ import {
     type HappyAgentDirectoryStore,
 } from "./happyAgentDirectoryStore";
 import { happyAgentDirectoryLinkTarget } from "./happyAgentDirectoryLinkTarget";
+import { happyShareLinkClicksRoute } from "./happyShareLinkClicks";
 import { startupValuesStoreCreate, type StartupValuesStore } from "./startupValuesStore";
 import { browserDevBridgeCreate } from "./browserDevBridge";
 import { cloudWebBridgeCreate } from "./cloudWebBridge";
@@ -1563,6 +1564,8 @@ if (mediaPreviewBridge) {
         if (serverHost) appDisposers.push(() => serverHost.sessions[Symbol.dispose]());
         const happyAgents = happyAgentDirectoryStoreCreate(desktopBridge, runtimeStore, {
             cloudHostFor: auth.hostFor,
+            // Asked for only after the window is up, by when the inbox is.
+            happyLinkReceive: (url) => happyLinkInbox.linkReceive(url),
             ...(serverHost
                 ? { servers: serverHost.source, serverSessions: serverHost.sessions }
                 : {}),
@@ -1870,6 +1873,8 @@ if (mediaPreviewBridge) {
             else happyAgentRouterHappyLinkOpen(activeRouter(), url);
         });
         if (happyLinkUnsubscribe) appDisposers.push(happyLinkUnsubscribe);
+        // A share link clicked anywhere in the window opens in the app.
+        appDisposers.push(happyShareLinkClicksRoute(document, happyLinkInbox.linkReceive));
         const happyLinksTake = async (): Promise<void> => {
             const take = desktopBridge.happyLinkExternalTake;
             if (!take) return;

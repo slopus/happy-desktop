@@ -29,6 +29,7 @@ import { MermaidDiagram } from "./MermaidDiagram";
 import { markdownTableCodeKeepsLine } from "./messageTextLayout";
 import {
     messageFileLinkFromHref,
+    messageHrefHere,
     messageReferenceFromHref,
     type MessageReferences,
 } from "./messageReferences";
@@ -333,7 +334,9 @@ const DocumentLink = ({ children, href, node }: ComponentPropsWithoutRef<"a"> & 
     const onFileLinkOpen = useContext(FileLinkOpenContext);
     const references = useContext(MarkdownReferencesContext);
     const entities = useContext(EntitiesContext);
-    const web = webHref(href);
+    // A share link to something here reads as the Happy link it carries.
+    const shared = messageHrefHere(href, entities) !== href;
+    const web = shared ? undefined : webHref(href);
     if (web !== undefined)
         return (
             <a
@@ -372,7 +375,19 @@ const DocumentLink = ({ children, href, node }: ComponentPropsWithoutRef<"a"> & 
         typeof href === "string" ? messageReferenceFromHref(href, entities) : undefined;
     if (reference !== undefined)
         return (
-            <DocumentEntityLink reference={reference} written={(node?.children.length ?? 0) > 0}>
+            <DocumentEntityLink
+                reference={reference}
+                // A bare share link's words are its address, not a label.
+                written={
+                    (node?.children.length ?? 0) > 0 &&
+                    !(
+                        shared &&
+                        node?.children.length === 1 &&
+                        node.children[0]?.type === "text" &&
+                        node.children[0].value === href
+                    )
+                }
+            >
                 {children}
             </DocumentEntityLink>
         );

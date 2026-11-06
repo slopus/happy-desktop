@@ -5,6 +5,8 @@ import {
     parseHappyLinks,
     parseHappyUrl,
     happyAgentFileLinkParse,
+    happyShareLinkParse,
+    happyShareLinksRewrite,
     replaceHappyLinks,
     type HappyAgentFileLink,
     type HappyLink,
@@ -132,6 +134,31 @@ export function messageReferenceShown(view: MessageReferenceView | undefined): b
     return view?.type === "link" || view?.type === "person";
 }
 
+/**
+ * The body with every share link naming the instance these references read
+ * written as the `happy://` link it carries, so it reads and opens as that
+ * link. Another server's share link stays a web address.
+ */
+function shareLinksHere(text: string, references: MessageReferences | undefined): string {
+    const instanceId = references?.instanceId;
+    return instanceId === undefined
+        ? text
+        : happyShareLinksRewrite(text, (named) => named === instanceId);
+}
+
+/**
+ * A link's destination as these references read it: a share link naming
+ * their instance is the `happy://` link it carries; anything else is itself.
+ */
+export function messageHrefHere(
+    href: string | undefined,
+    references: MessageReferences | undefined,
+): string | undefined {
+    if (href === undefined || references?.instanceId === undefined) return href;
+    const share = happyShareLinkParse(href);
+    return share?.instanceId === references.instanceId ? share.url : href;
+}
+
 /** Whether a link is for the instance these references read, or names none. */
 function linkHere(link: HappyLink, references: MessageReferences | undefined): boolean {
     return link.instanceId === undefined || link.instanceId === references?.instanceId;
@@ -145,8 +172,9 @@ export function messageReferenceFromHref(
     href: string | undefined,
     references: MessageReferences | undefined,
 ): HappyReference | undefined {
-    if (href === undefined) return undefined;
-    const link = parseHappyUrl(href);
+    const here = messageHrefHere(href, references);
+    if (here === undefined) return undefined;
+    const link = parseHappyUrl(here);
     return link?.type === "reference" && linkHere(link, references) ? link.reference : undefined;
 }
 
@@ -155,10 +183,11 @@ export function messageFileLinkFromHref(
     href: string | undefined,
     references: MessageReferences | undefined,
 ): HappyAgentFileLink | undefined {
-    if (href === undefined) return undefined;
-    const link = parseHappyUrl(href);
+    const here = messageHrefHere(href, references);
+    if (here === undefined) return undefined;
+    const link = parseHappyUrl(here);
     if (link !== undefined && !linkHere(link, references)) return undefined;
-    return happyAgentFileLinkParse(href);
+    return happyAgentFileLinkParse(here);
 }
 
 /**
@@ -184,7 +213,7 @@ export function messageReferencesResolve(
     streaming: boolean,
 ): string {
     return replaceHappyLinks(
-        text,
+        shareLinksHere(text, references),
         (match) => {
             const link = match.link;
             if (link === undefined)
@@ -256,7 +285,9 @@ export function messageReferencesPlainText(
     text: string,
     references: MessageReferences | undefined,
 ): string {
-    return replaceHappyLinks(text, (match) => linkPlainWords(match, references));
+    return replaceHappyLinks(shareLinksHere(text, references), (match) =>
+        linkPlainWords(match, references),
+    );
 }
 
 /** One run of a plain body: its own words, or a reference read as a link. */
@@ -288,7 +319,7 @@ export function messagePlainTextSegments(
             segments[segments.length - 1] = { type: "text", text: last.text + words };
         else segments.push({ type: "text", text: words });
     };
-    for (const segment of parseHappyLinks(text)) {
+    for (const segment of parseHappyLinks(shareLinksHere(text, references))) {
         if (segment.type === "text") {
             textAdd(segment.text);
             continue;
@@ -313,7 +344,8 @@ export function messagePlainTextSegments(
  * holding the same body can keep this and skip the parse next time.
  */
 export function messageReferencesNamed(text: string): readonly HappyReference[] {
-    return parseHappyLinks(text).flatMap((segment) =>
+    // Any server's share link is named, as any server's `happy://` link is.
+    return parseHappyLinks(happyShareLinksRewrite(text, () => true)).flatMap((segment) =>
         segment.type === "link" && segment.link?.type === "reference"
             ? [segment.link.reference]
             : [],

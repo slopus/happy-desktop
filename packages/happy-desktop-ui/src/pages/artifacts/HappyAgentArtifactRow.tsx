@@ -40,7 +40,8 @@ const THUMBNAIL = {
  */
 export function HappyAgentArtifactRow(props: HappyAgentArtifactRowProps) {
     const artifact = props.artifact;
-    const linkCopy = useContext(LinkCopyContext);
+    // An artifact on a server with no link that leaves the app has no menu.
+    const link = useContext(LinkCopyContext)(`happy://artifacts/${artifact.id}`);
     const [menu, setMenu] = useState<{ readonly x: number; readonly y: number } | undefined>();
     const deleted = artifact.status === "deleted";
     const thumbnail = THUMBNAIL[props.density];
@@ -76,10 +77,14 @@ export function HappyAgentArtifactRow(props: HappyAgentArtifactRowProps) {
                 data-happy-desktop-ui="happy-agent-artifact-row"
                 data-status={artifact.status}
                 onClick={() => props.onOpen(artifact.id)}
-                onContextMenu={(event) => {
-                    event.preventDefault();
-                    setMenu({ x: event.clientX, y: event.clientY });
-                }}
+                onContextMenu={
+                    link === undefined
+                        ? undefined
+                        : (event) => {
+                              event.preventDefault();
+                              setMenu({ x: event.clientX, y: event.clientY });
+                          }
+                }
                 type="button"
             >
                 <span
@@ -147,7 +152,7 @@ export function HappyAgentArtifactRow(props: HappyAgentArtifactRowProps) {
             </button>
             {/* Beside the row rather than in it, so a choice in the menu is
                 never also a click on the row. */}
-            {menu ? (
+            {menu && link !== undefined ? (
                 <ContextMenu
                     data-testid="happy-agent-artifact-row-menu"
                     items={[
@@ -162,9 +167,7 @@ export function HappyAgentArtifactRow(props: HappyAgentArtifactRowProps) {
                     onSelect={(id) => {
                         setMenu(undefined);
                         if (id !== ARTIFACT_LINK_COPY) return;
-                        void navigator.clipboard
-                            .writeText(linkCopy(`happy://artifacts/${artifact.id}`))
-                            .catch(() => undefined);
+                        void navigator.clipboard.writeText(link).catch(() => undefined);
                     }}
                     x={menu.x}
                     y={menu.y}

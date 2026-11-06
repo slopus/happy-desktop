@@ -400,16 +400,18 @@ const LINK_COPIED_MS = 1_600;
 
 /**
  * Copies the artifact's link, in the form the window writes for a link that
- * leaves it. The check confirms the copy for a moment; the label stays, so
- * the controls beside it never move.
+ * leaves it: its share link. The check confirms the copy for a moment; the
+ * label stays, so the controls beside it never move. A server with no link
+ * that leaves the app offers nothing to copy.
  */
 function ArtifactLinkCopy(props: { artifactId: HappyAgentArtifactId }) {
-    const linkCopy = useContext(LinkCopyContext);
+    const link = useContext(LinkCopyContext)(`happy://artifacts/${props.artifactId}`);
     const [copied, setCopied] = useState(false);
     const copiedTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+    if (link === undefined) return null;
     const copy = async () => {
         try {
-            await navigator.clipboard.writeText(linkCopy(`happy://artifacts/${props.artifactId}`));
+            await navigator.clipboard.writeText(link);
             setCopied(true);
             if (copiedTimer.current !== undefined) clearTimeout(copiedTimer.current);
             copiedTimer.current = setTimeout(() => {

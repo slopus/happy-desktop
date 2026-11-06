@@ -1,4 +1,5 @@
 import { formatHappyUrl, parseHappyUrl, type HappyLink } from "@slopus/happy-agent-client";
+import { happyShareLinkParse } from "./happyShareLink.js";
 
 /*
  * Instance links, as the Happy Agent API specifies them: an external link is
@@ -20,12 +21,13 @@ export type HappyExternalLink =
     | { readonly kind: "unsupported" };
 
 /**
- * Reads a `happy://` URL that reached the window from the system. Only an
- * instance link can be opened; a link with no instance never is, so it can
- * never be opened on the wrong server.
+ * Reads a `happy://` URL, or a link.happy.page share link that carries one,
+ * that reached the window from the system or a page. Only an instance link
+ * can be opened; a link with no instance never is, so it can never be opened
+ * on the wrong server.
  */
 export function happyExternalLinkParse(url: string): HappyExternalLink {
-    const parsed = parseHappyUrl(url);
+    const parsed = parseHappyUrl(happyShareLinkParse(url)?.url ?? url);
     if (parsed?.instanceId === undefined) return { kind: "unsupported" };
     const { instanceId, ...link } = parsed;
     return { kind: "instance", instanceId, url: formatHappyUrl(link), link };
