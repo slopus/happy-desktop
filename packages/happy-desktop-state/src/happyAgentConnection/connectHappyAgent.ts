@@ -53,12 +53,14 @@ import {
     archivedAgentsMerge,
     defaultMode,
     elementsReuse,
+    entitiesSettle,
     draftPreviewOf,
     modeOf,
     ownerResourceReplace,
     projectElements,
     projectBots,
     projectGroups,
+    RevisedMap,
     projectNumericIdentity,
     projectSession,
     projectTasks,
@@ -360,8 +362,8 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
     };
     const groupSubscribers = new Set<GroupsSubscriber>();
     const intendedModes = new Map<string, MessageMode>();
-    const agentDrafts = new Map<string, AgentDraftSnapshot>();
-    const agentModes = new Map<string, MessageMode | null>();
+    const agentDrafts = new RevisedMap<string, AgentDraftSnapshot>();
+    const agentModes = new RevisedMap<string, MessageMode | null>();
     const modeRevisions = new Map<string, number>();
     const pendingSwitchRevisions = new Map<string, number>();
     const adoptedSwitchMessages = new Set<string>();
@@ -737,24 +739,30 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                         agentModes,
                     ),
                 ),
-                botGroups: projectBots(
-                    current.bots,
-                    current.workspaces,
-                    endpoint,
-                    daemonConfig,
-                    agentDrafts,
-                    agentModes,
-                    sync.source.health()?.capabilities?.storyFeed === true,
+                botGroups: entitiesSettle(
+                    current.botGroups,
+                    projectBots(
+                        current.bots,
+                        current.workspaces,
+                        endpoint,
+                        daemonConfig,
+                        agentDrafts,
+                        agentModes,
+                        sync.source.health()?.capabilities?.storyFeed === true,
+                    ),
                 ),
-                taskGroups: projectTasks(
-                    current.tasks,
-                    current.taskMemberships,
-                    current.workspaces,
-                    endpoint,
-                    daemonConfig,
-                    taskOwnerOf,
-                    agentDrafts,
-                    agentModes,
+                taskGroups: entitiesSettle(
+                    current.taskGroups,
+                    projectTasks(
+                        current.tasks,
+                        current.taskMemberships,
+                        current.workspaces,
+                        endpoint,
+                        daemonConfig,
+                        taskOwnerOf,
+                        agentDrafts,
+                        agentModes,
+                    ),
                 ),
             }));
         }

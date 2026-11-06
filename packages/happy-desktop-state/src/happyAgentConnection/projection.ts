@@ -43,6 +43,7 @@ import type {
     WorkspaceGroup,
 } from "./types.js";
 import { happyAgentImageUrl } from "../utils/happyAgentImageUrl.js";
+import { deepEqual } from "../happyAgent/happyAgentSupport.js";
 
 export interface TranscriptMessage {
     message: Message;
@@ -257,6 +258,29 @@ export function projectSession(input: SessionProjectionInput): SessionState {
  * references and this hands the old one back instead. Downstream, one reference
  * comparison then replaces the whole conversation projection.
  */
+/**
+ * `next`, keeping each previous entity that came back equal under the same id and
+ * the previous list when every entity did. Bots and tasks are projected whole on
+ * every publish, so their unchanged rows get their identity back here, once,
+ * rather than in every reader downstream.
+ */
+export function entitiesSettle<T extends { readonly id: string }>(
+    previous: readonly T[],
+    next: readonly T[],
+): readonly T[] {
+    if (previous === next) return previous;
+    const byId = new Map<string, T>();
+    for (const entity of previous) byId.set(entity.id, entity);
+    let changed = previous.length !== next.length;
+    const settled = next.map((entity, index) => {
+        const before = byId.get(entity.id);
+        const kept = before !== undefined && deepEqual(before, entity) ? before : entity;
+        if (kept !== previous[index]) changed = true;
+        return kept;
+    });
+    return changed ? settled : previous;
+}
+
 export function elementsReuse<T>(previous: readonly T[], next: readonly T[]): readonly T[] {
     if (previous === next) return previous;
     if (previous.length !== next.length) return next;
@@ -459,6 +483,22 @@ export function projectGroups(
             // consumers that offer recovery can see them. Active list surfaces
             // filter on the explicit `archived` field; unread counts do not.
             const agents = root?.agents ?? project.agents;
+            const git = gitSnapshotProject(gitStates.get(project.id));
+            // One agent's change replaces its own row; every other project keeps
+            // its group, so readers downstream settle it by identity. With the
+            // drafts and modes unchanged too, the rows are the ones already
+            // projected, so they need not be visited at all.
+            const cached = projectGroupCache.get(project);
+            const reusable =
+                cached !== undefined &&
+                cached.root === root &&
+                cached.endpoint === endpoint &&
+                cached.config === config &&
+                cached.value.git === git &&
+                elementsSame(cached.value.workspaces, children);
+            const revision = revisionOf(drafts, modes);
+            if (reusable && revision !== undefined && cached.revision === revision)
+                return cached.value;
             const sessions = [...agents]
                 .sort(orderCompare)
                 .map((agent) =>
@@ -471,20 +511,10 @@ export function projectGroups(
                         modes.get(agent.id),
                     ),
                 );
-            const git = gitSnapshotProject(gitStates.get(project.id));
-            // One agent's change replaces its own row; every other project keeps
-            // its group, so readers downstream settle it by identity.
-            const cached = projectGroupCache.get(project);
-            if (
-                cached !== undefined &&
-                cached.root === root &&
-                cached.endpoint === endpoint &&
-                cached.config === config &&
-                cached.value.git === git &&
-                elementsSame(cached.value.workspaces, children) &&
-                elementsSame(cached.value.sessions, sessions)
-            )
+            if (reusable && elementsSame(cached.value.sessions, sessions)) {
+                projectGroupCache.set(project, { ...cached, revision });
                 return cached.value;
+            }
             const activeAgents = agents.filter((agent) => agent.archivedAt === null);
             const value: ProjectGroup = {
                 id: project.id,
@@ -516,7 +546,7 @@ export function projectGroups(
                 workspaces: children,
                 sessions,
             };
-            projectGroupCache.set(project, { root, endpoint, config, value });
+            projectGroupCache.set(project, { root, endpoint, config, revision, value });
             return value;
         });
 }
@@ -527,6 +557,7 @@ const projectGroupCache = new WeakMap<
         readonly root: Workspace | undefined;
         readonly endpoint: string;
         readonly config: DaemonConfig;
+        readonly revision: RevisionPair | undefined;
         readonly value: ProjectGroup;
     }
 >();
@@ -537,9 +568,64 @@ const workspaceGroupCache = new WeakMap<
         readonly projectId: string;
         readonly endpoint: string;
         readonly config: DaemonConfig;
+        readonly revision: RevisionPair | undefined;
         readonly value: WorkspaceGroup;
     }
 >();
+
+/**
+ * A map that counts its own changes, so a projection that read it can tell it
+ * is unchanged without reading it again. The connection keeps its drafts and
+ * stored modes in these.
+ */
+export class RevisedMap<K, V> extends Map<K, V> {
+    revision = 0;
+    override set(key: K, value: V): this {
+        this.revision += 1;
+        return super.set(key, value);
+    }
+    override delete(key: K): boolean {
+        this.revision += 1;
+        return super.delete(key);
+    }
+    override clear(): void {
+        this.revision += 1;
+        super.clear();
+    }
+}
+
+interface RevisionPair {
+    readonly drafts: ReadonlyMap<string, AgentDraftSnapshot>;
+    readonly draftsRevision: number;
+    readonly modes: ReadonlyMap<string, MessageMode | null>;
+    readonly modesRevision: number;
+}
+
+/** Interned per revision, so an unchanged pair compares by identity. */
+let revisionLatest: RevisionPair | undefined;
+
+function revisionOf(
+    drafts: ReadonlyMap<string, AgentDraftSnapshot>,
+    modes: ReadonlyMap<string, MessageMode | null>,
+): RevisionPair | undefined {
+    if (!(drafts instanceof RevisedMap) || !(modes instanceof RevisedMap)) return undefined;
+    const latest = revisionLatest;
+    if (
+        latest !== undefined &&
+        latest.drafts === drafts &&
+        latest.draftsRevision === drafts.revision &&
+        latest.modes === modes &&
+        latest.modesRevision === modes.revision
+    )
+        return latest;
+    revisionLatest = {
+        drafts,
+        draftsRevision: drafts.revision,
+        modes,
+        modesRevision: modes.revision,
+    };
+    return revisionLatest;
+}
 
 /** Whether two lists hold the very same items in the same order. */
 function elementsSame<T>(left: readonly T[], right: readonly T[]): boolean {
@@ -858,6 +944,18 @@ function projectWorkspace(
     // See the project-root projection above: archival is data, not removal from
     // this owned connection contract. Consumers decide which set they need.
     const agents = workspace.agents;
+    const git = gitSnapshotProject(gitState);
+    // The same workspace, drafts and modes project the same rows, so an
+    // unchanged workspace is answered without visiting its agents.
+    const cached = workspaceGroupCache.get(workspace);
+    const reusable =
+        cached !== undefined &&
+        cached.projectId === projectId &&
+        cached.endpoint === endpoint &&
+        cached.config === config &&
+        cached.value.git === git;
+    const revision = revisionOf(drafts, modes);
+    if (reusable && revision !== undefined && cached.revision === revision) return cached.value;
     const sessions = [...agents]
         .sort(orderCompare)
         .map((agent) =>
@@ -870,17 +968,10 @@ function projectWorkspace(
                 modes.get(agent.id),
             ),
         );
-    const git = gitSnapshotProject(gitState);
-    const cached = workspaceGroupCache.get(workspace);
-    if (
-        cached !== undefined &&
-        cached.projectId === projectId &&
-        cached.endpoint === endpoint &&
-        cached.config === config &&
-        cached.value.git === git &&
-        elementsSame(cached.value.sessions, sessions)
-    )
+    if (reusable && elementsSame(cached.value.sessions, sessions)) {
+        workspaceGroupCache.set(workspace, { ...cached, revision });
         return cached.value;
+    }
     const activeAgents = agents.filter((agent) => agent.archivedAt === null);
     const value: WorkspaceGroup = {
         id: workspace.id,
@@ -899,7 +990,7 @@ function projectWorkspace(
         usage: { totalTokens: 0 },
         unread: unreadOf(activeAgents),
     };
-    workspaceGroupCache.set(workspace, { projectId, endpoint, config, value });
+    workspaceGroupCache.set(workspace, { projectId, endpoint, config, revision, value });
     return value;
 }
 
