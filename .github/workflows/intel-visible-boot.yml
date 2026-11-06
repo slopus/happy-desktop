@@ -1,4 +1,4 @@
-name: Compare Intel visible boot
+name: Verify macOS keychain startup
 
 on:
     push:
@@ -9,13 +9,13 @@ permissions:
 
 jobs:
     visible:
-        name: Happy ${{ matrix.version }} visible Intel boot
-        runs-on: macos-15-intel
+        name: Happy 0.0.103 keychain ${{ matrix.variant }}
+        runs-on: macos-15
         timeout-minutes: 15
         strategy:
             fail-fast: false
             matrix:
-                version: ["0.0.102", "0.0.103"]
+                variant: [configured, cancel, reset]
         steps:
             - name: Check out diagnostic workflow
               uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -23,16 +23,16 @@ jobs:
             - name: Download and copy the published standard app
               env:
                   GH_TOKEN: ${{ github.token }}
-                  DIAGNOSTIC_VERSION: ${{ matrix.version }}
+                  DIAGNOSTIC_VERSION: "0.0.103"
               shell: bash
               run: |
                   set -euo pipefail
                   diagnostic_root="$RUNNER_TEMP/happy-visible-$DIAGNOSTIC_VERSION"
                   mkdir -p artifacts "$diagnostic_root/application" "$diagnostic_root/mount"
                   gh release view "v$DIAGNOSTIC_VERSION" --repo slopus/happy-desktop --json tagName,targetCommitish,publishedAt,assets > artifacts/release.json
-                  gh release download "v$DIAGNOSTIC_VERSION" --repo slopus/happy-desktop --pattern "Happy-$DIAGNOSTIC_VERSION-x64.dmg" --dir "$diagnostic_root"
-                  shasum -a 256 "$diagnostic_root/Happy-$DIAGNOSTIC_VERSION-x64.dmg" > artifacts/download.sha256
-                  hdiutil attach "$diagnostic_root/Happy-$DIAGNOSTIC_VERSION-x64.dmg" -readonly -nobrowse -mountpoint "$diagnostic_root/mount" | tee artifacts/mount.log
+                  gh release download "v$DIAGNOSTIC_VERSION" --repo slopus/happy-desktop --pattern "Happy-$DIAGNOSTIC_VERSION-arm64.dmg" --dir "$diagnostic_root"
+                  shasum -a 256 "$diagnostic_root/Happy-$DIAGNOSTIC_VERSION-arm64.dmg" > artifacts/download.sha256
+                  hdiutil attach "$diagnostic_root/Happy-$DIAGNOSTIC_VERSION-arm64.dmg" -readonly -nobrowse -mountpoint "$diagnostic_root/mount" | tee artifacts/mount.log
                   trap 'hdiutil detach "$diagnostic_root/mount" || true' EXIT
                   ditto "$diagnostic_root/mount/Happy.app" "$diagnostic_root/application/Happy.app"
                   hdiutil detach "$diagnostic_root/mount"
@@ -44,7 +44,8 @@ jobs:
 
             - name: Observe visible launch for sixty seconds and request quit
               env:
-                  DIAGNOSTIC_VERSION: ${{ matrix.version }}
+                  DIAGNOSTIC_VERSION: "0.0.103"
+                  DIAGNOSTIC_VARIANT: ${{ matrix.variant }}
               shell: bash
               run: |
                   python3 - <<'PY'
@@ -61,6 +62,7 @@ jobs:
 
                   assert os.environ.get("CI") == "true" and sys.platform == "darwin"
                   version = os.environ["DIAGNOSTIC_VERSION"]
+                  variant = os.environ["DIAGNOSTIC_VARIANT"]
                   executable = Path(os.environ["DIAGNOSTIC_EXECUTABLE"])
                   bundle = executable.parents[2]
                   actual_version = subprocess.check_output([
@@ -85,17 +87,81 @@ jobs:
                       return datetime.now(timezone.utc).isoformat()
 
                   evidence = {
-                      "version": version, "startedAt": timestamp(), "visibleLaunch": True,
+                      "version": version, "variant": variant, "startedAt": timestamp(), "visibleLaunch": True,
                       "args": [str(executable), f"--user-data-dir={profile / 'user-data'}"],
                       "environmentOverrides": {key: env[key] for key in ("HOME", "USERPROFILE", "HAPPY_HOME_DIR")},
                       "observations": [],
+                      "keychainOperations": [],
                   }
+
+                  def security_operation(label, arguments, required=False):
+                      try:
+                          result = subprocess.run(["security", *arguments], env=env, capture_output=True, text=True, timeout=10)
+                          record = {"operation": label, "code": result.returncode, "stdout": result.stdout, "stderr": result.stderr}
+                      except subprocess.TimeoutExpired:
+                          record = {"operation": label, "timeoutSeconds": 10}
+                      evidence["keychainOperations"].append(record)
+                      (artifacts / "keychain-operations.json").write_text(json.dumps(evidence["keychainOperations"], indent=2) + "\n")
+                      if required and record.get("code") != 0:
+                          raise RuntimeError(f"Keychain setup failed: {label}: {record}")
+
+                  def click_keychain_button():
+                      button = "Cancel" if variant == "cancel" else "Reset To Defaults"
+                      action = {"requestedButton": button, "at": timestamp(), "elapsedSeconds": round(time.monotonic() - launched, 3)}
+                      script = '''tell application "System Events"
+                          set candidates to {"SecurityAgent", "Happy", "CoreServicesUIAgent"}
+                          set visibleNames to name of every process whose visible is true
+                          repeat with processName in visibleNames
+                              if candidates does not contain (processName as text) then set end of candidates to (processName as text)
+                          end repeat
+                          repeat with processName in candidates
+                              if exists process (processName as text) then
+                                  tell process (processName as text)
+                                      repeat with candidateWindow in every window
+                                          if exists button BUTTON_TITLE of candidateWindow then
+                                              click button BUTTON_TITLE of candidateWindow
+                                              return "CLICKED|" & (processName as text) & "|visible=" & (visibleNames as text)
+                                          end if
+                                      end repeat
+                                  end tell
+                              end if
+                          end repeat
+                          return "NOT_FOUND|visible=" & (visibleNames as text)
+                      end tell'''.replace("BUTTON_TITLE", json.dumps(button))
+                      try:
+                          result = subprocess.run(["osascript", "-e", script], capture_output=True, text=True, timeout=4)
+                          action.update(code=result.returncode, stdout=result.stdout, stderr=result.stderr)
+                          action["clicked"] = result.returncode == 0 and result.stdout.startswith("CLICKED|")
+                          action["tccBlocked"] = any(text in result.stderr.lower() for text in (
+                              "not allowed assistive access", "not authorized to send apple events", "not authorised",
+                              "-1743", "-1719", "-25211",
+                          ))
+                          if action["tccBlocked"]:
+                              action["interactionSkipped"] = "TCC denied System Events; no further UI interaction attempted."
+                      except subprocess.TimeoutExpired:
+                          action.update(timeoutSeconds=4, clicked=False, interactionSkipped="System Events did not return; no retry.")
+                      evidence["uiAction"] = action
+                      (artifacts / "ui-action.json").write_text(json.dumps(action, indent=2) + "\n")
+
                   child = None
                   try:
+                      security_operation("initial default keychain", ["default-keychain", "-d", "user"])
+                      security_operation("initial keychain search list", ["list-keychains", "-d", "user"])
+                      if variant == "configured":
+                          keychain = home / "Library/Keychains/login.keychain-db"
+                          keychain.parent.mkdir(parents=True)
+                          security_operation("create disposable keychain", ["create-keychain", "-p", "test", str(keychain)], required=True)
+                          security_operation("unlock disposable keychain", ["unlock-keychain", "-p", "test", str(keychain)], required=True)
+                          security_operation("select disposable default", ["default-keychain", "-d", "user", "-s", str(keychain)], required=True)
+                          security_operation("select disposable search list", ["list-keychains", "-d", "user", "-s", str(keychain)], required=True)
                       with (artifacts / "stdout.log").open("wb") as stdout, (artifacts / "stderr.log").open("wb") as stderr:
                           child = subprocess.Popen(evidence["args"], env=env, stdout=stdout, stderr=stderr)
                           evidence["pid"] = child.pid
                           launched = time.monotonic()
+                          if variant in ("cancel", "reset"):
+                              while time.monotonic() - launched < 15:
+                                  time.sleep(0.1)
+                              click_keychain_button()
                           for seconds in (20, 40, 60):
                               while time.monotonic() - launched < seconds:
                                   if child.poll() is not None and "earlyExitAt" not in evidence:
@@ -136,6 +202,13 @@ jobs:
                               evidence["observations"].append(observation)
                               (artifacts / "process.json").write_text(json.dumps(evidence, indent=2) + "\n")
 
+                          # Query attributes only; never request or print the generated secret.
+                          security_operation("final default keychain", ["default-keychain", "-d", "user"])
+                          security_operation("final keychain search list", ["list-keychains", "-d", "user"])
+                          find_arguments = ["find-generic-password", "-s", "Happy Safe Storage", "-a", "Happy"]
+                          if variant == "configured":
+                              find_arguments.append(str(keychain))
+                          security_operation("Happy Safe Storage item attributes", find_arguments)
                           evidence["quitRequestedAt"] = timestamp()
                           quit_started = time.monotonic()
                           try:
@@ -183,6 +256,6 @@ jobs:
               if: always()
               uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
               with:
-                  name: intel-visible-${{ matrix.version }}
+                  name: keychain-${{ matrix.variant }}-0.0.103
                   path: artifacts/
                   if-no-files-found: error
