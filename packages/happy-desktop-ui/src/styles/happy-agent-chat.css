@@ -231,6 +231,21 @@
     cursor: progress;
 }
 
+/* The label reserves the width of its settled text under it, invisibly and
+   without height, so Submit and Submitted are one width. */
+.happy-agent-input__submit-label {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.happy-agent-input__submit-label::after {
+    height: 0;
+    overflow: hidden;
+    visibility: hidden;
+    content: attr(data-reserve);
+}
+
 .happy-agent-input__footer {
     display: flex;
     flex-direction: row;
@@ -255,12 +270,21 @@
     padding: 0;
 }
 
+/* One line, whatever the reply: the line is held before it arrives, and the
+   full reply reads as the person's own message below. */
 .happy-agent-input__answer-label {
+    max-width: 100%;
+    overflow: hidden;
     font-size: 16px;
     font-weight: 400;
     line-height: 24px;
     color: var(--text);
-    overflow-wrap: anywhere;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-agent-input__answer[data-placeholder] .happy-agent-input__answer-label {
+    color: var(--text-secondary);
 }
 
 .happy-agent-input__answer-description {
