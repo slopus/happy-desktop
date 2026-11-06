@@ -22,7 +22,6 @@ import type {
     Workspace,
 } from "@slopus/happy-agent-client";
 import { happyAgentServiceTierFromWire } from "../happyAgentServiceTier.js";
-import { deepEqual } from "../happyAgent/happyAgentSupport.js";
 import { happyAgentConversationActivityProject } from "../happyAgent/happyAgentConversationAuthors.js";
 import type {
     HappyAgentAnsweredUserInput,
@@ -86,14 +85,33 @@ export interface SessionProjectionInput {
     workspace?: Workspace;
 }
 
+const defaultModes = new WeakMap<DaemonConfig, MessageMode>();
+
+/** The mode a configuration starts a session in; one object per configuration. */
 export function defaultMode(config: DaemonConfig): MessageMode {
-    return {
+    const known = defaultModes.get(config);
+    if (known !== undefined) return known;
+    const mode: MessageMode = {
         effort: config.defaults.effort,
         modelId: config.defaults.modelId,
         permissionMode: config.defaults.permissionMode,
         providerId: config.defaults.providerId,
         serviceTier: null,
     };
+    defaultModes.set(config, mode);
+    return mode;
+}
+
+/** Whether two modes select the same route; every catalog row is checked with it. */
+function modesSame(left: MessageMode, right: MessageMode): boolean {
+    return (
+        left === right ||
+        (left.effort === right.effort &&
+            left.modelId === right.modelId &&
+            left.permissionMode === right.permissionMode &&
+            left.providerId === right.providerId &&
+            left.serviceTier === right.serviceTier)
+    );
 }
 
 /** How much of a draft a row shows: the start of it, on one line. */
@@ -239,10 +257,7 @@ export function projectSession(input: SessionProjectionInput): SessionState {
  * references and this hands the old one back instead. Downstream, one reference
  * comparison then replaces the whole conversation projection.
  */
-export function elementsReuse(
-    previous: readonly ChatElement[],
-    next: readonly ChatElement[],
-): readonly ChatElement[] {
+export function elementsReuse<T>(previous: readonly T[], next: readonly T[]): readonly T[] {
     if (previous === next) return previous;
     if (previous.length !== next.length) return next;
     for (let index = 0; index < next.length; index += 1)
@@ -444,9 +459,34 @@ export function projectGroups(
             // consumers that offer recovery can see them. Active list surfaces
             // filter on the explicit `archived` field; unread counts do not.
             const agents = root?.agents ?? project.agents;
-            const activeAgents = agents.filter((agent) => agent.archivedAt === null);
+            const sessions = [...agents]
+                .sort(orderCompare)
+                .map((agent) =>
+                    projectAgent(
+                        agent,
+                        root,
+                        endpoint,
+                        config,
+                        drafts.get(agent.id),
+                        modes.get(agent.id),
+                    ),
+                );
             const git = gitSnapshotProject(gitStates.get(project.id));
-            return {
+            // One agent's change replaces its own row; every other project keeps
+            // its group, so readers downstream settle it by identity.
+            const cached = projectGroupCache.get(project);
+            if (
+                cached !== undefined &&
+                cached.root === root &&
+                cached.endpoint === endpoint &&
+                cached.config === config &&
+                cached.value.git === git &&
+                elementsSame(cached.value.workspaces, children) &&
+                elementsSame(cached.value.sessions, sessions)
+            )
+                return cached.value;
+            const activeAgents = agents.filter((agent) => agent.archivedAt === null);
+            const value: ProjectGroup = {
                 id: project.id,
                 kind: project.avatar?.kind === "home" ? "home" : "regular",
                 name: project.name,
@@ -474,20 +514,40 @@ export function projectGroups(
                 usage: { totalTokens: 0 },
                 unread: unreadOf(activeAgents),
                 workspaces: children,
-                sessions: [...agents]
-                    .sort(orderCompare)
-                    .map((agent) =>
-                        projectAgent(
-                            agent,
-                            root,
-                            endpoint,
-                            config,
-                            drafts.get(agent.id),
-                            modes.get(agent.id),
-                        ),
-                    ),
+                sessions,
             };
+            projectGroupCache.set(project, { root, endpoint, config, value });
+            return value;
         });
+}
+
+const projectGroupCache = new WeakMap<
+    Project,
+    {
+        readonly root: Workspace | undefined;
+        readonly endpoint: string;
+        readonly config: DaemonConfig;
+        readonly value: ProjectGroup;
+    }
+>();
+
+const workspaceGroupCache = new WeakMap<
+    Workspace,
+    {
+        readonly projectId: string;
+        readonly endpoint: string;
+        readonly config: DaemonConfig;
+        readonly value: WorkspaceGroup;
+    }
+>();
+
+/** Whether two lists hold the very same items in the same order. */
+function elementsSame<T>(left: readonly T[], right: readonly T[]): boolean {
+    if (left === right) return true;
+    if (left.length !== right.length) return false;
+    for (let index = 0; index < left.length; index += 1)
+        if (left[index] !== right[index]) return false;
+    return true;
 }
 
 export function replaceResource<T extends { id: string }>(
@@ -798,9 +858,31 @@ function projectWorkspace(
     // See the project-root projection above: archival is data, not removal from
     // this owned connection contract. Consumers decide which set they need.
     const agents = workspace.agents;
-    const activeAgents = agents.filter((agent) => agent.archivedAt === null);
+    const sessions = [...agents]
+        .sort(orderCompare)
+        .map((agent) =>
+            projectAgent(
+                agent,
+                workspace,
+                endpoint,
+                config,
+                drafts.get(agent.id),
+                modes.get(agent.id),
+            ),
+        );
     const git = gitSnapshotProject(gitState);
-    return {
+    const cached = workspaceGroupCache.get(workspace);
+    if (
+        cached !== undefined &&
+        cached.projectId === projectId &&
+        cached.endpoint === endpoint &&
+        cached.config === config &&
+        cached.value.git === git &&
+        elementsSame(cached.value.sessions, sessions)
+    )
+        return cached.value;
+    const activeAgents = agents.filter((agent) => agent.archivedAt === null);
+    const value: WorkspaceGroup = {
         id: workspace.id,
         name: workspace.name,
         creatorAgentId: workspace.creatorAgentId,
@@ -813,21 +895,12 @@ function projectWorkspace(
             ? {}
             : { error: workspace.initialization.error }),
         ...(git === undefined ? {} : { git }),
-        sessions: [...agents]
-            .sort(orderCompare)
-            .map((agent) =>
-                projectAgent(
-                    agent,
-                    workspace,
-                    endpoint,
-                    config,
-                    drafts.get(agent.id),
-                    modes.get(agent.id),
-                ),
-            ),
+        sessions,
         usage: { totalTokens: 0 },
         unread: unreadOf(activeAgents),
     };
+    workspaceGroupCache.set(workspace, { projectId, endpoint, config, value });
+    return value;
 }
 
 // A catalog event replaces one immutable Agent. Keep the other session rows
@@ -927,7 +1000,7 @@ function projectAgent(
     if (
         cached &&
         cached.config === config &&
-        deepEqual(cached.mode, mode) &&
+        modesSame(cached.mode, mode) &&
         cached.draftPreview === draftPreview &&
         cached.endpoint === endpoint &&
         cached.cwd === cwd &&

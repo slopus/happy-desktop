@@ -2643,7 +2643,13 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         if (entry === undefined && agentOf(agentId) === undefined) return;
         modeRevisions.set(agentId, (modeRevisions.get(agentId) ?? 0) + 1);
         if (entry !== undefined) entry.mode = mode;
+        const previous = agentModes.get(agentId);
         agentModes.set(agentId, mode);
+        // Every user message restates its mode; the rows only change when it does.
+        const rowsChanged =
+            previous == null || mode === null
+                ? (previous == null) !== (mode === null)
+                : !modesEqual(previous, mode);
         if (mode !== null) {
             if (unhydratedDraftModes.has(agentId) && !intendedModes.has(agentId)) {
                 unhydratedDraftModes.delete(agentId);
@@ -2661,7 +2667,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
             }
         }
         if (entry !== undefined) publishSession(entry);
-        publishGroups();
+        if (rowsChanged) publishGroups();
     };
 
     // Accepting a non-user message or resolving a failure card with a route switch costs one

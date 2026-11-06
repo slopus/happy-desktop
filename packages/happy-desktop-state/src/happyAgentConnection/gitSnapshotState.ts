@@ -17,13 +17,18 @@ export function gitSnapshotStateUpdate(
     return { current, ...(lastReady === undefined ? {} : { lastReady }) };
 }
 
+/** A state is replaced whenever it changes, so each one projects once. */
+const projected = new WeakMap<GitSnapshotState, GitChangeSnapshot>();
+
 /** Failed scans carry freshness, rather than erasing the last known file list. */
 export function gitSnapshotProject(
     state: GitSnapshotState | undefined,
 ): GitChangeSnapshot | undefined {
     if (state === undefined) return undefined;
+    const known = projected.get(state);
+    if (known !== undefined) return known;
     const git = state.lastReady ?? state.current;
-    return {
+    const snapshot: GitChangeSnapshot = {
         comparison:
             !state.invalidated && state.current.comparison === "ready"
                 ? "ready"
@@ -38,4 +43,6 @@ export function gitSnapshotProject(
         version: git.scannedAt,
         ...(git.comparison === "ready" && git.base !== null ? { baseRevision: git.base } : {}),
     };
+    projected.set(state, snapshot);
+    return snapshot;
 }

@@ -124,47 +124,11 @@ function catalogProject(
     const archivedSessions: HappyAgentSessionSummary[] = [];
 
     for (const group of groups) {
-        const projectId = group.id as HappyAgentProjectId;
-        projects.push(projectProject(group, baseUrl));
-        sessions.push(
-            ...group.sessions
-                .filter((session) => !session.archived)
-                .map((session) => sessionProject(session, projectId)),
-        );
-        archivedSessions.push(
-            ...group.sessions
-                .filter((session) => session.archived)
-                .map((session) => sessionProject(session, projectId)),
-        );
-        for (const workspace of group.workspaces) {
-            worktrees.push({
-                id: workspace.id as HappyAgentWorktreeId,
-                projectId: group.id as HappyAgentProjectId,
-                name: workspace.name,
-                creatorAgentId: workspace.creatorAgentId,
-                orderKey: workspace.orderKey,
-                path: workspace.path,
-                displayPath: workspace.path,
-                status: workspace.status,
-                presence: workspace.presence,
-                // The host's own sentence about a failed checkout, carried
-                // whole. It is present only while the workspace it belongs to
-                // reports one, so a workspace that stops failing stops carrying
-                // a reason rather than keeping the last one it had.
-                ...(workspace.error === undefined ? {} : { error: workspace.error }),
-                ...gitProject(workspace.git),
-            });
-            sessions.push(
-                ...workspace.sessions
-                    .filter((session) => !session.archived)
-                    .map((session) => sessionProject(session, projectId)),
-            );
-            archivedSessions.push(
-                ...workspace.sessions
-                    .filter((session) => session.archived)
-                    .map((session) => sessionProject(session, projectId)),
-            );
-        }
+        const projected = groupProject(group, baseUrl);
+        projects.push(projected.project);
+        worktrees.push(...projected.worktrees);
+        sessions.push(...projected.sessions);
+        archivedSessions.push(...projected.archivedSessions);
     }
 
     archivedSessions.sort((left, right) => (right.archivedAt ?? 0) - (left.archivedAt ?? 0));
@@ -223,6 +187,65 @@ function catalogProject(
     return { archivedSessions, catalog, sessions };
 }
 
+interface GroupProjection {
+    readonly baseUrl: string;
+    readonly project: HappyAgentProject;
+    readonly worktrees: readonly HappyAgentWorktree[];
+    readonly sessions: readonly HappyAgentSessionSummary[];
+    readonly archivedSessions: readonly HappyAgentSessionSummary[];
+}
+
+/*
+ * The connection hands back the very same group for a project nothing changed in, so one
+ * session's change re-projects only its own project here.
+ */
+const groupProjections = new WeakMap<ProjectGroup, GroupProjection>();
+
+function groupProject(group: ProjectGroup, baseUrl: string): GroupProjection {
+    const cached = groupProjections.get(group);
+    if (cached?.baseUrl === baseUrl) return cached;
+    const projectId = group.id as HappyAgentProjectId;
+    const worktrees: HappyAgentWorktree[] = [];
+    const sessions: HappyAgentSessionSummary[] = [];
+    const archivedSessions: HappyAgentSessionSummary[] = [];
+    const sessionsAdd = (listed: readonly GroupSession[]): void => {
+        for (const session of listed)
+            (session.archived ? archivedSessions : sessions).push(
+                sessionProject(session, projectId),
+            );
+    };
+    sessionsAdd(group.sessions);
+    for (const workspace of group.workspaces) {
+        worktrees.push({
+            id: workspace.id as HappyAgentWorktreeId,
+            projectId: group.id as HappyAgentProjectId,
+            name: workspace.name,
+            creatorAgentId: workspace.creatorAgentId,
+            orderKey: workspace.orderKey,
+            path: workspace.path,
+            displayPath: workspace.path,
+            status: workspace.status,
+            presence: workspace.presence,
+            // The host's own sentence about a failed checkout, carried
+            // whole. It is present only while the workspace it belongs to
+            // reports one, so a workspace that stops failing stops carrying
+            // a reason rather than keeping the last one it had.
+            ...(workspace.error === undefined ? {} : { error: workspace.error }),
+            ...gitProject(workspace.git),
+        });
+        sessionsAdd(workspace.sessions);
+    }
+    const projection: GroupProjection = {
+        baseUrl,
+        project: projectProject(group, baseUrl),
+        worktrees,
+        sessions,
+        archivedSessions,
+    };
+    groupProjections.set(group, projection);
+    return projection;
+}
+
 function projectProject(group: ProjectGroup, baseUrl: string): HappyAgentProject {
     const avatar = avatarProject(group.avatar, baseUrl);
     return {
@@ -265,13 +288,24 @@ function avatarProject(
     };
 }
 
-function gitProject(
-    git: GitChangeSnapshot | undefined,
-): Pick<
+type GitProjection = Pick<
     HappyAgentProject,
     "changesStatus" | "changedFiles" | "addedLines" | "deletedLines" | "changes"
-> {
+>;
+
+/** A snapshot is replaced when its scan changes, so its file list is projected once. */
+const gitProjections = new WeakMap<GitChangeSnapshot, GitProjection>();
+
+function gitProject(git: GitChangeSnapshot | undefined): GitProjection {
     if (git === undefined) return { changesStatus: "loading" };
+    const cached = gitProjections.get(git);
+    if (cached !== undefined) return cached;
+    const projection = gitProjectFresh(git);
+    gitProjections.set(git, projection);
+    return projection;
+}
+
+function gitProjectFresh(git: GitChangeSnapshot): GitProjection {
     if (git.comparison === "unavailable") return { changesStatus: "unavailable" };
     return {
         changesStatus: git.comparison,
