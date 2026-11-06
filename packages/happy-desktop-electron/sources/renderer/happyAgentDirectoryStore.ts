@@ -579,15 +579,14 @@ export function happyAgentDirectoryStoreCreate(
                 continue;
             const session = sessions.sessions.get(remote.entry.remoteId);
             if (session?.state !== "signedIn") {
-                // A server the shell has no word on was never signed in to in
-                // this run; one it lists as signed out had a sign-in that ended.
+                // A server the shell has no word on, or lists as signed out
+                // without a reason, was never signed in to in this run; one
+                // signed out with a reason had a sign-in that ended.
                 signInRequire(
                     remote,
-                    session === undefined
+                    session?.message === undefined
                         ? { message: "Sign in to this server to use it.", first: true }
-                        : session.message === undefined
-                          ? {}
-                          : { message: session.message },
+                        : { message: session.message },
                 );
                 continue;
             }

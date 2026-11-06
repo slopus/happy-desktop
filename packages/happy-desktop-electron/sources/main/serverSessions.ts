@@ -161,7 +161,6 @@ export function serverSessionsCreate(deps: ServerSessionsDeps): ServerSessions {
     let closed = false;
     let rosterTimer: ReturnType<typeof setTimeout> | undefined;
     const direct = deps.direct;
-    const DIRECT_SIGN_IN = "Sign in to this server to use it.";
 
     /** Happy Cloud's own addresses: every added server, and the account. */
     const directServers = (): Map<string, string> => {
@@ -188,15 +187,15 @@ export function serverSessionsCreate(deps: ServerSessionsDeps): ServerSessions {
             ...(direct?.servers().keys() ?? []),
         ]);
         if (direct) ids.delete(direct.account.connectionId);
-        snapshot = [...ids].sort().map((connectionId) =>
-            sessions.has(connectionId)
-                ? { connectionId, state: "signedIn" as const }
-                : {
-                      connectionId,
-                      state: "signedOut" as const,
-                      message: endings.get(connectionId) ?? DIRECT_SIGN_IN,
-                  },
-        );
+        // A Happy Cloud server never signed in to in this run is signed out
+        // with nothing to say about why.
+        snapshot = [...ids].sort().map((connectionId) => {
+            if (sessions.has(connectionId)) return { connectionId, state: "signedIn" as const };
+            const message = endings.get(connectionId);
+            return message === undefined
+                ? { connectionId, state: "signedOut" as const }
+                : { connectionId, state: "signedOut" as const, message };
+        });
         tokens = Object.fromEntries(
             [...sessions]
                 .filter(([connectionId]) => connectionId !== direct?.account.connectionId)
@@ -427,6 +426,9 @@ export function serverSessionsCreate(deps: ServerSessionsDeps): ServerSessions {
         }
         rosterWatch();
     };
+
+    // Happy Cloud's servers the person added before are listed from the start.
+    if (direct) publish();
 
     return {
         credential(connectionId) {
