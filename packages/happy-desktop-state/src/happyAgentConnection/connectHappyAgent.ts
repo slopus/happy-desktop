@@ -154,6 +154,44 @@ function debugDetail(value: unknown): string {
     }
 }
 
+/**
+ * An event as the debug log records it. A message event carries the transcript itself —
+ * whole tool outputs, inline images — and one arrives per streamed token, so its content is
+ * named by block rather than serialized: the log is for following the sync, and a burst of
+ * full message bodies would both stall the stream and push everything else out of it.
+ */
+function eventDebugOf(event: HappyAgentEvent): unknown {
+    switch (event.type) {
+        case "message.delta": {
+            const { append, ...payload } = event.payload;
+            return { ...event, payload: { ...payload, appendLength: append.length } };
+        }
+        case "message.created":
+        case "message.updated": {
+            const { message } = event.payload;
+            return {
+                ...event,
+                payload: {
+                    ...event.payload,
+                    message: { ...message, content: message.content.map(messageBlockDebugOf) },
+                },
+            };
+        }
+        default:
+            return event;
+    }
+}
+
+function messageBlockDebugOf(block: MessageBlock): string {
+    switch (block.type) {
+        case "text":
+        case "reasoning":
+            return `${block.type} (${String(block.text.length)} characters)`;
+        default:
+            return block.type;
+    }
+}
+
 /** The drain with the process that reported it, when that is known. */
 function drainTag(drain: DaemonDrain, daemonId: string | undefined): HappyAgentDrain {
     return daemonId === undefined ? drain : { ...drain, daemonId };
@@ -3764,7 +3802,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                         // and is never journaled, so nothing here moves.
                     } else {
                         reportDebug({
-                            detail: debugDetail(update.event),
+                            detail: debugDetail(eventDebugOf(update.event)),
                             level: "info",
                             message: `SSE event arrived: ${update.event.type}`,
                             source: "sse",

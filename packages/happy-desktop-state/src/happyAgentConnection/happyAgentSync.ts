@@ -77,6 +77,8 @@ export function happyAgentSyncCreate() {
     const source: HappyAgentSync = {
         async *follow({ signal, events, documents, onOnboarding }) {
             if (closed || signal.aborted) return;
+            // Every follower sees every event of the connection; most want few kinds.
+            const wanted = new Set(events);
             const queue: QueuedSyncInput[] = [];
             let wake: (() => void) | undefined;
             const notify = (): void => {
@@ -88,7 +90,7 @@ export function happyAgentSyncCreate() {
                 if (
                     input.kind === "update" &&
                     input.update.kind === "event" &&
-                    !events.includes(input.update.event.type)
+                    !wanted.has(input.update.event.type)
                 )
                     return;
                 if (input.kind === "update" && input.update.kind === "document" && !documents)
