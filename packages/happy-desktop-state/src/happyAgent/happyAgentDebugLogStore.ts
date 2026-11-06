@@ -69,7 +69,15 @@ export function happyAgentDebugLogStoreCreate(options: HappyAgentDebugLogStoreOp
     const listeners = new Set<() => void>();
     let nextId = 1;
     let retainedCharacters = 0;
-    let snapshot: HappyAgentDebugLogSnapshot = { discardedEntries: 0, entries: [] };
+    let discardedEntries = 0;
+    /*
+     * The connection writes an entry for every realtime event, hundreds at a time in a burst,
+     * while the log is rarely on screen. Entries are appended in place and discarded by
+     * moving `head`; the immutable snapshot is materialized only when someone reads it.
+     */
+    let retained: HappyAgentDebugLogEntry[] = [];
+    let head = 0;
+    let snapshot: HappyAgentDebugLogSnapshot | undefined = { discardedEntries: 0, entries: [] };
 
     const writer: HappyAgentDebugLogWriter = {
         entryAppend(input) {
@@ -82,27 +90,30 @@ export function happyAgentDebugLogStoreCreate(options: HappyAgentDebugLogStoreOp
             };
             nextId += 1;
 
-            const entries = [...snapshot.entries, entry];
+            retained.push(entry);
             retainedCharacters += entryCharacters(entry);
-            let discardedEntries = snapshot.discardedEntries;
             while (
-                entries.length > 1 &&
-                (entries.length > MAXIMUM_ENTRIES ||
+                retained.length - head > 1 &&
+                (retained.length - head > MAXIMUM_ENTRIES ||
                     retainedCharacters > MAXIMUM_RETAINED_CHARACTERS)
             ) {
-                const discarded = entries.shift();
-                if (discarded === undefined) break;
-                retainedCharacters -= entryCharacters(discarded);
+                retainedCharacters -= entryCharacters(retained[head]!);
+                head += 1;
                 discardedEntries += 1;
             }
-            snapshot = { discardedEntries, entries };
+            // Compacted once the discarded head is as long as the log itself.
+            if (head >= MAXIMUM_ENTRIES) {
+                retained = retained.slice(head);
+                head = 0;
+            }
+            snapshot = undefined;
             for (const listener of listeners) listener();
         },
     };
 
     return {
         store: {
-            get: () => snapshot,
+            get: () => (snapshot ??= { discardedEntries, entries: retained.slice(head) }),
             subscribe(listener) {
                 listeners.add(listener);
                 return () => listeners.delete(listener);
