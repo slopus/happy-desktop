@@ -55,6 +55,7 @@ import {
 import {
     buildIdentityArgument,
     debugMetricsArgument,
+    doNotTrackArgument,
     happyCloudArgument,
     desktopIpc,
     happyArtifactPartition,
@@ -127,6 +128,7 @@ import { DesktopWindowStateStore } from "./windowState";
 import { desktopBuildIdentityRead } from "./buildIdentity";
 import { DesktopDaemonController } from "./desktopDaemonController";
 import { desktopSmokeReportStart } from "./desktopSmokeReport";
+import { doNotTrackEnabled, doNotTrackEnvironment } from "../shared/doNotTrack";
 import { powerSavingInstall } from "./powerSaving";
 import { cloudAuthProductionRedirectUri, serverOAuthRedirectUri } from "../shared/cloudAuthConfig";
 import { cloudAuthCallbackRead } from "./cloudAuthCallback";
@@ -240,6 +242,8 @@ const windowTitle =
         : applicationName;
 const desktopDebugEnabled =
     process.env.HAPPY_DESKTOP_DEBUG === "1" || process.argv.includes("--debug");
+/** Read once: `DO_NOT_TRACK` keeps analytics off in every window of this run. */
+const desktopDoNotTrack = doNotTrackEnabled(process.env[doNotTrackEnvironment]);
 
 function desktopDebugRendererDefaultPort(): number {
     if (!buildIdentity || buildIdentity.label === "dev") return 9222;
@@ -1249,6 +1253,7 @@ function localWindowCreate(bounds?: DesktopWindowBounds) {
                     : []),
                 ...(desktopDebugEnabled ? [debugMetricsArgument] : []),
                 ...(happyCloud ? [happyCloudArgument] : []),
+                ...(desktopDoNotTrack ? [doNotTrackArgument] : []),
             ],
             contextIsolation: true,
             nodeIntegration: false,

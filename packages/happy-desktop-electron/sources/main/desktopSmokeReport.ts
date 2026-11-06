@@ -6,6 +6,7 @@ import {
     desktopSmokeScreenshotEnvironment,
     type DesktopSmokeReport,
 } from "../shared/desktopSmokeReport";
+import { desktopFlavor } from "./desktopFlavor";
 
 const welcomeTimeout = 60_000;
 const welcomePollInterval = 250;
@@ -15,6 +16,11 @@ const welcomeVisibleScript = `(() => {
     if (!element) return false;
     const box = element.getBoundingClientRect();
     return box.width > 0 && box.height > 0 && getComputedStyle(element).visibility !== "hidden";
+})()`;
+// What the window's analytics says about itself; null when it said nothing.
+const analyticsEnabledScript = `(() => {
+    const state = document.documentElement.dataset.happyAnalytics;
+    return state === "on" ? true : state === "off" ? false : null;
 })()`;
 
 /**
@@ -41,12 +47,20 @@ export function desktopSmokeReportStart(
             await writeFile(screenshotPath, image.toPNG());
             screenshotWritten = true;
         }
+        const analyticsEnabled =
+            window && !window.isDestroyed()
+                ? ((await window.webContents
+                      .executeJavaScript(analyticsEnabledScript)
+                      .catch(() => null)) as boolean | null)
+                : null;
         const report: DesktopSmokeReport = {
             packaged: app.isPackaged,
             platform: process.platform,
             arch: process.arch,
             welcomeVisible,
             windowTitle: window?.webContents.getTitle() ?? "",
+            analyticsEnabled,
+            rendererHosted: desktopFlavor.kind === "local-web",
             screenshotWritten,
             hiddenMode,
             dockVisible: app.dock ? app.dock.isVisible() : null,

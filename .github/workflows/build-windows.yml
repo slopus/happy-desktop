@@ -80,8 +80,8 @@ jobs:
                   fi
             # A release build carries the PostHog key, and the Nightly flavor loads the
             # published renderer, which always does; CI must never count as a person.
-            # The gym already launches under automation, which sends nothing; with
-            # PostHog unreachable, no launch here could either.
+            # The gym already launches with DO_NOT_TRACK and under automation, which
+            # send nothing; with PostHog unreachable, no launch here could either.
             - name: Keep CI launches away from PostHog
               shell: pwsh
               run: |
@@ -154,6 +154,8 @@ jobs:
               run: ./scripts/verify-windows-installer.ps1 -Flavor '${{ matrix.flavor }}'
             - name: Launch the installed application and verify its renderer
               env:
+                  # Analytics off from the first event; the smoke fails unless the window says so.
+                  DO_NOT_TRACK: "1"
                   HAPPY_DESKTOP_GYM_PACKAGED: "1"
                   HAPPY_DESKTOP_GYM_SCREENSHOT: ${{ runner.temp }}/happy-installed.png
               run: pnpm --dir packages/happy-desktop-gym gym:electron smoke

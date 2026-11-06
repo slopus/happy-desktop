@@ -1677,6 +1677,7 @@ if (mediaPreviewBridge) {
             development: (browserLocal && !cloudWeb) || desktopBridge.buildIdentity !== undefined,
             happyAgents,
             ...(desktopBridge.system ? { system: desktopBridge.system } : {}),
+            doNotTrack: desktopBridge.doNotTrack === true,
         });
         appDisposers.push(analytics.dispose);
         appDisposers.push(
