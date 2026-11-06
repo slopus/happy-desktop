@@ -49,6 +49,7 @@ jobs:
                   replace_once('                expect(performance.now() - started, "interaction exceeded 2 seconds").toBeLessThan(', '''                const interactionDurationMs = performance.now() - started;
                                   maxInteractionDurationMs = Math.max(maxInteractionDurationMs, interactionDurationMs);
                                   measuredInteractions += 1;
+                                  console.info("CHAT_FUZZ_INTERACTION_DURATION " + JSON.stringify({seed, step, action, durationMs: interactionDurationMs}));
                                   expect(interactionDurationMs, "interaction exceeded 2 seconds").toBeLessThan(''')
                   replace_once('                        depth: testDepth,', '''                        depth: testDepth,
                                           passed: true,
