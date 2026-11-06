@@ -140,7 +140,8 @@ export type AnalyticsOutcome =
           readonly error_code: (typeof ANALYTICS_CREATE_ERROR_CODES)[number];
       };
 
-export const ANALYTICS_FLAVORS = ["standard", "nightly"] as const;
+export const ANALYTICS_FLAVORS = ["standard", "nightly", "preview"] as const;
+export type AnalyticsFlavor = (typeof ANALYTICS_FLAVORS)[number];
 export const ANALYTICS_AGENT_LOCATIONS = ["local", "remote"] as const;
 export const ANALYTICS_ARCHES = ["arm64", "x64", "other"] as const;
 
@@ -150,7 +151,8 @@ export interface AnalyticsCommonProperties {
     readonly device_class: "desktop";
     /** Numbers only; null, and so left out, for a build whose version is not. */
     readonly app_version: string | null;
-    readonly flavor: (typeof ANALYTICS_FLAVORS)[number];
+    /** Which build: what tells a preview from the release of the same numbers. */
+    readonly flavor: AnalyticsFlavor;
     /** Where the desktop runs. */
     readonly os: AnalyticsDesktopOs;
     /** Major and minor only, e.g. `15.6` or `10.0`; null on Linux and older shells. */
@@ -677,6 +679,24 @@ export function analyticsVersion(version: string | null | undefined): string | n
     if (!version) return null;
     const bare = version.split(/[-+]/, 1)[0]!;
     return bare.length <= VERSION_MAX_LENGTH && VERSION.test(bare) ? bare : null;
+}
+
+/** A numbered preview's version, as preview releases embed it. */
+const PREVIEW_VERSION = /^[0-9]+\.[0-9]+\.[0-9]+-preview\.(0|[1-9][0-9]*)$/;
+
+/**
+ * Which build an event came from. `app_version` leaves as numbers only, so
+ * `0.0.104-preview.1` and `0.0.104` send the same one; this tells them apart.
+ * The hosted Nightly renderer, which only ever ships as a preview, is
+ * `nightly`; a numbered preview of the standard app is `preview`; anything
+ * else is `standard`.
+ */
+export function analyticsFlavor(build: {
+    readonly nightly: boolean;
+    readonly version: string;
+}): AnalyticsFlavor {
+    if (build.nightly) return "nightly";
+    return PREVIEW_VERSION.test(build.version) ? "preview" : "standard";
 }
 
 /** An OS version cut to major.minor (`15.6.0` is `15.6`); null when it is not a plain number. */

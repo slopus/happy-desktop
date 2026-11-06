@@ -6,6 +6,7 @@ import {
     ANALYTICS_EVENT_RULES,
     ANALYTICS_MODEL_FAMILY_RULES,
     ANALYTICS_VALUE_PATTERNS,
+    analyticsFlavor,
     analyticsValueAllowed,
     type AnalyticsPropertyRule,
 } from "./analyticsCatalog";
@@ -57,7 +58,7 @@ const NARROWED: Readonly<Record<string, readonly string[]>> = {
     "common.os": ["ios", "android"],
     "common.device_class": ["phone", "tablet"],
     "common.agent_location": ["relay"],
-    "common.flavor": ["preview", "development"],
+    "common.flavor": ["development"],
     "onboarding_step_viewed.step": ["welcome", "pair", "sign_in", "notifications", "done"],
     "mobile_pairing_failed.error_code": [
         "invalid_code",
@@ -181,4 +182,13 @@ it("checks strings with the catalog's own patterns", () => {
 
 it("names model families with the catalog's own prefix table, in its order", () => {
     expect(ANALYTICS_MODEL_FAMILY_RULES).toEqual(catalog.model_family_rule.rules);
+});
+
+it("tells a numbered preview from the release of the same numbers", () => {
+    expect(
+        ["0.0.104", "0.0.104-preview.1", "0.0.104-preview.01", "0.0.104-beta.1", "0.0.0-test"].map(
+            (version) => analyticsFlavor({ nightly: false, version }),
+        ),
+    ).toEqual(["standard", "preview", "standard", "standard", "standard"]);
+    expect(analyticsFlavor({ nightly: true, version: "0.0.104-preview.1" })).toBe("nightly");
 });

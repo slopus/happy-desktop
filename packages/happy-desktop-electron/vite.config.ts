@@ -72,7 +72,11 @@ export default defineConfig({
         ),
         // PostHog's public project key, supplied by the release build the way
         // the phone receives EXPO_PUBLIC_POSTHOG_API_KEY. Unset sends nothing.
-        __HAPPY_POSTHOG_API_KEY__: JSON.stringify(process.env.HAPPY_POSTHOG_API_KEY || null),
+        // Only the builds release workflows publish set it; a profile build,
+        // which only gyms and diagnostics run, never carries it.
+        __HAPPY_POSTHOG_API_KEY__: JSON.stringify(
+            (!profileBuild && process.env.HAPPY_POSTHOG_API_KEY) || null,
+        ),
         // A local capture endpoint in place of PostHog, for checking what is
         // sent. Set, it also lets a development window send there.
         __HAPPY_POSTHOG_HOST__: JSON.stringify(process.env.HAPPY_POSTHOG_HOST || null),
