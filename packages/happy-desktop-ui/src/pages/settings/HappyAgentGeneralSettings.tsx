@@ -83,6 +83,8 @@ export type HappyAgentGeneralSettingsProps = {
     onCompletionSoundChange?: (sound: HappyAgentCompletionSound) => void;
     /** Whether this window sends product analytics events. Absent where the host sends none. */
     usageAnalyticsEnabled?: boolean;
+    /** The host refused to keep the last analytics choice. */
+    usageAnalyticsSaveFailed?: boolean;
     onUsageAnalyticsChange?: (enabled: boolean) => void;
     /** Absent where the host does not manage updates. */
     previewUpdatesEnabled?: boolean;
@@ -589,6 +591,7 @@ export function HappyAgentGeneralSettings(props: HappyAgentGeneralSettingsProps)
             {props.usageAnalyticsEnabled !== undefined && props.onUsageAnalyticsChange ? (
                 <HappyAgentProductAnalyticsSettings
                     enabled={props.usageAnalyticsEnabled}
+                    {...(props.usageAnalyticsSaveFailed ? { saveFailed: true } : {})}
                     onChange={props.onUsageAnalyticsChange}
                 />
             ) : null}

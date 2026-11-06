@@ -17,7 +17,7 @@ const categories: readonly HappyAgentSettingsCategory[] = [
 
 const noop = () => undefined;
 
-function PrivacyScreen(props: { readonly enabled: boolean }) {
+function PrivacyScreen(props: { readonly enabled: boolean; readonly saveFailed?: boolean }) {
     return (
         <HappyAgentSettingsShell
             activeCategoryId="general"
@@ -27,7 +27,11 @@ function PrivacyScreen(props: { readonly enabled: boolean }) {
             onClose={noop}
             title="General"
         >
-            <HappyAgentProductAnalyticsSettings enabled={props.enabled} onChange={noop} />
+            <HappyAgentProductAnalyticsSettings
+                enabled={props.enabled}
+                {...(props.saveFailed ? { saveFailed: true } : {})}
+                onChange={noop}
+            />
         </HappyAgentSettingsShell>
     );
 }
@@ -56,6 +60,15 @@ export function ProductAnalyticsSettingsPage() {
                 window={{ width: 720, height: 640 }}
             >
                 <PrivacyScreen enabled={false} />
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="Turned off, but the host refused to keep the choice"
+                label="Privacy — off, not saved"
+                number="03"
+                screen="03-off-not-saved-1100x760"
+                window={{ width: 1100, height: 760 }}
+            >
+                <PrivacyScreen enabled={false} saveFailed />
             </FullScreenSpecimen>
             <div className="specimen-grid">
                 <Specimen

@@ -11,7 +11,7 @@ vi.hoisted(() => {
 
 import {
     analyticsEnvelope,
-    ANALYTICS_PROPERTY_NAMES,
+    analyticsRuleOf,
     type AnalyticsClient,
     type AnalyticsMobilePairingMethod,
 } from "happy-desktop-analytics";
@@ -433,7 +433,7 @@ it("sends pairing events with catalog fields only: no code, address, emoji, or d
     ]);
     for (const item of captured) {
         for (const name of Object.keys(item.properties))
-            expect(ANALYTICS_PROPERTY_NAMES.has(name), `${item.event}.${name}`).toBe(true);
+            expect(analyticsRuleOf(item.event, name), `${item.event}.${name}`).toBeDefined();
         const sent = analyticsEnvelope(item.event, item.properties, {
             distinctId: "install",
             insertId: "0190e0d4-0000-7000-8000-000000000000",

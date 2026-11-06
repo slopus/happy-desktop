@@ -5,7 +5,7 @@
  * drops any property it does not know, or whose value its rule does not allow,
  * before an event leaves the window.
  *
- * Only enums, counts, booleans, versions, and allowlisted model ids: never an
+ * Only enums, counts, booleans, and version numbers: never a model id, an
  * IP, a name, an id, a path, a URL, or any text the reader or an agent wrote.
  */
 
@@ -91,6 +91,40 @@ export const ANALYTICS_EFFORTS = [
 ] as const;
 export type AnalyticsEffort = (typeof ANALYTICS_EFFORTS)[number];
 
+/**
+ * A model's family, from the catalog's `model_family_rule` prefix table; the
+ * model id itself never leaves the window.
+ */
+export const ANALYTICS_MODEL_FAMILIES = [
+    "claude_opus",
+    "claude_sonnet",
+    "claude_haiku",
+    "claude_fable",
+    "gpt",
+    "grok",
+    "gemini",
+    "glm",
+    "kimi",
+    "other",
+] as const;
+export type AnalyticsModelFamily = (typeof ANALYTICS_MODEL_FAMILIES)[number];
+
+/** The catalog's `model_family_rule`: the first prefix a bare model id starts with names its family. */
+export const ANALYTICS_MODEL_FAMILY_RULES: readonly (readonly [string, AnalyticsModelFamily])[] = [
+    ["anthropic/opus", "claude_opus"],
+    ["anthropic/claude-opus", "claude_opus"],
+    ["anthropic/sonnet", "claude_sonnet"],
+    ["anthropic/claude-sonnet", "claude_sonnet"],
+    ["anthropic/haiku", "claude_haiku"],
+    ["anthropic/claude-haiku", "claude_haiku"],
+    ["anthropic/fable", "claude_fable"],
+    ["openai/gpt", "gpt"],
+    ["xai/grok", "grok"],
+    ["google/gemini", "gemini"],
+    ["zai/glm", "glm"],
+    ["moonshotai/kimi", "kimi"],
+];
+
 /** A small count, bucketed so it cannot single anyone out. */
 export const ANALYTICS_BUCKETS = ["0", "1", "2", "3+"] as const;
 export type AnalyticsBucket = (typeof ANALYTICS_BUCKETS)[number];
@@ -114,7 +148,8 @@ export const ANALYTICS_ARCHES = ["arm64", "x64", "other"] as const;
 export interface AnalyticsCommonProperties {
     readonly client: "desktop";
     readonly device_class: "desktop";
-    readonly app_version: string;
+    /** Numbers only; null, and so left out, for a build whose version is not. */
+    readonly app_version: string | null;
     readonly flavor: (typeof ANALYTICS_FLAVORS)[number];
     /** Where the desktop runs. */
     readonly os: AnalyticsDesktopOs;
@@ -129,8 +164,8 @@ export interface AnalyticsCommonProperties {
 
 /** The model fields `conversation_created` shares with `message_sent`. */
 export interface AnalyticsModelProperties {
-    /** An allowlisted vendor-qualified model id, `other`, or null for the agent default. */
-    readonly model: string | null;
+    /** The model's family, `other` for any model outside the table, null for the agent default. */
+    readonly model_family: AnalyticsModelFamily | null;
     readonly model_provider_kind: AnalyticsProviderKind | null;
     /** The effort level sent; null is the model default. */
     readonly effort: AnalyticsEffort | null;
@@ -149,7 +184,7 @@ export const ANALYTICS_CONVERSATION_SOURCES = [
 export const ANALYTICS_PROJECT_SOURCES = ["open_folder", "clone_github"] as const;
 export const ANALYTICS_BOT_SOURCES = ["sidebar", "voice"] as const;
 
-/** What one Subscriptions card says about its assistant. */
+/** What one Subscriptions card says about its assistant as the person continues. */
 export const ANALYTICS_ASSISTANT_STATUSES = [
     "signed_in",
     "not_signed_in",
@@ -283,7 +318,6 @@ export type AnalyticsErrorArea = (typeof ANALYTICS_ERROR_AREAS)[number];
 /** Event-specific properties, by event name. */
 export interface AnalyticsEvents {
     readonly app_opened: {
-        readonly launch_count: number;
         /** Every desktop launch is a cold start: the renderer has no background state. */
         readonly is_cold_start: true;
         /** Happy Agent connections this window has, local included. */
@@ -300,7 +334,7 @@ export interface AnalyticsEvents {
           } & Partial<AnalyticsSetupDownloadFailure>)
     ) & {
         /** From the Setup step first showing in this window to its end. */
-        readonly duration_ms: number;
+        readonly duration: AnalyticsDuration;
     };
     readonly onboarding_assistant_status: {
         readonly assistant: (typeof ANALYTICS_ASSISTANTS)[number];
@@ -312,30 +346,6 @@ export interface AnalyticsEvents {
          * and for an assistant that is not installed.
          */
         readonly path_refreshed: boolean;
-    };
-    readonly onboarding_command_copied: {
-        readonly assistant: (typeof ANALYTICS_ASSISTANTS)[number];
-        /** `agent_prompt` is one of the Custom card's prompts for the person's own coding agent. */
-        readonly kind: "install" | "sign_in" | "agent_prompt";
-        /** Which variant of the commands the screen showed: Windows PowerShell, or POSIX shell. */
-        readonly shell: "powershell" | "posix";
-    };
-    /**
-     * Subscriptions first showed in this window: which other coding apps the
-     * machine has. Null when unknown, or when there is no verified signal on this OS.
-     */
-    readonly onboarding_local_apps: {
-        readonly claude_desktop_app: boolean | null;
-        readonly codex_desktop_app: boolean | null;
-        readonly antigravity_app: boolean | null;
-        readonly agy_cli: boolean | null;
-    };
-    /** The window closed on Subscriptions without Continue: what each card said then. */
-    readonly onboarding_subscriptions_exit: {
-        readonly claude_status: AnalyticsAssistantStatus | null;
-        readonly codex_status: AnalyticsAssistantStatus | null;
-        readonly grok_status: AnalyticsAssistantStatus | null;
-        readonly custom_status: AnalyticsAssistantStatus | null;
     };
     readonly onboarding_mobile: { readonly action: "paired" | "skipped" };
     readonly onboarding_completed: Readonly<Record<never, never>>;
@@ -413,8 +423,6 @@ export interface AnalyticsEvents {
     readonly error_shown: {
         readonly area: AnalyticsErrorArea;
         readonly code: AnalyticsErrorCode;
-        /** Occurrences of this area and code held back since the last one sent. */
-        readonly repeat_count: number;
     };
 }
 
@@ -427,7 +435,7 @@ export type AnalyticsEventProperties<E extends AnalyticsEventName> = AnalyticsCo
 /** How one property's value is checked as an event leaves, as `catalog.json` states it. */
 export type AnalyticsPropertyRule = (
     | { readonly type: "enum"; readonly values: readonly string[] }
-    | { readonly type: "bool" | "count" | "version" | "os_version" | "model" }
+    | { readonly type: "bool" | "count" | "version" | "os_version" }
 ) & { readonly nullable?: true; readonly optional?: true };
 
 type AllKeys<T> = T extends unknown ? keyof T : never;
@@ -443,11 +451,10 @@ const optional = <R extends AnalyticsPropertyRule>(rule: R) =>
 const BOOL = { type: "bool" } as const;
 const COUNT = { type: "count" } as const;
 const MODEL_RULES = {
-    model: nullable({ type: "model" }),
+    model_family: nullable(oneOf(ANALYTICS_MODEL_FAMILIES)),
     model_provider_kind: nullable(oneOf(ANALYTICS_PROVIDER_KINDS)),
     effort: nullable(oneOf(ANALYTICS_EFFORTS)),
 } as const;
-const ASSISTANT_STATUS = nullable(oneOf(ANALYTICS_ASSISTANT_STATUSES));
 const OUTCOME_RULES = {
     result: oneOf(["ok", "failed"]),
     error_code: optional(oneOf(ANALYTICS_CREATE_ERROR_CODES)),
@@ -472,7 +479,6 @@ export const ANALYTICS_EVENT_RULES: {
     readonly [E in AnalyticsEventName]: AnalyticsPropertyRules<AnalyticsEvents[E]>;
 } = {
     app_opened: {
-        launch_count: COUNT,
         is_cold_start: BOOL,
         agents_connected: oneOf(ANALYTICS_BUCKETS),
     },
@@ -483,29 +489,12 @@ export const ANALYTICS_EVENT_RULES: {
         error_detail: optional(oneOf(ANALYTICS_SETUP_ERROR_DETAILS)),
         attempt_count: optional(COUNT),
         transfer_percent_bucket: optional(oneOf(ANALYTICS_TRANSFER_PERCENT_BUCKETS)),
-        duration_ms: COUNT,
+        duration: oneOf(ANALYTICS_DURATIONS),
     },
     onboarding_assistant_status: {
         assistant: oneOf(ANALYTICS_ASSISTANTS),
         status: oneOf(ANALYTICS_ASSISTANT_STATUSES),
         path_refreshed: BOOL,
-    },
-    onboarding_command_copied: {
-        assistant: oneOf(ANALYTICS_ASSISTANTS),
-        kind: oneOf(["install", "sign_in", "agent_prompt"]),
-        shell: oneOf(["powershell", "posix"]),
-    },
-    onboarding_local_apps: {
-        claude_desktop_app: nullable(BOOL),
-        codex_desktop_app: nullable(BOOL),
-        antigravity_app: nullable(BOOL),
-        agy_cli: nullable(BOOL),
-    },
-    onboarding_subscriptions_exit: {
-        claude_status: ASSISTANT_STATUS,
-        codex_status: ASSISTANT_STATUS,
-        grok_status: ASSISTANT_STATUS,
-        custom_status: ASSISTANT_STATUS,
     },
     onboarding_mobile: { action: oneOf(["paired", "skipped"]) },
     onboarding_completed: NONE,
@@ -561,7 +550,6 @@ export const ANALYTICS_EVENT_RULES: {
     error_shown: {
         area: oneOf(ANALYTICS_ERROR_AREAS),
         code: oneOf(ANALYTICS_ERROR_CODES),
-        repeat_count: COUNT,
     },
 };
 
@@ -570,21 +558,14 @@ export const ANALYTICS_EVENT_NAMES: ReadonlySet<string> = new Set(
     Object.keys(ANALYTICS_EVENT_RULES),
 );
 
-/** Every property name the catalog allows on some event. */
-export const ANALYTICS_PROPERTY_NAMES: ReadonlySet<string> = new Set([
-    ...Object.keys(ANALYTICS_COMMON_RULES),
-    ...Object.values(ANALYTICS_EVENT_RULES).flatMap((rules) => Object.keys(rules)),
-]);
-
 /** The shapes the catalog's `types` allow for a string value. */
 export const ANALYTICS_VALUE_PATTERNS = {
-    version: /^[0-9]+(\.[0-9]+){0,3}([-+][0-9A-Za-z.]+)?$/,
+    version: /^[0-9]+(\.[0-9]+){0,3}$/,
     os_version: /^[0-9]+(\.[0-9]+)?$/,
-    model: /^(anthropic|openai|xai|google|zai|moonshotai)\/[a-z0-9][a-z0-9.-]{0,63}$/,
 } as const;
 const VERSION = ANALYTICS_VALUE_PATTERNS.version;
+const VERSION_MAX_LENGTH = 32;
 const OS_VERSION = ANALYTICS_VALUE_PATTERNS.os_version;
-const MODEL = ANALYTICS_VALUE_PATTERNS.model;
 const COUNT_MAX = 1_000_000;
 
 /** Whether a value is one `rule` allows. */
@@ -600,11 +581,13 @@ export function analyticsValueAllowed(rule: AnalyticsPropertyRule, value: unknow
                 Number.isInteger(value) && (value as number) >= 0 && (value as number) <= COUNT_MAX
             );
         case "version":
-            return typeof value === "string" && value.length <= 64 && VERSION.test(value);
+            return (
+                typeof value === "string" &&
+                value.length <= VERSION_MAX_LENGTH &&
+                VERSION.test(value)
+            );
         case "os_version":
             return typeof value === "string" && OS_VERSION.test(value);
-        case "model":
-            return typeof value === "string" && (value === "other" || MODEL.test(value));
     }
 }
 
@@ -628,20 +611,6 @@ export function analyticsRuleOf(
 export type AnalyticsFlag =
     /** On: pairing pages select Direct first for people who have not chosen. */
     "direct-connection-migration-new-users";
-
-/** Maps an operating system as Node names it (`process.platform`) to the shared family. */
-export function analyticsOsFromPlatform(platform: string): AnalyticsOs {
-    switch (platform) {
-        case "darwin":
-            return "mac";
-        case "win32":
-            return "win";
-        case "linux":
-            return "linux";
-        default:
-            return "other";
-    }
-}
 
 /** A provider's configured type on the catalog's list, else `other`; null when unknown. */
 export function analyticsProviderKind(
@@ -689,15 +658,25 @@ export function analyticsErrorCodeOfStatus(status: number): AnalyticsErrorCode {
 }
 
 /**
- * A Happy Agent model id as the catalog allows it: never `providerId:modelId`,
- * and a model outside the first-party vendors is `other`, since a custom
- * provider's model name could say something private. Null is the agent default.
+ * A Happy Agent model id's family: its `providerId:` prefix stripped, then the
+ * first rule it starts with, else `other`, since a custom provider's model
+ * name could say something private. Null is the agent default.
  */
-export function analyticsModel(modelId: string | undefined): string | null {
+export function analyticsModelFamily(modelId: string | undefined): AnalyticsModelFamily | null {
     if (modelId === undefined || modelId.length === 0) return null;
     const separator = modelId.indexOf(":");
     const bare = separator === -1 ? modelId : modelId.slice(separator + 1);
-    return MODEL.test(bare) ? bare : "other";
+    return ANALYTICS_MODEL_FAMILY_RULES.find(([prefix]) => bare.startsWith(prefix))?.[1] ?? "other";
+}
+
+/**
+ * A version as the catalog allows it: numbers only, cut at the first `-` or
+ * `+`; null when what is left is still not one.
+ */
+export function analyticsVersion(version: string | null | undefined): string | null {
+    if (!version) return null;
+    const bare = version.split(/[-+]/, 1)[0]!;
+    return bare.length <= VERSION_MAX_LENGTH && VERSION.test(bare) ? bare : null;
 }
 
 /** An OS version cut to major.minor (`15.6.0` is `15.6`); null when it is not a plain number. */

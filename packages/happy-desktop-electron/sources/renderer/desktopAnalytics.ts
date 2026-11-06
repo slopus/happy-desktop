@@ -5,12 +5,14 @@ import {
     analyticsErrorCodeOfStatus,
     analyticsErrorThrottleCreate,
     analyticsFailureKind,
+    analyticsDuration,
     analyticsHostLoopback,
-    analyticsModel,
+    analyticsModelFamily,
     analyticsOutageTrackerCreate,
     analyticsSeenCreate,
     analyticsOsVersion,
     analyticsProviderKind,
+    analyticsVersion,
     type AnalyticsAssistantStatus,
     type AnalyticsClient,
     type AnalyticsCommonProperties,
@@ -21,7 +23,6 @@ import {
     type AnalyticsEvents,
     type AnalyticsFailureAction,
     type AnalyticsFlag,
-    type AnalyticsMemory,
     type AnalyticsMobilePairingMethod,
     type AnalyticsMobilePairingSurface,
     type AnalyticsModelProperties,
@@ -53,7 +54,6 @@ import {
     type HappyMobileOnboardingStore,
     type MobilePairingMethodOutput,
     type MobilePairingMethodStore,
-    type UsageAnalyticsDocument,
     type UsageAnalyticsPersistence,
     type UsageAnalyticsStore,
     type WelcomeStore,
@@ -61,7 +61,6 @@ import {
 import {
     localOnboardingStage,
     type LocalOnboardingAssistant,
-    type LocalOnboardingCommandCopy,
     type LocalOnboardingView,
     type OnboardingStage,
 } from "happy-desktop-ui";
@@ -81,10 +80,16 @@ declare const __HAPPY_POSTHOG_API_KEY__: string | null;
 declare const __HAPPY_POSTHOG_HOST__: string | null;
 
 const INSTALL_ID_KEY = "happy.analytics.install-id.v1";
-const LAUNCH_COUNT_KEY = "happy.analytics.launch-count.v1";
 const USAGE_ANALYTICS_KEY = "happy.usage-analytics.v1";
-const ERROR_THROTTLE_KEY = "happy.analytics.error-shown.v1";
-const FAILURES_SEEN_KEY = "happy.analytics.failures-seen.v1";
+/**
+ * What earlier builds kept and nothing reads any more, deleted as the window
+ * opens: the install id is the only analytics value kept on disk.
+ */
+const OBSOLETE_KEYS = [
+    "happy.analytics.launch-count.v1",
+    "happy.analytics.error-shown.v1",
+    "happy.analytics.failures-seen.v1",
+] as const;
 /** How long `app_opened` waits for the Happy Agent's version before going without it. */
 const APP_OPENED_VERSION_WAIT_MS = 10_000;
 
@@ -92,8 +97,8 @@ export interface DesktopAnalytics {
     /** The Settings switch, shared with the settings screen. */
     readonly preference: UsageAnalyticsStore;
     /**
-     * Counts this renderer start and reports it once, as soon as the active
-     * Happy Agent's version is known or after a short wait without it.
+     * Reports this renderer start once, as soon as the active Happy Agent's
+     * version is known or after a short wait without it.
      */
     appOpened(): void;
     /** What one Happy Agent's workspace reported doing. */
@@ -124,34 +129,45 @@ export interface DesktopAnalytics {
     dispose(): void;
 }
 
+/** What one key holds: undefined when nothing is stored. Throws when storage cannot be read. */
 function storageRead(key: string): string | undefined {
-    try {
-        return localStorage.getItem(key) ?? undefined;
-    } catch {
-        return undefined;
-    }
+    return localStorage.getItem(key) ?? undefined;
 }
 
+/** Analytics-only state: a window the host refuses storage still works while it is open. */
 function storageWrite(key: string, value: string): void {
     try {
         localStorage.setItem(key, value);
     } catch {
-        // A storage-denied window still reports for as long as it is open.
+        // Kept in memory instead.
     }
 }
 
-/** A random identity for this installation, made once and kept by this window's storage. */
-function installId(): string {
-    const stored = storageRead(INSTALL_ID_KEY);
-    if (stored) return stored;
+function storageRemove(key: string): void {
+    try {
+        localStorage.removeItem(key);
+    } catch {
+        // Nothing the window can do; it is not read while analytics is off.
+    }
+}
+
+/**
+ * A random identity for this installation, kept by this window's storage:
+ * the stored one, or a new one when there is none or `renew` asks for it.
+ */
+function installId(renew: boolean): string {
+    try {
+        const stored = renew ? undefined : storageRead(INSTALL_ID_KEY);
+        if (stored) return stored;
+    } catch {
+        // Unreadable storage gets an id for this window only.
+    }
     const created = crypto.randomUUID();
     storageWrite(INSTALL_ID_KEY, created);
     return created;
 }
 
-function memoryOf(key: string): AnalyticsMemory {
-    return { read: () => storageRead(key), write: (value) => storageWrite(key, value) };
-}
+
 
 /** On screen and holding the keyboard; a window with no document is neither. */
 function windowFocused(): boolean {
@@ -173,14 +189,29 @@ const FAILURE_ACTIONS = {
     assistance: "ask_chief",
 } as const satisfies Record<string, AnalyticsFailureAction>;
 
+/**
+ * The Settings switch's storage. Nothing stored and something that cannot be
+ * read are told apart, since only the first means on; a refused write throws
+ * so Settings can say the choice was not kept.
+ */
 function usageAnalyticsPersistence(): UsageAnalyticsPersistence {
     return {
         read() {
-            const value = storageRead(USAGE_ANALYTICS_KEY);
-            return value ? (JSON.parse(value) as UsageAnalyticsDocument) : undefined;
+            let value: string | undefined;
+            try {
+                value = storageRead(USAGE_ANALYTICS_KEY);
+            } catch {
+                return { kind: "unreadable" };
+            }
+            if (value === undefined) return { kind: "absent" };
+            try {
+                return { kind: "stored", value: JSON.parse(value) as unknown };
+            } catch {
+                return { kind: "unreadable" };
+            }
         },
         write(document) {
-            storageWrite(USAGE_ANALYTICS_KEY, JSON.stringify(document));
+            localStorage.setItem(USAGE_ANALYTICS_KEY, JSON.stringify(document));
         },
     };
 }
@@ -322,19 +353,6 @@ function setupLive(snapshot: LocalOnboardingViewSnapshot, view: LocalOnboardingV
         view.kind !== "agent-ready" &&
         snapshot.onboarding?.reachedStage === undefined
     );
-}
-
-function commandKindOf(
-    kind: LocalOnboardingCommandCopy["kind"],
-): AnalyticsEvents["onboarding_command_copied"]["kind"] {
-    switch (kind) {
-        case "install":
-            return "install";
-        case "sign-in":
-            return "sign_in";
-        case "agent-prompt":
-            return "agent_prompt";
-    }
 }
 
 /** The pairing events, each carrying only methods and pages: never a code, address, emoji, or name. */
@@ -752,7 +770,7 @@ function conversationObserve(deps: ConversationObserveDeps): () => void {
             }
             const row = failureRowOf(entry);
             if (!row || now - row.occurredAt > FAILURE_FRESH_MS) continue;
-            if (!deps.seen.first(row.id)) continue;
+            if (!deps.seen.first(row.id, now)) continue;
             const kind = analyticsFailureKind(row.failure?.kind);
             deps.chatFailureShown({
                 kind,
@@ -778,8 +796,22 @@ export function desktopAnalyticsCreate(options: {
     /** Replaces the PostHog client, for tests. */
     readonly client?: AnalyticsClient;
 }): DesktopAnalytics {
+    for (const key of OBSOLETE_KEYS) storageRemove(key);
     const preference = usageAnalyticsStoreCreate(usageAnalyticsPersistence());
-    const installation = installId();
+    const reporting = (): boolean => preference.get().usageAnalyticsEnabled;
+    /**
+     * This installation's id, read or made only right before a request that
+     * may go. Turning analytics off deletes it, and the next one is new.
+     */
+    let installation: string | undefined;
+    let installationRenew = false;
+    const distinctId = (): string => {
+        if (installation === undefined) {
+            installation = installId(installationRenew);
+            installationRenew = false;
+        }
+        return installation;
+    };
     const client: AnalyticsClient =
         options.client ??
         analyticsClientCreate({
@@ -791,9 +823,19 @@ export function desktopAnalyticsCreate(options: {
                     ? undefined
                     : (__HAPPY_POSTHOG_API_KEY__ ?? undefined),
             ...(__HAPPY_POSTHOG_HOST__ === null ? {} : { host: __HAPPY_POSTHOG_HOST__ }),
-            distinctId: installation,
-            enabled: () => preference.get().usageAnalyticsEnabled,
+            distinctId,
+            enabled: reporting,
         });
+    /** What analytics-only observers forget when analytics turns off. */
+    const offResets = new Set<() => void>();
+    const preferenceChanged = (): void => {
+        if (reporting()) return;
+        installation = undefined;
+        installationRenew = true;
+        storageRemove(INSTALL_ID_KEY);
+        for (const reset of offResets) reset();
+    };
+    const preferenceUnsubscribe = preference.subscribe(preferenceChanged);
     const os = desktopOs();
 
     /**
@@ -809,14 +851,14 @@ export function desktopAnalyticsCreate(options: {
         return {
             client: "desktop",
             device_class: "desktop",
-            app_version: __HAPPY_RENDERER_VERSION__,
+            app_version: analyticsVersion(__HAPPY_RENDERER_VERSION__),
             flavor: localWebBuild ? "nightly" : "standard",
             os,
             os_version: analyticsOsVersion(options.system?.osVersion),
             arch: options.system?.arch ?? null,
             agent_os: local ? os : null,
             agent_location: entry ? (local ? "local" : "remote") : null,
-            happy_agent_version: entry?.version ?? null,
+            happy_agent_version: analyticsVersion(entry?.version),
         };
     };
     const track = <E extends AnalyticsEventName>(
@@ -835,23 +877,24 @@ export function desktopAnalyticsCreate(options: {
     window.addEventListener("pagehide", closing);
 
     const modelOf = (model: HappyAgentActivityModel): AnalyticsModelProperties => ({
-        model: analyticsModel(model.modelId),
+        model_family: analyticsModelFamily(model.modelId),
         model_provider_kind: analyticsProviderKind(model.providerType),
         effort: model.effort ?? null,
     });
 
-    const errorThrottle = analyticsErrorThrottleCreate(memoryOf(ERROR_THROTTLE_KEY));
-    const failuresSeen = analyticsSeenCreate(memoryOf(FAILURES_SEEN_KEY));
+    const errorThrottle = analyticsErrorThrottleCreate();
+    const failuresSeen = analyticsSeenCreate();
+    offResets.add(errorThrottle.clear);
+    offResets.add(failuresSeen.clear);
     const errorShown = (
         happyAgentId: string,
         area: AnalyticsErrorArea,
         code: AnalyticsErrorCode,
     ): void => {
         // Nothing is remembered for a window that does not report.
-        if (!preference.get().usageAnalyticsEnabled) return;
-        const repeatCount = errorThrottle.occurred(area, code, Date.now());
-        if (repeatCount !== undefined)
-            track(happyAgentId, "error_shown", { area, code, repeat_count: repeatCount });
+        if (!reporting()) return;
+        if (errorThrottle.allow(area, code, Date.now()))
+            track(happyAgentId, "error_shown", { area, code });
     };
 
     const outages = analyticsOutageTrackerCreate();
@@ -859,7 +902,10 @@ export function desktopAnalyticsCreate(options: {
         options.happyAgents.get().activeHappyAgentId ?? LOCAL_HAPPY_AGENT_ID;
     /** The Happy Agent an open outage is on, so its end is reported there. */
     let outageAgent = LOCAL_HAPPY_AGENT_ID;
+    // An outage that began while analytics was off is never reported.
+    offResets.add(outages.reset);
     const connectionCheck = (): void => {
+        if (!reporting()) return;
         const id = activeId();
         const entry = options.happyAgents.get().happyAgents.find((item) => item.id === id);
         const ended = outages.observe(
@@ -898,6 +944,9 @@ export function desktopAnalyticsCreate(options: {
               readonly entryIds: ReadonlySet<string>;
           }
         | undefined;
+    offResets.add(() => {
+        onScreen = undefined;
+    });
     // The conversation the person is looking at: the active Happy Agent's open one.
     let followed:
         | { readonly workspace: unknown; readonly check: () => void; readonly stop: () => void }
@@ -1032,9 +1081,6 @@ export function desktopAnalyticsCreate(options: {
                 pairingReport(options.happyAgents.get().activeHappyAgentId ?? LOCAL_HAPPY_AGENT_ID),
             ),
         appOpened() {
-            const count = Number(storageRead(LAUNCH_COUNT_KEY) ?? "0");
-            const launchCount = (Number.isSafeInteger(count) && count > 0 ? count : 0) + 1;
-            storageWrite(LAUNCH_COUNT_KEY, String(launchCount));
             // Reported on the Happy Agent the window is using, once its
             // version is known: a launch reported before the first connection
             // could only ever say it did not know which agent it ran.
@@ -1054,7 +1100,6 @@ export function desktopAnalyticsCreate(options: {
                     activeId(),
                     "app_opened",
                     {
-                        launch_count: launchCount,
                         is_cold_start: true,
                         agents_connected: analyticsBucket(
                             options.happyAgents.get().happyAgents.length,
@@ -1152,12 +1197,12 @@ export function desktopAnalyticsCreate(options: {
                 trackOptions?: AnalyticsTrackOptions,
             ): void => {
                 if (!setup) return;
-                const durationMs = Math.round(performance.now() - setup.startedAt);
+                const duration = analyticsDuration(performance.now() - setup.startedAt);
                 setup = undefined;
                 track(
                     LOCAL_HAPPY_AGENT_ID,
                     "onboarding_setup_result",
-                    { ...outcome, duration_ms: durationMs },
+                    { ...outcome, duration },
                     trackOptions,
                 );
             };
@@ -1175,39 +1220,20 @@ export function desktopAnalyticsCreate(options: {
                     },
                     { beacon: true },
                 );
-            const subscriptionsClose = (): void => {
-                const snapshot = store.get();
-                const view = localOnboardingView(snapshot);
-                if (
-                    view?.kind !== "provider-authentication" ||
-                    snapshot.pending ||
-                    snapshot.onboarding?.reachedStage !== undefined ||
-                    !welcome.get().welcomeAcknowledged
-                )
-                    return;
-                const statusOf = (id: LocalOnboardingAssistant["id"]) => {
-                    const assistant = view.assistants.find((item) => item.id === id);
-                    return (assistant && assistantStatus(assistant.authentication)) ?? null;
-                };
-                track(
-                    LOCAL_HAPPY_AGENT_ID,
-                    "onboarding_subscriptions_exit",
-                    {
-                        claude_status: statusOf("claude"),
-                        codex_status: statusOf("codex"),
-                        grok_status: statusOf("grok"),
-                        custom_status: assistantStatus(view.custom.authentication) ?? null,
-                    },
-                    { beacon: true },
-                );
-            };
             closers.add(setupClose);
-            closers.add(subscriptionsClose);
             let step: AnalyticsEvents["onboarding_step_viewed"]["step"] | undefined;
-            let localAppsSent = false;
             let mobile: string | undefined;
             let stage: string | undefined;
+            // While analytics is off nothing is followed, and what was is
+            // forgotten, so turning it back on reports only what it then sees.
+            offResets.add(() => {
+                setup = undefined;
+                step = undefined;
+                mobile = undefined;
+                stage = undefined;
+            });
             const observe = (snapshot: LocalOnboardingViewSnapshot): void => {
+                if (!reporting()) return;
                 const view = localOnboardingView(snapshot);
                 if (view && view.kind !== "finishing" && welcome.get().welcomeAcknowledged) {
                     const next = stepOf(localOnboardingStage(view));
@@ -1216,21 +1242,6 @@ export function desktopAnalyticsCreate(options: {
                         track(LOCAL_HAPPY_AGENT_ID, "onboarding_step_viewed", { step: next });
                     }
                     if (setupLive(snapshot, view)) setup ??= { startedAt: performance.now() };
-                    if (next === "subscriptions" && !localAppsSent) {
-                        const onboarding = snapshot.onboarding;
-                        const apps = onboarding?.localApps;
-                        // A shell that names no install shell predates the
-                        // look entirely, so it will never answer: unknown.
-                        if (apps || (onboarding?.assistants && !onboarding.installShell)) {
-                            localAppsSent = true;
-                            track(LOCAL_HAPPY_AGENT_ID, "onboarding_local_apps", {
-                                claude_desktop_app: apps?.claudeDesktop ?? null,
-                                codex_desktop_app: apps?.codexDesktop ?? null,
-                                antigravity_app: apps?.antigravityApp ?? null,
-                                agy_cli: apps?.agyCli ?? null,
-                            });
-                        }
-                    }
                 }
                 if (setup) {
                     const failure = setupFailureOf(snapshot, localProtocolMismatch());
@@ -1315,20 +1326,10 @@ export function desktopAnalyticsCreate(options: {
                     }
                     store.assistantsContinue();
                 },
-                commandCopied(copy) {
-                    const view = localOnboardingView(store.get());
-                    track(LOCAL_HAPPY_AGENT_ID, "onboarding_command_copied", {
-                        assistant: copy.assistant,
-                        kind: commandKindOf(copy.kind),
-                        // The variant on screen when it was copied.
-                        shell:
-                            view?.kind === "provider-authentication" ? view.installShell : "posix",
-                    });
-                    store.commandCopied(copy);
-                },
             };
         },
         dispose() {
+            preferenceUnsubscribe();
             directoryUnsubscribe();
             followed?.stop();
             if (typeof document !== "undefined")

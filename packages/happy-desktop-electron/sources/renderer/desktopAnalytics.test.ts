@@ -176,7 +176,6 @@ function onboardingCreate() {
         agentSetupBegin: () => undefined,
         chiefOfStaffSetup: () => undefined,
         assistantsContinue: () => undefined,
-        commandCopied: () => undefined,
         stepBack: () => undefined,
         happyMobileConnect: () => undefined,
         happyMobileSkip: () => undefined,
@@ -300,7 +299,7 @@ it("sends app_opened once, as soon as the Happy Agent's version is known", () =>
     expect(client.captured).toHaveLength(1);
     expect(client.captured[0]).toMatchObject({
         event: "app_opened",
-        properties: { launch_count: 1, happy_agent_version: "1.4.0" },
+        properties: { app_version: "0.0.0", happy_agent_version: "1.4.0" },
     });
     analytics.dispose();
 });
@@ -357,6 +356,7 @@ it("drops every property the catalog does not name", () => {
     const sent = envelopeOf("app_opened", {
         token: "phc_test",
         distinct_id: "someone-else",
+        is_cold_start: true,
         launch_count: 3,
         os_version: "15.6",
         arch: "arm64",
@@ -372,7 +372,7 @@ it("drops every property the catalog does not name", () => {
     });
 
     expect(sent?.properties).toEqual({
-        launch_count: 3,
+        is_cold_start: true,
         os_version: "15.6",
         arch: "arm64",
         distinct_id: "install",
@@ -449,8 +449,6 @@ it("never sends free text, whatever the machine says about its failures", () => 
             }),
         }),
     );
-    observed.commandCopied({ assistant: "claude", kind: "sign-in" });
-    observed.commandCopied({ assistant: "custom", kind: "agent-prompt" });
     observed.assistantsContinue();
 
     const activities: HappyAgentActivity[] = [
@@ -488,10 +486,7 @@ it("never sends free text, whatever the machine says about its failures", () => 
             "app_opened",
             "onboarding_step_viewed",
             "onboarding_setup_result",
-            "onboarding_command_copied",
             "onboarding_assistant_status",
-            "onboarding_local_apps",
-            "onboarding_subscriptions_exit",
             "message_sent",
             "conversation_created",
             "project_added",
@@ -499,23 +494,18 @@ it("never sends free text, whatever the machine says about its failures", () => 
             "bot_created",
         ]),
     );
-    expect(client.captured.filter((c) => c.event === "onboarding_subscriptions_exit")).toEqual([
-        expect.objectContaining({
-            properties: expect.objectContaining({
-                // A daemon refusing for want of a signed-in assistant marks every card.
-                claude_status: "not_signed_in",
-                codex_status: "not_installed",
-                grok_status: "not_installed",
-                custom_status: "not_signed_in",
-            }),
-            options: { beacon: true },
-        }),
-    ]);
+    expect(events).not.toContain("onboarding_local_apps");
+    expect(events).not.toContain("onboarding_subscriptions_exit");
+    expect(client.captured.find((c) => c.event === "message_sent")?.properties).toMatchObject({
+        model_family: "claude_opus",
+    });
+    expect(
+        client.captured.find((c) => c.event === "conversation_created")?.properties,
+    ).toMatchObject({ model_family: "other" });
 
     const allowedString = [
         /^[a-z][a-z0-9_]*$/, // enums
-        /^[0-9]+(\.[0-9]+){0,3}(-[a-z0-9.]+)?$/, // versions
-        /^[a-z0-9-]+\/[a-z0-9.-]+$/, // vendor-qualified model id
+        /^[0-9]+(\.[0-9]+){0,3}$/, // versions
     ];
     for (const captured of client.captured) {
         const sent = envelopeOf(captured.event, captured.properties);
@@ -558,7 +548,7 @@ it("reports a Setup still running at close as failed, with the last failure it m
         properties: { result: "failed", error_code: "start_timeout" },
         options: { beacon: true },
     });
-    expect(results[0]?.properties.duration_ms).toEqual(expect.any(Number));
+    expect(results[0]?.properties.duration).toBe("under_10s");
 });
 
 it("details a download failure by the shell's code, attempts, and how much arrived", () => {
@@ -722,7 +712,7 @@ it("takes the install shell from the desktop, and from the renderer's OS only on
     expect(subscriptions({})).toMatchObject({ installShell: "posix" });
 });
 
-it("reports the machine's other apps once, and which installs only a refreshed PATH found", () => {
+it("reports which installs only a refreshed PATH found, as the person continues", () => {
     const client = clientCreate();
     const analytics = desktopAnalyticsCreate({
         development: false,
@@ -732,7 +722,7 @@ it("reports the machine's other apps once, and which installs only a refreshed P
     const { store, welcome, publish } = onboardingCreate();
     const observed = analytics.onboardingObserve(store, welcome);
     const unsubscribe = observed.subscribe(() => undefined);
-    const subscriptions = (localApps?: LocalOnboardingSnapshot["localApps"]) =>
+    const subscriptions = () =>
         view({
             onboarding: onboarding("assistantsFound", {
                 assistants: [
@@ -741,7 +731,6 @@ it("reports the machine's other apps once, and which installs only a refreshed P
                     { id: "grok", status: "missing" },
                 ],
                 installShell: "powershell",
-                ...(localApps ? { localApps } : {}),
             }),
             providerAuthentication: {
                 claude: "invalid",
@@ -751,28 +740,8 @@ it("reports the machine's other apps once, and which installs only a refreshed P
                 grok: "invalid",
             },
         });
-    // Still looking: nothing is sent until the answer arrives.
     publish(subscriptions());
-    expect(client.captured.filter((c) => c.event === "onboarding_local_apps")).toEqual([]);
-    const apps = { agyCli: false, antigravityApp: null, claudeDesktop: true, codexDesktop: false };
-    publish(subscriptions(apps));
-    publish(subscriptions({ ...apps, agyCli: true }));
-    expect(
-        client.captured.filter((c) => c.event === "onboarding_local_apps").map((c) => c.properties),
-    ).toEqual([
-        expect.objectContaining({
-            claude_desktop_app: true,
-            codex_desktop_app: false,
-            antigravity_app: null,
-            agy_cli: false,
-        }),
-    ]);
-
-    observed.commandCopied({ assistant: "claude", kind: "sign-in" });
     observed.assistantsContinue();
-    expect(
-        client.captured.find((c) => c.event === "onboarding_command_copied")?.properties,
-    ).toMatchObject({ assistant: "claude", kind: "sign_in", shell: "powershell" });
     expect(
         client.captured
             .filter((c) => c.event === "onboarding_assistant_status")
@@ -791,32 +760,3 @@ it("reports the machine's other apps once, and which installs only a refreshed P
     analytics.dispose();
 });
 
-it("sends unknown apps for a shell too old to look for them", () => {
-    const client = clientCreate();
-    const analytics = desktopAnalyticsCreate({
-        development: false,
-        happyAgents: directoryCreate(),
-        client,
-    });
-    const { store, welcome, publish } = onboardingCreate();
-    const unsubscribe = analytics.onboardingObserve(store, welcome).subscribe(() => undefined);
-    publish(
-        view({
-            onboarding: onboarding("assistantsFound", {
-                assistants: [{ id: "claude", status: "missing" }],
-            }),
-        }),
-    );
-    expect(
-        client.captured.filter((c) => c.event === "onboarding_local_apps").map((c) => c.properties),
-    ).toEqual([
-        expect.objectContaining({
-            claude_desktop_app: null,
-            codex_desktop_app: null,
-            antigravity_app: null,
-            agy_cli: null,
-        }),
-    ]);
-    unsubscribe();
-    analytics.dispose();
-});

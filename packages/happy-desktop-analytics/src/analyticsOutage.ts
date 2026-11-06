@@ -29,6 +29,11 @@ export interface AnalyticsOutageTracker {
     restartRequested(): void;
     /** The window is closing: an outage still open ends with it. */
     close(now: number): ConnectionLost | undefined;
+    /**
+     * Analytics is off: the open outage and every agent seen connected are
+     * forgotten, so an outage that began while off is never reported.
+     */
+    reset(): void;
 }
 
 interface Outage {
@@ -89,5 +94,9 @@ export function analyticsOutageTrackerCreate(): AnalyticsOutageTracker {
             if (outage) outage.restarted = true;
         },
         close: (now) => end("closed", now),
+        reset() {
+            outage = undefined;
+            connected.clear();
+        },
     };
 }

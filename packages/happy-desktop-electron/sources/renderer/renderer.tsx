@@ -572,7 +572,6 @@ function DesktopOnboardingGate(props: {
             onAssistantsContinue={() => props.store.assistantsContinue()}
             onSandboxSetup={() => props.store.sandboxSetup()}
             {...(snapshot.onboarding.sandboxStep ? { sandboxStep: true } : {})}
-            onCommandCopy={(copy) => props.store.commandCopied(copy)}
             onConnectRetry={() => props.store.connectRetry()}
             onAgentUpdate={() => props.store.agentUpdate()}
             onHappyMobileConnect={() => props.store.happyMobileConnect()}

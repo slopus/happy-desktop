@@ -1,6 +1,5 @@
 import type {
     LocalOnboardingAssistant,
-    LocalOnboardingCommandCopy,
     LocalOnboardingCustom,
     LocalOnboardingView,
     OnboardingStage,
@@ -78,11 +77,6 @@ export interface LocalOnboardingStore {
     agentSetupBegin(): void;
     chiefOfStaffSetup(): void;
     assistantsContinue(): void;
-    /**
-     * The person copied a Subscriptions card's command or prompt. Setup keeps
-     * nothing of it; it is here so whoever owns the window can count it.
-     */
-    commandCopied(copy: LocalOnboardingCommandCopy): void;
     stepBack(step: LocalOnboardingStepBack): void;
     /** Starts Windows sandbox setup; Windows' administrator prompt opens from here. */
     sandboxSetup(): void;
@@ -920,7 +914,6 @@ export function localOnboardingStoreCreate(
         assistantsContinue() {
             attempt(bridge.onboardingAssistantsContinue(), "Happy could not continue setup.");
         },
-        commandCopied() {},
         stepBack(step) {
             attempt(bridge.onboardingStepBack(step), "Happy could not go back to that step.");
         },

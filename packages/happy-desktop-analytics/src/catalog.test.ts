@@ -4,7 +4,7 @@ import {
     ANALYTICS_COMMON_RULES,
     ANALYTICS_EVENT_NAMES,
     ANALYTICS_EVENT_RULES,
-    ANALYTICS_PROPERTY_NAMES,
+    ANALYTICS_MODEL_FAMILY_RULES,
     ANALYTICS_VALUE_PATTERNS,
     analyticsValueAllowed,
     type AnalyticsPropertyRule,
@@ -20,6 +20,7 @@ interface CatalogProperty {
 
 interface Catalog {
     readonly types: Readonly<Record<string, string>>;
+    readonly model_family_rule: { readonly rules: readonly (readonly [string, string])[] };
     readonly shared_enums: Readonly<Record<string, readonly string[]>>;
     readonly common: Readonly<Record<string, CatalogProperty>>;
     readonly events: Readonly<
@@ -44,7 +45,6 @@ const NOT_SENT: Readonly<Record<string, string>> = {
 
 /** Optional catalog properties the desktop never sends, and why. */
 const OMITTED: Readonly<Record<string, string>> = {
-    "app_opened.app_language": "the desktop is English only",
     "app_opened.notifications": "mobile only",
     "mobile_pairing_completed.start": "phone only",
     "mobile_pairing_failed.start": "phone only",
@@ -166,19 +166,8 @@ it("gives every desktop event the catalog's properties, types, and values", () =
     }
 });
 
-it("allows only the property names its rules list", () => {
-    expect([...ANALYTICS_PROPERTY_NAMES].sort()).toEqual(
-        [
-            ...new Set([
-                ...Object.keys(ANALYTICS_COMMON_RULES),
-                ...Object.values(ANALYTICS_EVENT_RULES).flatMap((rules) => Object.keys(rules)),
-            ]),
-        ].sort(),
-    );
-});
-
 it("checks strings with the catalog's own patterns", () => {
-    for (const type of ["version", "os_version", "model"] as const)
+    for (const type of ["version", "os_version"] as const)
         expect(catalog.types[type]).toContain(
             ANALYTICS_VALUE_PATTERNS[type].source.replaceAll("\\/", "/"),
         );
@@ -187,10 +176,9 @@ it("checks strings with the catalog's own patterns", () => {
     expect(
         [0, 1_000_000, 1_000_001, -1, 1.5].map((value) => analyticsValueAllowed(count, value)),
     ).toEqual([true, true, false, false, false]);
-    const model: AnalyticsPropertyRule = { type: "model" };
-    expect(
-        ["anthropic/opus-5-5", "other", "claude_extra:anthropic/opus-5", "custom/alice-model"].map(
-            (value) => analyticsValueAllowed(model, value),
-        ),
-    ).toEqual([true, true, false, false]);
+    expect(catalog.types.version).toContain("at most 32 characters");
+});
+
+it("names model families with the catalog's own prefix table, in its order", () => {
+    expect(ANALYTICS_MODEL_FAMILY_RULES).toEqual(catalog.model_family_rule.rules);
 });

@@ -437,7 +437,10 @@ const serverDirectoryAbsent: AppServers["directory"] = {
 const keepAwakeStoreNone = keepAwakeStoreCreate({ mode: "off" });
 
 /** Stands in where the host sends no usage events, so the view subscribes unconditionally. */
-const usageAnalyticsAbsentSnapshot = { usageAnalyticsEnabled: false } as const;
+const usageAnalyticsAbsentSnapshot = {
+    usageAnalyticsEnabled: false,
+    usageAnalyticsSaveFailed: false,
+} as const;
 const usageAnalyticsAbsent: UsageAnalyticsStore = {
     get: () => usageAnalyticsAbsentSnapshot,
     subscribe: () => () => undefined,
@@ -1425,6 +1428,7 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                     {...(props.usageAnalytics
                         ? {
                               usageAnalyticsEnabled: usageAnalytics.usageAnalyticsEnabled,
+                              usageAnalyticsSaveFailed: usageAnalytics.usageAnalyticsSaveFailed,
                               onUsageAnalyticsChange: usageAnalyticsStore.usageAnalyticsUpdate,
                           }
                         : {})}

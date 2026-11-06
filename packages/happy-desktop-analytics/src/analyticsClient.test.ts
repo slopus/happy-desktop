@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { ANALYTICS_PROPERTY_NAMES } from "./analyticsCatalog";
+import { analyticsRuleOf } from "./analyticsCatalog";
 import { ANALYTICS_ENVELOPE_PROPERTY_NAMES, analyticsClientCreate } from "./analyticsClient";
 
 const INSTALL_ID = "00000000-0000-4000-8000-000000000000";
@@ -14,8 +14,8 @@ const appOpened = {
     client: "desktop",
     device_class: "desktop",
     app_version: "1.2.3",
-    launch_count: 3,
     is_cold_start: true,
+    agents_connected: "2",
     $current_url: "file:///Users/alice/Happy.app/index.html",
     $referrer: "https://example.com",
     message: "Alice's private note",
@@ -30,7 +30,7 @@ it("sends a failed event once and never again, before or after analytics is turn
     let enabled = true;
     const client = analyticsClientCreate({
         apiKey: "phc_test",
-        distinctId: INSTALL_ID,
+        distinctId: () => INSTALL_ID,
         enabled: () => enabled,
     });
 
@@ -49,7 +49,7 @@ it("sends only catalog properties inside the fixed envelope, without cookies or 
     vi.stubGlobal("fetch", fetch);
     const client = analyticsClientCreate({
         apiKey: "phc_test",
-        distinctId: INSTALL_ID,
+        distinctId: () => INSTALL_ID,
         enabled: () => true,
     });
 
@@ -62,6 +62,7 @@ it("sends only catalog properties inside the fixed envelope, without cookies or 
         method: "POST",
         credentials: "omit",
         referrerPolicy: "no-referrer",
+        redirect: "error",
     });
     const body = JSON.parse(init.body as string) as {
         api_key: string;
@@ -74,11 +75,12 @@ it("sends only catalog properties inside the fixed envelope, without cookies or 
     expect(sent!.event).toBe("app_opened");
     for (const name of Object.keys(sent!.properties))
         expect(
-            ANALYTICS_PROPERTY_NAMES.has(name) || ANALYTICS_ENVELOPE_PROPERTY_NAMES.has(name),
+            analyticsRuleOf("app_opened", name) !== undefined ||
+                ANALYTICS_ENVELOPE_PROPERTY_NAMES.has(name),
             name,
         ).toBe(true);
     expect(sent!.properties).toMatchObject({
-        launch_count: 3,
+        agents_connected: "2",
         distinct_id: INSTALL_ID,
         $lib: "happy-desktop",
         $process_person_profile: false,
@@ -86,6 +88,25 @@ it("sends only catalog properties inside the fixed envelope, without cookies or 
         $geoip_disable: true,
     });
     expect(sent!.properties.$insert_id).toMatch(/^[0-9a-f-]{36}$/);
+    expect(sent!.timestamp).toMatch(/:[0-9]{2}\.000Z$/);
     expect(JSON.stringify(body)).not.toContain("alice");
     expect(JSON.stringify(body)).not.toContain("Alice");
+});
+
+it("sends nothing to a host override that is neither https nor http on this machine", () => {
+    const fetch = vi.fn(async () => new Response("{}"));
+    vi.stubGlobal("fetch", fetch);
+    for (const host of [
+        "http://capture.example.com",
+        "https://user:secret@capture.example.com",
+        "ftp://127.0.0.1",
+    ])
+        analyticsClientCreate({
+            apiKey: "phc_test",
+            host,
+            distinctId: () => INSTALL_ID,
+            enabled: () => true,
+        }).track("app_opened", appOpened);
+
+    expect(fetch).not.toHaveBeenCalled();
 });

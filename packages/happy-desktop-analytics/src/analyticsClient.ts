@@ -48,10 +48,16 @@ export interface AnalyticsClient {
 export interface AnalyticsClientOptions {
     /** The project's public key. Absent means nothing is ever sent or asked. */
     readonly apiKey: string | undefined;
-    /** Where events go instead of PostHog: a local capture endpoint, for checking them. */
+    /**
+     * Where events go instead of PostHog, for checking them: an https host, or
+     * an http one on this machine, without credentials. Any other sends nothing.
+     */
     readonly host?: string;
-    /** This installation's random identity; never derived from anything about the person. */
-    readonly distinctId: string;
+    /**
+     * This installation's random identity; never derived from anything about
+     * the person. Asked for only right before a request that may go.
+     */
+    readonly distinctId: () => string;
     /** Read right before every request, so turning analytics off stops the next one. */
     readonly enabled: () => boolean;
 }
@@ -62,19 +68,43 @@ export interface AnalyticsClientOptions {
  * never send.
  */
 export function analyticsHostLoopback(host: string): boolean {
-    let hostname: string;
+    const url = urlOf(host);
+    return url !== undefined && LOOPBACK_HOSTNAMES.has(url.hostname);
+}
+
+function urlOf(host: string): URL | undefined {
     try {
-        hostname = new URL(host).hostname;
+        return new URL(host);
     } catch {
-        return false;
+        return undefined;
     }
+}
+
+const LOOPBACK_HOSTNAMES: ReadonlySet<string> = new Set([
+    "127.0.0.1",
+    "[::1]",
+    "::1",
+    "localhost",
+]);
+
+/** An https host, or an http one on this machine, with no credentials in it. */
+function hostAllowed(host: string): boolean {
+    const url = urlOf(host);
+    if (url === undefined || url.username !== "" || url.password !== "") return false;
     return (
-        hostname === "127.0.0.1" ||
-        hostname === "[::1]" ||
-        hostname === "::1" ||
-        hostname === "localhost"
+        url.protocol === "https:" ||
+        (url.protocol === "http:" && LOOPBACK_HOSTNAMES.has(url.hostname))
     );
 }
+
+/** Every request: no cookie, no referrer, and no following a redirect anywhere else. */
+const REQUEST: RequestInit = {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "omit",
+    referrerPolicy: "no-referrer",
+    redirect: "error",
+};
 
 /** One event as `/batch/` takes it. */
 export interface AnalyticsBatchEvent {
@@ -136,46 +166,57 @@ function flagsOf(answer: unknown): ReadonlySet<string> {
  * Sends catalog events to PostHog from this renderer, one request per event,
  * without an SDK. A request that fails is dropped, never kept or sent again,
  * so nothing is sent after analytics is turned off. No cookie or referrer
- * goes with it, and a window driven by automation sends nothing unless it
- * sends to a capture endpoint on this machine.
+ * goes with it and no redirect is followed. A window driven by automation
+ * sends nothing unless it sends to a capture endpoint on this machine.
  */
 export function analyticsClientCreate(options: AnalyticsClientOptions): AnalyticsClient {
     const host = options.host ?? POSTHOG_HOST;
+    const allowed = hostAllowed(host);
     const loopback = options.host !== undefined && analyticsHostLoopback(options.host);
     const sendable = (): string | undefined => {
         const apiKey = options.apiKey;
-        if (apiKey === undefined || apiKey.length === 0 || !options.enabled()) return undefined;
+        if (!allowed || apiKey === undefined || apiKey.length === 0 || !options.enabled())
+            return undefined;
         if (!loopback && typeof navigator !== "undefined" && navigator.webdriver) return undefined;
         return apiKey;
     };
-    /** This window's answer from `/flags`, asked once; undefined when PostHog gave none. */
-    let flags: Promise<ReadonlySet<string> | undefined> | undefined;
-    const flagsLoad = (apiKey: string): Promise<ReadonlySet<string> | undefined> =>
-        (flags ??= fetch(`${host}/flags/?v=2`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ api_key: apiKey, distinct_id: options.distinctId }),
-            credentials: "omit",
-            referrerPolicy: "no-referrer",
-        })
-            .then(async (response) => (response.ok ? flagsOf(await response.json()) : undefined))
-            .catch(() => undefined));
+    /**
+     * This window's answer from `/flags`, asked once per installation id;
+     * undefined when PostHog gave none.
+     */
+    let flags:
+        | { readonly id: string; readonly answer: Promise<ReadonlySet<string> | undefined> }
+        | undefined;
+    const flagsLoad = (apiKey: string): Promise<ReadonlySet<string> | undefined> => {
+        const id = options.distinctId();
+        if (flags?.id !== id)
+            flags = {
+                id,
+                answer: fetch(`${host}/flags/?v=2`, {
+                    ...REQUEST,
+                    body: JSON.stringify({ api_key: apiKey, distinct_id: id }),
+                })
+                    .then(async (response) =>
+                        response.ok ? flagsOf(await response.json()) : undefined,
+                    )
+                    .catch(() => undefined),
+            };
+        return flags.answer;
+    };
     return {
         track(event, properties, trackOptions) {
             const apiKey = sendable();
             if (apiKey === undefined) return;
             const batch = analyticsEnvelope(event, { ...properties }, {
-                distinctId: options.distinctId,
+                distinctId: options.distinctId(),
                 insertId: crypto.randomUUID(),
-                timestamp: new Date().toISOString(),
+                // Whole seconds: finer times only help tell people apart.
+                timestamp: new Date(Math.floor(Date.now() / 1000) * 1000).toISOString(),
             });
             if (!batch) return;
             void fetch(`${host}/batch/`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
+                ...REQUEST,
                 body: JSON.stringify({ api_key: apiKey, batch: [batch] }),
-                credentials: "omit",
-                referrerPolicy: "no-referrer",
                 // Outlives the window it was sent from; best effort, like anything sent at close.
                 ...(trackOptions?.beacon ? { keepalive: true } : {}),
             }).catch(() => undefined);
