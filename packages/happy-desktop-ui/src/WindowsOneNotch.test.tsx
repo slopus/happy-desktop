@@ -189,7 +189,7 @@ it("records one real downward notch from controlled distances while streaming", 
             streaming = true;
         };
         for (const distance of [40, 70, 95, 500]) {
-            const repetitions = distance === 500 ? 1 : 10;
+            const repetitions = 10;
             for (let iteration = 1; iteration <= repetitions; iteration += 1) {
                 streaming = false;
                 samples = [];

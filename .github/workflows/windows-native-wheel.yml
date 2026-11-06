@@ -10,11 +10,12 @@ permissions:
 
 jobs:
     native-wheel:
-        runs-on: windows-2025
+        runs-on: ${{ matrix.os }}
         timeout-minutes: 20
         strategy:
             fail-fast: false
             matrix:
+                os: [windows-2025, ubuntu-latest]
                 dpr: [1, 1.25]
         defaults:
             run:
@@ -26,15 +27,16 @@ jobs:
               with:
                   node-version: "24"
                   cache: pnpm
-            - run: pnpm config set script-shell "C:\Program Files\Git\bin\bash.exe"
+            - if: runner.os == 'Windows'
+              run: pnpm config set script-shell "C:\Program Files\Git\bin\bash.exe"
             - run: pnpm install --frozen-lockfile
             - run: pnpm --dir packages/happy-desktop-ui exec playwright install chromium
             - name: Run native wheel trace
               env:
                   HAPPY_SCROLL_REPRO_DPR: ${{ matrix.dpr }}
                   HAPPY_SCROLL_REPRO_SMOOTH: "1"
-                  HAPPY_SCROLL_REPRO_HEADED: "1"
-                  HAPPY_SCROLL_REPRO_NATIVE: "1"
+                  HAPPY_SCROLL_REPRO_HEADED: ${{ runner.os == 'Windows' && '1' || '0' }}
+                  HAPPY_SCROLL_REPRO_NATIVE: ${{ runner.os == 'Windows' && '1' || '0' }}
               run: |
                   mkdir -p .context/native-wheel
                   set -o pipefail
@@ -45,7 +47,7 @@ jobs:
             - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
               if: always()
               with:
-                  name: windows-native-wheel-${{ matrix.dpr }}
+                  name: wheel-${{ matrix.os }}-${{ matrix.dpr }}
                   path: |
                       .context/native-wheel
                       packages/happy-desktop-ui/src/__screenshots__/WindowsOneNotch.test.tsx/**

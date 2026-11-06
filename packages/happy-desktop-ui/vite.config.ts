@@ -175,6 +175,22 @@ export default defineConfig({
                     await page.mouse.up();
                 },
                 scrollReproNativeOneNotch: async ({ page, iframe, frame }, offset: number) => {
+                    if (process.platform !== "win32") {
+                        const box = await iframe.locator("[data-scrollbar-viewport]").first().boundingBox();
+                        if (!box) throw new Error("Targeted wheel viewport is missing");
+                        await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+                        const target = await frame();
+                        await target.evaluate(async (distance) => {
+                            const prepare = (window as Window & {
+                                __happyOneNotchPrepare?: (distance: number) => Promise<void>;
+                            }).__happyOneNotchPrepare;
+                            if (!prepare) throw new Error("Targeted wheel fixture is missing");
+                            await prepare(distance);
+                        }, offset);
+                        const scale = await page.evaluate(() => window.devicePixelRatio);
+                        await page.mouse.wheel(0, 100 / scale);
+                        return;
+                    }
                     if (
                         process.platform !== "win32" ||
                         process.env.HAPPY_SCROLL_REPRO_NATIVE !== "1"
