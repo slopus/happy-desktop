@@ -59,8 +59,8 @@ function toggleValue(current: readonly string[], value: string, multiSelect: boo
  * HappyAgentUserInputPrompt — renders a `HappyAgentUserInputRequest` as one or more option
  * pickers. With `resolvedAnswers` it is the same card frozen: every option
  * stays where it was with the answers ticked, nothing can be changed, and its
- * height is the height it had when it was submitted. Only an answer no option
- * names, a reply given through the message box, is added under its question.
+ * height is the height it had when it was submitted. A free-form question
+ * holds one line for its reply in both states.
  * Single-select questions clear other options; multi-select questions
  * accumulate. Submit calls `onAnswer(requestId, { [questionId]: string[] })`
  * with the chosen option labels, and is blocked until every `required` question
@@ -128,13 +128,27 @@ export function HappyAgentUserInputPrompt(props: HappyAgentUserInputPromptProps)
             <div className="happy-agent-input__questions">
                 {request.questions.map((question, questionIndex) => {
                     const selected = answers[question.id] ?? [];
-                    /* A settled answer no option names was given through the
-                       message box; an unanswered free-form question says so. */
-                    const unoffered = selected.filter(
-                        (answer) => !question.options.some((option) => option.label === answer),
-                    );
-                    if (question.options.length === 0 && unoffered.length === 0)
-                        unoffered.push(question.required ? "No answer" : "Skipped");
+                    /* A free-form question holds one line for its reply from the
+                       start, so answering it changes no size: it asks for the
+                       reply, then quotes it on that same line. An answer to an
+                       offered question that no option names is the person's own
+                       message below, and the frozen form stays as it was. */
+                    const reply = selected
+                        .filter(
+                            (answer) => !question.options.some((option) => option.label === answer),
+                        )
+                        .join(", ");
+                    const replyLine =
+                        question.options.length > 0
+                            ? undefined
+                            : !resolved
+                              ? { text: "Waiting for your reply", placeholder: true }
+                              : reply
+                                ? { text: reply, placeholder: false }
+                                : {
+                                      text: question.required ? "No answer" : "Skipped",
+                                      placeholder: true,
+                                  };
                     return (
                         <div
                             aria-labelledby={`${questionPrefix}-${questionIndex}`}
@@ -212,18 +226,22 @@ export function HappyAgentUserInputPrompt(props: HappyAgentUserInputPromptProps)
                                     );
                                 })}
                             </div>
-                            {resolved && unoffered.length > 0 ? (
+                            {replyLine ? (
                                 <div
                                     className="happy-agent-input__answers"
                                     data-happy-desktop-ui="happy-agent-user-input-answers"
                                 >
-                                    {unoffered.map((answer) => (
-                                        <div className="happy-agent-input__answer" key={answer}>
-                                            <span className="happy-agent-input__answer-label">
-                                                {answer}
-                                            </span>
-                                        </div>
-                                    ))}
+                                    <div
+                                        className="happy-agent-input__answer"
+                                        data-placeholder={replyLine.placeholder ? "" : undefined}
+                                    >
+                                        <span
+                                            className="happy-agent-input__answer-label"
+                                            title={replyLine.placeholder ? undefined : reply}
+                                        >
+                                            {replyLine.text}
+                                        </span>
+                                    </div>
                                 </div>
                             ) : null}
                         </div>
@@ -284,13 +302,16 @@ export function HappyAgentUserInputPrompt(props: HappyAgentUserInputPromptProps)
                         }
                         variant="secondary"
                     >
-                        {resolved ? (
-                            "Submitted"
-                        ) : props.pending ? (
-                            <ShimmerText tone="inherit">Submit</ShimmerText>
-                        ) : (
-                            "Submit"
-                        )}
+                        {/* As wide as "Submitted" from the start, so answering moves nothing. */}
+                        <span className="happy-agent-input__submit-label" data-reserve="Submitted">
+                            {resolved ? (
+                                "Submitted"
+                            ) : props.pending ? (
+                                <ShimmerText tone="inherit">Submit</ShimmerText>
+                            ) : (
+                                "Submit"
+                            )}
+                        </span>
                     </Button>
                 </div>
             )}
