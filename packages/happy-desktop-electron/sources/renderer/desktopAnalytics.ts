@@ -784,20 +784,60 @@ function conversationObserve(deps: ConversationObserveDeps): () => void {
 }
 
 /**
+ * Says on the document whether this window reports, for the shell's
+ * first-launch smoke to read: `off` when `DO_NOT_TRACK` or the Settings
+ * switch turned it off, `on` otherwise (a build without a key still sends
+ * nothing).
+ */
+function analyticsStateMark(enabled: boolean): void {
+    if (typeof document === "undefined") return;
+    document.documentElement.dataset.happyAnalytics = enabled ? "on" : "off";
+}
+
+/**
+ * Analytics for a run started with `DO_NOT_TRACK`: no client, no observer, no
+ * storage but the Settings switch, which still shows and keeps the person's
+ * own choice for later runs. Every wrapped store is handed back unwrapped.
+ */
+function desktopAnalyticsDormant(preference: UsageAnalyticsStore): DesktopAnalytics {
+    analyticsStateMark(false);
+    return {
+        preference,
+        appOpened: () => undefined,
+        activity: () => undefined,
+        onboardingObserve: (store) => store,
+        mobilePairingObserve: () => ({
+            connector: (store) => store,
+            onboarding: (store) => store,
+            integration: (store) => store,
+        }),
+        mobilePairingMethodSelected: () => undefined,
+        agentBrokenObserve: (store) => store,
+        agentUpdateObserve: (store) => store,
+        flagFollow: () => () => undefined,
+        dispose: () => undefined,
+    };
+}
+
+/**
  * The desktop's analytics: one client for the window, the common fields read
  * from the Happy Agent each event happened on, and the observers that turn
- * product state into catalog events. Development windows send nothing.
+ * product state into catalog events. Development windows send nothing, and a
+ * run started with `DO_NOT_TRACK` starts none of it.
  */
 export function desktopAnalyticsCreate(options: {
     readonly development: boolean;
     readonly happyAgents: HappyAgentDirectoryStore;
     /** What the shell says about this machine; absent from older shells. */
     readonly system?: DesktopSystem;
+    /** The shell was started with `DO_NOT_TRACK`; off for this window's whole life. */
+    readonly doNotTrack?: boolean;
     /** Replaces the PostHog client, for tests. */
     readonly client?: AnalyticsClient;
 }): DesktopAnalytics {
-    for (const key of OBSOLETE_KEYS) storageRemove(key);
     const preference = usageAnalyticsStoreCreate(usageAnalyticsPersistence());
+    if (options.doNotTrack === true) return desktopAnalyticsDormant(preference);
+    for (const key of OBSOLETE_KEYS) storageRemove(key);
     const reporting = (): boolean => preference.get().usageAnalyticsEnabled;
     /**
      * This installation's id, read or made only right before a request that
@@ -829,6 +869,7 @@ export function desktopAnalyticsCreate(options: {
     /** What analytics-only observers forget when analytics turns off. */
     const offResets = new Set<() => void>();
     const preferenceChanged = (): void => {
+        analyticsStateMark(reporting());
         if (reporting()) return;
         installation = undefined;
         installationRenew = true;
@@ -836,6 +877,7 @@ export function desktopAnalyticsCreate(options: {
         for (const reset of offResets) reset();
     };
     const preferenceUnsubscribe = preference.subscribe(preferenceChanged);
+    analyticsStateMark(reporting());
     const os = desktopOs();
 
     /**

@@ -15,6 +15,8 @@ export interface GymSmokeResult {
     readonly arch: string;
     readonly welcomeVisible: boolean;
     readonly windowTitle: string;
+    /** Null only from a hosted Nightly renderer older than `DO_NOT_TRACK`. */
+    readonly analyticsEnabled: boolean | null;
 }
 
 /**
@@ -78,12 +80,23 @@ export async function gymSmokeRun(): Promise<GymSmokeResult> {
             throw new Error(`The welcome screen never appeared:\n${exit.output}`);
         if (screenshotPath && !report.screenshotWritten)
             throw new Error("The desktop app did not capture its welcome screen.");
+        // Every gym launch sets DO_NOT_TRACK; the window itself must say it
+        // took it, so a CI launch of a release build can never send. Only a
+        // hosted Nightly renderer older than DO_NOT_TRACK may say nothing.
+        if (
+            report.analyticsEnabled === true ||
+            (report.analyticsEnabled === null && !report.rendererHosted)
+        )
+            throw new Error(
+                `The desktop app's analytics is not off under DO_NOT_TRACK: ${JSON.stringify(report.analyticsEnabled)}`,
+            );
         return {
             packaged: report.packaged,
             platform: report.platform,
             arch: report.arch,
             welcomeVisible: report.welcomeVisible,
             windowTitle: report.windowTitle,
+            analyticsEnabled: report.analyticsEnabled,
         };
     } finally {
         await rm(root, { force: true, recursive: true });

@@ -41,8 +41,8 @@ jobs:
                   node-version: "24"
                   cache: pnpm
             # A release build carries the PostHog key, and CI must never count as a
-            # person. The gym already launches under automation, which sends
-            # nothing; with PostHog unreachable, no launch here could either.
+            # person. The gym already launches with DO_NOT_TRACK and under automation,
+            # which send nothing; with PostHog unreachable, no launch here could either.
             - name: Keep CI launches away from PostHog
               run: |
                   printf '0.0.0.0 us.i.posthog.com\n:: us.i.posthog.com\n' | sudo tee -a /etc/hosts
@@ -76,6 +76,8 @@ jobs:
                     --config.linux.artifactName="Happy-${RELEASE_VERSION}-${RELEASE_ARCH}.AppImage"
             - name: Boot the actual AppImage and verify its welcome screen
               env:
+                  # Analytics off from the first event; the smoke fails unless the window says so.
+                  DO_NOT_TRACK: "1"
                   HAPPY_DESKTOP_GYM_PACKAGED: "1"
                   HAPPY_DESKTOP_GYM_SCREENSHOT: ${{ runner.temp }}/happy-appimage.png
                   ELECTRON_DISABLE_SANDBOX: "1"

@@ -78,9 +78,15 @@ the failure set) are deleted as the window opens.
   was dropped for this: its retry queue resends a failed request past
   `before_send` and past opting out, and can't be turned off from outside its
   bundle.)
-- `DO_NOT_TRACK=1` in the environment turns analytics off the same way. Not
-  yet built: the shell has to hand the variable to the renderer, which is a
-  main or preload change waiting on Kirill's confirmation.
+- `DO_NOT_TRACK` in the environment turns analytics off for the whole run,
+  from the first event: `app_opened` is not sent, no observer starts, and
+  nothing analytics keeps is read, written, or deleted. Any value but `0`,
+  `false`, `no`, `off`, or empty counts. Main reads it once at startup and
+  hands it to the window as a launch argument, so the window knows before
+  analytics starts. The Settings choice is not changed and still shows.
+- Every CI and gym launch sets `DO_NOT_TRACK=1`. The first-launch smoke
+  reports whether the window's analytics is on and fails unless it is off;
+  only a hosted Nightly renderer older than this may say nothing.
 
 ### Removing analytics
 
@@ -135,6 +141,10 @@ stay or go with it:
 - The Settings switch's `usageAnalyticsSaveFailed` and its banner.
 - happy-desktop-ui's `LocalOnboardingScreen` `onCommandCopy` callback: no
   host passes it since `onboarding_command_copied` was removed.
+- The shell's `DO_NOT_TRACK` reading (`shared/doNotTrack.ts`, the
+  `--happy-do-not-track` argument and the bridge's `doNotTrack`), the smoke
+  report's `analyticsEnabled`, and the gym's `DO_NOT_TRACK`. Deleting the
+  shell part is a host change, so it waits on Kirill like the rest of main.
 
 ## The desktop's part
 
@@ -156,9 +166,9 @@ stay or go with it:
 - Not wired: a file or diff that could not be read in the side panel; only
   the active main tab counts.
 - Not yet: `app_crashed` (only `process`, `reason`, and `crashed_version`),
-  and `DO_NOT_TRACK` (above), both waiting on Kirill's confirmation of a main
-  or preload change. The crash design keeps nothing on disk: main hears
-  `render-process-gone` and `child-process-gone` and hands the reason to the
+  waiting on Kirill's confirmation of a main or preload change. The crash
+  design keeps nothing on disk: main hears `render-process-gone` and
+  `child-process-gone` and hands the reason to the
   reloaded renderer over IPC, in memory; a crash of main itself is not
   reported; and the voice events, which need
   the voice store to keep a typed reason instead of an error string.

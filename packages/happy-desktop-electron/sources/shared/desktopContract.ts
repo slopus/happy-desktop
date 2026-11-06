@@ -504,6 +504,9 @@ export const liveWindowArgument = "--happy-live-window=";
 /** Launch argument enabling renderer-local diagnostics in an explicit debug window. */
 export const debugMetricsArgument = "--happy-debug-metrics";
 
+/** Launch argument saying this run was started with `DO_NOT_TRACK` set. */
+export const doNotTrackArgument = "--happy-do-not-track";
+
 /**
  * Where local first-run setup currently stands. The stage is always derived from
  * what this machine actually has — a Node runtime, an installed agent, a
@@ -868,6 +871,12 @@ export interface HappyDesktopBridge {
     readonly happyCloud?: DesktopHappyCloud;
     /** The machine the shell runs on. Absent from shells older than this field. */
     readonly system?: DesktopSystem;
+    /**
+     * This run was started with `DO_NOT_TRACK` set, so analytics stays off
+     * for the window's whole life, whatever Settings says. Fixed at launch.
+     * Absent from shells older than this field.
+     */
+    readonly doNotTrack?: boolean;
     /**
      * Whether this window was explicitly launched with desktop debug tooling.
      * This is fixed for the window's life and is separate from `buildIdentity`:

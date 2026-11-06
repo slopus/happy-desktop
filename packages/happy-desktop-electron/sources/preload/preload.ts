@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer, webUtils } from "electron";
 import {
     buildIdentityArgument,
     debugMetricsArgument,
+    doNotTrackArgument,
     happyCloudArgument,
     desktopIpc,
     mediaPreviewArgument,
@@ -95,6 +96,7 @@ const bridge: HappyDesktopBridge = {
           }
         : {}),
     system: systemRead(),
+    doNotTrack: process.argv.includes(doNotTrackArgument),
     debugMetricsEnabled,
     appearanceSet: (mode) => ipcRenderer.send(desktopIpc.appearanceSet, mode),
     attachmentSourcePath(file: File) {

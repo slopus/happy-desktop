@@ -46,6 +46,11 @@ export interface GymElectronInvisibility {
  * renderer; it is not one of the debugging switches a packaged build refuses.
  */
 const GYM_AUTOMATION_SWITCH = "--enable-automation";
+/**
+ * And turns the app's analytics off outright, from its first event, in builds
+ * that know `DO_NOT_TRACK`.
+ */
+const GYM_ENVIRONMENT = { DO_NOT_TRACK: "1", HAPPY_DESKTOP_WINDOWS_HIDDEN: "1" } as const;
 
 export async function gymElectronLaunch(
     options: GymElectronLaunchOptions,
@@ -58,7 +63,7 @@ export async function gymElectronLaunch(
         throw new Error("Use gymElectronVideoRecord instead of Playwright recordVideo.");
     const app = await electron.launch({
         args: [...options.args, GYM_AUTOMATION_SWITCH],
-        env: { ...options.env, HAPPY_DESKTOP_WINDOWS_HIDDEN: "1" },
+        env: { ...options.env, ...GYM_ENVIRONMENT },
         executablePath: options.executablePath,
         timeout: options.timeout ?? 60_000,
         ...(options.cwd ? { cwd: options.cwd } : {}),
@@ -209,7 +214,7 @@ export async function gymElectronProcessRun(
     if (!options.args.some((argument) => argument.startsWith("--user-data-dir=")))
         throw new Error("gymElectronProcessRun requires an owned --user-data-dir.");
     const child = spawn(options.executablePath, [...options.args, GYM_AUTOMATION_SWITCH], {
-        env: { ...options.env, HAPPY_DESKTOP_WINDOWS_HIDDEN: "1" },
+        env: { ...options.env, ...GYM_ENVIRONMENT },
         stdio: ["ignore", "pipe", "pipe"],
         ...(options.cwd ? { cwd: options.cwd } : {}),
     });
