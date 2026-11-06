@@ -24,8 +24,7 @@ navigating is never sent, and nothing is counted on the device.
 
 ## Privacy
 
-- Only closed enums, counts, booleans, version strings, and allowlisted model
-  ids leave the window. No text anyone wrote, no names, ids, paths, URLs, hosts,
+- Only closed enums, counts, booleans, and version numbers leave the window. No text anyone wrote, no names, ids, paths, URLs, hosts,
   error messages, or stacks. Anything else does not typecheck, and
   `analyticsEnvelope` drops any property the catalog does not name for that
   event, or whose value its rule does not allow.
@@ -33,11 +32,15 @@ navigating is never sent, and nothing is counted on the device.
   as the window closes) in the spec's envelope: `distinct_id`, `$insert_id`,
   `$lib: "happy-desktop"`, `$process_person_profile: false`, `$ip: null`,
   `$geoip_disable: true`, and nothing PostHog would add itself. No cookies and
-  no referrer go with it. The one flag is a direct `POST /flags/?v=2` with the
-  install ID, asked once per window and kept in memory.
-- `model` is a first-party vendor-qualified id (`anthropic/…`, `openai/…`,
-  `xai/…`, `google/…`, `zai/…`, `moonshotai/…`), else `other`. `os_version` is
-  major.minor only. There is no per-account hash.
+  no referrer go with it, and no redirect is followed (`redirect: "error"`).
+  A host override must be https, or http on this machine, with no
+  credentials in it; any other sends nothing. Timestamps are whole seconds.
+  The one flag is a direct `POST /flags/?v=2` with the install ID, asked once
+  per install ID and kept in memory.
+- `model_family` (`claude_opus`, `gpt`, …) from the catalog's
+  `model_family_rule` prefix table, else `other`; the model id itself never
+  leaves. Versions are numbers only, cut at the first `-` or `+`, else null.
+  `os_version` is major.minor only. There is no per-account hash.
 - No IP from the desktop: events set `$ip: null` and `$geoip_disable: true`.
   PostHog still receives the request's IP unless the project's "Discard client
   IP data" is on, and Settings says so.
@@ -45,15 +48,29 @@ navigating is never sent, and nothing is counted on the device.
   nothing from a window driven by automation (`navigator.webdriver`), except
   to a capture endpoint on this machine (`127.0.0.1`, `::1`, or `localhost`).
 
-## Identity
+## Identity and storage
 
 A random install ID per installation. It is never derived from, or aliased to,
-an account, a Happy Agent, or the phone's `anonID`.
+an account, a Happy Agent, or the phone's `anonID`, and it is read or made only
+right before a request that may go.
+
+It is the only analytics value kept on disk, besides the Settings switch
+itself. The `error_shown` throttle times and the counted-failure set live in
+memory only, so a reload can send one error again inside its 10-minute window;
+that is accepted. Keys earlier builds kept (the launch counter, the throttle,
+the failure set) are deleted as the window opens.
 
 ## Switching it off
 
 - A build without a PostHog key sends nothing, nor does a development window
   unless its host override is a capture endpoint on this machine.
+- The switch fails closed: a stored choice that cannot be read or parsed is
+  off, and only nothing stored at all is on. A choice the host refused to
+  save is shown in Settings.
+- Turning it off stops the analytics-only observers (outages, onboarding,
+  rows on screen), forgets what they followed, so an outage that began while
+  off is never reported, and deletes the install ID and every remembered
+  send. Turning it back on starts with a new install ID.
 - The Settings switch stops sending at once. It is read right before every
   request, nothing is queued or batched, and a request that fails is dropped,
   never sent again, so nothing is sent after opt-out. A request already on
@@ -111,29 +128,37 @@ stay or go with it:
 - happy-desktop-app: the `usageAnalytics` prop through the router and the
   settings view, and `AppHappyAgentView`'s `onEntriesSeen` and
   `failureNewChat` calls.
-- The shell's `main/localApps.ts` look and the onboarding fields that carry
-  it, read only for `onboarding_local_apps`; a host change, so it waits on
-  Kirill like the rest of main.
+- The shell's `main/localApps.ts` look and the `localApps` onboarding field
+  that carries it. Nothing reads it since `onboarding_local_apps` was
+  removed; deleting it is a host change, so it waits on Kirill like the rest
+  of main.
+- The Settings switch's `usageAnalyticsSaveFailed` and its banner.
+- happy-desktop-ui's `LocalOnboardingScreen` `onCommandCopy` callback: no
+  host passes it since `onboarding_command_copied` was removed.
 
 ## The desktop's part
 
 - Errors first. `chat_failure_shown`: a failure card less than 5 minutes old,
   counted when the conversation's virtualized list actually has it on screen
-  in a foreground window, once per failure on this device.
+  in a foreground window, once per failure in five minutes.
   `chat_failure_action_clicked`: Retry, Switch, New chat, or Ask Chief of Staff
   on a failure card. `agent_connection_lost`: one per outage of 10 s or more
   while the window is on screen, sent when it ends. `error_shown`: an error on
   the surface the person is looking at in a foreground window (the active file
   or diff tab, the conversation that could not load, a failed send on screen,
-  the update card), at most once per area and code every 10 minutes, with
-  `repeat_count`. Then `onboarding_setup_result` and the `mobile_pairing_*`
+  the update card), at most once per area and code every 10 minutes, repeats
+  in between dropped. Then `onboarding_setup_result` and the `mobile_pairing_*`
   results.
 - Then use: `app_opened`, `message_sent`, `conversation_created`,
-  `project_added`, `workspace_created`, `bot_created`, `task_created`, and the
-  `onboarding_*` events.
+  `project_added`, `workspace_created`, `bot_created`, `task_created`,
+  `onboarding_step_viewed`, `onboarding_assistant_status`,
+  `onboarding_mobile`, and `onboarding_completed`.
 - Not wired: a file or diff that could not be read in the side panel; only
   the active main tab counts.
-- Not yet: `app_crashed`, which needs the main process to leave a marker for
-  the next launch, and `DO_NOT_TRACK` (above), both waiting on Kirill's
-  confirmation of a main or preload change; and the voice events, which need
+- Not yet: `app_crashed` (only `process`, `reason`, and `crashed_version`),
+  and `DO_NOT_TRACK` (above), both waiting on Kirill's confirmation of a main
+  or preload change. The crash design keeps nothing on disk: main hears
+  `render-process-gone` and `child-process-gone` and hands the reason to the
+  reloaded renderer over IPC, in memory; a crash of main itself is not
+  reported; and the voice events, which need
   the voice store to keep a typed reason instead of an error string.
