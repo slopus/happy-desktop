@@ -1,7 +1,9 @@
 import { randomUUID } from "node:crypto";
 import {
+    app,
     dialog,
     Menu,
+    shell,
     type BrowserWindow,
     type IpcMainEvent,
     type WebContents,
@@ -156,6 +158,33 @@ export function browserPasswordGuestAttach(options: BrowserPasswordGuestOptions)
         }
     }
 
+    /**
+     * macOS 27 keeps some browsers' folders private to the browser itself and
+     * records the refusal as a per-app switch under Files & Folders. Only the
+     * person can turn it on, so this says where; Happy changes no setting.
+     */
+    async function accessDeniedExplain(browser: string): Promise<void> {
+        if (!owned()) return;
+        try {
+            const { response } = await dialog.showMessageBox(window, {
+                type: "info",
+                title: "Saved logins",
+                message: `macOS blocked access to ${browser}’s saved logins`,
+                detail:
+                    `To let ${app.getName()} read them, open System Settings › Privacy & Security › ` +
+                    `Files & Folders, find ${app.getName()}, and turn on ${browserAppName(browser)}. ` +
+                    "Then click the sign-in field again.",
+                buttons: ["Open System Settings", "Cancel"],
+                defaultId: 0,
+                cancelId: 1,
+                noLink: true,
+            });
+            if (response === 0 && owned()) await shell.openExternal(privacyFilesAndFoldersUrl);
+        } catch {
+            /* Window closed, or System Settings could not be opened. */
+        }
+    }
+
     function fieldProbe(expected: GuestDocument, fieldId: string): Promise<string | null> {
         if (!current(expected) || expected.fieldId !== fieldId) return Promise.resolve(null);
         probePending?.finish(false);
@@ -259,7 +288,7 @@ export function browserPasswordGuestAttach(options: BrowserPasswordGuestOptions)
         pickerPending = true;
         void (async () => {
             try {
-                const { candidates } = await logins(expected.origin);
+                const { candidates, accessDenied } = await logins(expected.origin);
                 if (!current(expected) || pickerId !== pickerGeneration || !window.isFocused())
                     return;
                 if (automatic && candidates.length === 0) return;
@@ -271,6 +300,12 @@ export function browserPasswordGuestAttach(options: BrowserPasswordGuestOptions)
                         origin: expected.origin,
                         fieldReady: fieldId !== null && fieldKind !== null,
                         candidates,
+                        accessDenied,
+                        accessDeniedExplain: (browser) => {
+                            if (pickerId !== pickerGeneration || Date.now() - openedAt < 500)
+                                return;
+                            void accessDeniedExplain(browser);
+                        },
                         choose: (candidate) => {
                             // This closure is never exposed through IPC, a bridge,
                             // an application menu command, or an agent/tool API.
@@ -466,14 +501,18 @@ export function browserPasswordGuestAttach(options: BrowserPasswordGuestOptions)
 
 /**
  * The picker: logins for this exact site first, then related sites under their
- * own label, each named by account, site, and source; then
- * one line saying that Happy stores no password.
+ * own label, each named by account, site, and source; then each browser the OS
+ * would not let Happy read; then one line saying that Happy stores no password.
  */
 export function browserLoginPickerTemplate(options: {
     readonly origin: string;
     /** A sign-in field is focused, so a login can be filled. */
     readonly fieldReady: boolean;
     readonly candidates: readonly BrowserLoginCandidate[];
+    /** Browsers whose saved logins the OS refused to Happy, such as "Chrome". */
+    readonly accessDenied: readonly string[];
+    /** Explains how the person can allow a refused browser (macOS only). */
+    readonly accessDeniedExplain: (browser: string) => void;
     readonly choose: (candidate: BrowserLoginCandidate) => void;
 }): Electron.MenuItemConstructorOptions[] {
     const item = (candidate: BrowserLoginCandidate): Electron.MenuItemConstructorOptions => {
@@ -500,7 +539,7 @@ export function browserLoginPickerTemplate(options: {
             enabled: false,
         },
         { type: "separator" },
-        ...(options.candidates.length === 0
+        ...(options.candidates.length === 0 && options.accessDenied.length === 0
             ? [{ label: "No saved logins for this site", enabled: false }]
             : exact.map(item)),
         ...(related.length > 0
@@ -510,12 +549,50 @@ export function browserLoginPickerTemplate(options: {
                   ...related.map(item),
               ]
             : []),
+        ...(options.accessDenied.length > 0
+            ? [
+                  ...(options.candidates.length > 0 ? [{ type: "separator" as const }] : []),
+                  ...options.accessDenied.map(
+                      (browser): Electron.MenuItemConstructorOptions =>
+                          process.platform === "darwin"
+                              ? {
+                                    label: nativeLabel(
+                                        `macOS blocked access to ${nativePart(browser, 40)}’s saved logins…`,
+                                    ),
+                                    click: () => options.accessDeniedExplain(browser),
+                                }
+                              : {
+                                    label: nativeLabel(
+                                        `Windows blocked access to ${nativePart(browser, 40)}’s saved logins`,
+                                    ),
+                                    enabled: false,
+                                },
+                  ),
+              ]
+            : []),
         { type: "separator" },
         {
             label: "Happy reads these from your browsers and never stores passwords.",
             enabled: false,
         },
     ];
+}
+
+const privacyFilesAndFoldersUrl =
+    "x-apple.systempreferences:com.apple.preference.security?Privacy_FilesAndFolders";
+
+/** The name System Settings shows for a browser, which is its app's name. */
+function browserAppName(browser: string): string {
+    switch (browser) {
+        case "Chrome":
+            return "Google Chrome";
+        case "Brave":
+            return "Brave Browser";
+        case "Edge":
+            return "Microsoft Edge";
+        default:
+            return browser;
+    }
 }
 
 function identifier(value: unknown): value is string {
