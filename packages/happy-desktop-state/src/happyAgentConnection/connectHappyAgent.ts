@@ -2133,6 +2133,30 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
     // bootstrap plus every materialized conversation snapshot.
     const refetchResource = (refetch: Promise<void>): void => background(refetch);
 
+    /*
+     * A resource whose version chain broke misses every later update until its repair read
+     * lands, so a burst of updates to it would otherwise send a read per update. One read
+     * per resource is kept in flight, followed by exactly one more when it was asked for
+     * again meanwhile; that later read answers for every update that arrived before it.
+     */
+    const resourceRefetches = new Map<string, { again: boolean }>();
+    const refetchCoalesced = (key: string, read: () => Promise<void>): void => {
+        const running = resourceRefetches.get(key);
+        if (running !== undefined) {
+            running.again = true;
+            return;
+        }
+        const refetch = { again: false };
+        resourceRefetches.set(key, refetch);
+        const reads = async (): Promise<void> => {
+            do {
+                refetch.again = false;
+                await read();
+            } while (refetch.again && !rootController.signal.aborted);
+        };
+        refetchResource(reads().finally(() => resourceRefetches.delete(key)));
+    };
+
     // A busy agent emits a steady stream of versioned updates, and every one of
     // them misses while its repair read is outstanding. Keep one read per agent
     // in flight and follow it with exactly one more when events arrived
@@ -2172,13 +2196,45 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         refetchResource(read().finally(() => agentRefetches.delete(agentId)));
     };
 
+    /** Reads one project whole, adopting it unless a newer version landed meanwhile. */
+    const projectRefetch = (projectId: string): void =>
+        refetchCoalesced(`project:${projectId}`, () =>
+            client.getProject(projectId, { signal: rootController.signal }).then(({ project }) => {
+                const latest = groupsStore
+                    .getState()
+                    .projects.find((candidate) => candidate.id === project.id);
+                if (latest !== undefined && latest.version.localeCompare(project.version) > 0)
+                    return;
+                groupsStore.setState((state) => ({
+                    projects: ownerResourceReplace(state.projects, project),
+                }));
+                publishGroups();
+            }),
+        );
+
+    /** Reads one workspace whole, adopting it unless a newer version landed meanwhile. */
+    const workspaceRefetch = (workspaceId: string): void =>
+        refetchCoalesced(`workspace:${workspaceId}`, () =>
+            client
+                .getWorkspace(workspaceId, { signal: rootController.signal })
+                .then(({ workspace }) => {
+                    const latest = workspaceOf(workspace.id);
+                    if (latest !== undefined && latest.version.localeCompare(workspace.version) > 0)
+                        return;
+                    groupsStore.setState((state) => ({
+                        workspaces: ownerResourceReplace(state.workspaces, workspace),
+                    }));
+                    publishGroups();
+                }),
+        );
+
     /**
      * Reads one task whole and adopts it with the caller's membership. It is
      * how a task known only from an event learns whether the caller may
      * archive it, and how a broken version chain is repaired.
      */
     const taskRefetch = (taskId: string): void =>
-        refetchResource(
+        refetchCoalesced(`task:${taskId}`, () =>
             client
                 .getTask(taskId, { signal: deadlineSignal(SNAPSHOT_RESPONSE_TIMEOUT_MS) })
                 .then(taskResponseAdopt),
@@ -2266,42 +2322,8 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                 const current = groupsStore
                     .getState()
                     .projects.find((project) => project.id === event.payload.projectId);
-                if (current === undefined) {
-                    refetchResource(
-                        client
-                            .getProject(event.payload.projectId, {
-                                signal: rootController.signal,
-                            })
-                            .then(({ project }) => {
-                                groupsStore.setState((state) => ({
-                                    projects: ownerResourceReplace(state.projects, project),
-                                }));
-                                publishGroups();
-                            }),
-                    );
-                    return;
-                }
-                if (current.version !== event.payload.previousVersion) {
-                    refetchResource(
-                        client
-                            .getProject(event.payload.projectId, {
-                                signal: rootController.signal,
-                            })
-                            .then(({ project }) => {
-                                const latest = groupsStore
-                                    .getState()
-                                    .projects.find((candidate) => candidate.id === project.id);
-                                if (
-                                    latest === undefined ||
-                                    latest.version.localeCompare(project.version) <= 0
-                                ) {
-                                    groupsStore.setState((state) => ({
-                                        projects: ownerResourceReplace(state.projects, project),
-                                    }));
-                                    publishGroups();
-                                }
-                            }),
-                    );
+                if (current === undefined || current.version !== event.payload.previousVersion) {
+                    projectRefetch(event.payload.projectId);
                     return;
                 }
                 groupsStore.setState((state) => ({
@@ -2352,15 +2374,14 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                 // The bot is not held yet, so there is no version chain to
                 // extend: ask for it whole, exactly as a workspace does.
                 if (current === undefined) {
-                    refetchResource(
-                        client
-                            .getBot(event.payload.botId, { signal: rootController.signal })
-                            .then(({ bot }) => {
-                                groupsStore.setState((state) => ({
-                                    bots: replaceResource(state.bots, bot),
-                                }));
-                                publishGroups();
-                            }),
+                    const { botId } = event.payload;
+                    refetchCoalesced(`bot:${botId}`, () =>
+                        client.getBot(botId, { signal: rootController.signal }).then(({ bot }) => {
+                            groupsStore.setState((state) => ({
+                                bots: replaceResource(state.bots, bot),
+                            }));
+                            publishGroups();
+                        }),
                     );
                     return;
                 }
@@ -2420,43 +2441,8 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                 return;
             case "workspace.updated": {
                 const current = workspaceOf(event.payload.workspaceId);
-                if (current === undefined) {
-                    refetchResource(
-                        client
-                            .getWorkspace(event.payload.workspaceId, {
-                                signal: rootController.signal,
-                            })
-                            .then(({ workspace }) => {
-                                groupsStore.setState((state) => ({
-                                    workspaces: ownerResourceReplace(state.workspaces, workspace),
-                                }));
-                                publishGroups();
-                            }),
-                    );
-                    return;
-                }
-                if (current.version !== event.payload.previousVersion) {
-                    refetchResource(
-                        client
-                            .getWorkspace(event.payload.workspaceId, {
-                                signal: rootController.signal,
-                            })
-                            .then(({ workspace }) => {
-                                const latest = workspaceOf(workspace.id);
-                                if (
-                                    latest === undefined ||
-                                    latest.version.localeCompare(workspace.version) <= 0
-                                ) {
-                                    groupsStore.setState((state) => ({
-                                        workspaces: ownerResourceReplace(
-                                            state.workspaces,
-                                            workspace,
-                                        ),
-                                    }));
-                                    publishGroups();
-                                }
-                            }),
-                    );
+                if (current === undefined || current.version !== event.payload.previousVersion) {
+                    workspaceRefetch(event.payload.workspaceId);
                     return;
                 }
                 groupsStore.setState((state) => ({
@@ -2583,7 +2569,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                             entry.question === null ||
                             entry.question.version !== event.payload.previousVersion
                         ) {
-                            refetchResource(
+                            refetchCoalesced(`question:${entry.id}`, () =>
                                 client
                                     .getPendingQuestion(entry.id, {
                                         signal: rootController.signal,
