@@ -8,7 +8,7 @@ export type ShimmerTextProps = {
     "data-happy-desktop-ui"?: string;
     "data-testid"?: string;
     style?: CSSProperties;
-    /** The text to shimmer. Plain text: the sweep is painted through the glyphs. */
+    /** The text to shimmer, or a font icon: the sweep shows through the glyphs. */
     children: ReactNode;
     /**
      * The one text role the whole effect is built from. The default is ordinary
@@ -35,8 +35,9 @@ export type ShimmerTextProps = {
      * unbreakable box, which suits a label that sits on a line of its own. A
      * run inside a paragraph — a link in a message — has to break exactly where
      * its words would without the shimmer, so turning the sweep on and off
-     * never reflows the text or the row it is in. The sweep still crosses the
-     * whole run as one band, across every line it wraps onto.
+     * never reflows the text or the row it is in. A run split across lines
+     * has no one box for the band to cross, so the whole run breathes instead:
+     * its opacity eases toward the band's strength and back on the same loop.
      */
     inline?: boolean;
     /** One sweep, in milliseconds. */
@@ -70,10 +71,11 @@ export type ShimmerTextProps = {
  * colour with no sweep at all. Props only, desktop-only: no timers, no store,
  * no elapsed time.
  *
- * A single-line run of text sweeps on the compositor: the ramp is a box of
- * its own that slides behind the run's glyphs, which mask it, so a frame of
- * the loop repaints and rasterises nothing. A wrapping inline run, or one that
- * is not plain text, such as an icon, keeps the painted gradient.
+ * Every frame of the loop is a compositor frame, so the shimmer stays smooth
+ * while the main thread is busy, as it is at launch: the ramp is a box of its
+ * own that slides behind the run's glyphs — text or a font icon — which mask
+ * it, so a frame repaints and rasterises nothing. A wrapping inline run cannot
+ * carry one sliding box, and breathes its opacity instead.
  */
 export function ShimmerText(props: ShimmerTextProps) {
     const [local] = partitionComponentProps(props, [
@@ -95,8 +97,7 @@ export function ShimmerText(props: ShimmerTextProps) {
         const phase = local.phase ?? 0;
         return ((phase % 1) + 1) % 1;
     };
-    const layered = () =>
-        !local.inline && (typeof local.children === "string" || typeof local.children === "number");
+    const layered = () => !local.inline;
     return (
         <span
             className={["happy-shimmer-text", local.className].filter(Boolean).join(" ")}

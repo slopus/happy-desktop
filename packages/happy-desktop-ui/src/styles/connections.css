@@ -123,42 +123,55 @@
     background: var(--divider);
 }
 
-/* The sheen overlays the tile without clipping its unread or selection dots.
-   Only its paint moves, so pointer reordering keeps owning the tile's transform. */
-.happy-connections__item[data-working]::before {
-    content: "";
+/* The sheen overlays the tile without clipping its unread or selection dots:
+   it is a box of its own over the tile, clipped to the tile's corners, and the
+   band slides inside it on the compositor. Only the band moves, so pointer
+   reordering keeps owning the tile's transform, and a busy launch, when every
+   tile may be working at once, cannot stall it. */
+.happy-connections__sheen {
     position: absolute;
     inset: 0;
     z-index: 1;
+    overflow: hidden;
     border-radius: inherit;
     pointer-events: none;
+}
+.happy-connections__sheen::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 300%;
     background-image: linear-gradient(
         110deg,
         transparent 35%,
         color-mix(in srgb, var(--text) 28%, transparent) 50%,
         transparent 65%
     );
-    background-size: 300% 100%;
-    background-repeat: no-repeat;
+    will-change: transform;
     animation: happy-connections-working-sweep 1800ms linear infinite;
     animation-delay: calc(-1800ms * var(--happy-connections-shimmer-offset, 0));
 }
-.happy-connections__rail[data-shimmer-paused] .happy-connections__item[data-working]::before {
+.happy-connections__rail[data-shimmer-paused] .happy-connections__sheen::before {
     animation-play-state: paused;
 }
+/* Two tile widths of travel across a band three tiles wide: the band enters
+   beyond one edge and leaves beyond the other. */
 @keyframes happy-connections-working-sweep {
     from {
-        background-position: 100% 0;
+        transform: translateX(calc(-200% / 3));
     }
     to {
-        background-position: 0% 0;
+        transform: translateX(0);
     }
 }
 @media (prefers-reduced-motion: reduce) {
-    .happy-connections__item[data-working]::before {
-        animation: none;
-        background-image: none;
+    .happy-connections__sheen {
         box-shadow: inset 0 0 0 1px var(--text-secondary);
+    }
+    .happy-connections__sheen::before {
+        display: none;
     }
 }
 

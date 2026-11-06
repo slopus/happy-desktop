@@ -1,32 +1,36 @@
 /*
  * C-254 ShimmerText — a band of light travelling through a line of text.
  *
- * The text is painted by a gradient rather than by a colour: the element's
- * background is a ramp — resting colour, highlight, resting colour — clipped to
- * the glyphs, and the animation slides that ramp across them. Only the
- * background moves, so the letters never shift, never reflow, and stay fully
- * readable at every moment of the loop.
+ * Every frame of the loop belongs to the compositor. The shimmer is shown
+ * exactly while something is working, which is exactly when the main thread is
+ * busiest — at launch above all — so an animation that has to be painted, such
+ * as a `background-position` sweep, stalls precisely when it is looked at. Only
+ * `transform` and `opacity` move here, on layers that are rasterised once.
  *
- * The ramp is three times the text's own width and slides by two widths per
+ * The run masks itself, and everything in it, to its own glyphs with a text
+ * mask clip, and a ramp — resting colour, highlight, resting colour — slides
+ * behind those glyphs as a box of its own, so it shows only through the letters
+ * at their own antialiased coverage. The glyphs and the mask never move; the
+ * compositor moves the ramp's layer. The letters therefore never shift, never
+ * reflow, and stay readable at every moment of the loop.
+ *
+ * The ramp is three times the run's own width and slides by two widths per
  * cycle, so the highlight enters from beyond one end and leaves beyond the other
  * instead of appearing mid-word. One sweep therefore crosses the whole line
  * whatever its length: a label of two words and a label of ten are read at the
  * same speed.
  *
- * That extra width is what keeps the text on screen. The ramp is the only thing
- * painting the glyphs, so any part of the line the ramp does not cover is not
- * dimmed — it is invisible. Travelling a ramp of width `N` across the run by
- * `background-position` uncovers the line as soon as the position leaves the
- * `0%`–`100%` range, whatever `N` is; the range is what must be respected, and
- * the width is then chosen to put the band off both ends within it. At `100%`
- * the ramp's right edge sits on the run's right edge and two widths hang off to
- * the left; at `0%` it is the mirror image. The line is fully covered
- * throughout.
+ * A run that wraps like prose cannot carry one sliding box — an absolutely
+ * placed box inside a split inline has no width to slide across — and an engine
+ * without a text mask clip cannot hide a box behind glyphs. Both of those
+ * breathe instead: the run's opacity eases between its resting strength and the
+ * band's, which is the same move toward the page and back, still on the
+ * compositor.
  *
- * Both stops are mixed against `--surface` rather than toward transparency, so
- * every colour this paints is solid and a rendering test can assert an exact
- * `rgb()` in every engine. Tone picks the one text role the whole ramp is built
- * from, and sweep decides which end of that role the letters rest at.
+ * Every colour the sweep paints is mixed against `--surface` rather than toward
+ * transparency, so it is solid and a rendering test can assert an exact `rgb()`
+ * in every engine. Tone picks the one text role the whole ramp is built from,
+ * and sweep decides which end of that role the letters rest at.
  */
 
 .happy-shimmer-text {
@@ -39,65 +43,40 @@
     /* How far the resting letters sit below the passing highlight. */
     --happy-shimmer-rest: color-mix(in srgb, var(--happy-shimmer-color) 38%, var(--surface));
     --happy-shimmer-highlight: var(--happy-shimmer-color);
+    /* The breathing form of the same two ends, as the run's opacity over the
+       surface: the same mix the ramp paints, made by the compositor. */
+    --happy-shimmer-breathe-rest: 0.38;
+    --happy-shimmer-breathe-highlight: 1;
 
-    /* eslint-disable-next-line happy-layout/use-flex-layout -- one text run whose own glyphs clip a painted gradient: the sweep must cross the whole run, and as a flex box each word would become an anonymous item with a background box of its own, restarting the sweep per word */
+    /* eslint-disable-next-line happy-layout/use-flex-layout -- one text run whose glyphs mask a sliding ramp: the sweep must cross the whole run, and as a flex box each word would become an anonymous item */
     display: inline-block;
-    background-image: linear-gradient(
-        90deg,
-        var(--happy-shimmer-rest) 0%,
-        var(--happy-shimmer-rest) 40%,
-        var(--happy-shimmer-highlight) 50%,
-        var(--happy-shimmer-rest) 60%,
-        var(--happy-shimmer-rest) 100%
-    );
-    background-repeat: no-repeat;
-    /* Three times the run's width: the band sits in the middle third, so at
-       either end of the travel it is a full run-width clear of the line. */
-    background-size: 300% 100%;
-    background-clip: text;
-    /*
-     * The glyph fill is hidden through `text-fill-color` rather than by setting
-     * `color: transparent`, so that `color` keeps its real value and every tone
-     * can be expressed as one. That is what lets the ramp be built from
-     * `currentColor`: with the colour zeroed instead, `currentColor` on this
-     * element would resolve to `transparent` and the gradient would be painted
-     * out of nothing.
-     */
-    -webkit-text-fill-color: transparent;
-    animation-name: happy-shimmer-text-sweep;
+    animation-name: happy-shimmer-text-breathe;
     animation-duration: var(--happy-shimmer-duration);
-    animation-timing-function: linear;
+    animation-timing-function: ease-in-out;
     animation-iteration-count: infinite;
-    /* Parks the sweep at the requested fraction of one cycle. */
+    /* Parks the loop at the requested fraction of one cycle. */
     animation-delay: calc(-1 * var(--happy-shimmer-offset) * var(--happy-shimmer-duration));
 }
 
-/*
- * The compositor sweep. Moving `background-position` repaints and rasterises
- * the text on every frame; this draws the same pixels with one transform.
- *
- * The ramp becomes a box of its own, three run widths wide, that slides
- * exactly as the background would. The run masks itself, and everything in
- * it, to its own glyphs with `mask-clip: text`, so the sliding ramp shows only
- * through the letters, at their own antialiased coverage, as the clipped
- * background did. The glyphs and the mask are rasterised once and never move;
- * only the ramp's layer does, and the compositor moves it.
- *
- * Only a single line of plain text takes this path. A wrapping inline run
- * keeps the painted gradient, since its background is sliced across line
- * fragments, which one box cannot follow; so does anything that is not text,
- * whose ink may reach the edges of its box.
- */
 .happy-shimmer-text__ramp {
     display: none;
 }
 
-@supports (mask-clip: text) {
+/*
+ * The compositor sweep. Chromium masks by glyphs only through the prefixed
+ * `-webkit-mask-clip: text`; the unprefixed `mask-clip` does not take `text`
+ * there, so the prefixed test is the one that decides it in Electron.
+ */
+@supports (mask-clip: text) or (-webkit-mask-clip: text) {
     .happy-shimmer-text[data-layered] {
         position: relative;
-        background-image: none;
+        /* The glyphs paint at the resting colour beneath the ramp, so a sliver
+           the ramp does not reach still reads as resting text. */
+        -webkit-text-fill-color: var(--happy-shimmer-rest);
         animation-name: none;
+        -webkit-mask-image: linear-gradient(black, black);
         mask-image: linear-gradient(black, black);
+        -webkit-mask-clip: text;
         mask-clip: text;
     }
 
@@ -118,7 +97,7 @@
         pointer-events: none;
     }
 
-    .happy-shimmer-text__ramp::before {
+    .happy-shimmer-text[data-layered] > .happy-shimmer-text__ramp::before {
         content: "";
         position: absolute;
         top: 0;
@@ -138,6 +117,9 @@
             var(--happy-shimmer-rest) 60%,
             var(--happy-shimmer-rest) 100%
         );
+        /* Its own layer from the first frame, so starting the loop never
+           waits on a repaint to promote it. */
+        will-change: transform;
         animation-name: happy-shimmer-text-slide;
         animation-duration: var(--happy-shimmer-duration);
         animation-timing-function: linear;
@@ -150,9 +132,10 @@
     }
 }
 
-/* `background-position` 100% to 0% across a ramp three runs wide is two run
-   widths of travel: two thirds of the ramp's own width, less the two thirds
-   of its two end pixels that the percentage counts. */
+/* Two run widths of travel across a ramp three runs wide: two thirds of the
+   ramp's own width, less the two thirds of its two end pixels that the
+   percentage counts. The band sits mid-ramp, so the run is crossed over the
+   middle half of the loop and is clear at both ends of it. */
 @keyframes happy-shimmer-text-slide {
     from {
         transform: translateX(calc(-200% / 3 + 4px / 3));
@@ -163,16 +146,23 @@
     }
 }
 
-/*
- * An inline run breaks wherever the words around it would. Its background is
- * sliced across the line fragments as if they were laid end to end, so the
- * ramp — and the band in it — still spans the whole run once rather than
- * restarting on each line.
- */
+/* The band is mid-loop at the middle of the cycle, and clear at both ends of
+   it, exactly as the slide is. */
+@keyframes happy-shimmer-text-breathe {
+    from,
+    to {
+        opacity: var(--happy-shimmer-breathe-rest);
+    }
+
+    50% {
+        opacity: var(--happy-shimmer-breathe-highlight);
+    }
+}
+
+/* An inline run breaks wherever the words around it would. It breathes, so
+   turning the shimmer on and off never reflows the text or the row it is in. */
 .happy-shimmer-text[data-inline] {
     display: inline;
-    box-decoration-break: slice;
-    -webkit-box-decoration-break: slice;
 }
 
 .happy-shimmer-text[data-paused] {
@@ -181,8 +171,7 @@
 
 /*
  * Tone names the text role, and the ramp follows from it through
- * `currentColor`. Setting the real `color` is safe now that the glyph fill is
- * hidden separately, and it is also what keeps the reduced-motion text and any
+ * `currentColor`. It is also what keeps the reduced-motion text and any
  * inherited decoration on the same colour as the sweep.
  *
  * `inherit` is the absence of a rule here: no tone claims the colour, so the
@@ -219,43 +208,26 @@
        already secondary grey, and a half-strength wipe on grey is the one thing
        this must not be: it reads as a smudge rather than as light moving. */
     --happy-shimmer-highlight: color-mix(in srgb, var(--happy-shimmer-color) 15%, var(--surface));
-}
-
-/*
- * The whole travel, end to end. Both ends of it are positions that still cover
- * the run, which is why the sweep may not be widened by pushing this past `100%`
- * or below `0%`: that does not move the band further out, it slides the ramp off
- * the line and the text disappears.
- */
-@keyframes happy-shimmer-text-sweep {
-    from {
-        background-position: 100% 0;
-    }
-
-    to {
-        background-position: 0% 0;
-    }
+    /* A whole run fading that far would vanish for a moment rather than read
+       as light passing over it, so the breathing form stops well short. */
+    --happy-shimmer-breathe-rest: 1;
+    --happy-shimmer-breathe-highlight: 0.45;
 }
 
 /*
  * The sweep is decoration over text that is already legible, so a reader who
- * asked for less motion simply gets the text. The gradient is dropped entirely
- * rather than slowed or stopped: a clipped background with no animation would
- * leave one arbitrary frame of the ramp painted across the line, dimming part
- * of a label for no reason.
+ * asked for less motion simply gets the text, at exactly the colour its sweep
+ * was built out of — and `inherit` at the colour it would have had if the
+ * shimmer had never been swapped in.
  */
 @media (prefers-reduced-motion: reduce) {
     .happy-shimmer-text {
-        background-image: none;
-        /* Every tone already carries its own real `color`, so restoring the
-           glyph fill is the whole of it: each one lands on exactly the colour
-           its sweep was built out of, and `inherit` on the colour it would have
-           had if the shimmer had never been swapped in. */
-        -webkit-text-fill-color: currentColor;
         animation: none;
     }
 
     .happy-shimmer-text[data-layered] {
+        -webkit-text-fill-color: currentColor;
+        -webkit-mask-image: none;
         mask-image: none;
     }
 

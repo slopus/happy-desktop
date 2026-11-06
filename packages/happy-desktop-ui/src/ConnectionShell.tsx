@@ -214,6 +214,12 @@ export function ConnectionShell(props: {
                                         data-voice-focus={item.voiceFocus || undefined}
                                     >
                                         <ConnectionShellTile item={item} />
+                                        {item.working && item.status === "connected" ? (
+                                            <span
+                                                aria-hidden="true"
+                                                className="happy-connections__sheen"
+                                            />
+                                        ) : null}
                                         {item.unread ? (
                                             <span
                                                 aria-hidden="true"

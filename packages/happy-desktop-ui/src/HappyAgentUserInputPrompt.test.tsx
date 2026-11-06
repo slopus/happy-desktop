@@ -169,15 +169,15 @@ it("shimmers on Submit without moving the button, choices, or following content"
         await vi.waitFor(() => expect(submit.getAttribute("aria-busy")).toBe("true"));
         const shimmer = root.querySelector<HTMLElement>('[data-happy-desktop-ui="shimmer-text"]')!;
         expect(shimmer.textContent).toBe("Submit");
-        // The compositor slide where the engine can mask by glyphs, otherwise the painted sweep.
+        // The compositor slide where the engine can mask by glyphs, otherwise the breathe.
         expect(
             shimmer
                 .getAnimations({ subtree: true })
                 .map((animation) => (animation as CSSAnimation).animationName),
         ).toEqual([
-            CSS.supports("mask-clip", "text")
+            CSS.supports("mask-clip", "text") || CSS.supports("-webkit-mask-clip", "text")
                 ? "happy-shimmer-text-slide"
-                : "happy-shimmer-text-sweep",
+                : "happy-shimmer-text-breathe",
         ]);
         expect(getComputedStyle(submit).opacity).toBe("1");
         expect(submit.disabled).toBe(true);
