@@ -143,6 +143,35 @@ export function ConnectionShellPage() {
             summary="A 56px connection rail outside each independent workspace. Home stays first above a separator; remote order is controlled without remounting workspaces."
         >
             <Specimen
+                number="13"
+                label="Add Happy Cloud"
+                detail="A + tile after the last connection. Offered beside Home alone too, so the rail shows for the first connection."
+                stage="surface"
+            >
+                <div style={{ display: "flex", gap: 24 }}>
+                    <div style={{ display: "flex", width: 280, height: 220 }}>
+                        <ConnectionShell
+                            items={[items[0]!]}
+                            selectedId="local"
+                            onSelect={() => undefined}
+                            add={{ label: "Connect to Happy Cloud", onAdd: () => undefined }}
+                        >
+                            <p>Home alone.</p>
+                        </ConnectionShell>
+                    </div>
+                    <div style={{ display: "flex", width: 280, height: 300 }}>
+                        <ConnectionShell
+                            items={items.slice(0, 3)}
+                            selectedId="local"
+                            onSelect={() => undefined}
+                            add={{ label: "Connect to Happy Cloud", onAdd: () => undefined }}
+                        >
+                            <p>After the remotes.</p>
+                        </ConnectionShell>
+                    </div>
+                </div>
+            </Specimen>
+            <Specimen
                 number="09"
                 label="Working connections · frozen shimmer"
                 detail="The sheen crosses home, image, and generated tiles. Unread and selection dots stay clear; idle and offline tiles do not shimmer. Reduced motion uses a static outline."

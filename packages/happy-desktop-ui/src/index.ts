@@ -651,6 +651,11 @@ export {
     type CloudSignInNoticeView,
 } from "./CloudSignInNoticeDialog";
 export {
+    CloudConnectDialog,
+    type CloudConnectDialogProps,
+    type CloudConnectView,
+} from "./CloudConnectDialog";
+export {
     HappyLinkNoticeDialog,
     type HappyLinkNoticeDialogProps,
     type HappyLinkNoticeView,

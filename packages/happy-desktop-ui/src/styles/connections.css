@@ -267,3 +267,12 @@
     color: var(--text-secondary);
     font-size: 12px;
 }
+/* The "+" after the last connection: an outlined empty tile, so it reads as a
+   place for one more rather than a connection of its own. */
+.happy-connections__add {
+    box-shadow: inset 0 0 0 1px var(--divider);
+    touch-action: auto;
+}
+.happy-connections__add:hover {
+    background: var(--surface-ripple);
+}

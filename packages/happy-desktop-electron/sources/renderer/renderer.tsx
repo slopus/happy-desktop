@@ -85,6 +85,7 @@ import {
     WelcomeScreen,
     ZoomIndicator,
     ConnectionShell,
+    CloudConnectDialog,
     CloudSignInNoticeDialog,
     HappyLinkNoticeDialog,
     ConnectionSurface,
@@ -141,6 +142,10 @@ import { desktopConnectionUiCreate, type DesktopConnectionUi } from "./desktopCo
 import { desktopConnectionPreferencesCreate } from "./desktopConnectionPreferences";
 import { desktopModelPreferencesCreate } from "./desktopModelPreferences";
 import { desktopCloudAuthRouterCreate, type DesktopCloudAuthEvent } from "./desktopCloudAuthRouter";
+import {
+    desktopCloudConnectStoreCreate,
+    type DesktopCloudConnectStore,
+} from "./desktopCloudConnectStore";
 import {
     desktopCloudSignInNoticeStoreCreate,
     type DesktopCloudSignInNoticeStore,
@@ -642,6 +647,8 @@ interface DesktopRendererProps {
     usageAnalytics: UsageAnalyticsStore;
     /** Adds team servers through the host Happy Agent; absent on a shell that cannot. */
     servers?: AppServers;
+    /** The sidebar's "+" to Happy Cloud; absent on a shell that cannot sign in to servers. */
+    cloudConnect?: DesktopCloudConnectStore;
     keepAwake: KeepAwakeStore;
     navigationOrder: HappyAgentNavigationOrderStore;
     sidebarCollapse: HappyAgentSidebarCollapseStore;
@@ -806,6 +813,14 @@ function DesktopScreens(props: DesktopRendererProps) {
                 windowControls={props.platform === "desktop"}
                 collapsed={sidebarVisibility.hidden}
                 error={directory.error}
+                {...(props.cloudConnect
+                    ? {
+                          add: {
+                              label: "Connect to Happy Cloud",
+                              onAdd: props.cloudConnect.connectOpen,
+                          },
+                      }
+                    : {})}
             >
                 <ConnectionSurface
                     key={LOCAL_HAPPY_AGENT_ID}
@@ -1138,6 +1153,18 @@ function DesktopCloudSignInNotice(props: { store: DesktopCloudSignInNoticeStore 
             onTeamConnect={props.store.teamConnect}
             onTeamsCheck={props.store.teamsCheck}
             view={notice.view}
+        />
+    );
+}
+/** The sidebar "+"'s confirm before adding Happy Cloud, centered over everything else. */
+function DesktopCloudConnect(props: { store: DesktopCloudConnectStore }): ReactNode {
+    const view = useSyncExternalStore(props.store.subscribe, props.store.get, props.store.get);
+    if (!view) return null;
+    return (
+        <CloudConnectDialog
+            onCancel={props.store.connectCancel}
+            onConnect={props.store.connectConfirm}
+            view={view}
         />
     );
 }
@@ -1561,6 +1588,9 @@ if (mediaPreviewBridge) {
                   }
                 : undefined;
         if (servers) appDisposers.push(() => servers.add[Symbol.dispose]());
+        const cloudConnect = happyAgents.happyAgentServerConnect
+            ? desktopCloudConnectStoreCreate(happyAgents)
+            : undefined;
         // What this window reports about how it is used, read from the same
         // directory the sidebar reads. Development windows send nothing.
         const analytics = desktopAnalyticsCreate({
@@ -1823,6 +1853,7 @@ if (mediaPreviewBridge) {
             <DesktopAppearance appearance={appearance} powerSaving={powerSaving}>
                 <DesktopZoomIndicator />
                 <DesktopCloudSignInNotice store={notices} />
+                {cloudConnect ? <DesktopCloudConnect store={cloudConnect} /> : null}
                 <DesktopHappyLinkNotice
                     store={happyLinkInbox}
                     {...(servers
@@ -1862,6 +1893,7 @@ if (mediaPreviewBridge) {
                         gptLive={gptLive}
                         usageAnalytics={analytics.preference}
                         {...(servers ? { servers } : {})}
+                        {...(cloudConnect ? { cloudConnect } : {})}
                         keepAwake={keepAwake}
                         navigationOrder={navigationOrder}
                         sidebarCollapse={sidebarCollapse}

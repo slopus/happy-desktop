@@ -1,0 +1,14 @@
+/*
+ * CloudConnectDialog — the sidebar "+" confirm before adding Happy Cloud.
+ */
+
+.happy-cloud-connect__text {
+    margin: 0 0 12px;
+    color: var(--text-secondary);
+    font-family: var(--happy-font-ui);
+    font-size: 13px;
+    line-height: 20px;
+}
+.happy-cloud-connect__text:last-child {
+    margin-bottom: 0;
+}

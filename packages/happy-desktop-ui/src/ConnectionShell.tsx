@@ -84,6 +84,11 @@ export function ConnectionShell(props: {
     readonly itemMenuItems?: (item: ConnectionShellItem) => MenuItem[];
     /** A row was chosen from an entry's context menu. */
     readonly onItemMenuSelect?: (id: string, actionId: string) => void;
+    /**
+     * A "+" tile after the last connection. While it is offered the rail shows
+     * even beside Home alone, so the first connection can be added from it.
+     */
+    readonly add?: { readonly label: string; readonly onAdd: () => void };
 }) {
     // Which entry's menu is open and where the pointer asked for it. The menu
     // is this rail's own passing state; what it offers belongs to the caller.
@@ -117,7 +122,7 @@ export function ConnectionShell(props: {
     );
     return (
         <div className="happy-connections" data-happy-desktop-ui="connection-shell">
-            {props.items.length > 1 && !props.collapsed ? (
+            {(props.items.length > 1 || props.add) && !props.collapsed ? (
                 <nav
                     className="happy-connections__rail"
                     aria-label="Connections"
@@ -234,6 +239,18 @@ export function ConnectionShell(props: {
                                     ) : null}
                                 </Fragment>
                             ))}
+                            {props.add ? (
+                                <button
+                                    className="happy-connections__item happy-connections__add"
+                                    type="button"
+                                    aria-label={props.add.label}
+                                    title={props.add.label}
+                                    data-happy-desktop-ui="connection-add"
+                                    onClick={props.add.onAdd}
+                                >
+                                    <Icon name="plus" size={20} />
+                                </button>
+                            ) : null}
                         </div>
                     </ScrollArea>
                     <div className="happy-connections__footer" aria-hidden="true" />
