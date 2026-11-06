@@ -1028,6 +1028,10 @@ const START_REACHED_THRESHOLD = 64;
  * has arrived by the time they scroll there instead of after.
  */
 const START_READ_AHEAD_SCREENS = 2;
+/** How long reader input waits for its first native scroll (ms). */
+const NATIVE_INPUT_START_MS = 300;
+/** How long a reader's scroll animation may pause between frames (ms). */
+const NATIVE_INPUT_SETTLE_MS = 150;
 /** Do not expose the final fractional/integer pixels to a further downward wheel. */
 const BOTTOM_WHEEL_EPSILON = 2;
 /** Transcript clearances represented inside the virtualizer's coordinate space. */
@@ -3524,14 +3528,41 @@ export function MessageList(props: MessageListProps) {
         /* The scrollbar's track sits beside the scrollport, so its clicks,
            drags, and wheels reach the host but never the scrollport itself. */
         const host = element.parentElement;
+        /* A wheel notch or key animates over many frames, each a native write
+           whose scroll event waits for the next frame. The reader's input
+           stays pending until the animation has been still for a while, so a
+           streaming commit on any of those frames adopts it rather than
+           putting the reader back a frame, which the next frame then undoes. */
+        let nativeInputExpiry: number | undefined;
+        const nativeInputSettle = (delay: number) => {
+            if (nativeInputExpiry !== undefined) targetWindow.clearTimeout(nativeInputExpiry);
+            nativeInputExpiry = targetWindow.setTimeout(() => {
+                nativeInputExpiry = undefined;
+                nativeInputPending.current = false;
+            }, delay);
+        };
+        const nativeInputBegin = () => {
+            nativeInputPending.current = true;
+            nativeInputSettle(NATIVE_INPUT_START_MS);
+        };
+        const nativeInputEnd = () => {
+            if (nativeInputExpiry !== undefined) targetWindow.clearTimeout(nativeInputExpiry);
+            nativeInputExpiry = undefined;
+            nativeInputPending.current = false;
+        };
         const onTrackInput = (event: Event) => {
             if (event.target instanceof Element && event.target.closest("[data-scrollbar-track]"))
-                nativeInputPending.current = true;
+                nativeInputBegin();
+        };
+        const onWheelInput = (event: WheelEvent) => {
+            if (!event.ctrlKey && event.deltaY !== 0) nativeInputBegin();
         };
         host?.addEventListener("pointerdown", onTrackInput, { capture: true });
         host?.addEventListener("wheel", onTrackInput, { capture: true, passive: true });
+        element.addEventListener("wheel", onWheelInput, { capture: true, passive: true });
+        element.addEventListener("scrollend", nativeInputEnd);
         const onScroll = () => {
-            nativeInputPending.current = false;
+            if (nativeInputPending.current) nativeInputSettle(NATIVE_INPUT_SETTLE_MS);
             const currentScrollHeight = element.scrollHeight;
             const expected = expectedScrollTop.current;
             if (
@@ -3661,7 +3692,7 @@ export function MessageList(props: MessageListProps) {
                 event.target instanceof HTMLElement &&
                 event.target.closest("input, textarea, select, [contenteditable]") !== null;
             wheelDirection = editing || event.defaultPrevented ? 0 : messageListKeyDirection(event);
-            if (wheelDirection !== 0) nativeInputPending.current = true;
+            if (wheelDirection !== 0) nativeInputBegin();
             /* Keyboard scrolling animates too, and a follower's next streaming
                commit would write the end and cancel it: like an upward wheel,
                an upward key hands the position to the reader before it moves. */
@@ -3731,7 +3762,9 @@ export function MessageList(props: MessageListProps) {
             element.removeEventListener("wheel", onWheel);
             host?.removeEventListener("pointerdown", onTrackInput, { capture: true });
             host?.removeEventListener("wheel", onTrackInput, { capture: true });
-            nativeInputPending.current = false;
+            element.removeEventListener("wheel", onWheelInput, { capture: true });
+            element.removeEventListener("scrollend", nativeInputEnd);
+            nativeInputEnd();
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps -- current capture refs read the latest modeled rows while this effect owns one scrollport-listener lifetime
     }, [virtualized, virtualizer]);
