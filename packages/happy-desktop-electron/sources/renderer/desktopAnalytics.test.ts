@@ -759,4 +759,3 @@ it("reports which installs only a refreshed PATH found, as the person continues"
     unsubscribe();
     analytics.dispose();
 });
-

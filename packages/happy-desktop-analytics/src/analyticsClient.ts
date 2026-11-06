@@ -80,12 +80,7 @@ function urlOf(host: string): URL | undefined {
     }
 }
 
-const LOOPBACK_HOSTNAMES: ReadonlySet<string> = new Set([
-    "127.0.0.1",
-    "[::1]",
-    "::1",
-    "localhost",
-]);
+const LOOPBACK_HOSTNAMES: ReadonlySet<string> = new Set(["127.0.0.1", "[::1]", "::1", "localhost"]);
 
 /** An https host, or an http one on this machine, with no credentials in it. */
 function hostAllowed(host: string): boolean {
@@ -207,12 +202,16 @@ export function analyticsClientCreate(options: AnalyticsClientOptions): Analytic
         track(event, properties, trackOptions) {
             const apiKey = sendable();
             if (apiKey === undefined) return;
-            const batch = analyticsEnvelope(event, { ...properties }, {
-                distinctId: options.distinctId(),
-                insertId: crypto.randomUUID(),
-                // Whole seconds: finer times only help tell people apart.
-                timestamp: new Date(Math.floor(Date.now() / 1000) * 1000).toISOString(),
-            });
+            const batch = analyticsEnvelope(
+                event,
+                { ...properties },
+                {
+                    distinctId: options.distinctId(),
+                    insertId: crypto.randomUUID(),
+                    // Whole seconds: finer times only help tell people apart.
+                    timestamp: new Date(Math.floor(Date.now() / 1000) * 1000).toISOString(),
+                },
+            );
             if (!batch) return;
             void fetch(`${host}/batch/`, {
                 ...REQUEST,

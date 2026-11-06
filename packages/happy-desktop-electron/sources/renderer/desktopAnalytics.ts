@@ -167,8 +167,6 @@ function installId(renew: boolean): string {
     return created;
 }
 
-
-
 /** On screen and holding the keyboard; a window with no document is neither. */
 function windowFocused(): boolean {
     return (
@@ -647,7 +645,8 @@ const FAILURE_FRESH_MS = 5 * 60_000;
  */
 function errorCodeOf(error: unknown): AnalyticsErrorCode {
     for (let current = error; current instanceof Error; current = current.cause) {
-        if (current instanceof HappyAgentApiError) return analyticsErrorCodeOfStatus(current.status);
+        if (current instanceof HappyAgentApiError)
+            return analyticsErrorCodeOfStatus(current.status);
         if (current instanceof TypeError) return "offline";
         if (current.name === "TimeoutError") return "timeout";
     }

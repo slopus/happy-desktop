@@ -10052,7 +10052,9 @@ function HappyAgentConversationSurface(props: {
             }
             onTraceToggle={(turnId) => workspace.turnTraceToggle(turnId)}
             onTracesSeen={(viewer, turnIds) => workspace.turnTracesSeen(viewer, turnIds)}
-            onEntriesSeen={(viewer, entryIds) => workspace.conversationEntriesSeen(viewer, entryIds)}
+            onEntriesSeen={(viewer, entryIds) =>
+                workspace.conversationEntriesSeen(viewer, entryIds)
+            }
             overlay={
                 openImage ? (
                     <ModalOverlay onDismiss={() => workspace.imageClose()} placement="fill">
