@@ -1,0 +1,63 @@
+name: Windows inline artifact resize repro
+
+on:
+    push:
+        branches: ["windows-artifact**"]
+    workflow_dispatch:
+
+permissions:
+    contents: read
+
+jobs:
+    inline-artifact:
+        strategy:
+            fail-fast: false
+            matrix:
+                include:
+                    - os: windows-2025
+                      dpr: 1
+                      native: "1"
+                    - os: windows-2025
+                      dpr: 1.25
+                      native: "1"
+                    - os: windows-2025
+                      dpr: 1.5
+                      native: "1"
+                    - os: ubuntu-latest
+                      dpr: 1.25
+                      native: "0"
+        runs-on: ${{ matrix.os }}
+        timeout-minutes: 20
+        defaults:
+            run:
+                shell: bash
+        steps:
+            - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+            - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+            - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+              with:
+                  node-version: "24"
+                  cache: pnpm
+            - if: runner.os == 'Windows'
+              run: pnpm config set script-shell "C:\Program Files\Git\bin\bash.exe"
+            - run: pnpm install --frozen-lockfile
+            - run: pnpm --dir packages/happy-desktop-ui exec playwright install --with-deps chromium
+            - name: Record production guest measurement through real transcript InlinePage
+              env:
+                  HAPPY_SCROLL_REPRO_DPR: ${{ matrix.dpr }}
+                  HAPPY_SCROLL_REPRO_SMOOTH: "1"
+                  HAPPY_SCROLL_REPRO_HEADED: ${{ matrix.native }}
+                  HAPPY_SCROLL_REPRO_NATIVE: ${{ matrix.native }}
+                  HAPPY_TEST_DEPTH: cheap
+              run: |
+                  mkdir -p .context/inline-artifact
+                  set -o pipefail
+                  pnpm --dir packages/happy-desktop-ui exec vitest run --project chromium src/WindowsScrollInlineArtifact.test.tsx 2>&1 | tee .context/inline-artifact/trace.log
+            - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+              if: always()
+              with:
+                  name: inline-artifact-${{ matrix.os }}-dpr-${{ matrix.dpr }}-native-${{ matrix.native }}
+                  path: |
+                      .context/inline-artifact
+                      packages/happy-desktop-ui/**/__screenshots__/**
+                  if-no-files-found: warn
