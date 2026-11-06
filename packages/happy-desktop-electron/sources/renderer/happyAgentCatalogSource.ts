@@ -5,6 +5,7 @@ import {
     type GroupSession,
     type ProjectGroup,
     type TaskGroup,
+    type WorkspaceGroup,
     type HappyAgentConnection,
     type HappyAgentGitChangedFile,
     type HappyAgentPermissionMode,
@@ -135,14 +136,31 @@ function catalogProject(
     // A bot's conversation is stated on the bot and deliberately kept out of the
     // flat session list: that list is grouped under projects, and a bot is not
     // one. The chat itself is opened by id, which needs no catalog entry.
-    const subtasksProject = (tasks: BotGroup["subtasks"]): readonly HappyAgentBotSubtask[] =>
-        tasks.map((task) => ({
-            workspaceId: task.workspaceId as HappyAgentWorktreeId,
-            path: task.path,
-            conversation: happyAgentConversationSummaryProject(conversationProject(task.session)),
-            subtasks: subtasksProject(task.subtasks),
-        }));
-    const bots: HappyAgentBot[] = botGroups.map((bot) => ({
+    const bots = botGroups.map(botProject);
+    // A task's conversation is stated on the task for the same reason a bot's
+    // is, and its subtasks nest under it the same way.
+    const tasks = taskGroups.map(taskProject);
+    const catalog: HappyAgentProjectCatalog = { bots, projects, tasks, worktrees };
+    return { archivedSessions, catalog, sessions };
+}
+
+function subtasksProject(tasks: BotGroup["subtasks"]): readonly HappyAgentBotSubtask[] {
+    return tasks.map((task) => ({
+        workspaceId: task.workspaceId as HappyAgentWorktreeId,
+        path: task.path,
+        conversation: happyAgentConversationSummaryProject(conversationProject(task.session)),
+        subtasks: subtasksProject(task.subtasks),
+    }));
+}
+
+/* The connection hands back the very same bot and task groups for the ones nothing changed in. */
+const botProjections = new WeakMap<BotGroup, HappyAgentBot>();
+const taskProjections = new WeakMap<TaskGroup, HappyAgentTask>();
+
+function botProject(bot: BotGroup): HappyAgentBot {
+    const cached = botProjections.get(bot);
+    if (cached !== undefined) return cached;
+    const value: HappyAgentBot = {
         id: bot.id as HappyAgentBotId,
         workspaceId: bot.workspaceId as HappyAgentWorktreeId,
         conversation: happyAgentConversationSummaryProject(conversationProject(bot.session)),
@@ -156,10 +174,15 @@ function catalogProject(
         path: bot.path,
         displayPath: bot.path,
         ...(bot.avatar === undefined ? {} : { avatar: bot.avatar }),
-    }));
-    // A task's conversation is stated on the task for the same reason a bot's
-    // is, and its subtasks nest under it the same way.
-    const tasks: HappyAgentTask[] = taskGroups.map((task) => ({
+    };
+    botProjections.set(bot, value);
+    return value;
+}
+
+function taskProject(task: TaskGroup): HappyAgentTask {
+    const cached = taskProjections.get(task);
+    if (cached !== undefined) return cached;
+    const value: HappyAgentTask = {
         id: task.id as HappyAgentTaskId,
         workspaceId: task.workspaceId as HappyAgentWorktreeId,
         name: task.name,
@@ -182,9 +205,9 @@ function catalogProject(
         ...(task.membership === undefined
             ? {}
             : { membership: { orderKey: task.membership.orderKey } }),
-    }));
-    const catalog: HappyAgentProjectCatalog = { bots, projects, tasks, worktrees };
-    return { archivedSessions, catalog, sessions };
+    };
+    taskProjections.set(task, value);
+    return value;
 }
 
 interface GroupProjection {
@@ -216,23 +239,7 @@ function groupProject(group: ProjectGroup, baseUrl: string): GroupProjection {
     };
     sessionsAdd(group.sessions);
     for (const workspace of group.workspaces) {
-        worktrees.push({
-            id: workspace.id as HappyAgentWorktreeId,
-            projectId: group.id as HappyAgentProjectId,
-            name: workspace.name,
-            creatorAgentId: workspace.creatorAgentId,
-            orderKey: workspace.orderKey,
-            path: workspace.path,
-            displayPath: workspace.path,
-            status: workspace.status,
-            presence: workspace.presence,
-            // The host's own sentence about a failed checkout, carried
-            // whole. It is present only while the workspace it belongs to
-            // reports one, so a workspace that stops failing stops carrying
-            // a reason rather than keeping the last one it had.
-            ...(workspace.error === undefined ? {} : { error: workspace.error }),
-            ...gitProject(workspace.git),
-        });
+        worktrees.push(worktreeProject(workspace, projectId));
         sessionsAdd(workspace.sessions);
     }
     const projection: GroupProjection = {
@@ -244,6 +251,36 @@ function groupProject(group: ProjectGroup, baseUrl: string): GroupProjection {
     };
     groupProjections.set(group, projection);
     return projection;
+}
+
+/* The connection likewise hands back the very same workspace group when nothing in it changed. */
+const worktreeProjections = new WeakMap<WorkspaceGroup, HappyAgentWorktree>();
+
+function worktreeProject(
+    workspace: WorkspaceGroup,
+    projectId: HappyAgentProjectId,
+): HappyAgentWorktree {
+    const cached = worktreeProjections.get(workspace);
+    if (cached?.projectId === projectId) return cached;
+    const worktree: HappyAgentWorktree = {
+        id: workspace.id as HappyAgentWorktreeId,
+        projectId,
+        name: workspace.name,
+        creatorAgentId: workspace.creatorAgentId,
+        orderKey: workspace.orderKey,
+        path: workspace.path,
+        displayPath: workspace.path,
+        status: workspace.status,
+        presence: workspace.presence,
+        // The host's own sentence about a failed checkout, carried
+        // whole. It is present only while the workspace it belongs to
+        // reports one, so a workspace that stops failing stops carrying
+        // a reason rather than keeping the last one it had.
+        ...(workspace.error === undefined ? {} : { error: workspace.error }),
+        ...gitProject(workspace.git),
+    };
+    worktreeProjections.set(workspace, worktree);
+    return worktree;
 }
 
 function projectProject(group: ProjectGroup, baseUrl: string): HappyAgentProject {
