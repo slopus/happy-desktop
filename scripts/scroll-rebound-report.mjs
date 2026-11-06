@@ -18,7 +18,14 @@ for (const line of text.split(/\r?\n/u)) {
     const prefix = prefixes.find((candidate) => line.includes(candidate));
     if (!prefix) continue;
     const trace = JSON.parse(line.slice(line.indexOf(prefix) + prefix.length));
-    const frames = trace.samples ?? [];
+    const measuredInput = prefix === "ONE_NOTCH_CASE "
+        ? (trace.events ?? []).find((event) => event.type === "wheel" && event.deltaY > 0)
+        : undefined;
+    // The native fixture first injects an upward notch and repositions the list
+    // to prepare the trial. Only the measured downward notch starts the oracle.
+    const frames = prefix === "ONE_NOTCH_CASE "
+        ? (trace.samples ?? []).filter((sample) => measuredInput && sample.time >= measuredInput.time)
+        : (trace.samples ?? []);
     const events = (trace.events ?? []).filter((event) =>
         ["wheel", "pointerdown", "pointermove", "pointerup", "keydown"].includes(event.type),
     );
