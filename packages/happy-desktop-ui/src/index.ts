@@ -651,12 +651,12 @@ export {
     type CloudSignInNoticeView,
 } from "./CloudSignInNoticeDialog";
 export {
-    CloudConnectDialog,
+    CloudConnectScreen,
     type CloudConnectAvailability,
-    type CloudConnectDialogProps,
+    type CloudConnectScreenProps,
     type CloudConnectServer,
     type CloudConnectView,
-} from "./CloudConnectDialog";
+} from "./CloudConnectScreen";
 export {
     HappyLinkNoticeDialog,
     type HappyLinkNoticeDialogProps,

@@ -155,12 +155,17 @@ export interface HappyAgentDirectoryStore {
     /** Stops a remote's sign-in whose browser is open; present with `happyAgentSignIn`. */
     happyAgentSignInCancel?(id: string): void;
     /**
-     * Shows a Happy Cloud server the shell has added, by its connection ID,
-     * and opens its sign-in when the shell holds none. Present only when the
-     * shell reaches Happy Cloud itself.
+     * Lists a Happy Cloud server the shell has added and signed in to, by its
+     * connection ID, and selects it once the shell reports it signed in.
+     * Present only when the shell reaches Happy Cloud itself.
      */
-    happyAgentCloudConnect?(connectionId: string): void;
+    happyAgentCloudConnect?(
+        connectionId: string,
+    ): Promise<{ readonly ok: true } | { readonly ok: false; readonly message: string }>;
 }
+
+/** How long a Happy Cloud server may take to be reported signed in after the shell holds its tokens. */
+const CLOUD_SIGNED_IN_WAIT_MS = 15_000;
 
 export interface HappyAgentDirectoryDeps {
     readonly cloudHostFor: (id: string) => HappyAgentCloudHost;
@@ -492,8 +497,11 @@ export function happyAgentDirectoryStoreCreate(
         publish();
     };
 
-    const signIn = (remote: LocalHappyAgent, source: ServerSource): void => {
-        if (!remote.entry.signIn || remote.entry.signIn.phase === "browser") return;
+    /** Resolves with why the sign-in did not finish, or nothing once it has. */
+    const signIn = (remote: LocalHappyAgent, source: ServerSource): Promise<string | undefined> => {
+        if (!remote.entry.signIn) return Promise.resolve(undefined);
+        if (remote.entry.signIn.phase === "browser")
+            return Promise.resolve("Signing in to this server already started.");
         const controller = new AbortController();
         remote.signInAbort?.abort();
         remote.signInAbort = controller;
@@ -503,8 +511,8 @@ export function happyAgentDirectoryStoreCreate(
             publish();
         };
         const connectionId = remote.entry.remoteId;
-        if (connectionId === undefined) return;
-        source
+        if (connectionId === undefined) return Promise.resolve("This server has no connection.");
+        return source
             .serverSignIn(
                 connectionId,
                 {
@@ -519,7 +527,7 @@ export function happyAgentDirectoryStoreCreate(
             )
             .then(
                 () => {
-                    if (remote.signInAbort !== controller) return;
+                    if (remote.signInAbort !== controller) return "Signing in was stopped.";
                     remote.signInAbort = undefined;
                     // The connection's own retry brings the server's work in;
                     // until it answers the entry says it is connecting.
@@ -530,11 +538,14 @@ export function happyAgentDirectoryStoreCreate(
                         message: "Connecting to this Happy Agent.",
                     };
                     publish();
+                    return undefined;
                 },
                 (error: unknown) => {
-                    if (remote.signInAbort !== controller) return;
+                    if (remote.signInAbort !== controller) return "Signing in was stopped.";
                     remote.signInAbort = undefined;
-                    phase({ phase: "failed", message: happyAgentUserError(error).message });
+                    const message = happyAgentUserError(error).message;
+                    phase({ phase: "failed", message });
+                    return message;
                 },
             );
     };
@@ -1052,7 +1063,7 @@ export function happyAgentDirectoryStoreCreate(
             ? {
                   happyAgentSignIn(id: string) {
                       const remote = remotes.get(id);
-                      if (remote && deps.servers) signIn(remote, deps.servers);
+                      if (remote && deps.servers) void signIn(remote, deps.servers);
                   },
                   happyAgentSignInCancel(id: string) {
                       const remote = remotes.get(id);
@@ -1060,25 +1071,44 @@ export function happyAgentDirectoryStoreCreate(
                   },
                   ...(deps.cloud
                       ? {
-                            happyAgentCloudConnect(connectionId: string) {
+                            async happyAgentCloudConnect(connectionId: string) {
                                 const item = cloudItems([connectionId])[0];
-                                if (!item) return;
+                                const sessions = deps.serverSessions;
+                                if (!item || !sessions)
+                                    return {
+                                        ok: false,
+                                        message: "That server isn't on Happy Cloud.",
+                                    };
                                 cloudWanted = new Set([...cloudWanted, connectionId]);
                                 sessionsReconcile();
-                                roster?.connectionSelect(item.id);
-                                const remote = remotes.get(item.id);
-                                if (!remote || !deps.servers) return;
-                                if (
-                                    deps.serverSessions?.get().sessions.get(connectionId)?.state ===
-                                    "signedIn"
-                                )
-                                    return;
-                                if (!remote.entry.signIn)
-                                    signInRequire(remote, {
-                                        message: "Sign in to this server to use it.",
-                                        first: true,
+                                // The shell signed in with tokens the accounts
+                                // service issued; the window waits to hear it.
+                                const signedIn = await new Promise<boolean>((resolve) => {
+                                    const check = (): boolean =>
+                                        sessions.get().sessions.get(connectionId)?.state ===
+                                        "signedIn";
+                                    if (check()) {
+                                        resolve(true);
+                                        return;
+                                    }
+                                    const timer = setTimeout(() => {
+                                        unsubscribe();
+                                        resolve(false);
+                                    }, CLOUD_SIGNED_IN_WAIT_MS);
+                                    const unsubscribe = sessions.subscribe(() => {
+                                        if (!check()) return;
+                                        clearTimeout(timer);
+                                        unsubscribe();
+                                        resolve(true);
                                     });
-                                signIn(remote, deps.servers);
+                                });
+                                if (!signedIn)
+                                    return {
+                                        ok: false,
+                                        message: "Happy couldn't finish signing in to this server.",
+                                    };
+                                roster?.connectionSelect(item.id);
+                                return { ok: true };
                             },
                         }
                       : {}),

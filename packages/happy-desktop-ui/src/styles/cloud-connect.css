@@ -1,107 +1,169 @@
 /*
- * CloudConnectDialog — the sidebar "+" to Happy Cloud: confirm, account
- * sign-in, then the server picker.
+ * CloudConnectScreen — the sidebar "+" to Happy Cloud, full window on the
+ * onboarding sky. Every state is a SetupPage; this file only draws what sits
+ * in its slot: the server rows, the handle field, the links and the hero.
  */
 
-.happy-cloud-connect {
+.happy-cloud-connect__window {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: flex;
+    background: var(--groupped-background);
+}
+
+.happy-cloud-connect__window > .happy-setup-page {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+/* Steps change quickly here; the dissolve stays under 200ms. */
+.happy-cloud-connect.happy-setup-page[data-transition] .happy-setup-page__body {
+    animation-duration: 180ms;
+}
+
+.happy-cloud-connect__column {
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    align-items: stretch;
+    gap: 12px;
+    width: 100%;
+    max-width: 400px;
+    align-self: center;
 }
-.happy-cloud-connect__text {
-    margin: 0 0 12px;
-    color: var(--text-secondary);
-    font-family: var(--happy-font-ui);
-    font-size: 13px;
-    line-height: 20px;
-}
-.happy-cloud-connect__text:last-child {
-    margin-bottom: 0;
-}
-.happy-cloud-connect__section {
+
+.happy-cloud-connect__servers {
     display: flex;
     flex-direction: column;
     gap: 8px;
 }
-.happy-cloud-connect__heading {
-    margin: 0;
-    color: var(--text);
-    font-family: var(--happy-font-ui);
-    font-size: 13px;
-    font-weight: 600;
-    line-height: 20px;
-}
-.happy-cloud-connect__servers {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-}
+
 .happy-cloud-connect__server {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 8px 12px;
-    border: 1px solid var(--divider);
-    border-radius: 10px;
-    background: transparent;
-    color: var(--text);
+    gap: 14px;
+    min-height: 68px;
+    padding: 12px 16px;
+    border: 1px solid color-mix(in srgb, var(--onboarding-foreground) 22%, transparent);
+    border-radius: 14px;
+    background: color-mix(in srgb, var(--onboarding-foreground) 8%, transparent);
+    color: var(--onboarding-foreground);
     font: inherit;
     text-align: left;
     cursor: pointer;
+    transition:
+        background-color 120ms ease,
+        transform 120ms ease;
 }
+
 .happy-cloud-connect__server:hover:not(:disabled) {
-    background: var(--surface-ripple);
+    background: color-mix(in srgb, var(--onboarding-foreground) 14%, transparent);
 }
+
+.happy-cloud-connect__server:active:not(:disabled) {
+    transform: scale(0.99);
+}
+
 .happy-cloud-connect__server:disabled {
     cursor: default;
     opacity: 0.6;
 }
+
 .happy-cloud-connect__server:focus-visible {
-    outline: 2px solid var(--text-link);
+    outline: 2px solid var(--onboarding-foreground);
     outline-offset: 2px;
 }
-.happy-cloud-connect__server-name {
-    font-family: var(--happy-font-ui);
-    font-size: 13px;
-    font-weight: 600;
-    line-height: 18px;
-}
-.happy-cloud-connect__server-detail,
-.happy-cloud-connect__hint {
-    color: var(--text-secondary);
-    font-family: var(--happy-font-ui);
-    font-size: 12px;
-    line-height: 16px;
-}
-.happy-cloud-connect__row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-.happy-cloud-connect__row > :first-child {
-    flex: 1 1 auto;
-    min-width: 0;
-}
-.happy-cloud-connect__hint {
-    margin: 0;
-}
-.happy-cloud-connect__hint[data-tone="danger"] {
-    color: var(--status-error);
-}
+
 .happy-cloud-connect__server-text {
     display: flex;
+    flex: 1 1 auto;
     flex-direction: column;
-    gap: 2px;
     min-width: 0;
 }
-.happy-cloud-connect__server-image {
-    display: block;
+
+.happy-cloud-connect__server-name,
+.happy-cloud-connect__server-detail {
+    overflow: hidden;
+    font-family: var(--happy-font-ui);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-cloud-connect__server-name {
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 20px;
+}
+
+.happy-cloud-connect__server-detail {
+    font-size: 13px;
+    line-height: 18px;
+    opacity: 0.72;
+}
+
+.happy-cloud-connect__image {
     flex: none;
-    width: 32px;
-    height: 32px;
-    border-radius: 8px;
     object-fit: cover;
-    /* The ThumbHash placeholder, painted under the picture until it loads. */
     background-size: cover;
-    background-position: center;
+}
+
+.happy-cloud-connect__image[data-size="44"] {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+}
+
+.happy-cloud-connect__image[data-size="72"] {
+    width: 72px;
+    height: 72px;
+    border-radius: 18px;
+}
+
+.happy-cloud-connect__links {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 4px;
+}
+
+.happy-setup-page[data-backdrop="sky"]
+    .happy-cloud-connect__links
+    .happy-button[data-variant="ghost"] {
+    color: color-mix(in srgb, var(--onboarding-foreground) 78%, transparent);
+}
+
+.happy-cloud-connect__hero {
+    display: flex;
+    justify-content: center;
+}
+
+/* The one field a create or join step is about: larger than a form field. */
+.happy-cloud-connect__handle .happy-text-field__control[data-size="large"] {
+    height: 56px;
+    border-radius: 12px;
+    padding: 0 18px;
+}
+
+.happy-cloud-connect__handle
+    .happy-text-field__control[data-size="large"]
+    input.happy-text-field__input,
+.happy-cloud-connect__handle
+    .happy-text-field__control[data-size="large"]
+    .happy-text-field__leading-text {
+    font-size: 20px;
+}
+
+.happy-cloud-connect__hint {
+    min-height: 32px;
+    margin: -4px 0 0;
+    color: color-mix(in srgb, var(--onboarding-foreground) 72%, transparent);
+    font-family: var(--happy-font-ui);
+    font-size: 13px;
+    line-height: 16px;
+    text-align: center;
+}
+
+.happy-cloud-connect__hint[data-tone="attention"] {
+    color: var(--onboarding-foreground);
+    font-weight: 600;
 }

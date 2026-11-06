@@ -2037,9 +2037,11 @@ void app
                 desktopDaemonSenderRequire(event.sender);
                 return typeof value === "string" ? cloud.imageRead(value) : undefined;
             });
-            ipcMain.handle(desktopIpc.happyCloudServerAdd, (event, value: unknown) => {
+            ipcMain.handle(desktopIpc.happyCloudServerConnect, (event, value: unknown) => {
                 desktopDaemonSenderRequire(event.sender);
-                return cloud.serverAdd(name(value));
+                if (typeof value !== "string" || value.length > 128)
+                    throw new Error("Happy asked to connect to an invalid server.");
+                return cloud.serverConnect(value);
             });
         }
         ipcMain.handle(desktopIpc.serverSessionsGet, (event) => {

@@ -107,6 +107,12 @@ export interface ServerSessions extends HappyAgentRemoteAuthorization {
     callbackReceive(url: string): boolean;
     /** Happy Cloud's added servers changed: they are listed again. */
     directChanged(): void;
+    /**
+     * Holds a Happy Cloud server's tokens that the accounts service issued
+     * for it directly, without a browser. The server must already be listed
+     * at the credential's address.
+     */
+    directSignIn(connectionId: string, credential: OAuthCredential): void;
     /** Every current access token and its bound address, by connection, for the isolated transport. */
     tokens(): Readonly<Record<string, ServerRemoteCredential>>;
     get(): readonly ServerSessionSnapshot[];
@@ -264,6 +270,19 @@ export function serverSessionsCreate(deps: ServerSessionsDeps): ServerSessions {
         if (session.timer) clearTimeout(session.timer);
         delete session.timer;
         const expiresAt = session.credential.expiresAt;
+        // The account's token is a short pass that is never refreshed: it
+        // simply ends when it expires, and the next use signs in again.
+        if (connectionId === direct?.account.connectionId) {
+            if (expiresAt === null || closed) return;
+            session.timer = setTimeout(
+                () => {
+                    if (sessions.get(connectionId) === session) sessionEnd(connectionId, undefined);
+                },
+                Math.max(0, expiresAt - now()),
+            );
+            session.timer.unref?.();
+            return;
+        }
         const wait =
             delay ??
             (expiresAt === null
@@ -308,6 +327,12 @@ export function serverSessionsCreate(deps: ServerSessionsDeps): ServerSessions {
     ): Promise<ServerRemoteCredential | undefined> => {
         const session = sessions.get(connectionId);
         if (!session) return Promise.resolve(undefined);
+        // Nothing refreshes the account; a refused account token ends it.
+        if (connectionId === direct?.account.connectionId) {
+            if (rejected === undefined || session.credential.accessToken === rejected)
+                sessionEnd(connectionId, undefined);
+            return Promise.resolve(undefined);
+        }
         if (session.refreshing) return session.refreshing;
         if (rejected !== undefined && session.credential.accessToken !== rejected)
             return Promise.resolve(credentialOf(session));
@@ -433,7 +458,16 @@ export function serverSessionsCreate(deps: ServerSessionsDeps): ServerSessions {
     return {
         credential(connectionId) {
             const session = sessions.get(connectionId);
-            return session ? credentialOf(session) : undefined;
+            if (!session) return undefined;
+            // An expired account pass is gone even before its timer says so.
+            const expiresAt = session.credential.expiresAt;
+            if (
+                connectionId === direct?.account.connectionId &&
+                expiresAt !== null &&
+                expiresAt <= now()
+            )
+                return undefined;
+            return credentialOf(session);
         },
         refresh: refreshRun,
         serverMoved(connectionId, serverUrl) {
@@ -622,6 +656,16 @@ export function serverSessionsCreate(deps: ServerSessionsDeps): ServerSessions {
         tokens: () => tokens,
         directChanged() {
             if (!closed) publish();
+        },
+        directSignIn(connectionId, credential) {
+            if (closed) throw new ServerSessionError("Happy is closing.", "closed");
+            const url = direct?.servers().get(connectionId);
+            if (url === undefined || serverUrlNormalize(credential.serverUrl) !== url)
+                throw new ServerSessionError(
+                    "This sign-in is for a different server.",
+                    "audience_mismatch",
+                );
+            sessionStore(connectionId, url, credential);
         },
         get: () => snapshot,
         subscribe(listener) {

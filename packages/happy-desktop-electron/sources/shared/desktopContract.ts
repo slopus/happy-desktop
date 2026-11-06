@@ -35,8 +35,12 @@ export interface DesktopHappyCloud {
     availability(name: string): Promise<DesktopServerSignInResult<DesktopHappyCloudAvailability>>;
     serverCreate(name: string): Promise<DesktopServerSignInResult<HappyCloudServer>>;
     serverJoin(name: string, code: string): Promise<DesktopServerSignInResult<HappyCloudServer>>;
-    /** Lists a server as a connection of this app and answers its connection ID. */
-    serverAdd(name: string): Promise<DesktopServerSignInResult<string>>;
+    /**
+     * Signs in to a server the account was seen to belong to, by its ID, with
+     * tokens the accounts service issues; lists it as a connection of this
+     * app and answers its connection ID.
+     */
+    serverConnect(serverId: string): Promise<DesktopServerSignInResult<string>>;
     /** A listed server's picture as a `data:` URL, or `undefined` when it can't be read. */
     imageRead(serverId: string): Promise<string | undefined>;
 }
@@ -1151,7 +1155,7 @@ export const desktopIpc = {
     happyCloudAvailability: "happy:happy-cloud:availability",
     happyCloudServerCreate: "happy:happy-cloud:server-create",
     happyCloudServerJoin: "happy:happy-cloud:server-join",
-    happyCloudServerAdd: "happy:happy-cloud:server-add",
+    happyCloudServerConnect: "happy:happy-cloud:server-connect",
     happyCloudImageRead: "happy:happy-cloud:image-read",
     serverSessionsChanged: "happy:server-sessions:changed",
     happyLinkExternalReceived: "happy:happy-link:external-received",

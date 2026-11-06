@@ -86,6 +86,8 @@ export interface SetupPageAction {
      * rather than where anything sits.
      */
     readonly progress?: SetupPageProgress;
+    /** Takes focus with the page, so Enter answers it. */
+    readonly autoFocus?: boolean;
     onSelect(): void;
 }
 
@@ -297,6 +299,8 @@ export function SetupPage(props: SetupPageProps) {
                                           />
                                       ) : (
                                           <Button
+                                              // eslint-disable-next-line jsx-a11y/no-autofocus -- a page that asks one thing starts the keyboard there
+                                              autoFocus={action.autoFocus}
                                               disabled={action.disabled}
                                               loading={action.busy}
                                               onClick={action.onSelect}

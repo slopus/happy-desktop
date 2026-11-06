@@ -85,7 +85,7 @@ import {
     WelcomeScreen,
     ZoomIndicator,
     ConnectionShell,
-    CloudConnectDialog,
+    CloudConnectScreen,
     CloudSignInNoticeDialog,
     HappyLinkNoticeDialog,
     ConnectionSurface,
@@ -1156,19 +1156,32 @@ function DesktopCloudSignInNotice(props: { store: DesktopCloudSignInNoticeStore 
         />
     );
 }
-/** The sidebar "+"'s confirm before adding Happy Cloud, centered over everything else. */
-function DesktopCloudConnect(props: { store: DesktopCloudConnectStore }): ReactNode {
+/** The sidebar "+" to Happy Cloud, full window over everything else. */
+function DesktopCloudConnect(props: {
+    store: DesktopCloudConnectStore;
+    appearance: AppearanceStore;
+}): ReactNode {
     const view = useSyncExternalStore(props.store.subscribe, props.store.get, props.store.get);
+    const appearance = useSyncExternalStore(
+        props.appearance.subscribe,
+        props.appearance.get,
+        props.appearance.get,
+    );
     if (!view) return null;
     return (
-        <CloudConnectDialog
-            onCancel={props.store.connectCancel}
-            onConnect={props.store.connectConfirm}
+        <CloudConnectScreen
+            appearance={appearance.mode}
+            onBack={props.store.back}
+            onClose={props.store.connectCancel}
+            onContinue={props.store.connectConfirm}
             onCreate={props.store.serverCreate}
             onCreateNameChange={props.store.createNameUpdate}
+            onCreateOpen={props.store.createOpen}
             onJoin={props.store.serverJoin}
             onJoinCodeChange={props.store.joinCodeUpdate}
             onJoinNameChange={props.store.joinNameUpdate}
+            onJoinOpen={props.store.joinOpen}
+            onOpen={props.store.connectedOpen}
             onServerPick={props.store.serverPick}
             view={view}
         />
@@ -1873,7 +1886,9 @@ if (mediaPreviewBridge) {
             <DesktopAppearance appearance={appearance} powerSaving={powerSaving}>
                 <DesktopZoomIndicator />
                 <DesktopCloudSignInNotice store={notices} />
-                {cloudConnect ? <DesktopCloudConnect store={cloudConnect} /> : null}
+                {cloudConnect ? (
+                    <DesktopCloudConnect appearance={appearance} store={cloudConnect} />
+                ) : null}
                 <DesktopHappyLinkNotice
                     store={happyLinkInbox}
                     {...(servers

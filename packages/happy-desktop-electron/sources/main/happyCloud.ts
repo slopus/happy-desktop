@@ -12,6 +12,7 @@ import type {
     DesktopHappyCloudAvailability,
     DesktopServerSignInResult,
 } from "../shared/desktopContract";
+import type { OAuthCredential } from "@slopus/happy-agent-client";
 import type { ServerSessions, ServerSessionsDeps } from "./serverSessions";
 
 export interface HappyCloud {
@@ -21,8 +22,12 @@ export interface HappyCloud {
     availability(name: string): Promise<DesktopServerSignInResult<DesktopHappyCloudAvailability>>;
     serverCreate(name: string): Promise<DesktopServerSignInResult<HappyCloudServer>>;
     serverJoin(name: string, code: string): Promise<DesktopServerSignInResult<HappyCloudServer>>;
-    /** Lists a server the account belongs to as a connection, and returns its connection ID. */
-    serverAdd(name: string): DesktopServerSignInResult<string>;
+    /**
+     * Has the accounts service issue tokens for a server the account belongs
+     * to, lists it as a connection signed in with them, and returns its
+     * connection ID.
+     */
+    serverConnect(serverId: string): Promise<DesktopServerSignInResult<string>>;
     /** A listed server's picture as a `data:` URL, read with the account token. */
     imageRead(serverId: string): Promise<string | undefined>;
 }
@@ -59,38 +64,42 @@ export function happyCloudCreate(input: {
         read: (status: number, json: Record<string, unknown>) => T | Failure,
     ): Promise<T | Failure> => {
         const sessions = input.sessions();
-        let credential = sessions.credential(HAPPY_CLOUD_ACCOUNT_ID);
+        const credential = sessions.credential(HAPPY_CLOUD_ACCOUNT_ID);
         if (!credential) return SIGN_IN_REQUIRED;
-        for (let attempt = 0; attempt < 2; attempt += 1) {
-            let response: Response;
-            try {
-                response = await input.fetch(new URL(path, HAPPY_CLOUD_ACCOUNTS_URL), {
-                    method,
-                    headers: {
-                        accept: "application/json",
-                        authorization: `Bearer ${credential.accessToken}`,
-                        ...(body === undefined ? {} : { "content-type": "application/json" }),
-                    },
-                    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-                    redirect: "error",
-                });
-            } catch {
-                return {
-                    ok: false,
-                    message: "Happy Cloud isn't reachable right now.",
-                    code: "remote_unavailable",
-                };
-            }
-            const json = (await response.json().catch(() => ({}))) as Record<string, unknown>;
-            if (response.status === 401 && attempt === 0) {
-                credential = await sessions.refresh(HAPPY_CLOUD_ACCOUNT_ID, credential.accessToken);
-                if (!credential) return SIGN_IN_REQUIRED;
-                continue;
-            }
-            if (response.status === 401) return SIGN_IN_REQUIRED;
-            return read(response.status, json);
+        let response: Response;
+        try {
+            response = await input.fetch(new URL(path, HAPPY_CLOUD_ACCOUNTS_URL), {
+                method,
+                headers: {
+                    accept: "application/json",
+                    authorization: `Bearer ${credential.accessToken}`,
+                    ...(body === undefined ? {} : { "content-type": "application/json" }),
+                },
+                ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+                redirect: "error",
+            });
+        } catch {
+            return {
+                ok: false,
+                message: "Happy Cloud isn't reachable right now.",
+                code: "remote_unavailable",
+            };
         }
-        return SIGN_IN_REQUIRED;
+        const json = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+        // The account's pass is never refreshed: a refused one ends it, and
+        // the person signs in again.
+        if (response.status === 401) {
+            sessions.signInRequire(HAPPY_CLOUD_ACCOUNT_ID, credential.accessToken);
+            return SIGN_IN_REQUIRED;
+        }
+        return read(response.status, json);
+    };
+
+    /** Every server the account was seen to belong to, by ID, from list, create and join. */
+    const known = new Map<string, HappyCloudServer>();
+    const seen = (server: HappyCloudServer): HappyCloudServer => {
+        known.set(server.id, server);
+        return server;
     };
 
     const failure = (json: Record<string, unknown>, fallback: string): Failure => ({
@@ -116,7 +125,6 @@ export function happyCloudCreate(input: {
                     name: "Happy Cloud",
                     authorizationUrl: new URL("authorize", HAPPY_CLOUD_ACCOUNTS_URL).href,
                     tokenUrl: new URL("token", HAPPY_CLOUD_ACCOUNTS_URL).href,
-                    refreshUrl: new URL("token", HAPPY_CLOUD_ACCOUNTS_URL).href,
                     clientId: "happy",
                     resource: HAPPY_CLOUD_ACCOUNTS_URL,
                 },
@@ -131,6 +139,7 @@ export function happyCloudCreate(input: {
                     return json.servers.flatMap((value) => {
                         const server = serverRead(value);
                         if (!server) return [];
+                        seen(server);
                         const url = imageUrlRead(value);
                         if (url !== undefined) images.set(server.id, url);
                         return [server];
@@ -163,7 +172,7 @@ export function happyCloudCreate(input: {
             return result(
                 await accountsCall("POST", "v1/servers", { name }, (status, json) =>
                     status === 201
-                        ? (serverRead(json.server) ??
+                        ? (serverSeen(json.server, seen) ??
                           failure(json, "The server couldn't be created."))
                         : failure(
                               json,
@@ -178,7 +187,7 @@ export function happyCloudCreate(input: {
             return result(
                 await accountsCall("POST", "v1/servers/join", { name, code }, (status, json) =>
                     status === 200
-                        ? (serverRead(json.server) ?? failure(json, "Joining didn't work."))
+                        ? (serverSeen(json.server, seen) ?? failure(json, "Joining didn't work."))
                         : failure(
                               json,
                               status === 404
@@ -205,18 +214,40 @@ export function happyCloudCreate(input: {
                 return undefined;
             }
         },
-        serverAdd(name) {
-            if (!happyCloudServerNameValid(name))
-                return { ok: false, message: "That isn't a server name.", code: "invalid" };
-            if (!names.includes(name)) {
-                names = [...names, name];
+        async serverConnect(serverId) {
+            const server = known.get(serverId);
+            if (!server)
+                return { ok: false, message: "That server isn't one of yours.", code: "not_found" };
+            const issued = await accountsCall(
+                "POST",
+                `v1/servers/${encodeURIComponent(server.id)}/token`,
+                undefined,
+                (status, json): OAuthCredential | Failure =>
+                    status === 200 || status === 201
+                        ? (serverTokenRead(json, server.url) ??
+                          failure(json, "The server's sign-in couldn't be read."))
+                        : failure(json, "Happy Cloud couldn't sign you in to this server."),
+            );
+            if ("ok" in issued) return issued;
+            if (!names.includes(server.name)) {
+                names = [...names, server.name];
                 void writeFile(input.listPath, `${JSON.stringify(names)}\n`).catch(
                     (error: unknown) =>
                         console.error("Happy Cloud servers could not be saved.", error),
                 );
                 input.sessions().directChanged();
             }
-            return { ok: true, value: happyCloudConnectionId(name) };
+            const connectionId = happyCloudConnectionId(server.name);
+            try {
+                input.sessions().directSignIn(connectionId, issued);
+            } catch (error) {
+                return {
+                    ok: false,
+                    message: error instanceof Error ? error.message : "Signing in didn't work.",
+                    code: "failed",
+                };
+            }
+            return { ok: true, value: connectionId };
         },
     };
 }
@@ -256,6 +287,40 @@ function serverRead(value: unknown): HappyCloudServer | undefined {
         url: happyCloudServerUrl(server.name),
         role: server.role === "owner" ? "owner" : "member",
         ...(typeof image?.thumbhash === "string" ? { image: { thumbhash: image.thumbhash } } : {}),
+    };
+}
+
+function serverSeen(
+    value: unknown,
+    seen: (server: HappyCloudServer) => HappyCloudServer,
+): HappyCloudServer | undefined {
+    const server = serverRead(value);
+    return server ? seen(server) : undefined;
+}
+
+/**
+ * The server tokens the accounts service issued for `serverUrl`. They refresh
+ * at the accounts origin with no account token, for that server alone.
+ */
+function serverTokenRead(
+    json: Record<string, unknown>,
+    serverUrl: string,
+): OAuthCredential | undefined {
+    if (typeof json.access_token !== "string" || json.access_token === "") return undefined;
+    return {
+        accessToken: json.access_token,
+        expiresAt:
+            typeof json.expires_in === "number" && json.expires_in > 0
+                ? Date.now() + json.expires_in * 1000
+                : null,
+        refreshToken:
+            typeof json.refresh_token === "string" && json.refresh_token !== ""
+                ? json.refresh_token
+                : null,
+        refreshUrl: new URL("token", HAPPY_CLOUD_ACCOUNTS_URL).href,
+        clientId: "happy",
+        resource: serverUrl,
+        serverUrl,
     };
 }
 

@@ -1,11 +1,16 @@
 /**
  * Happy Cloud: an accounts service and the servers it lists, every one of
  * them reached directly from this app, never through the host Happy Agent.
- * `HAPPY_CLOUD_BASE` is the one place the domain is set.
+ * The accounts service and the servers live on separate domains, each set
+ * in one place here.
  */
+/** The domain every server sits under, as `<name>.<base>`. */
 export const HAPPY_CLOUD_BASE = "24-144-71-103.sslip.io";
-/** Where the person's Happy Cloud account signs in and lists their servers. */
-export const HAPPY_CLOUD_ACCOUNTS_URL = `https://accounts.${HAPPY_CLOUD_BASE}/`;
+/**
+ * Where the person's Happy Cloud account signs in and lists their servers;
+ * also the audience of the account's tokens.
+ */
+export const HAPPY_CLOUD_ACCOUNTS_URL = "https://auth.happy.engineering/";
 /**
  * The sign-in ID of the account itself. Its token is only for the accounts
  * API: it is never listed as a connection and never sent to a server.
