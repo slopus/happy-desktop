@@ -100,6 +100,8 @@ const PRELOAD_BUSY_WAIT_MS = 100;
 const GIT_WATCH_RENEW_MS = 2 * 60 * 1000;
 const RECENT_EVENT_RETENTION_MS = 60_000;
 const SNAPSHOT_RESPONSE_TIMEOUT_MS = 60_000;
+/** How long applying a backlog of realtime updates may hold the thread before it yields. */
+const UPDATE_SLICE_MS = 8;
 /** How long a timestamp-only agent version may wait before it is announced. */
 const QUIET_AGENT_PUBLISH_MS = 1_000;
 
@@ -576,25 +578,122 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         if (ids.length > 0) background(users.ensure(ids));
     };
 
-    const publishGroupDeltas = (deltas: readonly GroupDelta[]): void => {
+    /*
+     * Realtime events arrive in bursts: one network read can carry hundreds of them, and a
+     * streaming answer versions its agent once per token. Publishing re-projects a whole
+     * transcript or the whole catalog and hands it to every subscriber, so publishing once per
+     * event would project the same session hundreds of times in one task. While events apply,
+     * publishing only records what changed. What was recorded is published once, in a task of
+     * its own right after the burst, or at once when a reader asks for the published state.
+     * Every publication projects the state as it is then, so skipping the intermediate ones
+     * loses nothing.
+     */
+    let publishDeferred = 0;
+    /** Sessions waiting to be published, and whether any of their publications was forced. */
+    const sessionsUnpublished = new Map<SessionEntry, boolean>();
+    let groupsUnpublished = false;
+    const groupDeltasUnpublished: GroupDelta[] = [];
+    let publishScheduled = false;
+    const taskQueue = taskQueueCreate();
+
+    const publishSchedule = (): void => {
+        if (publishScheduled || closed) return;
+        publishScheduled = true;
+        taskQueue.post(() => {
+            publishScheduled = false;
+            if (!closed) publishFlush();
+        });
+    };
+
+    /*
+     * Set when an event settles something a caller awaits, such as a send's confirmation. The
+     * awaiting code resumes before any later task, and reads what was published, so the
+     * event's publications are delivered as soon as it has been applied.
+     */
+    let publishUrgent = false;
+
+    /** Applies `apply` with its publications recorded rather than delivered. */
+    const publishDefer = (apply: () => void): void => {
+        publishDeferred += 1;
+        try {
+            apply();
+        } finally {
+            publishDeferred -= 1;
+        }
+        if (publishDeferred === 0 && publishUrgent) {
+            publishUrgent = false;
+            publishFlush();
+        }
+    };
+
+    /** Settles a send waiting for the daemon to confirm its message. */
+    const sendConfirm = (messageId: string): void => {
+        const confirm = sendConfirmations.get(messageId);
+        if (confirm === undefined) return;
+        if (publishDeferred > 0) publishUrgent = true;
+        confirm();
+    };
+
+    const publishFlush = (): void => {
+        for (const [entry, force] of [...sessionsUnpublished]) {
+            sessionsUnpublished.delete(entry);
+            sessionPublishNow(entry, force);
+        }
+        groupsFlush();
+    };
+
+    const groupsFlush = (): void => {
+        if (groupsUnpublished) {
+            groupsUnpublished = false;
+            groupsPublishNow(groupDeltasUnpublished.splice(0));
+        } else if (groupDeltasUnpublished.length > 0) {
+            groupDeltasDeliver(groupDeltasUnpublished.splice(0));
+        }
+    };
+
+    const groupDeltasDeliver = (deltas: readonly GroupDelta[]): void => {
         for (const subscriber of groupSubscribers) {
             if (subscriber.closed) continue;
             for (const delta of deltas) subscriber.onDelta?.(delta);
         }
     };
 
+    const publishGroupDeltas = (deltas: readonly GroupDelta[]): void => {
+        if (publishDeferred > 0) {
+            groupDeltasUnpublished.push(...deltas);
+            publishSchedule();
+            return;
+        }
+        groupsFlush();
+        groupDeltasDeliver(deltas);
+    };
+
     const publishGroups = (deltas: readonly GroupDelta[] = []): void => {
+        if (publishDeferred > 0) {
+            groupsUnpublished = true;
+            groupDeltasUnpublished.push(...deltas);
+            publishSchedule();
+            return;
+        }
+        groupsUnpublished = false;
+        groupsPublishNow([...groupDeltasUnpublished.splice(0), ...deltas]);
+    };
+
+    const groupsPublishNow = (deltas: readonly GroupDelta[]): void => {
         if (config !== undefined) {
             const daemonConfig = config;
             groupsStore.setState((current) => ({
-                groups: projectGroups(
-                    current.projects,
-                    current.workspaces,
-                    endpoint,
-                    daemonConfig,
-                    gitStates,
-                    agentDrafts,
-                    agentModes,
+                groups: elementsReuse(
+                    current.groups,
+                    projectGroups(
+                        current.projects,
+                        current.workspaces,
+                        endpoint,
+                        daemonConfig,
+                        gitStates,
+                        agentDrafts,
+                        agentModes,
+                    ),
                 ),
                 botGroups: projectBots(
                     current.bots,
@@ -693,12 +792,33 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
     };
 
     const publishSession = (entry: SessionEntry, force = false): void => {
+        // Recorded as it happens: the next question replaces this one, so a
+        // publication that skipped it would lose it.
         answeredQuestionRecord(entry);
         // The connection-wide cache still owns inactive sessions, but there is
         // nobody to consume a projected ChatStore snapshot while a session is
         // not subscribed. In particular, do not parse/project the whole
         // transcript for every token in a background run. Authoritative loads
         // pass `force` so a later acquisition sees the complete cached state.
+        const unpublishedForce = sessionsUnpublished.get(entry);
+        if (!force && unpublishedForce === undefined && entry.subscribers.size === 0) return;
+        if (publishDeferred > 0) {
+            sessionsUnpublished.set(entry, force || unpublishedForce === true);
+            publishSchedule();
+            return;
+        }
+        sessionsUnpublished.delete(entry);
+        sessionPublishNow(entry, force || unpublishedForce === true);
+    };
+
+    const sessionUnpublishedFlush = (entry: SessionEntry): void => {
+        const force = sessionsUnpublished.get(entry);
+        if (force === undefined) return;
+        sessionsUnpublished.delete(entry);
+        sessionPublishNow(entry, force);
+    };
+
+    const sessionPublishNow = (entry: SessionEntry, force: boolean): void => {
         if (!force && entry.subscribers.size === 0) return;
         const projection = projectionOf(entry);
         if (projection === undefined) return;
@@ -1456,7 +1576,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                 captureLatestIdleRunFinalContext(entry);
                 for (const message of pendingSends) {
                     if (entry.messages.has(message.message.id)) {
-                        sendConfirmations.get(message.message.id)?.();
+                        sendConfirm(message.message.id);
                     } else {
                         entry.messages.set(message.message.id, message);
                         indexMessageUser(entry, message.message);
@@ -1489,9 +1609,14 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                     snapshotCursor,
                     entry.bufferedEvents.splice(0),
                 );
-                replaceAgent(bootstrap.agent);
-                publishSession(entry, true);
-                for (const event of buffered) applyEventNow(event);
+                // The snapshot and everything that happened since it are shown
+                // together, so a reader never sees the transcript catch up.
+                publishDefer(() => {
+                    replaceAgent(bootstrap.agent);
+                    publishSession(entry, true);
+                    for (const event of buffered) applyEventNow(event);
+                });
+                publishFlush();
                 drainHydrationBroadcastEvents();
                 if (
                     question === undefined &&
@@ -2144,7 +2269,11 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         for (const entry of sessions.values()) publishSession(entry);
     };
 
-    const applyEventNow = (event: HappyAgentEvent): void => {
+    /** Applies one event; what it changes is published with the rest of its burst. */
+    const applyEventNow = (event: HappyAgentEvent): void =>
+        publishDefer(() => applyEventPayload(event));
+
+    const applyEventPayload = (event: HappyAgentEvent): void => {
         const eventAgentId = agentIdOfEvent(event);
         const hydratingEntry = eventAgentId === undefined ? undefined : sessions.get(eventAgentId);
         if (hydratingEntry?.hydrating === true) {
@@ -2843,7 +2972,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
     };
 
     const updateMessage = (agentId: string, message: Message, runId: string | null): void => {
-        if (message.role === "user") sendConfirmations.get(message.id)?.();
+        if (message.role === "user") sendConfirm(message.id);
         const entry = sessions.get(agentId);
         const current = entry?.messages.get(message.id)?.message;
         const wasUnresolvedFailure =
@@ -2951,7 +3080,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                 updateMessage(agentId, message, runId);
             } else if (message.role === "user") {
                 rememberUserMessageId(message.id);
-                sendConfirmations.get(message.id)?.();
+                sendConfirm(message.id);
             }
             return;
         }
@@ -3395,6 +3524,30 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         }
     };
 
+    /*
+     * One network read can carry a long backlog, and applying it is a chain of microtasks
+     * the window cannot paint between. Once applying has held the thread for about a frame,
+     * it yields a task: what was applied so far is published and painted, and the rest
+     * follows. Any task boundary, a yield or the next network read, starts a new slice.
+     */
+    let sliceStartedAt: number | undefined;
+    const updateSliceSpent = (): boolean => {
+        const at = workClock();
+        if (sliceStartedAt === undefined) {
+            sliceStartedAt = at;
+            taskQueue.post(() => {
+                sliceStartedAt = undefined;
+            });
+            return false;
+        }
+        return at - sliceStartedAt >= UPDATE_SLICE_MS;
+    };
+    const updateSliceYield = (): Promise<void> =>
+        new Promise<void>((resolve) => {
+            if (rootController.signal.aborted) resolve();
+            else taskQueue.post(resolve);
+        });
+
     const runUpdates = async (): Promise<void> => {
         let reconnectMs = INITIAL_RECONNECT_MS;
         // Startup reads the bootstrap beside the feed until the daemon turns out to need the
@@ -3693,6 +3846,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                         }
                         advanceCursor(update.cursor);
                     }
+                    if (updateSliceSpent()) await updateSliceYield();
                 }
                 if (reopen) {
                     retryRequested = false;
@@ -4184,6 +4338,9 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         retry: retryUpdates,
         connectGroups(subscription) {
             if (closed) throw new Error("This Happy Agent connection is closed.");
+            // Whatever waits to be published reaches the subscribers already
+            // here first, so the newcomer starts from the same projection.
+            groupsFlush();
             const subscriber: GroupsSubscriber = { ...subscription, closed: false };
             groupSubscribers.add(subscriber);
             subscriber.onChange(
@@ -4193,9 +4350,18 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                 groupsStore.getState().taskGroups,
             );
             return {
-                projects: () => groupsStore.getState().groups,
-                bots: () => groupsStore.getState().botGroups,
-                tasks: () => groupsStore.getState().taskGroups,
+                projects: () => {
+                    groupsFlush();
+                    return groupsStore.getState().groups;
+                },
+                bots: () => {
+                    groupsFlush();
+                    return groupsStore.getState().botGroups;
+                },
+                tasks: () => {
+                    groupsFlush();
+                    return groupsStore.getState().taskGroups;
+                },
                 state: groupState,
                 close: () => {
                     subscriber.closed = true;
@@ -4249,25 +4415,36 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                 following: false,
             };
             entry.subscribers.add(subscriber);
+            const unpublished = sessionsUnpublished.has(entry);
             if (
-                wasInactive &&
-                !entry.reconcileRequired &&
-                entry.agent !== undefined &&
-                config !== undefined
+                unpublished ||
+                (wasInactive &&
+                    !entry.reconcileRequired &&
+                    entry.agent !== undefined &&
+                    config !== undefined)
             ) {
                 // Metadata can change while the session has no subscribers, so
                 // the retained store may be older even when no transcript
                 // reload is required. Re-project once on reactivation before
-                // handing the snapshot to the new reader.
-                publishSession(entry, true);
+                // handing the snapshot to the new reader. The new reader is
+                // answered now even in the middle of a burst of events.
+                answeredQuestionRecord(entry);
+                sessionsUnpublished.delete(entry);
+                sessionPublishNow(entry, true);
             } else {
                 subscriber.onChange(entry.store.elements(), entry.store.session());
             }
             void ensureSessionLoaded(entry);
             const connectedEntry = entry;
             return {
-                elements: () => connectedEntry.store.elements(),
-                session: () => connectedEntry.store.session(),
+                elements: () => {
+                    sessionUnpublishedFlush(connectedEntry);
+                    return connectedEntry.store.elements();
+                },
+                session: () => {
+                    sessionUnpublishedFlush(connectedEntry);
+                    return connectedEntry.store.session();
+                },
                 loadMore: (token) => {
                     void loadEarlier(connectedEntry, token);
                 },
@@ -5606,6 +5783,10 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
             unhydratedDraftModes.clear();
             if (quietPublishTimer !== undefined) clearTimeout(quietPublishTimer);
             publishConnection("closed");
+            sessionsUnpublished.clear();
+            groupsUnpublished = false;
+            groupDeltasUnpublished.length = 0;
+            taskQueue.close();
             groupSubscribers.clear();
             for (const entry of sessions.values()) entry.subscribers.clear();
             sessions.clear();
@@ -6010,6 +6191,45 @@ function abortableWait(milliseconds: number, signal: AbortSignal): Promise<void>
             reject(signal.reason);
         }
     });
+}
+
+/**
+ * Runs callbacks in tasks of their own, in order, after whatever is already queued: the
+ * renderer may paint between them. A message channel is used rather than a timer because a
+ * timer is clamped once nested and throttled in a window that is out of sight.
+ */
+function taskQueueCreate(): { post(run: () => void): void; close(): void } {
+    const queued: (() => void)[] = [];
+    let channel: MessageChannel | undefined;
+    let closed = false;
+    return {
+        post(run) {
+            if (closed) return;
+            if (typeof MessageChannel === "undefined") {
+                setTimeout(run, 0);
+                return;
+            }
+            if (channel === undefined) {
+                channel = new MessageChannel();
+                channel.port1.onmessage = () => queued.shift()?.();
+                // Node's ports would otherwise keep a finished process alive.
+                (channel.port1 as { unref?: () => void }).unref?.();
+            }
+            queued.push(run);
+            channel.port2.postMessage(undefined);
+        },
+        close() {
+            closed = true;
+            queued.length = 0;
+            channel?.port1.close();
+            channel = undefined;
+        },
+    };
+}
+
+/** A monotonic clock for measuring work, independent of the injected wall clock. */
+function workClock(): number {
+    return globalThis.performance?.now() ?? Date.now();
 }
 
 /**
