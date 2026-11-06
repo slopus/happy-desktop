@@ -464,7 +464,7 @@ const STEERING_QUOTE_INSET = 40;
 const STEERING_QUOTE_MARGIN = 16;
 /** Transcript request chrome from happy-agent-chat.css / approval-card.css. */
 /* Questions share the agent's 16px/24px prose and column. Options reserve only
-   the 18px checkbox and its 12px gap; settled answers have no inner padding. */
+   the 18px checkbox and its 12px gap; a free-form reply line has no inner padding. */
 const USER_INPUT_HORIZONTAL_MARGIN = AGENT_INSET;
 /** The prompt's gap after its Markdown context. */
 const USER_INPUT_CONTEXT_GAP = 12;
@@ -477,7 +477,8 @@ const USER_INPUT_EYEBROW_LINE = 20;
 const USER_INPUT_QUESTION_GAP = 20;
 const USER_INPUT_CONTENT_INSET = 8;
 const USER_INPUT_OPTION_GAP = 4;
-const USER_INPUT_ANSWER_GAP = 8;
+/** `.happy-agent-input__answer-label`: one 24px line, ellipsized. */
+const USER_INPUT_ANSWER_LINE = 24;
 const USER_INPUT_OPTION_VERTICAL_PADDING = 8;
 /** 12px parent gap, 4px padding either side of the 28px button. */
 const USER_INPUT_FOOTER_HEIGHT = 48;
@@ -947,7 +948,8 @@ function userInputEyebrowWrap(
 
 /**
  * Height of the structured question form. Answered, it is the same form
- * frozen, plus any answer no option names under its question.
+ * frozen at the same height: a free-form question's reply line is held in
+ * both states.
  */
 function userInputRequestHeight(
     request: Extract<ConversationRequest, { kind: "userInput" }>,
@@ -957,7 +959,6 @@ function userInputRequestHeight(
     const contentWidth = width - USER_INPUT_HORIZONTAL_MARGIN;
     const promptMeasure = contentWidth;
     const optionMeasure = contentWidth - USER_INPUT_OPTION_HORIZONTAL_CHROME;
-    const answerMeasure = contentWidth;
     /* The shared Markdown context reads above the first question in both
        states, through the same body model as an agent reply. */
     let total = request.context
@@ -989,18 +990,9 @@ function userInputRequestHeight(
                     : 0);
             total += Math.max(32, USER_INPUT_OPTION_VERTICAL_PADDING + contentHeight);
         }
-        if (request.status !== "answered") continue;
-        const unoffered = (request.answers[question.id] ?? []).filter(
-            (answer) => !question.options.some((option) => option.label === answer),
-        );
-        if (question.options.length === 0 && unoffered.length === 0)
-            unoffered.push(question.required ? "No answer" : "Skipped");
-        if (unoffered.length === 0) continue;
-        total += USER_INPUT_CONTENT_INSET;
-        for (const [answerIndex, answer] of unoffered.entries()) {
-            if (answerIndex > 0) total += USER_INPUT_ANSWER_GAP;
-            total += uiTextHeight(answer, 16, 24, answerMeasure, cache);
-        }
+        /* A free-form question holds its one reply line in both states. */
+        if (question.options.length === 0)
+            total += USER_INPUT_CONTENT_INSET + USER_INPUT_ANSWER_LINE;
     }
     const submitVisible = request.questions.every((question) => question.options.length > 0);
     return 2 * CHAT_FRAME_TEXT_INSET + total + (submitVisible ? USER_INPUT_FOOTER_HEIGHT : 0);
