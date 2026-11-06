@@ -1,4 +1,4 @@
-name: Linux WebKit fuzz baseline comparison
+name: Linux WebKit fuzz instrumented comparison
 
 on:
     push:
@@ -16,8 +16,8 @@ jobs:
                 include:
                     - revision: 3a20d9e5bda9f9bfe844f04e6fe4214c2c5a5008
                       label: preceding-product-tip
-                    - revision: ae5a0ca33017421e863bf68ea65c72d75a80d48c
-                      label: validation-tip
+                    - revision: 3e1105cd5459819837138563e1eef4b3066502fe
+                      label: newest-fix
         runs-on: ubuntu-24.04
         timeout-minutes: 25
         env:
@@ -32,6 +32,40 @@ jobs:
                   node-version: "24"
                   cache: pnpm
             - run: pnpm install --frozen-lockfile
+            - name: Instrument identical seed and interaction durations
+              run: |
+                  python3 - <<'PY'
+                  from pathlib import Path
+                  path = Path('packages/happy-desktop-ui/src/ConversationInteractionFuzz.test.tsx')
+                  source = path.read_text()
+                  def replace_once(old, new):
+                      global source
+                      assert source.count(old) == 1, (old, source.count(old))
+                      source = source.replace(old, new, 1)
+                  replace_once('        const log: string[] = [];', '''        const log: string[] = [];
+                          const seedStartedAt = performance.now();
+                          let maxInteractionDurationMs = 0;
+                          let measuredInteractions = 0;''')
+                  replace_once('                expect(performance.now() - started, "interaction exceeded 2 seconds").toBeLessThan(', '''                const interactionDurationMs = performance.now() - started;
+                                  maxInteractionDurationMs = Math.max(maxInteractionDurationMs, interactionDurationMs);
+                                  measuredInteractions += 1;
+                                  expect(interactionDurationMs, "interaction exceeded 2 seconds").toBeLessThan(''')
+                  replace_once('                        depth: testDepth,', '''                        depth: testDepth,
+                                          passed: true,
+                                          durationMs: performance.now() - seedStartedAt,
+                                          maxInteractionDurationMs,
+                                          measuredInteractions,''')
+                  replace_once('        } catch (error) {\n            const viewport = h.viewport();', '''        } catch (error) {
+                              console.info("CHAT_FUZZ_RESULT " + JSON.stringify({
+                                  browser: server.browser, seed, restore, short, depth: testDepth,
+                                  passed: false, durationMs: performance.now() - seedStartedAt,
+                                  maxInteractionDurationMs, measuredInteractions,
+                              }));
+                              const viewport = h.viewport();''')
+                  path.write_text(source)
+                  PY
+                  mkdir -p .context/linux-fuzz-baseline
+                  git diff -- packages/happy-desktop-ui/src/ConversationInteractionFuzz.test.tsx > .context/linux-fuzz-baseline/instrumentation.patch
             - name: Install browser dependencies
               timeout-minutes: 15
               run: pnpm --dir packages/happy-desktop-ui exec playwright install --with-deps webkit
