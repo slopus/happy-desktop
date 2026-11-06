@@ -12,7 +12,7 @@ import type { Loadable } from "../conversation/loadable.js";
 import { UserError } from "../types.js";
 import {
     happyAgentProjectGroupsPreserve,
-    happyAgentProjectGroupsProject,
+    happyAgentProjectGroupsProjectorCreate,
     happyAgentSessionGroupIdOf,
     type HappyAgentProjectGroup,
 } from "./happyAgentProjectGroupProject.js";
@@ -736,6 +736,14 @@ export function happyAgentSessionListStoreCreate(
         optimisticWorkspaceOrders: new Map(),
         sessions: [],
     }));
+
+    /*
+     * One projector for the list as published, another for the host's own
+     * answer while local intents make the two differ. Each rebuilds only the
+     * groups whose inputs changed since its own last projection.
+     */
+    const projectGroups = happyAgentProjectGroupsProjectorCreate();
+    const authoritativeGroups = happyAgentProjectGroupsProjectorCreate();
 
     const listeners = new Set<() => void>();
     let active = false;
@@ -1489,7 +1497,7 @@ export function happyAgentSessionListStoreCreate(
     ): readonly HappyAgentSubtaskRoot[] => [...catalog.bots, ...catalog.tasks];
 
     const publish = (
-        projected: readonly HappyAgentProjectGroup[] = happyAgentProjectGroupsProject(
+        projected: readonly HappyAgentProjectGroup[] = projectGroups(
             internal.getState().catalog,
             internal.getState().sessions,
         ),
@@ -1631,14 +1639,11 @@ export function happyAgentSessionListStoreCreate(
                     catalogListed: true,
                     sessions: pending.sessions,
                 });
-                const authoritativeProjected = happyAgentProjectGroupsProject(
-                    snapshot.catalog,
-                    snapshot.sessions,
-                );
-                const projected =
+                const projected = projectGroups(snapshot.catalog, pending.sessions);
+                const authoritativeProjected =
                     pending.sessions === snapshot.sessions
-                        ? authoritativeProjected
-                        : happyAgentProjectGroupsProject(snapshot.catalog, pending.sessions);
+                        ? projected
+                        : authoritativeGroups(snapshot.catalog, snapshot.sessions);
                 optimisticOrdersConfirm(authoritativeProjected);
                 // Judged against the previous authoritative read, so a row this
                 // store took out optimistically is still a change when the host
@@ -2639,7 +2644,7 @@ export function happyAgentSessionListStoreCreate(
         worktreeReorder: (projectId, worktreeId, afterId) =>
             mutate(async () => {
                 const { catalog, sessions } = internal.getState();
-                const projected = happyAgentProjectGroupsProject(catalog, sessions);
+                const projected = projectGroups(catalog, sessions);
                 const current = store.getState().projects;
                 const peers =
                     (current.type === "ready" ? current.value : projected).find(
@@ -2666,7 +2671,7 @@ export function happyAgentSessionListStoreCreate(
         projectReorder: (projectId, afterId) =>
             mutate(async () => {
                 const { catalog, sessions } = internal.getState();
-                const projected = happyAgentProjectGroupsProject(catalog, sessions);
+                const projected = projectGroups(catalog, sessions);
                 const current = store.getState().projects;
                 const visible = current.type === "ready" ? current.value : projected;
                 if (!visible.some((project) => project.id === projectId)) return;

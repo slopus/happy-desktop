@@ -33,7 +33,7 @@ import type {
  *
  * Being archived is deliberately not a phase. The host stops listing a worktree
  * the moment its archival begins, so "on its way out" is not something this list
- * can observe — see the filter in `happyAgentProjectGroupsProject`.
+ * can observe — see `worktreeListed`.
  */
 export type HappyAgentGroupLifecycle =
     | { readonly phase: "creating" }
@@ -143,65 +143,374 @@ export function happyAgentProjectGroupsProject(
     catalog: HappyAgentProjectCatalog,
     sessions: readonly HappyAgentSessionSummary[],
 ): readonly HappyAgentProjectGroup[] {
-    const projectSessions = new Map<HappyAgentProjectId, HappyAgentSessionSummary[]>();
-    const worktreeSessions = new Map<HappyAgentWorktreeId, HappyAgentSessionSummary[]>();
-    for (const session of sessions) {
-        // A subagent runs under the session that started it and is reachable
-        // through that session; giving it a row of its own would put a session
-        // nobody opened in the tab strip. Parentage is the whole of that test:
-        // a top-level session the host has not ordered yet — one created a
-        // moment ago — is still the reader's own tab, so a missing key falls
-        // back to the session's id rather than costing the session its row.
-        if (session.parentSessionId !== undefined) continue;
-        const bucket = session.worktreeId
-            ? mapAppend(worktreeSessions, session.worktreeId)
-            : mapAppend(projectSessions, session.projectId);
-        bucket.push(session);
-    }
+    return happyAgentProjectGroupsProjectorCreate()(catalog, sessions);
+}
 
-    const worktreesByProject = new Map<HappyAgentProjectId, HappyAgentWorktreeGroup[]>();
-    for (const worktree of catalog.worktrees) {
-        // A worktree being torn down is already gone as far as the reader is
-        // concerned: they asked for it. Listing it again between "archiving" and
-        // "archived" would take the row away, put it back, and take it away
-        // again. A failed archive stays listed — it still exists.
-        if (worktree.status === "archived" || worktree.status === "archiving") continue;
-        // A worktree is listed as soon as it exists, before anything has run in
-        // it: it was created deliberately and is where the next session goes, so
-        // an empty one is a destination rather than clutter.
-        const conversations = conversationsOf(worktreeSessions.get(worktree.id));
-        const worktreeRefusal = happyAgentWorktreeWriteRefusal(worktree);
-        mapAppend(worktreesByProject, worktree.projectId).push({
-            id: worktree.id,
-            projectId: worktree.projectId,
-            name: worktree.name,
-            creatorAgentId: worktree.creatorAgentId,
-            orderKey: worktree.orderKey,
-            path: worktree.path,
-            displayPath: worktree.displayPath,
-            lifecycle: happyAgentWorktreeLifecycleOf(worktree),
-            ...(worktreeRefusal === undefined ? {} : { writeRefusal: worktreeRefusal }),
-            conversations,
-            activity: activityOf(conversations),
-            updatedAt: newestOf(conversations),
-            ...(worktree.changesStatus === undefined
-                ? {}
-                : { changesStatus: worktree.changesStatus }),
-            ...(worktree.changedFiles === undefined ? {} : { changedFiles: worktree.changedFiles }),
-            ...(worktree.addedLines === undefined ? {} : { addedLines: worktree.addedLines }),
-            ...(worktree.deletedLines === undefined ? {} : { deletedLines: worktree.deletedLines }),
-            ...(worktree.changes === undefined ? {} : { changes: worktree.changes }),
+/**
+ * `happyAgentProjectGroupsProject` for one reader that projects the same catalog
+ * over and over. The catalog source hands back the very same project, worktree and
+ * session objects for everything a change did not touch, so a group whose inputs
+ * are all identical to the last projection's is that projection's group, and only
+ * the groups a change reached are built again. A rebuilt group that turns out
+ * equal to the one it replaces is the one it replaces, so a change the list does
+ * not show — a timestamp the row does not carry — leaves every reference alone.
+ */
+export function happyAgentProjectGroupsProjectorCreate(): (
+    catalog: HappyAgentProjectCatalog,
+    sessions: readonly HappyAgentSessionSummary[],
+) => readonly HappyAgentProjectGroup[] {
+    interface WorktreeProjection {
+        readonly source: HappyAgentWorktree;
+        readonly sessions: readonly HappyAgentSessionSummary[];
+        readonly value: HappyAgentWorktreeGroup;
+    }
+    interface ProjectProjection {
+        readonly source: HappyAgentProject;
+        readonly sessions: readonly HappyAgentSessionSummary[];
+        readonly worktrees: readonly HappyAgentWorktreeGroup[];
+        readonly value: HappyAgentProjectGroup;
+    }
+    let worktreeProjections = new Map<HappyAgentWorktreeId, WorktreeProjection>();
+    let projectProjections = new Map<HappyAgentProjectId, ProjectProjection>();
+    let projectedWorktrees: readonly HappyAgentWorktree[] = [];
+    let projectedProjects: readonly HappyAgentProject[] = [];
+    let groups: readonly HappyAgentProjectGroup[] = [];
+    let groupIndex = new Map<HappyAgentProjectId, number>();
+
+    /*
+     * The buckets the last call filed its sessions into, and where each session
+     * sat. The source hands back the very same flat list but for the sessions a
+     * change touched, so when none of those moved between groups the buckets are
+     * patched in place of being filed again.
+     */
+    let bucketed: readonly HappyAgentSessionSummary[] = [];
+    let buckets = new Map<string, HappyAgentSessionSummary[]>();
+    let slots: (readonly [string, number] | undefined)[] = [];
+
+    const bucketsFile = (sessions: readonly HappyAgentSessionSummary[]): void => {
+        buckets = new Map();
+        slots = sessions.map((session) => {
+            // A subagent runs under the session that started it and is reachable
+            // through that session; giving it a row of its own would put a session
+            // nobody opened in the tab strip. Parentage is the whole of that test:
+            // a top-level session the host has not ordered yet — one created a
+            // moment ago — is still the reader's own tab, so a missing key falls
+            // back to the session's id rather than costing the session its row.
+            if (session.parentSessionId !== undefined) return undefined;
+            const key = bucketKey(session);
+            const bucket = mapAppend(buckets, key);
+            bucket.push(session);
+            return [key, bucket.length - 1] as const;
         });
-    }
+        bucketed = sessions;
+    };
 
-    const groups = catalog.projects.map((project) =>
-        projectGroup(
-            project,
-            conversationsOf(projectSessions.get(project.id)),
-            (worktreesByProject.get(project.id) ?? []).sort(byOrderKey),
-        ),
-    );
-    return groups.sort(byOrderKey);
+    /**
+     * Files `sessions` by patching the last call's buckets, answering the
+     * buckets it changed, or `undefined` when a session moved and everything
+     * has to be filed again.
+     */
+    const bucketsPatch = (
+        sessions: readonly HappyAgentSessionSummary[],
+    ): ReadonlySet<string> | undefined => {
+        if (sessions.length !== bucketed.length) return undefined;
+        let patched: Map<string, HappyAgentSessionSummary[]> | undefined;
+        for (let index = 0; index < sessions.length; index += 1) {
+            const session = sessions[index]!;
+            if (session === bucketed[index]) continue;
+            const slot = slots[index];
+            if (
+                (session.parentSessionId === undefined) !== (slot !== undefined) ||
+                (slot !== undefined && bucketKey(session) !== slot[0])
+            )
+                return undefined;
+            if (slot === undefined) continue;
+            // A bucket the last projection holds is never written: the first
+            // change to it this call copies it.
+            patched ??= new Map();
+            let bucket = patched.get(slot[0]);
+            if (bucket === undefined) {
+                bucket = [...buckets.get(slot[0])!];
+                patched.set(slot[0], bucket);
+            }
+            bucket[slot[1]] = session;
+        }
+        bucketed = sessions;
+        if (patched === undefined) return NO_KEYS;
+        // Only the bucket arrays are ever held by a projection; the index is this
+        // projector's own and is updated in place.
+        for (const [key, bucket] of patched) buckets.set(key, bucket);
+        return new Set(patched.keys());
+    };
+
+    const worktreeProject = (worktree: HappyAgentWorktree): WorktreeProjection => {
+        const listed = buckets.get(worktreeKey(worktree.id)) ?? NO_SESSIONS;
+        const previous = worktreeProjections.get(worktree.id);
+        if (
+            previous !== undefined &&
+            previous.source === worktree &&
+            elementsSame(previous.sessions, listed)
+        )
+            return previous;
+        return {
+            source: worktree,
+            sessions: listed,
+            value: settled(
+                previous?.value,
+                worktreeGroup(
+                    worktree,
+                    conversationsSettled(previous?.value.conversations, listed),
+                ),
+            ),
+        };
+    };
+
+    const projectProject = (
+        project: HappyAgentProject,
+        worktrees: readonly HappyAgentWorktreeGroup[],
+    ): ProjectProjection => {
+        const listed = buckets.get(projectKey(project.id)) ?? NO_SESSIONS;
+        const previous = projectProjections.get(project.id);
+        if (
+            previous !== undefined &&
+            previous.source === project &&
+            elementsSame(previous.sessions, listed) &&
+            elementsSame(previous.worktrees, worktrees)
+        )
+            return previous;
+        return {
+            source: project,
+            sessions: listed,
+            worktrees,
+            value: settled(
+                previous?.value,
+                projectGroup(
+                    project,
+                    conversationsSettled(previous?.value.conversations, listed),
+                    previous !== undefined && elementsSame(previous.value.worktrees, worktrees)
+                        ? previous.value.worktrees
+                        : worktrees,
+                ),
+            ),
+        };
+    };
+
+    const projectAll = (catalog: HappyAgentProjectCatalog): readonly HappyAgentProjectGroup[] => {
+        const worktreesNext = new Map<HappyAgentWorktreeId, WorktreeProjection>();
+        const worktreesByProject = new Map<HappyAgentProjectId, HappyAgentWorktreeGroup[]>();
+        for (const worktree of catalog.worktrees) {
+            if (!worktreeListed(worktree)) continue;
+            // A worktree is listed as soon as it exists, before anything has run in
+            // it: it was created deliberately and is where the next session goes, so
+            // an empty one is a destination rather than clutter.
+            const projection = worktreeProject(worktree);
+            worktreesNext.set(worktree.id, projection);
+            mapAppend(worktreesByProject, worktree.projectId).push(projection.value);
+        }
+        worktreeProjections = worktreesNext;
+
+        const projectsNext = new Map<HappyAgentProjectId, ProjectProjection>();
+        const next = catalog.projects.map((project) => {
+            const projection = projectProject(
+                project,
+                (worktreesByProject.get(project.id) ?? []).sort(byOrderKey),
+            );
+            projectsNext.set(project.id, projection);
+            return projection.value;
+        });
+        projectProjections = projectsNext;
+        next.sort(byOrderKey);
+        projectedWorktrees = catalog.worktrees;
+        projectedProjects = catalog.projects;
+        // The list itself is the last one when it holds the same groups in the same order.
+        if (elementsSame(groups, next)) return groups;
+        groups = next;
+        groupIndex = new Map(next.map((group, index) => [group.id, index]));
+        return groups;
+    };
+
+    /**
+     * Projects only what changed since the last call: the worktrees and projects
+     * whose records were replaced and the groups whose sessions were. Answers
+     * `undefined` when something was added, removed, listed, unlisted, or moved,
+     * because only a full projection settles a new arrangement.
+     */
+    const projectChanged = (
+        catalog: HappyAgentProjectCatalog,
+        patched: ReadonlySet<string>,
+    ): readonly HappyAgentProjectGroup[] | undefined => {
+        const { projects, worktrees } = catalog;
+        if (
+            worktrees.length !== projectedWorktrees.length ||
+            projects.length !== projectedProjects.length
+        )
+            return undefined;
+        const worktreesDirty = new Map<HappyAgentWorktreeId, HappyAgentWorktree>();
+        for (let index = 0; index < worktrees.length; index += 1) {
+            const worktree = worktrees[index]!;
+            const before = projectedWorktrees[index]!;
+            if (worktree === before) continue;
+            if (
+                worktree.id !== before.id ||
+                worktree.projectId !== before.projectId ||
+                worktree.orderKey !== before.orderKey ||
+                worktreeListed(worktree) !== worktreeListed(before)
+            )
+                return undefined;
+            if (worktreeListed(worktree)) worktreesDirty.set(worktree.id, worktree);
+        }
+        const projectsDirty = new Map<HappyAgentProjectId, HappyAgentProject>();
+        for (let index = 0; index < projects.length; index += 1) {
+            const project = projects[index]!;
+            const before = projectedProjects[index]!;
+            if (project === before) continue;
+            if (project.id !== before.id || project.orderKey !== before.orderKey) return undefined;
+            projectsDirty.set(project.id, project);
+        }
+        // A session's bucket names a group whose record did not change; a bucket
+        // naming a group the catalog does not list is dropped, as a full
+        // projection drops it.
+        for (const key of patched) {
+            if (key.startsWith(WORKTREE_PREFIX)) {
+                const projection = worktreeProjections.get(
+                    key.slice(WORKTREE_PREFIX.length) as HappyAgentWorktreeId,
+                );
+                if (projection !== undefined && !worktreesDirty.has(projection.source.id))
+                    worktreesDirty.set(projection.source.id, projection.source);
+            } else {
+                const projection = projectProjections.get(
+                    key.slice(PROJECT_PREFIX.length) as HappyAgentProjectId,
+                );
+                if (projection !== undefined && !projectsDirty.has(projection.source.id))
+                    projectsDirty.set(projection.source.id, projection.source);
+            }
+        }
+        const worktreesReplaced = new Map<HappyAgentWorktreeId, HappyAgentWorktreeGroup>();
+        for (const worktree of worktreesDirty.values()) {
+            const previous = worktreeProjections.get(worktree.id);
+            if (previous === undefined) return undefined;
+            const projection = worktreeProject(worktree);
+            if (projection === previous) continue;
+            worktreeProjections.set(worktree.id, projection);
+            if (projection.value === previous.value) continue;
+            worktreesReplaced.set(worktree.id, projection.value);
+            const project = projectProjections.get(worktree.projectId);
+            if (project !== undefined && !projectsDirty.has(project.source.id))
+                projectsDirty.set(project.source.id, project.source);
+        }
+        let next: HappyAgentProjectGroup[] | undefined;
+        for (const project of projectsDirty.values()) {
+            const previous = projectProjections.get(project.id);
+            const index = groupIndex.get(project.id);
+            if (previous === undefined || index === undefined) return undefined;
+            // No worktree's key changed, so the replaced ones keep their places.
+            const projectWorktrees =
+                worktreesReplaced.size === 0
+                    ? previous.worktrees
+                    : previous.worktrees.map(
+                          (worktree) => worktreesReplaced.get(worktree.id) ?? worktree,
+                      );
+            const projection = projectProject(project, projectWorktrees);
+            if (projection === previous) continue;
+            projectProjections.set(project.id, projection);
+            if (projection.value === previous.value) continue;
+            next ??= [...groups];
+            next[index] = projection.value;
+        }
+        projectedWorktrees = worktrees;
+        projectedProjects = projects;
+        if (next !== undefined) groups = next;
+        return groups;
+    };
+
+    return (catalog, sessions) => {
+        const patched = sessions === bucketed ? NO_KEYS : bucketsPatch(sessions);
+        if (patched !== undefined) {
+            const projected = projectChanged(catalog, patched);
+            if (projected !== undefined) return projected;
+        } else bucketsFile(sessions);
+        return projectAll(catalog);
+    };
+}
+
+const NO_KEYS: ReadonlySet<string> = new Set();
+const WORKTREE_PREFIX = "worktree:";
+const PROJECT_PREFIX = "project:";
+
+function worktreeKey(id: HappyAgentWorktreeId): string {
+    return `${WORKTREE_PREFIX}${id}`;
+}
+
+function projectKey(id: HappyAgentProjectId): string {
+    return `${PROJECT_PREFIX}${id}`;
+}
+
+/** The bucket a top-level session is filed in: its worktree's, or else its project's. */
+function bucketKey(session: HappyAgentSessionSummary): string {
+    return session.worktreeId ? worktreeKey(session.worktreeId) : projectKey(session.projectId);
+}
+
+/**
+ * Whether a worktree is listed at all. One being torn down is already gone as
+ * far as the reader is concerned: they asked for it. Listing it again between
+ * "archiving" and "archived" would take the row away, put it back, and take it
+ * away again. A failed archive stays listed — it still exists.
+ */
+function worktreeListed(worktree: HappyAgentWorktree): boolean {
+    return worktree.status !== "archived" && worktree.status !== "archiving";
+}
+
+const NO_SESSIONS: readonly HappyAgentSessionSummary[] = [];
+
+/** `next`, or `previous` when the two describe the very same row. */
+function settled<T>(previous: T | undefined, next: T): T {
+    return previous !== undefined && deepEqual(previous, next) ? previous : next;
+}
+
+/** One group's rows, reusing the previous array when every row came back the same. */
+function conversationsSettled(
+    previous: readonly ConversationSummary[] | undefined,
+    sessions: readonly HappyAgentSessionSummary[],
+): readonly ConversationSummary[] {
+    const conversations = conversationsOf(sessions);
+    return previous !== undefined && elementsSame(previous, conversations)
+        ? previous
+        : conversations;
+}
+
+/** Whether two lists hold the very same items in the same order. */
+function elementsSame<T>(left: readonly T[], right: readonly T[]): boolean {
+    if (left === right) return true;
+    if (left.length !== right.length) return false;
+    for (let index = 0; index < left.length; index += 1)
+        if (left[index] !== right[index]) return false;
+    return true;
+}
+
+function worktreeGroup(
+    worktree: HappyAgentWorktree,
+    conversations: readonly ConversationSummary[],
+): HappyAgentWorktreeGroup {
+    const worktreeRefusal = happyAgentWorktreeWriteRefusal(worktree);
+    return {
+        id: worktree.id,
+        projectId: worktree.projectId,
+        name: worktree.name,
+        creatorAgentId: worktree.creatorAgentId,
+        orderKey: worktree.orderKey,
+        path: worktree.path,
+        displayPath: worktree.displayPath,
+        lifecycle: happyAgentWorktreeLifecycleOf(worktree),
+        ...(worktreeRefusal === undefined ? {} : { writeRefusal: worktreeRefusal }),
+        conversations,
+        activity: activityOf(conversations),
+        updatedAt: newestOf(conversations),
+        ...(worktree.changesStatus === undefined ? {} : { changesStatus: worktree.changesStatus }),
+        ...(worktree.changedFiles === undefined ? {} : { changedFiles: worktree.changedFiles }),
+        ...(worktree.addedLines === undefined ? {} : { addedLines: worktree.addedLines }),
+        ...(worktree.deletedLines === undefined ? {} : { deletedLines: worktree.deletedLines }),
+        ...(worktree.changes === undefined ? {} : { changes: worktree.changes }),
+    };
 }
 
 /**
@@ -222,24 +531,43 @@ export function happyAgentProjectGroupsPreserve(
     previous: readonly HappyAgentProjectGroup[],
     next: readonly HappyAgentProjectGroup[],
 ): readonly HappyAgentProjectGroup[] {
-    return entitiesPreserve(previous, next, (before, after) => {
-        const conversations = entitiesPreserve(before.conversations, after.conversations);
-        const worktrees = entitiesPreserve(before.worktrees, after.worktrees, worktreePreserve);
-        const merged =
-            conversations === after.conversations && worktrees === after.worktrees
-                ? after
-                : { ...after, conversations, worktrees };
-        return deepEqual(before, merged) ? before : merged;
-    });
+    return entitiesPreserve(previous, next, (before, after) =>
+        preserved(before, after, () => {
+            const conversations = entitiesPreserve(before.conversations, after.conversations);
+            const worktrees = entitiesPreserve(before.worktrees, after.worktrees, worktreePreserve);
+            const merged =
+                conversations === after.conversations && worktrees === after.worktrees
+                    ? after
+                    : { ...after, conversations, worktrees };
+            return deepEqual(before, merged) ? before : merged;
+        }),
+    );
 }
 
 function worktreePreserve(
     before: HappyAgentWorktreeGroup,
     after: HappyAgentWorktreeGroup,
 ): HappyAgentWorktreeGroup {
-    const conversations = entitiesPreserve(before.conversations, after.conversations);
-    const merged = conversations === after.conversations ? after : { ...after, conversations };
-    return deepEqual(before, merged) ? before : merged;
+    return preserved(before, after, () => {
+        const conversations = entitiesPreserve(before.conversations, after.conversations);
+        const merged = conversations === after.conversations ? after : { ...after, conversations };
+        return deepEqual(before, merged) ? before : merged;
+    });
+}
+
+/*
+ * What each projected group was last preserved as. A projector hands back the
+ * very same group until its inputs change, while the list keeps the merged or
+ * earlier object it was preserved as, so without this every group a change ever
+ * reached would be merged again on every later publish.
+ */
+const preservedAs = new WeakMap<object, object>();
+
+function preserved<T extends object>(before: T, after: T, merge: () => T): T {
+    if (before === after || preservedAs.get(after) === before) return before;
+    const kept = merge();
+    if (kept !== after) preservedAs.set(after, kept);
+    return kept;
 }
 
 /**
@@ -254,10 +582,16 @@ function entitiesPreserve<T extends { readonly id: string }>(
         deepEqual(before, after) ? before : after,
 ): readonly T[] {
     if (previous === next) return previous;
-    const byId = new Map<string, T>();
-    for (const entity of previous) byId.set(entity.id, entity);
+    // An entity still in its old place is matched without the index, which is
+    // only built once something actually moved.
+    let byId: Map<string, T> | undefined;
     let changed = previous.length !== next.length;
     const merged = next.map((entity, index) => {
+        if (entity === previous[index]) return entity;
+        if (byId === undefined) {
+            byId = new Map<string, T>();
+            for (const candidate of previous) byId.set(candidate.id, candidate);
+        }
         const before = byId.get(entity.id);
         const kept = before === undefined ? entity : preserve(before, entity);
         if (kept !== previous[index]) changed = true;
