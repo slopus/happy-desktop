@@ -1,3 +1,4 @@
+import type { HappyCloudServer } from "./happyCloud";
 import type {
     DesktopProfilerRequest,
     DesktopProfilerSnapshot,
@@ -22,6 +23,21 @@ export type DesktopKeepAwakeMode = "on" | "agent" | "off";
 export type DesktopServerSignInResult<T> =
     | { readonly ok: true; readonly value: T }
     | { readonly ok: false; readonly message: string; readonly code: string };
+
+/** Whether a Happy Cloud server name can be taken, as the accounts API answered. */
+export type DesktopHappyCloudAvailability =
+    | { readonly available: true }
+    | { readonly available: false; readonly reason: "taken" | "reserved" | "invalid" };
+
+/** The accounts API, asked by the shell with the account's token. */
+export interface DesktopHappyCloud {
+    serversList(): Promise<DesktopServerSignInResult<readonly HappyCloudServer[]>>;
+    availability(name: string): Promise<DesktopServerSignInResult<DesktopHappyCloudAvailability>>;
+    serverCreate(name: string): Promise<DesktopServerSignInResult<HappyCloudServer>>;
+    serverJoin(name: string, code: string): Promise<DesktopServerSignInResult<HappyCloudServer>>;
+    /** Lists a server as a connection of this app and answers its connection ID. */
+    serverAdd(name: string): Promise<DesktopServerSignInResult<string>>;
+}
 
 export interface DesktopCloudAuthConfiguration {
     readonly environment: "production" | "staging";
@@ -834,10 +850,12 @@ export interface HappyDesktopBridge {
      */
     readonly buildIdentity?: DesktopBuildIdentity;
     /**
-     * This shell reaches Happy Cloud directly, without the host Happy Agent.
+     * Happy Cloud, which this shell signs in to and talks to itself, without
+     * the host Happy Agent. The account signs in through `serverSignInBegin`
+     * with `HAPPY_CLOUD_ACCOUNT_ID`; its token never reaches the window.
      * Absent from production builds and from shells older than this field.
      */
-    readonly happyCloud?: true;
+    readonly happyCloud?: DesktopHappyCloud;
     /** The machine the shell runs on. Absent from shells older than this field. */
     readonly system?: DesktopSystem;
     /**
@@ -1127,6 +1145,11 @@ export const desktopIpc = {
     serverSignInFinish: "happy:server-sign-in:finish",
     serverSignInCancel: "happy:server-sign-in:cancel",
     serverSessionsGet: "happy:server-sessions:get",
+    happyCloudServersList: "happy:happy-cloud:servers-list",
+    happyCloudAvailability: "happy:happy-cloud:availability",
+    happyCloudServerCreate: "happy:happy-cloud:server-create",
+    happyCloudServerJoin: "happy:happy-cloud:server-join",
+    happyCloudServerAdd: "happy:happy-cloud:server-add",
     serverSessionsChanged: "happy:server-sessions:changed",
     happyLinkExternalReceived: "happy:happy-link:external-received",
     happyLinkExternalTake: "happy:happy-link:external-take",

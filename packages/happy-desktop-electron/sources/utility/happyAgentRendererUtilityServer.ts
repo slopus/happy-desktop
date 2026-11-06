@@ -11,8 +11,7 @@ import {
 } from "../main/happyAgentDaemonClient";
 import type { ServerRemoteCredential } from "../shared/serverRemoteAuthorization";
 import { happyAgentProxyHandle } from "../main/happyAgentProxyHandle";
-import { happyCloudForward, happyCloudPathIs } from "../main/happyCloudForward";
-import { HAPPY_CLOUD_CONNECTION_ID } from "../shared/happyCloud";
+import { happyCloudConnectionOf, happyCloudForward } from "../main/happyCloudForward";
 import { happyAgentRendererProxyCreate } from "../main/happyAgentRendererProxy";
 import { happyAgentRequestTimingCreate } from "../main/happyAgentRequestTiming";
 import {
@@ -257,13 +256,9 @@ export async function happyAgentRendererUtilityServerCreate(
                             .end();
                         return;
                     }
-                    if (happyCloudPathIs(path)) {
-                        happyCloudForward(
-                            request,
-                            response,
-                            url,
-                            remoteTokens[HAPPY_CLOUD_CONNECTION_ID],
-                        );
+                    const cloud = happyCloudConnectionOf(path);
+                    if (cloud !== undefined) {
+                        happyCloudForward(request, response, url, remoteTokens[cloud]);
                         return;
                     }
                     const onTiming = happyAgentRequestTimingCreate(response, debug);

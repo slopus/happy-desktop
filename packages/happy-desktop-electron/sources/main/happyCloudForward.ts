@@ -1,10 +1,10 @@
 import { request as httpsRequest } from "node:https";
 import { request as httpRequest, type IncomingMessage, type ServerResponse } from "node:http";
 import { pipeline } from "node:stream/promises";
-import { HAPPY_CLOUD_CONNECTION_ID } from "../shared/happyCloud";
+import { happyCloudServerNameOf } from "../shared/happyCloud";
 import type { ServerRemoteCredential } from "../shared/serverRemoteAuthorization";
 
-const CLOUD_PATH = `/v0/connections/${HAPPY_CLOUD_CONNECTION_ID}/api/`;
+const CLOUD_PATH = /^\/v0\/connections\/([a-z][a-z0-9_-]{0,63})\/api(\/.*)?$/u;
 
 /** Headers the window's request never carries on to the cloud. */
 const DROPPED = new Set([
@@ -19,16 +19,19 @@ const DROPPED = new Set([
     "referer",
 ]);
 
-/** Whether `path` is the window's address for Happy Cloud. */
-export function happyCloudPathIs(path: string): boolean {
-    return path.startsWith(CLOUD_PATH) || path === CLOUD_PATH.slice(0, -1);
+/** The Happy Cloud connection a window path addresses, or `undefined` for any other path. */
+export function happyCloudConnectionOf(path: string): string | undefined {
+    const connectionId = CLOUD_PATH.exec(path)?.[1];
+    return connectionId !== undefined && happyCloudServerNameOf(connectionId) !== undefined
+        ? connectionId
+        : undefined;
 }
 
 /**
- * Sends one window request straight to Happy Cloud with the person's access
- * token in `Authorization`. The host Happy Agent is not involved. Without a
- * sign-in it answers the host's own `403 remote_sign_in_required`, so the
- * window offers a sign-in exactly as it does for any team server.
+ * Sends one window request straight to a Happy Cloud server with the person's
+ * access token in `Authorization`. The host Happy Agent is not involved.
+ * Without a sign-in it answers the host's own `403 remote_sign_in_required`,
+ * so the window offers a sign-in exactly as it does for any team server.
  */
 export function happyCloudForward(
     request: IncomingMessage,
@@ -36,18 +39,16 @@ export function happyCloudForward(
     url: URL,
     credential: ServerRemoteCredential | undefined,
 ): void {
-    if (!credential) {
+    const json = (status: number, error: string, code: string): void => {
         response
-            .writeHead(403, { "content-type": "application/json", "cache-control": "no-store" })
-            .end(
-                JSON.stringify({
-                    error: "Sign in to Happy Cloud to use it.",
-                    code: "remote_sign_in_required",
-                }),
-            );
+            .writeHead(status, { "content-type": "application/json", "cache-control": "no-store" })
+            .end(JSON.stringify({ error, code }));
+    };
+    if (!credential) {
+        json(403, "Sign in to this server to use it.", "remote_sign_in_required");
         return;
     }
-    const rest = url.pathname.slice(CLOUD_PATH.length);
+    const rest = CLOUD_PATH.exec(url.pathname)?.[2]?.slice(1) ?? "";
     const target = new URL(`${rest}${url.search}`, credential.serverUrl);
     const headers: Record<string, string | string[]> = {};
     for (const [name, value] of Object.entries(request.headers))
@@ -60,15 +61,7 @@ export function happyCloudForward(
     });
     outgoing.on("error", () => {
         if (response.headersSent) response.destroy();
-        else
-            response
-                .writeHead(502, { "content-type": "application/json", "cache-control": "no-store" })
-                .end(
-                    JSON.stringify({
-                        error: "Happy Cloud isn't reachable right now.",
-                        code: "remote_unavailable",
-                    }),
-                );
+        else json(502, "This server isn't reachable right now.", "remote_unavailable");
     });
     request.once("aborted", () => outgoing.destroy());
     response.once("close", () => outgoing.destroy());

@@ -128,7 +128,6 @@ import { happyAgentDirectoryLinkTarget } from "./happyAgentDirectoryLinkTarget";
 import { startupValuesStoreCreate, type StartupValuesStore } from "./startupValuesStore";
 import { browserDevBridgeCreate } from "./browserDevBridge";
 import { localWebBuild } from "./localWebBuild";
-import { HAPPY_CLOUD_CONNECTION_ID, HAPPY_CLOUD_NAME, HAPPY_CLOUD_URL } from "../shared/happyCloud";
 import {
     localWebUpdateStoreCreate,
     type LocalWebUpdateSnapshot,
@@ -1165,6 +1164,12 @@ function DesktopCloudConnect(props: { store: DesktopCloudConnectStore }): ReactN
         <CloudConnectDialog
             onCancel={props.store.connectCancel}
             onConnect={props.store.connectConfirm}
+            onCreate={props.store.serverCreate}
+            onCreateNameChange={props.store.createNameUpdate}
+            onJoin={props.store.serverJoin}
+            onJoinCodeChange={props.store.joinCodeUpdate}
+            onJoinNameChange={props.store.joinNameUpdate}
+            onServerPick={props.store.serverPick}
             view={view}
         />
     );
@@ -1503,14 +1508,7 @@ if (mediaPreviewBridge) {
             ...(serverHost &&
             desktopBridge.happyCloud &&
             (localWebBuild !== undefined || desktopBridge.buildIdentity !== undefined)
-                ? {
-                      cloud: {
-                          id: `connection:${HAPPY_CLOUD_CONNECTION_ID}`,
-                          remoteId: HAPPY_CLOUD_CONNECTION_ID,
-                          name: HAPPY_CLOUD_NAME,
-                          url: HAPPY_CLOUD_URL,
-                      },
-                  }
+                ? { cloud: true }
                 : {}),
             attentionFollow(id, source) {
                 preferencesFor(id);
@@ -1605,12 +1603,14 @@ if (mediaPreviewBridge) {
                 : undefined;
         if (servers) appDisposers.push(() => servers.add[Symbol.dispose]());
         const cloudConnectAction = happyAgents.happyAgentCloudConnect;
-        const cloudConnect = cloudConnectAction
-            ? desktopCloudConnectStoreCreate({
-                  ...happyAgents,
-                  happyAgentCloudConnect: cloudConnectAction,
-              })
-            : undefined;
+        const cloudConnect =
+            cloudConnectAction && desktopBridge.happyCloud
+                ? desktopCloudConnectStoreCreate({
+                      cloud: desktopBridge.happyCloud,
+                      bridge: desktopBridge,
+                      connect: cloudConnectAction,
+                  })
+                : undefined;
         // What this window reports about how it is used, read from the same
         // directory the sidebar reads. Development windows send nothing.
         const analytics = desktopAnalyticsCreate({

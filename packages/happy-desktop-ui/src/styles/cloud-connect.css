@@ -1,7 +1,13 @@
 /*
- * CloudConnectDialog — the sidebar "+" confirm before adding Happy Cloud.
+ * CloudConnectDialog — the sidebar "+" to Happy Cloud: confirm, account
+ * sign-in, then the server picker.
  */
 
+.happy-cloud-connect {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
 .happy-cloud-connect__text {
     margin: 0 0 12px;
     color: var(--text-secondary);
@@ -11,4 +17,80 @@
 }
 .happy-cloud-connect__text:last-child {
     margin-bottom: 0;
+}
+.happy-cloud-connect__section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.happy-cloud-connect__heading {
+    margin: 0;
+    color: var(--text);
+    font-family: var(--happy-font-ui);
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 20px;
+}
+.happy-cloud-connect__servers {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.happy-cloud-connect__server {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    padding: 8px 12px;
+    border: 1px solid var(--divider);
+    border-radius: 10px;
+    background: transparent;
+    color: var(--text);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+.happy-cloud-connect__server:hover:not(:disabled) {
+    background: var(--surface-ripple);
+}
+.happy-cloud-connect__server:disabled {
+    cursor: default;
+    opacity: 0.6;
+}
+.happy-cloud-connect__server:focus-visible {
+    outline: 2px solid var(--text-link);
+    outline-offset: 2px;
+}
+.happy-cloud-connect__server-name {
+    font-family: var(--happy-font-ui);
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 18px;
+}
+.happy-cloud-connect__server-detail,
+.happy-cloud-connect__suffix,
+.happy-cloud-connect__hint {
+    color: var(--text-secondary);
+    font-family: var(--happy-font-ui);
+    font-size: 12px;
+    line-height: 16px;
+}
+.happy-cloud-connect__row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.happy-cloud-connect__row > :first-child {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+.happy-cloud-connect__suffix {
+    flex: none;
+    white-space: nowrap;
+}
+.happy-cloud-connect__hint {
+    margin: 0;
+}
+.happy-cloud-connect__hint[data-tone="danger"] {
+    color: var(--status-error);
 }

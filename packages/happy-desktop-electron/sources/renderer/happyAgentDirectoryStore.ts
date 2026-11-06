@@ -30,6 +30,7 @@ import type {
     TerminalColorScheme,
 } from "happy-desktop-state";
 import type { HappyDesktopBridge } from "../shared/desktopContract";
+import { happyCloudServerNameOf, happyCloudServerUrl } from "../shared/happyCloud";
 import type { HappyAgentMobilePairingObserve } from "./desktopAnalytics";
 import {
     happyAgentConnectionOpen,
@@ -153,10 +154,11 @@ export interface HappyAgentDirectoryStore {
     /** Stops a remote's sign-in whose browser is open; present with `happyAgentSignIn`. */
     happyAgentSignInCancel?(id: string): void;
     /**
-     * Lists Happy Cloud, shows it, and opens its sign-in when the shell holds
-     * none. Present only when the shell reaches Happy Cloud itself.
+     * Shows a Happy Cloud server the shell has added, by its connection ID,
+     * and opens its sign-in when the shell holds none. Present only when the
+     * shell reaches Happy Cloud itself.
      */
-    happyAgentCloudConnect?(): void;
+    happyAgentCloudConnect?(connectionId: string): void;
 }
 
 export interface HappyAgentDirectoryDeps {
@@ -172,11 +174,11 @@ export interface HappyAgentDirectoryDeps {
      */
     readonly serverSessions?: ServerSessionsStore;
     /**
-     * Happy Cloud, which the shell signs in to and talks to itself rather than
-     * through the host Happy Agent. It is listed while the shell reports a
-     * sign-in state for it. Absent where the shell does not offer it.
+     * Whether this window lists Happy Cloud's servers, which the shell signs
+     * in to and talks to itself rather than through the host Happy Agent.
+     * Each is listed while the shell reports a sign-in state for it.
      */
-    readonly cloud?: HappyAgentConnectionItem & { readonly remoteId: string };
+    readonly cloud?: boolean;
     readonly conversationOpen: (happyAgentId: string, location: HappyAgentSessionLocation) => void;
     readonly groupOpen: (happyAgentId: string, groupId: string) => void;
     /**
@@ -406,7 +408,22 @@ export function happyAgentDirectoryStoreCreate(
     const remotes = new Map<string, LocalHappyAgent>();
     let roster: HappyAgentConnectionsStore | undefined;
     // Happy Cloud was asked for in this window, before the shell has listed it.
-    let cloudWanted = false;
+    let cloudWanted: ReadonlySet<string> = new Set();
+    /** Happy Cloud's servers as connections, in the order the shell reported them. */
+    const cloudItems = (connectionIds: Iterable<string>): HappyAgentConnectionItem[] =>
+        [...new Set(connectionIds)].flatMap((connectionId) => {
+            const name = happyCloudServerNameOf(connectionId);
+            return name === undefined
+                ? []
+                : [
+                      {
+                          id: `connection:${connectionId}`,
+                          remoteId: connectionId,
+                          name,
+                          url: happyCloudServerUrl(name),
+                      },
+                  ];
+        });
     let rosterUnsubscribe: (() => void) | undefined;
     let sessionsUnsubscribe: (() => void) | undefined;
 
@@ -555,8 +572,8 @@ export function happyAgentDirectoryStoreCreate(
     const sessionsReconcile = (): void => {
         const sessions = deps.serverSessions?.get();
         if (!sessions?.loaded) return;
-        if (deps.cloud && (cloudWanted || sessions.sessions.has(deps.cloud.remoteId)))
-            roster?.connectionDirectSet(deps.cloud);
+        if (deps.cloud)
+            roster?.connectionsDirectSet(cloudItems([...sessions.sessions.keys(), ...cloudWanted]));
         for (const remote of remotes.values()) {
             if (remote.entry.serverUrl === undefined || remote.entry.remoteId === undefined)
                 continue;
@@ -1036,21 +1053,22 @@ export function happyAgentDirectoryStoreCreate(
                   },
                   ...(deps.cloud
                       ? {
-                            happyAgentCloudConnect() {
-                                const cloud = deps.cloud!;
-                                cloudWanted = true;
-                                roster?.connectionDirectSet(cloud);
-                                roster?.connectionSelect(cloud.id);
-                                const remote = remotes.get(cloud.id);
+                            happyAgentCloudConnect(connectionId: string) {
+                                const item = cloudItems([connectionId])[0];
+                                if (!item) return;
+                                cloudWanted = new Set([...cloudWanted, connectionId]);
+                                sessionsReconcile();
+                                roster?.connectionSelect(item.id);
+                                const remote = remotes.get(item.id);
                                 if (!remote || !deps.servers) return;
                                 if (
-                                    deps.serverSessions?.get().sessions.get(cloud.remoteId)
-                                        ?.state === "signedIn"
+                                    deps.serverSessions?.get().sessions.get(connectionId)?.state ===
+                                    "signedIn"
                                 )
                                     return;
                                 if (!remote.entry.signIn)
                                     signInRequire(remote, {
-                                        message: "Sign in to Happy Cloud to use it.",
+                                        message: "Sign in to this server to use it.",
                                         first: true,
                                     });
                                 signIn(remote, deps.servers);

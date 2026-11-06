@@ -74,7 +74,21 @@ const bridge: HappyDesktopBridge = {
     liveMicrophoneStart: (input) => ipcRenderer.invoke(desktopIpc.liveMicrophoneStart, input),
     liveMicrophoneRevoke: () => ipcRenderer.invoke(desktopIpc.liveMicrophoneRevoke),
     ...(identity ? { buildIdentity: identity } : {}),
-    ...(process.argv.includes(happyCloudArgument) ? { happyCloud: true as const } : {}),
+    ...(process.argv.includes(happyCloudArgument)
+        ? {
+              happyCloud: {
+                  serversList: () => ipcRenderer.invoke(desktopIpc.happyCloudServersList),
+                  availability: (name: string) =>
+                      ipcRenderer.invoke(desktopIpc.happyCloudAvailability, name),
+                  serverCreate: (name: string) =>
+                      ipcRenderer.invoke(desktopIpc.happyCloudServerCreate, name),
+                  serverJoin: (name: string, code: string) =>
+                      ipcRenderer.invoke(desktopIpc.happyCloudServerJoin, name, code),
+                  serverAdd: (name: string) =>
+                      ipcRenderer.invoke(desktopIpc.happyCloudServerAdd, name),
+              },
+          }
+        : {}),
     system: systemRead(),
     debugMetricsEnabled,
     appearanceSet: (mode) => ipcRenderer.send(desktopIpc.appearanceSet, mode),

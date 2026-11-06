@@ -53,17 +53,25 @@ export interface ServerSessionsDeps {
      */
     healthRead(connectionId: string): Promise<void>;
     /**
-     * A server this app reaches itself rather than through the host Happy
-     * Agent: Happy Cloud. It is in no roster, so its address is this one, and
-     * whether the person added it is remembered here rather than by the host.
+     * Happy Cloud, which this app reaches itself rather than through the host
+     * Happy Agent, so none of it is in the host's roster.
      */
     readonly direct?: {
-        readonly connectionId: string;
-        readonly serverUrl: string;
-        /** Whether the person has added it; a listed server wants a sign-in until it has one. */
-        listed(): boolean;
-        /** Remembers that the person added it, once its first sign-in is begun. */
-        listedSave(): void;
+        /**
+         * The servers the person added, by connection ID, with their addresses.
+         * Each is listed, and wants a sign-in until it has one.
+         */
+        servers(): ReadonlyMap<string, string>;
+        /**
+         * The account sign-in: its ID, its address, and its method, which is
+         * known rather than discovered. It is never listed, and its token is
+         * never handed to the transport.
+         */
+        readonly account: {
+            readonly connectionId: string;
+            readonly serverUrl: string;
+            readonly method: OAuthAuthenticationMethod;
+        };
     };
     now?(): number;
 }
@@ -97,6 +105,8 @@ export interface ServerSessions extends HappyAgentRemoteAuthorization {
      * `state` it carries; returns whether there was one.
      */
     callbackReceive(url: string): boolean;
+    /** Happy Cloud's added servers changed: they are listed again. */
+    directChanged(): void;
     /** Every current access token and its bound address, by connection, for the isolated transport. */
     tokens(): Readonly<Record<string, ServerRemoteCredential>>;
     get(): readonly ServerSessionSnapshot[];
@@ -151,23 +161,33 @@ export function serverSessionsCreate(deps: ServerSessionsDeps): ServerSessions {
     let closed = false;
     let rosterTimer: ReturnType<typeof setTimeout> | undefined;
     const direct = deps.direct;
-    const DIRECT_SIGN_IN = "Sign in to Happy Cloud to use it.";
+    const DIRECT_SIGN_IN = "Sign in to this server to use it.";
+
+    /** Happy Cloud's own addresses: every added server, and the account. */
+    const directServers = (): Map<string, string> => {
+        const servers = new Map(direct?.servers());
+        if (direct) servers.set(direct.account.connectionId, direct.account.serverUrl);
+        return servers;
+    };
+    const directIs = (connectionId: string): boolean => directServers().has(connectionId);
 
     /**
-     * The addresses sign-ins are bound to: the host's roster, and the direct
-     * server's own. A sign-in to the direct server alone never waits on the host.
+     * The addresses sign-ins are bound to: the host's roster and Happy
+     * Cloud's own. A Happy Cloud sign-in never waits on the host.
      */
     const rosterRead = async (connectionId?: string): Promise<ReadonlyMap<string, string>> => {
-        if (direct && connectionId === direct.connectionId)
-            return new Map([[direct.connectionId, direct.serverUrl]]);
-        const servers = new Map(await deps.roster());
-        if (direct) servers.set(direct.connectionId, direct.serverUrl);
-        return servers;
+        const own = directServers();
+        if (connectionId !== undefined && own.has(connectionId)) return own;
+        return new Map([...(await deps.roster()), ...own]);
     };
 
     const publish = (): void => {
-        const ids = new Set([...sessions.keys(), ...endings.keys()]);
-        if (direct?.listed()) ids.add(direct.connectionId);
+        const ids = new Set([
+            ...sessions.keys(),
+            ...endings.keys(),
+            ...(direct?.servers().keys() ?? []),
+        ]);
+        if (direct) ids.delete(direct.account.connectionId);
         snapshot = [...ids].sort().map((connectionId) =>
             sessions.has(connectionId)
                 ? { connectionId, state: "signedIn" as const }
@@ -178,10 +198,12 @@ export function serverSessionsCreate(deps: ServerSessionsDeps): ServerSessions {
                   },
         );
         tokens = Object.fromEntries(
-            [...sessions].map(([connectionId, session]) => [
-                connectionId,
-                { accessToken: session.credential.accessToken, serverUrl: session.serverUrl },
-            ]),
+            [...sessions]
+                .filter(([connectionId]) => connectionId !== direct?.account.connectionId)
+                .map(([connectionId, session]) => [
+                    connectionId,
+                    { accessToken: session.credential.accessToken, serverUrl: session.serverUrl },
+                ]),
         );
         rosterWatch();
         for (const listener of listeners) listener();
@@ -199,8 +221,7 @@ export function serverSessionsCreate(deps: ServerSessionsDeps): ServerSessions {
      */
     const rosterReconcile = (roster: ReadonlyMap<string, string>): void => {
         if (closed) return;
-        const servers = new Map(roster);
-        if (direct) servers.set(direct.connectionId, direct.serverUrl);
+        const servers = new Map([...roster, ...directServers()]);
         for (const attempt of attempts.values())
             if (servers.get(attempt.connectionId) !== attempt.serverUrl)
                 attempt.fail(new ServerSessionError(SERVER_MOVED, "server_moved"));
@@ -305,7 +326,7 @@ export function serverSessionsCreate(deps: ServerSessionsDeps): ServerSessions {
                     );
                 }
                 if (sessions.get(connectionId) !== session) return undefined;
-                if (direct?.connectionId !== connectionId) rosterReconcile(servers);
+                if (!directIs(connectionId)) rosterReconcile(servers);
                 if (sessions.get(connectionId) !== session) return undefined;
                 const credential = await refreshOAuthCredential(session.credential, {
                     fetch: deps.fetch,
@@ -433,7 +454,10 @@ export function serverSessionsCreate(deps: ServerSessionsDeps): ServerSessions {
                     "This server isn't one you sign in to from Happy.",
                     "not_found",
                 );
-            const method = await discoveryRead(url);
+            const method =
+                direct?.account.connectionId === connectionId
+                    ? direct.account.method
+                    : await discoveryRead(url);
             let signIn: OAuthSignIn;
             try {
                 // The token must name this address in its audience, so a server
@@ -513,7 +537,7 @@ export function serverSessionsCreate(deps: ServerSessionsDeps): ServerSessions {
                     throw new ServerSessionError("Signing in was cancelled.", "cancelled");
                 attemptEnd(attempt);
                 sessionStore(connectionId, url, credential);
-                if (direct?.connectionId === connectionId) return;
+                if (directIs(connectionId)) return;
                 // The roster learns the server's instance from a health it relays.
                 await deps.healthRead(connectionId).catch(() => undefined);
             });
@@ -552,10 +576,6 @@ export function serverSessionsCreate(deps: ServerSessionsDeps): ServerSessions {
                 },
             };
             attempts.set(id, attempt);
-            if (direct?.connectionId === connectionId && !direct.listed()) {
-                direct.listedSave();
-                publish();
-            }
             rosterWatch();
             try {
                 await deps.browserOpen(signIn.url);
@@ -598,6 +618,9 @@ export function serverSessionsCreate(deps: ServerSessionsDeps): ServerSessions {
             return true;
         },
         tokens: () => tokens,
+        directChanged() {
+            if (!closed) publish();
+        },
         get: () => snapshot,
         subscribe(listener) {
             listeners.add(listener);

@@ -37,11 +37,11 @@ export interface HappyAgentConnectionsStore {
     connectionSelect(id: string): void;
     connectionReorder(id: string, afterId: string | null): void;
     /**
-     * A connection this app reaches itself, not through the host, listed after
-     * the host's: Happy Cloud. Its owner says whether it is there; `undefined`
-     * takes it away.
+     * Connections this app reaches itself, not through the host, listed after
+     * the host's in the given order: Happy Cloud's servers. Their owner says
+     * which there are.
      */
-    connectionDirectSet(item: HappyAgentConnectionItem | undefined): void;
+    connectionsDirectSet(items: readonly HappyAgentConnectionItem[]): void;
     [Symbol.dispose](): void;
 }
 
@@ -74,14 +74,15 @@ export function happyAgentConnectionsStoreCreate(
     let version: string | undefined;
     let confirmedItems = snapshot.items;
     let optimisticOrder: readonly string[] | undefined;
-    let direct: HappyAgentConnectionItem | undefined;
-    /** The host's membership with the direct connection after it. */
+    let direct: readonly HappyAgentConnectionItem[] = [];
+    const directIs = (id: string): boolean => direct.some((item) => item.id === id);
+    /** The host's membership with the direct connections after it. */
     const withDirect = (
         items: readonly HappyAgentConnectionItem[],
-    ): readonly HappyAgentConnectionItem[] => {
-        const host = items.filter((item) => item.id !== direct?.id);
-        return direct ? [...host, direct] : host;
-    };
+    ): readonly HappyAgentConnectionItem[] => [
+        ...items.filter((item) => !directIs(item.id)),
+        ...direct,
+    ];
     let reorderController: AbortController | undefined;
     const publish = (next: HappyAgentConnectionsSnapshot): void => {
         snapshot = next;
@@ -234,19 +235,25 @@ export function happyAgentConnectionsStoreCreate(
                 if (listeners.size === 0) stop();
             };
         },
-        connectionDirectSet(item) {
-            if (direct === item || (direct?.id === item?.id && direct?.name === item?.name)) return;
+        connectionsDirectSet(items) {
+            if (
+                items.length === direct.length &&
+                items.every(
+                    (item, index) =>
+                        item.id === direct[index]!.id && item.name === direct[index]!.name,
+                )
+            )
+                return;
             const previous = direct;
-            direct = item;
-            const host = snapshot.items.filter((entry) => entry.id !== previous?.id);
-            confirmedItems = withDirect(
-                confirmedItems.filter((entry) => entry.id !== previous?.id),
-            );
-            const items = withDirect(host);
+            const host = (list: readonly HappyAgentConnectionItem[]) =>
+                list.filter((entry) => !previous.some((item) => item.id === entry.id));
+            direct = items;
+            confirmedItems = withDirect(host(confirmedItems));
+            const next = withDirect(host(snapshot.items));
             publish({
                 ...snapshot,
-                items,
-                selectedId: items.some((entry) => entry.id === snapshot.selectedId)
+                items: next,
+                selectedId: next.some((entry) => entry.id === snapshot.selectedId)
                     ? snapshot.selectedId
                     : "local",
             });
@@ -262,7 +269,7 @@ export function happyAgentConnectionsStoreCreate(
             // Home is outside the server roster and can never be moved.
             if (!item?.remoteId || id === afterId || (afterId !== null && !after?.remoteId)) return;
             // The host does not know the direct connection, so it keeps its place.
-            if (direct !== undefined && (id === direct.id || afterId === direct.id)) return;
+            if (directIs(id) || (afterId !== null && directIs(afterId))) return;
             const index = snapshot.items.indexOf(item);
             if ((snapshot.items[index - 1]?.remoteId ?? null) === (after?.remoteId ?? null)) return;
             const request = new AbortController();

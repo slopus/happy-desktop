@@ -652,7 +652,9 @@ export {
 } from "./CloudSignInNoticeDialog";
 export {
     CloudConnectDialog,
+    type CloudConnectAvailability,
     type CloudConnectDialogProps,
+    type CloudConnectServer,
     type CloudConnectView,
 } from "./CloudConnectDialog";
 export {
