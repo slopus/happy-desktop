@@ -243,6 +243,7 @@ import {
     FormRow,
     type FilePreviewKind,
     filePreviewKind,
+    type GitComparisonBaseProps,
     Lightbox,
     MarkdownDiff,
     markdownDiffCompute,
@@ -976,6 +977,8 @@ interface OpenGroup {
     readonly conversations: HappyAgentProjectGroup["conversations"];
     readonly changes: NonNullable<HappyAgentProjectGroup["changes"]>;
     readonly changesStatus?: HappyAgentProjectGroup["changesStatus"];
+    /** What Changes is measured against, when the host says. */
+    readonly comparedWith?: HappyAgentProjectGroup["comparedWith"];
     readonly create?: HappyAgentSessionCreateInput;
     /**
      * Where the open group's checkout is in its own life, for a worktree. A
@@ -2029,6 +2032,9 @@ function openGroupFind(
             ...(worktree?.changesStatus === undefined
                 ? {}
                 : { changesStatus: worktree.changesStatus }),
+            ...(worktree?.comparedWith === undefined
+                ? {}
+                : { comparedWith: worktree.comparedWith }),
             ...(worktree === undefined ? {} : { lifecycle: worktree.lifecycle }),
             create: { cwd: task.path, worktreeId: task.workspaceId },
             path: task.path,
@@ -2072,6 +2078,9 @@ function openGroupFind(
                 ...(project.changesStatus === undefined
                     ? {}
                     : { changesStatus: project.changesStatus }),
+                ...(project.comparedWith === undefined
+                    ? {}
+                    : { comparedWith: project.comparedWith }),
                 create: { cwd: project.path },
                 lifecycle: project.lifecycle,
                 path: project.displayPath,
@@ -2087,6 +2096,9 @@ function openGroupFind(
                     ...(worktree.changesStatus === undefined
                         ? {}
                         : { changesStatus: worktree.changesStatus }),
+                    ...(worktree.comparedWith === undefined
+                        ? {}
+                        : { comparedWith: worktree.comparedWith }),
                     create: { cwd: worktree.path, worktreeId: worktree.id },
                     lifecycle: worktree.lifecycle,
                     path: worktree.displayPath,
@@ -2106,6 +2118,20 @@ function openGroupFind(
             path: archived.displayPath,
         };
     return undefined;
+}
+
+/**
+ * The Changes header for an open group, or nothing from a host that does not
+ * say what it compares with.
+ */
+function comparisonProps(group: OpenGroup): GitComparisonBaseProps | undefined {
+    const comparedWith = group.comparedWith;
+    if (comparedWith === undefined) return undefined;
+    return {
+        baseRef: comparedWith.ref,
+        ...(comparedWith.source === null ? {} : { source: comparedWith.source }),
+        ...(comparedWith.notice === null ? {} : { notice: comparedWith.notice }),
+    };
 }
 
 /**
@@ -7649,6 +7675,7 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                 workspace={props.workspace}
             />
         );
+    const panelComparison = openGroup && comparisonProps(openGroup);
 
     // Devices reach a workspace on another machine, so only a connection the
     // host can bridge offers them, and only for the workspace that is open.
@@ -7750,6 +7777,7 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                         {...(props.changeTiers === undefined
                             ? {}
                             : { changeTiers: props.changeTiers })}
+                        {...(panelComparison === undefined ? {} : { comparison: panelComparison })}
                         expanded={workspace.fileTreeExpanded}
                         collapsed={workspace.fileTreeCollapsed}
                         layout={workspace.fileLayout}
@@ -10968,6 +10996,8 @@ function HappyAgentPanelBody(props: {
      * workspace to remember them in, when every change is listed together.
      */
     changeTiers?: HappyAgentChangeTiersStore;
+    /** What Changes is measured against, when the host says. */
+    comparison?: GitComparisonBaseProps;
     closeShortcut?: KeyboardShortcut;
     expanded: ReadonlySet<string>;
     collapsed: ReadonlySet<string>;
@@ -11352,6 +11382,9 @@ function HappyAgentPanelBody(props: {
                             layout={props.layout}
                             loading={loading}
                             nodes={nodes}
+                            {...(props.comparison === undefined
+                                ? {}
+                                : { comparison: props.comparison })}
                             {...(changesStale
                                 ? {
                                       note: "Showing the last successful Git scan. Retrying automatically…",

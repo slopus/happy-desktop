@@ -144,6 +144,18 @@
     color: var(--git-removed-text);
 }
 
+/* ---- Comparison ------------------------------------------------------- */
+
+/* Inset to the control row's edge, so "Compared with" starts where the scope
+   choice above it does. */
+.happy-file-browser__comparison {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    min-width: 0;
+    padding: 0 var(--happy-panel-inset) 6px;
+}
+
 /* ---- Search ----------------------------------------------------------- */
 
 /* Inset to the same edge as the control row and the file rows, so the field,

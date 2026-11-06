@@ -2,6 +2,7 @@ import { partitionComponentProps } from "./componentProps";
 import { type CSSProperties } from "react";
 import { FileTree, type FileTreeNode, type FileTreeProps } from "./FileTree";
 import { compactCount, changeCountLabel } from "./countText";
+import { GitComparisonBase, type GitComparisonBaseProps } from "./GitComparisonBase";
 import { Icon } from "./Icon";
 import { SearchField } from "./TitleBar";
 import { SegmentedControl } from "./SegmentedControl";
@@ -43,6 +44,12 @@ export type FileBrowserProps = {
     deletedLines?: number;
     /** Optional truthfulness note under the controls (e.g. a truncated listing). */
     note?: string;
+    /**
+     * What Changes is measured against, stated under the controls. Absent when
+     * the host does not say, and never shown for All Files, which compares
+     * nothing.
+     */
+    comparison?: GitComparisonBaseProps;
     /** What the reader is looking for. */
     searchQuery?: string;
     /**
@@ -102,6 +109,7 @@ export function FileBrowser(props: FileBrowserProps) {
         "addedLines",
         "deletedLines",
         "note",
+        "comparison",
         "fileActionsUnavailable",
         "searchQuery",
         "onSearchQueryChange",
@@ -216,6 +224,17 @@ export function FileBrowser(props: FileBrowserProps) {
                     </>
                 ) : null}
             </div>
+            {/* What the changes are measured against belongs with the scope
+                that has one: under the controls that chose it, above the rows
+                it explains. */}
+            {local.scope === "changed" && local.comparison ? (
+                <div
+                    className="happy-file-browser__comparison"
+                    data-happy-desktop-ui="file-browser-comparison"
+                >
+                    <GitComparisonBase {...local.comparison} />
+                </div>
+            ) : null}
             {/* Directly above the rows it narrows, so the thing being typed
                 into and the thing changing under it read as one. The scope
                 choice stays at the top, because it says what this listing is

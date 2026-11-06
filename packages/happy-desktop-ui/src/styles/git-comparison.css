@@ -1,0 +1,110 @@
+/*
+ * C-289 GitComparisonBase — which branch a checkout's changes are measured
+ * against.
+ *
+ * A 32px box with the search field's own geometry — input well, divider
+ * hairline, small radius, 8px lead to a 14px glyph, 8px gaps — so it reads as
+ * a pair with "Search changes" under it and starts on the same edge. Inside: a
+ * secondary "Compared with", the ref in the code face, and a source badge. A
+ * fallback notice sits under the box in 11px secondary text, its glyph on the
+ * box glyph's lane.
+ */
+
+.happy-git-comparison,
+.happy-git-comparison * {
+    box-sizing: border-box;
+}
+
+.happy-git-comparison {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+    font-family: var(--happy-font-ui);
+    font-synthesis: none;
+    color: var(--text);
+}
+
+.happy-git-comparison__box {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    min-width: 0;
+    height: 32px;
+    padding: 0 8px;
+    background: var(--input-background);
+    border: 1px solid var(--divider);
+    border-radius: var(--happy-radius-sm);
+    color: var(--text);
+    font-family: var(--happy-font-ui);
+    font-synthesis: none;
+}
+
+.happy-git-comparison__icon {
+    display: flex;
+    flex: none;
+    align-items: center;
+    color: var(--text-secondary);
+}
+
+.happy-git-comparison__label {
+    display: block;
+    flex: none;
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 16px;
+    white-space: nowrap;
+}
+
+/* The ref is what the reader came to read, so it is the one bright part and
+   the only part that gives way: it elides before the label or the badge do. */
+.happy-git-comparison__ref {
+    display: block;
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--text);
+    font-family: var(--happy-font-mono);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 16px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-git-comparison__source {
+    flex: none;
+}
+
+/* 1px hairline + 8px lead: the notice glyph sits on the box glyph's lane. */
+.happy-git-comparison__notice {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    min-width: 0;
+    padding: 0 9px;
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 16px;
+}
+
+.happy-git-comparison__notice-icon {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 16px;
+    color: var(--box-warning-text);
+}
+
+.happy-git-comparison__notice-text {
+    display: block;
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
