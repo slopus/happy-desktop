@@ -107,6 +107,7 @@ it("records one real downward notch from controlled distances while streaming", 
         deltaMode?: number;
         trusted?: boolean;
         bottomDistance: number;
+        scrollTop?: number;
     }[] = [];
     const targetWindow = window as Window & {
         __happyOneNotchPrepare?: (distance: number) => Promise<void>;
@@ -129,6 +130,7 @@ it("records one real downward notch from controlled distances while streaming", 
                     deltaMode: event.deltaMode,
                     trusted: event.isTrusted,
                     bottomDistance: bottomDistance(),
+                    scrollTop: viewport.scrollTop,
                 }),
             { capture: true },
         );
@@ -184,11 +186,12 @@ it("records one real downward notch from controlled distances while streaming", 
                 time: performance.now(),
                 type: "prepared",
                 bottomDistance: bottomDistance(),
+                scrollTop: viewport.scrollTop,
             });
             nextUpdate = performance.now() + 150;
             streaming = true;
         };
-        for (const distance of [40, 70, 95, 500]) {
+        for (const distance of [40, 70, 95, 120, 150, 500]) {
             const repetitions = 10;
             for (let iteration = 1; iteration <= repetitions; iteration += 1) {
                 streaming = false;
@@ -226,4 +229,4 @@ it("records one real downward notch from controlled distances while streaming", 
         root.unmount();
         container.remove();
     }
-}, 300_000);
+}, 480_000);

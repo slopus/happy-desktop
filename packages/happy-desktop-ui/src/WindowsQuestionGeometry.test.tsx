@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
-import { cdp, commands, userEvent } from "vitest/browser";
+import { cdp, userEvent } from "vitest/browser";
 import { expect, it, onTestFinished } from "vitest";
 import type {
     ComposerSnapshot,
@@ -13,12 +13,6 @@ import "./styles.css";
 import { ConversationDock } from "./ConversationDock";
 import { ConversationView } from "./ConversationView";
 import { pageViewport } from "./testing";
-
-declare module "vitest/browser" {
-    interface BrowserCommands {
-        scrollReproQuestionSubmit: () => Promise<void>;
-    }
-}
 
 const author: ConversationAuthor = {
     id: "question-agent",
@@ -256,7 +250,7 @@ it("records question card geometry through real submission and authoritative ans
                     const button =
                         rootCard.querySelector<HTMLButtonElement>('[data-action="submit"]');
                     expect(button?.disabled, `${variant}: submit enabled`).toBe(false);
-                    await commands.scrollReproQuestionSubmit();
+                    await userEvent.click(button!);
                 }
                 expect(submitted, `${variant}: answer payload`).toBeDefined();
                 phase = "local-submitted";

@@ -13,7 +13,7 @@ jobs:
         strategy:
             fail-fast: false
             matrix:
-                os: [windows-2025, ubuntu-latest]
+                os: [windows-2025]
                 zoom: [1, 1.25]
         runs-on: ${{ matrix.os }}
         timeout-minutes: 20
