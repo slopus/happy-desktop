@@ -74,6 +74,7 @@ import {
     happyAgentAttachmentTextAppend,
     happyAgentCommentsTextAppend,
     happyAgentComposerAttachmentCreate,
+    happyAgentComposerAttachmentDownscaled,
     happyAgentComposerAttachmentPreviewRelease,
     happyAgentComposerAttachmentPreviewRenew,
     happyAgentComposerAttachmentsValidate,
@@ -5062,10 +5063,37 @@ export function happyAgentWorkspaceStoreCreate(
             // can answer about, and kept with the draft: the send that needs
             // it may be minutes later and in another surface.
             const sourcePath = client.attachmentSourcePath(file);
-            target
-                .getState()
-                .attachmentAdd(happyAgentComposerAttachmentCreate(id, file, sourcePath));
+            const attachment = happyAgentComposerAttachmentCreate(id, file, sourcePath);
+            target.getState().attachmentAdd(attachment);
+            if (attachment.kind === "inlineImage") void attachmentDownscale(target, attachment);
         }
+    };
+
+    /**
+     * Swaps a large inline image for the smaller copy that will actually be
+     * sent, so the thumbnail and size in the draft are what the agent gets. The
+     * swap is skipped once the attachment has moved or a send has taken it;
+     * that send waits for the same copy itself.
+     */
+    const attachmentDownscale = async (
+        target: ComposerStore,
+        attachment: Extract<ComposerAttachment, { kind: "inlineImage" }>,
+    ): Promise<void> => {
+        const downscaled = await happyAgentComposerAttachmentDownscaled(attachment);
+        if (!downscaled) return;
+        const state = target.getState();
+        const current = state.attachments.find((candidate) => candidate.id === attachment.id);
+        if (
+            disposed ||
+            state.submission.status === "pending" ||
+            current?.kind !== "inlineImage" ||
+            current.file !== attachment.file
+        ) {
+            happyAgentComposerAttachmentPreviewRelease(downscaled);
+            return;
+        }
+        state.attachmentReplace(downscaled);
+        happyAgentComposerAttachmentPreviewRelease(current);
     };
 
     /** Takes one attachment out of a composer's draft, letting go of its preview. */
@@ -5202,6 +5230,7 @@ export function happyAgentWorkspaceStoreCreate(
                         attachmentsRemember(conversationAttachments, conversationId, created);
                         return;
                     case "attachmentAdded":
+                    case "attachmentReplaced":
                         attachmentsRemember(conversationAttachments, conversationId, created);
                         return;
                     case "textUpdated":
@@ -7239,6 +7268,7 @@ export function happyAgentWorkspaceStoreCreate(
                             attachmentsRemember(groupAttachments, groupId, created);
                             return;
                         case "attachmentAdded":
+                        case "attachmentReplaced":
                             attachmentsRemember(groupAttachments, groupId, created);
                             return;
                         case "textSubmitted": {

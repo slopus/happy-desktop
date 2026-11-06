@@ -178,6 +178,11 @@ export type ComposerOutput =
           readonly attachment: ComposerAttachment;
       }
     | {
+          readonly type: "attachmentReplaced";
+          readonly scopeId: string;
+          readonly attachment: ComposerAttachment;
+      }
+    | {
           readonly type: "attachmentRemoved";
           readonly scopeId: string;
           readonly attachmentId: string;
@@ -244,6 +249,8 @@ export interface ComposerState extends ComposerSnapshot {
     textUpdate(text: string): void;
     focusUpdate(focused: boolean): void;
     attachmentAdd(attachment: ComposerAttachment): void;
+    /** Swaps one waiting attachment, by id, for a prepared copy in the same place. */
+    attachmentReplace(attachment: ComposerAttachment): void;
     attachmentRemove(attachmentId: string): void;
     audienceUpdate(audience: MessageAudience): void;
     audienceToggle(): void;
@@ -458,6 +465,24 @@ export function composerStoreCreate(
                 submission: { status: "idle" },
             });
             output({ type: "attachmentAdded", scopeId, attachment: storedAttachment });
+        },
+
+        attachmentReplace(attachment): void {
+            const previous = get();
+            // A send in flight already carries the draft as it was, and its
+            // confirmation clears only that same revision.
+            if (previous.submission.status === "pending") return;
+            const index = previous.attachments.findIndex((item) => item.id === attachment.id);
+            if (index < 0) return;
+            const storedAttachment = { ...attachment };
+            set({
+                attachments: previous.attachments.map((item, at) =>
+                    at === index ? storedAttachment : item,
+                ),
+                revision: previous.revision + 1,
+                submission: { status: "idle" },
+            });
+            output({ type: "attachmentReplaced", scopeId, attachment: storedAttachment });
         },
 
         attachmentRemove(attachmentId): void {
