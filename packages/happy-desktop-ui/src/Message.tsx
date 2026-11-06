@@ -2269,9 +2269,10 @@ export function MessageList(props: MessageListProps) {
     function modelAnchorCapture(
         viewportHeight: number,
         scrollTop = readerScrollTop.current,
+        inset = VIRTUAL_ANCHOR_INSET,
     ): MessageListVirtualAnchor | undefined {
         if (following.current || items.length === 0) return undefined;
-        const viewportInset = Math.min(VIRTUAL_ANCHOR_INSET, viewportHeight);
+        const viewportInset = Math.max(0, Math.min(inset, viewportHeight));
         // Model starts exclude the leading gap; native scroll offsets
         // include it. Capture and restore the same physical row point.
         const gap = leadingGap(viewportHeight);
@@ -3396,7 +3397,28 @@ export function MessageList(props: MessageListProps) {
             from = 0;
         const viewportHeight = viewportGeometry.current.height || element.clientHeight;
         if (from < items.length) {
-            const anchor = readerAnchor.current ?? modelAnchorCapture(viewportHeight);
+            /* While the reader's own wheel or key animation runs, a change on
+               or below the screen holds the top of the screen, which needs no
+               write: any write now would be undone by the animation's next
+               frame, and the rows would go one way and come back. */
+            const start = rowSizeModel.starts[from];
+            const animating =
+                nativeInputPending.current &&
+                !following.current &&
+                initialPositionApplied.current &&
+                start !== undefined &&
+                start >= element.scrollTop + MESSAGE_LIST_PADDING_START &&
+                leadingGap(viewportHeight) === 0;
+            const anchor =
+                (animating
+                    ? modelAnchorCapture(
+                          viewportHeight,
+                          element.scrollTop,
+                          viewportHeight - MESSAGE_LIST_PADDING_START,
+                      )
+                    : undefined) ??
+                readerAnchor.current ??
+                modelAnchorCapture(viewportHeight);
             if (anchor) pendingAnchor.current ??= { anchor, viewportHeight };
             /* New transcript rows grow below a parked point without consuming
                the floor gap that currently places it. A footer-only change
@@ -3555,7 +3577,7 @@ export function MessageList(props: MessageListProps) {
                 nativeInputBegin();
         };
         const onWheelInput = (event: WheelEvent) => {
-            if (!event.ctrlKey && event.deltaY !== 0) nativeInputBegin();
+            if (event.isTrusted && !event.ctrlKey && event.deltaY !== 0) nativeInputBegin();
         };
         host?.addEventListener("pointerdown", onTrackInput, { capture: true });
         host?.addEventListener("wheel", onTrackInput, { capture: true, passive: true });
@@ -3692,7 +3714,7 @@ export function MessageList(props: MessageListProps) {
                 event.target instanceof HTMLElement &&
                 event.target.closest("input, textarea, select, [contenteditable]") !== null;
             wheelDirection = editing || event.defaultPrevented ? 0 : messageListKeyDirection(event);
-            if (wheelDirection !== 0) nativeInputBegin();
+            if (wheelDirection !== 0 && event.isTrusted) nativeInputBegin();
             /* Keyboard scrolling animates too, and a follower's next streaming
                commit would write the end and cancel it: like an upward wheel,
                an upward key hands the position to the reader before it moves. */
