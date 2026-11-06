@@ -239,11 +239,10 @@
     align-items: center;
 }
 
-.happy-agent-input__submit-label::after {
+.happy-agent-input__submit-reserve {
     height: 0;
     overflow: hidden;
     visibility: hidden;
-    content: attr(data-reserve);
 }
 
 .happy-agent-input__footer {
