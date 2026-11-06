@@ -64,7 +64,7 @@ export default defineConfig({
                 },
             },
             enabled: true,
-            headless: true,
+            headless: process.env.HAPPY_SCROLL_REPRO_HEADED !== "1",
             instances: browsers.map((browser) => ({ browser })),
             provider: playwright({
                 launchOptions: {
