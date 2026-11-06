@@ -249,7 +249,7 @@ for (const mode of ["parked-artifact-above", "parked-artifact-below", "following
             if (mode !== "following") {
                 const view = viewport.getBoundingClientRect();
                 const box = content.getBoundingClientRect();
-                const targetTop = mode === "parked-artifact-above" ? -850 : view.height + 50;
+                const targetTop = mode === "parked-artifact-above" ? -700 : view.height + 50;
                 viewport.scrollTop += box.top - view.top - targetTop + 100;
                 await delay(150);
                 await commands.scrollReproWheel(-100 * devicePixelRatio, 1);
