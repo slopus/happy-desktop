@@ -5,9 +5,9 @@ import { Sidebar, SIDEBAR_SLOT_CELL, type SidebarSection } from "./Sidebar";
 import { createRenderer } from "./testing";
 
 /*
- * A row's unread mark is a red dot centred on the top corner of its own mark,
- * mirroring the folded count centred on the bottom one. A mention is a disc of
- * exactly the folded count's diameter on the same centre. It never carries a
+ * A row's unread mark is a red dot centred on the top-right pixel of its photo,
+ * mirroring the folded count centred on the bottom-right one. A mention is a
+ * blue disc of exactly the folded count's diameter on the same centre. It never carries a
  * number and never touches the trailing lane; a row with no mark of its own
  * wears it in the spinner's cell instead.
  */
@@ -96,49 +96,89 @@ const mark = (id: string, part: string) =>
         `[data-testid="unread"] [data-item-id="${id}"] [data-happy-desktop-ui="${part}"]`,
     );
 
-const centre = (rect: DOMRect) => ({
-    x: rect.left + rect.width / 2,
-    y: rect.top + rect.height / 2,
-});
+const element = (id: string, selector: string) =>
+    document.querySelector<HTMLElement>(
+        `[data-testid="unread"] [data-item-id="${id}"] ${selector}`,
+    )!;
 
-it("mirrors the unread mark and the folded count across the mark's corners at one diameter", async () => {
+const ratioVariable = () =>
+    getComputedStyle(document.querySelector('[data-testid="unread"]')!).getPropertyValue(
+        "--happy-device-pixel",
+    );
+
+/** Sets the window's device pixel ratio, as page zoom or another screen would. */
+const withRatio = async (ratio: number) => {
+    Object.defineProperty(window, "devicePixelRatio", { configurable: true, value: ratio });
+    window.dispatchEvent(new Event("resize"));
+    await expect.poll(ratioVariable).toBe(`${1 / ratio}px`);
+};
+
+const near = (actual: number, expected: number) =>
+    expect(Math.abs(actual - expected)).toBeLessThan(0.1);
+
+it("centres each corner badge on the photo's corner pixel, in device pixels at every ratio", async () => {
     const view = render();
     await view.ready();
-    const leading = mark("folded", "sidebar-item-leading")!.getBoundingClientRect();
-    const mention = mark("folded", "sidebar-item-unread")!.getBoundingClientRect();
-    const count = document
-        .querySelector<HTMLElement>(
-            '[data-testid="unread"] [data-item-id="folded"] .happy-sidebar__item-folded',
-        )!
-        .getBoundingClientRect();
-    const top = centre(mention);
-    const bottom = centre(count);
-    // Both centres on the mark box's right edge, one on each corner.
-    expect(top.x).toBe(leading.right);
-    expect(bottom.x).toBe(leading.right);
-    expect(top.y).toBe(leading.top);
-    expect(bottom.y).toBe(leading.bottom);
-    // Mirrored about the mark's midline.
-    const midline = leading.top + leading.height / 2;
-    expect(midline - top.y).toBe(bottom.y - midline);
-    // One diameter, a circle each, with the same ring.
-    expect(count.width).toBe(count.height);
-    expect(mention.width).toBe(mention.height);
-    expect(mention.width).toBe(count.width);
-    const ring = (selector: string) =>
-        getComputedStyle(
-            document.querySelector(`[data-testid="unread"] [data-item-id="folded"] ${selector}`)!,
-        ).borderTopWidth;
-    expect(ring(".happy-sidebar__item-unread")).toBe(ring(".happy-sidebar__item-folded"));
-    // The plain dot is smaller, on the same centre.
-    for (const id of ["unread"]) {
-        const dot = mark(id, "sidebar-item-unread")!.getBoundingClientRect();
-        const lead = mark(id, "sidebar-item-leading")!.getBoundingClientRect();
-        expect(dot.width).toBeLessThan(mention.width);
-        expect(centre(dot).x).toBe(lead.right);
-        expect(centre(dot).y).toBe(lead.top);
+    const own = Object.getOwnPropertyDescriptor(window, "devicePixelRatio");
+    const real = devicePixelRatio;
+    try {
+        for (const ratio of [1, 1.25, 1.5, 2, 2.5, 3]) {
+            await withRatio(ratio);
+            const photo = element("folded", ".happy-avatar").getBoundingClientRect();
+            // Layout keeps 1/64 (Chromium) or 1/60 (Gecko) of a CSS pixel, so a
+            // tenth of a device pixel is the tolerance; the rendered pixels are
+            // measured exactly by the sheet.
+            // The photo's last pixel column and its top and bottom rows, counted
+            // from its first device pixel; a disc is centred on a pixel's middle.
+            const last = Math.round(photo.width * ratio) - 1 + 0.5;
+            const first = 0.5;
+            const at = (rect: DOMRect) => ({
+                x: (rect.left - photo.left) * ratio + (rect.width * ratio) / 2,
+                y: (rect.top - photo.top) * ratio + (rect.height * ratio) / 2,
+                diameter: rect.width * ratio,
+            });
+            const mention = at(
+                element(
+                    "folded",
+                    '[data-happy-desktop-ui="sidebar-item-unread"]',
+                ).getBoundingClientRect(),
+            );
+            const count = at(
+                element("folded", ".happy-sidebar__item-folded").getBoundingClientRect(),
+            );
+            const dot = at(
+                element(
+                    "unread",
+                    '[data-happy-desktop-ui="sidebar-item-unread"]',
+                ).getBoundingClientRect(),
+            );
+            const dotPhoto = element("unread", ".happy-avatar").getBoundingClientRect();
+            near(mention.x, last);
+            near(mention.y, first);
+            near(count.x, last);
+            near(count.y, last);
+            // The dot shares the rule, on its own row's photo.
+            near(dot.x - (dotPhoto.left - photo.left) * ratio, last);
+            // One diameter for both badges, an odd whole number of device pixels,
+            // so the centre is a pixel; the plain dot is smaller and odd too.
+            near(mention.diameter, count.diameter);
+            for (const diameter of [mention.diameter, dot.diameter]) {
+                near(diameter % 2, 1);
+            }
+            expect(dot.diameter).toBeLessThan(mention.diameter);
+            expect(
+                getComputedStyle(element("folded", ".happy-sidebar__item-unread")).borderTopWidth,
+            ).toBe(
+                getComputedStyle(element("folded", ".happy-sidebar__item-folded")).borderTopWidth,
+            );
+        }
+    } finally {
+        if (own) Object.defineProperty(window, "devicePixelRatio", own);
+        else Reflect.deleteProperty(window, "devicePixelRatio");
+        window.dispatchEvent(new Event("resize"));
+        await expect.poll(ratioVariable).toBe(`${1 / real}px`);
     }
-    expect(mark("folded", "sidebar-item-unread")!.textContent).toBe("");
+    expect(element("folded", '[data-happy-desktop-ui="sidebar-item-unread"]').textContent).toBe("");
     expect(mark("folded", "sidebar-item-trailing")).toBeNull();
     expect(
         document.querySelector('[data-happy-desktop-ui="sidebar-item-unread-count"]'),

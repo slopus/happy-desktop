@@ -1,5 +1,6 @@
 import { Avatar } from "./Avatar";
-import { useRef, useSyncExternalStore } from "react";
+import { useRef } from "react";
+import { useDevicePixelRatio } from "./devicePixelRatio";
 import { Ionicon } from "./vectorIcons/VectorIcon";
 import { StoryPosterFace, type StoryFace } from "./StoryViewer";
 
@@ -18,12 +19,6 @@ export type StoriesRowItem = {
     readonly seen?: number;
 };
 
-/** Page zoom and a move to a screen of another scale both fire a resize: the ratio is read again. */
-function pixelRatioSubscribe(change: () => void) {
-    addEventListener("resize", change);
-    return () => removeEventListener("resize", change);
-}
-
 /**
  * A story ring around a photo `size` square with corner `radius`, drawn past its box: one
  * round-capped arc per live story, clockwise from the top, the watched first, faint and thin, and
@@ -41,7 +36,7 @@ export function StoryRing(props: {
     const seen = props.state === "seen" ? total : (props.seen ?? 0);
     // 1px off the photo in whole device pixels at every zoom, then 2px while anything is new or
     // 1px once all is watched; the extra pixel grows outward, so the photo's gap never changes.
-    const ratio = useSyncExternalStore(pixelRatioSubscribe, () => devicePixelRatio);
+    const ratio = useDevicePixelRatio();
     const pixel = Math.max(1, Math.round(ratio)) / ratio;
     const stroke = seen < total ? 2 * pixel : pixel;
     const inset = pixel + stroke / 2;

@@ -35,6 +35,7 @@ import { Tooltip } from "./Tooltip";
 import { type ImageMark } from "./imageMark";
 import { ScrollArea } from "./Scrollbar";
 import { StoryRing } from "./StoriesRow";
+import { useDevicePixelRatio } from "./devicePixelRatio";
 import { SidebarSectionContext, SidebarSectionTail } from "./SidebarSectionDetails";
 import { sidebarSectionsReuser } from "./sidebarSectionsReuser";
 /** One control on a row: its glyph, what it does, and when it shows. */
@@ -4119,6 +4120,8 @@ export function Sidebar(props: SidebarProps) {
                         .map((item) => item.id),
           )
         : [];
+    // The corner badges are placed in whole device pixels; see sidebar.css.
+    const devicePixel = 1 / useDevicePixelRatio();
     const tabStop =
         tabStopFocus !== undefined &&
         tabStopFocus.activeItemId === local.activeItemId &&
@@ -4137,7 +4140,12 @@ export function Sidebar(props: SidebarProps) {
             data-fold-control-reveal={local.foldControlReveal}
             data-happy-desktop-ui="sidebar"
             data-scrolled={scrolled ? "" : undefined}
-            style={local.style}
+            style={
+                {
+                    "--happy-device-pixel": `${devicePixel}px`,
+                    ...local.style,
+                } as CSSProperties
+            }
         >
             <header className="happy-sidebar__header" data-happy-desktop-ui="sidebar-header">
                 {local.onBack ? (

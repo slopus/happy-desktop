@@ -14,8 +14,21 @@
     --happy-surface-header-height: 56px;
     --happy-surface-footer-height: 40px;
     --happy-sidebar-floor: 226px;
-    /* One diameter for the badges on a mark's corners. */
-    --happy-sidebar-corner-badge: 12px;
+    /* The window's device pixel, set by the sidebar from devicePixelRatio,
+       and the corner badges' sizes counted in it; see the badges below. The
+       hundredth of a pixel keeps a ratio such as 1.25, where 4px is exactly
+       five device pixels, from rounding down a whole one in floating point. */
+    --happy-device-pixel: 1px;
+    --happy-sidebar-corner-badge: calc(
+        2 * round(down, 6.01px, var(--happy-device-pixel)) + var(--happy-device-pixel)
+    );
+    --happy-sidebar-corner-dot: calc(
+        2 * round(down, 4.01px, var(--happy-device-pixel)) + var(--happy-device-pixel)
+    );
+    --happy-sidebar-corner-ring: max(
+        var(--happy-device-pixel),
+        round(down, 1.01px, var(--happy-device-pixel))
+    );
     display: flex;
     flex: none;
     flex-direction: column;
@@ -1248,6 +1261,7 @@
     height: var(--happy-sidebar-corner-badge);
     padding: 0 2px;
     border: 1px solid var(--surface);
+    border-width: var(--happy-sidebar-corner-ring);
     border-radius: var(--happy-radius-pill);
     background: var(--input-background);
     color: var(--text-secondary);
@@ -1552,15 +1566,15 @@
 
 /*
  * Whether a row has news for the reader: a red dot on the top corner of the
- * row's mark. A mention is the folded count's own disc, in the mention's
- * colour. Neither carries a number: the only number on a row is what a fold
- * hides.
+ * row's mark. A mention is a blue disc the folded count's size. Neither
+ * carries a number: the only number on a row is what a fold hides.
  */
 .happy-sidebar__item-unread {
     box-sizing: border-box;
-    width: 8px;
-    height: 8px;
+    width: var(--happy-sidebar-corner-dot);
+    height: var(--happy-sidebar-corner-dot);
     border: 1px solid var(--surface);
+    border-width: var(--happy-sidebar-corner-ring);
     border-radius: var(--happy-radius-pill);
     background: var(--status-error);
     pointer-events: none;
@@ -1573,28 +1587,44 @@
 }
 
 /*
- * The two corner badges are centred on the corners of the mark's box — the
- * unread mark on the top one, the folded count on the bottom one — so the
- * mark's edge runs through the middle of each, and the pair mirror each other
- * about the mark's midline. One diameter for both; the plain dot is smaller
- * and shares its centre. The box's corner rather than the rounded corner's
- * curve, so a square glyph and a rounded photo place them alike. Every size
- * is even, so each centre lands on a whole pixel. The diameter is set on the
- * sidebar so a count on a branch box takes it too.
+ * The corner badges are centred on the mark's outermost pixels: the unread
+ * mark on its top-right pixel, the folded count on its bottom-right one. The
+ * straight edges are extended past the rounded corners, so a square glyph and
+ * a rounded photo place them alike.
+ *
+ * Centred on a pixel, a disc must be an odd number of device pixels across,
+ * so every size and offset here is counted in device pixels: twice a whole
+ * number of them plus the centre one. Offsets in whole device pixels from the
+ * mark also mean the badge and the photo snap to the grid the same way, at any
+ * ratio or page zoom, so neither edge smears.
  */
 .happy-sidebar__item-leading > .happy-sidebar__item-unread,
 .happy-sidebar__item-leading > .happy-sidebar__item-folded {
     position: absolute;
-    left: 100%;
-    transform: translate(-50%, -50%);
+    --happy-sidebar-corner-half: calc(
+        (var(--happy-sidebar-corner-size) - var(--happy-device-pixel)) / 2
+    );
+    left: calc(
+        round(nearest, 100%, var(--happy-device-pixel)) - var(--happy-device-pixel) -
+            var(--happy-sidebar-corner-half)
+    );
 }
 
 .happy-sidebar__item-leading > .happy-sidebar__item-unread {
-    top: 0;
+    --happy-sidebar-corner-size: var(--happy-sidebar-corner-dot);
+    top: calc(0px - var(--happy-sidebar-corner-half));
+}
+
+.happy-sidebar__item-leading > .happy-sidebar__item-unread[data-mentioned],
+.happy-sidebar__item-leading > .happy-sidebar__item-folded {
+    --happy-sidebar-corner-size: var(--happy-sidebar-corner-badge);
 }
 
 .happy-sidebar__item-leading > .happy-sidebar__item-folded {
-    top: 100%;
+    top: calc(
+        round(nearest, 100%, var(--happy-device-pixel)) - var(--happy-device-pixel) -
+            var(--happy-sidebar-corner-half)
+    );
 }
 
 /* A row with no mark of its own: the activity spinner's cell at the trailing

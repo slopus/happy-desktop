@@ -4,8 +4,8 @@ import { ThemeScope } from "../../src/ThemeScope";
 /**
  * A review sheet, not a specimen: the real sidebar, light and dark, with the
  * red unread dot on the top corner of each row's mark, mirrored by the folded
- * count on the bottom one, and the mention badge drawn each way being weighed
- * for it. "Blue" is what the sidebar draws; the other two restyle it here.
+ * count on the bottom one, and the blue mention badge at the two sizes being
+ * weighed. The large one is what the sidebar draws.
  */
 export const componentNumber = "B-003";
 
@@ -135,32 +135,16 @@ function sections(): SidebarSection[] {
 }
 
 const VARIANTS: readonly { readonly id: string; readonly title: string }[] = [
-    { id: "red", title: "A. Big red" },
-    { id: "blue", title: "B. Blue, no glyph" },
-    { id: "at", title: "C. Blue with @" },
+    { id: "large", title: "Blue, the folded count's size" },
+    { id: "small", title: "Blue, the red dot's size" },
 ];
 
-/* A and C restyle the mention badge on this sheet only. C's `@` is the folded
-   count's own type. Its ink hangs 0.675px below its line box's centre, the
-   descender of the bowl, so it is raised by the nearest device pixel. */
+/* The small variant restyles the mention badge on this sheet only. */
 const VARIANT_STYLES = `
-[data-badge-variant="red"] .happy-sidebar__item-unread[data-mentioned] {
-    background: var(--status-error);
-}
-[data-badge-variant="at"] .happy-sidebar__item-unread[data-mentioned] {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #ffffff;
-    font-family: var(--happy-font-mono);
-    font-size: 8.5px;
-    font-weight: 700;
-    line-height: 1;
-    font-synthesis: none;
-}
-[data-badge-variant="at"] .happy-sidebar__item-unread[data-mentioned]::after {
-    content: "@";
-    transform: translateY(-0.5px);
+[data-badge-variant="small"] .happy-sidebar__item-leading > .happy-sidebar__item-unread[data-mentioned] {
+    --happy-sidebar-corner-size: var(--happy-sidebar-corner-dot);
+    width: var(--happy-sidebar-corner-dot);
+    height: var(--happy-sidebar-corner-dot);
 }
 `;
 
