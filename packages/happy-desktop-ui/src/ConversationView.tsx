@@ -1,4 +1,11 @@
-import { type CSSProperties, type ReactNode, useRef, useState, useSyncExternalStore } from "react";
+import {
+    type CSSProperties,
+    memo,
+    type ReactNode,
+    useRef,
+    useState,
+    useSyncExternalStore,
+} from "react";
 import type { FileLinkOpenHandler, FileOpenHandler } from "./fileReference";
 import {
     MarkdownLayoutCacheContext,
@@ -486,6 +493,17 @@ function conversationRowClassName(
     return classNames.length === 0 ? undefined : classNames.join(" ");
 }
 
+/** A queued message's row carries its own class beside the row's others. */
+function conversationRowClassNameQueued(
+    className: string | undefined,
+    queued: boolean,
+): string | undefined {
+    if (!queued) return className;
+    return className === undefined
+        ? "happy-conversation__queued"
+        : `${className} happy-conversation__queued`;
+}
+
 /**
  * Splits off the queued steering waiting at the end of the transcript.
  *
@@ -673,11 +691,18 @@ export function ConversationView(props: ConversationViewProps) {
     };
     const messageExpanded = (entry: Extract<ConversationEntry, { kind: "message" }>) =>
         props.expandedMessageIds?.has(entry.message.id) ?? rowExpanded(entry);
+    // Read out of `props` so the handler below, which every memoized row
+    // receives, depends on this one callback rather than on the props object.
+    const onMessageExpandedChange = props.onMessageExpandedChange;
     const messageExpandedChange = (entry: ConversationEntry, expanded: boolean) => {
-        if (entry.kind === "message" && props.onMessageExpandedChange)
-            props.onMessageExpandedChange(entry.message.id, expanded);
+        if (entry.kind === "message" && onMessageExpandedChange)
+            onMessageExpandedChange(entry.message.id, expanded);
         else rowExpandedChange(entry, expanded);
     };
+    const entryExpandedChange = (entry: ConversationEntry, expanded: boolean) =>
+        entry.kind === "message"
+            ? messageExpandedChange(entry, expanded)
+            : rowExpandedChange(entry, expanded);
     const rowHeightCache = conversationRowHeightCacheGet(conversationCacheKey);
     conversationRowHeightCachePrune(rowHeightCache, props.entries);
     /* With no turn running, a send waiting on the daemon is next to nothing:
@@ -1227,7 +1252,7 @@ export function ConversationView(props: ConversationViewProps) {
                                     : undefined;
                             const inlinePage = inlinePageOf(entry);
                             return (
-                                <ConversationEntryView
+                                <ConversationRow
                                     /* The key leads the spread props below so React
                                    takes its direct element path for each of the
                                    transcript's rows instead of copying props. */
@@ -1251,21 +1276,15 @@ export function ConversationView(props: ConversationViewProps) {
                                             ? props.agentAuthor
                                             : undefined
                                     }
-                                    className={
-                                        [
-                                            conversationRowClassName(
-                                                source,
-                                                index,
-                                                index < transcript.length && statusVisible,
-                                                props.viewerId,
-                                            ),
-                                            index >= transcript.length
-                                                ? "happy-conversation__queued"
-                                                : undefined,
-                                        ]
-                                            .filter(Boolean)
-                                            .join(" ") || undefined
-                                    }
+                                    className={conversationRowClassNameQueued(
+                                        conversationRowClassName(
+                                            source,
+                                            index,
+                                            index < transcript.length && statusVisible,
+                                            props.viewerId,
+                                        ),
+                                        index >= transcript.length,
+                                    )}
                                     entry={entry}
                                     grouped={
                                         entry.kind === "message"
@@ -1277,11 +1296,7 @@ export function ConversationView(props: ConversationViewProps) {
                                     onStoryOpen={props.onStoryOpen}
                                     onRequestAnswer={props.onRequestAnswer}
                                     onRequestSelectionChange={props.onRequestSelectionChange}
-                                    onRowExpandedChange={(expanded) =>
-                                        entry.kind === "message"
-                                            ? messageExpandedChange(entry, expanded)
-                                            : rowExpandedChange(entry, expanded)
-                                    }
+                                    onEntryExpandedChange={entryExpandedChange}
                                     messageExpanded={
                                         entry.kind === "message" &&
                                         entry.message.sender?.kind === "human"
@@ -1302,7 +1317,7 @@ export function ConversationView(props: ConversationViewProps) {
                                     )}
                                     {...placedOf(entry)}
                                     onDelegationSelect={props.onDelegationSelect}
-                                    now={props.now}
+                                    now={conversationEntryReadsNow(entry) ? props.now : undefined}
                                     {...(props.onFileOpen ? { onFileOpen: props.onFileOpen } : {})}
                                     {...(props.onFileLinkOpen
                                         ? { onFileLinkOpen: props.onFileLinkOpen }
@@ -1345,6 +1360,37 @@ export function ConversationView(props: ConversationViewProps) {
 
             {props.overlay ? <WindowOverlay>{props.overlay}</WindowOverlay> : null}
         </section>
+    );
+}
+
+/**
+ * One transcript row, memoized: a streamed delta, a status change, or the
+ * clock's tick re-renders the rows whose props changed rather than every row
+ * on screen (measured: about twenty rows and their Markdown on each delta
+ * without it). The contract is that every prop a row receives is its own
+ * entry, a value derived from that entry, or a value that stays the same
+ * across renders — so the row's expansion handler takes the entry, and the
+ * clock reaches only the rows that read it.
+ */
+const ConversationRow = memo(function ConversationRow(
+    props: Omit<ConversationEntryViewProps, "onRowExpandedChange"> & {
+        readonly onEntryExpandedChange: (entry: ConversationEntry, expanded: boolean) => void;
+    },
+) {
+    const { onEntryExpandedChange, ...entryProps } = props;
+    return (
+        <ConversationEntryView
+            {...entryProps}
+            onRowExpandedChange={(expanded) => onEntryExpandedChange(props.entry, expanded)}
+        />
+    );
+});
+
+/** The rows that draw something from the current time: a delegated agent's clock, a story quote's expiry. */
+function conversationEntryReadsNow(entry: ConversationEntry): boolean {
+    return (
+        entry.kind === "delegation" ||
+        (entry.kind === "message" && entry.message.storyQuote !== undefined)
     );
 }
 
