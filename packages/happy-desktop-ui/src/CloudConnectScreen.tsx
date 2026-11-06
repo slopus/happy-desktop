@@ -160,7 +160,7 @@ function CloudConnectServerImage(props: {
  * Esc returns to the app from every state. Props only.
  */
 export function CloudConnectScreen(props: CloudConnectScreenProps) {
-    const { view } = props;
+    const { view, onClose } = props;
     const frame = {
         backdrop: { appearance: props.appearance, kind: "sky" },
         className: "happy-cloud-connect",
@@ -177,10 +177,18 @@ export function CloudConnectScreen(props: CloudConnectScreenProps) {
         <div
             className="happy-cloud-connect__window"
             data-happy-desktop-ui="cloud-connect-screen"
-            onKeyDown={(event) => {
-                if (event.key !== "Escape" || event.defaultPrevented) return;
-                event.preventDefault();
-                props.onClose();
+            // Esc leaves from every state, wherever focus is: a waiting step
+            // has nothing focused inside the screen to hear the key.
+            ref={(element) => {
+                if (!element) return;
+                const document = element.ownerDocument;
+                const keyDown = (event: KeyboardEvent) => {
+                    if (event.key !== "Escape" || event.defaultPrevented) return;
+                    event.preventDefault();
+                    onClose();
+                };
+                document.addEventListener("keydown", keyDown);
+                return () => document.removeEventListener("keydown", keyDown);
             }}
             role="dialog"
             aria-modal="true"
