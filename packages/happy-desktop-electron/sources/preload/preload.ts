@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer, webUtils } from "electron";
 import {
     buildIdentityArgument,
     debugMetricsArgument,
+    happyCloudArgument,
     desktopIpc,
     mediaPreviewArgument,
     liveWindowArgument,
@@ -73,6 +74,7 @@ const bridge: HappyDesktopBridge = {
     liveMicrophoneStart: (input) => ipcRenderer.invoke(desktopIpc.liveMicrophoneStart, input),
     liveMicrophoneRevoke: () => ipcRenderer.invoke(desktopIpc.liveMicrophoneRevoke),
     ...(identity ? { buildIdentity: identity } : {}),
+    ...(process.argv.includes(happyCloudArgument) ? { happyCloud: true as const } : {}),
     system: systemRead(),
     debugMetricsEnabled,
     appearanceSet: (mode) => ipcRenderer.send(desktopIpc.appearanceSet, mode),

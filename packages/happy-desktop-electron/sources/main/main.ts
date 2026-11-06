@@ -19,7 +19,7 @@ import {
     type WebContents,
 } from "electron";
 import { existsSync } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -28,6 +28,7 @@ import { desktopQuitListen } from "./desktopQuit";
 import { happyAgentDaemonPathsResolve } from "./happyAgentDaemonClient";
 import { HappyAgentDaemonClient } from "./happyAgentDaemonClient";
 import { ServerSessionError, serverSessionsCreate } from "./serverSessions";
+import { HAPPY_CLOUD_CONNECTION_ID, HAPPY_CLOUD_URL } from "../shared/happyCloud";
 import { browserPermissionsInstall } from "./browserPermissions";
 import { BrowserPasswords } from "./browserPasswords";
 import { browserPasswordGuestAttach } from "./browserPasswordGuest";
@@ -54,6 +55,7 @@ import {
 import {
     buildIdentityArgument,
     debugMetricsArgument,
+    happyCloudArgument,
     desktopIpc,
     happyArtifactPartition,
     happyHtmlPreviewPartition,
@@ -475,8 +477,32 @@ const serverOAuthRedirect = new URL(serverOAuthRedirectUri);
  * a team-server token: the isolated transport and main's own daemon clients
  * add each one to requests through the host Happy Agent.
  */
+/**
+ * Happy Cloud, which this app signs in to and talks to itself, never through
+ * the host Happy Agent. Only builds that are not production offer it: a
+ * development checkout and the Nightly flavor. Whether the person added it is
+ * one marker file in this app's data; its tokens stay in memory like every
+ * team server's.
+ */
+const happyCloudListedPath = join(app.getPath("userData"), "happy-cloud-listed");
+let happyCloudListed = existsSync(happyCloudListedPath);
+const happyCloudDirect =
+    buildIdentity !== undefined || desktopFlavor.kind === "local-web"
+        ? {
+              connectionId: HAPPY_CLOUD_CONNECTION_ID,
+              serverUrl: HAPPY_CLOUD_URL,
+              listed: () => happyCloudListed,
+              listedSave() {
+                  happyCloudListed = true;
+                  void writeFile(happyCloudListedPath, "").catch((error: unknown) =>
+                      console.error("Happy Cloud could not be remembered.", error),
+                  );
+              },
+          }
+        : undefined;
 const serverSessions = serverSessionsCreate({
     roster: () => runtime.serverRoster(),
+    ...(happyCloudDirect ? { direct: happyCloudDirect } : {}),
     fetch: (input, init) => net.fetch(input instanceof URL ? input.href : input, init),
     async browserOpen(url) {
         await shell.openExternal(url);
@@ -1231,6 +1257,7 @@ function localWindowCreate(bounds?: DesktopWindowBounds) {
                     ? [`${buildIdentityArgument}${JSON.stringify(buildIdentity)}`]
                     : []),
                 ...(desktopDebugEnabled ? [debugMetricsArgument] : []),
+                ...(happyCloudDirect ? [happyCloudArgument] : []),
             ],
             contextIsolation: true,
             nodeIntegration: false,

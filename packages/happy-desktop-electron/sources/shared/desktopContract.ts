@@ -469,6 +469,9 @@ export interface DesktopBuildIdentity {
 /** Launch argument prefix carrying `DesktopBuildIdentity` JSON into the preload. */
 export const buildIdentityArgument = "--happy-build-identity=";
 
+/** Launch argument saying this shell signs in to and talks to Happy Cloud itself. */
+export const happyCloudArgument = "--happy-cloud";
+
 /** Main chooses this identity before the application document exists. */
 export const liveWindowArgument = "--happy-live-window=";
 
@@ -830,6 +833,11 @@ export interface HappyDesktopBridge {
      * whole life: the shell has it before the first frame and it never changes.
      */
     readonly buildIdentity?: DesktopBuildIdentity;
+    /**
+     * This shell reaches Happy Cloud directly, without the host Happy Agent.
+     * Absent from production builds and from shells older than this field.
+     */
+    readonly happyCloud?: true;
     /** The machine the shell runs on. Absent from shells older than this field. */
     readonly system?: DesktopSystem;
     /**

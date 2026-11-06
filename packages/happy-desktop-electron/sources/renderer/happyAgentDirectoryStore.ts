@@ -1,8 +1,5 @@
-import type { ConnectionListResponse } from "@slopus/happy-agent-client";
 import {
-    HappyAgentApiError,
     HappyAgentClient,
-    UserError,
     happyAgentConnectionsStoreCreate,
     happyAgentNodeStoreCreate,
     happyAgentUserError,
@@ -154,11 +151,10 @@ export interface HappyAgentDirectoryStore {
     /** Stops a remote's sign-in whose browser is open; present with `happyAgentSignIn`. */
     happyAgentSignInCancel?(id: string): void;
     /**
-     * Has the host add a team server by address unless it already lists it,
-     * shows that server, and opens its sign-in when the shell holds none.
-     * Rejects with a displayable `UserError`; present with `happyAgentSignIn`.
+     * Lists Happy Cloud, shows it, and opens its sign-in when the shell holds
+     * none. Present only when the shell reaches Happy Cloud itself.
      */
-    happyAgentServerConnect?(url: string, name: string): Promise<void>;
+    happyAgentCloudConnect?(): void;
 }
 
 export interface HappyAgentDirectoryDeps {
@@ -173,6 +169,12 @@ export interface HappyAgentDirectoryDeps {
      * shell holds no sign-in for wants one, whatever its connection is doing.
      */
     readonly serverSessions?: ServerSessionsStore;
+    /**
+     * Happy Cloud, which the shell signs in to and talks to itself rather than
+     * through the host Happy Agent. It is listed while the shell reports a
+     * sign-in state for it. Absent where the shell does not offer it.
+     */
+    readonly cloud?: HappyAgentConnectionItem & { readonly remoteId: string };
     readonly conversationOpen: (happyAgentId: string, location: HappyAgentSessionLocation) => void;
     readonly groupOpen: (happyAgentId: string, groupId: string) => void;
     /**
@@ -401,6 +403,8 @@ export function happyAgentDirectoryStoreCreate(
     let browserOpenUnsubscribe: (() => void) | undefined;
     const remotes = new Map<string, LocalHappyAgent>();
     let roster: HappyAgentConnectionsStore | undefined;
+    // Happy Cloud was asked for in this window, before the shell has listed it.
+    let cloudWanted = false;
     let rosterUnsubscribe: (() => void) | undefined;
     let sessionsUnsubscribe: (() => void) | undefined;
 
@@ -549,6 +553,8 @@ export function happyAgentDirectoryStoreCreate(
     const sessionsReconcile = (): void => {
         const sessions = deps.serverSessions?.get();
         if (!sessions?.loaded) return;
+        if (deps.cloud && (cloudWanted || sessions.sessions.has(deps.cloud.remoteId)))
+            roster?.connectionDirectSet(deps.cloud);
         for (const remote of remotes.values()) {
             if (remote.entry.serverUrl === undefined || remote.entry.remoteId === undefined)
                 continue;
@@ -881,31 +887,6 @@ export function happyAgentDirectoryStoreCreate(
                 client,
                 happyAgent.connection!.sync,
                 connectionsPersistence,
-                // The client has no method for this route yet, so it is asked directly.
-                async (request, signal) => {
-                    const response = await fetch(`${base}/v0/connections/servers`, {
-                        method: "POST",
-                        headers: {
-                            accept: "application/json",
-                            authorization: "Bearer happy-local-capability",
-                            "content-type": "application/json; charset=utf-8",
-                        },
-                        body: JSON.stringify(request),
-                        redirect: "manual",
-                        signal,
-                    });
-                    const body: unknown = await response.json().catch(() => null);
-                    if (response.ok) return body as ConnectionListResponse;
-                    const failure = (body ?? {}) as { error?: unknown; code?: unknown };
-                    throw new HappyAgentApiError(
-                        response.status,
-                        typeof failure.error === "string" && failure.error.length > 0
-                            ? failure.error
-                            : `The Happy Agent on this computer answered ${String(response.status)}.`,
-                        typeof failure.code === "string" ? failure.code : null,
-                        null,
-                    );
-                },
             );
             const rosterReconcile = (): void => {
                 const membership = roster!.get();
@@ -1043,25 +1024,29 @@ export function happyAgentDirectoryStoreCreate(
                       const remote = remotes.get(id);
                       if (remote) signInCancel(remote);
                   },
-                  async happyAgentServerConnect(url: string, name: string) {
-                      if (!roster)
-                          throw new UserError(
-                              "The Happy Agent on this computer isn't connected. Try again once it is.",
-                          );
-                      const id = await roster.connectionServerAdd(url, name);
-                      roster.connectionSelect(id);
-                      const remote = remotes.get(id);
-                      const remoteId = remote?.entry.remoteId;
-                      if (!remote || remoteId === undefined || !deps.servers) return;
-                      if (deps.serverSessions?.get().sessions.get(remoteId)?.state === "signedIn")
-                          return;
-                      if (!remote.entry.signIn)
-                          signInRequire(remote, {
-                              message: "Sign in to this server to use it.",
-                              first: true,
-                          });
-                      signIn(remote, deps.servers);
-                  },
+                  ...(deps.cloud
+                      ? {
+                            happyAgentCloudConnect() {
+                                const cloud = deps.cloud!;
+                                cloudWanted = true;
+                                roster?.connectionDirectSet(cloud);
+                                roster?.connectionSelect(cloud.id);
+                                const remote = remotes.get(cloud.id);
+                                if (!remote || !deps.servers) return;
+                                if (
+                                    deps.serverSessions?.get().sessions.get(cloud.remoteId)
+                                        ?.state === "signedIn"
+                                )
+                                    return;
+                                if (!remote.entry.signIn)
+                                    signInRequire(remote, {
+                                        message: "Sign in to Happy Cloud to use it.",
+                                        first: true,
+                                    });
+                                signIn(remote, deps.servers);
+                            },
+                        }
+                      : {}),
               }
             : {}),
     };

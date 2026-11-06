@@ -11,6 +11,8 @@ import {
 } from "../main/happyAgentDaemonClient";
 import type { ServerRemoteCredential } from "../shared/serverRemoteAuthorization";
 import { happyAgentProxyHandle } from "../main/happyAgentProxyHandle";
+import { happyCloudForward, happyCloudPathIs } from "../main/happyCloudForward";
+import { HAPPY_CLOUD_CONNECTION_ID } from "../shared/happyCloud";
 import { happyAgentRendererProxyCreate } from "../main/happyAgentRendererProxy";
 import { happyAgentRequestTimingCreate } from "../main/happyAgentRequestTiming";
 import {
@@ -253,6 +255,15 @@ export async function happyAgentRendererUtilityServerCreate(
                                 "access-control-max-age": "600",
                             })
                             .end();
+                        return;
+                    }
+                    if (happyCloudPathIs(path)) {
+                        happyCloudForward(
+                            request,
+                            response,
+                            url,
+                            remoteTokens[HAPPY_CLOUD_CONNECTION_ID],
+                        );
                         return;
                     }
                     const onTiming = happyAgentRequestTimingCreate(response, debug);

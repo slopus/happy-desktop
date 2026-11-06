@@ -1,9 +1,4 @@
-import {
-    HappyAgentApiError,
-    type ConnectionListResponse,
-    type HappyAgentClient,
-} from "@slopus/happy-agent-client";
-import { UserError } from "../types.js";
+import type { ConnectionListResponse, HappyAgentClient } from "@slopus/happy-agent-client";
 import type { HappyAgentSync } from "../happyAgentConnection/happyAgentSync.js";
 import { happyAgentSyncRead } from "../happyAgentConnection/happyAgentSyncRead.js";
 
@@ -42,19 +37,13 @@ export interface HappyAgentConnectionsStore {
     connectionSelect(id: string): void;
     connectionReorder(id: string, afterId: string | null): void;
     /**
-     * Asks the host to add a server connection by address and resolves with its
-     * item ID once the roster lists it, or with the existing one's when the host
-     * already lists that address. Rejects with a displayable `UserError`.
+     * A connection this app reaches itself, not through the host, listed after
+     * the host's: Happy Cloud. Its owner says whether it is there; `undefined`
+     * takes it away.
      */
-    connectionServerAdd(url: string, name: string): Promise<string>;
+    connectionDirectSet(item: HappyAgentConnectionItem | undefined): void;
     [Symbol.dispose](): void;
 }
-
-/** `POST /v0/connections/servers`: the host adds a server connection and answers its roster. */
-export type HappyAgentConnectionServerAdd = (
-    request: { readonly url: string; readonly name: string },
-    signal: AbortSignal,
-) => Promise<ConnectionListResponse>;
 
 /**
  * The main daemon owns membership; connectivity never removes a known UI. Until the daemon
@@ -65,7 +54,6 @@ export function happyAgentConnectionsStoreCreate(
     client: HappyAgentClient,
     sync: HappyAgentSync,
     persistence?: HappyAgentConnectionsPersistence,
-    serverAdd?: HappyAgentConnectionServerAdd,
 ): HappyAgentConnectionsStore {
     const remembered = (persistence?.read() ?? []).filter(
         (item) => item.remoteId !== undefined && item.id === `connection:${item.remoteId}`,
@@ -86,6 +74,14 @@ export function happyAgentConnectionsStoreCreate(
     let version: string | undefined;
     let confirmedItems = snapshot.items;
     let optimisticOrder: readonly string[] | undefined;
+    let direct: HappyAgentConnectionItem | undefined;
+    /** The host's membership with the direct connection after it. */
+    const withDirect = (
+        items: readonly HappyAgentConnectionItem[],
+    ): readonly HappyAgentConnectionItem[] => {
+        const host = items.filter((item) => item.id !== direct?.id);
+        return direct ? [...host, direct] : host;
+    };
     let reorderController: AbortController | undefined;
     const publish = (next: HappyAgentConnectionsSnapshot): void => {
         snapshot = next;
@@ -119,8 +115,9 @@ export function happyAgentConnectionsStoreCreate(
                       },
             );
         }
-        confirmedItems = items;
         persistence?.write(items.filter((item) => item.remoteId !== undefined));
+        items = [...withDirect(items)];
+        confirmedItems = items;
         if (optimisticOrder) {
             const byId = new Map(items.map((item) => [item.id, item]));
             const order = new Set(optimisticOrder);
@@ -237,6 +234,23 @@ export function happyAgentConnectionsStoreCreate(
                 if (listeners.size === 0) stop();
             };
         },
+        connectionDirectSet(item) {
+            if (direct === item || (direct?.id === item?.id && direct?.name === item?.name)) return;
+            const previous = direct;
+            direct = item;
+            const host = snapshot.items.filter((entry) => entry.id !== previous?.id);
+            confirmedItems = withDirect(
+                confirmedItems.filter((entry) => entry.id !== previous?.id),
+            );
+            const items = withDirect(host);
+            publish({
+                ...snapshot,
+                items,
+                selectedId: items.some((entry) => entry.id === snapshot.selectedId)
+                    ? snapshot.selectedId
+                    : "local",
+            });
+        },
         connectionSelect(id) {
             if (id !== snapshot.selectedId && snapshot.items.some((item) => item.id === id))
                 publish({ ...snapshot, selectedId: id });
@@ -247,6 +261,8 @@ export function happyAgentConnectionsStoreCreate(
             const after = snapshot.items.find((entry) => entry.id === afterId);
             // Home is outside the server roster and can never be moved.
             if (!item?.remoteId || id === afterId || (afterId !== null && !after?.remoteId)) return;
+            // The host does not know the direct connection, so it keeps its place.
+            if (direct !== undefined && (id === direct.id || afterId === direct.id)) return;
             const index = snapshot.items.indexOf(item);
             if ((snapshot.items[index - 1]?.remoteId ?? null) === (after?.remoteId ?? null)) return;
             const request = new AbortController();
@@ -284,29 +300,6 @@ export function happyAgentConnectionsStoreCreate(
                     // Reconcile conflicts and uncertain outcomes through an authoritative read.
                     if (controller) reconcileRequest(controller.signal);
                 });
-        },
-        async connectionServerAdd(url, name) {
-            const listed = (): string | undefined =>
-                snapshot.items.find((item) => item.url === url)?.id;
-            const existing = listed();
-            if (existing !== undefined) return existing;
-            if (!serverAdd)
-                throw new UserError("The Happy Agent on this computer can't add servers yet.");
-            let result: ConnectionListResponse;
-            try {
-                result = await serverAdd({ url, name }, AbortSignal.timeout(30_000));
-            } catch (error) {
-                throw new UserError(
-                    error instanceof Error ? error.message : String(error),
-                    error instanceof HappyAgentApiError ? (error.code ?? undefined) : undefined,
-                    error,
-                );
-            }
-            if (!disposed) adopt(result);
-            const added = listed();
-            if (added === undefined)
-                throw new UserError("The Happy Agent on this computer didn't list the server.");
-            return added;
         },
         [Symbol.dispose]() {
             disposed = true;

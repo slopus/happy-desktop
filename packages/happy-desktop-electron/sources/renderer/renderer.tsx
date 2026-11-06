@@ -128,6 +128,7 @@ import { happyAgentDirectoryLinkTarget } from "./happyAgentDirectoryLinkTarget";
 import { startupValuesStoreCreate, type StartupValuesStore } from "./startupValuesStore";
 import { browserDevBridgeCreate } from "./browserDevBridge";
 import { localWebBuild } from "./localWebBuild";
+import { HAPPY_CLOUD_CONNECTION_ID, HAPPY_CLOUD_NAME, HAPPY_CLOUD_URL } from "../shared/happyCloud";
 import {
     localWebUpdateStoreCreate,
     type LocalWebUpdateSnapshot,
@@ -1496,6 +1497,21 @@ if (mediaPreviewBridge) {
             ...(serverHost
                 ? { servers: serverHost.source, serverSessions: serverHost.sessions }
                 : {}),
+            // Happy Cloud is offered only by builds that are not production, the
+            // hosted Nightly renderer and development windows, and only on a
+            // shell that reaches it itself.
+            ...(serverHost &&
+            desktopBridge.happyCloud &&
+            (localWebBuild !== undefined || desktopBridge.buildIdentity !== undefined)
+                ? {
+                      cloud: {
+                          id: `connection:${HAPPY_CLOUD_CONNECTION_ID}`,
+                          remoteId: HAPPY_CLOUD_CONNECTION_ID,
+                          name: HAPPY_CLOUD_NAME,
+                          url: HAPPY_CLOUD_URL,
+                      },
+                  }
+                : {}),
             attentionFollow(id, source) {
                 preferencesFor(id);
                 const attentionStop = attentionFollow(id, source);
@@ -1588,8 +1604,12 @@ if (mediaPreviewBridge) {
                   }
                 : undefined;
         if (servers) appDisposers.push(() => servers.add[Symbol.dispose]());
-        const cloudConnect = happyAgents.happyAgentServerConnect
-            ? desktopCloudConnectStoreCreate(happyAgents)
+        const cloudConnectAction = happyAgents.happyAgentCloudConnect;
+        const cloudConnect = cloudConnectAction
+            ? desktopCloudConnectStoreCreate({
+                  ...happyAgents,
+                  happyAgentCloudConnect: cloudConnectAction,
+              })
             : undefined;
         // What this window reports about how it is used, read from the same
         // directory the sidebar reads. Development windows send nothing.

@@ -52,6 +52,19 @@ export interface ServerSessionsDeps {
      * which is how its roster learns the server's instance.
      */
     healthRead(connectionId: string): Promise<void>;
+    /**
+     * A server this app reaches itself rather than through the host Happy
+     * Agent: Happy Cloud. It is in no roster, so its address is this one, and
+     * whether the person added it is remembered here rather than by the host.
+     */
+    readonly direct?: {
+        readonly connectionId: string;
+        readonly serverUrl: string;
+        /** Whether the person has added it; a listed server wants a sign-in until it has one. */
+        listed(): boolean;
+        /** Remembers that the person added it, once its first sign-in is begun. */
+        listedSave(): void;
+    };
     now?(): number;
 }
 
@@ -137,16 +150,31 @@ export function serverSessionsCreate(deps: ServerSessionsDeps): ServerSessions {
     let tokens: Readonly<Record<string, ServerRemoteCredential>> = {};
     let closed = false;
     let rosterTimer: ReturnType<typeof setTimeout> | undefined;
+    const direct = deps.direct;
+    const DIRECT_SIGN_IN = "Sign in to Happy Cloud to use it.";
+
+    /**
+     * The addresses sign-ins are bound to: the host's roster, and the direct
+     * server's own. A sign-in to the direct server alone never waits on the host.
+     */
+    const rosterRead = async (connectionId?: string): Promise<ReadonlyMap<string, string>> => {
+        if (direct && connectionId === direct.connectionId)
+            return new Map([[direct.connectionId, direct.serverUrl]]);
+        const servers = new Map(await deps.roster());
+        if (direct) servers.set(direct.connectionId, direct.serverUrl);
+        return servers;
+    };
 
     const publish = (): void => {
         const ids = new Set([...sessions.keys(), ...endings.keys()]);
+        if (direct?.listed()) ids.add(direct.connectionId);
         snapshot = [...ids].sort().map((connectionId) =>
             sessions.has(connectionId)
                 ? { connectionId, state: "signedIn" as const }
                 : {
                       connectionId,
                       state: "signedOut" as const,
-                      message: endings.get(connectionId)!,
+                      message: endings.get(connectionId) ?? DIRECT_SIGN_IN,
                   },
         );
         tokens = Object.fromEntries(
@@ -169,8 +197,10 @@ export function serverSessionsCreate(deps: ServerSessionsDeps): ServerSessions {
      * no longer lists loses its sign-in quietly, and one it now lists at
      * another address loses it with a word saying so.
      */
-    const rosterReconcile = (servers: ReadonlyMap<string, string>): void => {
+    const rosterReconcile = (roster: ReadonlyMap<string, string>): void => {
         if (closed) return;
+        const servers = new Map(roster);
+        if (direct) servers.set(direct.connectionId, direct.serverUrl);
         for (const attempt of attempts.values())
             if (servers.get(attempt.connectionId) !== attempt.serverUrl)
                 attempt.fail(new ServerSessionError(SERVER_MOVED, "server_moved"));
@@ -194,8 +224,7 @@ export function serverSessionsCreate(deps: ServerSessionsDeps): ServerSessions {
         if (rosterTimer) return;
         rosterTimer = setTimeout(() => {
             rosterTimer = undefined;
-            void deps
-                .roster()
+            void rosterRead()
                 .then(rosterReconcile, () => undefined)
                 .finally(rosterWatch);
         }, ROSTER_WATCH_MS);
@@ -268,7 +297,7 @@ export function serverSessionsCreate(deps: ServerSessionsDeps): ServerSessions {
                 // only while the roster still names it there.
                 let servers: ReadonlyMap<string, string>;
                 try {
-                    servers = await deps.roster();
+                    servers = await rosterRead(connectionId);
                 } catch {
                     throw new HappyAgentOAuthError(
                         "network_error",
@@ -276,7 +305,7 @@ export function serverSessionsCreate(deps: ServerSessionsDeps): ServerSessions {
                     );
                 }
                 if (sessions.get(connectionId) !== session) return undefined;
-                rosterReconcile(servers);
+                if (direct?.connectionId !== connectionId) rosterReconcile(servers);
                 if (sessions.get(connectionId) !== session) return undefined;
                 const credential = await refreshOAuthCredential(session.credential, {
                     fetch: deps.fetch,
@@ -398,7 +427,7 @@ export function serverSessionsCreate(deps: ServerSessionsDeps): ServerSessions {
         },
         async signInBegin(connectionId) {
             if (closed) throw new ServerSessionError("Happy is closing.", "closed");
-            const url = (await deps.roster()).get(connectionId);
+            const url = (await rosterRead(connectionId)).get(connectionId);
             if (url === undefined)
                 throw new ServerSessionError(
                     "This server isn't one you sign in to from Happy.",
@@ -439,7 +468,9 @@ export function serverSessionsCreate(deps: ServerSessionsDeps): ServerSessions {
                 // The code is redeemed, and its tokens kept, only for the
                 // address the attempt began for.
                 const bound = async (): Promise<void> => {
-                    const current = (await deps.roster().catch(() => undefined))?.get(connectionId);
+                    const current = (await rosterRead(connectionId).catch(() => undefined))?.get(
+                        connectionId,
+                    );
                     if (current !== url)
                         throw new ServerSessionError(
                             "This server's address changed while you were signing in. Sign in again.",
@@ -482,6 +513,7 @@ export function serverSessionsCreate(deps: ServerSessionsDeps): ServerSessions {
                     throw new ServerSessionError("Signing in was cancelled.", "cancelled");
                 attemptEnd(attempt);
                 sessionStore(connectionId, url, credential);
+                if (direct?.connectionId === connectionId) return;
                 // The roster learns the server's instance from a health it relays.
                 await deps.healthRead(connectionId).catch(() => undefined);
             });
@@ -520,6 +552,10 @@ export function serverSessionsCreate(deps: ServerSessionsDeps): ServerSessions {
                 },
             };
             attempts.set(id, attempt);
+            if (direct?.connectionId === connectionId && !direct.listed()) {
+                direct.listedSave();
+                publish();
+            }
             rosterWatch();
             try {
                 await deps.browserOpen(signIn.url);
