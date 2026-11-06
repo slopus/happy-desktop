@@ -67,7 +67,6 @@
     line-height: 18px;
 }
 .happy-cloud-connect__server-detail,
-.happy-cloud-connect__suffix,
 .happy-cloud-connect__hint {
     color: var(--text-secondary);
     font-family: var(--happy-font-ui);
@@ -82,10 +81,6 @@
 .happy-cloud-connect__row > :first-child {
     flex: 1 1 auto;
     min-width: 0;
-}
-.happy-cloud-connect__suffix {
-    flex: none;
-    white-space: nowrap;
 }
 .happy-cloud-connect__hint {
     margin: 0;

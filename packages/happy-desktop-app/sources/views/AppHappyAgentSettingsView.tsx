@@ -389,7 +389,9 @@ function serverSignInRead(entry: AppHappyAgentEntry): HappyAgentServerSignIn {
                 ? { kind: "required" }
                 : { kind: "required", message: entry.message };
         case "browser":
-            return { kind: "browser", host: signIn.host };
+            return signIn.host === undefined
+                ? { kind: "browser" }
+                : { kind: "browser", host: signIn.host };
         case "failed":
             return { kind: "failed", message: signIn.message };
     }

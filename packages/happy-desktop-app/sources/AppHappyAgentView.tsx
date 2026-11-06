@@ -598,7 +598,7 @@ export type AppHappyAgentSignIn =
      */
     | { readonly phase: "required"; readonly reason: "first" | "ended" }
     /** The browser is open at `host`, where the person is signing in. */
-    | { readonly phase: "browser"; readonly host: string }
+    | { readonly phase: "browser"; readonly host?: string }
     | { readonly phase: "failed"; readonly message: string };
 
 export interface AppHappyAgentSetup {
@@ -3194,7 +3194,7 @@ export function happyAgentSignInEmpty(signIn: AppHappyAgentSignIn): {
         case "browser":
             return {
                 actionLabel: "Cancel",
-                description: `Finish signing in at ${signIn.host} in your browser.`,
+                description: `Finish signing in${signIn.host ? ` at ${signIn.host}` : ""} in your browser.`,
                 icon: "lock",
                 title: "Signing in…",
             };

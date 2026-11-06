@@ -46,7 +46,8 @@ function ConnectionShellTile(props: { readonly item: ConnectionShellItem }) {
     if (item.local) return <Icon name="home" size={20} />;
     return (
         <Avatar
-            initials={item.label.slice(0, 1).toUpperCase()}
+            // A handle such as `@acme` takes its initial from the name.
+            initials={item.label.replace(/^@/, "").slice(0, 1).toUpperCase()}
             size="md"
             style={{ width: 36, height: 36, borderRadius: 10 }}
             type="agent"

@@ -13,8 +13,8 @@ export type HappyAgentServerSignIn =
     | { readonly kind: "signedIn" }
     /** No sign-in yet, or it ended; `message` says which. */
     | { readonly kind: "required"; readonly message?: string }
-    /** The browser is open at `host`, where the person is signing in. */
-    | { readonly kind: "browser"; readonly host: string }
+    /** The browser is open at `host`, where the person is signing in; absent for Happy Cloud. */
+    | { readonly kind: "browser"; readonly host?: string }
     | { readonly kind: "failed"; readonly message: string };
 
 /** One team server this window is connected to. */
@@ -212,7 +212,7 @@ function HappyAgentServerSignInNote(props: { readonly signIn: HappyAgentServerSi
     if (signIn.kind === "browser")
         return (
             <p className="happy-agent-server-settings__note">
-                {`Finish signing in at ${signIn.host} in your browser.`}
+                {`Finish signing in${signIn.host ? ` at ${signIn.host}` : ""} in your browser.`}
             </p>
         );
     if (signIn.kind === "failed")

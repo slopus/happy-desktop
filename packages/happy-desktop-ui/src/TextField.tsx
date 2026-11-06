@@ -42,6 +42,8 @@ export type TextFieldProps = {
     disabled?: boolean;
     required?: boolean;
     leadingIcon?: IconName;
+    /** Fixed text before the value, such as `@` before a handle; not part of the value. */
+    leadingText?: string;
     fullWidth?: boolean;
     id?: string;
     name?: string;
@@ -93,6 +95,7 @@ export function TextField(props: TextFieldProps) {
         "id",
         "label",
         "leadingIcon",
+        "leadingText",
         "multiline",
         "name",
         "onBlur",
@@ -169,6 +172,15 @@ export function TextField(props: TextFieldProps) {
                           </span>
                       ))(local.leadingIcon)
                     : null}
+                {local.leadingText ? (
+                    <span
+                        aria-hidden="true"
+                        className="happy-text-field__leading-text"
+                        data-happy-desktop-ui="text-field-leading-text"
+                    >
+                        {local.leadingText}
+                    </span>
+                ) : null}
 
                 {local.multiline ? (
                     <div

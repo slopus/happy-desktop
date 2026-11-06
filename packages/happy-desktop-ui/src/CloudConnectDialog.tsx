@@ -11,8 +11,8 @@ export interface CloudConnectServer {
     readonly id: string;
     /** The server's own name for itself: the row's title. */
     readonly displayName: string;
-    /** The server's host, shown under its name. */
-    readonly host: string;
+    /** The server's handle, shown under its title as `@name`. */
+    readonly name: string;
     readonly role: "owner" | "member";
     /**
      * The server's picture. The ThumbHash is painted at once and the bytes
@@ -59,16 +59,14 @@ export type CloudConnectAvailability =
 /** Where connecting this window to Happy Cloud stands. */
 export type CloudConnectView =
     | { readonly kind: "confirm" }
-    /** The account sign-in is open in the browser; `host` is where. */
-    | { readonly kind: "signingIn"; readonly host?: string }
+    /** The account sign-in is open in the browser. */
+    | { readonly kind: "signingIn" }
     | {
           readonly kind: "picker";
           readonly servers:
               | { readonly status: "loading" }
               | { readonly status: "ready"; readonly servers: readonly CloudConnectServer[] }
               | { readonly status: "error"; readonly message: string };
-          /** The domain every server name sits under, shown after the name field. */
-          readonly suffix: string;
           readonly create: {
               readonly name: string;
               readonly availability: CloudConnectAvailability;
@@ -93,14 +91,25 @@ export interface CloudConnectDialogProps {
     onJoin(): void;
 }
 
-const AVAILABILITY_HINT: Record<CloudConnectAvailability, string | undefined> = {
-    idle: undefined,
-    checking: "Checking…",
-    available: "Available",
-    taken: "That name is taken.",
-    reserved: "That name is reserved.",
-    invalid: "3–32 lowercase letters, digits or dashes, not starting or ending with a dash.",
-};
+function availabilityHint(
+    availability: CloudConnectAvailability,
+    name: string,
+): string | undefined {
+    switch (availability) {
+        case "idle":
+            return undefined;
+        case "checking":
+            return "Checking…";
+        case "available":
+            return `@${name} is available`;
+        case "taken":
+            return `@${name} is taken.`;
+        case "reserved":
+            return `@${name} is reserved.`;
+        case "invalid":
+            return "3–32 lowercase letters, digits or dashes, not starting or ending with a dash.";
+    }
+}
 
 /**
  * The sidebar's "+" to Happy Cloud. It asks first; Connect signs in to the
@@ -133,7 +142,7 @@ export function CloudConnectDialog(props: CloudConnectDialogProps) {
                 >
                     <p className="happy-cloud-connect__text">
                         {view.kind === "signingIn"
-                            ? `Finish signing in${view.host ? ` at ${view.host}` : ""} in your browser.`
+                            ? "Finish signing in in your browser."
                             : "Sign in or create an account to add a cloud team. Agents run in the cloud; no computer needed."}
                     </p>
                     {view.kind === "failed" ? (
@@ -145,7 +154,7 @@ export function CloudConnectDialog(props: CloudConnectDialogProps) {
             </ModalOverlay>
         );
     const busy = view.busy !== undefined;
-    const hint = AVAILABILITY_HINT[view.create.availability];
+    const hint = availabilityHint(view.create.availability, view.create.name);
     const nameBad =
         view.create.availability === "taken" ||
         view.create.availability === "reserved" ||
@@ -195,7 +204,7 @@ export function CloudConnectDialog(props: CloudConnectDialogProps) {
                                                 {server.displayName}
                                             </span>
                                             <span className="happy-cloud-connect__server-detail">
-                                                {server.host}
+                                                @{server.name}
                                                 {server.role === "owner" ? " · Owner" : ""}
                                             </span>
                                         </span>
@@ -211,12 +220,12 @@ export function CloudConnectDialog(props: CloudConnectDialogProps) {
                                 aria-label="Server name"
                                 disabled={busy}
                                 fullWidth
+                                leadingText="@"
                                 onSubmit={props.onCreate}
                                 onValueChange={props.onCreateNameChange}
                                 placeholder="acme"
                                 value={view.create.name}
                             />
-                            <span className="happy-cloud-connect__suffix">.{view.suffix}</span>
                             <Button
                                 disabled={busy || view.create.availability !== "available"}
                                 loading={view.busy === "create"}
@@ -242,8 +251,9 @@ export function CloudConnectDialog(props: CloudConnectDialogProps) {
                                 aria-label="Server to join"
                                 disabled={busy}
                                 fullWidth
+                                leadingText="@"
                                 onValueChange={props.onJoinNameChange}
-                                placeholder="Server name"
+                                placeholder="name"
                                 value={view.join.name}
                             />
                             <TextField

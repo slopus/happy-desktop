@@ -6,7 +6,6 @@ import type {
 import type { DesktopHappyCloud, HappyDesktopBridge } from "../shared/desktopContract";
 import {
     HAPPY_CLOUD_ACCOUNT_ID,
-    HAPPY_CLOUD_BASE,
     happyCloudServerNameValid,
     type HappyCloudServer,
 } from "../shared/happyCloud";
@@ -74,7 +73,7 @@ export function desktopCloudConnectStoreCreate(input: {
         return {
             id: server.id,
             displayName: server.displayName,
-            host: new URL(server.url).host,
+            name: server.name,
             role: server.role,
             ...(server.image
                 ? {
@@ -117,7 +116,6 @@ export function desktopCloudConnectStoreCreate(input: {
             set({
                 kind: "picker",
                 servers: listed,
-                suffix: HAPPY_CLOUD_BASE,
                 create: { name: "", availability: "idle" },
                 join: { name: "", code: "" },
             });
@@ -134,7 +132,7 @@ export function desktopCloudConnectStoreCreate(input: {
             return false;
         }
         attemptId = begun.value.attemptId;
-        set({ kind: "signingIn", host: begun.value.host });
+        set({ kind: "signingIn" });
         const finished = await bridge.serverSignInFinish(begun.value.attemptId);
         attemptId = undefined;
         if (!current(asked)) return false;

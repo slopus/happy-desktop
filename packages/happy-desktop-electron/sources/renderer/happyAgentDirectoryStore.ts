@@ -88,7 +88,8 @@ export type HappyAgentDirectorySignIn =
      * started. `ended`: a sign-in stopped working.
      */
     | { readonly phase: "required"; readonly reason: "first" | "ended" }
-    | { readonly phase: "browser"; readonly host: string }
+    /** `host` is absent for a Happy Cloud server, whose domain is not shown. */
+    | { readonly phase: "browser"; readonly host?: string }
     | { readonly phase: "failed"; readonly message: string };
 
 export interface HappyAgentDirectoryEntry {
@@ -419,7 +420,7 @@ export function happyAgentDirectoryStoreCreate(
                       {
                           id: `connection:${connectionId}`,
                           remoteId: connectionId,
-                          name,
+                          name: `@${name}`,
                           url: happyCloudServerUrl(name),
                       },
                   ];
@@ -506,7 +507,14 @@ export function happyAgentDirectoryStoreCreate(
         source
             .serverSignIn(
                 connectionId,
-                { signInOpened: (host) => phase({ phase: "browser", host }) },
+                {
+                    signInOpened: (host) =>
+                        phase(
+                            happyCloudServerNameOf(connectionId) === undefined
+                                ? { phase: "browser", host }
+                                : { phase: "browser" },
+                        ),
+                },
                 controller.signal,
             )
             .then(

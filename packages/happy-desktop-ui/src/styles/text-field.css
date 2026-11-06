@@ -129,6 +129,25 @@
     color: var(--input-placeholder);
 }
 
+/* Fixed text before the value: the value's own font, in the placeholder's tone. */
+.happy-text-field__leading-text {
+    flex: none;
+    margin-right: -7px;
+    color: var(--input-placeholder);
+    font-family: var(--happy-font-ui);
+    font-size: 13px;
+    font-weight: 500;
+    white-space: pre;
+}
+
+.happy-text-field__control[data-size="small"] .happy-text-field__leading-text {
+    font-size: 12px;
+}
+
+.happy-text-field__control[data-size="large"] .happy-text-field__leading-text {
+    font-size: 14px;
+}
+
 /* ---- Input / textarea -------------------------------------------------- */
 
 .happy-text-field__input {

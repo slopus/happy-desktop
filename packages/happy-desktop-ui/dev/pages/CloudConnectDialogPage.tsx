@@ -29,14 +29,14 @@ const SERVERS = [
     {
         id: "s1",
         displayName: "Acme Corp",
-        host: "acme.happy.computer",
+        name: "acme",
         role: "owner" as const,
         image: { thumbhash: "HAgGXxBVauaQSKZWmNmKFmhmhjAoCYMC" },
     },
     {
         id: "s2",
         displayName: "Design Guild",
-        host: "design-guild.happy.computer",
+        name: "design-guild",
         role: "member" as const,
     },
 ];
@@ -50,7 +50,7 @@ const SPECIMENS: readonly {
     {
         label: "Signing in",
         detail: "the account sign-in is open in the browser",
-        view: { kind: "signingIn", host: "accounts.happy.computer" },
+        view: { kind: "signingIn" },
     },
     {
         label: "Picker",
@@ -58,7 +58,6 @@ const SPECIMENS: readonly {
         view: {
             kind: "picker",
             servers: { status: "ready", servers: SERVERS },
-            suffix: "happy.computer",
             create: { name: "", availability: "idle" },
             join: { name: "", code: "" },
         },
@@ -69,7 +68,6 @@ const SPECIMENS: readonly {
         view: {
             kind: "picker",
             servers: { status: "ready", servers: [] },
-            suffix: "happy.computer",
             create: { name: "acme-labs", availability: "available" },
             join: { name: "", code: "" },
         },
@@ -80,7 +78,6 @@ const SPECIMENS: readonly {
         view: {
             kind: "picker",
             servers: { status: "ready", servers: SERVERS },
-            suffix: "happy.computer",
             create: { name: "acme", availability: "taken" },
             join: { name: "design-guild", code: "WRONG123" },
             error: "No server has that name and invite code.",
