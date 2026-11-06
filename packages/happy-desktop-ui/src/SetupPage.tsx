@@ -116,6 +116,11 @@ export interface SetupPageProps {
      * already its own picture — the install terminal, or the two-panel fork.
      */
     readonly scene?: LottieSceneName;
+    /**
+     * A press anywhere on the scene's square. It is not announced: it is for
+     * flows that hide something behind the picture.
+     */
+    readonly onScenePress?: () => void;
     readonly title: string;
     /** One short line under the title; may carry an inline link. Reserved when absent. */
     readonly copy?: ReactNode;
@@ -174,6 +179,7 @@ export function SetupPage(props: SetupPageProps) {
         "backdrop",
         "transitionKey",
         "scene",
+        "onScenePress",
         "title",
         "copy",
         "status",
@@ -216,9 +222,11 @@ export function SetupPage(props: SetupPageProps) {
                         className="happy-setup-page__header"
                         data-happy-desktop-ui="setup-page-header"
                     >
+                        {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- a hidden, pointer-only gesture by design */}
                         <span
                             className="happy-setup-page__stage"
                             data-happy-desktop-ui="setup-page-stage"
+                            onClick={local.onScenePress}
                         >
                             {local.scene ? (
                                 <LottieScene

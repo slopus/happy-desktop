@@ -2046,6 +2046,22 @@ void app
                 desktopDaemonSenderRequire(event.sender);
                 return cloud.serverRemove(name(value));
             });
+            ipcMain.handle(
+                desktopIpc.happyCloudPasswordSignIn,
+                (event, login: unknown, password: unknown) => {
+                    desktopDaemonSenderRequire(event.sender);
+                    if (
+                        typeof login !== "string" ||
+                        typeof password !== "string" ||
+                        login.length === 0 ||
+                        login.length > 256 ||
+                        password.length === 0 ||
+                        password.length > 1024
+                    )
+                        throw new Error("Happy asked to sign in with an invalid login.");
+                    return cloud.passwordSignIn(login, password);
+                },
+            );
             ipcMain.handle(desktopIpc.happyCloudAccountSignOut, (event) => {
                 desktopDaemonSenderRequire(event.sender);
                 cloud.accountSignOut();

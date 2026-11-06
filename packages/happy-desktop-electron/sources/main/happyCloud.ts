@@ -34,6 +34,12 @@ export interface HappyCloud {
     serverRemove(name: string): Promise<void>;
     /** Forgets the account's pass; the servers' own sign-ins stay. */
     accountSignOut(): void;
+    /**
+     * Signs in to a test account with its login and password, which go to
+     * the accounts service and nowhere else; the pass is held like one from
+     * the browser.
+     */
+    passwordSignIn(login: string, password: string): Promise<DesktopServerSignInResult<void>>;
 }
 
 type Failure = { readonly ok: false; readonly message: string; readonly code: string };
@@ -248,6 +254,65 @@ export function happyCloudCreate(input: {
             const sessions = input.sessions();
             const credential = sessions.credential(HAPPY_CLOUD_ACCOUNT_ID);
             if (credential) sessions.signInRequire(HAPPY_CLOUD_ACCOUNT_ID, credential.accessToken);
+        },
+        async passwordSignIn(login, password) {
+            let response: Response;
+            try {
+                response = await input.fetch(
+                    new URL("v1/auth/password", HAPPY_CLOUD_ACCOUNTS_URL),
+                    {
+                        method: "POST",
+                        headers: { accept: "application/json", "content-type": "application/json" },
+                        body: JSON.stringify({ login, password }),
+                        redirect: "error",
+                    },
+                );
+            } catch {
+                return {
+                    ok: false,
+                    message: "Happy Cloud isn't reachable right now.",
+                    code: "remote_unavailable",
+                };
+            }
+            const json = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+            if (response.status === 429) {
+                const seconds = typeof json.retryAfter === "number" ? json.retryAfter : 60;
+                const minutes = Math.max(1, Math.ceil(seconds / 60));
+                return {
+                    ok: false,
+                    message: `Too many tries. Try again in ${String(minutes)} min.`,
+                    code: "locked",
+                };
+            }
+            if (response.status === 401)
+                return {
+                    ok: false,
+                    message: "That login or password is wrong.",
+                    code: "invalid_credentials",
+                };
+            if (!response.ok || typeof json.access_token !== "string" || json.access_token === "")
+                return failure(json, "Signing in didn't work.");
+            try {
+                input.sessions().directSignIn(HAPPY_CLOUD_ACCOUNT_ID, {
+                    accessToken: json.access_token,
+                    expiresAt:
+                        typeof json.expires_in === "number" && json.expires_in > 0
+                            ? Date.now() + json.expires_in * 1000
+                            : null,
+                    refreshToken: null,
+                    refreshUrl: null,
+                    clientId: "happy",
+                    resource: HAPPY_CLOUD_ACCOUNTS_URL,
+                    serverUrl: HAPPY_CLOUD_ACCOUNTS_URL,
+                });
+            } catch (error) {
+                return {
+                    ok: false,
+                    message: error instanceof Error ? error.message : "Signing in didn't work.",
+                    code: "failed",
+                };
+            }
+            return { ok: true, value: undefined };
         },
         async serverConnect(serverId) {
             const server = known.get(serverId);

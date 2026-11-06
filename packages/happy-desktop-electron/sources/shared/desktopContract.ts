@@ -47,6 +47,8 @@ export interface DesktopHappyCloud {
     serverRemove(name: string): Promise<void>;
     /** Forgets the account's pass; added servers stay signed in. */
     accountSignOut(): Promise<void>;
+    /** Signs in to a test account; the shell sends the password to accounts and keeps none of it. */
+    passwordSignIn(login: string, password: string): Promise<DesktopServerSignInResult<void>>;
 }
 
 export interface DesktopCloudAuthConfiguration {
@@ -1172,6 +1174,7 @@ export const desktopIpc = {
     happyCloudImageRead: "happy:happy-cloud:image-read",
     happyCloudServerRemove: "happy:happy-cloud:server-remove",
     happyCloudAccountSignOut: "happy:happy-cloud:account-sign-out",
+    happyCloudPasswordSignIn: "happy:happy-cloud:password-sign-in",
     serverSessionsChanged: "happy:server-sessions:changed",
     happyLinkExternalReceived: "happy:happy-link:external-received",
     happyLinkExternalTake: "happy:happy-link:external-take",

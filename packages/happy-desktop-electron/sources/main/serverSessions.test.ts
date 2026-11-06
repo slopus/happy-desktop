@@ -486,3 +486,20 @@ it("holds a Happy Cloud server's issued tokens and refreshes them without the ac
         }),
     ]);
 });
+
+it("holds Happy Cloud's account pass issued without a browser", () => {
+    const context = cloudCreate(serverCreate());
+    context.sessions.directSignIn("account", {
+        accessToken: "pass",
+        expiresAt: Date.now() + 3600_000,
+        refreshToken: null,
+        refreshUrl: null,
+        clientId: "happy",
+        resource: ACCOUNTS,
+        serverUrl: ACCOUNTS,
+    });
+    expect(context.sessions.credential("account")?.accessToken).toBe("pass");
+    // The pass is never listed, nor handed to the transport.
+    expect(context.sessions.get()).toEqual([{ connectionId: "cloud-acme", state: "signedOut" }]);
+    expect(context.sessions.tokens()).toEqual({});
+});

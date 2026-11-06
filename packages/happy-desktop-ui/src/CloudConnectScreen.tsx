@@ -30,7 +30,19 @@ export type CloudConnectAvailability =
     | "invalid";
 
 export type CloudConnectView =
-    | { readonly kind: "welcome" }
+    | {
+          readonly kind: "welcome";
+          /**
+           * Test-account sign-in, revealed by pressing the logo ten times
+           * in a row. Absent, nothing of it is drawn or announced.
+           */
+          readonly testSignIn?: {
+              readonly login: string;
+              readonly password: string;
+              readonly busy?: boolean;
+              readonly error?: string;
+          };
+      }
     /** The account sign-in is open in the browser. */
     | { readonly kind: "signingIn" }
     | {
@@ -83,6 +95,10 @@ export interface CloudConnectScreenProps {
     onJoin(): void;
     /** Success's Open: into the new cloud team. */
     onOpen(): void;
+    onLogoPress(): void;
+    onTestLoginChange(login: string): void;
+    onTestPasswordChange(password: string): void;
+    onTestSignIn(): void;
 }
 
 function availabilityHint(
@@ -172,21 +188,74 @@ export function CloudConnectScreen(props: CloudConnectScreenProps) {
         >
             {(() => {
                 switch (view.kind) {
-                    case "welcome":
+                    case "welcome": {
+                        const test = view.testSignIn;
                         return (
                             <SetupPage
                                 {...frame}
                                 action={{
-                                    autoFocus: true,
+                                    autoFocus: !test,
+                                    disabled: test?.busy,
                                     label: "Continue",
                                     onSelect: props.onContinue,
                                 }}
                                 copy="Add a cloud team. Its agents run in the cloud, so no computer needs to stay on."
+                                onScenePress={props.onLogoPress}
                                 scene="cloud-variation"
                                 secondary={notNow}
                                 title="Happy Cloud"
-                            />
+                            >
+                                {test ? (
+                                    <div className="happy-cloud-connect__column">
+                                        <TextField
+                                            aria-label="Login"
+                                            autoFocus
+                                            className="happy-cloud-connect__handle"
+                                            disabled={test.busy}
+                                            fullWidth
+                                            onSubmit={props.onTestSignIn}
+                                            onValueChange={props.onTestLoginChange}
+                                            placeholder="Login"
+                                            size="large"
+                                            value={test.login}
+                                        />
+                                        <TextField
+                                            aria-label="Password"
+                                            autoComplete="off"
+                                            className="happy-cloud-connect__handle"
+                                            disabled={test.busy}
+                                            fullWidth
+                                            onSubmit={props.onTestSignIn}
+                                            onValueChange={props.onTestPasswordChange}
+                                            placeholder="Password"
+                                            size="large"
+                                            type="password"
+                                            value={test.password}
+                                        />
+                                        <p
+                                            className="happy-cloud-connect__hint"
+                                            data-tone={test.error ? "attention" : undefined}
+                                            role="status"
+                                        >
+                                            {test.error}
+                                        </p>
+                                        <div className="happy-cloud-connect__links">
+                                            <Button
+                                                disabled={
+                                                    test.login.trim() === "" || test.password === ""
+                                                }
+                                                loading={test.busy}
+                                                onClick={props.onTestSignIn}
+                                                variant="secondary"
+                                            >
+                                                Sign in with a test account
+                                            </Button>
+                                        </div>
+                                    </div>
+                                ) : undefined}
+                            </SetupPage>
                         );
+                    }
                     case "signingIn":
                         return (
                             <SetupPage

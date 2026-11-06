@@ -1229,6 +1229,10 @@ function DesktopCloudConnect(props: {
             onJoinNameChange={props.store.joinNameUpdate}
             onJoinOpen={props.store.joinOpen}
             onOpen={props.store.connectedOpen}
+            onLogoPress={props.store.logoPress}
+            onTestLoginChange={props.store.testLoginUpdate}
+            onTestPasswordChange={props.store.testPasswordUpdate}
+            onTestSignIn={props.store.testSignIn}
             onServerPick={props.store.serverPick}
             view={view}
         />

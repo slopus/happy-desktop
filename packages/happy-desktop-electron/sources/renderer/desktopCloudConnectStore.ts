@@ -31,7 +31,17 @@ export interface DesktopCloudConnectStore {
     serverJoin(): void;
     /** Success's Open: the new team is already selected behind the screen. */
     connectedOpen(): void;
+    /** A press on the welcome's logo; enough of them in a row reveal test sign-in. */
+    logoPress(): void;
+    testLoginUpdate(login: string): void;
+    testPasswordUpdate(password: string): void;
+    /** Signs in to a test account, then lists its servers as after the browser. */
+    testSignIn(): void;
 }
+
+/** Presses on the logo, all within the window, that reveal test sign-in. */
+const LOGO_PRESSES = 10;
+const LOGO_WINDOW_MS = 4000;
 
 /** How long typing pauses before a new server name is checked. */
 const AVAILABILITY_DELAY_MS = 300;
@@ -53,7 +63,10 @@ export function desktopCloudConnectStoreCreate(input: {
     readonly connect: (
         connectionId: string,
     ) => Promise<{ readonly ok: true } | { readonly ok: false; readonly message: string }>;
+    readonly now?: () => number;
 }): DesktopCloudConnectStore {
+    const now = input.now ?? Date.now;
+    let logoPresses: number[] = [];
     const { cloud, bridge } = input;
     const listeners = new Set<() => void>();
     let view: CloudConnectView | undefined;
@@ -216,6 +229,7 @@ export function desktopCloudConnectStoreCreate(input: {
         connectOpen() {
             if (view !== undefined) return;
             generation += 1;
+            logoPresses = [];
             images.clear();
             servers = [];
             set({ kind: "welcome" });
@@ -321,6 +335,59 @@ export function desktopCloudConnectStoreCreate(input: {
             if (view?.kind !== "connected") return;
             generation += 1;
             set(undefined);
+        },
+        logoPress() {
+            if (view?.kind !== "welcome" || view.testSignIn) return;
+            const at = now();
+            logoPresses = [...logoPresses.filter((pressed) => at - pressed < LOGO_WINDOW_MS), at];
+            if (logoPresses.length < LOGO_PRESSES) return;
+            logoPresses = [];
+            set({ kind: "welcome", testSignIn: { login: "", password: "" } });
+        },
+        testLoginUpdate(login) {
+            if (view?.kind !== "welcome" || !view.testSignIn || view.testSignIn.busy) return;
+            set({ kind: "welcome", testSignIn: { login, password: view.testSignIn.password } });
+        },
+        testPasswordUpdate(password) {
+            if (view?.kind !== "welcome" || !view.testSignIn || view.testSignIn.busy) return;
+            set({ kind: "welcome", testSignIn: { login: view.testSignIn.login, password } });
+        },
+        testSignIn() {
+            if (view?.kind !== "welcome" || !view.testSignIn || view.testSignIn.busy) return;
+            const { login, password } = view.testSignIn;
+            if (login.trim() === "" || password === "") return;
+            generation += 1;
+            const asked = generation;
+            // The password leaves this store with the request and is not kept.
+            set({ kind: "welcome", testSignIn: { login, password: "", busy: true } });
+            void cloud
+                .passwordSignIn(login.trim(), password)
+                .then(async (answer) => {
+                    if (!current(asked)) return;
+                    if (!answer.ok) {
+                        set({
+                            kind: "welcome",
+                            testSignIn: { login, password: "", error: answer.message },
+                        });
+                        return;
+                    }
+                    if ((await list(asked)) === "signInRequired" && current(asked))
+                        set({
+                            kind: "welcome",
+                            testSignIn: { login, password: "", error: "Signing in didn't work." },
+                        });
+                })
+                .catch(() => {
+                    if (current(asked))
+                        set({
+                            kind: "welcome",
+                            testSignIn: {
+                                login,
+                                password: "",
+                                error: "Happy Cloud isn't reachable right now.",
+                            },
+                        });
+                });
         },
     };
 }

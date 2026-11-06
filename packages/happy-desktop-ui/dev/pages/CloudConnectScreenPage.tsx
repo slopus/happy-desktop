@@ -52,6 +52,23 @@ const SPECIMENS: readonly {
         view: { kind: "welcome" },
     },
     {
+        label: "Test sign-in",
+        detail: "revealed by pressing the logo ten times",
+        view: { kind: "welcome", testSignIn: { login: "qa-desktop", password: "secret" } },
+    },
+    {
+        label: "Test sign-in wrong",
+        detail: "the accounts service refused the login",
+        view: {
+            kind: "welcome",
+            testSignIn: {
+                login: "qa-desktop",
+                password: "",
+                error: "That login or password is wrong.",
+            },
+        },
+    },
+    {
         label: "Signing in",
         detail: "the account sign-in is open in the browser",
         view: { kind: "signingIn" },
@@ -168,6 +185,10 @@ export function CloudConnectScreenPage() {
                                     onJoinNameChange={noop}
                                     onJoinOpen={noop}
                                     onOpen={noop}
+                                    onLogoPress={noop}
+                                    onTestLoginChange={noop}
+                                    onTestPasswordChange={noop}
+                                    onTestSignIn={noop}
                                     onServerPick={noop}
                                     view={specimen.view}
                                 />

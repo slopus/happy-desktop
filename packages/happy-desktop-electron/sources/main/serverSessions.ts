@@ -108,9 +108,9 @@ export interface ServerSessions extends HappyAgentRemoteAuthorization {
     /** Happy Cloud's added servers changed: they are listed again. */
     directChanged(): void;
     /**
-     * Holds a Happy Cloud server's tokens that the accounts service issued
-     * for it directly, without a browser. The server must already be listed
-     * at the credential's address.
+     * Holds tokens the accounts service issued without a browser: a Happy
+     * Cloud server's, or the account's own pass. A server must already be
+     * listed at the credential's address.
      */
     directSignIn(connectionId: string, credential: OAuthCredential): void;
     /**
@@ -664,7 +664,7 @@ export function serverSessionsCreate(deps: ServerSessionsDeps): ServerSessions {
         },
         directSignIn(connectionId, credential) {
             if (closed) throw new ServerSessionError("Happy is closing.", "closed");
-            const url = direct?.servers().get(connectionId);
+            const url = directServers().get(connectionId);
             if (url === undefined || serverUrlNormalize(credential.serverUrl) !== url)
                 throw new ServerSessionError(
                     "This sign-in is for a different server.",
