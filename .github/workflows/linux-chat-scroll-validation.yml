@@ -10,7 +10,7 @@ permissions:
 
 jobs:
     linux-browser:
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         timeout-minutes: 45
         env:
             HAPPY_TEST_DEPTH: full
@@ -23,7 +23,7 @@ jobs:
                   cache: pnpm
             - run: pnpm install --frozen-lockfile
             - name: Install browser dependencies
-              timeout-minutes: 8
+              timeout-minutes: 15
               run: pnpm --dir packages/happy-desktop-ui exec playwright install --with-deps chromium firefox webkit
             - name: Run transcript suites in all three engines
               run: |
