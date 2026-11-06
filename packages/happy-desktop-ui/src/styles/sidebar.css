@@ -1566,7 +1566,7 @@
 
 /*
  * Whether a row has news for the reader: a red dot on the top corner of the
- * row's mark. A mention is a blue disc the folded count's size. Neither
+ * row's mark; a mention turns that dot blue. Neither
  * carries a number: the only number on a row is what a fold hides.
  */
 .happy-sidebar__item-unread {
@@ -1581,8 +1581,6 @@
 }
 
 .happy-sidebar__item-unread[data-mentioned] {
-    width: var(--happy-sidebar-corner-badge);
-    height: var(--happy-sidebar-corner-badge);
     background: var(--happy-unread-mention-background);
 }
 
@@ -1615,7 +1613,6 @@
     top: calc(0px - var(--happy-sidebar-corner-half));
 }
 
-.happy-sidebar__item-leading > .happy-sidebar__item-unread[data-mentioned],
 .happy-sidebar__item-leading > .happy-sidebar__item-folded {
     --happy-sidebar-corner-size: var(--happy-sidebar-corner-badge);
 }

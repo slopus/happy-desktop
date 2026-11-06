@@ -201,7 +201,7 @@ export type SidebarItem = {
     unread?: boolean;
     /**
      * Someone mentioned the reader in what is unread. The row's unread dot then
-     * grows to the folded count's size, in the mention's own colour.
+     * takes the mention's own colour.
      */
     unreadMentioned?: boolean;
     /**

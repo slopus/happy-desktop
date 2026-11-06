@@ -4,8 +4,7 @@ import { ThemeScope } from "../../src/ThemeScope";
 /**
  * A review sheet, not a specimen: the real sidebar, light and dark, with the
  * red unread dot on the top corner of each row's mark, mirrored by the folded
- * count on the bottom one, and the blue mention badge at the two sizes being
- * weighed. The large one is what the sidebar draws.
+ * count on the bottom one, and the same dot in blue for a mention.
  */
 export const componentNumber = "B-003";
 
@@ -134,62 +133,36 @@ function sections(): SidebarSection[] {
     }));
 }
 
-const VARIANTS: readonly { readonly id: string; readonly title: string }[] = [
-    { id: "large", title: "Blue, the folded count's size" },
-    { id: "small", title: "Blue, the red dot's size" },
-];
-
-/* The small variant restyles the mention badge on this sheet only. */
-const VARIANT_STYLES = `
-[data-badge-variant="small"] .happy-sidebar__item-leading > .happy-sidebar__item-unread[data-mentioned] {
-    --happy-sidebar-corner-size: var(--happy-sidebar-corner-dot);
-    width: var(--happy-sidebar-corner-dot);
-    height: var(--happy-sidebar-corner-dot);
-}
-`;
-
 export function UnreadSidebarPage() {
     return (
-        <div
-            data-unread-sidebar=""
-            style={{ display: "flex", flexDirection: "column", gap: 24, padding: 24 }}
-        >
-            <style>{VARIANT_STYLES}</style>
+        <div data-unread-sidebar="" style={{ display: "flex", gap: 24, padding: 24 }}>
             {(["light", "dark"] as const).map((appearance) => (
-                <div key={appearance} style={{ display: "flex", gap: 16 }}>
-                    {VARIANTS.map((variant) => (
+                <div key={appearance} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>
+                        {appearance === "light" ? "Light" : "Dark"}
+                    </div>
+                    <ThemeScope mode={appearance}>
                         <div
-                            key={variant.id}
-                            style={{ display: "flex", flexDirection: "column", gap: 8 }}
+                            data-unread-variant={appearance}
+                            style={{
+                                background: "var(--groupped-background)",
+                                color: "var(--text)",
+                                display: "flex",
+                                height: 400,
+                                overflow: "hidden",
+                                width: 280,
+                            }}
                         >
-                            <div style={{ fontSize: 13, fontWeight: 600 }}>
-                                {variant.title} ({appearance})
-                            </div>
-                            <ThemeScope mode={appearance}>
-                                <div
-                                    data-badge-variant={variant.id}
-                                    data-unread-variant={variant.id}
-                                    style={{
-                                        background: "var(--groupped-background)",
-                                        color: "var(--text)",
-                                        display: "flex",
-                                        height: 400,
-                                        overflow: "hidden",
-                                        width: 280,
-                                    }}
-                                >
-                                    <Sidebar
-                                        activeItemId="notes"
-                                        onItemAction={noop}
-                                        onItemCollapseToggle={noop}
-                                        onItemSelect={noop}
-                                        sections={sections()}
-                                        style={{ width: 280 }}
-                                    />
-                                </div>
-                            </ThemeScope>
+                            <Sidebar
+                                activeItemId="notes"
+                                onItemAction={noop}
+                                onItemCollapseToggle={noop}
+                                onItemSelect={noop}
+                                sections={sections()}
+                                style={{ width: 280 }}
+                            />
                         </div>
-                    ))}
+                    </ThemeScope>
                 </div>
             ))}
         </div>

@@ -6,8 +6,8 @@ import { createRenderer } from "./testing";
 
 /*
  * A row's unread mark is a red dot centred on the top-right pixel of its photo,
- * mirroring the folded count centred on the bottom-right one. A mention is a
- * blue disc of exactly the folded count's diameter on the same centre. It never carries a
+ * mirroring the folded count centred on the bottom-right one. A mention is the
+ * same dot in blue. It never carries a
  * number and never touches the trailing lane; a row with no mark of its own
  * wears it in the spinner's cell instead.
  */
@@ -159,13 +159,13 @@ it("centres each corner badge on the photo's corner pixel, in device pixels at e
             near(count.y, last);
             // The dot shares the rule, on its own row's photo.
             near(dot.x - (dotPhoto.left - photo.left) * ratio, last);
-            // One diameter for both badges, an odd whole number of device pixels,
-            // so the centre is a pixel; the plain dot is smaller and odd too.
-            near(mention.diameter, count.diameter);
-            for (const diameter of [mention.diameter, dot.diameter]) {
+            // A mention is the dot's own size; every diameter is an odd whole
+            // number of device pixels, so the centre is a pixel.
+            near(mention.diameter, dot.diameter);
+            for (const diameter of [mention.diameter, dot.diameter, count.diameter]) {
                 near(diameter % 2, 1);
             }
-            expect(dot.diameter).toBeLessThan(mention.diameter);
+            expect(dot.diameter).toBeLessThan(count.diameter);
             expect(
                 getComputedStyle(element("folded", ".happy-sidebar__item-unread")).borderTopWidth,
             ).toBe(
