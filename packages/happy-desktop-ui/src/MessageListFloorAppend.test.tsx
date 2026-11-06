@@ -244,6 +244,103 @@ it.each(["wheel", "End"] as const)(
     },
 );
 
+function streamingFixture(view: ReturnType<typeof createRenderer>) {
+    let grow!: () => void;
+    let position: MessageListScrollPosition | undefined;
+    function Fixture() {
+        const [live, setLive] = useState(140);
+        grow = () => flushSync(() => setLive((previous) => previous + 20));
+        const rows = [70, 70, 70, live];
+        return (
+            <div style={{ display: "flex", height: 160, width: 620 }}>
+                <MessageList
+                    virtualize
+                    estimateDependencies={[live]}
+                    estimateRowSize={(index) => rows[index]!}
+                    onScrollPositionChange={(next) => {
+                        position = next;
+                    }}
+                >
+                    {rows.map((height, index) => (
+                        <div key={index} data-row={index} style={{ height }}>
+                            Row {index}
+                        </div>
+                    ))}
+                </MessageList>
+            </div>
+        );
+    }
+    view.render(Fixture, { width: 1000, height: 1000 });
+    return {
+        grow: () => grow(),
+        position: () => position,
+        viewport: () => view.container.querySelector<HTMLElement>(".happy-message-list__viewport")!,
+    };
+}
+
+it.each(["wheel", "ArrowDown"] as const)(
+    "resumes following when a %s from a reader just above a live end reaches it",
+    async (intent) => {
+        const view = createRenderer();
+        try {
+            const fixture = streamingFixture(view);
+            await view.ready();
+            await frame();
+            await frame();
+            const viewport = fixture.viewport();
+            viewport.dispatchEvent(new WheelEvent("wheel", { deltaY: -30 }));
+            viewport.scrollTop -= 30;
+            await frame();
+            await frame();
+            expect(fixture.position()).not.toEqual({ type: "bottom" });
+            // One notch or arrow press reaches further than the 30px left.
+            if (intent === "wheel")
+                viewport.dispatchEvent(new WheelEvent("wheel", { deltaY: 100, cancelable: true }));
+            else
+                viewport.dispatchEvent(
+                    new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }),
+                );
+            for (let index = 0; index < 3; index += 1) {
+                fixture.grow();
+                await frame();
+            }
+            expect(fixture.position()).toEqual({ type: "bottom" });
+            expect(viewport.scrollTop).toBe(viewport.scrollHeight - viewport.clientHeight);
+        } finally {
+            view.destroy();
+        }
+    },
+);
+
+it("never puts a scrollbar drag back when the stream commits before its scroll event", async () => {
+    const view = createRenderer();
+    try {
+        const fixture = streamingFixture(view);
+        await view.ready();
+        await frame();
+        await frame();
+        const viewport = fixture.viewport();
+        expect(viewport.scrollTop).toBe(viewport.scrollHeight - viewport.clientHeight);
+        viewport.parentElement!.setAttribute("data-scrollbar-dragging", "");
+        let wanted = viewport.scrollTop;
+        for (let step = 0; step < 4; step += 1) {
+            wanted -= 20;
+            viewport.scrollTop = wanted;
+            fixture.grow();
+            await frame();
+            expect(Math.abs(viewport.scrollTop - wanted), `step ${String(step)}`).toBeLessThan(1);
+        }
+        viewport.parentElement!.removeAttribute("data-scrollbar-dragging");
+        fixture.grow();
+        await frame();
+        await frame();
+        expect(Math.abs(viewport.scrollTop - wanted)).toBeLessThan(1);
+        expect(fixture.position()).not.toEqual({ type: "bottom" });
+    } finally {
+        view.destroy();
+    }
+});
+
 it.each([180, 100])(
     "keeps a formerly floored transcript visible when the viewport becomes %ipx",
     async (nextHeight) => {

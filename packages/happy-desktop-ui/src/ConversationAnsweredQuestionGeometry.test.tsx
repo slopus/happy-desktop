@@ -275,3 +275,85 @@ it.each([360, 880])(
         }
     },
 );
+
+it.each(["Run it in batches overnight", ""])(
+    "keeps a free-form question's card the same size when its reply %j arrives",
+    async (reply) => {
+        const request = (answered: boolean): ConversationEntry => ({
+            kind: "request",
+            id: "question",
+            sequence: "question",
+            request: {
+                kind: "userInput",
+                requestId: "question",
+                questions: [
+                    {
+                        id: "plan",
+                        header: "Plan",
+                        question: "How should the backfill run?",
+                        multiSelect: false,
+                        required: false,
+                        options: [],
+                    },
+                ],
+                ...(answered
+                    ? { status: "answered" as const, answers: { plan: reply ? [reply] : [] } }
+                    : { status: "pending" as const }),
+            },
+        });
+        const after: ConversationEntry = {
+            kind: "notice",
+            id: "after",
+            level: "info",
+            sequence: "after",
+            text: "The run goes on below the question.",
+            variant: "notice",
+        };
+        let answer: () => void = () => undefined;
+        function Harness() {
+            const [answered, setAnswered] = useState(false);
+            answer = () => flushSync(() => setAnswered(true));
+            return (
+                <div style={{ width: 360, height: 600 }}>
+                    <ConversationView
+                        agentAuthor={agentAuthor}
+                        conversationId="free-form"
+                        entries={[request(answered), after]}
+                        motion="calm"
+                        running
+                    />
+                </div>
+            );
+        }
+        const view = createRenderer();
+        view.render(Harness, { width: 400, height: 640 });
+        try {
+            await view.ready();
+            await frame();
+            await frame();
+            const card = () =>
+                view.container.querySelector<HTMLElement>(
+                    '[data-happy-desktop-ui="happy-agent-user-input"]',
+                )!;
+            const next = () =>
+                card().closest<HTMLElement>(".happy-message-list__virtual-row")!
+                    .nextElementSibling as HTMLElement;
+            const height = card().getBoundingClientRect().height;
+            const below = {
+                model: next().style.transform,
+                top: next().getBoundingClientRect().top,
+            };
+            answer();
+            await frame();
+            await frame();
+            expect(card().getAttribute("data-state")).toBe("answered");
+            expect(card().getBoundingClientRect().height).toBe(height);
+            expect({
+                model: next().style.transform,
+                top: next().getBoundingClientRect().top,
+            }).toEqual(below);
+        } finally {
+            view.destroy();
+        }
+    },
+);
