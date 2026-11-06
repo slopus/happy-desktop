@@ -12,6 +12,11 @@ export interface HappyAgentNodeIdentity {
 export interface HappyAgentNodeSnapshot {
     /** Absent until the daemon has reported its config, or on a daemon too old to have one. */
     readonly node?: HappyAgentNodeIdentity;
+    /**
+     * The daemon said it runs no workspaces (`config.features.workspaces`),
+     * such as a cloud server with no compute. Absent while it has not said so.
+     */
+    readonly workspacesUnavailable?: true;
 }
 
 export interface HappyAgentNodeStore {
@@ -69,8 +74,16 @@ export function happyAgentNodeStoreCreate(
     let failed = false;
     const adopt = (config: DaemonConfig): void => {
         const node = identityProject(client.endpoint, config);
-        if (identitiesEqual(snapshot.node, node)) return;
-        snapshot = node === undefined ? {} : { node };
+        const workspacesUnavailable = config.features?.workspaces === false;
+        if (
+            identitiesEqual(snapshot.node, node) &&
+            workspacesUnavailable === (snapshot.workspacesUnavailable === true)
+        )
+            return;
+        snapshot = {
+            ...(node === undefined ? {} : { node }),
+            ...(workspacesUnavailable ? { workspacesUnavailable } : {}),
+        };
         for (const listener of listeners) listener();
     };
     const reconcileRequest = (parent: AbortSignal): void => {

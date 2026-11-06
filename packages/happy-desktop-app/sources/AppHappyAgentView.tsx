@@ -528,6 +528,8 @@ export interface AppHappyAgentEntry {
     readonly instanceId?: string;
     /** A team server added by its address: that address, as the host Happy Agent normalized it. */
     readonly serverUrl?: string;
+    /** This Happy Agent runs no workspaces, so it has no projects to offer. */
+    readonly workspacesUnavailable?: true;
     readonly projects: readonly HappyAgentProjectGroup[];
     /**
      * This Happy Agent's bots. They are listed under a heading of their own
@@ -2503,8 +2505,10 @@ function happyAgentSections(
             ? [happyAgentTasksSection(happyAgent, titleShimmerEnabled)]
             : []),
         // The reader's own choice in settings for this connection: the
-        // section goes entirely, heading and all, rather than folding.
-        ...(projectsVisibilityConnection(projectsVisibility, happyAgent.id).projectsHidden
+        // section goes entirely, heading and all, rather than folding. A Happy
+        // Agent that runs no workspaces has no projects to list or add.
+        ...(projectsVisibilityConnection(projectsVisibility, happyAgent.id).projectsHidden ||
+        happyAgent.workspacesUnavailable
             ? []
             : [happyAgentProjectsSection(happyAgent, titleShimmerEnabled, folded)]),
     ]);

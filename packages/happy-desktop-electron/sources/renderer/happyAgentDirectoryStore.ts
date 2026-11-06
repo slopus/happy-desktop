@@ -109,6 +109,8 @@ export interface HappyAgentDirectoryEntry {
     readonly instanceId?: string;
     /** A team server added by its address: that address, as the host Happy Agent normalized it. */
     readonly serverUrl?: string;
+    /** This Happy Agent runs no workspaces, so it has no projects to offer. */
+    readonly workspacesUnavailable?: true;
     /**
      * Why this Happy Agent's daemon stopped admitting work, in its own words,
      * from its drain until a replacement admits work again.
@@ -815,10 +817,18 @@ export function happyAgentDirectoryStoreCreate(
         happyAgent.node = node;
         happyAgent.nodeUnsubscribe = node.subscribe(() => {
             if (happyAgent.node !== node) return;
-            const { node: identity } = node.get();
-            if (identity === happyAgent.entry.node) return;
-            const { node: _node, ...entry } = happyAgent.entry;
-            happyAgent.entry = identity === undefined ? entry : { ...entry, node: identity };
+            const { node: identity, workspacesUnavailable } = node.get();
+            if (
+                identity === happyAgent.entry.node &&
+                workspacesUnavailable === happyAgent.entry.workspacesUnavailable
+            )
+                return;
+            const { node: _node, workspacesUnavailable: _workspaces, ...entry } = happyAgent.entry;
+            happyAgent.entry = {
+                ...entry,
+                ...(identity === undefined ? {} : { node: identity }),
+                ...(workspacesUnavailable ? { workspacesUnavailable } : {}),
+            };
             publish();
         });
         // The person's choices about this Happy Agent are its own user
