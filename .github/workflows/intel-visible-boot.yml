@@ -1,0 +1,188 @@
+name: Compare Intel visible boot
+
+on:
+    push:
+        branches: [diag/intel-visible-boot]
+
+permissions:
+    contents: read
+
+jobs:
+    visible:
+        name: Happy ${{ matrix.version }} visible Intel boot
+        runs-on: macos-15-intel
+        timeout-minutes: 15
+        strategy:
+            fail-fast: false
+            matrix:
+                version: ["0.0.102", "0.0.103"]
+        steps:
+            - name: Check out diagnostic workflow
+              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+            - name: Download and copy the published standard app
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  DIAGNOSTIC_VERSION: ${{ matrix.version }}
+              shell: bash
+              run: |
+                  set -euo pipefail
+                  diagnostic_root="$RUNNER_TEMP/happy-visible-$DIAGNOSTIC_VERSION"
+                  mkdir -p artifacts "$diagnostic_root/application" "$diagnostic_root/mount"
+                  gh release view "v$DIAGNOSTIC_VERSION" --repo slopus/happy-desktop --json tagName,targetCommitish,publishedAt,assets > artifacts/release.json
+                  gh release download "v$DIAGNOSTIC_VERSION" --repo slopus/happy-desktop --pattern "Happy-$DIAGNOSTIC_VERSION-x64.dmg" --dir "$diagnostic_root"
+                  shasum -a 256 "$diagnostic_root/Happy-$DIAGNOSTIC_VERSION-x64.dmg" > artifacts/download.sha256
+                  hdiutil attach "$diagnostic_root/Happy-$DIAGNOSTIC_VERSION-x64.dmg" -readonly -nobrowse -mountpoint "$diagnostic_root/mount" | tee artifacts/mount.log
+                  trap 'hdiutil detach "$diagnostic_root/mount" || true' EXIT
+                  ditto "$diagnostic_root/mount/Happy.app" "$diagnostic_root/application/Happy.app"
+                  hdiutil detach "$diagnostic_root/mount"
+                  trap - EXIT
+                  plutil -p "$diagnostic_root/application/Happy.app/Contents/Info.plist" > artifacts/bundle-info.txt
+                  echo "DIAGNOSTIC_EXECUTABLE=$diagnostic_root/application/Happy.app/Contents/MacOS/Happy" >> "$GITHUB_ENV"
+                  sw_vers > artifacts/runner-os.txt
+                  system_profiler SPDisplaysDataType > artifacts/runner-displays.txt
+
+            - name: Observe visible launch for sixty seconds and request quit
+              env:
+                  DIAGNOSTIC_VERSION: ${{ matrix.version }}
+              shell: bash
+              run: |
+                  python3 - <<'PY'
+                  from datetime import datetime, timezone
+                  import json
+                  import os
+                  from pathlib import Path
+                  import re
+                  import shutil
+                  import subprocess
+                  import sys
+                  import tempfile
+                  import time
+
+                  assert os.environ.get("CI") == "true" and sys.platform == "darwin"
+                  version = os.environ["DIAGNOSTIC_VERSION"]
+                  executable = Path(os.environ["DIAGNOSTIC_EXECUTABLE"])
+                  bundle = executable.parents[2]
+                  actual_version = subprocess.check_output([
+                      "plutil", "-extract", "CFBundleShortVersionString", "raw", "-o", "-",
+                      str(bundle / "Contents/Info.plist"),
+                  ], text=True).strip()
+                  assert actual_version == version, (actual_version, version)
+                  artifacts = Path("artifacts").resolve()
+                  profile = Path(tempfile.mkdtemp(prefix="happy-visible-profile-", dir=os.environ["RUNNER_TEMP"]))
+                  home = profile / "home"
+                  home.mkdir()
+                  env = {
+                      key: value for key, value in os.environ.items()
+                      if not key.startswith("HAPPY_DESKTOP_") and key not in (
+                          "HAPPY_AGENT_SERVER_SOCKET_PATH", "HAPPY_AGENT_SERVER_TOKEN_PATH",
+                          "NODE_OPTIONS", "ELECTRON_RUN_AS_NODE", "VITE_DEV_SERVER_URL",
+                      )
+                  }
+                  env.update(HOME=str(home), USERPROFILE=str(home), HAPPY_HOME_DIR=str(home / ".happy"))
+
+                  def timestamp():
+                      return datetime.now(timezone.utc).isoformat()
+
+                  evidence = {
+                      "version": version, "startedAt": timestamp(), "visibleLaunch": True,
+                      "args": [str(executable), f"--user-data-dir={profile / 'user-data'}"],
+                      "environmentOverrides": {key: env[key] for key in ("HOME", "USERPROFILE", "HAPPY_HOME_DIR")},
+                      "observations": [],
+                  }
+                  child = None
+                  try:
+                      with (artifacts / "stdout.log").open("wb") as stdout, (artifacts / "stderr.log").open("wb") as stderr:
+                          child = subprocess.Popen(evidence["args"], env=env, stdout=stdout, stderr=stderr)
+                          evidence["pid"] = child.pid
+                          launched = time.monotonic()
+                          for seconds in (20, 40, 60):
+                              while time.monotonic() - launched < seconds:
+                                  if child.poll() is not None and "earlyExitAt" not in evidence:
+                                      evidence["earlyExitAt"] = timestamp()
+                                      evidence["earlyExitCode"] = child.returncode
+                                  time.sleep(0.1)
+                              observation = {
+                                  "scheduledSeconds": seconds, "at": timestamp(),
+                                  "elapsedSeconds": round(time.monotonic() - launched, 3),
+                                  "alive": child.poll() is None, "exitCode": child.returncode,
+                              }
+                              processes = subprocess.run([
+                                  "ps", "-axo", "pid=,ppid=,stat=,etime=,command=",
+                              ], capture_output=True, text=True, timeout=10)
+                              rows = []
+                              for line in processes.stdout.splitlines():
+                                  fields = line.strip().split(None, 4)
+                                  if len(fields) == 5:
+                                      rows.append((int(fields[0]), int(fields[1]), fields[4], line))
+                              relevant = {child.pid}
+                              relevant.update(pid for pid, _, command, _ in rows if str(bundle) in command)
+                              while True:
+                                  descendants = {pid for pid, parent, _, _ in rows if parent in relevant}
+                                  if descendants <= relevant:
+                                      break
+                                  relevant.update(descendants)
+                              (artifacts / f"processes-{seconds}s.txt").write_text(
+                                  "PID PPID STAT ELAPSED COMMAND\n" +
+                                  "\n".join(line for pid, _, _, line in rows if pid in relevant) + "\n"
+                              )
+                              screenshot = subprocess.run([
+                                  "screencapture", "-x", str(artifacts / f"desktop-{seconds}s.png"),
+                              ], capture_output=True, text=True, timeout=15)
+                              observation["screenshot"] = {
+                                  "code": screenshot.returncode, "stdout": screenshot.stdout,
+                                  "stderr": screenshot.stderr,
+                              }
+                              evidence["observations"].append(observation)
+                              (artifacts / "process.json").write_text(json.dumps(evidence, indent=2) + "\n")
+
+                          evidence["quitRequestedAt"] = timestamp()
+                          quit_started = time.monotonic()
+                          try:
+                              result = subprocess.run([
+                                  "osascript", "-e", f"tell application {json.dumps(str(bundle))} to quit",
+                              ], capture_output=True, text=True, timeout=15)
+                              evidence["quitRequest"] = {
+                                  "code": result.returncode, "stdout": result.stdout, "stderr": result.stderr,
+                              }
+                          except subprocess.TimeoutExpired as error:
+                              evidence["quitRequest"] = {"timeoutSeconds": error.timeout}
+                          while child.poll() is None and time.monotonic() - quit_started < 30:
+                              time.sleep(0.1)
+                          evidence["quitWaitSeconds"] = round(time.monotonic() - quit_started, 3)
+                          evidence["gracefulExitCode"] = child.poll()
+                          if child.poll() is not None:
+                              evidence["exitObservedAt"] = timestamp()
+                          else:
+                              evidence["killedAt"] = timestamp()
+                              child.kill()
+                              child.wait(timeout=5)
+                          evidence["finalExitCode"] = child.returncode
+                          evidence["finalSignal"] = -child.returncode if child.returncode < 0 else None
+                  finally:
+                      if child is not None and child.poll() is None:
+                          child.kill()
+                          child.wait(timeout=5)
+                      (artifacts / "process.json").write_text(json.dumps(evidence, indent=2) + "\n")
+                      logs = ""
+                      for name in ("stdout.log", "stderr.log"):
+                          path = artifacts / name
+                          if path.exists():
+                              logs += f"{name}:\n" + path.read_text(errors="replace") + "\n"
+                      (artifacts / "electron.log").write_text(logs)
+                      gpu = re.compile(r"gpu|egl|swiftshader|angle|gl_display|gldisplay|viz_main", re.IGNORECASE)
+                      (artifacts / "gpu.log").write_text("\n".join(line for line in logs.splitlines() if gpu.search(line)) + "\n")
+                      print(json.dumps(evidence, indent=2), flush=True)
+                      shutil.rmtree(profile)
+
+                  assert len(evidence["observations"]) == 3
+                  assert all(item["screenshot"]["code"] == 0 for item in evidence["observations"]), "OS screenshot failed; see process.json"
+                  PY
+
+            - name: Upload screenshots and launch evidence
+              if: always()
+              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+              with:
+                  name: intel-visible-${{ matrix.version }}
+                  path: artifacts/
+                  if-no-files-found: error
