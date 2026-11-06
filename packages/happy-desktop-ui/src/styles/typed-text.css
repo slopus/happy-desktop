@@ -10,12 +10,10 @@
  * The animation is only applied to text that replaced earlier text; the first
  * label a row ever shows is already there when the row appears.
  *
- * The reveal is a clip rather than a growing width. A label that changed its own
- * box fifty times a second made every ancestor lay out again on each step, and
- * the tool rows this animates sit inside a `ScrollingText` that watches its
- * content for exactly that — so a run of tool calls typing their subjects spent
- * the frame in layout instead of paint. Clipping paints the same reveal and
- * leaves the box alone.
+ * The reveal never changes the label's box: a label that changed its own box
+ * fifty times a second made every ancestor lay out again on each step, and the
+ * tool rows this animates sit inside a `ScrollingText` that watches its content
+ * for exactly that. Nor is it painted: see `[data-typing]` below.
  */
 
 .happy-typed-text {
@@ -27,7 +25,7 @@
     /* eslint-disable-next-line happy-layout/use-flex-layout -- the label is one inline text run that is revealed by clipping: as a flex box the text would become an anonymous, shrinkable item that squeezes instead of being clipped */
     display: inline-block;
     /* The label is one unwrapped run; nothing overflows its natural box, and
-       what the reveal has not reached yet is clipped by `clip-path` below. */
+       what the reveal has not reached yet is masked out below. */
     overflow: hidden;
     vertical-align: bottom;
     white-space: nowrap;
@@ -35,14 +33,34 @@
 }
 
 .happy-typed-text[data-typing] {
-    /* No fill mode: once typed, the label is unclipped again and stops
-       depending on the `ch` estimate for what it reveals.
+    /*
+     * The reveal is ink sliding in behind the glyphs, not a clip or a width.
+     * The label keeps its natural box for the whole animation, so a row
+     * typing its subject relays out nothing — which, inside a `ScrollingText`
+     * watching its content with a ResizeObserver, was fifty measurements and
+     * fifty layouts of the transcript around it per typing label — and it
+     * repaints nothing either: an animated clip is painted on the main thread
+     * every step, so a busy page froze the typing mid-word.
+     *
+     * The run masks itself to its own glyphs and paints none of its own; a
+     * box of its colour slides in from the left a step at a time behind them,
+     * on the compositor. At rest the box covers the whole run, so a typed
+     * label reads exactly as a still one.
+     */
+    position: relative;
+    -webkit-text-fill-color: transparent;
+    -webkit-mask-image: linear-gradient(black, black);
+    mask-image: linear-gradient(black, black);
+    -webkit-mask-clip: text;
+    mask-clip: text;
+}
 
-       The reveal is a clip, not a width. The label keeps its natural box for
-       the whole animation, so a row typing its subject repaints instead of
-       relaying out fifty times a second — which, inside a `ScrollingText`
-       watching its content with a ResizeObserver, was fifty measurements and
-       fifty layouts of the transcript around it per typing label. */
+.happy-typed-text[data-typing]::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: currentColor;
+    pointer-events: none;
     animation: happy-typed-text-type
         calc(var(--happy-typed-chars) * var(--happy-typed-char-duration))
         steps(var(--happy-typed-chars), end);
@@ -50,16 +68,16 @@
 
 @keyframes happy-typed-text-type {
     from {
-        clip-path: inset(0 100% 0 0);
+        transform: translateX(-100%);
     }
 
     to {
-        clip-path: inset(0 0 0 0);
+        transform: translateX(0);
     }
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .happy-typed-text[data-typing] {
+    .happy-typed-text[data-typing]::before {
         animation: none;
     }
 }

@@ -410,7 +410,11 @@ export function SetupProgress(props: SetupProgressProps) {
                 <span
                     className="happy-setup-page__progress-fill"
                     data-happy-desktop-ui="setup-page-progress-fill"
-                    style={measured ? { width: `${String(fraction * 100)}%` } : undefined}
+                    style={
+                        measured
+                            ? ({ "--happy-progress": String(fraction) } as CSSProperties)
+                            : undefined
+                    }
                 />
             </span>
             <span

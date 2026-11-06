@@ -167,13 +167,17 @@ export function ContextMeter(props: ContextMeterProps) {
                 data-happy-desktop-ui="context-meter-track"
             >
                 {/*
-                 * The fill is a width, not a transform: the bar is one hairline
-                 * tall and a scaled fill would smear its rounded end.
+                 * The fill is slid, not scaled: the bar is one hairline tall
+                 * and a scaled fill would smear its rounded end.
                  */}
                 <span
                     className="happy-context-meter__fill"
                     data-happy-desktop-ui="context-meter-fill"
-                    style={{ width: `${String(fraction * 100)}%` }}
+                    style={
+                        {
+                            "--happy-context-meter-fraction": String(fraction),
+                        } as CSSProperties
+                    }
                 />
                 <span className="happy-context-meter__shine" />
                 {/*

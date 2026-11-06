@@ -545,11 +545,15 @@
  */
 .happy-setup-page__progress-fill {
     display: block;
-    width: 0;
+    width: 100%;
     height: 100%;
     border-radius: inherit;
     background: var(--text);
-    transition: width 260ms ease-out;
+    /* The track's full width, slid in from the left by the share not yet
+       down and clipped by the track: a compositor move that keeps the fill's
+       rounded leading end, as a widening fill would. */
+    transform: translateX(calc((var(--happy-progress, 0) - 1) * 100%));
+    transition: transform 260ms ease-out;
 }
 
 /* Grows from empty even when its first paint already carries a number — an
@@ -558,14 +562,14 @@
    beginning. */
 @starting-style {
     .happy-setup-page__progress-fill {
-        width: 0;
+        transform: translateX(-100%);
     }
 }
 
 /* Nothing is measured yet, so nothing is claimed: the fill stays at zero and
    the track's own sweep says "running" without asserting a position. */
 .happy-setup-page__progress[data-state="waiting"] .happy-setup-page__progress-fill {
-    width: 0;
+    transform: translateX(-100%);
 }
 
 @keyframes happy-setup-page-progress-sweep {
@@ -624,7 +628,7 @@
     }
 
     .happy-setup-page__progress[data-state="waiting"] .happy-setup-page__progress-fill {
-        width: 100%;
+        transform: none;
         opacity: 0.4;
     }
 

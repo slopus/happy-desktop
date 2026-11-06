@@ -166,6 +166,14 @@ function variantParts(variant: SpinnerVariant) {
                     <span className="happy-spinner__fill" data-happy-desktop-ui="spinner-fill" />
                 </span>,
             );
+        case "circle":
+            /* The four phases of ◐◓◑◒ as four still layers inside one still
+               outline; only their opacity changes. */
+            return (
+                <span className="happy-spinner__glyph" data-happy-desktop-ui="spinner-glyph">
+                    {cells(4, "phase")}
+                </span>
+            );
         case "bounce":
             return bracketed(
                 <span className="happy-spinner__track" data-happy-desktop-ui="spinner-track">
@@ -184,6 +192,9 @@ function variantParts(variant: SpinnerVariant) {
  * exception: its tiny dots are stamped onto the actual device-pixel grid so
  * all eight retain one identical mask through their shared opacity cycle,
  * which the compositor runs.
+ *
+ * Every loop moves only `transform` and `opacity`, so it runs on the
+ * compositor and keeps turning while the page's main thread is busy.
  */
 export function Spinner(props: SpinnerProps) {
     const variant = props.variant ?? "braille-2";

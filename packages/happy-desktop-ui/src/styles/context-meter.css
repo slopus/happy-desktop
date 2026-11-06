@@ -77,12 +77,17 @@
 
 .happy-context-meter__fill {
     flex: none;
+    width: 100%;
     height: 100%;
     border-radius: var(--happy-radius-pill);
     background: currentColor;
+    /* The track's full width slid in from the left by the share not yet spent,
+       clipped by the track: a compositor move that keeps the fill's rounded
+       end, which a scaled fill would smear. */
+    transform: translateX(calc((var(--happy-context-meter-fraction, 0) - 1) * 100%));
     /* The window only ever moves by a report at a time; the ease keeps a jump
        from reading as a glitch without animating anything on its own. */
-    transition: width 240ms ease-out;
+    transition: transform 240ms ease-out;
 }
 
 /*

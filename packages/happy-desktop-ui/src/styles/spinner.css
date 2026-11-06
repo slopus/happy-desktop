@@ -13,6 +13,12 @@
  * `animation-play-state`, a fixture renders any CSS variant on an exact cell.
  * The Braille stamps read the same `data-frame` and park on it.
  *
+ * Every keyframe moves only `transform` or `opacity`, so each loop runs on the
+ * compositor and keeps turning while the main thread is busy — a loader is on
+ * screen exactly when the page is doing the most work. A shape that once
+ * changed its size, colour, clip, or painted image now holds that shape still
+ * and scales, turns, or fades it instead.
+ *
  * Declared widths: braille is twice its snapped dot pitch (8px at the 14px and
  * 16px production sizes); blocks are size * 1.125, bounce size * 2.625, bar
  * size * 3.5, and everything else is square.
@@ -247,38 +253,76 @@
  *
  * The dimensions are still snapped so the glyph is crisp at the common
  * ratios, which is a separate concern from whether it holds still.
+ *
+ * Nor is the fill repainted. Each of the four half-discs is a still layer of
+ * its own over the outline's whole box, rasterised once, and the loop only
+ * shows one and hides the rest — an opacity step, which the compositor runs
+ * however busy the page is. Swapping the painted gradient instead repainted
+ * the glyph on every frame, on the main thread, so a page at work froze every
+ * running tool's spinner.
  */
 .happy-spinner[data-variant="circle"] .happy-spinner__glyph {
+    --happy-spinner-ring: round(calc(var(--happy-spinner-size) / 16), 1px);
+
+    position: relative;
     width: round(calc(var(--happy-spinner-size) * 0.8125), 1px);
     height: round(calc(var(--happy-spinner-size) * 0.8125), 1px);
     /* Longhands: the shorthand puts a non-theme var inside a colour-bearing
      * declaration, which the theme rule forbids. */
-    border-width: round(calc(var(--happy-spinner-size) / 16), 1px);
+    border-width: var(--happy-spinner-ring);
     border-style: solid;
     border-color: currentcolor;
     border-radius: var(--happy-radius-pill);
-    /* Frame 0, so a glyph with no running animation still reads as the moon. */
-    background-image: linear-gradient(90deg, currentcolor 50%, transparent 50%);
+}
+
+/* Over the border box, as the painted gradient was, so a half's edge lies
+   under the ring of the same ink rather than beside it. */
+.happy-spinner[data-variant="circle"] .happy-spinner__phase {
+    position: absolute;
+    inset: calc(-1 * var(--happy-spinner-ring));
+    border-radius: inherit;
+    background-image: linear-gradient(
+        var(--happy-spinner-phase-angle),
+        currentcolor 50%,
+        transparent 50%
+    );
+    opacity: 0;
     animation-name: happy-spinner-phase;
 }
 
 /* Left, top, right, bottom — the same cycle a 90deg step rotation produced.
-   The shared `steps(1, end)` holds each phase for its whole frame. */
+   Each half shows for its own quarter of the loop; the shared `steps(1, end)`
+   holds it for the whole frame. The phase offsets a half's quarter forward. */
+.happy-spinner[data-variant="circle"] .happy-spinner__phase:nth-child(1) {
+    --happy-spinner-phase-angle: 90deg;
+
+    /* Frame 0, so a glyph with no running animation still reads as the moon. */
+    opacity: 1;
+}
+
+.happy-spinner[data-variant="circle"] .happy-spinner__phase:nth-child(2) {
+    --happy-spinner-phase-angle: 180deg;
+    --happy-spinner-phase: 0.75;
+}
+
+.happy-spinner[data-variant="circle"] .happy-spinner__phase:nth-child(3) {
+    --happy-spinner-phase-angle: 270deg;
+    --happy-spinner-phase: 0.5;
+}
+
+.happy-spinner[data-variant="circle"] .happy-spinner__phase:nth-child(4) {
+    --happy-spinner-phase-angle: 0deg;
+    --happy-spinner-phase: 0.25;
+}
+
 @keyframes happy-spinner-phase {
     0% {
-        background-image: linear-gradient(90deg, currentcolor 50%, transparent 50%);
+        opacity: 1;
     }
 
-    25% {
-        background-image: linear-gradient(180deg, currentcolor 50%, transparent 50%);
-    }
-
-    50% {
-        background-image: linear-gradient(270deg, currentcolor 50%, transparent 50%);
-    }
-
-    75% {
-        background-image: linear-gradient(0deg, currentcolor 50%, transparent 50%);
+    25%,
+    100% {
+        opacity: 0;
     }
 }
 
@@ -304,8 +348,12 @@
 .happy-spinner[data-variant="blocks"] .happy-spinner__bar {
     flex: none;
     width: calc(var(--happy-spinner-unit) * 1.5);
+    /* Full height, scaled down from the floor. */
+    height: 100%;
     border-radius: 1px;
     background: currentcolor;
+    transform: scaleY(0.25);
+    transform-origin: bottom;
     animation-name: happy-spinner-equalise;
     animation-timing-function: linear;
 }
@@ -324,27 +372,27 @@
 
 @keyframes happy-spinner-equalise {
     0% {
-        height: 25%;
+        transform: scaleY(0.25);
         animation-timing-function: steps(1, end);
     }
 
     25% {
-        height: 50%;
+        transform: scaleY(0.5);
         animation-timing-function: steps(1, end);
     }
 
     50% {
-        height: 100%;
+        transform: scaleY(1);
         animation-timing-function: steps(1, end);
     }
 
     75% {
-        height: 62.5%;
+        transform: scaleY(0.625);
         animation-timing-function: steps(1, end);
     }
 
     100% {
-        height: 25%;
+        transform: scaleY(0.25);
     }
 }
 
@@ -361,6 +409,7 @@
 .happy-spinner[data-variant="bar"] .happy-spinner__track {
     /* Eight cells of 3 units, the last one without its trailing gutter. */
     width: calc(var(--happy-spinner-cell) * 8 - var(--happy-spinner-unit));
+    overflow: clip;
     background-image: repeating-linear-gradient(
         90deg,
         var(--happy-spinner-dim) 0 calc(var(--happy-spinner-unit) * 2),
@@ -372,9 +421,11 @@
     width: 100%;
     height: 100%;
     /*
-     * The fill keeps the track's full width and reveals whole cells with
-     * clip-path, so the block pitch never rescales as the bar grows.
+     * The fill keeps the track's full width and slides in from the left a
+     * whole cell at a time, clipped by the track, so the block pitch never
+     * rescales and every lit block lands on a track cell.
      */
+    flex: none;
     background-image: repeating-linear-gradient(
         90deg,
         currentcolor 0 calc(var(--happy-spinner-unit) * 2),
@@ -386,11 +437,11 @@
 
 @keyframes happy-spinner-progress {
     from {
-        clip-path: inset(0 100% 0 0);
+        transform: translateX(calc(var(--happy-spinner-cell) * -8));
     }
 
     to {
-        clip-path: inset(0 0 0 0);
+        transform: translateX(0);
     }
 }
 
@@ -510,22 +561,39 @@
 }
 
 .happy-spinner[data-variant="toggle"] .happy-spinner__glyph {
+    position: relative;
     width: calc(var(--happy-spinner-size) * 0.75);
     height: 100%;
     border: 1px solid currentcolor;
     border-radius: 1px;
+}
+
+/* The filled half of ▮▯, a still layer over the border box that fades out and
+   back in. */
+.happy-spinner[data-variant="toggle"] .happy-spinner__glyph::before {
+    content: "";
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
     background-color: currentcolor;
     animation-name: happy-spinner-toggle;
+    animation-duration: var(--happy-spinner-duration);
     animation-timing-function: steps(2, jump-none);
+    animation-iteration-count: infinite;
+    animation-delay: calc(-1 * var(--happy-spinner-offset) * var(--happy-spinner-duration));
+}
+
+.happy-spinner[data-paused][data-variant="toggle"] .happy-spinner__glyph::before {
+    animation-play-state: paused;
 }
 
 @keyframes happy-spinner-toggle {
     from {
-        background-color: currentcolor;
+        opacity: 1;
     }
 
     to {
-        background-color: transparent;
+        opacity: 0;
     }
 }
 
@@ -565,7 +633,9 @@
 
 .happy-spinner[data-variant="grow-vertical"] .happy-spinner__glyph {
     width: calc(var(--happy-spinner-size) * 0.75);
+    height: 100%;
     border-radius: 1px;
+    transform-origin: bottom;
     background: currentcolor;
     animation-name: happy-spinner-grow-vertical;
     animation-timing-function: steps(6, jump-none);
@@ -574,11 +644,11 @@
 
 @keyframes happy-spinner-grow-vertical {
     from {
-        height: 12.5%;
+        transform: scaleY(0.125);
     }
 
     to {
-        height: 100%;
+        transform: scaleY(1);
     }
 }
 
@@ -591,8 +661,10 @@
 }
 
 .happy-spinner[data-variant="grow-horizontal"] .happy-spinner__glyph {
+    width: 100%;
     height: 100%;
     border-radius: 1px;
+    transform-origin: left;
     background: currentcolor;
     animation-name: happy-spinner-grow-horizontal;
     animation-timing-function: steps(7, jump-none);
@@ -601,11 +673,11 @@
 
 @keyframes happy-spinner-grow-horizontal {
     from {
-        width: 12.5%;
+        transform: scaleX(0.125);
     }
 
     to {
-        width: 100%;
+        transform: scaleX(1);
     }
 }
 

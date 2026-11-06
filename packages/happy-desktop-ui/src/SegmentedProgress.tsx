@@ -140,7 +140,9 @@ export function SegmentedProgress(props: SegmentedProgressProps) {
                             <span
                                 className="happy-segmented-progress__fill"
                                 data-happy-desktop-ui="segmented-progress-fill"
-                                style={{ width: `${String((fraction ?? 0) * 100)}%` }}
+                                style={
+                                    { "--happy-progress": String(fraction ?? 0) } as CSSProperties
+                                }
                             />
                         </span>
                         <span

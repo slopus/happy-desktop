@@ -93,20 +93,27 @@
  * the primary action beside it means. User-paced steps refine that ink below.
  * The width is eased because the counts behind it arrive in bursts; the ease
  * never shows a position the step has not reached.
+ *
+ * The fill is the track's full width, slid in from the left by the share it
+ * has not reached and clipped by the track, so it moves on the compositor
+ * while keeping its own rounded leading end, as a widening fill would.
  */
 .happy-segmented-progress__fill {
     display: block;
+    flex: none;
+    width: 100%;
     height: 100%;
     border-radius: inherit;
     background: var(--text);
-    transition: width 260ms ease-out;
+    transform: translateX(calc((var(--happy-progress, 0) - 1) * 100%));
+    transition: transform 260ms ease-out;
 }
 
 /* Grows from empty even when its first paint already carries a number: a bar
    that appears part full reads as one that lost its beginning. */
 @starting-style {
     .happy-segmented-progress__fill {
-        width: 0;
+        transform: translateX(-100%);
     }
 }
 
