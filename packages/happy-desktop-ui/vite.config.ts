@@ -179,6 +179,9 @@ export default defineConfig({
                         const box = await iframe.locator("[data-scrollbar-viewport]").first().boundingBox();
                         if (!box) throw new Error("Targeted wheel viewport is missing");
                         await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+                        const scale = await page.evaluate(() => window.devicePixelRatio);
+                        await page.mouse.wheel(0, -100 / scale);
+                        await new Promise((resolve) => setTimeout(resolve, 350));
                         const target = await frame();
                         await target.evaluate(async (distance) => {
                             const prepare = (window as Window & {
@@ -187,7 +190,6 @@ export default defineConfig({
                             if (!prepare) throw new Error("Targeted wheel fixture is missing");
                             await prepare(distance);
                         }, offset);
-                        const scale = await page.evaluate(() => window.devicePixelRatio);
                         await page.mouse.wheel(0, 100 / scale);
                         return;
                     }

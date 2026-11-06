@@ -200,6 +200,7 @@ it("records one real downward notch from controlled distances while streaming", 
                 const wheels = events.filter(
                     (event) => event.type === "wheel" && (event.deltaY ?? 0) > 0,
                 );
+                const prepared = events.find((event) => event.type === "prepared");
                 console.log(
                     "ONE_NOTCH_CASE " +
                         JSON.stringify({
@@ -215,6 +216,7 @@ it("records one real downward notch from controlled distances while streaming", 
                     `native wheel delivery at ${distance}px, iteration ${iteration}`,
                 ).toBe(1);
                 expect(wheels[0]?.trusted).toBe(true);
+                expect(prepared?.bottomDistance, `prepared distance at ${distance}px, iteration ${iteration}`).toBeCloseTo(distance, 0);
             }
         }
     } finally {
