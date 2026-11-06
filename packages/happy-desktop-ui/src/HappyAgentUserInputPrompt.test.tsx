@@ -112,7 +112,10 @@ it("gates submit on required questions and reports single/multi select answers",
     expect(boxes.every((box) => box.disabled)).toBe(true);
     const settled = answered.element.querySelector<HTMLButtonElement>('[data-action="submit"]')!;
     expect(settled.disabled).toBe(true);
-    expect(settled.textContent).toBe("Submitted");
+    // The reserve that holds its width is hidden from sight and from assistive tech.
+    expect(settled.querySelector(".happy-agent-input__submit-label")!.firstChild!.textContent).toBe(
+        "Submitted",
+    );
     expect(
         answered.element.querySelector('[data-happy-desktop-ui="happy-agent-user-input-answers"]'),
     ).toBeNull();

@@ -303,7 +303,7 @@ export function HappyAgentUserInputPrompt(props: HappyAgentUserInputPromptProps)
                         variant="secondary"
                     >
                         {/* As wide as "Submitted" from the start, so answering moves nothing. */}
-                        <span className="happy-agent-input__submit-label" data-reserve="Submitted">
+                        <span className="happy-agent-input__submit-label">
                             {resolved ? (
                                 "Submitted"
                             ) : props.pending ? (
@@ -311,6 +311,9 @@ export function HappyAgentUserInputPrompt(props: HappyAgentUserInputPromptProps)
                             ) : (
                                 "Submit"
                             )}
+                            <span aria-hidden className="happy-agent-input__submit-reserve">
+                                Submitted
+                            </span>
                         </span>
                     </Button>
                 </div>

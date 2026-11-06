@@ -3503,8 +3503,12 @@ export function MessageList(props: MessageListProps) {
                    mouse wheel animates each notch over several frames, and the
                    end that streaming moves meanwhile lands the animation short
                    of it, so the reader is taken there now rather than left a
-                   line above a live end that every later notch chases. */
-                const reach = messageListWheelPixels(event, element);
+                   line above a live end that every later notch chases. At a
+                   fractional scale the notch scrolls up to the device pixel
+                   ratio further than its reported delta. */
+                const reach =
+                    messageListWheelPixels(event, element) *
+                    Math.max(1, targetWindow.devicePixelRatio);
                 if (!event.ctrlKey && bottomOffset <= Math.max(BOTTOM_WHEEL_EPSILON, reach))
                     event.preventDefault();
                 if (bottomOffset <= Math.max(FOLLOW_BOTTOM_THRESHOLD, reach)) {
