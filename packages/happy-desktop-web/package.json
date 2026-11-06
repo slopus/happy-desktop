@@ -6,6 +6,7 @@
     "scripts": {
         "dev": "vite --host 127.0.0.1",
         "build": "vite build",
+        "build:cloud-web": "HAPPY_TARGET=cloud-web vite build --outDir dist/cloud-web --emptyOutDir",
         "typecheck": "tsc --project tsconfig.json",
         "format": "oxfmt --write .",
         "format:check": "oxfmt --check .",

@@ -97,6 +97,7 @@ import {
     type HappyAgentStateDocument,
     type HappyAgentServerRow,
     type HappyAgentServerSignIn,
+    HappyCloudWebSettings,
 } from "happy-desktop-ui";
 import { HappyAgentVersionProvider } from "../HappyAgentVersionProvider";
 import {
@@ -449,8 +450,17 @@ const usageAnalyticsAbsent: UsageAnalyticsStore = {
     usageAnalyticsUpdate: () => undefined,
 };
 
+/** The cloud web app's session at the edge: its server, switching, and signing out. */
+export interface AppCloudWebSession {
+    readonly serverName: string;
+    onServerSwitch(): void;
+    onSignOut(): void;
+}
+
 export interface AppHappyAgentSettingsViewProps {
     appearance: AppearanceStore;
+    /** Present only in the cloud web app. */
+    cloudWebSession?: AppCloudWebSession;
     /** Whether this desktop fills logins saved in the person's browsers (macOS and Windows). */
     browserPasswordsAvailable?: boolean;
     /** Application update status remains visible here while the footer waits for a download. */
@@ -1212,6 +1222,13 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
             ) : section === "account" ? (
                 // The local author identity and optional WorkOS connection.
                 <>
+                    {props.cloudWebSession ? (
+                        <HappyCloudWebSettings
+                            onServerSwitch={props.cloudWebSession.onServerSwitch}
+                            onSignOut={props.cloudWebSession.onSignOut}
+                            serverName={props.cloudWebSession.serverName}
+                        />
+                    ) : null}
                     <HappyAgentProfileSettings
                         dirty={profile.dirty}
                         email={profile.email}
@@ -1255,21 +1272,25 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                         {...(profile.saveError ? { saveError: profile.saveError } : {})}
                         {...(unavailable === undefined ? {} : { unavailable })}
                     />
-                    <HappyAgentAccountSettings
-                        authorizationCompleting={cloud.authorizationCompleting}
-                        authorizationStarting={cloud.authorizationStarting}
-                        disconnecting={cloud.disconnecting}
-                        onConnect={() => {
-                            if (happyAgentOnline()) cloudStore.cloudAccountConnect();
-                        }}
-                        onDisconnect={() => {
-                            if (happyAgentOnline()) cloudStore.cloudAccountDisconnect();
-                        }}
-                        status={cloud.status}
-                        {...(cloud.error ? { error: cloud.error.message } : {})}
-                        {...(cloud.user ? { email: cloud.user.email } : {})}
-                        {...(unavailable === undefined ? {} : { unavailable })}
-                    />
+                    {/* The web app's Happy Cloud session stands in for the
+                        machine's own WorkOS connection, which it has none of. */}
+                    {props.cloudWebSession ? null : (
+                        <HappyAgentAccountSettings
+                            authorizationCompleting={cloud.authorizationCompleting}
+                            authorizationStarting={cloud.authorizationStarting}
+                            disconnecting={cloud.disconnecting}
+                            onConnect={() => {
+                                if (happyAgentOnline()) cloudStore.cloudAccountConnect();
+                            }}
+                            onDisconnect={() => {
+                                if (happyAgentOnline()) cloudStore.cloudAccountDisconnect();
+                            }}
+                            status={cloud.status}
+                            {...(cloud.error ? { error: cloud.error.message } : {})}
+                            {...(cloud.user ? { email: cloud.user.email } : {})}
+                            {...(unavailable === undefined ? {} : { unavailable })}
+                        />
+                    )}
                 </>
             ) : section === "file-tiers" ? (
                 fileTierSettings(changeTiers, changeTiersStore, unavailable)

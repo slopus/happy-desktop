@@ -15,6 +15,8 @@ const unavailableReactDevtoolsCore = fileURLToPath(
 );
 const profileBuild = process.env.HAPPY_DESKTOP_PROFILE === "1";
 const localWebSite = process.env.HAPPY_LOCAL_WEB_SITE === "1";
+// The cloud web app: one Happy Cloud server's client, served from that server's origin.
+const cloudWeb = process.env.HAPPY_TARGET === "cloud-web";
 const localWebBuild = localWebSite
     ? {
           buildId: process.env.HAPPY_LOCAL_WEB_BUILD_ID ?? "development",
@@ -52,7 +54,7 @@ function profilerEntryPlugin(enabled: boolean): Plugin {
 }
 
 export default defineConfig({
-    base: localWebSite ? "/" : "./",
+    base: localWebSite || cloudWeb ? "/" : "./",
     // The profile entry must own the React DevTools hook before React DOM is
     // evaluated. Vite's normal Fast Refresh preamble installs a placeholder
     // hook first, so profile development deliberately disables HMR (the
@@ -63,6 +65,7 @@ export default defineConfig({
     define: {
         __HAPPY_ALLOW_SOURCE_AGENT__: JSON.stringify(process.env.HAPPY_ALLOW_SOURCE_AGENT === "1"),
         __HAPPY_DESKTOP_PROFILE__: JSON.stringify(profileBuild),
+        __HAPPY_CLOUD_WEB__: JSON.stringify(cloudWeb),
         __HAPPY_LOCAL_WEB_BUILD_ID__: JSON.stringify(localWebBuild?.buildId ?? null),
         __HAPPY_LOCAL_WEB_VERSION__: JSON.stringify(localWebBuild?.version ?? null),
         // The version this renderer was built as, which is what analytics

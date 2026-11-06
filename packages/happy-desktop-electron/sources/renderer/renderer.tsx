@@ -1,3 +1,6 @@
+// First, so the cloud web app's session handling is in place before any
+// module captures `fetch`.
+import { CLOUD_WEB_PICKER_URL, cloudWeb, cloudWebSignOut } from "./cloudWeb";
 import { useSyncExternalStore, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { RouterProvider } from "@tanstack/react-router";
@@ -128,6 +131,7 @@ import {
 import { happyAgentDirectoryLinkTarget } from "./happyAgentDirectoryLinkTarget";
 import { startupValuesStoreCreate, type StartupValuesStore } from "./startupValuesStore";
 import { browserDevBridgeCreate } from "./browserDevBridge";
+import { cloudWebBridgeCreate } from "./cloudWebBridge";
 import { localWebBuild } from "./localWebBuild";
 import {
     localWebUpdateStoreCreate,
@@ -457,6 +461,7 @@ function HappyAgentBoundary(props: {
             context={{
                 appearance: props.appearance,
                 browserPasswordsAvailable: props.browserPasswordsAvailable,
+                ...(cloudWebSession ? { cloudWebSession } : {}),
                 browserContent: props.browserContent,
                 // A development window says which checkout it came from; the
                 // packaged product supplies nothing and shows nothing.
@@ -1141,9 +1146,22 @@ function DesktopRuntimeContent(
 
 // Browser-local dev mode is signalled by a CSP-safe meta tag the dev server
 // injects (an inline script would be blocked by the page's script-src policy).
+// The cloud web app is a browser tab too, with its own server as the bridge's
+// Happy Agent.
 const browserLocal =
+    cloudWeb ||
     document.querySelector('meta[name="happy-browser-local"]')?.getAttribute("content") === "1";
-const bridge = window.happyDesktop ?? (browserLocal ? browserDevBridgeCreate() : undefined);
+/** The cloud web app's own server, switching and signing out, for Settings. */
+const cloudWebSession = cloudWeb
+    ? {
+          serverName: window.location.hostname.split(".")[0] ?? window.location.hostname,
+          onServerSwitch: () => window.location.assign(CLOUD_WEB_PICKER_URL),
+          onSignOut: () => void cloudWebSignOut(),
+      }
+    : undefined;
+const bridge =
+    window.happyDesktop ??
+    (cloudWeb ? cloudWebBridgeCreate() : browserLocal ? browserDevBridgeCreate() : undefined);
 desktopRowHeightCheckInstall();
 const root = createRoot(document.getElementById("root")!);
 // A todo list is laid over a picture; fetching and decoding both of them now
@@ -1656,7 +1674,7 @@ if (mediaPreviewBridge) {
         // What this window reports about how it is used, read from the same
         // directory the sidebar reads. Development windows send nothing.
         const analytics = desktopAnalyticsCreate({
-            development: browserLocal || desktopBridge.buildIdentity !== undefined,
+            development: (browserLocal && !cloudWeb) || desktopBridge.buildIdentity !== undefined,
             happyAgents,
             ...(desktopBridge.system ? { system: desktopBridge.system } : {}),
         });

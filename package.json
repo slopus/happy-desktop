@@ -11,6 +11,7 @@
     "type": "module",
     "scripts": {
         "dev": "node scripts/dev-desktop.mjs",
+        "build:cloud-web": "pnpm --dir packages/happy-desktop-web build:cloud-web",
         "dev:web": "PORTLESS_LAN=0 PORTLESS_LAN_IP= PORTLESS_TLD=localhost pnpm exec portless run --name happy-desktop-web node scripts/dev-web.mjs",
         "dev:desktop": "node scripts/dev-desktop.mjs",
         "dev:desktop:electron": "node scripts/dev-desktop.mjs",

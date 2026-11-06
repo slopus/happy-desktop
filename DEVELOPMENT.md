@@ -112,14 +112,14 @@ pnpm --dir packages/happy-desktop-app typecheck
 pnpm --dir packages/happy-desktop-electron lint
 ```
 
-| Package                           | Responsibility                                         |
-| --------------------------------- | ------------------------------------------------------ |
-| `packages/happy-desktop-state`    | Framework-independent product state and agent protocol |
-| `packages/happy-desktop-ui`       | Reusable components and the component blueprint        |
-| `packages/happy-desktop-app`      | Application composition and routing                    |
-| `packages/happy-desktop-electron` | Electron shell and local daemon boundary               |
-| `packages/happy-desktop-web`      | Browser development entry                              |
-| `packages/happy-desktop-gym`      | Rendering and desktop verification utilities           |
+| Package                           | Responsibility                                                                                        |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `packages/happy-desktop-state`    | Framework-independent product state and agent protocol                                                |
+| `packages/happy-desktop-ui`       | Reusable components and the component blueprint                                                       |
+| `packages/happy-desktop-app`      | Application composition and routing                                                                   |
+| `packages/happy-desktop-electron` | Electron shell and local daemon boundary                                                              |
+| `packages/happy-desktop-web`      | Browser development entry; `pnpm build:cloud-web` builds the cloud web app (static, `dist/cloud-web`) |
+| `packages/happy-desktop-gym`      | Rendering and desktop verification utilities                                                          |
 
 ## Gym (advanced)
 

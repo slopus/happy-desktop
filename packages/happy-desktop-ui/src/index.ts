@@ -1109,6 +1109,10 @@ export {
     type HappyAgentPasswordSettingsProps,
 } from "./pages/settings/HappyAgentPasswordSettings";
 export {
+    HappyCloudWebSettings,
+    type HappyCloudWebSettingsProps,
+} from "./pages/settings/HappyCloudWebSettings";
+export {
     HappyAgentSecretCreateDialog,
     type HappyAgentSecretCreateDialogProps,
     type HappyAgentSecretCreateDraft,
