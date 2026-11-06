@@ -14,9 +14,9 @@ jobs:
             fail-fast: false
             matrix:
                 include:
-                    - revision: 3a20d9e5
+                    - revision: 3a20d9e5bda9f9bfe844f04e6fe4214c2c5a5008
                       label: preceding-product-tip
-                    - revision: ae5a0ca3
+                    - revision: ae5a0ca33017421e863bf68ea65c72d75a80d48c
                       label: validation-tip
         runs-on: ubuntu-24.04
         timeout-minutes: 25
