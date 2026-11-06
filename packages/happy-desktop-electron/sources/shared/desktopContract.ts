@@ -43,6 +43,10 @@ export interface DesktopHappyCloud {
     serverConnect(serverId: string): Promise<DesktopServerSignInResult<string>>;
     /** A listed server's picture as a `data:` URL, or `undefined` when it can't be read. */
     imageRead(serverId: string): Promise<string | undefined>;
+    /** Revokes the server's sign-in at Happy Cloud and takes it off this app's list. */
+    serverRemove(name: string): Promise<void>;
+    /** Forgets the account's pass; added servers stay signed in. */
+    accountSignOut(): Promise<void>;
 }
 
 export interface DesktopCloudAuthConfiguration {
@@ -1157,6 +1161,8 @@ export const desktopIpc = {
     happyCloudServerJoin: "happy:happy-cloud:server-join",
     happyCloudServerConnect: "happy:happy-cloud:server-connect",
     happyCloudImageRead: "happy:happy-cloud:image-read",
+    happyCloudServerRemove: "happy:happy-cloud:server-remove",
+    happyCloudAccountSignOut: "happy:happy-cloud:account-sign-out",
     serverSessionsChanged: "happy:server-sessions:changed",
     happyLinkExternalReceived: "happy:happy-link:external-received",
     happyLinkExternalTake: "happy:happy-link:external-take",

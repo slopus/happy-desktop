@@ -113,6 +113,11 @@ export interface ServerSessions extends HappyAgentRemoteAuthorization {
      * at the credential's address.
      */
     directSignIn(connectionId: string, credential: OAuthCredential): void;
+    /**
+     * Drops a Happy Cloud sign-in quietly and hands back its refresh token,
+     * for the caller to revoke, or `null` when it had none.
+     */
+    directSignOut(connectionId: string): string | null;
     /** Every current access token and its bound address, by connection, for the isolated transport. */
     tokens(): Readonly<Record<string, ServerRemoteCredential>>;
     get(): readonly ServerSessionSnapshot[];
@@ -666,6 +671,11 @@ export function serverSessionsCreate(deps: ServerSessionsDeps): ServerSessions {
                     "audience_mismatch",
                 );
             sessionStore(connectionId, url, credential);
+        },
+        directSignOut(connectionId) {
+            const refreshToken = sessions.get(connectionId)?.credential.refreshToken ?? null;
+            sessionEnd(connectionId, undefined);
+            return refreshToken;
         },
         get: () => snapshot,
         subscribe(listener) {

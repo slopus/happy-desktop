@@ -106,6 +106,7 @@ import {
     type DesktopUpdateSnapshot,
     type HappyDesktopBridge,
 } from "../shared/desktopContract";
+import { happyCloudServerNameOf } from "../shared/happyCloud";
 import { desktopStartRequestFromValues, desktopStartupValues } from "./desktopStartupModel";
 import { dockUnreadPublish, happyAgentEntryUnreadCount } from "./dockUnread";
 import { happyAgentListedConversations } from "./happyAgentListed";
@@ -268,6 +269,20 @@ function completionSoundMenuItems(current: HappyAgentCompletionSound): MenuItem[
             }),
         ),
     ];
+}
+
+const CLOUD_SIGN_OUT_ACTION = "happy-cloud-sign-out";
+const CLOUD_REMOVE_ACTION = "happy-cloud-remove";
+const CLOUD_SERVER_MENU_ITEMS: readonly MenuItem[] = [
+    { kind: "separator" },
+    { kind: "item", id: CLOUD_SIGN_OUT_ACTION, label: "Sign out of Happy Cloud" },
+    { kind: "item", id: CLOUD_REMOVE_ACTION, label: "Remove from Happy", danger: true },
+];
+
+/** The Happy Cloud connection a rail entry stands for, by its entry ID. */
+function cloudServerConnectionOf(id: string): string | undefined {
+    const connectionId = id.startsWith("connection:") ? id.slice("connection:".length) : id;
+    return happyCloudServerNameOf(connectionId) === undefined ? undefined : connectionId;
 }
 
 function completionSoundOf(actionId: string): HappyAgentCompletionSound | undefined {
@@ -791,14 +806,28 @@ function DesktopScreens(props: DesktopRendererProps) {
                 })}
                 selectedId={directory.activeHappyAgentId ?? LOCAL_HAPPY_AGENT_ID}
                 onSelect={props.happyAgents.happyAgentActivate}
-                itemMenuItems={(item) =>
-                    completionSoundMenuItems(
+                itemMenuItems={(item) => [
+                    ...completionSoundMenuItems(
                         happyAgentAttentionConnection(attention, item.id).completionSound,
-                    )
-                }
+                    ),
+                    ...(props.cloudConnect && cloudServerConnectionOf(item.id) !== undefined
+                        ? CLOUD_SERVER_MENU_ITEMS
+                        : []),
+                ]}
                 onItemMenuSelect={(id, actionId) => {
                     const sound = completionSoundOf(actionId);
                     if (sound) props.attention.completionSoundUpdate(id, sound);
+                    const cloud = props.bridge.happyCloud;
+                    const connectionId = cloudServerConnectionOf(id);
+                    if (!cloud || connectionId === undefined) return;
+                    if (actionId === CLOUD_SIGN_OUT_ACTION) void cloud.accountSignOut();
+                    if (actionId === CLOUD_REMOVE_ACTION) {
+                        const name = happyCloudServerNameOf(connectionId);
+                        if (name === undefined) return;
+                        void cloud.serverRemove(name).then(() => {
+                            props.happyAgents.happyAgentCloudForget?.(connectionId);
+                        });
+                    }
                 }}
                 onReorder={
                     directory.happyAgents.some(

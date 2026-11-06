@@ -30,6 +30,10 @@ export interface HappyCloud {
     serverConnect(serverId: string): Promise<DesktopServerSignInResult<string>>;
     /** A listed server's picture as a `data:` URL, read with the account token. */
     imageRead(serverId: string): Promise<string | undefined>;
+    /** Revokes a server's sign-in at the accounts service, then forgets the server here. */
+    serverRemove(name: string): Promise<void>;
+    /** Forgets the account's pass; the servers' own sign-ins stay. */
+    accountSignOut(): void;
 }
 
 type Failure = { readonly ok: false; readonly message: string; readonly code: string };
@@ -213,6 +217,37 @@ export function happyCloudCreate(input: {
             } catch {
                 return undefined;
             }
+        },
+        async serverRemove(name) {
+            const connectionId = happyCloudConnectionId(name);
+            const refreshToken = input.sessions().directSignOut(connectionId);
+            if (names.includes(name)) {
+                names = names.filter((entry) => entry !== name);
+                void writeFile(input.listPath, `${JSON.stringify(names)}\n`).catch(
+                    (error: unknown) =>
+                        console.error("Happy Cloud servers could not be saved.", error),
+                );
+                input.sessions().directChanged();
+            }
+            if (refreshToken === null) return;
+            // RFC 7009: the answer is always 200, and a failed revocation
+            // still leaves the server forgotten here.
+            await input
+                .fetch(new URL("revoke", HAPPY_CLOUD_ACCOUNTS_URL), {
+                    method: "POST",
+                    headers: { "content-type": "application/x-www-form-urlencoded" },
+                    body: new URLSearchParams({
+                        token: refreshToken,
+                        client_id: "happy",
+                    }).toString(),
+                    redirect: "error",
+                })
+                .catch(() => undefined);
+        },
+        accountSignOut() {
+            const sessions = input.sessions();
+            const credential = sessions.credential(HAPPY_CLOUD_ACCOUNT_ID);
+            if (credential) sessions.signInRequire(HAPPY_CLOUD_ACCOUNT_ID, credential.accessToken);
         },
         async serverConnect(serverId) {
             const server = known.get(serverId);

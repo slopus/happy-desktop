@@ -162,6 +162,8 @@ export interface HappyAgentDirectoryStore {
     happyAgentCloudConnect?(
         connectionId: string,
     ): Promise<{ readonly ok: true } | { readonly ok: false; readonly message: string }>;
+    /** Stops listing a Happy Cloud server the shell removed. */
+    happyAgentCloudForget?(connectionId: string): void;
 }
 
 /** How long a Happy Cloud server may take to be reported signed in after the shell holds its tokens. */
@@ -1109,6 +1111,12 @@ export function happyAgentDirectoryStoreCreate(
                                     };
                                 roster?.connectionSelect(item.id);
                                 return { ok: true };
+                            },
+                            happyAgentCloudForget(connectionId: string) {
+                                const wanted = new Set(cloudWanted);
+                                wanted.delete(connectionId);
+                                cloudWanted = wanted;
+                                sessionsReconcile();
                             },
                         }
                       : {}),

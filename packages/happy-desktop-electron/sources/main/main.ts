@@ -2037,6 +2037,14 @@ void app
                 desktopDaemonSenderRequire(event.sender);
                 return typeof value === "string" ? cloud.imageRead(value) : undefined;
             });
+            ipcMain.handle(desktopIpc.happyCloudServerRemove, (event, value: unknown) => {
+                desktopDaemonSenderRequire(event.sender);
+                return cloud.serverRemove(name(value));
+            });
+            ipcMain.handle(desktopIpc.happyCloudAccountSignOut, (event) => {
+                desktopDaemonSenderRequire(event.sender);
+                cloud.accountSignOut();
+            });
             ipcMain.handle(desktopIpc.happyCloudServerConnect, (event, value: unknown) => {
                 desktopDaemonSenderRequire(event.sender);
                 if (typeof value !== "string" || value.length > 128)
