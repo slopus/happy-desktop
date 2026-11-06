@@ -19,8 +19,15 @@ const SERVER_NAME = /^[a-z0-9](?:[a-z0-9-]{1,30}[a-z0-9])$/u;
 export interface HappyCloudServer {
     readonly id: string;
     readonly name: string;
+    /** The server's own name for itself, or `name` while it has none. */
+    readonly displayName: string;
     readonly url: string;
     readonly role: "owner" | "member";
+    /**
+     * The server's picture: its ThumbHash, painted until the bytes arrive
+     * through `DesktopHappyCloud.imageRead`. Absent when it has none.
+     */
+    readonly image?: { readonly thumbhash: string };
 }
 
 /** Whether a server name is one Happy Cloud could have issued. */

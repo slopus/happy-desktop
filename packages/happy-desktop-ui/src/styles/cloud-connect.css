@@ -38,9 +38,8 @@
 }
 .happy-cloud-connect__server {
     display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 2px;
+    align-items: center;
+    gap: 12px;
     padding: 8px 12px;
     border: 1px solid var(--divider);
     border-radius: 10px;
@@ -93,4 +92,21 @@
 }
 .happy-cloud-connect__hint[data-tone="danger"] {
     color: var(--status-error);
+}
+.happy-cloud-connect__server-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+.happy-cloud-connect__server-image {
+    display: block;
+    flex: none;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    object-fit: cover;
+    /* The ThumbHash placeholder, painted under the picture until it loads. */
+    background-size: cover;
+    background-position: center;
 }

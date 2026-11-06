@@ -66,12 +66,43 @@ export function desktopCloudConnectStoreCreate(input: {
     };
     const current = (asked: number): boolean => asked === generation && view !== undefined;
 
-    const serverView = (server: HappyCloudServer): CloudConnectServer => ({
-        id: server.id,
-        name: server.name,
-        host: new URL(server.url).host,
-        role: server.role,
-    });
+    // Pictures read for this dialog, by server ID; a server's row shows its
+    // ThumbHash until its bytes are here.
+    const images = new Map<string, string>();
+    const serverView = (server: HappyCloudServer): CloudConnectServer => {
+        const url = images.get(server.id);
+        return {
+            id: server.id,
+            displayName: server.displayName,
+            host: new URL(server.url).host,
+            role: server.role,
+            ...(server.image
+                ? {
+                      image: {
+                          thumbhash: server.image.thumbhash,
+                          ...(url === undefined ? {} : { url }),
+                      },
+                  }
+                : {}),
+        };
+    };
+    const imagesRead = (asked: number): void => {
+        for (const server of servers) {
+            if (!server.image || images.has(server.id)) continue;
+            void cloud.imageRead(server.id).then((url) => {
+                if (url === undefined || !current(asked)) return;
+                images.set(server.id, url);
+                picker((value) =>
+                    value.servers.status === "ready"
+                        ? {
+                              ...value,
+                              servers: { status: "ready", servers: servers.map(serverView) },
+                          }
+                        : value,
+                );
+            });
+        }
+    };
 
     const list = async (asked: number): Promise<"signInRequired" | "done"> => {
         const answer = await cloud.serversList();
@@ -90,6 +121,7 @@ export function desktopCloudConnectStoreCreate(input: {
                 create: { name: "", availability: "idle" },
                 join: { name: "", code: "" },
             });
+        imagesRead(asked);
         return "done";
     };
 
@@ -142,6 +174,7 @@ export function desktopCloudConnectStoreCreate(input: {
         connectOpen() {
             if (view !== undefined) return;
             generation += 1;
+            images.clear();
             set({ kind: "confirm" });
         },
         connectCancel() {

@@ -4622,6 +4622,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
             return (
                 <HappyAgentWorkspaceSurface
                     instanceId={active.instanceId}
+                    {...(active.workspacesUnavailable ? { workspacesUnavailable: true } : {})}
                     {...(storiesStore ? { onStoryOpen: storiesStore.storyOpen } : {})}
                     {...(referenceSurfaces ? { referenceSurfaces } : {})}
                     availability={
@@ -6581,6 +6582,8 @@ function HappyAgentArtifactsPanelSurface(props: {
 }
 
 interface HappyAgentWorkspaceSurfaceProps {
+    /** This Happy Agent runs no workspaces, so its empty pane offers no project. */
+    workspacesUnavailable?: true;
     /**
      * The instance this machine's health named, which a link naming an
      * instance must match to resolve here; absent while it has not said.
@@ -8383,9 +8386,16 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                             name="Workspace"
                             phase="refused"
                         />
-                    ) : (
-                        /* Keep project setup in the main empty pane: the sidebar
+                    ) : /* Keep project setup in the main empty pane: the sidebar
                            explains why it is empty without repeating this action. */
+                    props.workspacesUnavailable ? (
+                        <EmptyState
+                            description="Pick a bot or a task in the sidebar."
+                            icon="chat"
+                            size="panel"
+                            title="Nothing open"
+                        />
+                    ) : (
                         <EmptyState
                             {...(availability.online
                                 ? {

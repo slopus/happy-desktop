@@ -26,10 +26,16 @@ const WINDOW = { height: 760, width: 1100 } as const;
 const noop = () => undefined;
 
 const SERVERS = [
-    { id: "s1", name: "acme", host: "acme.happy.computer", role: "owner" as const },
+    {
+        id: "s1",
+        displayName: "Acme Corp",
+        host: "acme.happy.computer",
+        role: "owner" as const,
+        image: { thumbhash: "HAgGXxBVauaQSKZWmNmKFmhmhjAoCYMC" },
+    },
     {
         id: "s2",
-        name: "design-guild",
+        displayName: "Design Guild",
         host: "design-guild.happy.computer",
         role: "member" as const,
     },

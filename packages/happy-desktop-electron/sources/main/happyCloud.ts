@@ -23,6 +23,8 @@ export interface HappyCloud {
     serverJoin(name: string, code: string): Promise<DesktopServerSignInResult<HappyCloudServer>>;
     /** Lists a server the account belongs to as a connection, and returns its connection ID. */
     serverAdd(name: string): DesktopServerSignInResult<string>;
+    /** A listed server's picture as a `data:` URL, read with the account token. */
+    imageRead(serverId: string): Promise<string | undefined>;
 }
 
 type Failure = { readonly ok: false; readonly message: string; readonly code: string };
@@ -45,6 +47,8 @@ export function happyCloudCreate(input: {
     readonly sessions: () => ServerSessions;
 }): HappyCloud {
     let names = listRead(input.listPath);
+    /** Each listed server's picture address, from the last list; only the accounts origin. */
+    const images = new Map<string, string>();
     const servers = (): ReadonlyMap<string, string> =>
         new Map(names.map((name) => [happyCloudConnectionId(name), happyCloudServerUrl(name)]));
 
@@ -120,11 +124,18 @@ export function happyCloudCreate(input: {
         },
         async serversList() {
             return result(
-                await accountsCall("GET", "v1/servers", undefined, (status, json) =>
-                    status === 200 && Array.isArray(json.servers)
-                        ? json.servers.flatMap((value) => serverRead(value) ?? [])
-                        : failure(json, "Your servers couldn't be read."),
-                ),
+                await accountsCall("GET", "v1/servers", undefined, (status, json) => {
+                    if (status !== 200 || !Array.isArray(json.servers))
+                        return failure(json, "Your servers couldn't be read.");
+                    images.clear();
+                    return json.servers.flatMap((value) => {
+                        const server = serverRead(value);
+                        if (!server) return [];
+                        const url = imageUrlRead(value);
+                        if (url !== undefined) images.set(server.id, url);
+                        return [server];
+                    });
+                }),
             );
         },
         async availability(name) {
@@ -177,6 +188,23 @@ export function happyCloudCreate(input: {
                 ),
             );
         },
+        async imageRead(serverId) {
+            const url = images.get(serverId);
+            const credential = input.sessions().credential(HAPPY_CLOUD_ACCOUNT_ID);
+            if (url === undefined || !credential) return undefined;
+            try {
+                const response = await input.fetch(url, {
+                    headers: { authorization: `Bearer ${credential.accessToken}` },
+                    redirect: "error",
+                });
+                const type = response.headers.get("content-type") ?? "";
+                if (!response.ok || !type.startsWith("image/")) return undefined;
+                const bytes = Buffer.from(await response.arrayBuffer());
+                return `data:${type};base64,${bytes.toString("base64")}`;
+            } catch {
+                return undefined;
+            }
+        },
         serverAdd(name) {
             if (!happyCloudServerNameValid(name))
                 return { ok: false, message: "That isn't a server name.", code: "invalid" };
@@ -216,11 +244,29 @@ function serverRead(value: unknown): HappyCloudServer | undefined {
         !happyCloudServerNameValid(server.name)
     )
         return undefined;
+    const image = server.image as Record<string, unknown> | null | undefined;
     return {
         id: server.id,
         name: server.name,
+        displayName:
+            typeof server.displayName === "string" && server.displayName.trim() !== ""
+                ? server.displayName
+                : server.name,
         // The address is this build's, from the name: never one the API hands over.
         url: happyCloudServerUrl(server.name),
         role: server.role === "owner" ? "owner" : "member",
+        ...(typeof image?.thumbhash === "string" ? { image: { thumbhash: image.thumbhash } } : {}),
     };
+}
+
+/** A server's picture address, only when it is on the accounts origin the token belongs to. */
+function imageUrlRead(value: unknown): string | undefined {
+    const image = (value as { readonly image?: { readonly url?: unknown } | null }).image;
+    if (typeof image?.url !== "string") return undefined;
+    try {
+        const url = new URL(image.url, HAPPY_CLOUD_ACCOUNTS_URL);
+        return url.origin === new URL(HAPPY_CLOUD_ACCOUNTS_URL).origin ? url.href : undefined;
+    } catch {
+        return undefined;
+    }
 }

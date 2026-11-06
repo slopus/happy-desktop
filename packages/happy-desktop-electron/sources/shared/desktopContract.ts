@@ -37,6 +37,8 @@ export interface DesktopHappyCloud {
     serverJoin(name: string, code: string): Promise<DesktopServerSignInResult<HappyCloudServer>>;
     /** Lists a server as a connection of this app and answers its connection ID. */
     serverAdd(name: string): Promise<DesktopServerSignInResult<string>>;
+    /** A listed server's picture as a `data:` URL, or `undefined` when it can't be read. */
+    imageRead(serverId: string): Promise<string | undefined>;
 }
 
 export interface DesktopCloudAuthConfiguration {
@@ -1150,6 +1152,7 @@ export const desktopIpc = {
     happyCloudServerCreate: "happy:happy-cloud:server-create",
     happyCloudServerJoin: "happy:happy-cloud:server-join",
     happyCloudServerAdd: "happy:happy-cloud:server-add",
+    happyCloudImageRead: "happy:happy-cloud:image-read",
     serverSessionsChanged: "happy:server-sessions:changed",
     happyLinkExternalReceived: "happy:happy-link:external-received",
     happyLinkExternalTake: "happy:happy-link:external-take",

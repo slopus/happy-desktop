@@ -2033,6 +2033,10 @@ void app
                     return cloud.serverJoin(name(value), code);
                 },
             );
+            ipcMain.handle(desktopIpc.happyCloudImageRead, (event, value: unknown) => {
+                desktopDaemonSenderRequire(event.sender);
+                return typeof value === "string" ? cloud.imageRead(value) : undefined;
+            });
             ipcMain.handle(desktopIpc.happyCloudServerAdd, (event, value: unknown) => {
                 desktopDaemonSenderRequire(event.sender);
                 return cloud.serverAdd(name(value));

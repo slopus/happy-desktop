@@ -1,16 +1,50 @@
+import { Avatar } from "./Avatar";
 import { Banner } from "./Banner";
 import { Button } from "./Button";
 import { Modal } from "./Modal";
 import { ModalOverlay } from "./ModalOverlay";
 import { TextField } from "./TextField";
+import { thumbhashDataUrl } from "./thumbhashDataUrl";
 
 /** One Happy Cloud server the person belongs to. */
 export interface CloudConnectServer {
     readonly id: string;
-    readonly name: string;
+    /** The server's own name for itself: the row's title. */
+    readonly displayName: string;
     /** The server's host, shown under its name. */
     readonly host: string;
     readonly role: "owner" | "member";
+    /**
+     * The server's picture. The ThumbHash is painted at once and the bytes
+     * over it once `url` is known. Absent: the generated initials tile.
+     */
+    readonly image?: { readonly thumbhash: string; readonly url?: string };
+}
+
+function CloudConnectServerImage(props: { readonly server: CloudConnectServer }) {
+    const { image } = props.server;
+    if (!image)
+        return (
+            <Avatar
+                initials={props.server.displayName.slice(0, 1).toUpperCase()}
+                size="md"
+                style={{ width: 32, height: 32, borderRadius: 8 }}
+                type="agent"
+            />
+        );
+    const placeholder = thumbhashDataUrl(image.thumbhash);
+    const style = placeholder ? { backgroundImage: `url(${placeholder})` } : undefined;
+    return image.url ? (
+        <img
+            alt=""
+            className="happy-cloud-connect__server-image"
+            draggable={false}
+            src={image.url}
+            style={style}
+        />
+    ) : (
+        <span aria-hidden="true" className="happy-cloud-connect__server-image" style={style} />
+    );
 }
 
 /** What the accounts service said about the name being typed for a new server. */
@@ -155,12 +189,15 @@ export function CloudConnectDialog(props: CloudConnectDialogProps) {
                                         onClick={() => props.onServerPick(server.id)}
                                         type="button"
                                     >
-                                        <span className="happy-cloud-connect__server-name">
-                                            {server.name}
-                                        </span>
-                                        <span className="happy-cloud-connect__server-detail">
-                                            {server.host}
-                                            {server.role === "owner" ? " · Owner" : ""}
+                                        <CloudConnectServerImage server={server} />
+                                        <span className="happy-cloud-connect__server-text">
+                                            <span className="happy-cloud-connect__server-name">
+                                                {server.displayName}
+                                            </span>
+                                            <span className="happy-cloud-connect__server-detail">
+                                                {server.host}
+                                                {server.role === "owner" ? " · Owner" : ""}
+                                            </span>
                                         </span>
                                     </button>
                                 ))}
