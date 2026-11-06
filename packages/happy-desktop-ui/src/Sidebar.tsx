@@ -1164,6 +1164,15 @@ function blockShift(drag: SidebarDrag, index: number): number {
 }
 
 /** The visual offset shared by rows and the connector layer during a drag. */
+/** Whether two arrays hold the same values, by identity, in the same order. */
+function arrayItemsSame<Value>(left: readonly Value[], right: readonly Value[]): boolean {
+    if (left === right) return true;
+    if (left.length !== right.length) return false;
+    for (let index = 0; index < left.length; index += 1)
+        if (!Object.is(left[index], right[index])) return false;
+    return true;
+}
+
 function rowDragShift(drag: SidebarDrag | undefined, index: number): number {
     if (!drag || !drag.moved) return 0;
     const unitIndex = drag.units.findIndex((unit) => unit.includes(index));
@@ -1226,12 +1235,44 @@ interface SidebarTreeConnectorsProps {
 function SidebarTreeConnectors(props: SidebarTreeConnectorsProps) {
     const groups = sidebarConnectorGroups(props.items);
     const layerRef = useRef<HTMLDivElement>(null);
+    /*
+     * What the stems were last aligned from, and the observer that keeps them
+     * aligned while nothing here renders. Aligning reads every row's box, so it
+     * forces a layout in the middle of the commit; a sidebar renders on every
+     * row's status change, and one tree per section re-aligning on each of
+     * those was most of what such a commit cost. A commit that brought this
+     * tree nothing new — the same row objects, the same drag, the same carried
+     * rows — leaves the stems alone, and the observer catches any change of
+     * row geometry those do not account for.
+     */
+    const aligned = useRef<
+        | {
+              readonly items: readonly SidebarItem[];
+              readonly drag: SidebarDrag | undefined;
+              readonly carriedItemIds: readonly string[];
+              readonly tree: HTMLElement;
+              readonly firstRow: HTMLElement;
+              readonly observer: ResizeObserver;
+              readonly align: () => void;
+          }
+        | undefined
+    >(undefined);
     // eslint-disable-next-line happy-react/no-layout-effect -- Connector endpoints require the browser's used row pitch after zoom quantizes flex row heights and gaps; one tree observer keeps that measured geometry current and is cleaned up with the layer.
     useLayoutEffect(() => {
         const layer = layerRef.current;
         const tree = layer?.parentElement;
         const firstRow = tree?.querySelector<HTMLElement>(":scope > .happy-sidebar__item");
         if (!layer || !tree || !firstRow) return;
+        const previous = aligned.current;
+        if (
+            previous &&
+            previous.tree === tree &&
+            previous.firstRow === firstRow &&
+            previous.drag === props.drag &&
+            arrayItemsSame(previous.carriedItemIds, props.carriedItemIds) &&
+            arrayItemsSame(previous.items, props.items)
+        )
+            return;
         const align = (): void => {
             // Relative drag offsets do not change the flex tree's extent. Read
             // its uniform row geometry once, then apply the same explicit drag
@@ -1306,15 +1347,40 @@ function SidebarTreeConnectors(props: SidebarTreeConnectorsProps) {
             }
         };
         align();
-        const observer = new ResizeObserver(align);
+        if (previous && previous.tree === tree && previous.firstRow === firstRow) {
+            aligned.current = {
+                ...previous,
+                items: props.items,
+                drag: props.drag,
+                carriedItemIds: props.carriedItemIds,
+                align,
+            };
+            return;
+        }
+        previous?.observer.disconnect();
+        const observer = new ResizeObserver(() => aligned.current?.align());
         observer.observe(tree);
         observer.observe(firstRow);
-        window.addEventListener("resize", align);
-        return () => {
-            observer.disconnect();
-            window.removeEventListener("resize", align);
+        aligned.current = {
+            items: props.items,
+            drag: props.drag,
+            carriedItemIds: props.carriedItemIds,
+            tree,
+            firstRow,
+            observer,
+            align,
         };
     });
+    // eslint-disable-next-line happy-react/no-layout-effect -- the layer's one observer and window listener live as long as the layer does
+    useLayoutEffect(() => {
+        const resize = () => aligned.current?.align();
+        window.addEventListener("resize", resize);
+        return () => {
+            window.removeEventListener("resize", resize);
+            aligned.current?.observer.disconnect();
+            aligned.current = undefined;
+        };
+    }, []);
     return (
         <div
             aria-hidden="true"
