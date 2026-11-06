@@ -1,5 +1,6 @@
 import type { HappyAgentClient, Secret } from "@slopus/happy-agent-client";
 import { createStore } from "zustand/vanilla";
+import type { HappyAgentSync } from "../happyAgentConnection/happyAgentSync.js";
 import { UserError } from "../types.js";
 import { deepEqual, happyAgentUserError } from "./happyAgentSupport.js";
 
@@ -29,7 +30,7 @@ export interface HappyAgentSecret {
 }
 
 export interface HappyAgentSecretsSnapshot {
-    /** Why the first list read failed. A later successful poll clears it. */
+    /** Why the first list read failed. A later successful read clears it. */
     readonly error?: UserError;
     /** True until the daemon first answers for the global list. */
     readonly loading: boolean;
@@ -48,19 +49,27 @@ export interface HappyAgentSecretsStore {
 
 export interface HappyAgentSecretsStoreDeps {
     readonly client: Pick<HappyAgentClient, "createSecret" | "listSecrets">;
+    readonly sync: HappyAgentSync;
 }
 
 const EMPTY: HappyAgentSecretsSnapshot = { loading: true, secrets: [] };
-const SECRETS_POLL_INTERVAL_MS = 4_000;
+/** How long a failed read waits before it is tried again while the list is watched. */
+const SECRETS_RETRY_MS = 4_000;
 const SECRETS_PAGE_SIZE = 100;
+/*
+ * The events that change what the list shows. A grant attached or detached
+ * changes no secret's metadata, so it does not cost a read.
+ */
+const SECRET_EVENTS = ["secret.created", "secret.updated", "secret.removed"] as const;
 
 /**
  * Global environment-bundle secrets.
  *
- * The daemon has secret events, but this secondary settings surface does not
- * yet consume that stream. It polls only while watched and stops on the last
- * unsubscribe. Raw values remain local to the caller and the outgoing create
- * body; only the daemon's safe metadata response is ever published.
+ * Live while watched: the connection's bootstrap, reconciles and secret events
+ * are delivery hints, each answered by one authoritative read of the list, and
+ * the last unsubscribe stops following. Raw values remain local to the caller
+ * and the outgoing create body; only the daemon's safe metadata response is
+ * ever published.
  */
 export function happyAgentSecretsStoreCreate(
     deps: HappyAgentSecretsStoreDeps,
@@ -69,21 +78,25 @@ export function happyAgentSecretsStoreCreate(
     const listeners = new Set<() => void>();
     const mutations = new Set<AbortController>();
     let disposed = false;
+    let follower: AbortController | undefined;
     let readController: AbortController | undefined;
-    let timer: ReturnType<typeof setTimeout> | undefined;
+    /** A hint arrived while a read was out, so the read may predate what it hinted at. */
+    let readAgain = false;
+    let failed = false;
+    let retry: ReturnType<typeof setTimeout> | undefined;
 
-    const timerCancel = (): void => {
-        if (timer === undefined) return;
-        clearTimeout(timer);
-        timer = undefined;
+    const retryCancel = (): void => {
+        if (retry === undefined) return;
+        clearTimeout(retry);
+        retry = undefined;
     };
 
-    const schedule = (): void => {
-        if (disposed || listeners.size === 0 || timer !== undefined) return;
-        timer = setTimeout(() => {
-            timer = undefined;
+    const retrySchedule = (): void => {
+        if (disposed || listeners.size === 0 || retry !== undefined) return;
+        retry = setTimeout(() => {
+            retry = undefined;
             load();
-        }, SECRETS_POLL_INTERVAL_MS);
+        }, SECRETS_RETRY_MS);
     };
 
     const settleProjected = (next: readonly HappyAgentSecret[]): void => {
@@ -111,26 +124,74 @@ export function happyAgentSecretsStoreCreate(
         return secrets;
     };
 
+    const readFinish = (): void => {
+        readController = undefined;
+        if (!readAgain) return;
+        readAgain = false;
+        load();
+    };
+
+    /** Reads the list once, or once more after the read already out. */
     const load = (): void => {
-        if (disposed || listeners.size === 0 || readController !== undefined) return;
-        timerCancel();
+        if (disposed || listeners.size === 0) return;
+        if (readController !== undefined) {
+            readAgain = true;
+            return;
+        }
+        retryCancel();
         const controller = new AbortController();
         readController = controller;
         void readAll(controller).then(
             (secrets) => {
                 if (disposed || readController !== controller) return;
-                readController = undefined;
+                failed = false;
                 settle(secrets);
-                schedule();
+                readFinish();
             },
             (error: unknown) => {
                 if (disposed || readController !== controller || controller.signal.aborted) return;
-                readController = undefined;
+                failed = true;
                 if (store.getState().loading)
                     store.setState({ error: happyAgentUserError(error), loading: false }, false);
-                schedule();
+                readFinish();
+                if (readController === undefined) retrySchedule();
             },
         );
+    };
+
+    const follow = (): void => {
+        if (disposed || follower !== undefined || listeners.size === 0) return;
+        const active = new AbortController();
+        follower = active;
+        void (async () => {
+            for await (const input of deps.sync.follow({
+                signal: active.signal,
+                events: SECRET_EVENTS,
+            })) {
+                if (input.kind === "error") continue;
+                // A reconnect after a failed read is the moment to try again.
+                if (
+                    input.kind === "bootstrap" ||
+                    input.kind === "reconcile" ||
+                    input.update.kind === "event" ||
+                    (input.update.kind === "connected" && failed)
+                )
+                    load();
+            }
+        })()
+            .catch(() => undefined)
+            .finally(() => {
+                if (follower === active) follower = undefined;
+            });
+    };
+
+    const stop = (): void => {
+        follower?.abort();
+        follower = undefined;
+        retryCancel();
+        readController?.abort();
+        readController = undefined;
+        readAgain = false;
     };
 
     return {
@@ -139,27 +200,25 @@ export function happyAgentSecretsStoreCreate(
             if (disposed) return () => undefined;
             listeners.add(listener);
             const unsubscribe = store.subscribe(listener);
-            if (listeners.size === 1) load();
+            if (listeners.size === 1) follow();
             let released = false;
             return () => {
                 if (released) return;
                 released = true;
                 unsubscribe();
                 listeners.delete(listener);
-                if (listeners.size !== 0) return;
-                timerCancel();
-                readController?.abort();
-                readController = undefined;
+                if (listeners.size === 0) stop();
             };
         },
         async secretCreate(input) {
             if (disposed) throw new UserError("The secrets store is no longer available.");
             // A read started before this write could answer afterward with the
             // old list. Stop it; the authoritative create response is adopted
-            // immediately and the ordinary poll resumes from there.
-            timerCancel();
+            // immediately, and the secret's own event reads the list again.
+            const reading = readController !== undefined || readAgain;
             readController?.abort();
             readController = undefined;
+            readAgain = false;
             const controller = new AbortController();
             mutations.add(controller);
             const mutationId = globalThis.crypto.randomUUID();
@@ -185,15 +244,14 @@ export function happyAgentSecretsStoreCreate(
                 throw happyAgentUserError(error);
             } finally {
                 mutations.delete(controller);
-                schedule();
+                // The read stopped above still owes its watcher an answer.
+                if (reading) load();
             }
         },
         [Symbol.dispose]() {
             if (disposed) return;
             disposed = true;
-            timerCancel();
-            readController?.abort();
-            readController = undefined;
+            stop();
             for (const controller of mutations) controller.abort();
             mutations.clear();
             listeners.clear();

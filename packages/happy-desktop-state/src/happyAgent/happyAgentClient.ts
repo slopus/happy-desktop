@@ -1009,7 +1009,10 @@ export function happyAgentWorkspaceClientCreate(
         },
         secrets() {
             if (disposed) throw new Error("The Happy Agent client is disposed.");
-            secretsStore ??= happyAgentSecretsStoreCreate({ client: deps.client });
+            secretsStore ??= happyAgentSecretsStoreCreate({
+                client: deps.client,
+                sync: deps.connection.sync,
+            });
             return secretsStore;
         },
         async chat(sessionId) {
