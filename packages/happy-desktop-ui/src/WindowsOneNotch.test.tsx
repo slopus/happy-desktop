@@ -38,6 +38,7 @@ const composer: ComposerSnapshot = {
 };
 const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 const frame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+const detail = import.meta.env.VITE_SCROLL_DETAIL === "1";
 
 it("records one real downward notch from controlled distances while streaming", async () => {
     const container = document.createElement("div");
@@ -99,6 +100,10 @@ it("records one real downward notch from controlled distances while streaming", 
         clientHeight: number;
         bottomDistance: number;
         rows: { key: string; top: number }[];
+        row30?: { top: number; height: number } | null;
+        working?: { top: number; height: number } | null;
+        firstVisible?: string | null;
+        lastVisible?: string | null;
     }[] = [];
     let events: {
         time: number;
@@ -108,6 +113,10 @@ it("records one real downward notch from controlled distances while streaming", 
         trusted?: boolean;
         bottomDistance: number;
         scrollTop?: number;
+        before?: number;
+        after?: number;
+        stack?: string[];
+        textLength?: number;
     }[] = [];
     const targetWindow = window as Window & {
         __happyOneNotchPrepare?: (distance: number) => Promise<void>;
@@ -120,6 +129,23 @@ it("records one real downward notch from controlled distances while streaming", 
         if (!viewport) throw new Error("Missing viewport");
         const bottomDistance = () =>
             viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
+        if (detail) {
+            const descriptor = Object.getOwnPropertyDescriptor(Element.prototype, "scrollTop");
+            if (!descriptor?.get || !descriptor.set) throw new Error("Missing scrollTop descriptor");
+            const getScrollTop = descriptor.get;
+            const setScrollTop = descriptor.set;
+            Object.defineProperty(viewport, "scrollTop", {
+                configurable: true,
+                get() { return getScrollTop.call(viewport) as number; },
+                set(value: number) {
+                    const before = getScrollTop.call(viewport) as number;
+                    const stack = new Error().stack?.split("\n").slice(1, 5);
+                    setScrollTop.call(viewport, value);
+                    const after = getScrollTop.call(viewport) as number;
+                    events.push({ time: performance.now(), type: "write", before, after, stack, bottomDistance: bottomDistance() });
+                },
+            });
+        }
         viewport.addEventListener(
             "wheel",
             (event) =>
@@ -139,16 +165,36 @@ it("records one real downward notch from controlled distances while streaming", 
                 time: performance.now(),
                 type: "scroll",
                 bottomDistance: bottomDistance(),
+                scrollTop: viewport.scrollTop,
             }),
         );
+        if (detail) viewport.addEventListener("scrollend", () => events.push({
+            time: performance.now(), type: "scrollend", bottomDistance: bottomDistance(), scrollTop: viewport.scrollTop,
+        }));
         const capture = () => {
             const viewportRect = viewport.getBoundingClientRect();
+            const allRows = Array.from(viewport.querySelectorAll<HTMLElement>(".happy-message-list__virtual-row[data-index]"));
+            const visible = allRows.filter((row) => {
+                const rect = row.getBoundingClientRect();
+                return rect.bottom > viewportRect.top && rect.top < viewportRect.bottom;
+            });
+            const geometry = (node: HTMLElement | null) => {
+                if (!node) return null;
+                const rect = node.getBoundingClientRect();
+                return { top: rect.top - viewportRect.top, height: rect.height };
+            };
             samples.push({
                 time: performance.now(),
                 scrollTop: viewport.scrollTop,
                 scrollHeight: viewport.scrollHeight,
                 clientHeight: viewport.clientHeight,
                 bottomDistance: bottomDistance(),
+                ...(detail ? {
+                    row30: geometry(viewport.querySelector<HTMLElement>('.happy-message-list__virtual-row[data-index="30"]')),
+                    working: geometry(viewport.querySelector<HTMLElement>('[data-item-id="working-status"]')),
+                    firstVisible: visible[0]?.dataset.itemId ?? visible[0]?.dataset.index ?? null,
+                    lastVisible: visible.at(-1)?.dataset.itemId ?? visible.at(-1)?.dataset.index ?? null,
+                } : {}),
                 rows: Array.from(
                     viewport.querySelectorAll<HTMLElement>(".happy-message-list__virtual-row[data-index]"),
                 ).flatMap((row) => {
@@ -166,9 +212,9 @@ it("records one real downward notch from controlled distances while streaming", 
             if (!streaming || performance.now() < nextUpdate) return;
             nextUpdate = performance.now() + 200;
             ticks += 1;
-            update(
-                `A response is streaming. ${"A new wrapped line appears while the reader follows this response. ".repeat(ticks)}`,
-            );
+            const text = `A response is streaming. ${"A new wrapped line appears while the reader follows this response. ".repeat(ticks)}`;
+            if (detail) events.push({ time: performance.now(), type: "stream", textLength: text.length, bottomDistance: bottomDistance(), scrollTop: viewport.scrollTop });
+            update(text);
         }, 20);
         targetWindow.__happyOneNotchPrepare = async (distance) => {
             // Establish the requested parked position with an upward scroll
@@ -191,8 +237,8 @@ it("records one real downward notch from controlled distances while streaming", 
             nextUpdate = performance.now() + 150;
             streaming = true;
         };
-        for (const distance of [40, 70, 95, 120, 150, 500]) {
-            const repetitions = 10;
+        for (const distance of detail ? [120] : [40, 70, 95, 120, 150, 500]) {
+            const repetitions = detail ? 3 : 10;
             for (let iteration = 1; iteration <= repetitions; iteration += 1) {
                 streaming = false;
                 samples = [];

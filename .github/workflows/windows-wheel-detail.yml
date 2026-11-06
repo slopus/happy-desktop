@@ -1,0 +1,43 @@
+name: Windows wheel detailed trace
+
+on:
+    push:
+        branches: ["windows-wheel-detail**"]
+
+permissions:
+    contents: read
+
+jobs:
+    detail:
+        runs-on: windows-2025
+        timeout-minutes: 15
+        defaults:
+            run:
+                shell: bash
+        steps:
+            - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+            - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa
+            - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+              with:
+                  node-version: "24"
+                  cache: pnpm
+            - run: pnpm config set script-shell "C:\Program Files\Git\bin\bash.exe"
+            - run: pnpm install --frozen-lockfile
+            - run: pnpm --dir packages/happy-desktop-ui exec playwright install chromium
+            - name: Trace three native-wheel trials
+              env:
+                  HAPPY_SCROLL_REPRO_DPR: "1"
+                  HAPPY_SCROLL_REPRO_SMOOTH: "1"
+                  HAPPY_SCROLL_REPRO_HEADED: "1"
+                  HAPPY_SCROLL_REPRO_NATIVE: "1"
+                  VITE_SCROLL_DETAIL: "1"
+              run: |
+                  mkdir -p .context/wheel-detail
+                  set -o pipefail
+                  pnpm --dir packages/happy-desktop-ui exec vitest run --project chromium src/WindowsOneNotch.test.tsx 2>&1 | tee .context/wheel-detail/output.log
+            - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+              if: always()
+              with:
+                  name: wheel-detail
+                  path: .context/wheel-detail
+                  if-no-files-found: warn
