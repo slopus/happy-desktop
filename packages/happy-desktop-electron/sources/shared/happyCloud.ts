@@ -5,7 +5,7 @@
  * in one place here.
  */
 /** The domain every server sits under, as `<name>.<base>`. */
-export const HAPPY_CLOUD_BASE = "24-144-71-103.sslip.io";
+export const HAPPY_CLOUD_BASE = "happy-clusters.com";
 /**
  * Where the person's Happy Cloud account signs in and lists their servers;
  * also the audience of the account's tokens.
