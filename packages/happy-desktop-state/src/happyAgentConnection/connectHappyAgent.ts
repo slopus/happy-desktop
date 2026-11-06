@@ -1,4 +1,8 @@
-import { agentTreeFind, agentTreeUpdate } from "./agentSubtasks.js";
+import {
+    agentCatalogIndexed,
+    agentCatalogStore,
+    type AgentCatalogIndex,
+} from "./agentCatalogIndex.js";
 import {
     applyMessageDelta,
     HappyAgentClient,
@@ -967,8 +971,24 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         publishGroups([{ type: "groups_state_changed", state: groupState() }]);
     };
 
-    const workspaceOf = (workspaceId: string): Workspace | undefined =>
-        groupsStore.getState().workspaces.find((candidate) => candidate.id === workspaceId);
+    /*
+     * Where every agent of the catalog lives. A streaming agent is versioned once per token,
+     * and each version is looked up and stored everywhere it is held; walking every tree of
+     * the catalog for that would make one token cost the whole catalog. The index follows
+     * the catalog's owners as they are replaced, walking again only the ones that changed.
+     */
+    let agentIndex: AgentCatalogIndex | undefined;
+    const agentIndexCurrent = (): AgentCatalogIndex => {
+        const { bots, tasks, workspaces, projects } = groupsStore.getState();
+        agentIndex = agentCatalogIndexed(agentIndex, { bots, tasks, workspaces, projects });
+        return agentIndex;
+    };
+
+    const workspaceOf = (workspaceId: string): Workspace | undefined => {
+        const index = agentIndexCurrent();
+        const at = index.workspaceAt.get(workspaceId);
+        return at === undefined ? undefined : index.catalog.workspaces[at];
+    };
 
     const botOf = (botId: string): Bot | undefined =>
         groupsStore.getState().bots.find((candidate) => candidate.id === botId);
@@ -977,27 +997,8 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         groupsStore.getState().tasks.find((candidate) => candidate.id === taskId);
 
     const agentOf = (agentId: string): Agent | undefined => {
-        const { bots, projects, tasks, workspaces } = groupsStore.getState();
-        for (const bot of bots) {
-            const agent = agentTreeFind(bot.agent, agentId);
-            if (agent !== undefined) return agent;
-        }
-        for (const task of tasks) {
-            const agent = agentTreeFind(task.agent, agentId);
-            if (agent !== undefined) return agent;
-        }
-        for (const workspace of workspaces) {
-            for (const root of workspace.agents) {
-                const agent = agentTreeFind(root, agentId);
-                if (agent !== undefined) return agent;
-            }
-        }
-        for (const project of projects) {
-            for (const root of project.agents) {
-                const agent = agentTreeFind(root, agentId);
-                if (agent !== undefined) return agent;
-            }
-        }
+        const held = agentIndexCurrent().found.get(agentId);
+        if (held !== undefined) return held.agent;
         const materialized = sessions.get(agentId)?.agent;
         if (materialized !== undefined) return materialized;
         for (const entry of sessions.values()) {
@@ -1015,23 +1016,6 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         current.version === current.id ||
         current.version.localeCompare(updated.version) <= 0;
 
-    const ownerAgentReplace = <Owner extends { readonly id: string; readonly agents: Agent[] }>(
-        owner: Owner,
-        agent: Agent,
-    ): Owner => {
-        // A child may work in another workspace. Its event must still replace
-        // the embedded ancestry used by the original workspace's live marker.
-        const updated = owner.agents.map((root) => agentTreeUpdate(root, agent));
-        const agents =
-            owner.id === agent.workspaceId || updated.some((root) => root.id === agent.id)
-                ? (replaceResource(updated, agent) as Agent[])
-                : updated;
-        return agents.length === owner.agents.length &&
-            agents.every((root, index) => root === owner.agents[index])
-            ? owner
-            : { ...owner, agents };
-    };
-
     const replaceAgent = (agent: Agent): void => {
         storeAgent(agent);
         announceAgent(agent);
@@ -1040,22 +1024,10 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
 
     /** Keeps one agent version everywhere this connection holds it, without telling anyone. */
     const storeAgent = (agent: Agent): void => {
-        groupsStore.setState((current) => ({
-            workspaces: current.workspaces.map((workspace) => ownerAgentReplace(workspace, agent)),
-            projects: current.projects.map((project) => ownerAgentReplace(project, agent)),
-            // A bot's row is drawn from the agent embedded in the bot, so the
-            // same versioned agent event has to reach that copy too — otherwise
-            // the bot keeps reporting the status it was created with.
-            bots: current.bots.map((bot) => {
-                const next = agentTreeUpdate(bot.agent, agent);
-                return next === bot.agent ? bot : { ...bot, agent: next };
-            }),
-            // A task's row is drawn from its embedded agent the same way.
-            tasks: current.tasks.map((task) => {
-                const next = agentTreeUpdate(task.agent, agent);
-                return next === task.agent ? task : { ...task, agent: next };
-            }),
-        }));
+        const index = agentIndexCurrent();
+        const held = index.catalog;
+        const stored = agentCatalogStore(index, agent);
+        if (stored !== held) groupsStore.setState({ ...stored });
         const entry = sessions.get(agent.id);
         if (entry !== undefined) {
             entry.agent = agent;
