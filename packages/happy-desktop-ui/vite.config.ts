@@ -1,4 +1,5 @@
 import { availableParallelism } from "node:os";
+import { execFileSync, spawn } from "node:child_process";
 import { resolve } from "node:path";
 import babel from "@rolldown/plugin-babel";
 import react, { reactCompilerPreset } from "@vitejs/plugin-react";
@@ -10,6 +11,8 @@ import { testDepthBrowsers, testDepthRead } from "happy-desktop-gym/test-depth";
 
 const depth = testDepthRead(process.env.HAPPY_TEST_DEPTH);
 const browsers = testDepthBrowsers(depth);
+const nativeWheelRepro = process.env.HAPPY_SCROLL_REPRO_NATIVE === "1";
+let parkedImageRelease: ((data: string) => void) | undefined;
 
 export default defineConfig({
     define: { "import.meta.env.HAPPY_TEST_DEPTH": JSON.stringify(depth) },
@@ -62,12 +65,218 @@ export default defineConfig({
                 reducedMotionEmulate: async ({ page }, reduce: boolean) => {
                     await page.emulateMedia({ reducedMotion: reduce ? "reduce" : "no-preference" });
                 },
+                scrollReproImageGate: async (
+                    { page },
+                    action: "arm" | "release" | "clear",
+                    data: string,
+                ) => {
+                    const url = "https://parked-anchor.invalid/late.png";
+                    if (action === "arm") {
+                        const bytes = new Promise<string>((resolvePromise) => {
+                            parkedImageRelease = resolvePromise;
+                        });
+                        await page.route(url, async (route) => {
+                            const image = await bytes;
+                            await route.fulfill({
+                                status: 200,
+                                contentType: "image/png",
+                                body: Buffer.from(image, "base64"),
+                            });
+                        });
+                    } else if (action === "release") {
+                        if (!parkedImageRelease) throw new Error("Image gate was not armed");
+                        parkedImageRelease(data);
+                        parkedImageRelease = undefined;
+                    } else {
+                        await page.unroute(url);
+                        parkedImageRelease = undefined;
+                    }
+                },
+                scrollReproWheel: async ({ page, iframe }, deltaY: number, count: number) => {
+                    const box = await iframe
+                        .locator("[data-scrollbar-viewport]")
+                        .first()
+                        .boundingBox();
+                    if (!box) throw new Error("Scroll repro viewport is missing");
+                    if (process.env.HAPPY_SCROLL_REPRO_NATIVE === "1") {
+                        if (process.platform !== "win32")
+                            throw new Error("Native wheel repro requires Windows");
+                        const windowGeometry = await page.evaluate(() => ({
+                            x: window.screenX + (window.outerWidth - window.innerWidth) / 2,
+                            y:
+                                window.screenY +
+                                window.outerHeight -
+                                window.innerHeight -
+                                (window.outerWidth - window.innerWidth) / 2,
+                            screenWidth: window.screen.width,
+                            screenHeight: window.screen.height,
+                            devicePixelRatio: window.devicePixelRatio,
+                            outerWidth: window.outerWidth,
+                            outerHeight: window.outerHeight,
+                            innerWidth: window.innerWidth,
+                            innerHeight: window.innerHeight,
+                        }));
+                        const x = Math.round(windowGeometry.x + box.x + box.width / 2);
+                        const y = Math.round(windowGeometry.y + box.y + box.height / 2);
+                        const output = execFileSync(
+                            "powershell.exe",
+                            [
+                                "-NoLogo",
+                                "-NoProfile",
+                                "-NonInteractive",
+                                "-File",
+                                resolve(
+                                    import.meta.dirname,
+                                    "../../scripts/windows-scroll-wheel.ps1",
+                                ),
+                                "-ScreenX",
+                                String(x),
+                                "-ScreenY",
+                                String(y),
+                                "-Delta",
+                                String(deltaY < 0 ? 120 : -120),
+                                "-Count",
+                                String(count),
+                            ],
+                            { stdio: "pipe" },
+                        );
+                        console.log(
+                            "NATIVE_WHEEL_GEOMETRY",
+                            JSON.stringify({ windowGeometry, box, x, y }),
+                            output.toString(),
+                        );
+                        return;
+                    }
+                    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+                    for (let i = 0; i < count; i += 1) {
+                        await page.mouse.wheel(0, deltaY);
+                        if (i < count - 1) await new Promise((resolve) => setTimeout(resolve, 75));
+                    }
+                },
+                scrollReproDrag: async ({ page, iframe }, direction: "up" | "down") => {
+                    const track = iframe
+                        .locator('[data-scrollbar-track][data-axis="vertical"]')
+                        .first();
+                    const thumb = track.locator(".happy-scrollbar__thumb");
+                    const box = await thumb.boundingBox();
+                    const trackBox = await track.boundingBox();
+                    if (!box || !trackBox)
+                        throw new Error("Scroll repro thumb or track is missing");
+                    const x = box.x + box.width / 2;
+                    const y = box.y + box.height / 2;
+                    const distance =
+                        direction === "up" ? -300 : trackBox.y + trackBox.height + box.height - y;
+                    await page.mouse.move(x, y);
+                    await page.mouse.down();
+                    for (let i = 1; i <= 10; i += 1) {
+                        await page.mouse.move(x, y + (distance * i) / 10);
+                        await new Promise((resolve) => setTimeout(resolve, 40));
+                    }
+                    await page.mouse.up();
+                },
+                scrollReproNativeOneNotch: async ({ page, iframe, frame }, offset: number) => {
+                    if (
+                        process.platform !== "win32" ||
+                        process.env.HAPPY_SCROLL_REPRO_NATIVE !== "1"
+                    )
+                        throw new Error(
+                            "Targeted native wheel requires the headed Windows native lane",
+                        );
+                    const box = await iframe
+                        .locator("[data-scrollbar-viewport]")
+                        .first()
+                        .boundingBox();
+                    if (!box) throw new Error("Targeted wheel viewport is missing");
+                    const geometry = await page.evaluate(() => ({
+                        x: window.screenX + (window.outerWidth - window.innerWidth) / 2,
+                        y:
+                            window.screenY +
+                            window.outerHeight -
+                            window.innerHeight -
+                            (window.outerWidth - window.innerWidth) / 2,
+                    }));
+                    const child = spawn(
+                        "powershell.exe",
+                        [
+                            "-NoLogo",
+                            "-NoProfile",
+                            "-NonInteractive",
+                            "-File",
+                            resolve(import.meta.dirname, "../../scripts/windows-scroll-wheel.ps1"),
+                            "-ScreenX",
+                            String(Math.round(geometry.x + box.x + box.width / 2)),
+                            "-ScreenY",
+                            String(Math.round(geometry.y + box.y + box.height / 2)),
+                            "-Delta",
+                            "-120",
+                            "-WaitForSignal",
+                            "-PrepareUp",
+                        ],
+                        { stdio: "pipe" },
+                    );
+                    await new Promise<void>((resolvePromise, reject) => {
+                        let output = "";
+                        let errors = "";
+                        let signalled = false;
+                        child.stdout.on("data", (chunk: Buffer) => {
+                            output += chunk.toString();
+                            if (!signalled && output.includes("NATIVE_WHEEL_READY")) {
+                                signalled = true;
+                                void frame()
+                                    .then((target) =>
+                                        target.evaluate(async (distance) => {
+                                            const prepare = (
+                                                window as Window & {
+                                                    __happyOneNotchPrepare?: (
+                                                        distance: number,
+                                                    ) => Promise<void>;
+                                                }
+                                            ).__happyOneNotchPrepare;
+                                            if (!prepare)
+                                                throw new Error(
+                                                    "Targeted wheel fixture is missing",
+                                                );
+                                            await prepare(distance);
+                                        }, offset),
+                                    )
+                                    .then(() => child.stdin.end("go\n"))
+                                    .catch((error: unknown) => {
+                                        child.kill();
+                                        reject(error);
+                                    });
+                            }
+                        });
+                        child.stderr.on("data", (chunk: Buffer) => {
+                            errors += chunk.toString();
+                        });
+                        child.on("error", reject);
+                        child.on("close", (code) => {
+                            if (code !== 0 || !signalled)
+                                reject(
+                                    new Error(
+                                        `Native wheel failed (${String(code)}): ${errors}\n${output}`,
+                                    ),
+                                );
+                            else resolvePromise();
+                        });
+                    });
+                },
+                scrollReproKey: async ({ page, iframe }, key: string) => {
+                    await iframe.locator("[data-scrollbar-viewport]").first().focus();
+                    await page.keyboard.press(key);
+                },
             },
             enabled: true,
             headless: process.env.HAPPY_SCROLL_REPRO_HEADED !== "1",
             instances: browsers.map((browser) => ({ browser })),
             provider: playwright({
                 launchOptions: {
+                    ...(process.env.HAPPY_SCROLL_REPRO_SMOOTH === "1"
+                        ? {
+                              args: ["--enable-smooth-scrolling"],
+                              ignoreDefaultArgs: ["--disable-smooth-scrolling"],
+                          }
+                        : {}),
                     /* Firefox honours HTTP_PROXY/ALL_PROXY from the environment,
                      * so on a machine behind a local proxy it cannot reach the
                      * Vitest server on loopback and every session times out.
@@ -77,13 +286,13 @@ export default defineConfig({
                     firefoxUserPrefs: { "network.proxy.type": 0 },
                 },
                 contextOptions: {
-                    deviceScaleFactor: 2,
+                    deviceScaleFactor: Number(process.env.HAPPY_SCROLL_REPRO_DPR ?? 2),
                     /* Must be >= the tester viewport below: when the browser
                      * window is smaller, vitest CSS-scales the tester iframe
                      * and element captures come out at a fraction of true 2x. */
                     viewport: {
-                        height: 1660,
-                        width: 1660,
+                        height: nativeWheelRepro ? 680 : 1660,
+                        width: nativeWheelRepro ? 980 : 1660,
                     },
                 },
             }),
@@ -91,8 +300,8 @@ export default defineConfig({
             /* Element captures clip to the viewport; keep it larger than any
              * test surface so screenshots and pixel measurements never truncate. */
             viewport: {
-                height: 1600,
-                width: 1600,
+                height: nativeWheelRepro ? 650 : 1600,
+                width: nativeWheelRepro ? 900 : 1600,
             },
         },
     },
