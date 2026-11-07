@@ -148,6 +148,7 @@ export interface HappyAgentSession {
     readonly providerUsage: HappyAgentProviderUsageStore | undefined;
     readonly providers: HappyAgentProvidersStore;
     readonly members: () => import("happy-desktop-state").HappyAgentMembersStore | undefined;
+    readonly computes: () => import("happy-desktop-state").HappyAgentComputesStore | undefined;
     readonly credentialImport: () =>
         | import("happy-desktop-state").HappyAgentCredentialImportStore
         | undefined;
@@ -488,7 +489,7 @@ export function happyAgentConnectionOpen(input: {
         ...(input.credentialImportHost ? { credentialImportHost: input.credentialImportHost } : {}),
         ...(input.cloudServer
             ? {
-                  cloudMembers: {
+                  cloudServer: {
                       serverName: input.cloudServer.name,
                       request: happyCloudRequestCreate({
                           endpoint: directClient.endpoint,
@@ -645,6 +646,7 @@ export function happyAgentConnectionOpen(input: {
                     providers: client.providers(),
                     credentialImport: () => client.credentialImport(),
                     members: () => client.members(),
+                    computes: () => client.computes(),
                     voiceSettings: client.voiceSettings(),
                     taskSettings: () => client.taskSettings(),
                     surfaceSettings: () => client.surfaceSettings(),

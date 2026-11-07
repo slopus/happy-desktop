@@ -254,6 +254,7 @@ export * from "./happyAgent/happyAgentProviderCredentials.js";
 export * from "./happyAgent/happyAgentProvidersStore.js";
 export * from "./happyAgent/happyAgentCredentialImportStore.js";
 export * from "./happyAgent/happyAgentMembersStore.js";
+export * from "./happyAgent/happyAgentComputesStore.js";
 export * from "./happyAgent/happyAgentVoiceSettingsStore.js";
 export * from "./happyAgent/happyAgentSecurityPolicyStore.js";
 export * from "./happyAgent/happyAgentSecretsStore.js";

@@ -52,6 +52,57 @@ export function ComputeChipPage() {
                     />
                 </div>
             </Specimen>
+            <Specimen
+                detail="as a picker: the attached pool checked with its machines under it, an offline machine, and Detach; open the menu to see it"
+                label="Picker"
+                number="03"
+                stage="surface"
+            >
+                <div
+                    style={{
+                        display: "flex",
+                        justifyContent: "flex-end",
+                        width: "360px",
+                        paddingTop: "200px",
+                    }}
+                >
+                    <ComputeChip
+                        compute={{ kind: "pool", label: "Lab machines", online: true }}
+                        picker={{
+                            loading: false,
+                            options: [
+                                {
+                                    id: "pool:lab",
+                                    kind: "pool",
+                                    label: "Lab machines (default)",
+                                    online: true,
+                                    current: true,
+                                },
+                                {
+                                    id: "runner:1",
+                                    kind: "runner",
+                                    label: "build-1",
+                                    online: true,
+                                    current: false,
+                                },
+                                {
+                                    id: "runner:2",
+                                    kind: "runner",
+                                    label: "build-2",
+                                    online: false,
+                                    current: false,
+                                },
+                            ],
+                            attachAllowed: true,
+                            detachAllowed: true,
+                            busy: false,
+                            onOpen: () => undefined,
+                            onAttach: () => undefined,
+                            onDetach: () => undefined,
+                        }}
+                    />
+                </div>
+            </Specimen>
         </ComponentPage>
     );
 }
