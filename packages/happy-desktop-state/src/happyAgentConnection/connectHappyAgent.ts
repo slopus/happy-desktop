@@ -481,7 +481,10 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
     let resyncTask: Promise<void> | undefined;
     const resyncBufferedEvents: HappyAgentEvent[] = [];
     const hydrationBroadcastEvents: HappyAgentEvent[] = [];
-    const recentEvents: RecentEvent[] = [];
+    // Expired slots are cleared immediately; the live suffix is compacted geometrically.
+    // Removing one expired event must not shift an entire minute of traffic on each arrival.
+    let recentEvents: (RecentEvent | undefined)[] = [];
+    let recentEventsStart = 0;
     let compatibility: ServerCompatibility = CHECKING_SERVER_COMPATIBILITY;
     let closed = false;
     let updatesAttemptController: AbortController | undefined;
@@ -1568,9 +1571,16 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         const receivedAt = now();
         recentEvents.push({ event, receivedAt });
         const cutoff = receivedAt - RECENT_EVENT_RETENTION_MS;
-        let expired = 0;
-        while (recentEvents[expired]?.receivedAt < cutoff) expired += 1;
-        if (expired > 0) recentEvents.splice(0, expired);
+        for (;;) {
+            const oldest = recentEvents[recentEventsStart];
+            if (oldest === undefined || oldest.receivedAt >= cutoff) break;
+            recentEvents[recentEventsStart] = undefined;
+            recentEventsStart += 1;
+        }
+        if (recentEventsStart > 0 && recentEventsStart * 2 >= recentEvents.length) {
+            recentEvents = recentEvents.slice(recentEventsStart);
+            recentEventsStart = 0;
+        }
     };
 
     const eventsForSessionAfter = (
@@ -1580,7 +1590,9 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
     ): HappyAgentEvent[] => {
         const events = new Map<string, HappyAgentEvent>();
         if (resyncTask === undefined) {
-            for (const candidate of recentEvents) {
+            for (let at = recentEventsStart; at < recentEvents.length; at += 1) {
+                // Only the expired prefix has cleared slots; the live suffix is contiguous.
+                const candidate = recentEvents[at]!;
                 const event = candidate.event;
                 if (event.cursor.localeCompare(after) > 0 && agentIdOfEvent(event) === entry.id) {
                     events.set(event.cursor, event);
@@ -2182,7 +2194,10 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
             // so far belong to an interval this snapshot supersedes, and their
             // cursors need not even be comparable with the new ones. A session
             // read again below must not replay them on top of its snapshot.
-            if (reconcileSessions) recentEvents.length = 0;
+            if (reconcileSessions) {
+                recentEvents.length = 0;
+                recentEventsStart = 0;
+            }
             for (const entry of sessions.values()) {
                 const known = agentOf(entry.id);
                 if (known !== undefined) {
@@ -6049,6 +6064,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
             processOwners.clear();
             hydrationBroadcastEvents.length = 0;
             recentEvents.length = 0;
+            recentEventsStart = 0;
             currentRuns.clear();
             resyncBufferedEvents.length = 0;
         },
