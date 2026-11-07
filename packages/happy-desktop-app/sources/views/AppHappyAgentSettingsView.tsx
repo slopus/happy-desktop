@@ -1364,6 +1364,16 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                     onProviderEnabledChange={(id, enabled) => {
                         if (happyAgentOnline()) providersStore.providerEnabledUpdate(id, enabled);
                     }}
+                    onKeyAdd={(providerId, input) =>
+                        providersStore.credentialAdd(providerId, input)
+                    }
+                    onKeyEnabledChange={(providerId, keyId, enabled) => {
+                        if (happyAgentOnline())
+                            providersStore.credentialEnabledUpdate(providerId, keyId, enabled);
+                    }}
+                    onKeyRemove={(providerId, keyId) => {
+                        if (happyAgentOnline()) providersStore.credentialRemove(providerId, keyId);
+                    }}
                     providers={providerRows(providers.providers, settings, selection)}
                     {...(providers.error ? { error: providers.error.message } : {})}
                     {...(providers.saveError ? { saveError: providers.saveError.message } : {})}
@@ -1926,6 +1936,32 @@ function providerRows(
             ),
         ],
         status: provider.disabledReason ?? "ready",
+        ...(provider.credentials
+            ? {
+                  keys: {
+                      addable: provider.credentials.keyed,
+                      ...(provider.type === "bedrock" ? { region: true } : {}),
+                      source: provider.credentials.source,
+                      list: provider.credentials.list.map((credential) => ({
+                          id: credential.id,
+                          label: credential.label,
+                          enabled: credential.enabled,
+                          state: credential.state,
+                          ...(credential.coolingUntil === null
+                              ? {}
+                              : {
+                                    coolingUntil: new Date(
+                                        credential.coolingUntil,
+                                    ).toLocaleTimeString([], {
+                                        hour: "numeric",
+                                        minute: "2-digit",
+                                    }),
+                                }),
+                          saving: provider.credentials?.saving.has(credential.id) === true,
+                      })),
+                  },
+              }
+            : {}),
     }));
 }
 

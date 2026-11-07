@@ -1,6 +1,12 @@
 import { createStore } from "zustand/vanilla";
-import type { HappyAgentClient } from "@slopus/happy-agent-client";
+import type { DaemonConfig, HappyAgentClient } from "@slopus/happy-agent-client";
 import type { UserError } from "../types.js";
+import {
+    happyAgentProviderCredentialsProject,
+    type HappyAgentProviderCredentialInput,
+    type HappyAgentProviderCredentials,
+    type HappyAgentProviderCredentialsApi,
+} from "./happyAgentProviderCredentials.js";
 import { happyAgentModelCatalogProject } from "./happyAgentProject.js";
 import { happyAgentUserError, referencesPreserve } from "./happyAgentSupport.js";
 import type { HappyAgentModelCatalog, HappyAgentModelProvider } from "./happyAgentTypes.js";
@@ -12,6 +18,13 @@ import type { HappyAgentModelCatalog, HappyAgentModelProvider } from "./happyAge
 export interface HappyAgentProviderEntry extends HappyAgentModelProvider {
     /** This window has asked for a change the daemon has not confirmed yet. */
     readonly saving: boolean;
+    /**
+     * The team keys a Happy Cloud server keeps for this provider, with which of
+     * them this window is changing. Absent on a Happy Agent.
+     */
+    readonly credentials?: HappyAgentProviderCredentials & {
+        readonly saving: ReadonlySet<string>;
+    };
 }
 
 export interface HappyAgentProvidersSnapshot {
@@ -40,6 +53,15 @@ export interface HappyAgentProvidersStore {
     subscribe(listener: () => void): () => void;
     /** Asks the daemon to start or stop using one provider machine-wide. */
     providerEnabledUpdate(providerId: string, enabled: boolean): void;
+    /**
+     * Adds a team API key to a Happy Cloud provider. Rejects with the server's
+     * reason, such as only the owner being allowed to.
+     */
+    credentialAdd(providerId: string, input: HappyAgentProviderCredentialInput): Promise<void>;
+    /** Turns one team key on or off; a refusal lands in `saveError`. */
+    credentialEnabledUpdate(providerId: string, credentialId: string, enabled: boolean): void;
+    /** Removes one team key; a refusal lands in `saveError`. */
+    credentialRemove(providerId: string, credentialId: string): void;
     [Symbol.dispose](): void;
 }
 
@@ -51,6 +73,8 @@ export interface HappyAgentProvidersStoreDeps {
      * authority is told rather than left holding the configuration from before.
      */
     readonly catalogChanged?: (catalog: HappyAgentModelCatalog) => void;
+    /** Happy Cloud's team key routes; absent on a Happy Agent, which keeps none. */
+    readonly credentials?: HappyAgentProviderCredentialsApi;
 }
 
 const EMPTY: HappyAgentProvidersSnapshot = { providers: [], loading: true };
@@ -69,6 +93,31 @@ export function happyAgentProvidersStoreCreate(
     const listeners = new Set<() => void>();
     /** Providers whose requested change the daemon has not answered yet. */
     const saving = new Set<string>();
+    /** Team keys whose requested change the server has not answered yet, by provider. */
+    const credentialSaving = new Map<string, Set<string>>();
+    const NO_CREDENTIALS_SAVING: ReadonlySet<string> = new Set();
+    /**
+     * Accepted key changes still marked as changing until the configuration
+     * read after them lands, so the row never shows the state from before.
+     */
+    let credentialSettles: (() => void)[] = [];
+    /** The team keys the server last reported, by provider. */
+    let credentials: ReadonlyMap<string, HappyAgentProviderCredentials> = new Map();
+    const entryOf = (provider: HappyAgentModelProvider): HappyAgentProviderEntry => {
+        const keys = credentials.get(provider.id);
+        return {
+            ...provider,
+            saving: saving.has(provider.id),
+            ...(keys
+                ? {
+                      credentials: {
+                          ...keys,
+                          saving: credentialSaving.get(provider.id) ?? NO_CREDENTIALS_SAVING,
+                      },
+                  }
+                : {}),
+        };
+    };
     let disposed = false;
     let controller: AbortController | undefined;
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -92,12 +141,13 @@ export function happyAgentProvidersStoreCreate(
      * answer leaves unchanged keep their identity, so a poll every few seconds
      * does not replace every card in the category.
      */
-    const settle = (catalog: HappyAgentModelCatalog): void => {
+    const settle = (config: DaemonConfig): void => {
+        const catalog = happyAgentModelCatalogProject(config);
+        credentials = happyAgentProviderCredentialsProject(config);
+        for (const clear of credentialSettles) clear();
+        credentialSettles = [];
         const current = store.getState();
-        const providers = referencesPreserve(
-            current.providers,
-            catalog.providers.map((provider) => providerEntry(provider, saving.has(provider.id))),
-        );
+        const providers = referencesPreserve(current.providers, catalog.providers.map(entryOf));
         const { error: _cleared, ...rest } = current;
         store.setState({ ...rest, providers, loading: false }, true);
         deps.catalogChanged?.(catalog);
@@ -109,9 +159,11 @@ export function happyAgentProvidersStoreCreate(
         const providers = referencesPreserve(
             current.providers,
             current.providers.map((provider) =>
-                provider.saving === saving.has(provider.id)
+                provider.saving === saving.has(provider.id) &&
+                provider.credentials?.saving ===
+                    (credentialSaving.get(provider.id) ?? NO_CREDENTIALS_SAVING)
                     ? provider
-                    : { ...provider, saving: saving.has(provider.id) },
+                    : entryOf(provider),
             ),
         );
         if (providers === current.providers) return;
@@ -127,7 +179,7 @@ export function happyAgentProvidersStoreCreate(
             (response) => {
                 if (disposed || controller !== currentController) return;
                 controller = undefined;
-                settle(happyAgentModelCatalogProject(response.config));
+                settle(response.config);
                 schedule();
             },
             (error: unknown) => {
@@ -147,6 +199,50 @@ export function happyAgentProvidersStoreCreate(
             },
         );
     };
+
+    /** Reads the configuration again at once, after a change the server accepted. */
+    function reread(): void {
+        timerCancel();
+        controller?.abort();
+        controller = undefined;
+        load();
+    }
+
+    /** Marks one team key as changing until the server answers the change. */
+    function credentialChange(
+        providerId: string,
+        credentialId: string,
+        change: (api: HappyAgentProviderCredentialsApi) => Promise<void>,
+    ): void {
+        const api = deps.credentials;
+        if (disposed || !api || credentialSaving.get(providerId)?.has(credentialId)) return;
+        credentialSaving.set(
+            providerId,
+            new Set(credentialSaving.get(providerId)).add(credentialId),
+        );
+        const { saveError: _cleared, ...rest } = store.getState();
+        store.setState(rest, true);
+        savingPublish();
+        const settled = (): void => {
+            const next = new Set(credentialSaving.get(providerId));
+            next.delete(credentialId);
+            if (next.size === 0) credentialSaving.delete(providerId);
+            else credentialSaving.set(providerId, next);
+        };
+        void change(api).then(
+            () => {
+                if (disposed) return;
+                credentialSettles.push(settled);
+                reread();
+            },
+            (error: unknown) => {
+                if (disposed) return;
+                settled();
+                savingPublish();
+                store.setState({ saveError: happyAgentUserError(error) }, false);
+            },
+        );
+    }
 
     return {
         get: () => store.getState(),
@@ -182,7 +278,7 @@ export function happyAgentProvidersStoreCreate(
                 (response) => {
                     if (disposed) return;
                     saving.delete(providerId);
-                    settle(happyAgentModelCatalogProject(response.config));
+                    settle(response.config);
                     schedule();
                 },
                 (error: unknown) => {
@@ -192,6 +288,23 @@ export function happyAgentProvidersStoreCreate(
                     store.setState({ saveError: happyAgentUserError(error) }, false);
                     schedule();
                 },
+            );
+        },
+        credentialAdd(providerId, input) {
+            const api = deps.credentials;
+            if (disposed || !api) return Promise.reject(happyAgentUserError("Not available here."));
+            return api.credentialAdd(providerId, input).then(reread, (error: unknown) => {
+                throw happyAgentUserError(error);
+            });
+        },
+        credentialEnabledUpdate(providerId, credentialId, enabled) {
+            credentialChange(providerId, credentialId, (api) =>
+                api.credentialEnabledUpdate(providerId, credentialId, enabled),
+            );
+        },
+        credentialRemove(providerId, credentialId) {
+            credentialChange(providerId, credentialId, (api) =>
+                api.credentialRemove(providerId, credentialId),
             );
         },
         [Symbol.dispose]() {
@@ -206,13 +319,6 @@ export function happyAgentProvidersStoreCreate(
     };
 }
 
-function providerEntry(
-    provider: HappyAgentModelProvider,
-    saving: boolean,
-): HappyAgentProviderEntry {
-    return { ...provider, saving };
-}
-
 const INERT_SNAPSHOT: HappyAgentProvidersSnapshot = { providers: [], loading: false };
 
 /**
@@ -224,5 +330,8 @@ export const happyAgentProvidersStoreNoop: HappyAgentProvidersStore = {
     get: () => INERT_SNAPSHOT,
     subscribe: () => () => undefined,
     providerEnabledUpdate: () => undefined,
+    credentialAdd: () => Promise.reject(new Error("Not available here.")),
+    credentialEnabledUpdate: () => undefined,
+    credentialRemove: () => undefined,
     [Symbol.dispose]: () => undefined,
 };

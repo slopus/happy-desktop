@@ -1,3 +1,4 @@
+import type { HappyAgentProviderCredentialsApi } from "./happyAgentProviderCredentials.js";
 import type {
     TerminalColorScheme,
     TerminalDriverCreate,
@@ -421,6 +422,8 @@ export interface HappyAgentWorkspaceClientDeps {
      */
     readonly mobileConnector?: HappyAgentMobileConnectorStore;
     readonly client: HappyAgentClient;
+    /** Happy Cloud's team key routes over this connection's transport. */
+    readonly providerCredentials?: HappyAgentProviderCredentialsApi;
     readonly cloudHost: HappyAgentCloudHost;
     readonly connection: HappyAgentConnection;
     readonly hostServices: HappyAgentHostServices;
@@ -963,6 +966,7 @@ export function happyAgentWorkspaceClientCreate(
             providersStore ??= happyAgentProvidersStoreCreate({
                 client: deps.client,
                 catalogChanged: (catalog) => models.catalogChanged(catalog),
+                ...(deps.providerCredentials ? { credentials: deps.providerCredentials } : {}),
             });
             return providersStore;
         },

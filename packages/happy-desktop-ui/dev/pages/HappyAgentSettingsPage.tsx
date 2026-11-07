@@ -328,6 +328,60 @@ Ask before touching anything outside the working directory.
 - Never force-push \`main\`.
 `;
 
+const cloudProviders: readonly HappyAgentProviderRow[] = [
+    {
+        enabled: true,
+        id: "openai",
+        keys: {
+            addable: true,
+            source: "tenant",
+            list: [
+                { enabled: true, id: "default", label: "Team key", state: "ready" },
+                {
+                    coolingUntil: "4:30 PM",
+                    enabled: true,
+                    id: "k2",
+                    label: "Backup key",
+                    state: "cooling",
+                },
+                { enabled: true, id: "k3", label: "Old key", state: "invalid" },
+                { enabled: false, id: "k4", label: "Spare", saving: true, state: "disabled" },
+            ],
+        },
+        models: [
+            {
+                efforts: ["Low", "Medium", "High"],
+                enabled: true,
+                id: "openai:openai/gpt-6.1-sol",
+                isDefault: true,
+                modelId: "openai/gpt-6.1-sol",
+                name: "GPT-6.1 Sol",
+            },
+        ],
+        name: "OpenAI",
+        serviceTiers: [],
+        status: "ready",
+    },
+    {
+        enabled: false,
+        id: "grok",
+        keys: { addable: true, list: [], source: null },
+        models: [],
+        name: "xAI",
+        serviceTiers: [],
+        status: "not_enabled",
+    },
+    {
+        enabled: false,
+        id: "bedrock",
+        keys: { addable: true, list: [], region: true, source: null },
+        models: [],
+        name: "Amazon Bedrock",
+        serviceTiers: [],
+        status: "not_enabled",
+    },
+];
+
 const providers: readonly HappyAgentProviderRow[] = [
     {
         enabled: true,
@@ -1119,6 +1173,30 @@ export function HappyAgentSettingsBlueprintPage() {
                         onModelEnabledChange={noop}
                         onProviderEnabledChange={noop}
                         providers={providers}
+                    />
+                </HappyAgentSettingsShell>
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="Happy Cloud providers: team API keys in each state, one with none yet, and Bedrock's region"
+                label="Happy Agent settings — providers with team keys"
+                number="03b"
+                screen="providers-team-keys"
+            >
+                <HappyAgentSettingsShell
+                    activeCategoryId="providers"
+                    categories={categories}
+                    description="Every model provider this server knows about"
+                    onCategorySelect={noop}
+                    onClose={noop}
+                    title="Providers"
+                >
+                    <HappyAgentProviderSettings
+                        onKeyAdd={() => Promise.resolve()}
+                        onKeyEnabledChange={noop}
+                        onKeyRemove={noop}
+                        onModelEnabledChange={noop}
+                        onProviderEnabledChange={noop}
+                        providers={cloudProviders}
                     />
                 </HappyAgentSettingsShell>
             </FullScreenSpecimen>

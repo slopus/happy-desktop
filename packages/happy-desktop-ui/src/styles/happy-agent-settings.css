@@ -354,6 +354,63 @@
     line-height: 18px;
 }
 
+/* A Happy Cloud provider's team keys sit under its models, on the same
+   indent, each one a row like a model's with its state and controls. */
+.happy-agent-provider__keys {
+    display: flex;
+    flex-direction: column;
+    padding-left: 32px;
+}
+
+.happy-agent-provider__key {
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 48px;
+    padding: 8px 0;
+    border-top: 1px solid var(--divider);
+    color: var(--text-secondary);
+}
+
+.happy-agent-provider__key-meta,
+.happy-agent-provider__keys-note {
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+}
+
+.happy-agent-provider__keys-note {
+    padding: 8px 0;
+    border-top: 1px solid var(--divider);
+}
+
+.happy-agent-provider__key-add {
+    display: flex;
+    padding: 8px 0;
+    border-top: 1px solid var(--divider);
+}
+
+.happy-agent-provider__key-form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 12px 0 8px;
+    border-top: 1px solid var(--divider);
+}
+
+.happy-agent-provider__key-error {
+    color: var(--status-error);
+    font-size: 12px;
+    line-height: 16px;
+}
+
+.happy-agent-provider__key-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
 /* ---- Nodes ------------------------------------------------------------- */
 
 /* One node reads as the same kind of card a provider does: they are both a

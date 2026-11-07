@@ -4,6 +4,7 @@ import {
     describeServerCompatibility,
     HappyAgentClient,
     happyAgentWorkspaceClientCreate,
+    happyAgentProviderCredentialsApiCreate,
     happyAgentClockStoreCreate,
     gptLiveRuntimeCreate,
     type GptLiveRuntime,
@@ -470,6 +471,10 @@ export function happyAgentConnectionOpen(input: {
         : onboardingStore;
     const client: HappyAgentWorkspaceClient = happyAgentWorkspaceClientCreate({
         client: directClient,
+        providerCredentials: happyAgentProviderCredentialsApiCreate({
+            endpoint: directClient.endpoint,
+            token: "happy-local-capability",
+        }),
         guidedMobileSetup: input.guidedMobileSetup,
         mobileConnector,
         cloudHost: input.cloudHost,

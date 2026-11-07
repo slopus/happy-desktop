@@ -1,6 +1,9 @@
+import { useState } from "react";
 import type { BadgeVariant } from "../../Badge";
 import { Banner } from "../../Banner";
 import { Box } from "../../Box";
+import { Button } from "../../Button";
+import { TextField } from "../../TextField";
 import { EmptyState } from "../../EmptyState";
 import { Icon } from "../../Icon";
 import { Spinner } from "../../Spinner";
@@ -25,6 +28,38 @@ export interface HappyAgentProviderModelRow {
     readonly efforts: readonly string[];
 }
 
+/** Where one team key stands, as the server reports it. */
+export type HappyAgentProviderKeyState = "ready" | "cooling" | "invalid" | "disabled";
+
+export interface HappyAgentProviderKeyRow {
+    readonly id: string;
+    readonly label: string;
+    readonly enabled: boolean;
+    readonly state: HappyAgentProviderKeyState;
+    /** When a cooling key is tried again, already formatted. */
+    readonly coolingUntil?: string;
+    /** A change asked for and not answered yet. */
+    readonly saving?: boolean;
+}
+
+/** The team API keys a Happy Cloud server keeps for one provider. */
+export interface HappyAgentProviderKeys {
+    readonly list: readonly HappyAgentProviderKeyRow[];
+    /** Whether a key can be added here; subscriptions sign in instead. */
+    readonly addable: boolean;
+    /** Amazon Bedrock also asks which AWS region its key is for. */
+    readonly region?: boolean;
+    /** Whose key answers now: the team's, Happy Cloud's, or nobody's. */
+    readonly source: "tenant" | "operator" | null;
+}
+
+/** What adding a team key sends. */
+export interface HappyAgentProviderKeyInput {
+    readonly label: string;
+    readonly apiKey: string;
+    readonly region?: string;
+}
+
 export interface HappyAgentProviderRow {
     readonly id: string;
     /** Service identity shown separately from the account's friendly name. */
@@ -38,6 +73,8 @@ export interface HappyAgentProviderRow {
     readonly models: readonly HappyAgentProviderModelRow[];
     /** Service tiers the provider offers, already labelled. */
     readonly serviceTiers: readonly string[];
+    /** Team API keys, on a Happy Cloud server; absent on a Happy Agent. */
+    readonly keys?: HappyAgentProviderKeys;
 }
 
 export type HappyAgentProviderSettingsProps = {
@@ -51,6 +88,10 @@ export type HappyAgentProviderSettingsProps = {
     onModelEnabledChange: (id: string, enabled: boolean) => void;
     /** Switches one whole provider on or off for the machine. */
     onProviderEnabledChange: (id: string, enabled: boolean) => void;
+    /** Adds a team key; rejects with the reason to show in the form. */
+    onKeyAdd?: (providerId: string, input: HappyAgentProviderKeyInput) => Promise<void>;
+    onKeyEnabledChange?: (providerId: string, keyId: string, enabled: boolean) => void;
+    onKeyRemove?: (providerId: string, keyId: string) => void;
 };
 
 const STATUS_LABELS: Record<HappyAgentProviderStatus, string> = {
@@ -214,18 +255,254 @@ export function HappyAgentProviderSettings(props: HappyAgentProviderSettingsProp
                                 </span>
                             ) : null}
                         </Box>
-                        {STATUS_HINTS[provider.status] ? (
+                        {provider.keys ? (
+                            <HappyAgentProviderKeyList
+                                keys={provider.keys}
+                                providerId={provider.id}
+                                providerName={provider.name}
+                                unavailable={props.unavailable !== undefined}
+                                {...(props.onKeyAdd ? { onKeyAdd: props.onKeyAdd } : {})}
+                                {...(props.onKeyEnabledChange
+                                    ? { onKeyEnabledChange: props.onKeyEnabledChange }
+                                    : {})}
+                                {...(props.onKeyRemove ? { onKeyRemove: props.onKeyRemove } : {})}
+                            />
+                        ) : null}
+                        {providerHint(provider) ? (
                             <p
                                 className="happy-agent-provider__hint"
                                 data-happy-desktop-ui="happy-agent-provider-hint"
                             >
-                                {STATUS_HINTS[provider.status]}
+                                {providerHint(provider)}
                             </p>
                         ) : null}
                     </article>
                 ))}
             </HappyAgentSettingsSection>
         </>
+    );
+}
+
+/**
+ * What the reader has to do before a provider's models work. On a Happy Cloud
+ * server a provider that takes a key and has none waits for one, rather than
+ * for a sign-in on some machine.
+ */
+function providerHint(provider: HappyAgentProviderRow): string | undefined {
+    if (provider.keys?.addable && provider.keys.source === null)
+        return "Add a team API key to use its models.";
+    if (provider.keys) return undefined;
+    return STATUS_HINTS[provider.status];
+}
+
+const KEY_STATE_LABELS: Record<HappyAgentProviderKeyState, string> = {
+    ready: "Ready",
+    cooling: "Resting",
+    invalid: "Rejected",
+    disabled: "Off",
+};
+
+const KEY_STATE_VARIANTS: Record<HappyAgentProviderKeyState, BadgeVariant> = {
+    ready: "success",
+    cooling: "warning",
+    invalid: "danger",
+    disabled: "neutral",
+};
+
+function keyMeta(key: HappyAgentProviderKeyRow): string {
+    if (key.state === "cooling")
+        return key.coolingUntil
+            ? `Hit a limit; tried again at ${key.coolingUntil}.`
+            : "Hit a limit; tried again soon.";
+    if (key.state === "invalid") return "The provider refused this key. Add a new one.";
+    if (key.state === "disabled") return "Not used until it is switched on.";
+    return "Used for this team's turns.";
+}
+
+/**
+ * A provider's team keys on a Happy Cloud server, and the form that adds one.
+ * The draft lives here only while the form is open: the key goes straight to
+ * the server and is never shown again.
+ */
+function HappyAgentProviderKeyList(props: {
+    readonly providerId: string;
+    readonly providerName: string;
+    readonly keys: HappyAgentProviderKeys;
+    readonly unavailable: boolean;
+    readonly onKeyAdd?: (providerId: string, input: HappyAgentProviderKeyInput) => Promise<void>;
+    readonly onKeyEnabledChange?: (providerId: string, keyId: string, enabled: boolean) => void;
+    readonly onKeyRemove?: (providerId: string, keyId: string) => void;
+}) {
+    const [draft, setDraft] = useState<
+        | {
+              readonly label: string;
+              readonly apiKey: string;
+              readonly region: string;
+              readonly busy: boolean;
+              readonly error?: string;
+          }
+        | undefined
+    >(undefined);
+    const submit = (): void => {
+        if (!draft || draft.busy || !props.onKeyAdd) return;
+        const label = draft.label.trim() || "Team key";
+        const apiKey = draft.apiKey.trim();
+        if (!apiKey) {
+            setDraft({ ...draft, error: "Paste the API key." });
+            return;
+        }
+        setDraft({ ...draft, busy: true, error: undefined });
+        const region = draft.region.trim();
+        void props
+            .onKeyAdd(props.providerId, {
+                label,
+                apiKey,
+                ...(props.keys.region && region ? { region } : {}),
+            })
+            .then(
+                () => setDraft(undefined),
+                (error: unknown) =>
+                    setDraft((current) =>
+                        current
+                            ? {
+                                  ...current,
+                                  busy: false,
+                                  error: error instanceof Error ? error.message : String(error),
+                              }
+                            : current,
+                    ),
+            );
+    };
+    return (
+        <Box
+            className="happy-agent-provider__keys"
+            data-happy-desktop-ui="happy-agent-provider-keys"
+        >
+            {props.keys.source === "operator" && props.keys.list.length === 0 ? (
+                <span className="happy-agent-provider__keys-note">
+                    Happy Cloud provides this one. Add a team key to use your own account.
+                </span>
+            ) : null}
+            {props.keys.list.map((key) => (
+                <Box
+                    className="happy-agent-provider__key"
+                    data-happy-desktop-ui="happy-agent-provider-key"
+                    data-state={key.state}
+                    key={key.id}
+                >
+                    <Icon name="lock" size={14} />
+                    <Box className="happy-agent-provider__model-text">
+                        <span className="happy-agent-provider__model-name">{key.label}</span>
+                        <span className="happy-agent-provider__key-meta">{keyMeta(key)}</span>
+                    </Box>
+                    <HappyAgentSettingsStatus
+                        label={KEY_STATE_LABELS[key.state]}
+                        variant={KEY_STATE_VARIANTS[key.state]}
+                    />
+                    {key.saving ? <Spinner size={16} /> : null}
+                    <Switch
+                        aria-label={`${key.label} enabled`}
+                        checked={key.enabled}
+                        disabled={props.unavailable || key.saving || !props.onKeyEnabledChange}
+                        onChange={(enabled) =>
+                            props.onKeyEnabledChange?.(props.providerId, key.id, enabled)
+                        }
+                    />
+                    <Button
+                        aria-label={`Remove ${key.label}`}
+                        disabled={props.unavailable || key.saving || !props.onKeyRemove}
+                        icon="trash"
+                        iconOnly
+                        onClick={() => props.onKeyRemove?.(props.providerId, key.id)}
+                        size="small"
+                        variant="ghost"
+                    />
+                </Box>
+            ))}
+            {props.keys.addable && props.onKeyAdd ? (
+                draft ? (
+                    <Box
+                        className="happy-agent-provider__key-form"
+                        data-happy-desktop-ui="happy-agent-provider-key-form"
+                    >
+                        <TextField
+                            autoFocus
+                            disabled={draft.busy}
+                            label="Name"
+                            onSubmit={submit}
+                            onValueChange={(label) => setDraft({ ...draft, label })}
+                            placeholder="Team key"
+                            size="small"
+                            value={draft.label}
+                        />
+                        <TextField
+                            autoComplete="off"
+                            disabled={draft.busy}
+                            label="API key"
+                            onSubmit={submit}
+                            onValueChange={(apiKey) => setDraft({ ...draft, apiKey })}
+                            size="small"
+                            type="password"
+                            value={draft.apiKey}
+                        />
+                        {props.keys.region ? (
+                            <TextField
+                                disabled={draft.busy}
+                                hint="Optional. The AWS region this key is for."
+                                label="Region"
+                                onSubmit={submit}
+                                onValueChange={(region) => setDraft({ ...draft, region })}
+                                placeholder="us-east-1"
+                                size="small"
+                                value={draft.region}
+                            />
+                        ) : null}
+                        {draft.error ? (
+                            <span
+                                className="happy-agent-provider__key-error"
+                                data-happy-desktop-ui="happy-agent-provider-key-error"
+                                role="alert"
+                            >
+                                {draft.error}
+                            </span>
+                        ) : null}
+                        <Box className="happy-agent-provider__key-actions">
+                            <Button
+                                disabled={draft.busy}
+                                onClick={() => setDraft(undefined)}
+                                size="small"
+                                variant="ghost"
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                loading={draft.busy}
+                                onClick={submit}
+                                size="small"
+                                variant="primary"
+                            >
+                                Add key
+                            </Button>
+                        </Box>
+                    </Box>
+                ) : (
+                    <Box className="happy-agent-provider__key-add">
+                        <Button
+                            aria-label={`Add an API key for ${props.providerName}`}
+                            disabled={props.unavailable}
+                            icon="plus"
+                            onClick={() =>
+                                setDraft({ label: "", apiKey: "", region: "", busy: false })
+                            }
+                            size="small"
+                            variant="secondary"
+                        >
+                            Add API key
+                        </Button>
+                    </Box>
+                )
+            ) : null}
+        </Box>
     );
 }
 
