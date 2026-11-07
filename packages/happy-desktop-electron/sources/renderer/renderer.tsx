@@ -1372,7 +1372,9 @@ if (mediaPreviewBridge) {
         // here and the session store navigates through it when a conversation it
         // created should be opened.
         const happyAgentHistory = happyAgentHistoryCreate({
-            browser: false,
+            // A browser tab's address is a place people paste and share, so the
+            // cloud web app follows it; the desktop window has no address bar.
+            browser: cloudWeb,
             persistence: desktopHistoryPersistence(),
         });
         const happyAgentRouter = happyAgentRouterCreate(happyAgentHistory);
