@@ -1,6 +1,7 @@
 import {
     agentCatalogIndexed,
     agentCatalogStore,
+    agentHolderProjects,
     type AgentCatalogIndex,
 } from "./agentCatalogIndex.js";
 import {
@@ -60,6 +61,8 @@ import {
     projectElements,
     projectBots,
     projectGroups,
+    projectGroupsAt,
+    projectGroupsChanged,
     RevisedMap,
     projectNumericIdentity,
     projectSession,
@@ -73,6 +76,7 @@ import type {
     CreateSessionInput,
     DraftUpdate,
     GroupDelta,
+    GroupsChanges,
     GroupTarget,
     GroupsState,
     MutationAction,
@@ -456,7 +460,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
     const mutationQueues = new Map<string, Promise<void>>();
     const sessionCreations = new Map<string, Promise<void>>();
     const sessionMutationCounts = new Map<string, number>();
-    const gitStates = new Map<string, GitSnapshotState>();
+    const gitStates = new RevisedMap<string, GitSnapshotState>();
     const processOwners = new Map<string, string>();
     let config: DaemonConfig | undefined;
     let currentUserId: string | undefined;
@@ -505,6 +509,25 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         tasks: [],
         workspaces: [],
     }));
+    /*
+     * Which projects the next groups publish has to project again. Agent versions,
+     * drafts, modes and Git scans name the projects they reach. Anything else that
+     * replaces the catalog's projects or workspaces leaves them unlike the ones
+     * tracked here, and the publish then projects the whole catalog.
+     */
+    const groupsDirty = new Set<string>();
+    const groupsDirtyMark = (projectId: string): void => {
+        groupsDirty.add(projectId);
+    };
+    let groupsTracked:
+        | {
+              readonly config: DaemonConfig;
+              readonly projects: readonly Project[];
+              readonly workspaces: readonly Workspace[];
+          }
+        | undefined;
+    /** Where each published project group sits. */
+    let groupsAt: ReadonlyMap<string, number> = new Map();
 
     reportDebug({
         detail: debugDetail({ endpoint }),
@@ -723,27 +746,90 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         groupsPublishNow([...groupDeltasUnpublished.splice(0), ...deltas]);
     };
 
+    /** The project groups as `projectGroupsChanged` brings them forward. */
+    const groupsProject = (daemonConfig: DaemonConfig): GroupsChanges | undefined => {
+        const draftsChanged = agentDrafts.changesTake();
+        const modesChanged = agentModes.changesTake();
+        const gitChanged = gitStates.changesTake();
+        const current = groupsStore.getState();
+        const tracked = groupsTracked;
+        groupsTracked = {
+            config: daemonConfig,
+            projects: current.projects,
+            workspaces: current.workspaces,
+        };
+        let projected: ReturnType<typeof projectGroupsChanged>;
+        if (
+            tracked !== undefined &&
+            tracked.config === daemonConfig &&
+            tracked.projects === current.projects &&
+            tracked.workspaces === current.workspaces &&
+            draftsChanged !== undefined &&
+            modesChanged !== undefined &&
+            gitChanged !== undefined
+        ) {
+            const index = agentIndexCurrent();
+            const touchedAgents = new Set([...draftsChanged, ...modesChanged]);
+            for (const agentId of touchedAgents)
+                agentHolderProjects(index, agentId, groupsDirtyMark);
+            for (const ownerId of gitChanged) {
+                if (index.projectAt.has(ownerId)) groupsDirty.add(ownerId);
+                const at = index.workspaceAt.get(ownerId);
+                const projectId = at === undefined ? null : current.workspaces[at]!.projectId;
+                if (projectId !== null) groupsDirty.add(projectId);
+            }
+            projected = projectGroupsChanged(
+                current.groups,
+                groupsAt,
+                {
+                    projects: current.projects,
+                    workspaces: current.workspaces,
+                    projectAt: index.projectAt,
+                    workspaceAt: index.workspaceAt,
+                },
+                endpoint,
+                daemonConfig,
+                gitStates,
+                agentDrafts,
+                agentModes,
+                groupsDirty,
+                touchedAgents,
+            );
+        }
+        groupsDirty.clear();
+        if (projected !== undefined) {
+            if (projected.groups !== current.groups)
+                groupsStore.setState({ groups: projected.groups });
+            return { projects: projected.changed };
+        }
+        const groups = elementsReuse(
+            current.groups,
+            projectGroups(
+                current.projects,
+                current.workspaces,
+                endpoint,
+                daemonConfig,
+                gitStates,
+                agentDrafts,
+                agentModes,
+            ),
+        );
+        groupsAt = projectGroupsAt(groups);
+        groupsStore.setState({ groups });
+        return undefined;
+    };
+
     const groupsPublishNow = (deltas: readonly GroupDelta[]): void => {
+        let changes: GroupsChanges | undefined = GROUPS_UNCHANGED;
         if (config !== undefined) {
             const daemonConfig = config;
+            changes = groupsProject(daemonConfig);
             groupsStore.setState((current) => ({
-                groups: elementsReuse(
-                    current.groups,
-                    projectGroups(
-                        current.projects,
-                        current.workspaces,
-                        endpoint,
-                        daemonConfig,
-                        gitStates,
-                        agentDrafts,
-                        agentModes,
-                    ),
-                ),
                 botGroups: entitiesSettle(
                     current.botGroups,
                     projectBots(
                         current.bots,
-                        current.workspaces,
+                        workspaceOf,
                         endpoint,
                         daemonConfig,
                         agentDrafts,
@@ -756,7 +842,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                     projectTasks(
                         current.tasks,
                         current.taskMemberships,
-                        current.workspaces,
+                        workspaceOf,
                         endpoint,
                         daemonConfig,
                         taskOwnerOf,
@@ -770,7 +856,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         const { botGroups, groups, taskGroups } = groupsStore.getState();
         for (const subscriber of groupSubscribers) {
             if (subscriber.closed) continue;
-            subscriber.onChange(groups, state, botGroups, taskGroups);
+            subscriber.onChange(groups, state, botGroups, taskGroups, changes);
             for (const delta of deltas) subscriber.onDelta?.(delta);
         }
     };
@@ -1072,8 +1158,18 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
     const storeAgent = (agent: Agent): void => {
         const index = agentIndexCurrent();
         const held = index.catalog;
-        const stored = agentCatalogStore(index, agent);
+        const tracked =
+            groupsTracked !== undefined &&
+            groupsTracked.projects === held.projects &&
+            groupsTracked.workspaces === held.workspaces;
+        const stored = agentCatalogStore(index, agent, tracked ? groupsDirtyMark : undefined);
         if (stored !== held) groupsStore.setState({ ...stored });
+        if (tracked && groupsTracked !== undefined)
+            groupsTracked = {
+                ...groupsTracked,
+                projects: stored.projects,
+                workspaces: stored.workspaces,
+            };
         const entry = sessions.get(agent.id);
         if (entry !== undefined) {
             entry.agent = agent;
@@ -6202,6 +6298,9 @@ function abortableWait(milliseconds: number, signal: AbortSignal): Promise<void>
  * renderer may paint between them. A message channel is used rather than a timer because a
  * timer is clamped once nested and throttled in a window that is out of sight.
  */
+/** A publish that projected nothing replaced no group. */
+const GROUPS_UNCHANGED: GroupsChanges = { projects: new Set() };
+
 function taskQueueCreate(): { post(run: () => void): void; close(): void } {
     const queued: (() => void)[] = [];
     let channel: MessageChannel | undefined;

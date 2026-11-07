@@ -44,6 +44,7 @@ import type {
 } from "./types.js";
 import { happyAgentImageUrl } from "../utils/happyAgentImageUrl.js";
 import { deepEqual } from "../happyAgent/happyAgentSupport.js";
+import { sortedPatch } from "../utils/sortedPatch.js";
 
 export interface TranscriptMessage {
     message: Message;
@@ -451,104 +452,220 @@ export function projectGroups(
 ): readonly ProjectGroup[] {
     const workspacesByProject = new Map<string, Workspace[]>();
     for (const workspace of workspaces) {
-        if (workspace.archivedAt !== null || workspace.status !== "active") continue;
-        // A bot's workspace has no project and is listed under its bot instead.
-        if (workspace.projectId === null) continue;
-        const entries = workspacesByProject.get(workspace.projectId) ?? [];
+        if (!workspaceListed(workspace)) continue;
+        const entries = workspacesByProject.get(workspace.projectId!) ?? [];
         entries.push(workspace);
-        workspacesByProject.set(workspace.projectId, entries);
+        workspacesByProject.set(workspace.projectId!, entries);
     }
-
+    const context: GroupContext = { endpoint, config, gitStates, drafts, modes };
     return projects
-        .filter((project) => project.archivedAt === null && project.status === "active")
+        .filter(projectListed)
         .sort(orderCompare)
         .map((project) => {
             const projectWorkspaces = workspacesByProject.get(project.id) ?? [];
-            const root = projectWorkspaces.find((workspace) => workspace.id === project.id);
-            const children = projectWorkspaces
-                .filter((workspace) => workspace.id !== project.id)
-                .sort(orderCompare)
-                .map((workspace) =>
-                    projectWorkspace(
-                        workspace,
-                        project.id,
-                        endpoint,
-                        config,
-                        gitStates.get(workspace.id),
-                        drafts,
-                        modes,
-                    ),
-                );
-            // Archived sessions remain part of the typed group projection so
-            // consumers that offer recovery can see them. Active list surfaces
-            // filter on the explicit `archived` field; unread counts do not.
-            const agents = root?.agents ?? project.agents;
-            const git = gitSnapshotProject(gitStates.get(project.id));
-            // One agent's change replaces its own row; every other project keeps
-            // its group, so readers downstream settle it by identity. With the
-            // drafts and modes unchanged too, the rows are the ones already
-            // projected, so they need not be visited at all.
-            const cached = projectGroupCache.get(project);
-            const reusable =
-                cached !== undefined &&
-                cached.root === root &&
-                cached.endpoint === endpoint &&
-                cached.config === config &&
-                cached.value.git === git &&
-                elementsSame(cached.value.workspaces, children);
-            const revision = revisionOf(drafts, modes);
-            if (reusable && revision !== undefined && cached.revision === revision)
-                return cached.value;
-            const sessions = [...agents]
-                .sort(orderCompare)
-                .map((agent) =>
-                    projectAgent(
-                        agent,
-                        root,
-                        endpoint,
-                        config,
-                        drafts.get(agent.id),
-                        modes.get(agent.id),
-                    ),
-                );
-            if (reusable && elementsSame(cached.value.sessions, sessions)) {
-                projectGroupCache.set(project, { ...cached, revision });
-                return cached.value;
-            }
-            const activeAgents = agents.filter((agent) => agent.archivedAt === null);
-            const value: ProjectGroup = {
-                id: project.id,
-                kind: project.avatar?.kind === "home" ? "home" : "regular",
-                name: project.name,
-                ...(project.git?.branch === undefined || project.git.branch === null
-                    ? {}
-                    : { branch: project.git.branch }),
-                orderKey: project.orderKey,
-                path: computePath(project.compute),
-                presence: "present",
-                ...(project.initialization.error === null
-                    ? {}
-                    : { initializationError: project.initialization.error }),
-                initializationStatus: project.initialization.status,
-                ...(project.remoteSource === null ? {} : { remoteSource: project.remoteSource }),
-                ...(project.avatar?.kind === "image"
-                    ? {
-                          avatar: {
-                              height: 512,
-                              width: 512,
-                              url: `${endpoint.replace(/\/$/u, "")}/v0/projects/${encodeURIComponent(project.id)}/avatar`,
-                          },
-                      }
-                    : {}),
-                ...(git === undefined ? {} : { git }),
-                usage: { totalTokens: 0 },
-                unread: unreadOf(activeAgents),
-                workspaces: children,
-                sessions,
-            };
-            projectGroupCache.set(project, { root, endpoint, config, revision, value });
-            return value;
+            return projectGroup(
+                project,
+                projectWorkspaces.find((workspace) => workspace.id === project.id),
+                projectWorkspaces
+                    .filter((workspace) => workspace.id !== project.id)
+                    .sort(orderCompare),
+                context,
+            );
         });
+}
+
+/**
+ * `previous` — the groups as last projected — brought forward to a catalog in which
+ * only the projects in `dirty` may have changed, and only in their agents, drafts,
+ * modes or Git state: every project and workspace is still listed, in the same
+ * place, under the same key. Only those projects are projected again, and only
+ * the rows that changed within them; the answer names the groups it replaced.
+ * `undefined` says the catalog moved in a way only a full projection settles.
+ */
+export function projectGroupsChanged(
+    previous: readonly ProjectGroup[],
+    previousAt: ReadonlyMap<string, number>,
+    catalog: {
+        readonly projects: readonly Project[];
+        readonly workspaces: readonly Workspace[];
+        readonly projectAt: ReadonlyMap<string, number>;
+        readonly workspaceAt: ReadonlyMap<string, number>;
+    },
+    endpoint: string,
+    config: DaemonConfig,
+    gitStates: ReadonlyMap<string, GitSnapshotState>,
+    drafts: ReadonlyMap<string, AgentDraftSnapshot>,
+    modes: ReadonlyMap<string, MessageMode | null>,
+    dirty: ReadonlySet<string>,
+    touchedAgents: ReadonlySet<string>,
+): { readonly groups: readonly ProjectGroup[]; readonly changed: ReadonlySet<string> } | undefined {
+    const context: GroupContext = { endpoint, config, gitStates, drafts, modes, touchedAgents };
+    const changed = new Set<string>();
+    let groups: ProjectGroup[] | undefined;
+    for (const projectId of dirty) {
+        const at = previousAt.get(projectId);
+        const projectAt = catalog.projectAt.get(projectId);
+        const project = projectAt === undefined ? undefined : catalog.projects[projectAt];
+        if (at === undefined) {
+            // An unlisted project stays unlisted unless its own record changed.
+            if (project !== undefined && projectListed(project)) return undefined;
+            continue;
+        }
+        const before = previous[at]!;
+        if (
+            project === undefined ||
+            !projectListed(project) ||
+            project.orderKey !== before.orderKey
+        )
+            return undefined;
+        const workspaceOf = (id: string): Workspace | undefined => {
+            const position = catalog.workspaceAt.get(id);
+            return position === undefined ? undefined : catalog.workspaces[position];
+        };
+        const rootCandidate = workspaceOf(projectId);
+        const root =
+            rootCandidate !== undefined &&
+            workspaceListed(rootCandidate) &&
+            rootCandidate.projectId === projectId
+                ? rootCandidate
+                : undefined;
+        const children: Workspace[] = [];
+        for (const child of before.workspaces) {
+            const workspace = workspaceOf(child.id);
+            if (
+                workspace === undefined ||
+                !workspaceListed(workspace) ||
+                workspace.projectId !== projectId ||
+                workspace.orderKey !== child.orderKey
+            )
+                return undefined;
+            children.push(workspace);
+        }
+        const value = projectGroup(project, root, children, context, before);
+        if (value === before) continue;
+        groups ??= [...previous];
+        groups[at] = value;
+        changed.add(projectId);
+    }
+    return { groups: groups ?? previous, changed };
+}
+
+/** Where each group sits in a list of them. */
+export function projectGroupsAt(groups: readonly ProjectGroup[]): ReadonlyMap<string, number> {
+    return new Map(groups.map((group, at) => [group.id, at]));
+}
+
+interface GroupContext {
+    readonly endpoint: string;
+    readonly config: DaemonConfig;
+    readonly gitStates: ReadonlyMap<string, GitSnapshotState>;
+    readonly drafts: ReadonlyMap<string, AgentDraftSnapshot>;
+    readonly modes: ReadonlyMap<string, MessageMode | null>;
+    /** Agents whose draft or mode changed; with a previous group, the only others projected again. */
+    readonly touchedAgents?: ReadonlySet<string>;
+}
+
+function projectListed(project: Project): boolean {
+    return project.archivedAt === null && project.status === "active";
+}
+
+/** A bot's workspace has no project and is listed under its bot instead. */
+function workspaceListed(workspace: Workspace): boolean {
+    return (
+        workspace.archivedAt === null &&
+        workspace.status === "active" &&
+        workspace.projectId !== null
+    );
+}
+
+function projectGroup(
+    project: Project,
+    root: Workspace | undefined,
+    childWorkspaces: readonly Workspace[],
+    context: GroupContext,
+    previous?: ProjectGroup,
+): ProjectGroup {
+    const { endpoint, config, gitStates, drafts, modes } = context;
+    const children = childWorkspaces.map((workspace, at) =>
+        projectWorkspace(
+            workspace,
+            project.id,
+            endpoint,
+            config,
+            gitStates.get(workspace.id),
+            drafts,
+            modes,
+            previous === undefined ? undefined : { group: previous.workspaces[at]!, context },
+        ),
+    );
+    // Archived sessions remain part of the typed group projection so
+    // consumers that offer recovery can see them. Active list surfaces
+    // filter on the explicit `archived` field; unread counts do not.
+    const agents = root?.agents ?? project.agents;
+    const git = gitSnapshotProject(gitStates.get(project.id));
+    // One agent's change replaces its own row; every other project keeps
+    // its group, so readers downstream settle it by identity. With the
+    // drafts and modes unchanged too, the rows are the ones already
+    // projected, so they need not be visited at all.
+    const cached = projectGroupCache.get(project);
+    const reusable =
+        cached !== undefined &&
+        cached.root === root &&
+        cached.endpoint === endpoint &&
+        cached.config === config &&
+        cached.value.git === git &&
+        elementsSame(cached.value.workspaces, children);
+    const revision = revisionOf(drafts, modes);
+    if (reusable && revision !== undefined && cached.revision === revision) return cached.value;
+    const sessions = sessionsProject(
+        agents,
+        (agent) =>
+            projectAgent(agent, root, endpoint, config, drafts.get(agent.id), modes.get(agent.id)),
+        previous,
+        context.touchedAgents,
+    );
+    if (reusable && elementsSame(cached.value.sessions, sessions.sorted)) {
+        projectGroupCache.set(project, { ...cached, revision });
+        return cached.value;
+    }
+    const activeAgents = agents.filter((agent) => agent.archivedAt === null);
+    const value: ProjectGroup = {
+        id: project.id,
+        kind: project.avatar?.kind === "home" ? "home" : "regular",
+        name: project.name,
+        ...(project.git?.branch === undefined || project.git.branch === null
+            ? {}
+            : { branch: project.git.branch }),
+        orderKey: project.orderKey,
+        path: computePath(project.compute),
+        presence: "present",
+        ...(project.initialization.error === null
+            ? {}
+            : { initializationError: project.initialization.error }),
+        initializationStatus: project.initialization.status,
+        ...(project.remoteSource === null ? {} : { remoteSource: project.remoteSource }),
+        ...(project.avatar?.kind === "image"
+            ? {
+                  avatar: {
+                      height: 512,
+                      width: 512,
+                      url: projectAvatarUrl(endpoint, project.id),
+                  },
+              }
+            : {}),
+        ...(git === undefined ? {} : { git }),
+        usage: { totalTokens: 0 },
+        unread: unreadOf(activeAgents),
+        workspaces: children,
+        sessions: sessions.sorted,
+    };
+    rowsSources.set(value, sessions);
+    projectGroupCache.set(project, { root, endpoint, config, revision, value });
+    return value;
+}
+
+function projectAvatarUrl(endpoint: string, projectId: string): string {
+    return `${endpoint.replace(/\/$/u, "")}/v0/projects/${encodeURIComponent(projectId)}/avatar`;
 }
 
 const projectGroupCache = new WeakMap<
@@ -580,17 +697,28 @@ const workspaceGroupCache = new WeakMap<
  */
 export class RevisedMap<K, V> extends Map<K, V> {
     revision = 0;
+    /** The keys changed since the last `changesTake`, or `undefined` once the map was cleared. */
+    private changes: Set<K> | undefined = new Set();
     override set(key: K, value: V): this {
         this.revision += 1;
+        this.changes?.add(key);
         return super.set(key, value);
     }
     override delete(key: K): boolean {
         this.revision += 1;
+        this.changes?.add(key);
         return super.delete(key);
     }
     override clear(): void {
         this.revision += 1;
+        this.changes = undefined;
         super.clear();
+    }
+    /** The keys changed since the last call, or `undefined` when they are not known. */
+    changesTake(): ReadonlySet<K> | undefined {
+        const taken = this.changes;
+        this.changes = new Set();
+        return taken;
     }
 }
 
@@ -722,21 +850,20 @@ export function archivedAgentsMerge(
  */
 export function projectBots(
     bots: readonly Bot[],
-    workspaces: readonly Workspace[],
+    workspaceOf: (workspaceId: string) => Workspace | undefined,
     endpoint: string,
     config: DaemonConfig,
     drafts: ReadonlyMap<string, AgentDraftSnapshot> = new Map(),
     modes: ReadonlyMap<string, MessageMode | null> = new Map(),
     storiesSupported = false,
 ): readonly BotGroup[] {
-    const workspaceById = new Map(workspaces.map((workspace) => [workspace.id, workspace]));
     const subtasksProject = (agent: Agent, bot: Bot): readonly BotSubtaskGroup[] =>
-        agentSubtasksProject(agent, bot, workspaceById, endpoint, config, drafts, modes);
+        agentSubtasksProject(agent, bot, workspaceOf, endpoint, config, drafts, modes);
     return bots
         .filter((bot) => bot.archivedAt === null && bot.status === "active")
         .sort(orderCompare)
         .map((bot) => {
-            const workspace = workspaceById.get(bot.workspaceId);
+            const workspace = workspaceOf(bot.workspaceId);
             return {
                 id: bot.id,
                 workspaceId: bot.workspaceId,
@@ -781,7 +908,7 @@ export function projectBots(
 function agentSubtasksProject(
     agent: Agent,
     owner: { readonly workspaceId: string; readonly compute: Bot["compute"] },
-    workspaceById: ReadonlyMap<string, Workspace>,
+    workspaceOf: (workspaceId: string) => Workspace | undefined,
     endpoint: string,
     config: DaemonConfig,
     drafts: ReadonlyMap<string, AgentDraftSnapshot>,
@@ -790,7 +917,7 @@ function agentSubtasksProject(
     return (agent.subtasks ?? [])
         .filter((child) => child.archivedAt === null)
         .map((child) => {
-            const workspace = workspaceById.get(child.workspaceId);
+            const workspace = workspaceOf(child.workspaceId);
             return {
                 workspaceId: child.workspaceId,
                 path:
@@ -808,7 +935,7 @@ function agentSubtasksProject(
                 subtasks: agentSubtasksProject(
                     child,
                     owner,
-                    workspaceById,
+                    workspaceOf,
                     endpoint,
                     config,
                     drafts,
@@ -833,14 +960,13 @@ function agentSubtasksProject(
 export function projectTasks(
     tasks: readonly Task[],
     memberships: readonly TaskMembership[],
-    workspaces: readonly Workspace[],
+    workspaceOf: (workspaceId: string) => Workspace | undefined,
     endpoint: string,
     config: DaemonConfig,
     ownerOf: (task: Task) => TaskOwner | null,
     drafts: ReadonlyMap<string, AgentDraftSnapshot> = new Map(),
     modes: ReadonlyMap<string, MessageMode | null> = new Map(),
 ): readonly TaskGroup[] {
-    const workspaceById = new Map(workspaces.map((workspace) => [workspace.id, workspace]));
     const membershipByTask = new Map(
         memberships.map((membership) => [membership.taskId, membership]),
     );
@@ -877,7 +1003,7 @@ export function projectTasks(
                 session: taskSessionUnread(
                     projectAgent(
                         task.agent,
-                        workspaceById.get(task.workspaceId),
+                        workspaceOf(task.workspaceId),
                         endpoint,
                         config,
                         drafts.get(task.agent.id),
@@ -888,7 +1014,7 @@ export function projectTasks(
                 subtasks: agentSubtasksProject(
                     task.agent,
                     task,
-                    workspaceById,
+                    workspaceOf,
                     endpoint,
                     config,
                     drafts,
@@ -940,6 +1066,7 @@ function projectWorkspace(
     gitState: GitSnapshotState | undefined,
     drafts: ReadonlyMap<string, AgentDraftSnapshot> = new Map(),
     modes: ReadonlyMap<string, MessageMode | null> = new Map(),
+    previous?: { readonly group: WorkspaceGroup; readonly context: GroupContext },
 ): WorkspaceGroup {
     // See the project-root projection above: archival is data, not removal from
     // this owned connection contract. Consumers decide which set they need.
@@ -956,9 +1083,9 @@ function projectWorkspace(
         cached.value.git === git;
     const revision = revisionOf(drafts, modes);
     if (reusable && revision !== undefined && cached.revision === revision) return cached.value;
-    const sessions = [...agents]
-        .sort(orderCompare)
-        .map((agent) =>
+    const rows = sessionsProject(
+        agents,
+        (agent) =>
             projectAgent(
                 agent,
                 workspace,
@@ -967,7 +1094,10 @@ function projectWorkspace(
                 drafts.get(agent.id),
                 modes.get(agent.id),
             ),
-        );
+        previous?.group,
+        previous?.context.touchedAgents,
+    );
+    const sessions = rows.sorted;
     if (reusable && elementsSame(cached.value.sessions, sessions)) {
         workspaceGroupCache.set(workspace, { ...cached, revision });
         return cached.value;
@@ -990,8 +1120,61 @@ function projectWorkspace(
         usage: { totalTokens: 0 },
         unread: unreadOf(activeAgents),
     };
+    rowsSources.set(value, rows);
     workspaceGroupCache.set(workspace, { projectId, endpoint, config, revision, value });
     return value;
+}
+
+/** A group's rows in its owner's agent order, beside the same rows sorted for the list. */
+interface GroupRows {
+    readonly agents: readonly Agent[];
+    readonly rows: readonly GroupSession[];
+    readonly sorted: readonly GroupSession[];
+}
+
+/** What each group's rows were projected from, so the same owner's next group can patch them. */
+const rowsSources = new WeakMap<ProjectGroup | WorkspaceGroup, GroupRows>();
+
+/**
+ * One owner's rows, sorted the way the list shows them. Given the group the same
+ * owner last produced, only the agents replaced since, and the ones whose draft or
+ * mode changed, are projected again, and only their rows are moved in the sorted
+ * list; anything else is projected and sorted whole.
+ */
+function sessionsProject(
+    agents: readonly Agent[],
+    project: (agent: Agent) => GroupSession,
+    previous: ProjectGroup | WorkspaceGroup | undefined,
+    touched: ReadonlySet<string> | undefined,
+): GroupRows {
+    const source = previous === undefined ? undefined : rowsSources.get(previous);
+    if (source === undefined || touched === undefined) {
+        const rows = agents.map(project);
+        return { agents, rows, sorted: [...rows].sort(rowCompare) };
+    }
+    if (source.agents === agents && touched.size === 0) return source;
+    let rows: readonly GroupSession[];
+    if (source.agents.length === agents.length) {
+        let patched: GroupSession[] | undefined;
+        for (let at = 0; at < agents.length; at += 1) {
+            const agent = agents[at]!;
+            if (agent === source.agents[at] && !touched.has(agent.id)) continue;
+            const row = project(agent);
+            if (row === source.rows[at]) continue;
+            patched ??= [...source.rows];
+            patched[at] = row;
+        }
+        rows = patched ?? source.rows;
+    } else rows = agents.map(project);
+    return { agents, rows, sorted: sortedPatch(source.sorted, source.rows, rows, rowCompare) };
+}
+
+/** `orderCompare` over the rows, which carry their agent's key. */
+function rowCompare(left: GroupSession, right: GroupSession): number {
+    return orderCompare(
+        { id: left.id, orderKey: left.orderKey ?? null },
+        { id: right.id, orderKey: right.orderKey ?? null },
+    );
 }
 
 // A catalog event replaces one immutable Agent. Keep the other session rows

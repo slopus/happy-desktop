@@ -119,6 +119,37 @@ function sameTrees(previous: AgentCatalog, next: AgentCatalog, rank: number): bo
     return previous.projects[rank]!.agents === next.projects[rank]!.agents;
 }
 
+/**
+ * Moves the index across one owner's trees that kept their shape — the same agents in the
+ * same places, some of them replaced — visiting only the replaced ones, which a stored
+ * version leaves as the path down to it. `false` when the shape changed, leaving the
+ * owner's entries for a walk of the whole trees to settle.
+ */
+function treesPatch(
+    index: IndexWritable,
+    before: readonly Agent[],
+    after: readonly Agent[],
+    rank: number,
+): boolean {
+    if (before === after) return true;
+    if (before.length !== after.length) return false;
+    for (let at = 0; at < after.length; at += 1) {
+        const previous = before[at]!;
+        const agent = after[at]!;
+        if (previous === agent) continue;
+        if (previous.id !== agent.id) return false;
+        // Only the copy the index found is replaced; a copy earlier in the walk keeps it.
+        const known = index.found.get(agent.id);
+        if (known?.rank === rank && known.agent === previous)
+            index.found.set(agent.id, { agent, rank });
+        if (!treesPatch(index, previous.subtasks ?? NO_AGENTS, agent.subtasks ?? NO_AGENTS, rank))
+            return false;
+    }
+    return true;
+}
+
+const NO_AGENTS: readonly Agent[] = [];
+
 /** Moves `index` onto `catalog`, whose owners differ from its own only at `changed` ranks. */
 function indexAdvance(
     index: IndexWritable,
@@ -126,9 +157,12 @@ function indexAdvance(
     changed: readonly number[],
 ): void {
     const before = index.catalog;
+    const reshaped = changed.filter(
+        (rank) => !treesPatch(index, rootsAt(before, rank), rootsAt(catalog, rank), rank),
+    );
     const lost = new Set<string>();
-    for (const rank of changed) treesRemove(index, rootsAt(before, rank), rank, lost);
-    for (const rank of changed) treesAdd(index, rootsAt(catalog, rank), rank);
+    for (const rank of reshaped) treesRemove(index, rootsAt(before, rank), rank, lost);
+    for (const rank of reshaped) treesAdd(index, rootsAt(catalog, rank), rank);
     for (const id of lost) {
         const holders = index.holders.get(id);
         if (holders === undefined) continue;
@@ -218,7 +252,12 @@ export function ownerAgentReplace<Owner extends { readonly id: string; readonly 
  * owners involved rather than the whole catalog. The index is moved onto the catalog it
  * returns, which is the same catalog when no owner changed.
  */
-export function agentCatalogStore(index: AgentCatalogIndex, agent: Agent): AgentCatalog {
+export function agentCatalogStore(
+    index: AgentCatalogIndex,
+    agent: Agent,
+    /** Told the project of every workspace and project replaced. */
+    projectReplaced?: (projectId: string) => void,
+): AgentCatalog {
     const { catalog } = index;
     const ranks = new Set<number>(index.holders.get(agent.id));
     if (agent.parentAgentId !== null)
@@ -236,7 +275,12 @@ export function agentCatalogStore(index: AgentCatalogIndex, agent: Agent): Agent
     let workspaces = catalog.workspaces;
     let projects = catalog.projects;
     const changed: number[] = [];
-    const replaced = <T>(owners: readonly T[], original: readonly T[], at: number, next: T) => {
+    const ownersReplace = <T>(
+        owners: readonly T[],
+        original: readonly T[],
+        at: number,
+        next: T,
+    ) => {
         const copy = owners === original ? [...owners] : (owners as T[]);
         copy[at] = next;
         return copy;
@@ -250,26 +294,28 @@ export function agentCatalogStore(index: AgentCatalogIndex, agent: Agent): Agent
                 const bot = bots[rank]!;
                 const next = agentTreeUpdate(bot.agent, agent);
                 if (next === bot.agent) continue;
-                bots = replaced(bots, catalog.bots, rank, { ...bot, agent: next });
+                bots = ownersReplace(bots, catalog.bots, rank, { ...bot, agent: next });
             } else {
                 const at = rank - taskBase;
                 const task = tasks[at]!;
                 const next = agentTreeUpdate(task.agent, agent);
                 if (next === task.agent) continue;
-                tasks = replaced(tasks, catalog.tasks, at, { ...task, agent: next });
+                tasks = ownersReplace(tasks, catalog.tasks, at, { ...task, agent: next });
             }
         } else if (rank < projectBase) {
             const at = rank - workspaceBase;
             const workspace = workspaces[at]!;
             const next = ownerAgentReplace(workspace, agent);
             if (next === workspace) continue;
-            workspaces = replaced(workspaces, catalog.workspaces, at, next);
+            workspaces = ownersReplace(workspaces, catalog.workspaces, at, next);
+            if (next.projectId !== null) projectReplaced?.(next.projectId);
         } else {
             const at = rank - projectBase;
             const project = projects[at]!;
             const next = ownerAgentReplace(project, agent);
             if (next === project) continue;
-            projects = replaced(projects, catalog.projects, at, next);
+            projects = ownersReplace(projects, catalog.projects, at, next);
+            projectReplaced?.(next.id);
         }
         changed.push(rank);
     }
@@ -277,4 +323,22 @@ export function agentCatalogStore(index: AgentCatalogIndex, agent: Agent): Agent
     const stored = { bots, tasks, workspaces, projects };
     indexAdvance(index as IndexWritable, stored, changed);
     return stored;
+}
+
+/** Names the project of every workspace and project whose trees hold `agentId`. */
+export function agentHolderProjects(
+    index: AgentCatalogIndex,
+    agentId: string,
+    add: (projectId: string) => void,
+): void {
+    const { bots, tasks, workspaces, projects } = index.catalog;
+    const workspaceBase = bots.length + tasks.length;
+    const projectBase = workspaceBase + workspaces.length;
+    for (const rank of index.holders.get(agentId) ?? []) {
+        if (rank < workspaceBase) continue;
+        if (rank < projectBase) {
+            const projectId = workspaces[rank - workspaceBase]!.projectId;
+            if (projectId !== null) add(projectId);
+        } else add(projects[rank - projectBase]!.id);
+    }
 }

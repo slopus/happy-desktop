@@ -915,9 +915,22 @@ export interface HappyAgentGroupsSubscriptionOptions {
         state: GroupsState,
         bots: readonly BotGroup[],
         tasks: readonly TaskGroup[],
+        /**
+         * How `projects` differs from the list the previous call to this
+         * subscriber carried, when the connection knows: only the groups it
+         * names were replaced, each in its own place. Absent on the first call
+         * and whenever the catalog changed in a way only a full projection
+         * settles. Bots and tasks always arrive whole.
+         */
+        changes?: GroupsChanges,
     ) => void;
     onDelta?: (delta: GroupDelta) => void;
     onError?: (error: unknown) => void;
+}
+
+/** The project groups one publish replaced, everything else being the very same. */
+export interface GroupsChanges {
+    readonly projects: ReadonlySet<string>;
 }
 
 export interface HappyAgentGroupsConnection {
