@@ -159,6 +159,19 @@ export function happyAgentServiceName(type: string): string {
 }
 
 /**
+ * The service to name beside an account, as in "OpenAI · Happy (free)", or
+ * nothing when the account's own name already says it, so no label ever
+ * reads "Grok · Grok".
+ */
+export function happyAgentProviderServiceName(
+    type: string,
+    accountName: string,
+): string | undefined {
+    const service = happyAgentServiceName(type);
+    return service === accountName ? undefined : service;
+}
+
+/**
  * Bytes per base64 chunk. Divisibility by three means each chunk can be encoded
  * independently without padding in the middle of the joined result.
  */

@@ -35,6 +35,7 @@ import {
     happyAgentMenusDerive,
     happyAgentModelKey,
     happyAgentServiceName,
+    happyAgentProviderServiceName,
     happyAgentThinkingLabel,
     experimentsStoreNoop,
     mobilePairingMethodStoreNoop,
@@ -2000,11 +2001,7 @@ function providerRows(
             name: model.name,
         })),
         name: providerAccountName(provider.id, provider.name),
-        // The service is named only when the account's own name doesn't
-        // already say it, so a provider never reads "Grok · Grok".
-        ...(happyAgentServiceName(provider.type) === providerAccountName(provider.id, provider.name)
-            ? {}
-            : { typeName: happyAgentServiceName(provider.type) }),
+        ...providerTypeName(provider),
         saving: provider.saving,
         serviceTiers: [
             ...new Set(
@@ -2140,4 +2137,13 @@ function credentialImportRows(
                   }),
         };
     });
+}
+
+/** The service named beside a provider, unless its own name already says it. */
+function providerTypeName(provider: HappyAgentProviderEntry): { typeName?: string } {
+    const typeName = happyAgentProviderServiceName(
+        provider.type,
+        providerAccountName(provider.id, provider.name),
+    );
+    return typeName === undefined ? {} : { typeName };
 }
