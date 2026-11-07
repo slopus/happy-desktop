@@ -9,6 +9,7 @@ import {
     powerSaveBlocker,
     protocol,
     screen,
+    safeStorage,
     session as electronSession,
     shell,
     utilityProcess,
@@ -29,6 +30,7 @@ import { happyAgentDaemonPathsResolve } from "./happyAgentDaemonClient";
 import { HappyAgentDaemonClient } from "./happyAgentDaemonClient";
 import { ServerSessionError, serverSessionsCreate } from "./serverSessions";
 import { happyCloudCreate } from "./happyCloud";
+import { happyCloudVaultCreate } from "./happyCloudVault";
 import { browserPermissionsInstall } from "./browserPermissions";
 import { BrowserPasswords } from "./browserPasswords";
 import { browserPasswordGuestAttach } from "./browserPasswordGuest";
@@ -495,6 +497,10 @@ const happyCloud =
               listPath: join(app.getPath("userData"), "happy-cloud-servers.json"),
               fetch: (input, init) => net.fetch(input instanceof URL ? input.href : input, init),
               sessions: () => serverSessions,
+              vault: happyCloudVaultCreate({
+                  path: join(app.getPath("userData"), "happy-cloud-sessions.bin"),
+                  cipher: safeStorage,
+              }),
           })
         : undefined;
 const serverSessions = serverSessionsCreate({
@@ -2022,6 +2028,8 @@ void app
         });
         if (happyCloud) {
             const cloud = happyCloud;
+            // The secret store answers only once the app is ready.
+            serverSessions.directRestore();
             const credentialImport = credentialImportCreate();
             const name = (value: unknown): string => {
                 if (typeof value !== "string" || value.length > 64)
@@ -2076,6 +2084,14 @@ void app
             ipcMain.handle(desktopIpc.happyCloudCredentialScan, (event) => {
                 desktopDaemonSenderRequire(event.sender);
                 return credentialImport.scan();
+            });
+            ipcMain.handle(desktopIpc.happyCloudServerSignOut, (event, value: unknown) => {
+                desktopDaemonSenderRequire(event.sender);
+                return cloud.serverSignOut(name(value));
+            });
+            ipcMain.handle(desktopIpc.happyCloudSignInsKept, (event) => {
+                desktopDaemonSenderRequire(event.sender);
+                return serverSessions.directKept();
             });
             ipcMain.handle(desktopIpc.happyCloudAccountSignOut, (event) => {
                 desktopDaemonSenderRequire(event.sender);

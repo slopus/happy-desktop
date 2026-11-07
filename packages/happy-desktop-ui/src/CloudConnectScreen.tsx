@@ -73,7 +73,12 @@ export type CloudConnectView =
       }
     /** Signing in to the chosen server. */
     | { readonly kind: "connecting"; readonly server: CloudConnectServer }
-    | { readonly kind: "connected"; readonly server: CloudConnectServer }
+    | {
+          readonly kind: "connected";
+          readonly server: CloudConnectServer;
+          /** This computer can't keep the sign-in, so a restart asks for it again. */
+          readonly notKept?: true;
+      }
     | { readonly kind: "failed"; readonly message: string };
 
 export interface CloudConnectScreenProps {
@@ -478,6 +483,13 @@ export function CloudConnectScreen(props: CloudConnectScreenProps) {
                                     onSelect: props.onOpen,
                                 }}
                                 copy={`@${view.server.name} is now in your sidebar.`}
+                                {...(view.notKept
+                                    ? {
+                                          status: {
+                                              label: "This computer can’t keep sign-ins, so you’ll sign in again after a restart.",
+                                          },
+                                      }
+                                    : {})}
                                 title="You’re in"
                             >
                                 <div className="happy-cloud-connect__hero">

@@ -278,9 +278,11 @@ function completionSoundMenuItems(current: HappyAgentCompletionSound): MenuItem[
 }
 
 const CLOUD_SIGN_OUT_ACTION = "happy-cloud-sign-out";
+const CLOUD_SERVER_SIGN_OUT_ACTION = "happy-cloud-server-sign-out";
 const CLOUD_REMOVE_ACTION = "happy-cloud-remove";
 const CLOUD_SERVER_MENU_ITEMS: readonly MenuItem[] = [
     { kind: "separator" },
+    { kind: "item", id: CLOUD_SERVER_SIGN_OUT_ACTION, label: "Sign out of this server" },
     { kind: "item", id: CLOUD_SIGN_OUT_ACTION, label: "Sign out of Happy Cloud" },
     { kind: "item", id: CLOUD_REMOVE_ACTION, label: "Remove from Happy", danger: true },
 ];
@@ -842,6 +844,10 @@ function DesktopScreens(props: DesktopRendererProps) {
                     const connectionId = cloudServerConnectionOf(id);
                     if (!cloud || connectionId === undefined) return;
                     if (actionId === CLOUD_SIGN_OUT_ACTION) void cloud.accountSignOut();
+                    if (actionId === CLOUD_SERVER_SIGN_OUT_ACTION) {
+                        const name = happyCloudServerNameOf(connectionId);
+                        if (name !== undefined) void cloud.serverSignOut(name);
+                    }
                     if (actionId === CLOUD_REMOVE_ACTION) {
                         const name = happyCloudServerNameOf(connectionId);
                         if (name === undefined) return;

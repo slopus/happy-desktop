@@ -24,8 +24,10 @@ export interface ServerSessionSnapshot {
      * - `signedIn`: main holds an access token for the server.
      * - `signedOut`: it holds none, because nobody signed in since the app
      *   started or because a refresh was rejected; `message` says which.
+     * - `restoring`: a sign-in kept from an earlier run is being refreshed;
+     *   it becomes one of the other two.
      */
-    readonly state: "signedIn" | "signedOut";
+    readonly state: "signedIn" | "signedOut" | "restoring";
     readonly message?: string;
 }
 

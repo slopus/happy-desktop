@@ -597,6 +597,15 @@ export function happyAgentDirectoryStoreCreate(
         publish();
     };
 
+    /** Whether the shell is still refreshing a sign-in it kept for this server. */
+    const signInRestoring = (remote: LocalHappyAgent): boolean => {
+        const remoteId = remote.entry.remoteId;
+        return (
+            remoteId !== undefined &&
+            deps.serverSessions?.get().sessions.get(remoteId)?.state === "restoring"
+        );
+    };
+
     /** Whether the shell holds no sign-in for a server added by address. */
     const serverSignedOut = (remote: LocalHappyAgent): boolean => {
         const sessions = deps.serverSessions?.get();
@@ -605,7 +614,8 @@ export function happyAgentDirectoryStoreCreate(
             sessions?.loaded === true &&
             remote.entry.serverUrl !== undefined &&
             remoteId !== undefined &&
-            sessions.sessions.get(remoteId)?.state !== "signedIn"
+            sessions.sessions.get(remoteId)?.state !== "signedIn" &&
+            sessions.sessions.get(remoteId)?.state !== "restoring"
         );
     };
 
@@ -623,6 +633,9 @@ export function happyAgentDirectoryStoreCreate(
             if (remote.entry.serverUrl === undefined || remote.entry.remoteId === undefined)
                 continue;
             const session = sessions.sessions.get(remote.entry.remoteId);
+            // A sign-in kept from the last run is being refreshed; the
+            // connection's own retry brings the server in once it is.
+            if (session?.state === "restoring") continue;
             if (session?.state !== "signedIn") {
                 // A server the shell has no word on, or lists as signed out
                 // without a reason, was never signed in to in this run; one
@@ -747,6 +760,7 @@ export function happyAgentDirectoryStoreCreate(
                             ? undefined
                             : serverAuthFailure(error);
                     if (authFailure === "signInRequired") {
+                        if (signInRestoring(happyAgent)) return;
                         signInRequire(happyAgent);
                         return;
                     }

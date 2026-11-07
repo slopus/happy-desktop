@@ -212,10 +212,15 @@ export function desktopCloudConnectStoreCreate(input: {
             return;
         }
         const connected = await input.connect(added.value);
+        const kept = connected.ok ? await cloud.signInsKept().catch(() => true) : true;
         if (!current(asked)) return;
         set(
             connected.ok
-                ? { kind: "connected", server: serverView(server) }
+                ? {
+                      kind: "connected",
+                      server: serverView(server),
+                      ...(kept ? {} : { notKept: true as const }),
+                  }
                 : { kind: "failed", message: connected.message },
         );
     };

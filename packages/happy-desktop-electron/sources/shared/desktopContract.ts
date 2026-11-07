@@ -74,6 +74,13 @@ export interface DesktopHappyCloud {
     imageRead(serverId: string): Promise<string | undefined>;
     /** Revokes the server's sign-in at Happy Cloud and takes it off this app's list. */
     serverRemove(name: string): Promise<void>;
+    /** Revokes the server's sign-in and forgets the kept copy; the server stays listed. */
+    serverSignOut(name: string): Promise<void>;
+    /**
+     * Whether Happy Cloud sign-ins outlive a restart: only where the
+     * operating system can encrypt them.
+     */
+    signInsKept(): Promise<boolean>;
     /** Forgets the account's pass; added servers stay signed in. */
     accountSignOut(): Promise<void>;
     /** Signs in to a test account; the shell sends the password to accounts and keeps none of it. */
@@ -1224,6 +1231,8 @@ export const desktopIpc = {
     happyCloudServerConnect: "happy:happy-cloud:server-connect",
     happyCloudImageRead: "happy:happy-cloud:image-read",
     happyCloudServerRemove: "happy:happy-cloud:server-remove",
+    happyCloudServerSignOut: "happy:happy-cloud:server-sign-out",
+    happyCloudSignInsKept: "happy:happy-cloud:sign-ins-kept",
     happyCloudAccountSignOut: "happy:happy-cloud:account-sign-out",
     happyCloudPasswordSignIn: "happy:happy-cloud:password-sign-in",
     happyCloudCredentialScan: "happy:happy-cloud:credential-scan",

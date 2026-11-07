@@ -4,8 +4,9 @@ export interface ServerSession {
     /**
      * - `signedIn`: the shell holds an access token for the server.
      * - `signedOut`: it holds none, and `message` says why.
+     * - `restoring`: a sign-in kept from an earlier run is being refreshed.
      */
-    readonly state: "signedIn" | "signedOut";
+    readonly state: "signedIn" | "signedOut" | "restoring";
     readonly message?: string;
 }
 

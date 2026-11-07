@@ -14,6 +14,7 @@ import type {
 } from "../shared/desktopContract";
 import type { OAuthCredential } from "@slopus/happy-agent-client";
 import type { ServerSessions, ServerSessionsDeps } from "./serverSessions";
+import type { HappyCloudVault } from "./happyCloudVault";
 
 export interface HappyCloud {
     /** What the sign-ins hold for Happy Cloud: the added servers and the account. */
@@ -32,6 +33,8 @@ export interface HappyCloud {
     imageRead(serverId: string): Promise<string | undefined>;
     /** Revokes a server's sign-in at the accounts service, then forgets the server here. */
     serverRemove(name: string): Promise<void>;
+    /** Revokes a server's sign-in and forgets it here, kept copy included; the server stays listed. */
+    serverSignOut(name: string): Promise<void>;
     /** Forgets the account's pass; the servers' own sign-ins stay. */
     accountSignOut(): void;
     /**
@@ -60,6 +63,8 @@ export function happyCloudCreate(input: {
     readonly listPath: string;
     readonly fetch: typeof globalThis.fetch;
     readonly sessions: () => ServerSessions;
+    /** Where the servers' sign-ins are kept across restarts, when this computer can. */
+    readonly vault?: HappyCloudVault;
 }): HappyCloud {
     let names = listRead(input.listPath);
     /** Each listed server's picture address, from the last list; only the accounts origin. */
@@ -123,9 +128,26 @@ export function happyCloudCreate(input: {
             ? value
             : { ok: true, value: value as T };
 
+    /** Ends a server's sign-in here and revokes it at the accounts service. */
+    const signOut = async (connectionId: string): Promise<void> => {
+        const refreshToken = input.sessions().directSignOut(connectionId);
+        if (refreshToken === null) return;
+        // RFC 7009: the answer is always 200, and a failed revocation
+        // still leaves the sign-in forgotten here.
+        await input
+            .fetch(new URL("revoke", HAPPY_CLOUD_ACCOUNTS_URL), {
+                method: "POST",
+                headers: { "content-type": "application/x-www-form-urlencoded" },
+                body: new URLSearchParams({ token: refreshToken, client_id: "happy" }).toString(),
+                redirect: "error",
+            })
+            .catch(() => undefined);
+    };
+
     return {
         direct: {
             servers,
+            ...(input.vault ? { vault: input.vault } : {}),
             account: {
                 connectionId: HAPPY_CLOUD_ACCOUNT_ID,
                 serverUrl: HAPPY_CLOUD_ACCOUNTS_URL,
@@ -226,7 +248,7 @@ export function happyCloudCreate(input: {
         },
         async serverRemove(name) {
             const connectionId = happyCloudConnectionId(name);
-            const refreshToken = input.sessions().directSignOut(connectionId);
+            const signedOut = signOut(connectionId);
             if (names.includes(name)) {
                 names = names.filter((entry) => entry !== name);
                 void writeFile(input.listPath, `${JSON.stringify(names)}\n`).catch(
@@ -235,21 +257,9 @@ export function happyCloudCreate(input: {
                 );
                 input.sessions().directChanged();
             }
-            if (refreshToken === null) return;
-            // RFC 7009: the answer is always 200, and a failed revocation
-            // still leaves the server forgotten here.
-            await input
-                .fetch(new URL("revoke", HAPPY_CLOUD_ACCOUNTS_URL), {
-                    method: "POST",
-                    headers: { "content-type": "application/x-www-form-urlencoded" },
-                    body: new URLSearchParams({
-                        token: refreshToken,
-                        client_id: "happy",
-                    }).toString(),
-                    redirect: "error",
-                })
-                .catch(() => undefined);
+            await signedOut;
         },
+        serverSignOut: (name) => signOut(happyCloudConnectionId(name)),
         accountSignOut() {
             const sessions = input.sessions();
             const credential = sessions.credential(HAPPY_CLOUD_ACCOUNT_ID);

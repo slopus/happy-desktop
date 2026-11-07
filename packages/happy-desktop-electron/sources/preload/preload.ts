@@ -91,6 +91,9 @@ const bridge: HappyDesktopBridge = {
                       ipcRenderer.invoke(desktopIpc.happyCloudImageRead, serverId),
                   serverRemove: (name: string) =>
                       ipcRenderer.invoke(desktopIpc.happyCloudServerRemove, name),
+                  serverSignOut: (name: string) =>
+                      ipcRenderer.invoke(desktopIpc.happyCloudServerSignOut, name),
+                  signInsKept: () => ipcRenderer.invoke(desktopIpc.happyCloudSignInsKept),
                   accountSignOut: () => ipcRenderer.invoke(desktopIpc.happyCloudAccountSignOut),
                   passwordSignIn: (login: string, password: string) =>
                       ipcRenderer.invoke(desktopIpc.happyCloudPasswordSignIn, login, password),
