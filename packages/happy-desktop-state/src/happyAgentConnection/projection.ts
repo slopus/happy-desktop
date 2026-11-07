@@ -261,13 +261,13 @@ export function projectSession(input: SessionProjectionInput): SessionState {
  */
 /**
  * `next`, keeping each previous entity that came back equal under the same id and
- * the previous list when every entity did. Bots and tasks are projected whole on
- * every publish, so their unchanged rows get their identity back here, once,
- * rather than in every reader downstream.
+ * the previous list when every entity did. A projection cache can retain the
+ * canonical row when equality chose the old object over a newly projected one.
  */
 export function entitiesSettle<T extends { readonly id: string }>(
     previous: readonly T[],
     next: readonly T[],
+    onReuse?: (entity: T) => void,
 ): readonly T[] {
     if (previous === next) return previous;
     const byId = new Map<string, T>();
@@ -276,6 +276,7 @@ export function entitiesSettle<T extends { readonly id: string }>(
     const settled = next.map((entity, index) => {
         const before = byId.get(entity.id);
         const kept = before !== undefined && deepEqual(before, entity) ? before : entity;
+        if (kept !== entity) onReuse?.(kept);
         if (kept !== previous[index]) changed = true;
         return kept;
     });
@@ -882,6 +883,8 @@ export function projectBots(
     drafts: ReadonlyMap<string, AgentDraftSnapshot> = new Map(),
     modes: ReadonlyMap<string, MessageMode | null> = new Map(),
     storiesSupported = false,
+    /** Owned by the caller's unchanged projection context, never shared across contexts. */
+    rows?: WeakMap<Bot, BotGroup>,
 ): readonly BotGroup[] {
     const subtasksProject = (agent: Agent, bot: Bot): readonly BotSubtaskGroup[] =>
         agentSubtasksProject(agent, bot, workspaceOf, endpoint, config, drafts, modes);
@@ -889,8 +892,10 @@ export function projectBots(
         .filter((bot) => bot.archivedAt === null && bot.status === "active")
         .sort(orderCompare)
         .map((bot) => {
+            const cached = rows?.get(bot);
+            if (cached !== undefined) return cached;
             const workspace = workspaceOf(bot.workspaceId);
-            return {
+            const value: BotGroup = {
                 id: bot.id,
                 workspaceId: bot.workspaceId,
                 name: bot.name,
@@ -923,6 +928,8 @@ export function projectBots(
                 unread: unreadOf([bot.agent]),
                 subtasks: subtasksProject(bot.agent, bot),
             };
+            rows?.set(bot, value);
+            return value;
         });
 }
 
@@ -992,10 +999,16 @@ export function projectTasks(
     ownerOf: (task: Task) => TaskOwner | null,
     drafts: ReadonlyMap<string, AgentDraftSnapshot> = new Map(),
     modes: ReadonlyMap<string, MessageMode | null> = new Map(),
+    /** Also invalidated by membership and owner-profile changes, not only session context. */
+    rows?: WeakMap<Task, TaskGroup>,
 ): readonly TaskGroup[] {
-    const membershipByTask = new Map(
-        memberships.map((membership) => [membership.taskId, membership]),
-    );
+    let membershipByTask = taskMembershipIndexes.get(memberships);
+    if (membershipByTask === undefined) {
+        membershipByTask = new Map(
+            memberships.map((membership) => [membership.taskId, membership]),
+        );
+        taskMembershipIndexes.set(memberships, membershipByTask);
+    }
     return [...tasks]
         .sort((left, right) =>
             left.createdAt === right.createdAt
@@ -1007,8 +1020,10 @@ export function projectTasks(
                 : left.createdAt - right.createdAt,
         )
         .map((task) => {
+            const cached = rows?.get(task);
+            if (cached !== undefined) return cached;
             const membership = membershipByTask.get(task.id);
-            return {
+            const value: TaskGroup = {
                 id: task.id,
                 workspaceId: task.workspaceId,
                 name: task.name,
@@ -1048,8 +1063,16 @@ export function projectTasks(
                 ),
                 unread: unreadOf([task.agent]),
             };
+            rows?.set(task, value);
+            return value;
         });
 }
+
+/** Membership arrays are immutable; owner updates need neither rebuild nor retain old indexes. */
+const taskMembershipIndexes = new WeakMap<
+    readonly TaskMembership[],
+    ReadonlyMap<string, TaskMembership>
+>();
 
 const taskSessionCache = new WeakMap<
     GroupSession,

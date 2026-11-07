@@ -78,6 +78,7 @@ import {
     type TranscriptMessage,
 } from "./projection.js";
 import type {
+    BotGroup,
     ConnectHappyAgentOptions,
     CreateSessionInput,
     DraftUpdate,
@@ -94,6 +95,7 @@ import type {
     HappyAgentTeammate,
     ServerCompatibility,
     TaskOwner,
+    TaskGroup,
 } from "./types.js";
 import { sidebarReadAheadOrder, type SidebarReadAheadRows } from "./types.js";
 
@@ -561,6 +563,11 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
           }
         | undefined;
 
+    // An owner replacement changes only its own projection. The dependency checks at
+    // publication discard these weak caches whenever any input outside that owner changes.
+    let botRows = new WeakMap<Bot, BotGroup>();
+    let taskRows = new WeakMap<Task, TaskGroup>();
+
     reportDebug({
         detail: debugDetail({ endpoint }),
         level: "info",
@@ -865,10 +872,16 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                 tracked.workspaces === current.workspaces &&
                 tracked.draftsRevision === agentDrafts.revision &&
                 tracked.modesRevision === agentModes.revision;
-            const botGroups =
+            const botContextSame = contextSame && tracked.storiesSupported === storiesSupported;
+            const taskContextSame =
                 contextSame &&
-                tracked.bots === current.bots &&
-                tracked.storiesSupported === storiesSupported
+                tracked.memberships === current.taskMemberships &&
+                tracked.profilesRevision === userProfilesRevision &&
+                tracked.currentUserId === currentUserId;
+            if (!botContextSame) botRows = new WeakMap();
+            if (!taskContextSame) taskRows = new WeakMap();
+            const botGroups =
+                botContextSame && tracked.bots === current.bots
                     ? current.botGroups
                     : entitiesSettle(
                           current.botGroups,
@@ -880,14 +893,15 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                               agentDrafts,
                               agentModes,
                               storiesSupported,
+                              botRows,
                           ),
+                          (row) => {
+                              const bot = botOf(row.id);
+                              if (bot !== undefined) botRows.set(bot, row);
+                          },
                       );
             const taskGroups =
-                contextSame &&
-                tracked.tasks === current.tasks &&
-                tracked.memberships === current.taskMemberships &&
-                tracked.profilesRevision === userProfilesRevision &&
-                tracked.currentUserId === currentUserId
+                taskContextSame && tracked.tasks === current.tasks
                     ? current.taskGroups
                     : entitiesSettle(
                           current.taskGroups,
@@ -900,7 +914,12 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                               taskOwnerOf,
                               agentDrafts,
                               agentModes,
+                              taskRows,
                           ),
+                          (row) => {
+                              const task = taskOf(row.id);
+                              if (task !== undefined) taskRows.set(task, row);
+                          },
                       );
             ownedGroupsTracked = {
                 config: daemonConfig,
