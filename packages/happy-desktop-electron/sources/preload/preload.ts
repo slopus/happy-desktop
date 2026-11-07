@@ -22,6 +22,7 @@ import {
     type DesktopMediaPreview,
     type DesktopRuntimeSnapshot,
     type DesktopStartRequest,
+    type DesktopCredentialImportItem,
     type DesktopSystem,
     type DesktopWindowState,
     type HappyDesktopBridge,
@@ -97,7 +98,17 @@ const bridge: HappyDesktopBridge = {
                   accountSignOut: () => ipcRenderer.invoke(desktopIpc.happyCloudAccountSignOut),
                   passwordSignIn: (login: string, password: string) =>
                       ipcRenderer.invoke(desktopIpc.happyCloudPasswordSignIn, login, password),
-                  credentialScan: () => ipcRenderer.invoke(desktopIpc.happyCloudCredentialScan),
+                  credentialScan: (options?: { readonly shell?: boolean }) =>
+                      ipcRenderer.invoke(desktopIpc.happyCloudCredentialScan, options),
+                  credentialImport: (
+                      connectionId: string,
+                      items: readonly DesktopCredentialImportItem[],
+                  ) =>
+                      ipcRenderer.invoke(
+                          desktopIpc.happyCloudCredentialImport,
+                          connectionId,
+                          items,
+                      ),
               },
           }
         : {}),

@@ -9,6 +9,8 @@ import {
     HappyAgentInstructionsSettings,
     HappyAgentMobileSettings,
     HappyAgentProviderSettings,
+    HappyAgentCredentialImport,
+    type HappyAgentCredentialImportRow,
     HappyAgentProfilerSettings,
     HappyAgentProfileSettings,
     HappyAgentSecretSettings,
@@ -579,6 +581,62 @@ const fileTierRows: readonly HappyAgentFileTierRow[] = [
 ];
 
 /** The File tiers category wired to its own state, so every control answers. */
+const credentialImportRows: readonly HappyAgentCredentialImportRow[] = [
+    {
+        id: "openai-env",
+        vendorName: "OpenAI",
+        label: "OpenAI API key",
+        source: "$OPENAI_API_KEY",
+        use: "import",
+        masked: "••••3f9a",
+        picked: "team",
+    },
+    {
+        id: "bedrock-aws",
+        vendorName: "Amazon Bedrock",
+        label: "AWS access keys · default",
+        source: "~/.aws/credentials",
+        use: "import",
+        masked: "••••7QXA",
+        picked: "private",
+    },
+    {
+        id: "claude-token",
+        vendorName: "Claude",
+        label: "Claude Code token",
+        source: "~/Happy/Config/happy.toml",
+        use: "import",
+        masked: "••••k2Lw",
+        result: { ok: true, duplicate: false },
+    },
+    {
+        id: "grok-key",
+        vendorName: "xAI",
+        label: "Grok API key",
+        source: "~/.grok/auth.json",
+        use: "import",
+        masked: "••••09cd",
+        result: { ok: false, message: "xAI refused this key: it has been revoked." },
+    },
+    {
+        id: "codex-sub",
+        vendorName: "ChatGPT",
+        label: "ChatGPT subscription",
+        source: "~/.codex/auth.json",
+        account: "ada@example.com · Pro",
+        use: "signIn",
+        signInAvailable: true,
+    },
+    {
+        id: "aws-session",
+        vendorName: "Amazon Bedrock",
+        label: "AWS access keys · work",
+        source: "~/.aws/credentials",
+        use: "unsupported",
+        reason: "Temporary AWS keys expire. Use an IAM user's keys or a Bedrock API key.",
+    },
+];
+
 function FileTierSettingsSpecimen(props: {
     detail: string;
     label: string;
@@ -1287,6 +1345,41 @@ export function HappyAgentSettingsBlueprintPage() {
                     onClose={noop}
                     title="Providers"
                 >
+                    <HappyAgentProviderSettings
+                        onKeyAdd={() => Promise.resolve()}
+                        onKeyEnabledChange={noop}
+                        onKeyRemove={noop}
+                        onModelEnabledChange={noop}
+                        onProviderEnabledChange={noop}
+                        providers={cloudProviders}
+                    />
+                </HappyAgentSettingsShell>
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="Import from this computer: picked keys for the team and for one person, an imported key, a refused one, a subscription to sign in on the server, and one the server can't use"
+                label="Happy Agent settings — providers import"
+                number="03d"
+                screen="providers-import"
+            >
+                <HappyAgentSettingsShell
+                    activeCategoryId="providers"
+                    categories={categories}
+                    description="Every model provider this server knows about"
+                    onCategorySelect={noop}
+                    onClose={noop}
+                    title="Providers"
+                >
+                    <HappyAgentCredentialImport
+                        onImport={noop}
+                        onPickScopeChange={noop}
+                        onPickToggle={noop}
+                        onScan={noop}
+                        onSignIn={noop}
+                        phase="ready"
+                        rows={credentialImportRows}
+                        shellScanned={false}
+                        teamAllowed
+                    />
                     <HappyAgentProviderSettings
                         onKeyAdd={() => Promise.resolve()}
                         onKeyEnabledChange={noop}

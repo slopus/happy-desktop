@@ -433,6 +433,78 @@
     gap: 8px;
 }
 
+/* ---- Credential import -------------------------------------------------- */
+
+.happy-agent-credential-import__actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 0;
+}
+
+.happy-agent-credential-import__list {
+    display: flex;
+    flex-direction: column;
+}
+
+.happy-agent-credential-import__row {
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 52px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--divider);
+}
+
+/* Rows without a checkbox keep their text in the same column as rows with one. */
+.happy-agent-credential-import__spacer {
+    flex: none;
+    width: 18px;
+}
+
+.happy-agent-credential-import__text {
+    display: flex;
+    flex: 1 1 0%;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.happy-agent-credential-import__name {
+    overflow: hidden;
+    color: var(--text);
+    font-size: 13px;
+    line-height: 18px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-agent-credential-import__meta,
+.happy-agent-credential-import__empty {
+    overflow: hidden;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-agent-credential-import__empty {
+    padding: 8px 0;
+}
+
+.happy-agent-credential-import__error {
+    color: var(--status-error);
+    font-size: 12px;
+    line-height: 16px;
+}
+
+.happy-agent-credential-import__scope {
+    flex: none;
+    width: 160px;
+}
+
 /* ---- Nodes ------------------------------------------------------------- */
 
 /* One node reads as the same kind of card a provider does: they are both a

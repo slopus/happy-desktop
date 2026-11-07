@@ -3,28 +3,60 @@ import { randomUUID } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { parse as tomlParse } from "smol-toml";
 import type {
     DesktopCredentialFound,
+    DesktopCredentialImportItem,
+    DesktopCredentialImportResult,
     DesktopCredentialKind,
+    DesktopCredentialUse,
     DesktopCredentialVendor,
+    DesktopServerSignInResult,
 } from "../shared/desktopContract";
+import type { ServerSessions } from "./serverSessions";
 
 /**
- * A credential found on this computer, with its secret. The secret stays in
- * this process: the renderer only ever sees `found`.
+ * A credential found on this computer, with its secret when it can be
+ * copied. The secret stays in this process: the renderer only ever sees
+ * `found`.
  */
 interface CredentialHeld {
     readonly found: DesktopCredentialFound;
-    readonly secret: string;
+    readonly secret?: string;
 }
 
 /** The largest credential file read; anything bigger is not what it claims to be. */
 const MAX_FILE_BYTES = 256 * 1024;
 /** How long the last scan's secrets are held for checking and uploading. */
 const HOLD_MS = 10 * 60_000;
+/** How long the login shell may take to print its environment. */
+const SHELL_TIMEOUT_MS = 10_000;
+
+/** The vendors Happy Cloud takes each kind of credential for. */
+const IMPORTABLE: Readonly<Record<DesktopCredentialKind, readonly DesktopCredentialVendor[]>> = {
+    api_key: ["openai", "grok", "bedrock"],
+    aws_keys: ["bedrock"],
+    oauth_token: ["claude-code"],
+};
+
+const VENDOR_NAMES: Readonly<Record<DesktopCredentialVendor, string>> = {
+    openai: "OpenAI",
+    anthropic: "Anthropic",
+    grok: "xAI",
+    bedrock: "Amazon Bedrock",
+    codex: "ChatGPT",
+    "claude-code": "Claude",
+    openrouter: "OpenRouter",
+    deepseek: "DeepSeek",
+    mistral: "Mistral",
+    groq: "Groq",
+    together: "Together AI",
+    fireworks: "Fireworks",
+    moonshot: "Moonshot",
+};
 
 /**
- * Environment variables that hold a vendor API key, as the vendors' own tools
+ * Environment variables that hold a credential, as the vendors' own tools
  * read them.
  */
 const ENV_KEYS: readonly {
@@ -36,13 +68,67 @@ const ENV_KEYS: readonly {
     { variable: "ANTHROPIC_API_KEY", vendor: "anthropic", kind: "api_key" },
     { variable: "XAI_API_KEY", vendor: "grok", kind: "api_key" },
     { variable: "AWS_BEARER_TOKEN_BEDROCK", vendor: "bedrock", kind: "api_key" },
-    { variable: "CLAUDE_CODE_OAUTH_TOKEN", vendor: "claude-code", kind: "oauth" },
+    { variable: "CLAUDE_CODE_OAUTH_TOKEN", vendor: "claude-code", kind: "oauth_token" },
+    { variable: "OPENROUTER_API_KEY", vendor: "openrouter", kind: "api_key" },
+    { variable: "DEEPSEEK_API_KEY", vendor: "deepseek", kind: "api_key" },
+    { variable: "MISTRAL_API_KEY", vendor: "mistral", kind: "api_key" },
+    { variable: "GROQ_API_KEY", vendor: "groq", kind: "api_key" },
+    { variable: "TOGETHER_API_KEY", vendor: "together", kind: "api_key" },
+    { variable: "FIREWORKS_API_KEY", vendor: "fireworks", kind: "api_key" },
+    { variable: "MOONSHOT_API_KEY", vendor: "moonshot", kind: "api_key" },
 ];
+
+/**
+ * The inline secrets a Happy Agent provider of each type can hold, and what
+ * each one is. Every other field is a setting or names a file or a variable.
+ */
+const HAPPY_PROVIDER_SECRETS: Readonly<
+    Record<
+        string,
+        readonly {
+            readonly field: string;
+            readonly vendor: DesktopCredentialVendor;
+            readonly kind: DesktopCredentialKind;
+        }[]
+    >
+> = {
+    claude: [
+        { field: "oauth_token", vendor: "claude-code", kind: "oauth_token" },
+        { field: "api_key", vendor: "anthropic", kind: "api_key" },
+    ],
+    codex: [{ field: "api_key", vendor: "openai", kind: "api_key" }],
+    grok: [{ field: "api_key", vendor: "grok", kind: "api_key" }],
+    bedrock: [{ field: "bearer_token", vendor: "bedrock", kind: "api_key" }],
+};
+
+/** The provider IDs whose type Happy Agent infers when none is written. */
+const HAPPY_PROVIDER_TYPES = new Set(["claude", "codex", "grok", "bedrock"]);
+
+/** OpenAI-compatible providers Happy Agent's provider routes add under these IDs. */
+const HAPPY_COMPATIBLE: Readonly<Record<string, DesktopCredentialVendor>> = {
+    openrouter: "openrouter",
+    deepseek: "deepseek",
+    mistral: "mistral",
+    groq: "groq",
+    together: "together",
+    fireworks: "fireworks",
+    moonshot: "moonshot",
+};
 
 /** The last four characters, which is all a person needs to tell keys apart. */
 export function credentialMask(secret: string): string {
     const trimmed = secret.trim();
     return trimmed.length <= 8 ? "••••" : `••••${trimmed.slice(-4)}`;
+}
+
+/** What Happy Cloud can do with one copyable credential. */
+function useOf(vendor: DesktopCredentialVendor, kind: DesktopCredentialKind): DesktopCredentialUse {
+    return IMPORTABLE[kind].includes(vendor)
+        ? { kind: "import", credential: kind }
+        : {
+              kind: "unsupported",
+              reason: `Happy Cloud can't use ${VENDOR_NAMES[vendor]} keys yet.`,
+          };
 }
 
 function homeShort(path: string, home: string): string {
@@ -59,13 +145,25 @@ async function fileRead(path: string): Promise<string | undefined> {
     }
 }
 
+function recordOf(value: unknown): Record<string, unknown> | undefined {
+    return typeof value === "object" && value !== null && !Array.isArray(value)
+        ? (value as Record<string, unknown>)
+        : undefined;
+}
+
 function jsonRead(text: string | undefined): Record<string, unknown> | undefined {
     if (text === undefined) return undefined;
     try {
-        const parsed: unknown = JSON.parse(text);
-        return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
-            ? (parsed as Record<string, unknown>)
-            : undefined;
+        return recordOf(JSON.parse(text));
+    } catch {
+        return undefined;
+    }
+}
+
+function tomlRead(text: string | undefined): Record<string, unknown> | undefined {
+    if (text === undefined) return undefined;
+    try {
+        return recordOf(tomlParse(text));
     } catch {
         return undefined;
     }
@@ -75,7 +173,24 @@ function stringOf(value: unknown): string | undefined {
     return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
 }
 
-/** The sections of an AWS INI file, by name, with their keys lowercased. */
+/** A plan name as its vendor writes it, capitalized for a label. */
+function planOf(value: unknown): string | undefined {
+    const plan = stringOf(value);
+    return plan === undefined ? undefined : `${plan[0]!.toUpperCase()}${plan.slice(1)}`;
+}
+
+/** The claims of a JWT, read without checking it: only for a label. */
+function jwtClaims(token: string | undefined): Record<string, unknown> | undefined {
+    const payload = token?.split(".")[1];
+    if (!payload) return undefined;
+    try {
+        return recordOf(JSON.parse(Buffer.from(payload, "base64url").toString("utf8")));
+    } catch {
+        return undefined;
+    }
+}
+
+/** The sections of an INI file, by name, with their keys lowercased. */
 function iniSections(text: string): Map<string, Record<string, string>> {
     const sections = new Map<string, Record<string, string>>();
     let current: Record<string, string> | undefined;
@@ -94,56 +209,105 @@ function iniSections(text: string): Map<string, Record<string, string>> {
     return sections;
 }
 
-/**
- * `~/.aws/credentials`: one access key pair per profile, with the region its
- * profile names in `~/.aws/config` when it names one.
- */
-function awsProfilesRead(
-    credentials: string,
-    config: string | undefined,
-): { profile: string; secret: string }[] {
-    const regions = config === undefined ? new Map() : iniSections(config);
-    return [...iniSections(credentials)].flatMap(([profile, values]) => {
-        const id = values.aws_access_key_id;
-        const key = values.aws_secret_access_key;
-        if (!id || !key) return [];
-        const region =
-            values.region ??
-            regions.get(profile === "default" ? "default" : `profile ${profile}`)?.region;
-        return [
-            {
-                profile,
-                secret: JSON.stringify({
-                    accessKeyId: id,
-                    secretAccessKey: key,
-                    ...(values.aws_session_token ? { sessionToken: values.aws_session_token } : {}),
-                    ...(region ? { region } : {}),
-                }),
-            },
-        ];
+/** Whether an AWS key pair is long-lived: temporary ones expire before anyone uses them. */
+function awsUse(accessKeyId: string, sessionToken: string | undefined): DesktopCredentialUse {
+    return sessionToken !== undefined || !accessKeyId.startsWith("AKIA")
+        ? {
+              kind: "unsupported",
+              reason: "These are temporary AWS keys. Give the cloud its own IAM keys instead.",
+          }
+        : { kind: "import", credential: "aws_keys" };
+}
+
+function awsSecret(input: {
+    accessKeyId: string;
+    secretAccessKey: string;
+    region: string | undefined;
+}): string {
+    return JSON.stringify({
+        accessKeyId: input.accessKeyId,
+        secretAccessKey: input.secretAccessKey,
+        ...(input.region ? { region: input.region } : {}),
     });
 }
 
-/** Claude Code's sign-in in the macOS keychain, asked for only when the person scans. */
-function claudeKeychainRead(): Promise<string | undefined> {
-    if (process.platform !== "darwin") return Promise.resolve(undefined);
+/** Whether a program finished successfully. Its output is never read. */
+function succeeds(file: string, args: readonly string[]): Promise<boolean> {
     return new Promise((resolve) => {
+        execFile(file, [...args], { timeout: 10_000, maxBuffer: MAX_FILE_BYTES }, (error) =>
+            resolve(!error),
+        );
+    });
+}
+
+/** The environment the person's login shell sets up, or nothing when it can't be read. */
+function shellEnvironment(): Promise<Record<string, string> | undefined> {
+    const shell = process.env.SHELL;
+    if (process.platform === "win32" || !shell) return Promise.resolve(undefined);
+    return new Promise((resolve) => {
+        // A marker keeps whatever the shell's startup files print out of the
+        // environment that follows it.
         execFile(
-            "/usr/bin/security",
-            ["find-generic-password", "-s", "Claude Code-credentials", "-w"],
-            { timeout: 60_000, maxBuffer: MAX_FILE_BYTES },
-            (error, stdout) => resolve(error ? undefined : stdout.trim() || undefined),
+            shell,
+            ["-ilc", "printf '\\0HAPPY_ENV\\0'; env -0"],
+            { timeout: SHELL_TIMEOUT_MS, maxBuffer: 4 * MAX_FILE_BYTES },
+            (error, stdout) => {
+                const at = stdout.lastIndexOf("\0HAPPY_ENV\0");
+                if (error || at < 0) {
+                    resolve(undefined);
+                    return;
+                }
+                const environment: Record<string, string> = {};
+                for (const entry of stdout.slice(at + "\0HAPPY_ENV\0".length).split("\0")) {
+                    const equals = entry.indexOf("=");
+                    if (equals > 0) environment[entry.slice(0, equals)] = entry.slice(equals + 1);
+                }
+                resolve(environment);
+            },
         );
     });
 }
 
 /**
+ * Happy Agent's providers, with `runtime.toml` merged over `happy.toml` one
+ * field at a time, as the daemon reads them.
+ */
+async function happyProvidersRead(
+    home: string,
+): Promise<{ id: string; fields: Record<string, unknown>; source: string }[]> {
+    const happyPath =
+        process.platform === "darwin"
+            ? join(home, "Happy", "Config", "happy.toml")
+            : join(home, "happy", "config", "happy.toml");
+    const runtimePath = join(home, ".happy", "agent", "runtime.toml");
+    const providers = new Map<string, { fields: Record<string, unknown>; source: string }>();
+    for (const path of [happyPath, runtimePath]) {
+        const table = recordOf(tomlRead(await fileRead(path))?.providers);
+        if (!table) continue;
+        for (const [id, value] of Object.entries(table)) {
+            const fields = recordOf(value);
+            if (!fields) continue;
+            const previous = providers.get(id);
+            providers.set(id, {
+                fields: { ...previous?.fields, ...fields },
+                source: homeShort(path, home),
+            });
+        }
+    }
+    return [...providers].map(([id, entry]) => ({ id, ...entry }));
+}
+
+/**
  * Finds the model provider credentials this computer already holds, straight
- * from where the vendors' own tools keep them: environment variables, Codex's
- * `auth.json`, Claude Code's credentials file or keychain item, and AWS's
- * shared credentials file. Nothing is started, no daemon is asked, and nothing
- * is written. Secrets are held in memory for a few minutes so the person can
- * check and upload what they pick; the renderer sees only masked entries.
+ * from where the vendors' own tools keep them: environment variables, Happy
+ * Agent's config, Codex's and Grok's `auth.json`, Claude Code's sign-in, and
+ * AWS's shared credentials file. Nothing is started, no daemon is asked, and
+ * nothing is written.
+ *
+ * A subscription's sign-in is only noticed, never read: its refresh token
+ * rotates, so a copy would sign this computer out. Secrets that can be
+ * copied are held in memory for a few minutes so the person can upload what
+ * they pick; the renderer sees only masked entries.
  */
 export function credentialImportCreate(options: { readonly home?: string } = {}) {
     let held = new Map<string, CredentialHeld>();
@@ -154,61 +318,102 @@ export function credentialImportCreate(options: { readonly home?: string } = {})
         expiry = undefined;
     };
 
-    const scan = async (): Promise<readonly DesktopCredentialFound[]> => {
+    const scan = async (
+        scanOptions: { readonly shell?: boolean } = {},
+    ): Promise<readonly DesktopCredentialFound[]> => {
         const home = options.home ?? homedir();
         const found: CredentialHeld[] = [];
         const seen = new Set<string>();
         const add = (
+            entry: Omit<DesktopCredentialFound, "id" | "masked" | "vendorName">,
+            secret?: string,
+        ): void => {
+            // The same key in two places is one key to import.
+            const key = `${entry.vendor}\u0000${secret ?? entry.source}`;
+            if (seen.has(key)) return;
+            seen.add(key);
+            const masked =
+                secret === undefined
+                    ? undefined
+                    : credentialMask(stringOf(jsonRead(secret)?.accessKeyId) ?? secret);
+            found.push({
+                found: {
+                    ...entry,
+                    id: randomUUID(),
+                    vendorName: VENDOR_NAMES[entry.vendor],
+                    ...(masked ? { masked } : {}),
+                },
+                ...(secret === undefined ? {} : { secret }),
+            });
+        };
+        const keyAdd = (
             vendor: DesktopCredentialVendor,
             kind: DesktopCredentialKind,
             source: string,
             label: string,
             secret: string,
-        ): void => {
-            // The same key in two places is one key to import.
-            const key = `${vendor}\u0000${kind}\u0000${secret}`;
-            if (seen.has(key)) return;
-            seen.add(key);
-            found.push({
-                found: {
-                    id: randomUUID(),
-                    vendor,
-                    kind,
-                    source,
-                    label,
-                    masked: credentialMask(maskedPart(kind, secret)),
-                },
-                secret,
-            });
-        };
+        ): void => add({ vendor, use: useOf(vendor, kind), source, label }, secret);
 
-        for (const entry of ENV_KEYS) {
-            const value = stringOf(process.env[entry.variable]);
-            if (value) add(entry.vendor, entry.kind, `$${entry.variable}`, entry.variable, value);
+        const environments: { env: Record<string, string | undefined>; suffix: string }[] = [
+            { env: process.env, suffix: "" },
+        ];
+        if (scanOptions.shell) {
+            const shell = await shellEnvironment();
+            if (shell) environments.push({ env: shell, suffix: " · login shell" });
         }
-        const envAws = stringOf(process.env.AWS_ACCESS_KEY_ID);
-        const envAwsSecret = stringOf(process.env.AWS_SECRET_ACCESS_KEY);
-        if (envAws && envAwsSecret)
-            add(
-                "bedrock",
-                "aws_keys",
-                "$AWS_ACCESS_KEY_ID",
-                "AWS environment",
-                JSON.stringify({
-                    accessKeyId: envAws,
-                    secretAccessKey: envAwsSecret,
-                    ...(stringOf(process.env.AWS_SESSION_TOKEN)
-                        ? { sessionToken: stringOf(process.env.AWS_SESSION_TOKEN) }
-                        : {}),
-                    ...(stringOf(process.env.AWS_REGION ?? process.env.AWS_DEFAULT_REGION)
-                        ? {
-                              region: stringOf(
-                                  process.env.AWS_REGION ?? process.env.AWS_DEFAULT_REGION,
-                              ),
-                          }
-                        : {}),
-                }),
-            );
+        for (const { env, suffix } of environments) {
+            for (const entry of ENV_KEYS) {
+                const value = stringOf(env[entry.variable]);
+                if (value)
+                    keyAdd(
+                        entry.vendor,
+                        entry.kind,
+                        `$${entry.variable}${suffix}`,
+                        entry.variable,
+                        value,
+                    );
+            }
+            const accessKeyId = stringOf(env.AWS_ACCESS_KEY_ID);
+            const secretAccessKey = stringOf(env.AWS_SECRET_ACCESS_KEY);
+            if (accessKeyId && secretAccessKey)
+                add(
+                    {
+                        vendor: "bedrock",
+                        use: awsUse(accessKeyId, stringOf(env.AWS_SESSION_TOKEN)),
+                        source: `$AWS_ACCESS_KEY_ID${suffix}`,
+                        label: "AWS environment",
+                    },
+                    awsSecret({
+                        accessKeyId,
+                        secretAccessKey,
+                        region: stringOf(env.AWS_REGION ?? env.AWS_DEFAULT_REGION),
+                    }),
+                );
+        }
+
+        // Happy Agent's own config holds a provider's secret inline when it
+        // was typed there; everything else in it points at the files below.
+        for (const { id, fields, source } of await happyProvidersRead(home)) {
+            const type = stringOf(fields.type) ?? (HAPPY_PROVIDER_TYPES.has(id) ? id : undefined);
+            if (type === "openai_compatible") {
+                const vendor = HAPPY_COMPATIBLE[id];
+                const apiKey = stringOf(fields.api_key);
+                if (vendor && apiKey)
+                    keyAdd(vendor, "api_key", `${source} [${id}]`, `Happy Agent ${id}`, apiKey);
+                continue;
+            }
+            for (const secret of HAPPY_PROVIDER_SECRETS[type ?? ""] ?? []) {
+                const value = stringOf(fields[secret.field]);
+                if (value)
+                    keyAdd(
+                        secret.vendor,
+                        secret.kind,
+                        `${source} [${id}]`,
+                        `Happy Agent ${id}`,
+                        value,
+                    );
+            }
+        }
 
         const codexHome = stringOf(process.env.CODEX_HOME) ?? join(home, ".codex");
         const codexPath = join(codexHome, "auth.json");
@@ -216,53 +421,109 @@ export function credentialImportCreate(options: { readonly home?: string } = {})
         if (codex) {
             const apiKey = stringOf(codex.OPENAI_API_KEY);
             if (apiKey)
-                add("openai", "api_key", homeShort(codexPath, home), "Codex API key", apiKey);
-            const tokens = codex.tokens;
-            if (
-                typeof tokens === "object" &&
-                tokens !== null &&
-                stringOf((tokens as Record<string, unknown>).refresh_token)
-            )
-                add(
-                    "codex",
-                    "oauth",
-                    homeShort(codexPath, home),
-                    "ChatGPT subscription",
-                    JSON.stringify(tokens),
-                );
+                keyAdd("openai", "api_key", homeShort(codexPath, home), "Codex API key", apiKey);
+            const tokens = recordOf(codex.tokens);
+            if (stringOf(tokens?.refresh_token)) {
+                const claims = jwtClaims(stringOf(tokens?.id_token));
+                const auth = recordOf(claims?.["https://api.openai.com/auth"]);
+                const account = [stringOf(claims?.email), planOf(auth?.chatgpt_plan_type)]
+                    .filter(Boolean)
+                    .join(" · ");
+                add({
+                    vendor: "codex",
+                    use: { kind: "signIn", providerId: "codex" },
+                    source: homeShort(codexPath, home),
+                    label: "ChatGPT subscription",
+                    ...(account ? { account } : {}),
+                });
+            }
         }
 
-        const claudeHome = stringOf(process.env.CLAUDE_CONFIG_DIR) ?? join(home, ".claude");
-        const claudePath = join(claudeHome, ".credentials.json");
-        const claudeOauth = (text: string | undefined, source: string): void => {
-            const oauth = jsonRead(text)?.claudeAiOauth;
-            if (
-                typeof oauth === "object" &&
-                oauth !== null &&
-                stringOf((oauth as Record<string, unknown>).refreshToken)
-            )
-                add("claude-code", "oauth", source, "Claude subscription", JSON.stringify(oauth));
-        };
-        claudeOauth(await fileRead(claudePath), homeShort(claudePath, home));
-        claudeOauth(await claudeKeychainRead(), "Keychain · Claude Code");
+        const grokPath = join(home, ".grok", "auth.json");
+        const grok = jsonRead(await fileRead(grokPath));
+        if (grok)
+            for (const [scope, value] of Object.entries(grok)) {
+                const record = recordOf(value);
+                const key = stringOf(record?.key);
+                if (scope === "xai::api_key" && key)
+                    keyAdd("grok", "api_key", homeShort(grokPath, home), "Grok API key", key);
+                else if (stringOf(record?.refresh_token))
+                    add({
+                        vendor: "grok",
+                        use: {
+                            kind: "unsupported",
+                            reason: "A Grok sign-in can't be shared. Add an xAI API key instead.",
+                        },
+                        source: homeShort(grokPath, home),
+                        label: "Grok sign-in",
+                    });
+            }
+
+        // Claude Code's sign-in: its account comes from Claude Code's settings,
+        // and the sign-in itself is only checked for, never read.
+        const claudeHome = stringOf(process.env.CLAUDE_CONFIG_DIR);
+        const claudeDir = claudeHome ?? join(home, ".claude");
+        const claudeSettings = jsonRead(await fileRead(join(claudeHome ?? home, ".claude.json")));
+        const claudeFile = join(claudeDir, ".credentials.json");
+        const claudeOauth = recordOf(jsonRead(await fileRead(claudeFile))?.claudeAiOauth);
+        const claudeSignedIn =
+            stringOf(claudeOauth?.refreshToken) !== undefined ||
+            (claudeHome === undefined &&
+                process.platform === "darwin" &&
+                (await succeeds("/usr/bin/security", [
+                    "find-generic-password",
+                    "-s",
+                    "Claude Code-credentials",
+                ])));
+        if (claudeSignedIn) {
+            const account = [
+                stringOf(recordOf(claudeSettings?.oauthAccount)?.emailAddress),
+                planOf(claudeOauth?.subscriptionType),
+            ]
+                .filter(Boolean)
+                .join(" · ");
+            add({
+                vendor: "claude-code",
+                use: { kind: "signIn", providerId: "claude" },
+                source: claudeOauth ? homeShort(claudeFile, home) : "Keychain · Claude Code",
+                label: "Claude subscription",
+                ...(account ? { account } : {}),
+            });
+        }
 
         const awsPath =
             stringOf(process.env.AWS_SHARED_CREDENTIALS_FILE) ?? join(home, ".aws", "credentials");
         const aws = await fileRead(awsPath);
-        if (aws)
-            for (const { profile, secret } of awsProfilesRead(
-                aws,
-                await fileRead(
-                    stringOf(process.env.AWS_CONFIG_FILE) ?? join(home, ".aws", "config"),
-                ),
-            ))
+        if (aws) {
+            const config = await fileRead(
+                stringOf(process.env.AWS_CONFIG_FILE) ?? join(home, ".aws", "config"),
+            );
+            const regions =
+                config === undefined
+                    ? new Map<string, Record<string, string>>()
+                    : iniSections(config);
+            for (const [profile, values] of iniSections(aws)) {
+                const accessKeyId = values.aws_access_key_id;
+                const secretAccessKey = values.aws_secret_access_key;
+                if (!accessKeyId || !secretAccessKey) continue;
                 add(
-                    "bedrock",
-                    "aws_keys",
-                    `${homeShort(awsPath, home)} [${profile}]`,
-                    `AWS ${profile}`,
-                    secret,
+                    {
+                        vendor: "bedrock",
+                        use: awsUse(accessKeyId, values.aws_session_token || undefined),
+                        source: `${homeShort(awsPath, home)} [${profile}]`,
+                        label: `AWS ${profile}`,
+                    },
+                    awsSecret({
+                        accessKeyId,
+                        secretAccessKey,
+                        region:
+                            values.region ??
+                            regions.get(profile === "default" ? "default" : `profile ${profile}`)
+                                ?.region,
+                    }),
                 );
+            }
+        }
 
         forget();
         held = new Map(found.map((entry) => [entry.found.id, entry]));
@@ -273,30 +534,159 @@ export function credentialImportCreate(options: { readonly home?: string } = {})
 
     return {
         scan,
-        /** The secret of one entry of the last scan, while it is still held. */
-        secretOf(
-            id: string,
-        ): { readonly found: DesktopCredentialFound; readonly secret: string } | undefined {
-            return held.get(id);
+        /**
+         * One copyable entry of the last scan with its secret, while it is
+         * still held; nothing for a sign-in or anything Happy Cloud can't use.
+         */
+        importableOf(id: string):
+            | {
+                  readonly found: DesktopCredentialFound;
+                  readonly kind: DesktopCredentialKind;
+                  readonly secret: string;
+              }
+            | undefined {
+            const entry = held.get(id);
+            if (entry?.secret === undefined || entry.found.use.kind !== "import") return undefined;
+            return { found: entry.found, kind: entry.found.use.credential, secret: entry.secret };
         },
+        vendorName: (vendor: DesktopCredentialVendor): string => VENDOR_NAMES[vendor],
         forget,
     };
 }
 
+/** The most credentials one import request carries. */
+const IMPORT_BATCH = 20;
+
 /**
- * What a found credential is told apart by: an AWS pair's access key ID, a
- * subscription's refresh token, or the key itself.
+ * Sends the picked credentials of the last scan to a Happy Cloud server with
+ * the person's sign-in for it. Each goes to the container named after its
+ * vendor in the scope picked, which the server creates the first time and
+ * reuses after. Re-sending is safe: a credential already there is reported
+ * as a duplicate and stored once.
  */
-function maskedPart(kind: DesktopCredentialKind, secret: string): string {
-    if (kind === "api_key") return secret;
-    try {
-        const parsed = JSON.parse(secret) as Record<string, unknown>;
-        const part =
-            kind === "aws_keys"
-                ? parsed.accessKeyId
-                : (parsed.refresh_token ?? parsed.refreshToken);
-        return typeof part === "string" ? part : "";
-    } catch {
-        return "";
+export async function credentialImportSend(input: {
+    readonly importer: ReturnType<typeof credentialImportCreate>;
+    readonly sessions: Pick<ServerSessions, "credential" | "refresh">;
+    readonly fetch: typeof globalThis.fetch;
+    readonly connectionId: string;
+    readonly items: readonly DesktopCredentialImportItem[];
+}): Promise<DesktopServerSignInResult<readonly DesktopCredentialImportResult[]>> {
+    const results: DesktopCredentialImportResult[] = [];
+    const sendable: {
+        readonly id: string;
+        readonly body: Record<string, unknown>;
+    }[] = [];
+    for (const item of input.items) {
+        const entry = input.importer.importableOf(item.id);
+        if (!entry) {
+            results.push({
+                id: item.id,
+                ok: false,
+                code: "expired",
+                message: "Look for credentials again, then import.",
+            });
+            continue;
+        }
+        sendable.push({
+            id: item.id,
+            body: {
+                vendor: entry.found.vendor,
+                kind: entry.kind,
+                secret: entry.secret,
+                label: entry.found.label,
+                target: { name: input.importer.vendorName(entry.found.vendor), scope: item.scope },
+            },
+        });
     }
+    for (let start = 0; start < sendable.length; start += IMPORT_BATCH) {
+        const batch = sendable.slice(start, start + IMPORT_BATCH);
+        const answer = await importPost(input, { items: batch.map((entry) => entry.body) });
+        if (!answer.ok) return answer;
+        for (const [index, entry] of batch.entries()) {
+            const result = recordOf(answer.value.find((one) => recordOf(one)?.index === index));
+            const check = recordOf(result?.check);
+            const account = stringOf(check?.accountHint);
+            const error = recordOf(result?.error) ?? recordOf(check?.error);
+            results.push(
+                result?.ok === true
+                    ? {
+                          id: entry.id,
+                          ok: true,
+                          duplicate: result.duplicate === true,
+                          ...(account ? { account } : {}),
+                      }
+                    : {
+                          id: entry.id,
+                          ok: false,
+                          code: stringOf(error?.kind) ?? "failed",
+                          message: stringOf(error?.message) ?? "Happy Cloud didn't take this one.",
+                      },
+            );
+        }
+    }
+    const order = new Map(input.items.map((item, index) => [item.id, index]));
+    return {
+        ok: true,
+        value: results.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0)),
+    };
+}
+
+/** One import request, signed in again once when the server refuses the token. */
+async function importPost(
+    input: {
+        readonly sessions: Pick<ServerSessions, "credential" | "refresh">;
+        readonly fetch: typeof globalThis.fetch;
+        readonly connectionId: string;
+    },
+    body: unknown,
+): Promise<DesktopServerSignInResult<readonly unknown[]>> {
+    let credential = input.sessions.credential(input.connectionId);
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+        if (!credential)
+            return {
+                ok: false,
+                code: "sign_in_required",
+                message: "Sign in to this server to import.",
+            };
+        let response: Response;
+        try {
+            response = await input.fetch(
+                new URL("v0/cloud/credentials/import", credential.serverUrl),
+                {
+                    method: "POST",
+                    headers: {
+                        accept: "application/json",
+                        authorization: `Bearer ${credential.accessToken}`,
+                        "content-type": "application/json",
+                    },
+                    body: JSON.stringify(body),
+                    redirect: "error",
+                },
+            );
+        } catch {
+            return {
+                ok: false,
+                code: "unreachable",
+                message: "This server isn't reachable right now.",
+            };
+        }
+        const json = recordOf(await response.json().catch(() => undefined));
+        if (response.status === 401 && attempt === 0) {
+            credential = await input.sessions.refresh(input.connectionId, credential.accessToken);
+            continue;
+        }
+        if (response.ok && Array.isArray(json?.results)) return { ok: true, value: json.results };
+        if (response.status === 404)
+            return {
+                ok: false,
+                code: "unavailable",
+                message: "This server can't import credentials yet.",
+            };
+        return {
+            ok: false,
+            code: stringOf(json?.code) ?? "failed",
+            message: stringOf(json?.error) ?? "Importing didn't work.",
+        };
+    }
+    return { ok: false, code: "sign_in_required", message: "Sign in to this server to import." };
 }

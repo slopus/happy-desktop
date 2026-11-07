@@ -50,6 +50,7 @@ import {
     type HappyAgentFeedFilterPersistence,
     type HappyAgentWorkspaceMemoryPersistence,
     type HappyAgentWorkspaceStore,
+    type HappyAgentCredentialImportHost,
     type ServerCompatibility,
     type TerminalColorScheme,
 } from "happy-desktop-state";
@@ -145,6 +146,9 @@ export interface HappyAgentSession {
     readonly profile: () => HappyAgentProfileStore | undefined;
     readonly providerUsage: HappyAgentProviderUsageStore | undefined;
     readonly providers: HappyAgentProvidersStore;
+    readonly credentialImport: () =>
+        | import("happy-desktop-state").HappyAgentCredentialImportStore
+        | undefined;
     readonly voiceSettings: HappyAgentVoiceSettingsStore;
     readonly taskSettings: () => import("happy-desktop-state").HappyAgentTaskSettingsStore;
     readonly surfaceSettings: () => import("happy-desktop-state").HappyAgentSurfaceSettingsStore;
@@ -384,6 +388,8 @@ export function happyAgentConnectionOpen(input: {
     readonly hostServicesUrl?: string;
     /** Whether this computer's USB devices and ports can be bridged to this Happy Agent. */
     readonly deviceBridges?: boolean;
+    /** The shell's credential import, when this is a Happy Cloud server. */
+    readonly credentialImportHost?: HappyAgentCredentialImportHost;
     /**
      * The window's appearance right now, read again for every terminal this
      * connection opens. A terminal is started in it and keeps it afterwards.
@@ -475,6 +481,7 @@ export function happyAgentConnectionOpen(input: {
             endpoint: directClient.endpoint,
             token: "happy-local-capability",
         }),
+        ...(input.credentialImportHost ? { credentialImportHost: input.credentialImportHost } : {}),
         guidedMobileSetup: input.guidedMobileSetup,
         mobileConnector,
         cloudHost: input.cloudHost,
@@ -620,6 +627,7 @@ export function happyAgentConnectionOpen(input: {
                     profile: () => profileStore,
                     providerUsage: client.providerUsage(),
                     providers: client.providers(),
+                    credentialImport: () => client.credentialImport(),
                     voiceSettings: client.voiceSettings(),
                     taskSettings: () => client.taskSettings(),
                     surfaceSettings: () => client.surfaceSettings(),

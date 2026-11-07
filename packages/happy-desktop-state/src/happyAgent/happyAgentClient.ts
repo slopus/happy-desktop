@@ -115,6 +115,11 @@ import {
     type HappyAgentProvidersStore,
 } from "./happyAgentProvidersStore.js";
 import {
+    happyAgentCredentialImportStoreCreate,
+    type HappyAgentCredentialImportHost,
+    type HappyAgentCredentialImportStore,
+} from "./happyAgentCredentialImportStore.js";
+import {
     happyAgentVoiceSettingsStoreCreate,
     type HappyAgentVoiceSettingsStore,
 } from "./happyAgentVoiceSettingsStore.js";
@@ -217,6 +222,12 @@ export interface HappyAgentWorkspaceClient {
      * catalog `models` holds, so a provider switched off stops being offered.
      */
     providers(): HappyAgentProvidersStore;
+    /**
+     * Settings › Providers › Import: copies credentials found on this computer
+     * to the server. Only a Happy Cloud server reached from a desktop shell
+     * has one; elsewhere this is undefined.
+     */
+    credentialImport(): HappyAgentCredentialImportStore | undefined;
     /**
      * The voice controller and prompt this machine's calls start with, as the
      * Voice settings read and change them. Materialized on first access and
@@ -424,6 +435,8 @@ export interface HappyAgentWorkspaceClientDeps {
     readonly client: HappyAgentClient;
     /** Happy Cloud's team key routes over this connection's transport. */
     readonly providerCredentials?: HappyAgentProviderCredentialsApi;
+    /** The desktop shell's credential import, for a Happy Cloud server. */
+    readonly credentialImportHost?: HappyAgentCredentialImportHost;
     readonly cloudHost: HappyAgentCloudHost;
     readonly connection: HappyAgentConnection;
     readonly hostServices: HappyAgentHostServices;
@@ -602,6 +615,7 @@ export function happyAgentWorkspaceClientCreate(
     let teamsStore: HappyAgentTeamsStore | undefined;
     let profileStore: HappyAgentProfileStore | undefined;
     let providersStore: HappyAgentProvidersStore | undefined;
+    let credentialImportStore: HappyAgentCredentialImportStore | undefined;
     let voiceSettingsStore: HappyAgentVoiceSettingsStore | undefined;
     let taskSettingsStore: HappyAgentTaskSettingsStore | undefined;
     let surfaceSettingsStore: HappyAgentSurfaceSettingsStore | undefined;
@@ -970,6 +984,15 @@ export function happyAgentWorkspaceClientCreate(
             });
             return providersStore;
         },
+        credentialImport() {
+            if (disposed) throw new Error("The Happy Agent client is disposed.");
+            if (!deps.credentialImportHost || !deps.providerCredentials) return undefined;
+            credentialImportStore ??= happyAgentCredentialImportStoreCreate({
+                host: deps.credentialImportHost,
+                credentials: deps.providerCredentials,
+            });
+            return credentialImportStore;
+        },
         taskSettings() {
             if (disposed) throw new Error("The Happy Agent client is disposed.");
             taskSettingsStore ??= happyAgentTaskSettingsStoreCreate({
@@ -1157,6 +1180,8 @@ export function happyAgentWorkspaceClientCreate(
             profileStore = undefined;
             providersStore?.[Symbol.dispose]();
             providersStore = undefined;
+            credentialImportStore?.[Symbol.dispose]();
+            credentialImportStore = undefined;
             voiceSettingsStore?.[Symbol.dispose]();
             voiceSettingsStore = undefined;
             taskSettingsStore?.[Symbol.dispose]();

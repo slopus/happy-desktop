@@ -1095,6 +1095,12 @@ export {
     type HappyAgentProviderStatus,
 } from "./pages/settings/HappyAgentProviderSettings";
 export {
+    HappyAgentCredentialImport,
+    type HappyAgentCredentialImportProps,
+    type HappyAgentCredentialImportRow,
+    type HappyAgentCredentialImportScope,
+} from "./pages/settings/HappyAgentCredentialImport";
+export {
     HappyAgentFileTierSettings,
     type HappyAgentFileTierMoveDirection,
     type HappyAgentFileTierRow,

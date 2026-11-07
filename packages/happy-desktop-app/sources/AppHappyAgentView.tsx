@@ -669,6 +669,14 @@ export interface AppHappyAgentSession {
      * machine's configuration, which leaves that category saying so.
      */
     readonly providers?: HappyAgentProvidersStore;
+    /**
+     * Settings › Providers › Import, which copies credentials found on this
+     * computer to the server. Absent, or answering undefined, where there is
+     * no such import: anywhere but a Happy Cloud server reached from a desktop.
+     */
+    readonly credentialImport?: () =>
+        | import("happy-desktop-state").HappyAgentCredentialImportStore
+        | undefined;
     /** The voice controller and prompt this machine's calls start with, as Voice settings edit them. */
     readonly voiceSettings?: HappyAgentVoiceSettingsStore;
     /** This connection's authenticated person's task membership preference. */

@@ -49,6 +49,7 @@
         "@slopus/happy-agent-client": "0.0.159",
         "electron-updater": "^6.8.9",
         "koffi": "3.3.4",
+        "smol-toml": "^1.9.1",
         "tldts": "7.4.19",
         "usb": "^2.19.1",
         "ws": "^8.21.1",

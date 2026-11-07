@@ -36,10 +36,34 @@ export type DesktopCredentialVendor =
     | "grok"
     | "bedrock"
     | "codex"
-    | "claude-code";
+    | "claude-code"
+    | "openrouter"
+    | "deepseek"
+    | "mistral"
+    | "groq"
+    | "together"
+    | "fireworks"
+    | "moonshot";
 
-/** How a found credential signs in: a key, an AWS key pair, or a subscription's sign-in. */
-export type DesktopCredentialKind = "api_key" | "aws_keys" | "oauth";
+/**
+ * How a credential that can be copied signs in: a key, an AWS key pair, or
+ * Claude Code's long-lived setup token.
+ */
+export type DesktopCredentialKind = "api_key" | "aws_keys" | "oauth_token";
+
+/**
+ * What can be done with a found credential.
+ *
+ * - `import`: copied to Happy Cloud as it is.
+ * - `signIn`: a subscription's sign-in, which rotates its refresh token, so
+ *   copying it would sign this computer out. The cloud signs in on its own,
+ *   as the built-in provider `providerId`.
+ * - `unsupported`: Happy Cloud can't use it; `reason` says why.
+ */
+export type DesktopCredentialUse =
+    | { readonly kind: "import"; readonly credential: DesktopCredentialKind }
+    | { readonly kind: "signIn"; readonly providerId: string }
+    | { readonly kind: "unsupported"; readonly reason: string };
 
 /**
  * A model provider credential the shell found on this computer. Never the
@@ -49,14 +73,44 @@ export interface DesktopCredentialFound {
     /** Names this entry of the last scan; not stable across scans. */
     readonly id: string;
     readonly vendor: DesktopCredentialVendor;
-    readonly kind: DesktopCredentialKind;
+    /** The vendor's display name, such as "OpenAI". */
+    readonly vendorName: string;
+    readonly use: DesktopCredentialUse;
     /** Where it was found, such as `~/.codex/auth.json` or `$OPENAI_API_KEY`. */
     readonly source: string;
     /** A suggested name for it. */
     readonly label: string;
-    /** The last four characters behind dots. */
-    readonly masked: string;
+    /** The account it signs in as, when its vendor's own files say: an email or a plan. */
+    readonly account?: string;
+    /** The last four characters behind dots; absent for a sign-in, whose secret is never read. */
+    readonly masked?: string;
 }
+
+/** Where one imported credential goes on the server. */
+export type DesktopCredentialImportScope = "team" | "private";
+
+export interface DesktopCredentialImportItem {
+    /** The found entry, by its ID in the last scan. */
+    readonly id: string;
+    readonly scope: DesktopCredentialImportScope;
+}
+
+/** How one credential's import ended. */
+export type DesktopCredentialImportResult =
+    | {
+          readonly id: string;
+          readonly ok: true;
+          /** It was already there; nothing was stored. */
+          readonly duplicate: boolean;
+          readonly account?: string;
+      }
+    | {
+          readonly id: string;
+          readonly ok: false;
+          /** The server's fixed reason, such as `unauthorized` or `forbidden_scope`. */
+          readonly code: string;
+          readonly message: string;
+      };
 
 /** The accounts API, asked by the shell with the account's token. */
 export interface DesktopHappyCloud {
@@ -90,7 +144,22 @@ export interface DesktopHappyCloud {
      * vendors' own tools keep them. The shell holds what it found for a few
      * minutes and answers with masked entries only.
      */
-    credentialScan(): Promise<readonly DesktopCredentialFound[]>;
+    credentialScan(options?: {
+        /**
+         * Also reads the environment the person's login shell sets up, which
+         * an app opened from the Dock or Start menu never sees. Only when asked.
+         */
+        readonly shell?: boolean;
+    }): Promise<readonly DesktopCredentialFound[]>;
+    /**
+     * Copies credentials from the last scan to a Happy Cloud server the
+     * window is signed in to. The shell sends the secrets; the server checks
+     * each before it keeps it.
+     */
+    credentialImport(
+        connectionId: string,
+        items: readonly DesktopCredentialImportItem[],
+    ): Promise<DesktopServerSignInResult<readonly DesktopCredentialImportResult[]>>;
 }
 
 export interface DesktopCloudAuthConfiguration {
@@ -1236,6 +1305,7 @@ export const desktopIpc = {
     happyCloudAccountSignOut: "happy:happy-cloud:account-sign-out",
     happyCloudPasswordSignIn: "happy:happy-cloud:password-sign-in",
     happyCloudCredentialScan: "happy:happy-cloud:credential-scan",
+    happyCloudCredentialImport: "happy:happy-cloud:credential-import",
     serverSessionsChanged: "happy:server-sessions:changed",
     happyLinkExternalReceived: "happy:happy-link:external-received",
     happyLinkExternalTake: "happy:happy-link:external-take",

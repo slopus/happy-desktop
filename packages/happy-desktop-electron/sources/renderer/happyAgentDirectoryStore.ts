@@ -41,6 +41,7 @@ import {
     type HappyAgentSession,
 } from "./happyAgentConnection";
 import type { DesktopRuntimeStore } from "./runtimeStore";
+import { desktopCredentialImportHostCreate } from "./desktopCredentialImportHost";
 
 export const LOCAL_HAPPY_AGENT_ID = "local";
 const CONNECTIONS_KEY = "happy.happy-agent.connections.v1";
@@ -718,6 +719,18 @@ export function happyAgentDirectoryStoreCreate(
             // A Happy Agent on another machine is what this computer's devices
             // and ports can reach; the local one already has them.
             deviceBridges: happyAgent.entry.remoteId !== undefined,
+            // Only the shell reads this computer's credentials, and only a
+            // Happy Cloud server takes them.
+            ...(bridge.happyCloud &&
+            happyAgent.entry.remoteId !== undefined &&
+            happyCloudServerNameOf(happyAgent.entry.remoteId) !== undefined
+                ? {
+                      credentialImportHost: desktopCredentialImportHostCreate(
+                          bridge.happyCloud,
+                          happyAgent.entry.remoteId,
+                      ),
+                  }
+                : {}),
             happyAgentHttpUrl,
             modelPreferencePersistence: deps.modelPreferencePersistence(happyAgent.entry.id),
             terminalColorScheme: deps.terminalColorScheme,

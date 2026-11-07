@@ -31,6 +31,7 @@ import { HappyAgentDaemonClient } from "./happyAgentDaemonClient";
 import { ServerSessionError, serverSessionsCreate } from "./serverSessions";
 import { happyCloudCreate } from "./happyCloud";
 import { happyCloudVaultCreate } from "./happyCloudVault";
+import { happyCloudServerNameOf } from "../shared/happyCloud";
 import { browserPermissionsInstall } from "./browserPermissions";
 import { BrowserPasswords } from "./browserPasswords";
 import { browserPasswordGuestAttach } from "./browserPasswordGuest";
@@ -79,6 +80,7 @@ import {
     type DesktopPreviewNavigation,
     type DesktopPreviewNavigationStep,
     type DesktopAppearanceMode,
+    type DesktopCredentialImportItem,
 } from "../shared/desktopContract";
 import { rendererUtilityOriginArgument } from "../shared/happyAgentRendererUtilityContract";
 import {
@@ -135,7 +137,7 @@ import { doNotTrackEnabled, doNotTrackEnvironment } from "../shared/doNotTrack";
 import { powerSavingInstall } from "./powerSaving";
 import { cloudAuthProductionRedirectUri, serverOAuthRedirectUri } from "../shared/cloudAuthConfig";
 import { cloudAuthCallbackRead } from "./cloudAuthCallback";
-import { credentialImportCreate } from "./credentialImport";
+import { credentialImportCreate, credentialImportSend } from "./credentialImport";
 import { happyExternalLinkUrl } from "./happyLink";
 
 if (process.platform !== "darwin" && process.platform !== "linux" && process.platform !== "win32") {
@@ -2081,10 +2083,45 @@ void app
                     return cloud.passwordSignIn(login, password);
                 },
             );
-            ipcMain.handle(desktopIpc.happyCloudCredentialScan, (event) => {
+            ipcMain.handle(desktopIpc.happyCloudCredentialScan, (event, options: unknown) => {
                 desktopDaemonSenderRequire(event.sender);
-                return credentialImport.scan();
+                return credentialImport.scan({
+                    shell:
+                        typeof options === "object" &&
+                        options !== null &&
+                        (options as { shell?: unknown }).shell === true,
+                });
             });
+            ipcMain.handle(
+                desktopIpc.happyCloudCredentialImport,
+                (event, connectionId: unknown, items: unknown) => {
+                    desktopDaemonSenderRequire(event.sender);
+                    if (
+                        typeof connectionId !== "string" ||
+                        happyCloudServerNameOf(connectionId) === undefined ||
+                        !Array.isArray(items) ||
+                        items.length === 0 ||
+                        items.length > 200 ||
+                        !items.every(
+                            (item: unknown) =>
+                                typeof item === "object" &&
+                                item !== null &&
+                                typeof (item as { id?: unknown }).id === "string" &&
+                                ((item as { scope?: unknown }).scope === "team" ||
+                                    (item as { scope?: unknown }).scope === "private"),
+                        )
+                    )
+                        throw new Error("Happy asked to import invalid credentials.");
+                    return credentialImportSend({
+                        importer: credentialImport,
+                        sessions: serverSessions,
+                        fetch: (input, init) =>
+                            net.fetch(input instanceof URL ? input.href : input, init),
+                        connectionId,
+                        items: items as readonly DesktopCredentialImportItem[],
+                    });
+                },
+            );
             ipcMain.handle(desktopIpc.happyCloudServerSignOut, (event, value: unknown) => {
                 desktopDaemonSenderRequire(event.sender);
                 return cloud.serverSignOut(name(value));

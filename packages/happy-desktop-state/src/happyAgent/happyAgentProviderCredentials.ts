@@ -74,6 +74,8 @@ export interface HappyAgentProviderCredentialsApi {
         enabled: boolean,
     ): Promise<void>;
     credentialRemove(providerId: string, credentialId: string): Promise<void>;
+    /** What the signed-in member may do on this server, such as `providers.manage`. */
+    permissionsRead(): Promise<ReadonlySet<string>>;
 }
 
 /** A subscription sign-in's current or most recent attempt. */
@@ -366,5 +368,15 @@ export function happyAgentProviderCredentialsApiCreate(options: {
             ),
         credentialRemove: (providerId, credentialId) =>
             unit(send("DELETE", `${credentials(providerId)}/${encodeURIComponent(credentialId)}`)),
+        permissionsRead: async () => {
+            const answer = (await send("GET", "v0/permissions")) as
+                | { readonly granted?: unknown }
+                | undefined;
+            return new Set(
+                Array.isArray(answer?.granted)
+                    ? answer.granted.filter((value): value is string => typeof value === "string")
+                    : [],
+            );
+        },
     };
 }

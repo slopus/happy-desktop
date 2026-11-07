@@ -52,6 +52,8 @@ import {
     happyAgentProviderUsageStoreNoop,
     type HappyAgentProviderUsageStore,
     happyAgentProvidersStoreNoop,
+    happyAgentCredentialImportStoreNoop,
+    type HappyAgentCredentialImportSnapshot,
     happyAgentSecretsStoreNoop,
     happyAgentVoiceSettingsStoreNoop,
     happyAgentWindowStoreNoop,
@@ -78,6 +80,8 @@ import {
     HappyAgentMobileSettings,
     happyAgentMobileLinkHeading,
     HappyAgentProviderSettings,
+    HappyAgentCredentialImport,
+    type HappyAgentCredentialImportRow,
     HappyAgentProfilerSettings,
     HappyAgentProfileSettings,
     HappyAgentPasswordSettings,
@@ -744,6 +748,15 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
         providersStore.get,
         providersStore.get,
     );
+    // Import exists only on a Happy Cloud server reached from a desktop, and
+    // looks for nothing until the person asks it to.
+    const credentialImportStore =
+        section === "providers" ? host?.session?.credentialImport?.() : undefined;
+    const credentialImport = useSyncExternalStore(
+        (credentialImportStore ?? happyAgentCredentialImportStoreNoop).subscribe,
+        (credentialImportStore ?? happyAgentCredentialImportStoreNoop).get,
+        (credentialImportStore ?? happyAgentCredentialImportStoreNoop).get,
+    );
     // The voice controller and prompt are read, and re-read every few seconds,
     // only while the Voice category is on screen, including while calls are off.
     const voiceSettingsStore =
@@ -1367,44 +1380,78 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                     ]}
                 />
             ) : section === "providers" ? (
-                <HappyAgentProviderSettings
-                    loading={providers.loading}
-                    onModelEnabledChange={(id, enabled) =>
-                        happyAgentOnline()
-                            ? props.settings.modelEnabledUpdate(id as HappyAgentModelKey, enabled)
-                            : undefined
-                    }
-                    onProviderEnabledChange={(id, enabled) => {
-                        if (happyAgentOnline()) providersStore.providerEnabledUpdate(id, enabled);
-                    }}
-                    onKeyAdd={(providerId, input) =>
-                        providersStore.credentialAdd(providerId, input)
-                    }
-                    onKeyEnabledChange={(providerId, keyId, enabled) => {
-                        if (happyAgentOnline())
-                            providersStore.credentialEnabledUpdate(providerId, keyId, enabled);
-                    }}
-                    onKeyRemove={(providerId, keyId) => {
-                        if (happyAgentOnline()) providersStore.credentialRemove(providerId, keyId);
-                    }}
-                    onSubscriptionSignIn={(providerId) => {
-                        if (happyAgentOnline()) providersStore.subscriptionSignIn(providerId);
-                    }}
-                    onSubscriptionCodeSubmit={(providerId, code) =>
-                        providersStore.subscriptionCodeSubmit(providerId, code)
-                    }
-                    onSubscriptionSignInCancel={(providerId) => {
-                        if (happyAgentOnline()) providersStore.subscriptionSignInCancel(providerId);
-                    }}
-                    onSubscriptionSignOut={(providerId) => {
-                        if (happyAgentOnline()) providersStore.subscriptionSignOut(providerId);
-                    }}
-                    {...(props.externalLinkOpen ? { onExternalOpen: props.externalLinkOpen } : {})}
-                    providers={providerRows(providers.providers, settings, selection)}
-                    {...(providers.error ? { error: providers.error.message } : {})}
-                    {...(providers.saveError ? { saveError: providers.saveError.message } : {})}
-                    {...(unavailable === undefined ? {} : { unavailable })}
-                />
+                <>
+                    {credentialImportStore ? (
+                        <HappyAgentCredentialImport
+                            phase={credentialImport.phase}
+                            rows={credentialImportRows(credentialImport, providers.providers)}
+                            shellScanned={credentialImport.shellScanned}
+                            teamAllowed={credentialImport.teamAllowed}
+                            {...(credentialImport.error
+                                ? { error: credentialImport.error.message }
+                                : {})}
+                            onScan={(options) => credentialImportStore.scanStart(options)}
+                            onPickToggle={(id) => credentialImportStore.pickToggle(id)}
+                            onPickScopeChange={(id, scope) =>
+                                credentialImportStore.pickScopeUpdate(id, scope)
+                            }
+                            onImport={() => credentialImportStore.importSubmit()}
+                            onSignIn={(id) => {
+                                const use = credentialImport.found.find(
+                                    (entry) => entry.id === id,
+                                )?.use;
+                                if (use?.kind === "signIn" && happyAgentOnline())
+                                    providersStore.subscriptionSignIn(use.providerId);
+                            }}
+                        />
+                    ) : null}
+                    <HappyAgentProviderSettings
+                        loading={providers.loading}
+                        onModelEnabledChange={(id, enabled) =>
+                            happyAgentOnline()
+                                ? props.settings.modelEnabledUpdate(
+                                      id as HappyAgentModelKey,
+                                      enabled,
+                                  )
+                                : undefined
+                        }
+                        onProviderEnabledChange={(id, enabled) => {
+                            if (happyAgentOnline())
+                                providersStore.providerEnabledUpdate(id, enabled);
+                        }}
+                        onKeyAdd={(providerId, input) =>
+                            providersStore.credentialAdd(providerId, input)
+                        }
+                        onKeyEnabledChange={(providerId, keyId, enabled) => {
+                            if (happyAgentOnline())
+                                providersStore.credentialEnabledUpdate(providerId, keyId, enabled);
+                        }}
+                        onKeyRemove={(providerId, keyId) => {
+                            if (happyAgentOnline())
+                                providersStore.credentialRemove(providerId, keyId);
+                        }}
+                        onSubscriptionSignIn={(providerId) => {
+                            if (happyAgentOnline()) providersStore.subscriptionSignIn(providerId);
+                        }}
+                        onSubscriptionCodeSubmit={(providerId, code) =>
+                            providersStore.subscriptionCodeSubmit(providerId, code)
+                        }
+                        onSubscriptionSignInCancel={(providerId) => {
+                            if (happyAgentOnline())
+                                providersStore.subscriptionSignInCancel(providerId);
+                        }}
+                        onSubscriptionSignOut={(providerId) => {
+                            if (happyAgentOnline()) providersStore.subscriptionSignOut(providerId);
+                        }}
+                        {...(props.externalLinkOpen
+                            ? { onExternalOpen: props.externalLinkOpen }
+                            : {})}
+                        providers={providerRows(providers.providers, settings, selection)}
+                        {...(providers.error ? { error: providers.error.message } : {})}
+                        {...(providers.saveError ? { saveError: providers.saveError.message } : {})}
+                        {...(unavailable === undefined ? {} : { unavailable })}
+                    />
+                </>
             ) : section === "passwords" ? (
                 <HappyAgentPasswordSettings available={props.browserPasswordsAvailable ?? false} />
             ) : section === "secrets" ? (
@@ -2043,4 +2090,47 @@ function secretRows(secrets: readonly HappyAgentSecret[]): readonly HappyAgentSe
             timeStyle: "short",
         }).format(new Date(secret.updatedAt)),
     }));
+}
+
+/** What Import lists: each found credential with its pick or how its import ended. */
+function credentialImportRows(
+    snapshot: HappyAgentCredentialImportSnapshot,
+    providers: readonly HappyAgentProviderEntry[],
+): HappyAgentCredentialImportRow[] {
+    return snapshot.found.map((entry): HappyAgentCredentialImportRow => {
+        const base = {
+            id: entry.id,
+            vendorName: entry.vendorName,
+            label: entry.label,
+            source: entry.source,
+            ...(entry.account === undefined ? {} : { account: entry.account }),
+        };
+        if (entry.use.kind === "signIn") {
+            const providerId = entry.use.providerId;
+            return {
+                ...base,
+                use: "signIn",
+                signInAvailable: providers.some(
+                    (provider) => provider.id === providerId && provider.subscription,
+                ),
+            };
+        }
+        if (entry.use.kind === "unsupported")
+            return { ...base, use: "unsupported", reason: entry.use.reason };
+        const picked = snapshot.picked.get(entry.id);
+        const result = snapshot.results.get(entry.id);
+        return {
+            ...base,
+            use: "import",
+            ...(entry.masked === undefined ? {} : { masked: entry.masked }),
+            ...(picked === undefined ? {} : { picked }),
+            ...(result === undefined
+                ? {}
+                : {
+                      result: result.ok
+                          ? { ok: true, duplicate: result.duplicate }
+                          : { ok: false, message: result.message },
+                  }),
+        };
+    });
 }
