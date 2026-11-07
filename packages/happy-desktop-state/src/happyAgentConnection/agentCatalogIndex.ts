@@ -130,12 +130,13 @@ function indexAdvance(
     for (const rank of changed) treesRemove(index, rootsAt(before, rank), rank, lost);
     for (const rank of changed) treesAdd(index, rootsAt(catalog, rank), rank);
     for (const id of lost) {
-        if (index.found.has(id)) continue;
         const holders = index.holders.get(id);
         if (holders === undefined) continue;
-        // Still held by an owner nothing changed in, further down the lookup order.
+        // Still held by an owner whose trees were not walked again, which may come
+        // before the one a walk found it in.
         let rank = Infinity;
         for (const holder of holders) rank = Math.min(rank, holder);
+        if ((index.found.get(id)?.rank ?? Infinity) <= rank) continue;
         for (const root of rootsAt(catalog, rank)) {
             const agent = agentTreeFind(root, id);
             if (agent === undefined) continue;
