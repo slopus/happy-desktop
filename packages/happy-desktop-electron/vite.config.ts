@@ -53,6 +53,20 @@ function profilerEntryPlugin(enabled: boolean): Plugin {
     };
 }
 
+/**
+ * The cloud web app names its tab after its server and puts back the server's
+ * picture before the app loads. The script is a file of its own because the
+ * edge's CSP refuses inline scripts.
+ */
+function cloudWebHeadPlugin(): Plugin {
+    return {
+        name: "happy-cloud-web-head",
+        transformIndexHtml: () => [
+            { tag: "script", attrs: { src: "/cloud-web-head.js" }, injectTo: "head" },
+        ],
+    };
+}
+
 export default defineConfig({
     base: localWebSite || cloudWeb ? "/" : "./",
     // The profile entry must own the React DevTools hook before React DOM is
@@ -96,6 +110,7 @@ export default defineConfig({
         react(),
         babel({ presets: [reactCompilerPreset()] }),
         profilerEntryPlugin(profileBuild),
+        ...(cloudWeb ? [cloudWebHeadPlugin()] : []),
         // Happy-ui's empty-state marks are drawn by a WASM Lottie renderer that
         // ships hardcoded CDN URLs for its binary. This cuts them out so the
         // renderer can only ever load the copy bundled here.

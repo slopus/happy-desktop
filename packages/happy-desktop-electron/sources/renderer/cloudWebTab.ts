@@ -1,10 +1,12 @@
 import { LOCAL_HAPPY_AGENT_ID, type HappyAgentDirectoryStore } from "./happyAgentDirectoryStore";
 
 /**
- * Where the last drawn server icon is kept, so `/favicon-cache.js` can put it
- * back before the app loads. The two must agree on this name.
+ * Where the last drawn server icon and the server's name are kept, so
+ * `/cloud-web-head.js` can put them back before the app loads. The two must
+ * agree on these names.
  */
 const CACHE_KEY = "happy.favicon";
+const TITLE_KEY = "happy.title";
 const TAB_SIZE = 64;
 const TOUCH_SIZE = 180;
 /** The superellipse exponent that reads like an iPhone icon's continuous corners. */
@@ -90,16 +92,26 @@ function cacheWrite(cache: FaviconCache | undefined): void {
     }
 }
 
+function titleWrite(name: string): void {
+    document.title = name;
+    try {
+        window.localStorage.setItem(TITLE_KEY, name);
+    } catch {
+        // A full or refused storage only costs the head start.
+    }
+}
+
 /**
- * Shows the server's own picture as the cloud web app's tab icon, clipped to
- * the same rounded square as Happy's default icon, and Happy's icon when the
- * server has none or its picture does not load. The picture is followed from
- * the server's own identity, so a new one replaces the icon without a reload.
+ * Names the cloud web app's tab after its server, and shows the server's own
+ * picture as its icon, clipped to the same rounded square as Happy's default
+ * icon, or Happy's icon when the server has none or its picture does not
+ * load. Both follow the server's own identity, so a rename or a new picture
+ * reaches the tab without a reload.
  */
-export function cloudWebFaviconFollow(directory: HappyAgentDirectoryStore): () => void {
+export function cloudWebTabFollow(directory: HappyAgentDirectoryStore): () => void {
     const head = document.head;
     // The page's own icons, from the static build, put back whenever the
-    // server has no picture to show instead. `/favicon-cache.js` may have
+    // server has no picture to show instead. `/cloud-web-head.js` may have
     // set them aside already, keeping each one's own `rel` beside it.
     const defaults = [
         ...head.querySelectorAll<HTMLLinkElement>('link[data-happy-icon="default"]'),
@@ -144,6 +156,7 @@ export function cloudWebFaviconFollow(directory: HappyAgentDirectoryStore): () =
             .happyAgents.find((entry) => entry.id === LOCAL_HAPPY_AGENT_ID)?.node;
         // Until the server has said who it is, the icon already showing stays.
         if (!node) return;
+        if (document.title !== node.name) titleWrite(node.name);
         const avatar = node.avatar;
         const key = avatar?.thumbhash ?? "";
         if (key === wanted) return;

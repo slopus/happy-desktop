@@ -1,8 +1,15 @@
-// Puts back the server picture the cloud web app last showed as its tab icon,
-// before the app loads, so a reload does not show Happy's icon first. The app
-// keeps this record under the same key (cloudWebFavicon.ts) and replaces the
-// icon once the server says what its picture is now.
+// The cloud web app's tab before the app loads: its server's name as the
+// title, and the server picture it last showed as the icon, so a reload shows
+// neither Happy's defaults first. The app keeps both records under the same
+// keys (cloudWebTab.ts) and replaces them once the server says what they are now.
 (function () {
+    var name;
+    try {
+        name = window.localStorage.getItem("happy.title");
+    } catch (error) {
+        name = null;
+    }
+    document.title = name || window.location.hostname.split(".")[0];
     var cache;
     try {
         cache = JSON.parse(window.localStorage.getItem("happy.favicon") || "null");
