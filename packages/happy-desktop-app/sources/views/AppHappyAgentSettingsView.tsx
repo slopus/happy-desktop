@@ -15,6 +15,7 @@ import type {
     HappyAgentSecret,
     HappyAgentModelKey,
     HappyAgentProviderEntry,
+    HappyAgentProviderSubscription,
     HappyAgentSettingsSnapshot,
     HappyAgentSettingsStore,
     HappyAgentTaskSettingsSnapshot,
@@ -92,6 +93,7 @@ import {
     HappyAgentUsageSettings,
     providerAccountName,
     type HappyAgentProviderRow,
+    type HappyAgentProviderSubscriptionRow,
     type HappyAgentSecretRow,
     type HappyAgentSettingsCategory,
     type HappyAgentStateDocument,
@@ -459,6 +461,8 @@ export interface AppCloudWebSession {
 
 export interface AppHappyAgentSettingsViewProps {
     appearance: AppearanceStore;
+    /** Opens a page in the person's own browser, such as a provider's sign-in page. */
+    externalLinkOpen?: (url: string) => void;
     /** Present only in the cloud web app. */
     cloudWebSession?: AppCloudWebSession;
     /** Whether this desktop fills logins saved in the person's browsers (macOS and Windows). */
@@ -1374,6 +1378,19 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                     onKeyRemove={(providerId, keyId) => {
                         if (happyAgentOnline()) providersStore.credentialRemove(providerId, keyId);
                     }}
+                    onSubscriptionSignIn={(providerId) => {
+                        if (happyAgentOnline()) providersStore.subscriptionSignIn(providerId);
+                    }}
+                    onSubscriptionCodeSubmit={(providerId, code) =>
+                        providersStore.subscriptionCodeSubmit(providerId, code)
+                    }
+                    onSubscriptionSignInCancel={(providerId) => {
+                        if (happyAgentOnline()) providersStore.subscriptionSignInCancel(providerId);
+                    }}
+                    onSubscriptionSignOut={(providerId) => {
+                        if (happyAgentOnline()) providersStore.subscriptionSignOut(providerId);
+                    }}
+                    {...(props.externalLinkOpen ? { onExternalOpen: props.externalLinkOpen } : {})}
                     providers={providerRows(providers.providers, settings, selection)}
                     {...(providers.error ? { error: providers.error.message } : {})}
                     {...(providers.saveError ? { saveError: providers.saveError.message } : {})}
@@ -1936,6 +1953,7 @@ function providerRows(
             ),
         ],
         status: provider.disabledReason ?? "ready",
+        ...(provider.subscription ? { subscription: subscriptionRow(provider.subscription) } : {}),
         ...(provider.credentials
             ? {
                   keys: {
@@ -1963,6 +1981,44 @@ function providerRows(
               }
             : {}),
     }));
+}
+
+/** A team subscription and its sign-in, worded for the provider's card. */
+function subscriptionRow(
+    subscription: HappyAgentProviderSubscription,
+): HappyAgentProviderSubscriptionRow {
+    const account = subscription.signIn.account;
+    const operation = subscription.operation;
+    const authorization = operation?.authorization;
+    return {
+        name: subscription.name,
+        signedIn: subscription.signIn.status === "signed_in",
+        ...(account && (account.email || account.plan)
+            ? { account: [account.email, account.plan].filter(Boolean).join(" · ") }
+            : {}),
+        ...(operation
+            ? {
+                  signIn: {
+                      status: operation.status,
+                      message: operation.message,
+                      ...(authorization
+                          ? {
+                                authorization: {
+                                    method: authorization.method,
+                                    url: authorization.url,
+                                    acceptsCode: authorization.acceptsCode,
+                                    ...(authorization.userCode
+                                        ? { userCode: authorization.userCode }
+                                        : {}),
+                                },
+                            }
+                          : {}),
+                      ...(operation.error ? { error: operation.error.message } : {}),
+                  },
+              }
+            : {}),
+        pending: subscription.pending,
+    };
 }
 
 /** Safe secret metadata with its timestamp localized for the settings list. */

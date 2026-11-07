@@ -387,6 +387,8 @@
 
 .happy-agent-provider__key-add {
     display: flex;
+    align-items: center;
+    gap: 12px;
     padding: 8px 0;
     border-top: 1px solid var(--divider);
 }
@@ -403,6 +405,26 @@
     color: var(--status-error);
     font-size: 12px;
     line-height: 16px;
+}
+
+.happy-agent-provider__subscription-step {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* The device code is read off this screen and typed on another, so it is
+   large and monospaced. */
+.happy-agent-provider__subscription-code {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--text);
+    font-family: var(--happy-font-mono);
+    font-size: 20px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    line-height: 28px;
 }
 
 .happy-agent-provider__key-actions {

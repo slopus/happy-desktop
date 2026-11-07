@@ -3,6 +3,7 @@ import type { BadgeVariant } from "../../Badge";
 import { Banner } from "../../Banner";
 import { Box } from "../../Box";
 import { Button } from "../../Button";
+import { CopyButton } from "../../CopyButton";
 import { SegmentedControl } from "../../SegmentedControl";
 import { TextField } from "../../TextField";
 import { EmptyState } from "../../EmptyState";
@@ -74,6 +75,32 @@ export type HappyAgentProviderKeyInput =
           readonly region?: string;
       };
 
+/**
+ * The team subscription a Happy Cloud server signs in to for a provider, such
+ * as a ChatGPT or Claude plan, and where its sign-in stands.
+ */
+export interface HappyAgentProviderSubscriptionRow {
+    /** The vendor's name for it, such as "Codex" or "Claude Code". */
+    readonly name: string;
+    /** Who is signed in, already worded, while signed in. */
+    readonly account?: string;
+    readonly signedIn: boolean;
+    readonly signIn?: {
+        readonly status: "running" | "waiting" | "succeeded" | "failed" | "cancelled";
+        readonly message: string;
+        /** What the person does next, while the sign-in waits on them. */
+        readonly authorization?: {
+            readonly method: "browser" | "device";
+            readonly url: string;
+            readonly userCode?: string;
+            readonly acceptsCode: boolean;
+        };
+        readonly error?: string;
+    };
+    /** A request this window sent and the server has not answered. */
+    readonly pending?: boolean;
+}
+
 export interface HappyAgentProviderRow {
     readonly id: string;
     /** Service identity shown separately from the account's friendly name. */
@@ -89,6 +116,8 @@ export interface HappyAgentProviderRow {
     readonly serviceTiers: readonly string[];
     /** Team API keys, on a Happy Cloud server; absent on a Happy Agent. */
     readonly keys?: HappyAgentProviderKeys;
+    /** The team's subscription sign-in, on a Happy Cloud server. */
+    readonly subscription?: HappyAgentProviderSubscriptionRow;
 }
 
 export type HappyAgentProviderSettingsProps = {
@@ -106,6 +135,13 @@ export type HappyAgentProviderSettingsProps = {
     onKeyAdd?: (providerId: string, input: HappyAgentProviderKeyInput) => Promise<void>;
     onKeyEnabledChange?: (providerId: string, keyId: string, enabled: boolean) => void;
     onKeyRemove?: (providerId: string, keyId: string) => void;
+    onSubscriptionSignIn?: (providerId: string) => void;
+    /** Hands the vendor's code to the waiting sign-in; rejects with the reason. */
+    onSubscriptionCodeSubmit?: (providerId: string, code: string) => Promise<void>;
+    onSubscriptionSignInCancel?: (providerId: string) => void;
+    onSubscriptionSignOut?: (providerId: string) => void;
+    /** Opens a vendor's sign-in page in the person's own browser. */
+    onExternalOpen?: (url: string) => void;
 };
 
 const STATUS_LABELS: Record<HappyAgentProviderStatus, string> = {
@@ -269,6 +305,28 @@ export function HappyAgentProviderSettings(props: HappyAgentProviderSettingsProp
                                 </span>
                             ) : null}
                         </Box>
+                        {provider.subscription ? (
+                            <HappyAgentProviderSubscription
+                                providerId={provider.id}
+                                subscription={provider.subscription}
+                                unavailable={props.unavailable !== undefined}
+                                {...(props.onSubscriptionSignIn
+                                    ? { onSignIn: props.onSubscriptionSignIn }
+                                    : {})}
+                                {...(props.onSubscriptionCodeSubmit
+                                    ? { onCodeSubmit: props.onSubscriptionCodeSubmit }
+                                    : {})}
+                                {...(props.onSubscriptionSignInCancel
+                                    ? { onCancel: props.onSubscriptionSignInCancel }
+                                    : {})}
+                                {...(props.onSubscriptionSignOut
+                                    ? { onSignOut: props.onSubscriptionSignOut }
+                                    : {})}
+                                {...(props.onExternalOpen
+                                    ? { onExternalOpen: props.onExternalOpen }
+                                    : {})}
+                            />
+                        ) : null}
                         {provider.keys ? (
                             <HappyAgentProviderKeyList
                                 keys={provider.keys}
@@ -303,6 +361,7 @@ export function HappyAgentProviderSettings(props: HappyAgentProviderSettingsProp
  * for a sign-in on some machine.
  */
 function providerHint(provider: HappyAgentProviderRow): string | undefined {
+    if (provider.subscription) return undefined;
     if (provider.keys?.addable && provider.keys.source === null)
         return "Add a team API key to use its models.";
     if (provider.keys) return undefined;
@@ -557,6 +616,185 @@ function HappyAgentProviderKeyList(props: {
                     </Box>
                 )
             ) : null}
+        </Box>
+    );
+}
+
+/**
+ * A provider's team subscription on a Happy Cloud server: who it is signed in
+ * as, or the sign-in that is under way. Codex confirms a code on any device;
+ * Claude opens a page that shows a code to paste back here.
+ */
+function HappyAgentProviderSubscription(props: {
+    readonly providerId: string;
+    readonly subscription: HappyAgentProviderSubscriptionRow;
+    readonly unavailable: boolean;
+    readonly onSignIn?: (providerId: string) => void;
+    readonly onCodeSubmit?: (providerId: string, code: string) => Promise<void>;
+    readonly onCancel?: (providerId: string) => void;
+    readonly onSignOut?: (providerId: string) => void;
+    readonly onExternalOpen?: (url: string) => void;
+}) {
+    const [code, setCode] = useState("");
+    const [codeError, setCodeError] = useState<string | undefined>(undefined);
+    const subscription = props.subscription;
+    const signIn = subscription.signIn;
+    const active = signIn?.status === "running" || signIn?.status === "waiting";
+    const authorization = signIn?.status === "waiting" ? signIn.authorization : undefined;
+    const busy = props.unavailable || subscription.pending === true;
+    const open = (url: string): void => {
+        if (props.onExternalOpen) props.onExternalOpen(url);
+        else window.open(url, "_blank", "noopener,noreferrer");
+    };
+    const codeSubmit = (): void => {
+        const trimmed = code.trim();
+        if (!trimmed || busy || !props.onCodeSubmit) return;
+        setCodeError(undefined);
+        void props.onCodeSubmit(props.providerId, trimmed).then(
+            () => setCode(""),
+            (error: unknown) =>
+                setCodeError(error instanceof Error ? error.message : String(error)),
+        );
+    };
+    return (
+        <Box
+            className="happy-agent-provider__keys"
+            data-happy-desktop-ui="happy-agent-provider-subscription"
+        >
+            {active ? (
+                <Box className="happy-agent-provider__key-form">
+                    <Box className="happy-agent-provider__subscription-step">
+                        {signIn.status === "running" ? <Spinner size={16} /> : null}
+                        <span className="happy-agent-provider__model-name">{signIn.message}</span>
+                    </Box>
+                    {authorization?.method === "device" ? (
+                        <>
+                            <span className="happy-agent-provider__key-meta">
+                                Open the page on any device and enter this code. Anyone on the team
+                                can use the subscription once it is signed in.
+                            </span>
+                            {authorization.userCode ? (
+                                <Box className="happy-agent-provider__subscription-code">
+                                    <span data-happy-desktop-ui="happy-agent-provider-user-code">
+                                        {authorization.userCode}
+                                    </span>
+                                    <CopyButton label="Copy code" text={authorization.userCode} />
+                                </Box>
+                            ) : null}
+                        </>
+                    ) : authorization ? (
+                        <span className="happy-agent-provider__key-meta">
+                            Sign in on the page, then paste the code it shows here. Anyone on the
+                            team can use the subscription once it is signed in.
+                        </span>
+                    ) : null}
+                    {authorization?.acceptsCode ? (
+                        <TextField
+                            autoComplete="off"
+                            disabled={busy}
+                            label="Code from the page"
+                            onSubmit={codeSubmit}
+                            onValueChange={(value) => {
+                                setCode(value);
+                                setCodeError(undefined);
+                            }}
+                            size="small"
+                            type="password"
+                            value={code}
+                            {...(codeError ? { error: codeError } : {})}
+                        />
+                    ) : null}
+                    <Box className="happy-agent-provider__key-actions">
+                        <Button
+                            disabled={busy || !props.onCancel}
+                            onClick={() => props.onCancel?.(props.providerId)}
+                            size="small"
+                            variant="ghost"
+                        >
+                            Cancel
+                        </Button>
+                        {authorization ? (
+                            <Button
+                                icon="open-external"
+                                onClick={() => open(authorization.url)}
+                                size="small"
+                                variant={authorization.acceptsCode ? "secondary" : "primary"}
+                            >
+                                Open sign-in page
+                            </Button>
+                        ) : null}
+                        {authorization?.acceptsCode ? (
+                            <Button
+                                disabled={!code.trim()}
+                                loading={subscription.pending === true}
+                                onClick={codeSubmit}
+                                size="small"
+                                variant="primary"
+                            >
+                                Finish sign-in
+                            </Button>
+                        ) : null}
+                    </Box>
+                </Box>
+            ) : subscription.signedIn ? (
+                <Box className="happy-agent-provider__key" data-state="ready">
+                    <Icon name="users" size={14} />
+                    <Box className="happy-agent-provider__model-text">
+                        <span className="happy-agent-provider__model-name">
+                            {subscription.account ?? `Signed in to ${subscription.name}`}
+                        </span>
+                        <span className="happy-agent-provider__key-meta">
+                            The team's subscription. Every agent on this server can use it.
+                        </span>
+                    </Box>
+                    <Button
+                        disabled={busy || !props.onSignIn}
+                        onClick={() => props.onSignIn?.(props.providerId)}
+                        size="small"
+                        variant="ghost"
+                    >
+                        Switch account
+                    </Button>
+                    <Button
+                        disabled={busy || !props.onSignOut}
+                        onClick={() => props.onSignOut?.(props.providerId)}
+                        size="small"
+                        variant="danger"
+                    >
+                        Sign out
+                    </Button>
+                </Box>
+            ) : (
+                <Box className="happy-agent-provider__key-add">
+                    <Box className="happy-agent-provider__model-text">
+                        {signIn?.status === "failed" ? (
+                            <span
+                                className="happy-agent-provider__key-error"
+                                data-happy-desktop-ui="happy-agent-provider-key-error"
+                                role="alert"
+                            >
+                                {signIn.error ?? signIn.message}
+                            </span>
+                        ) : (
+                            <span className="happy-agent-provider__key-meta">
+                                Sign in with the team's {subscription.name} subscription so every
+                                agent on this server can use it.
+                            </span>
+                        )}
+                    </Box>
+                    <Button
+                        disabled={busy || !props.onSignIn}
+                        loading={subscription.pending === true}
+                        onClick={() => props.onSignIn?.(props.providerId)}
+                        size="small"
+                        variant="secondary"
+                    >
+                        {signIn?.status === "failed"
+                            ? "Try again"
+                            : `Sign in to ${subscription.name}`}
+                    </Button>
+                </Box>
+            )}
         </Box>
     );
 }

@@ -819,6 +819,7 @@ function HappyAgentSettingsRoute() {
     return (
         <AppHappyAgentSettingsView
             appearance={context.appearance}
+            {...(context.externalLinkOpen ? { externalLinkOpen: context.externalLinkOpen } : {})}
             browserPasswordsAvailable={context.browserPasswordsAvailable ?? false}
             {...(context.cloudWebSession ? { cloudWebSession: context.cloudWebSession } : {})}
             update={context.update}

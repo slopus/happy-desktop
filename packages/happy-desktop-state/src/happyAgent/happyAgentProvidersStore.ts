@@ -3,6 +3,7 @@ import type { DaemonConfig, HappyAgentClient } from "@slopus/happy-agent-client"
 import type { UserError } from "../types.js";
 import {
     happyAgentProviderCredentialsProject,
+    type HappyAgentProviderCli,
     type HappyAgentProviderCredentialInput,
     type HappyAgentProviderCredentials,
     type HappyAgentProviderCredentialsApi,
@@ -25,6 +26,21 @@ export interface HappyAgentProviderEntry extends HappyAgentModelProvider {
     readonly credentials?: HappyAgentProviderCredentials & {
         readonly saving: ReadonlySet<string>;
     };
+    /**
+     * The team subscription a Happy Cloud server signs in to for this
+     * provider, such as a ChatGPT or Claude plan. Absent elsewhere.
+     */
+    readonly subscription?: HappyAgentProviderSubscription;
+}
+
+export interface HappyAgentProviderSubscription {
+    /** The vendor's name for what is signed in to, such as "Codex". */
+    readonly name: string;
+    readonly signIn: HappyAgentProviderCli["signIn"];
+    /** The current or last sign-in; its authorization says what to do next. */
+    readonly operation: HappyAgentProviderCli["operation"];
+    /** A start, code, or cancel this window sent that is not answered yet. */
+    readonly pending: boolean;
 }
 
 export interface HappyAgentProvidersSnapshot {
@@ -62,6 +78,14 @@ export interface HappyAgentProvidersStore {
     credentialEnabledUpdate(providerId: string, credentialId: string, enabled: boolean): void;
     /** Removes one team key; a refusal lands in `saveError`. */
     credentialRemove(providerId: string, credentialId: string): void;
+    /** Starts the team subscription's sign-in; a refusal lands in `saveError`. */
+    subscriptionSignIn(providerId: string): void;
+    /** Hands the waiting sign-in the code the vendor's page showed. */
+    subscriptionCodeSubmit(providerId: string, code: string): Promise<void>;
+    /** Stops the sign-in that is waiting. */
+    subscriptionSignInCancel(providerId: string): void;
+    /** Signs the team out of the subscription, removing its shared credential. */
+    subscriptionSignOut(providerId: string): void;
     [Symbol.dispose](): void;
 }
 
@@ -85,6 +109,8 @@ const EMPTY: HappyAgentProvidersSnapshot = { providers: [], loading: true };
  * stops the moment nobody is.
  */
 const PROVIDERS_POLL_INTERVAL_MS = 4_000;
+/** How often a sign-in the person is finishing is re-read, so it lands promptly. */
+const SIGN_IN_POLL_INTERVAL_MS = 1_500;
 
 export function happyAgentProvidersStoreCreate(
     deps: HappyAgentProvidersStoreDeps,
@@ -103,10 +129,36 @@ export function happyAgentProvidersStoreCreate(
     let credentialSettles: (() => void)[] = [];
     /** The team keys the server last reported, by provider. */
     let credentials: ReadonlyMap<string, HappyAgentProviderCredentials> = new Map();
+    /** The server's subscription sign-ins, by the provider each serves. */
+    let clis: ReadonlyMap<string, HappyAgentProviderCli> = new Map();
+    /** Providers whose sign-in request this window has not had answered. */
+    const cliPending = new Set<string>();
+    const subscriptionOf = (providerId: string): HappyAgentProviderSubscription | undefined => {
+        const cli = clis.get(providerId);
+        if (!cli) return undefined;
+        return {
+            name: cli.name,
+            signIn: cli.signIn,
+            operation: cli.operation,
+            pending: cliPending.has(providerId),
+        };
+    };
+    const subscriptionsEqual = (
+        left: HappyAgentProviderSubscription | undefined,
+        right: HappyAgentProviderSubscription | undefined,
+    ): boolean =>
+        left === right ||
+        (left !== undefined &&
+            right !== undefined &&
+            left.pending === right.pending &&
+            JSON.stringify(left) === JSON.stringify(right));
     const entryOf = (provider: HappyAgentModelProvider): HappyAgentProviderEntry => {
         const keys = credentials.get(provider.id);
+        const subscription = subscriptionOf(provider.id);
+        const { subscription: _previous, ...rest } = provider as HappyAgentProviderEntry;
         return {
-            ...provider,
+            ...rest,
+            ...(subscription ? { subscription } : {}),
             saving: saving.has(provider.id),
             ...(keys
                 ? {
@@ -130,10 +182,16 @@ export function happyAgentProvidersStoreCreate(
 
     const schedule = (): void => {
         if (disposed || listeners.size === 0 || timer !== undefined) return;
-        timer = setTimeout(() => {
-            timer = undefined;
-            load();
-        }, PROVIDERS_POLL_INTERVAL_MS);
+        const signingIn = [...clis.values()].some(
+            (cli) => cli.operation?.status === "running" || cli.operation?.status === "waiting",
+        );
+        timer = setTimeout(
+            () => {
+                timer = undefined;
+                load();
+            },
+            signingIn ? SIGN_IN_POLL_INTERVAL_MS : PROVIDERS_POLL_INTERVAL_MS,
+        );
     };
 
     /**
@@ -161,7 +219,8 @@ export function happyAgentProvidersStoreCreate(
             current.providers.map((provider) =>
                 provider.saving === saving.has(provider.id) &&
                 provider.credentials?.saving ===
-                    (credentialSaving.get(provider.id) ?? NO_CREDENTIALS_SAVING)
+                    (credentialSaving.get(provider.id) ?? NO_CREDENTIALS_SAVING) &&
+                subscriptionsEqual(provider.subscription, subscriptionOf(provider.id))
                     ? provider
                     : entryOf(provider),
             ),
@@ -176,10 +235,17 @@ export function happyAgentProvidersStoreCreate(
         const currentController = new AbortController();
         controller = currentController;
         void deps.client.getConfig({ signal: currentController.signal }).then(
-            (response) => {
+            async (response) => {
                 if (disposed || controller !== currentController) return;
-                controller = undefined;
                 settle(response.config);
+                // Only a Happy Cloud server signs subscriptions in for its team.
+                const api = deps.credentials;
+                if (api && credentials.size > 0) {
+                    const read = await api.providerClisRead().catch(() => undefined);
+                    if (disposed || controller !== currentController) return;
+                    if (read) clisAccept(read);
+                }
+                controller = undefined;
                 schedule();
             },
             (error: unknown) => {
@@ -199,6 +265,50 @@ export function happyAgentProvidersStoreCreate(
             },
         );
     };
+
+    /** Keeps the newer of what is known and what arrived, and redraws what changed. */
+    function clisAccept(read: readonly HappyAgentProviderCli[]): void {
+        const next = new Map(clis);
+        for (const cli of read) {
+            if (cli.providerId === null) continue;
+            const known = next.get(cli.providerId);
+            if (!known || known.version <= cli.version) next.set(cli.providerId, cli);
+        }
+        clis = next;
+        savingPublish();
+    }
+
+    /** Sends one sign-in request for a provider and takes in the sign-in it answers with. */
+    function cliSend(
+        providerId: string,
+        request: (
+            api: HappyAgentProviderCredentialsApi,
+            cliId: string,
+        ) => Promise<HappyAgentProviderCli>,
+    ): Promise<void> {
+        const api = deps.credentials;
+        const cli = clis.get(providerId);
+        if (disposed || !api || !cli)
+            return Promise.reject(happyAgentUserError("Not available here."));
+        cliPending.add(providerId);
+        const { saveError: _cleared, ...rest } = store.getState();
+        store.setState(rest, true);
+        savingPublish();
+        return request(api, cli.id).then(
+            (answer) => {
+                cliPending.delete(providerId);
+                if (disposed) return;
+                clisAccept([answer]);
+                timerCancel();
+                schedule();
+            },
+            (error: unknown) => {
+                cliPending.delete(providerId);
+                if (!disposed) savingPublish();
+                throw happyAgentUserError(error);
+            },
+        );
+    }
 
     /** Reads the configuration again at once, after a change the server accepted. */
     function reread(): void {
@@ -302,6 +412,31 @@ export function happyAgentProvidersStoreCreate(
                 api.credentialEnabledUpdate(providerId, credentialId, enabled),
             );
         },
+        subscriptionSignIn(providerId) {
+            if (cliPending.has(providerId)) return;
+            void cliSend(providerId, (api, cliId) =>
+                api.signInStart(cliId, crypto.randomUUID()),
+            ).catch((error: unknown) => {
+                if (!disposed) store.setState({ saveError: happyAgentUserError(error) }, false);
+            });
+        },
+        subscriptionCodeSubmit(providerId, code) {
+            return cliSend(providerId, (api, cliId) =>
+                api.signInCodeSubmit(cliId, code, crypto.randomUUID()),
+            );
+        },
+        subscriptionSignInCancel(providerId) {
+            void cliSend(providerId, (api, cliId) =>
+                api.signInCancel(cliId, crypto.randomUUID()),
+            ).catch((error: unknown) => {
+                if (!disposed) store.setState({ saveError: happyAgentUserError(error) }, false);
+            });
+        },
+        subscriptionSignOut(providerId) {
+            credentialChange(providerId, "default", (api) =>
+                api.credentialRemove(providerId, "default"),
+            );
+        },
         credentialRemove(providerId, credentialId) {
             credentialChange(providerId, credentialId, (api) =>
                 api.credentialRemove(providerId, credentialId),
@@ -333,5 +468,9 @@ export const happyAgentProvidersStoreNoop: HappyAgentProvidersStore = {
     credentialAdd: () => Promise.reject(new Error("Not available here.")),
     credentialEnabledUpdate: () => undefined,
     credentialRemove: () => undefined,
+    subscriptionSignIn: () => undefined,
+    subscriptionCodeSubmit: () => Promise.reject(new Error("Not available here.")),
+    subscriptionSignInCancel: () => undefined,
+    subscriptionSignOut: () => undefined,
     [Symbol.dispose]: () => undefined,
 };

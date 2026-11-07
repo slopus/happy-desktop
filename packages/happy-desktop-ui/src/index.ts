@@ -1088,6 +1088,7 @@ export {
     type HappyAgentProviderKeyRow,
     type HappyAgentProviderKeyState,
     type HappyAgentProviderKeys,
+    type HappyAgentProviderSubscriptionRow,
     type HappyAgentProviderSettingsProps,
     type HappyAgentProviderStatus,
 } from "./pages/settings/HappyAgentProviderSettings";
