@@ -34,7 +34,7 @@ export function desktopTopologyTarget(topology: DesktopTopology): DesktopTopolog
         detail: `System Happy Agent · ${topology.id.slice(-6)}`,
         id: topology.id,
         kind: "local",
-        label: "This Mac",
+        label: "This computer",
         mode: "local",
     };
 }

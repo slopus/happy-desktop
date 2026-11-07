@@ -446,11 +446,11 @@ function unmatched(
     const account = view.account;
     const state =
         account.status === "signedIn"
-            ? `This Mac is signed in as ${account.email}.`
+            ? `This computer is signed in as ${account.email}.`
             : account.status === "signingIn"
               ? "A sign-in from Happy is still open in your browser."
               : account.status === "unavailable"
-                ? "Happy Agent on this Mac isn’t ready to sign in."
+                ? "Happy Agent on this computer isn’t ready to sign in."
                 : undefined;
     return {
         body: (

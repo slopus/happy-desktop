@@ -15,7 +15,7 @@ export type HappyAgentDevicesPanelProps = {
     /** One workspace's bridges, as its store projects them. */
     devices: HappyAgentDeviceBridgesSnapshot;
     onUsbAttach: (busId: string) => void;
-    /** Programs in the workspace reach `localPort` on this Mac at `workspacePort`. */
+    /** Programs in the workspace reach `localPort` on this computer at `workspacePort`. */
     onWorkspaceToLocalOpen: (localPort: number, workspacePort: number) => void;
     /** This Mac reaches `workspacePort` in the workspace at `localPort`. */
     onLocalToWorkspaceOpen: (workspacePort: number, localPort: number) => void;
@@ -140,7 +140,7 @@ function bridgeRow(
             bridge.heldInterfaces.length === 0
                 ? []
                 : [
-                      `This Mac kept interface${bridge.heldInterfaces.length === 1 ? "" : "s"} ${bridge.heldInterfaces.join(", ")}`,
+                      `This computer kept interface${bridge.heldInterfaces.length === 1 ? "" : "s"} ${bridge.heldInterfaces.join(", ")}`,
                   ];
         return (
             <Row
@@ -161,7 +161,7 @@ function bridgeRow(
     if (bridge.kind === "workspaceToLocal") {
         const workspacePort = bridge.workspacePort === null ? "…" : String(bridge.workspacePort);
         // Where another device sends it is that device's to know.
-        const local = bridge.localPort === null ? "" : ` → Mac :${String(bridge.localPort)}`;
+        const local = bridge.localPort === null ? "" : ` → Computer :${String(bridge.localPort)}`;
         return (
             <Row
                 detail={[status, ...connections, ...elsewhere]}
@@ -180,7 +180,7 @@ function bridgeRow(
             error={bridge.error}
             icon="arrow-forward-outline"
             key={bridge.id}
-            title={`Mac :${String(bridge.localPort)} → Workspace :${String(bridge.workspacePort)}`}
+            title={`Computer :${String(bridge.localPort)} → Workspace :${String(bridge.workspacePort)}`}
             tone={bridge.status === "failed" ? "failed" : undefined}
             trailing={close}
         />
@@ -305,7 +305,9 @@ export function HappyAgentDevicesPanel(props: HappyAgentDevicesPanelProps) {
     };
     const usbList = (bluetooth: boolean, empty: string): ReactNode => {
         if (!usb)
-            return <p className="happy-agent-devices__note">Looking for devices on this Mac…</p>;
+            return (
+                <p className="happy-agent-devices__note">Looking for devices on this computer…</p>
+            );
         if (!usb.available) return <p className="happy-agent-devices__note">{usb.reason}</p>;
         const listed = usb.devices.filter((device) => device.bluetooth === bluetooth);
         if (listed.length === 0) return <p className="happy-agent-devices__note">{empty}</p>;
@@ -345,11 +347,11 @@ export function HappyAgentDevicesPanel(props: HappyAgentDevicesPanelProps) {
                                 />
                                 <Capability
                                     capability={capabilities.workspaceToLocal}
-                                    label="The workspace can reach this Mac"
+                                    label="The workspace can reach this computer"
                                 />
                                 <Capability
                                     capability={capabilities.localToWorkspace}
-                                    label="This Mac can reach the workspace"
+                                    label="This computer can reach the workspace"
                                 />
                             </ul>
                         ) : (
@@ -363,7 +365,7 @@ export function HappyAgentDevicesPanel(props: HappyAgentDevicesPanelProps) {
                     {devices.host.status === "appOutdated" ? null : (
                         <>
                             <Section title="USB devices">
-                                {usbList(false, "No USB devices are plugged into this Mac.")}
+                                {usbList(false, "No USB devices are plugged into this computer.")}
                             </Section>
                             <Section
                                 note="An attached adapter becomes the workspace’s own Bluetooth controller. A spare USB adapter works best: macOS keeps the one it is using."
@@ -371,30 +373,30 @@ export function HappyAgentDevicesPanel(props: HappyAgentDevicesPanelProps) {
                             >
                                 {usbList(
                                     true,
-                                    "No USB Bluetooth adapters are plugged into this Mac.",
+                                    "No USB Bluetooth adapters are plugged into this computer.",
                                 )}
                             </Section>
-                            <Section title="Workspace to this Mac">
+                            <Section title="Workspace to this computer">
                                 <PortForm
                                     description={(local, workspace) =>
-                                        `Programs in the workspace connect to 127.0.0.1:${workspace} and reach localhost:${local} on this Mac.`
+                                        `Programs in the workspace connect to 127.0.0.1:${workspace} and reach localhost:${local} on this computer.`
                                     }
                                     disabled={
                                         !actionable ||
                                         capabilities?.workspaceToLocal.available !== true
                                     }
                                     error={devices.workspaceToLocal.error}
-                                    firstLabel="This Mac"
+                                    firstLabel="This computer"
                                     id="happy-agent-devices-workspace-to-local"
                                     onSubmit={props.onWorkspaceToLocalOpen}
                                     pending={devices.workspaceToLocal.pending}
                                     secondLabel="Workspace"
                                 />
                             </Section>
-                            <Section title="This Mac to the workspace">
+                            <Section title="This computer to the workspace">
                                 <PortForm
                                     description={(workspace, local) =>
-                                        `Open localhost:${local} on this Mac to reach port ${workspace} in the workspace.`
+                                        `Open localhost:${local} on this computer to reach port ${workspace} in the workspace.`
                                     }
                                     disabled={
                                         !actionable ||
@@ -405,7 +407,7 @@ export function HappyAgentDevicesPanel(props: HappyAgentDevicesPanelProps) {
                                     id="happy-agent-devices-local-to-workspace"
                                     onSubmit={props.onLocalToWorkspaceOpen}
                                     pending={devices.localToWorkspace.pending}
-                                    secondLabel="This Mac"
+                                    secondLabel="This computer"
                                 />
                             </Section>
                         </>

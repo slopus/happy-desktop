@@ -59,7 +59,7 @@ export function happyAgentConnectionsStoreCreate(
         (item) => item.remoteId !== undefined && item.id === `connection:${item.remoteId}`,
     );
     let snapshot: HappyAgentConnectionsSnapshot = {
-        items: [{ id: "local", name: "This Mac" }, ...remembered],
+        items: [{ id: "local", name: "This computer" }, ...remembered],
         selectedId: "local",
         reordering: false,
     };
