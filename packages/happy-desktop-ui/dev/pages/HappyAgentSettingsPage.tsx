@@ -10,6 +10,7 @@ import {
     HappyAgentMobileSettings,
     HappyAgentProviderSettings,
     HappyAgentCredentialImport,
+    HappyAgentMembersSettings,
     type HappyAgentCredentialImportRow,
     HappyAgentProfilerSettings,
     HappyAgentProfileSettings,
@@ -1390,6 +1391,81 @@ export function HappyAgentSettingsBlueprintPage() {
                         onModelEnabledChange={noop}
                         onProviderEnabledChange={noop}
                         providers={cloudProviders}
+                    />
+                </HappyAgentSettingsShell>
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="Happy Cloud members, seen by an owner: roles to change, an invite code shown once, a pending invite, and leaving or deleting the server"
+                label="Happy Agent settings — members"
+                number="03e"
+                screen="members"
+            >
+                <HappyAgentSettingsShell
+                    activeCategoryId="members"
+                    categories={[...categories, { icon: "users", id: "members", label: "Members" }]}
+                    description="Who is on this server and what they may do"
+                    onCategorySelect={noop}
+                    onClose={noop}
+                    title="Members"
+                >
+                    <HappyAgentMembersSettings
+                        inviteCreated={{
+                            code: "K7QF-29XM",
+                            roleName: "Member",
+                            expires: "Expires in 7 days",
+                        }}
+                        inviteCreating={false}
+                        invites={[
+                            {
+                                id: "i1",
+                                roleName: "Admin",
+                                expires: "Expires in 3 days",
+                                saving: false,
+                            },
+                        ]}
+                        loading={false}
+                        manage
+                        members={[
+                            {
+                                id: "a1",
+                                name: "Ada Lovelace",
+                                roleId: "owner",
+                                joined: "Joined Nov 7",
+                                self: true,
+                                saving: false,
+                            },
+                            {
+                                id: "a2",
+                                name: "Grace Hopper",
+                                roleId: "admin",
+                                joined: "Joined Nov 7",
+                                self: false,
+                                saving: false,
+                            },
+                            {
+                                id: "a3",
+                                name: "Alan Turing",
+                                roleId: "member",
+                                joined: "Joined Nov 8",
+                                self: false,
+                                saving: true,
+                            },
+                        ]}
+                        onDelete={() => Promise.resolve()}
+                        onInviteCreate={noop}
+                        onInviteCreatedDismiss={noop}
+                        onInviteRevoke={noop}
+                        onLeave={() => Promise.resolve()}
+                        onRemove={noop}
+                        onRoleChange={noop}
+                        owner
+                        roles={[
+                            { id: "owner", name: "Owner" },
+                            { id: "admin", name: "Admin" },
+                            { id: "member", name: "Member" },
+                            { id: "viewer", name: "Viewer" },
+                        ]}
+                        serverName="acme"
                     />
                 </HappyAgentSettingsShell>
             </FullScreenSpecimen>

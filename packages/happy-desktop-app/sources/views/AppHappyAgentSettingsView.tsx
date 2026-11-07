@@ -54,6 +54,8 @@ import {
     type HappyAgentProviderUsageStore,
     happyAgentProvidersStoreNoop,
     happyAgentCredentialImportStoreNoop,
+    happyAgentMembersStoreNoop,
+    type HappyAgentMembersSnapshot,
     type HappyAgentCredentialImportSnapshot,
     happyAgentSecretsStoreNoop,
     happyAgentVoiceSettingsStoreNoop,
@@ -82,6 +84,8 @@ import {
     happyAgentMobileLinkHeading,
     HappyAgentProviderSettings,
     HappyAgentCredentialImport,
+    HappyAgentMembersSettings,
+    Banner,
     type HappyAgentCredentialImportRow,
     HappyAgentProfilerSettings,
     HappyAgentProfileSettings,
@@ -137,6 +141,8 @@ export const HAPPY_AGENT_SETTINGS_CATEGORIES: readonly HappyAgentSettingsCategor
     { icon: "lock", id: "secrets", label: "Secrets" },
     { icon: "lock", id: "passwords", label: "Passwords" },
     { icon: "globe", id: "providers", label: "Providers" },
+    // Who is on a Happy Cloud server; offered only there.
+    { icon: "users", id: "members", label: "Members" },
     // Usage sits after Providers because it is the same accounts read the other
     // way round: which of them exist, then what each has spent.
     { icon: "zap", id: "usage", label: "Usage" },
@@ -368,6 +374,7 @@ const CATEGORY_DESCRIPTIONS: Record<string, string> = {
     secrets: "Environment variables for agents",
     passwords: "Saved logins from your browsers",
     providers: "Model providers and the models they offer",
+    members: "Who is on this server and what they may do",
     usage: "What each provider account has spent",
 };
 
@@ -583,11 +590,6 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
     );
     const section = props.section;
     const stateOpen = section === "debug";
-    // A category the host cannot serve is left out of the list rather than
-    // shown and refused.
-    const categories = HAPPY_AGENT_SETTINGS_CATEGORIES.filter(
-        (category) => category.id !== "servers" || props.servers !== undefined,
-    );
     const titleShimmerStore = props.titleShimmer ?? titleShimmerStoreNoop;
     const titleShimmer = useSyncExternalStore(
         titleShimmerStore.subscribe,
@@ -618,6 +620,14 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
         props.happyAgents.get,
     );
     const host = hostHappyAgent(directory);
+    const membersStore = host?.session?.members?.();
+    // A category the host cannot serve is left out of the list rather than
+    // shown and refused.
+    const categories = HAPPY_AGENT_SETTINGS_CATEGORIES.filter(
+        (category) =>
+            (category.id !== "servers" || props.servers !== undefined) &&
+            (category.id !== "members" || membersStore !== undefined),
+    );
     const hostAvailability = host?.session
         ? happyAgentAvailabilityProject(host.session.connection.get(), true, {
               status: host.status,
@@ -753,6 +763,14 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
     // looks for nothing until the person asks it to.
     const credentialImportStore =
         section === "providers" ? host?.session?.credentialImport?.() : undefined;
+    // The member list is read, and re-read every few seconds, only while
+    // Members is on screen.
+    const membersShown = section === "members" ? membersStore : undefined;
+    const members = useSyncExternalStore(
+        (membersShown ?? happyAgentMembersStoreNoop).subscribe,
+        (membersShown ?? happyAgentMembersStoreNoop).get,
+        (membersShown ?? happyAgentMembersStoreNoop).get,
+    );
     const credentialImport = useSyncExternalStore(
         (credentialImportStore ?? happyAgentCredentialImportStoreNoop).subscribe,
         (credentialImportStore ?? happyAgentCredentialImportStoreNoop).get,
@@ -1456,6 +1474,67 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                         {...(unavailable === undefined ? {} : { unavailable })}
                     />
                 </>
+            ) : section === "members" ? (
+                membersShown ? (
+                    <HappyAgentMembersSettings
+                        {...(members.error ? { error: members.error.message } : {})}
+                        inviteCreating={members.inviteCreating}
+                        {...(members.inviteCreated
+                            ? {
+                                  inviteCreated: {
+                                      code: members.inviteCreated.code,
+                                      roleName: roleNameOf(members, members.inviteCreated.roleId),
+                                      expires: expiresText(members.inviteCreated.expiresAt),
+                                  },
+                              }
+                            : {})}
+                        invites={members.invites.map((invite) => ({
+                            id: invite.id,
+                            roleName: roleNameOf(members, invite.roleId),
+                            expires: [
+                                ...(invite.uses === 0
+                                    ? []
+                                    : [
+                                          invite.uses === 1
+                                              ? "Used once"
+                                              : `Used ${String(invite.uses)} times`,
+                                      ]),
+                                expiresText(invite.expiresAt),
+                            ].join(" · "),
+                            saving: invite.saving,
+                        }))}
+                        loading={members.loading}
+                        manage={members.manage}
+                        members={members.members.map((member) => ({
+                            id: member.id,
+                            name: member.name ?? "Someone who hasn't signed in yet",
+                            roleId: member.roleId,
+                            joined: `Joined ${new Date(member.joinedAt).toLocaleDateString([], {
+                                month: "short",
+                                day: "numeric",
+                            })}`,
+                            self: member.self,
+                            saving: member.saving,
+                        }))}
+                        onDelete={(confirm) => membersShown.serverDelete(confirm)}
+                        onInviteCreate={(roleId) => membersShown.inviteCreate(roleId)}
+                        onInviteCreatedDismiss={() => membersShown.inviteCreatedDismiss()}
+                        onInviteRevoke={(inviteId) => membersShown.inviteRevoke(inviteId)}
+                        onLeave={() => membersShown.serverLeave()}
+                        onRemove={(memberId) => membersShown.memberRemove(memberId)}
+                        onRoleChange={(memberId, roleId) =>
+                            membersShown.memberRoleUpdate(memberId, roleId)
+                        }
+                        owner={members.roleId === "owner"}
+                        roles={members.roles}
+                        {...(members.saveError ? { saveError: members.saveError.message } : {})}
+                        serverName={members.serverName}
+                    />
+                ) : (
+                    <Banner tone="neutral" title="No members here">
+                        Members belong to a Happy Cloud server. Open one to see who is on it.
+                    </Banner>
+                )
             ) : section === "passwords" ? (
                 <HappyAgentPasswordSettings available={props.browserPasswordsAvailable ?? false} />
             ) : section === "secrets" ? (
@@ -2146,4 +2225,17 @@ function providerTypeName(provider: HappyAgentProviderEntry): { typeName?: strin
         providerAccountName(provider.id, provider.name),
     );
     return typeName === undefined ? {} : { typeName };
+}
+
+/** A role's name, or its ID when the team's roles don't list it. */
+function roleNameOf(members: HappyAgentMembersSnapshot, roleId: string): string {
+    return members.roles.find((role) => role.id === roleId)?.name ?? roleId;
+}
+
+/** "Expires in 3 days", "Expires in 5 hours" or "Expires soon". */
+function expiresText(expiresAt: number): string {
+    const hours = Math.floor((expiresAt - Date.now()) / 3_600_000);
+    if (hours >= 48) return `Expires in ${String(Math.floor(hours / 24))} days`;
+    if (hours >= 2) return `Expires in ${String(hours)} hours`;
+    return "Expires soon";
 }

@@ -91,7 +91,6 @@ export function desktopCloudConnectStoreCreate(input: {
             id: server.id,
             displayName: server.displayName,
             name: server.name,
-            role: server.role,
             ...(server.image
                 ? {
                       image: {

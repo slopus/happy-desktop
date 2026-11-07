@@ -120,6 +120,11 @@ import {
     type HappyAgentCredentialImportStore,
 } from "./happyAgentCredentialImportStore.js";
 import {
+    happyAgentMembersStoreCreate,
+    type HappyAgentMembersStore,
+} from "./happyAgentMembersStore.js";
+import type { HappyCloudRequest } from "./happyAgentProviderCredentials.js";
+import {
     happyAgentVoiceSettingsStoreCreate,
     type HappyAgentVoiceSettingsStore,
 } from "./happyAgentVoiceSettingsStore.js";
@@ -228,6 +233,11 @@ export interface HappyAgentWorkspaceClient {
      * has one; elsewhere this is undefined.
      */
     credentialImport(): HappyAgentCredentialImportStore | undefined;
+    /**
+     * Settings › Members: who is on a Happy Cloud server, their roles and
+     * invites. Undefined anywhere but a Happy Cloud server.
+     */
+    members(): HappyAgentMembersStore | undefined;
     /**
      * The voice controller and prompt this machine's calls start with, as the
      * Voice settings read and change them. Materialized on first access and
@@ -437,6 +447,12 @@ export interface HappyAgentWorkspaceClientDeps {
     readonly providerCredentials?: HappyAgentProviderCredentialsApi;
     /** The desktop shell's credential import, for a Happy Cloud server. */
     readonly credentialImportHost?: HappyAgentCredentialImportHost;
+    /** A Happy Cloud server's member routes, and how this window drops the server. */
+    readonly cloudMembers?: {
+        readonly serverName: string;
+        readonly request: HappyCloudRequest;
+        readonly serverForget: () => Promise<void>;
+    };
     readonly cloudHost: HappyAgentCloudHost;
     readonly connection: HappyAgentConnection;
     readonly hostServices: HappyAgentHostServices;
@@ -616,6 +632,7 @@ export function happyAgentWorkspaceClientCreate(
     let profileStore: HappyAgentProfileStore | undefined;
     let providersStore: HappyAgentProvidersStore | undefined;
     let credentialImportStore: HappyAgentCredentialImportStore | undefined;
+    let membersStore: HappyAgentMembersStore | undefined;
     let voiceSettingsStore: HappyAgentVoiceSettingsStore | undefined;
     let taskSettingsStore: HappyAgentTaskSettingsStore | undefined;
     let surfaceSettingsStore: HappyAgentSurfaceSettingsStore | undefined;
@@ -993,6 +1010,18 @@ export function happyAgentWorkspaceClientCreate(
             });
             return credentialImportStore;
         },
+        members() {
+            if (disposed) throw new Error("The Happy Agent client is disposed.");
+            const cloud = deps.cloudMembers;
+            if (!cloud) return undefined;
+            membersStore ??= happyAgentMembersStoreCreate({
+                serverName: cloud.serverName,
+                request: cloud.request,
+                selfUserId: async () => (await deps.client.getProfile()).profile.userId ?? null,
+                serverForget: cloud.serverForget,
+            });
+            return membersStore;
+        },
         taskSettings() {
             if (disposed) throw new Error("The Happy Agent client is disposed.");
             taskSettingsStore ??= happyAgentTaskSettingsStoreCreate({
@@ -1182,6 +1211,8 @@ export function happyAgentWorkspaceClientCreate(
             providersStore = undefined;
             credentialImportStore?.[Symbol.dispose]();
             credentialImportStore = undefined;
+            membersStore?.[Symbol.dispose]();
+            membersStore = undefined;
             voiceSettingsStore?.[Symbol.dispose]();
             voiceSettingsStore = undefined;
             taskSettingsStore?.[Symbol.dispose]();

@@ -692,12 +692,31 @@ export function happyAgentDirectoryStoreCreate(
         };
     };
 
+    function cloudForget(connectionId: string): void {
+        const wanted = new Set(cloudWanted);
+        wanted.delete(connectionId);
+        cloudWanted = wanted;
+        sessionsReconcile();
+    }
+
+    /** Removes a Happy Cloud server the reader no longer belongs to. */
+    const cloudServerForgetOf = (connectionId: string) => async (): Promise<void> => {
+        const name = happyCloudServerNameOf(connectionId);
+        if (name === undefined || !bridge.happyCloud) return;
+        await bridge.happyCloud.serverRemove(name);
+        cloudForget(connectionId);
+    };
+
     const connectionOpen = (
         happyAgent: LocalHappyAgent,
         client: HappyAgentClient,
         hostServicesUrl: string,
     ): void => {
         const happyAgentHttpUrl = client.endpoint.replace(/\/$/u, "");
+        const cloudName =
+            happyAgent.entry.remoteId === undefined
+                ? undefined
+                : happyCloudServerNameOf(happyAgent.entry.remoteId);
         connectionClose(happyAgent);
         happyAgent.url = happyAgentHttpUrl;
         happyAgent.connection = happyAgentConnectionOpen({
@@ -720,15 +739,18 @@ export function happyAgentDirectoryStoreCreate(
             // and ports can reach; the local one already has them.
             deviceBridges: happyAgent.entry.remoteId !== undefined,
             // Only the shell reads this computer's credentials, and only a
-            // Happy Cloud server takes them.
-            ...(bridge.happyCloud &&
-            happyAgent.entry.remoteId !== undefined &&
-            happyCloudServerNameOf(happyAgent.entry.remoteId) !== undefined
+            // Happy Cloud server takes them. Leaving or deleting the server
+            // takes it out of this window, as removing it from the rail does.
+            ...(bridge.happyCloud && cloudName !== undefined && happyAgent.entry.remoteId
                 ? {
                       credentialImportHost: desktopCredentialImportHostCreate(
                           bridge.happyCloud,
                           happyAgent.entry.remoteId,
                       ),
+                      cloudServer: {
+                          name: cloudName,
+                          forget: cloudServerForgetOf(happyAgent.entry.remoteId),
+                      },
                   }
                 : {}),
             happyAgentHttpUrl,
@@ -1206,12 +1228,7 @@ export function happyAgentDirectoryStoreCreate(
                                 roster?.connectionSelect(item.id);
                                 return { ok: true };
                             },
-                            happyAgentCloudForget(connectionId: string) {
-                                const wanted = new Set(cloudWanted);
-                                wanted.delete(connectionId);
-                                cloudWanted = wanted;
-                                sessionsReconcile();
-                            },
+                            happyAgentCloudForget: cloudForget,
                         }
                       : {}),
               }

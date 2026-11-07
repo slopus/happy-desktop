@@ -30,14 +30,12 @@ const ACME = {
     id: "s1",
     displayName: "Acme Corp",
     name: "acme",
-    role: "owner" as const,
     image: { thumbhash: "HAgGXxBVauaQSKZWmNmKFmhmhjAoCYMC" },
 };
 const GUILD = {
     id: "s2",
     displayName: "Design Guild",
     name: "design-guild",
-    role: "member" as const,
 };
 
 const SPECIMENS: readonly {

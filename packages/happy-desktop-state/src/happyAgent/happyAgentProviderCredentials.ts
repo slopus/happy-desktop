@@ -267,17 +267,19 @@ export function happyAgentProviderCredentialsProject(
 }
 
 /**
- * The provider key routes over a connection's own HTTP transport: the
- * endpoint its client uses, with the same bearer. A refusal becomes a
- * `UserError` carrying the server's own words.
+ * One request to a Happy Cloud route over a connection's own HTTP transport:
+ * the endpoint its client uses, with the same bearer. Answers the parsed body,
+ * or rejects with a `UserError` carrying the server's own words and `code`.
  */
-export function happyAgentProviderCredentialsApiCreate(options: {
+export type HappyCloudRequest = (method: string, path: string, body?: unknown) => Promise<unknown>;
+
+export function happyCloudRequestCreate(options: {
     readonly endpoint: string;
     readonly token: string;
     readonly fetch?: typeof fetch;
-}): HappyAgentProviderCredentialsApi {
+}): HappyCloudRequest {
     const base = options.endpoint.replace(/\/$/u, "");
-    const send = async (method: string, path: string, body?: unknown): Promise<unknown> => {
+    return async (method: string, path: string, body?: unknown): Promise<unknown> => {
         const request = options.fetch ?? fetch;
         let response: Response;
         try {
@@ -308,6 +310,19 @@ export function happyAgentProviderCredentialsApiCreate(options: {
                   : undefined,
         );
     };
+}
+
+/**
+ * The provider key routes over a connection's own HTTP transport: the
+ * endpoint its client uses, with the same bearer. A refusal becomes a
+ * `UserError` carrying the server's own words.
+ */
+export function happyAgentProviderCredentialsApiCreate(options: {
+    readonly endpoint: string;
+    readonly token: string;
+    readonly fetch?: typeof fetch;
+}): HappyAgentProviderCredentialsApi {
+    const send = happyCloudRequestCreate(options);
     const credentials = (providerId: string): string =>
         `v0/providers/${encodeURIComponent(providerId)}/credentials`;
     const cliOf = (answer: unknown): HappyAgentProviderCli => {

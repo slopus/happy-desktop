@@ -12,7 +12,6 @@ export interface CloudConnectServer {
     readonly displayName: string;
     /** The server's handle, shown under its title as `@name`. */
     readonly name: string;
-    readonly role: "owner" | "member";
     /**
      * The server's picture. The ThumbHash is painted at once and the bytes
      * over it once `url` is known. Absent: the generated initials tile.
@@ -319,9 +318,6 @@ export function CloudConnectScreen(props: CloudConnectScreenProps) {
                                                         </span>
                                                         <span className="happy-cloud-connect__server-detail">
                                                             @{server.name}
-                                                            {server.role === "owner"
-                                                                ? " · Owner"
-                                                                : ""}
                                                         </span>
                                                     </span>
                                                 </button>

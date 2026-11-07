@@ -677,6 +677,8 @@ export interface AppHappyAgentSession {
      * computer to the server. Absent, or answering undefined, where there is
      * no such import: anywhere but a Happy Cloud server reached from a desktop.
      */
+    /** Settings › Members, on a Happy Cloud server; absent or undefined elsewhere. */
+    readonly members?: () => import("happy-desktop-state").HappyAgentMembersStore | undefined;
     readonly credentialImport?: () =>
         | import("happy-desktop-state").HappyAgentCredentialImportStore
         | undefined;
