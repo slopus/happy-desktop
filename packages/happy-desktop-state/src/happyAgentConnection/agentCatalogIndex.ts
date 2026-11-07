@@ -398,6 +398,17 @@ const OWNER_LISTS = {
     project: "projects",
 } as const satisfies Record<keyof AgentCatalogOwners, keyof AgentCatalog>;
 
+/** The first task rooted at this agent, not a task that only holds it as a subtask. */
+export function agentRootTask(index: AgentCatalogIndex, agentId: string): Task | undefined {
+    const { bots, tasks } = index.catalog;
+    let first = tasks.length;
+    for (const rank of index.holders.get(agentId) ?? []) {
+        const at = rank - bots.length;
+        if (at >= 0 && at < first && tasks[at]!.agent.id === agentId) first = at;
+    }
+    return tasks[first];
+}
+
 /** Names the project of every workspace and project whose trees hold `agentId`. */
 export function agentHolderProjects(
     index: AgentCatalogIndex,

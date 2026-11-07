@@ -3,6 +3,7 @@ import {
     agentCatalogOwnerUpdate,
     agentCatalogStore,
     agentHolderProjects,
+    agentRootTask,
     type AgentCatalogIndex,
     type AgentCatalogOwners,
 } from "./agentCatalogIndex.js";
@@ -966,8 +967,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         if (entry.agent === undefined || config === undefined) return undefined;
         // A bot, or a task nobody else owns, is the reader's: its stories are theirs.
         const { id } = entry.agent;
-        const owner =
-            groupsStore.getState().tasks.find((task) => task.agent.id === id)?.ownerUserId ?? null;
+        const owner = agentRootTask(agentIndexCurrent(), id)?.ownerUserId ?? null;
         return {
             agent: entry.agent,
             config,
