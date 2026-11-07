@@ -130,10 +130,17 @@ export function happyAgentPermissionLabel(mode: HappyAgentPermissionMode): strin
 
 /** Display names for the provider types the daemon configures. */
 const SERVICE_NAMES: Readonly<Record<string, string>> = {
-    bedrock: "Bedrock",
+    anthropic: "Anthropic",
+    bedrock: "Amazon Bedrock",
     claude: "Claude",
+    "claude-code": "Claude Code",
+    claude_code: "Claude Code",
     codex: "Codex",
     grok: "Grok",
+    openai: "OpenAI",
+    openai_compatible: "OpenAI-compatible",
+    "openai-compatible": "OpenAI-compatible",
+    xai: "xAI",
 };
 
 /**

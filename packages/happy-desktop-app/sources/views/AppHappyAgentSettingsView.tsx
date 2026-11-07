@@ -2000,7 +2000,11 @@ function providerRows(
             name: model.name,
         })),
         name: providerAccountName(provider.id, provider.name),
-        typeName: happyAgentServiceName(provider.type),
+        // The service is named only when the account's own name doesn't
+        // already say it, so a provider never reads "Grok · Grok".
+        ...(happyAgentServiceName(provider.type) === providerAccountName(provider.id, provider.name)
+            ? {}
+            : { typeName: happyAgentServiceName(provider.type) }),
         saving: provider.saving,
         serviceTiers: [
             ...new Set(
