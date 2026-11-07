@@ -65,6 +65,7 @@ import {
     type AppCloudWebSession,
     HAPPY_AGENT_SETTINGS_DEFAULT_CATEGORY,
     happyAgentSettingsCategoryExists,
+    happyAgentSettingsSectionOf,
     HAPPY_AGENT_SETTINGS_MOVED_CATEGORIES,
     type AppHappyAgentDaemonStore,
     type AppHappyAgentDebugStore,
@@ -1002,6 +1003,12 @@ export function happyAgentRouterHappyLinkOpen(
     if (link.type === "file") {
         const file = happyAgentFileLinkParse(url);
         if (file !== undefined) session.workspace.fileLinkOpen(file, fileTabKind(file.path));
+        return;
+    }
+    if (link.type === "settings") {
+        const section = happyAgentSettingsSectionOf(link.page);
+        if (section !== undefined)
+            void router.navigate({ params: { section }, to: "/settings/$section" });
         return;
     }
     const reference = link.reference;

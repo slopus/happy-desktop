@@ -356,9 +356,11 @@ export {
     type MessageListRowHeightMismatch,
 } from "./messageListRowHeightCheck";
 export {
+    MessageSettingsLinksContext,
     type LinkOpenHandler,
     type LinkOpenPlacement,
     type MessageGenerationStatus,
+    type MessageSettingsLinks,
 } from "./MessageMarkdown";
 export { type MessageReferences, type MessageReferenceView } from "./messageReferences";
 export { Lightbox, type LightboxProps } from "./Lightbox";

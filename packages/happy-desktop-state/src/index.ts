@@ -215,7 +215,9 @@ export type {
 // The Happy link grammar is the daemon client's; the app reads it from here.
 export {
     HAPPY_REFERENCE_KINDS,
+    HAPPY_SETTINGS_PAGES,
     formatHappyFileUrl,
+    formatHappySettingsUrl,
     formatHappyReferenceUrl,
     happyReferencePlaceholder,
     isHappyUrl,
@@ -227,6 +229,7 @@ export {
     type HappyLinkMatch,
     type HappyReference,
     type HappyReferenceKind,
+    type HappySettingsPage,
 } from "@slopus/happy-agent-client";
 export {
     HAPPY_AGENT_FILE_LINK_READ_ONLY_REFUSAL,

@@ -1,6 +1,7 @@
 import {
     formatHappyFileUrl,
     formatHappyReferenceUrl,
+    formatHappySettingsUrl,
     happyReferencePlaceholder,
     parseHappyLinks,
     parseHappyUrl,
@@ -12,6 +13,7 @@ import {
     type HappyLink,
     type HappyLinkMatch,
     type HappyReference,
+    type HappySettingsPage,
 } from "happy-desktop-state";
 
 /**
@@ -164,6 +166,17 @@ function linkHere(link: HappyLink, references: MessageReferences | undefined): b
     return link.instanceId === undefined || link.instanceId === references?.instanceId;
 }
 
+/** The settings page a `happy://` address names here, or nothing for any other link. */
+export function messageSettingsPageFromHref(
+    href: string | undefined,
+    references: MessageReferences | undefined,
+): HappySettingsPage | undefined {
+    const here = messageHrefHere(href, references);
+    if (here === undefined) return undefined;
+    const link = parseHappyUrl(here);
+    return link?.type === "settings" && linkHere(link, references) ? link.page : undefined;
+}
+
 /**
  * The reference a `happy://` address names here, or nothing for a file link,
  * anything malformed, or a link naming another instance.
@@ -228,6 +241,15 @@ export function messageReferencesResolve(
                 if (match.image || match.label.trim().length > 0) return match.source;
                 return `[${labelEscape(link.file.path)}](${formatHappyFileUrl(link.file)})`;
             }
+            // A settings page has no live title: it reads as its label, and
+            // the surface decides whether it opens. A button keeps its title.
+            if (link.type === "settings") {
+                const label = labelEscape(match.label) || "Settings";
+                const href = formatHappySettingsUrl(link.page);
+                return match.display === "button"
+                    ? `[${label}](${href} "button")`
+                    : `[${label}](${href})`;
+            }
             const reference = link.reference;
             const words = referenceWords(
                 referenceView(reference, references),
@@ -250,9 +272,7 @@ export function messageReferencesResolve(
 /** Escaped Markdown words for a link naming another instance: its label, or a placeholder. */
 function foreignWords(match: HappyLinkMatch, link: HappyLink): string {
     if (match.label.trim().length > 0) return match.label;
-    return labelEscape(
-        link.type === "file" ? link.file.path : happyReferencePlaceholder(link.reference),
-    );
+    return labelEscape(linkPlaceholder(link));
 }
 
 /** The words one Happy link in a plain body reads as. */
@@ -261,7 +281,7 @@ function linkPlainWords(match: HappyLinkMatch, references: MessageReferences | u
     if (link !== undefined && !linkHere(link, references)) {
         const written = labelPlain(match.label);
         if (written.length > 0) return written;
-        return link.type === "file" ? link.file.path : happyReferencePlaceholder(link.reference);
+        return linkPlaceholder(link);
     }
     if (link?.type === "reference") {
         const words = referenceWords(
@@ -274,7 +294,20 @@ function linkPlainWords(match: HappyLinkMatch, references: MessageReferences | u
     const written = labelPlain(match.label);
     if (written.length > 0) return written;
     if (link?.type === "file") return link.file.path;
+    if (link?.type === "settings") return "Settings";
     return match.syntax === "legacyTag" ? "an unavailable reference" : "";
+}
+
+/** The words a link with no label of its own reads as. */
+function linkPlaceholder(link: HappyLink): string {
+    switch (link.type) {
+        case "file":
+            return link.file.path;
+        case "settings":
+            return "Settings";
+        case "reference":
+            return happyReferencePlaceholder(link.reference);
+    }
 }
 
 /**

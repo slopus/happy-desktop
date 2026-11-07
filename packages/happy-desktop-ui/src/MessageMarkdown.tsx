@@ -29,6 +29,7 @@ import {
     messageReferenceFromHref,
     messageReferenceShown,
     messageReferencesResolve,
+    messageSettingsPageFromHref,
     type MessageReferences,
 } from "./messageReferences";
 import {
@@ -131,6 +132,20 @@ function linkMenuItems(defaultPlacement: LinkOpenPlacement | undefined): MenuIte
  * and where opening one goes. Absent, every reference reads as inert text.
  */
 const MarkdownReferencesContext = createContext<MessageReferences | undefined>(undefined);
+
+/**
+ * The settings pages this surface can open from a message's
+ * `happy://settings/<page>` link. Opening one only navigates; it never
+ * changes a setting. Absent, every settings link reads as its words.
+ */
+export interface MessageSettingsLinks {
+    has(page: string): boolean;
+    open(page: string): void;
+}
+
+export const MessageSettingsLinksContext = createContext<MessageSettingsLinks | undefined>(
+    undefined,
+);
 /**
  * A Happy reference a message names: an underlined link like any other in the
  * body, reading as the live title of what it names. While that thing is busy
@@ -298,6 +313,7 @@ const MarkdownLink = ({
     const onFileLinkOpen = useContext(MarkdownFileLinkOpenContext);
     const onLinkOpen = useContext(MarkdownLinkOpenContext);
     const linkOpenDefault = useContext(MarkdownLinkDefaultContext);
+    const settingsLinks = useContext(MessageSettingsLinksContext);
     // The link's own context menu, while it is up: where the pointer asked
     // for it. Local to the link because nothing else in the message reads it.
     const [menuAt, setMenuAt] = useState<{ x: number; y: number }>();
@@ -313,6 +329,35 @@ const MarkdownLink = ({
                 {children}
             </MessageReferenceLink>
         );
+    // A settings page this surface has opens it in the app, as a link or, when
+    // its writer titled it "button", as a button that sits on the line like one.
+    const settingsPage = messageSettingsPageFromHref(href, references);
+    if (settingsPage !== undefined && settingsLinks?.has(settingsPage) === true) {
+        const open = (event: { preventDefault(): void }) => {
+            event.preventDefault();
+            settingsLinks.open(settingsPage);
+        };
+        return props.title === "button" ? (
+            <button
+                className="happy-message__md-settings-button"
+                data-happy-desktop-ui="message-md-settings-button"
+                onClick={open}
+                type="button"
+            >
+                <MarkdownLinkContext.Provider value={true}>{children}</MarkdownLinkContext.Provider>
+            </button>
+        ) : (
+            <a
+                className="happy-message__md-link"
+                data-happy-desktop-ui="message-md-settings-link"
+                href={href}
+                onClick={open}
+                onDragStart={(event) => event.preventDefault()}
+            >
+                <MarkdownLinkContext.Provider value={true}>{children}</MarkdownLinkContext.Provider>
+            </a>
+        );
+    }
     // A link into another workspace's folder carries that folder, so it opens
     // the same file wherever the message is read. Its scheme means nothing to
     // the browser or the OS, so no click may hand it to either.

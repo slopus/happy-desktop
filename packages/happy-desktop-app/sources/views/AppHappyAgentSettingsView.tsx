@@ -149,6 +149,15 @@ export const HAPPY_AGENT_SETTINGS_MOVED_CATEGORIES: Readonly<Record<string, stri
     tasks: "sharing",
 };
 
+/**
+ * The category a `happy://settings/<page>` link opens here, or nothing when
+ * this window has no such page. Import lives on the Providers page.
+ */
+export function happyAgentSettingsSectionOf(page: string): string | undefined {
+    const section = page === "providers/import" ? "providers" : page;
+    return happyAgentSettingsCategoryExists(section) ? section : undefined;
+}
+
 /** True when `section` addresses a category this window actually has. */
 export function happyAgentSettingsCategoryExists(section: string): boolean {
     return HAPPY_AGENT_SETTINGS_CATEGORIES.some((category) => category.id === section);

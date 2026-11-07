@@ -1,6 +1,7 @@
 import { type ReactNode } from "react";
 import type { HappyReference } from "happy-desktop-state";
 import { Message } from "../../src/Message";
+import { MessageSettingsLinksContext, type MessageSettingsLinks } from "../../src/MessageMarkdown";
 import type { MessageReferences, MessageReferenceView } from "../../src/messageReferences";
 import { ComponentPage, DimensionRule, Specimen } from "../kit";
 
@@ -46,6 +47,12 @@ const references: MessageReferences = {
             }
         );
     },
+    open: () => undefined,
+};
+
+/** This surface has the Providers and Account pages, and not Members. */
+const settingsLinks: MessageSettingsLinks = {
+    has: (page) => page === "providers" || page === "account",
     open: () => undefined,
 };
 
@@ -194,6 +201,24 @@ export function MessageReferencesPage() {
                         ].join("\n"),
                     ),
                 )}
+            </Specimen>
+            <Specimen
+                detail='happy://settings/<page> opens that settings page and only navigates · titled "button" it reads as an inline pill padded sideways only, so the line height the row measured holds · a page this surface lacks reads as its words'
+                label="Settings links and buttons"
+                number="06"
+                stage="app"
+            >
+                <MessageSettingsLinksContext.Provider value={settingsLinks}>
+                    {channelFrame(
+                        agentReply(
+                            [
+                                'Your team has no model yet. [Add your API keys](happy://settings/providers "button") to start, or [review your account](happy://settings/account) first.',
+                                "",
+                                "Managing people lives in [Members](happy://settings/members), which this app doesn't have.",
+                            ].join("\n"),
+                        ),
+                    )}
+                </MessageSettingsLinksContext.Provider>
             </Specimen>
         </ComponentPage>
     );
