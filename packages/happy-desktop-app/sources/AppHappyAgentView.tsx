@@ -142,6 +142,7 @@ import type {
     HappyAgentWorkingWait,
     HappyAgentWorktreeId,
     HappyAgentLinkOpenPlacement,
+    HappyAgentCompute,
     HappyAgentSettingsStore,
     KeepAwakeMode,
     KeepAwakeStore,
@@ -234,6 +235,8 @@ import {
     FileChangeDiff,
     CodeEditor,
     ComposerFooterBar,
+    ComputeChip,
+    type ComputeChipCompute,
     ComposerModelControl,
     type ComposerModelUsageWatch,
     ConversationDock,
@@ -10153,15 +10156,23 @@ function HappyAgentConversationSurface(props: {
                                declared window still appears with an empty-state count
                                so the context surface is discoverable. */
                             trailing={
-                                conversation.contextGauge ? (
-                                    <ContextMeter
-                                        approximate={conversation.contextGauge.approximate}
-                                        compactTokens={conversation.contextGauge.compactTokens}
-                                        measured={conversation.contextGauge.measured}
-                                        totalTokens={conversation.contextGauge.totalTokens}
-                                        usedTokens={conversation.contextGauge.usedTokens}
-                                    />
-                                ) : undefined
+                                <>
+                                    {/* Where the agent's tools run, on a Happy Cloud server. */}
+                                    {conversation.compute ? (
+                                        <ComputeChip
+                                            compute={computeChipOf(conversation.compute)}
+                                        />
+                                    ) : null}
+                                    {conversation.contextGauge ? (
+                                        <ContextMeter
+                                            approximate={conversation.contextGauge.approximate}
+                                            compactTokens={conversation.contextGauge.compactTokens}
+                                            measured={conversation.contextGauge.measured}
+                                            totalTokens={conversation.contextGauge.totalTokens}
+                                            usedTokens={conversation.contextGauge.usedTokens}
+                                        />
+                                    ) : null}
+                                </>
                             }
                         />
                     }
@@ -12060,4 +12071,16 @@ function HappyAgentTerminalScreen(props: {
             status={snapshot.status}
         />
     );
+}
+
+/** The chip's words for a compute binding: its name, or a short ID when the server sent none. */
+function computeChipOf(compute: HappyAgentCompute): ComputeChipCompute {
+    if (compute.kind === "none") return { kind: "none" };
+    const label =
+        compute.label ?? (compute.kind === "pool" ? compute.poolId : compute.runnerId.slice(0, 8));
+    return {
+        kind: compute.kind,
+        label,
+        ...(compute.online === undefined ? {} : { online: compute.online }),
+    };
 }

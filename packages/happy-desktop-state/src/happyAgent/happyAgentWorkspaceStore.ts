@@ -142,6 +142,7 @@ import type {
     HappyAgentProjectSettingsState,
     HappyAgentProjectId,
     HappyAgentQueuedMessage,
+    HappyAgentCompute,
     HappyAgentContextGauge,
     HappyAgentOpenInTarget,
     HappyAgentWorkspaceFiles,
@@ -306,6 +307,8 @@ export interface HappyAgentConversationSnapshot {
     readonly usageError?: string;
     /** Room left in the context window, when the model declares one. */
     readonly contextGauge?: HappyAgentContextGauge;
+    /** Where its tools run, on a Happy Cloud server; absent on a Happy Agent. */
+    readonly compute?: HappyAgentCompute;
     readonly activityPanelOpen: boolean;
     /** The transcript image opened full size, if any. */
     readonly openImage?: HappyAgentOpenImage;
@@ -3049,6 +3052,7 @@ export function happyAgentWorkspaceStoreCreate(
             usageLoading: chat.usageLoading,
             ...(chat.usageError !== undefined ? { usageError: chat.usageError } : {}),
             ...(chat.contextGauge ? { contextGauge: chat.contextGauge } : {}),
+            ...(chat.compute ? { compute: chat.compute } : {}),
             activityPanelOpen: chat.activityPanelOpen,
             ...(chat.openImage ? { openImage: chat.openImage } : {}),
             ...(chat.menus ? { menus: chat.menus } : pendingMenus ? { menus: pendingMenus } : {}),

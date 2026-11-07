@@ -24,6 +24,7 @@ import type {
     HappyAgentSubtaskActivity,
 } from "../happyAgent/happyAgentTypes.js";
 import type { HappyAgentServiceTier } from "../happyAgentServiceTier.js";
+import type { HappyAgentCompute } from "../happyAgent/happyAgentTypes.js";
 import type { HappyAgentSync } from "./happyAgentSync.js";
 import type { UserProfile } from "./userProfiles.js";
 
@@ -500,6 +501,8 @@ export interface SessionState {
     title?: string;
     recap?: string;
     titleStatus: "error" | "generating" | "idle" | "ready";
+    /** Where its tools run, on a Happy Cloud server; absent on a Happy Agent. */
+    compute?: HappyAgentCompute;
     effort?: string;
     serviceTier?: HappyAgentServiceTier;
     permissionMode: string;

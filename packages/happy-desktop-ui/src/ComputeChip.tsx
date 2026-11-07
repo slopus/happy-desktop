@@ -7,7 +7,8 @@ export type ComputeChipCompute =
           readonly kind: "pool" | "runner";
           /** The pool's name or the machine's hostname. */
           readonly label: string;
-          readonly online: boolean;
+          /** Absent until the server has said; no dot is drawn then. */
+          readonly online?: boolean;
       };
 
 export type ComputeChipProps = {
@@ -24,20 +25,24 @@ export function ComputeChip(props: ComputeChipProps) {
     const title =
         compute.kind === "none"
             ? "No machine is attached. The agent attaches one when the work needs it."
-            : `${compute.kind === "pool" ? "Runs on a machine in" : "Runs on"} ${compute.label}${compute.online ? "" : " · offline"}`;
+            : `${compute.kind === "pool" ? "Runs on a machine in" : "Runs on"} ${compute.label}${compute.online === false ? " · offline" : ""}`;
     return (
         <span
             className="happy-compute-chip"
             data-happy-desktop-ui="compute-chip"
             data-kind={compute.kind}
-            data-online={compute.kind === "none" ? undefined : String(compute.online)}
+            data-online={
+                compute.kind === "none" || compute.online === undefined
+                    ? undefined
+                    : String(compute.online)
+            }
             title={title}
         >
             <Icon name="terminal" size={14} />
             <span className="happy-compute-chip__label">
                 {compute.kind === "none" ? "No machine" : compute.label}
             </span>
-            {compute.kind === "none" ? null : (
+            {compute.kind === "none" || compute.online === undefined ? null : (
                 <span
                     aria-label={compute.online ? "Online" : "Offline"}
                     className="happy-compute-chip__dot"

@@ -463,6 +463,26 @@ export interface HappyAgentUsageContext {
  * Only exists when the model declares a window; a model that does not is not
  * reported as full, or as empty, but not reported at all.
  */
+/**
+ * Where a Happy Cloud conversation's shell, file and git tools run: nothing,
+ * any machine of a pool, or one machine. `label` is the pool's name or the
+ * machine's hostname; `online` is absent until the server has said.
+ */
+export type HappyAgentCompute =
+    | { readonly kind: "none" }
+    | {
+          readonly kind: "pool";
+          readonly poolId: string;
+          readonly label?: string;
+          readonly online?: boolean;
+      }
+    | {
+          readonly kind: "runner";
+          readonly runnerId: string;
+          readonly label?: string;
+          readonly online?: boolean;
+      };
+
 export interface HappyAgentContextGauge {
     readonly usedTokens: number;
     readonly remainingTokens: number;

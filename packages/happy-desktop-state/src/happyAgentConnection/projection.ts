@@ -2,6 +2,7 @@ import { gitSnapshotProject, type GitSnapshotState } from "./gitSnapshotState.js
 import { mediaLayoutProject, mediaScaleProject } from "./mediaLayoutProject.js";
 import type {
     Agent,
+    AgentCompute,
     AgentActivityResponse,
     AgentContextUsage,
     AgentDraftSnapshot,
@@ -25,6 +26,7 @@ import { happyAgentServiceTierFromWire } from "../happyAgentServiceTier.js";
 import { happyAgentConversationActivityProject } from "../happyAgent/happyAgentConversationAuthors.js";
 import type {
     HappyAgentAnsweredUserInput,
+    HappyAgentCompute,
     HappyAgentSubtaskActivity,
 } from "../happyAgent/happyAgentTypes.js";
 import type { UserProfile } from "./userProfiles.js";
@@ -143,6 +145,32 @@ export function modeOf(
     return stored ?? defaultMode(config);
 }
 
+/** The cloud's compute binding, as the conversation shows it. */
+function computeProject(compute: AgentCompute): HappyAgentCompute {
+    const status =
+        compute.type === "none" || compute.status === undefined
+            ? {}
+            : { online: compute.status === "online" };
+    switch (compute.type) {
+        case "none":
+            return { kind: "none" };
+        case "pool":
+            return {
+                kind: "pool",
+                poolId: compute.poolId,
+                ...(compute.label === undefined ? {} : { label: compute.label }),
+                ...status,
+            };
+        case "runner":
+            return {
+                kind: "runner",
+                runnerId: compute.runnerId,
+                ...(compute.label === undefined ? {} : { label: compute.label }),
+                ...status,
+            };
+    }
+}
+
 export function projectSession(input: SessionProjectionInput): SessionState {
     const { agent, config, workspace } = input;
     const mode = modeOf(config, input.draft, input.mode, input.intendedMode);
@@ -206,6 +234,7 @@ export function projectSession(input: SessionProjectionInput): SessionState {
             (input.mode === null && agent.parentAgentId === null),
         ...(agent.title === null ? {} : { title: agent.title }),
         titleStatus: agent.titleStatus,
+        ...(agent.compute === undefined ? {} : { compute: computeProject(agent.compute) }),
         effort: mode.effort,
         ...(serviceTier === undefined ? {} : { serviceTier }),
         permissionMode: mode.permissionMode,
