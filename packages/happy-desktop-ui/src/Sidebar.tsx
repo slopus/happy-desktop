@@ -492,6 +492,17 @@ export type SidebarProps = Omit<HTMLAttributes<HTMLElement>, "style"> & {
     composeTooltip?: string;
     /** A row above the compose row that opens the window's search. */
     searchRow?: { label: string; shortcut?: KeyboardShortcut; onOpen: () => void };
+    /**
+     * A quiet row closing the section named by `afterSectionId`, that drops a
+     * menu of the other things the window can make, reported through
+     * `onSelect` with the chosen item's ID.
+     */
+    createRow?: {
+        afterSectionId: string;
+        label: string;
+        items: readonly MenuItem[];
+        onSelect: (id: string) => void;
+    };
     footer?: ReactNode;
     /** Stable product context rendered between the 56px heading and scrollport. */
     headerAccessory?: ReactNode;
@@ -1665,6 +1676,8 @@ function SidebarRow({
     shortcutAlwaysVisible?: boolean;
     tooltip?: string;
     shift?: number;
+    /** The row drops a menu, and whether that menu is open now. */
+    menuExpanded?: boolean;
 }) {
     const item = () => props.item;
     const renameFinished = useRef(false);
@@ -2104,8 +2117,10 @@ function SidebarRow({
         <Row
             aria-current={props.active ? "page" : undefined}
             aria-expanded={
-                props.onCollapseToggle || props.expandable ? item().collapsed !== true : undefined
+                props.menuExpanded ??
+                (props.onCollapseToggle || props.expandable ? item().collapsed !== true : undefined)
             }
+            aria-haspopup={props.menuExpanded === undefined ? undefined : "menu"}
             aria-keyshortcuts={
                 ariaKeyShortcuts().length > 0 ? ariaKeyShortcuts().join(" ") : undefined
             }
@@ -2673,6 +2688,7 @@ export function Sidebar(props: SidebarProps) {
         "composeLabel",
         "composeShortcut",
         "composeTooltip",
+        "createRow",
         "searchRow",
         "footer",
         "foldControlPlacement",
@@ -2715,6 +2731,7 @@ export function Sidebar(props: SidebarProps) {
     ]);
     const interactionEnabled = props.interactionEnabled !== false;
     const menuRoot = useRef<HTMLDivElement>(null);
+    const createRowNode = useRef<HTMLElement | null>(null);
     // The item that last had focus, which stays the list's Tab stop until
     // another item comes on screen, as going back or forward brings one.
     const [tabStopFocus, tabStopFocusSet] = useState<{ id: string; activeItemId: string }>();
@@ -2782,6 +2799,7 @@ export function Sidebar(props: SidebarProps) {
     type OpenMenu = {
         target:
             | { readonly kind: "item"; readonly item: SidebarItem }
+            | { readonly kind: "create" }
             | {
                   readonly kind: "section";
                   readonly sectionId: string;
@@ -2790,6 +2808,8 @@ export function Sidebar(props: SidebarProps) {
         items: MenuItem[];
         x: number;
         y: number;
+        /** Where the menu's bottom edge goes instead when it does not fit under `y`. */
+        above?: number;
     };
     const [itemMenu, itemMenuSet] = useState<OpenMenu>();
     const setItemMenu = useCallback(
@@ -2845,17 +2865,35 @@ export function Sidebar(props: SidebarProps) {
         const bounds = menuRoot.current?.getBoundingClientRect();
         if (bounds) {
             const x = Math.max(8, Math.min(itemMenu.x, window.innerWidth - bounds.width - 8));
-            const y = Math.max(8, Math.min(itemMenu.y, window.innerHeight - bounds.height - 8));
+            const fitsBelow = itemMenu.y + bounds.height <= window.innerHeight - 8;
+            const y = Math.max(
+                8,
+                fitsBelow || itemMenu.above === undefined
+                    ? Math.min(itemMenu.y, window.innerHeight - bounds.height - 8)
+                    : itemMenu.above - bounds.height,
+            );
             if (x !== itemMenu.x || y !== itemMenu.y) {
                 setItemMenu({ ...itemMenu, x, y });
                 return;
             }
         }
+        // The create row's menu is dropped from the row, so it takes the focus
+        // the way a menu button's does, and the row itself toggles it shut.
+        const createMenu = itemMenu.target.kind === "create";
+        if (createMenu)
+            menuRoot.current
+                ?.querySelector<HTMLElement>('[role^="menuitem"]:not(:disabled)')
+                ?.focus();
         const close = (event: Event) => {
-            if (!menuRoot.current?.contains(event.target as Node)) setItemMenu(undefined);
+            const target = event.target as Node;
+            if (menuRoot.current?.contains(target)) return;
+            if (createMenu && createRowNode.current?.contains(target)) return;
+            setItemMenu(undefined);
         };
         const closeOnEscape = (event: KeyboardEvent) => {
-            if (event.key === "Escape") setItemMenu(undefined);
+            if (event.key !== "Escape") return;
+            setItemMenu(undefined);
+            if (createMenu) createRowNode.current?.focus();
         };
         const dismiss = () => setItemMenu(undefined);
         document.addEventListener("pointerdown", close);
@@ -4080,6 +4118,43 @@ export function Sidebar(props: SidebarProps) {
             y: event.clientY,
         });
     };
+    // New closes the section it is told to follow, as the next sibling of that
+    // section's box rather than inside it, so a drag among the section's rows
+    // never measures it.
+    const createRowElement = local.createRow ? (
+        <SidebarRow
+            key="sidebar-create-row"
+            active={false}
+            className="happy-sidebar__create"
+            item={{
+                icon: "plus",
+                id: "create",
+                kind: "action",
+                label: local.createRow.label,
+            }}
+            menuExpanded={itemMenu?.target.kind === "create"}
+            nodeRef={(node) => {
+                createRowNode.current = node;
+            }}
+            onSelect={() => {
+                if (itemMenu?.target.kind === "create") {
+                    setItemMenu(undefined);
+                    return;
+                }
+                const bounds = createRowNode.current?.getBoundingClientRect();
+                if (!bounds || !local.createRow) return;
+                // Dropped from the row's leading edge, under it,
+                // or raised over it when the window ends first.
+                setItemMenu({
+                    target: { kind: "create" },
+                    items: [],
+                    x: bounds.left,
+                    y: bounds.bottom + 4,
+                    above: bounds.top - 4,
+                });
+            }}
+        />
+    ) : null;
     // Filled while the sections render below, and handed to the row handlers after commit.
     const rowTargets = new Map<string, SidebarRowTarget>();
     const rowAct = (key: string, act: (target: SidebarRowTarget) => unknown): unknown => {
@@ -4514,7 +4589,7 @@ export function Sidebar(props: SidebarProps) {
                             {local.bodyAccessory}
                         </div>
                     ) : null}
-                    {sections.map((section) => {
+                    {sections.flatMap((section) => {
                         // The rows as they stand on screen. Everything below —
                         // the tree connectors, a drag's units, a keyboard move —
                         // is stated against these rather than against the rows
@@ -4556,7 +4631,7 @@ export function Sidebar(props: SidebarProps) {
                                 : dropped?.carried === true && dropped.listId === section.id
                                   ? dropped.itemIds
                                   : [];
-                        return (
+                        const sectionElement = (
                             <section
                                 className="happy-sidebar__section"
                                 key={section.id}
@@ -4988,6 +5063,9 @@ export function Sidebar(props: SidebarProps) {
                                     : null}
                             </section>
                         );
+                        return section.id === local.createRow?.afterSectionId
+                            ? [sectionElement, createRowElement]
+                            : [sectionElement];
                     })}
                 </div>
             </ScrollArea>
@@ -5057,7 +5135,13 @@ export function Sidebar(props: SidebarProps) {
                     style={{ left: itemMenu.x, top: itemMenu.y }}
                 >
                     <Menu
-                        items={itemMenu.items}
+                        // The create row's entries are read live, so one that
+                        // becomes unavailable while the menu is open says so.
+                        items={
+                            itemMenu.target.kind === "create" && local.createRow
+                                ? [...local.createRow.items]
+                                : itemMenu.items
+                        }
                         onSelect={(actionId) => {
                             const target = itemMenu.target;
                             try {
@@ -5068,7 +5152,8 @@ export function Sidebar(props: SidebarProps) {
                                     renameStart(target.item);
                                     return;
                                 }
-                                if (target.kind === "item")
+                                if (target.kind === "create") local.createRow?.onSelect(actionId);
+                                else if (target.kind === "item")
                                     local.onItemMenuSelect?.(target.item, actionId);
                                 else
                                     local.onSectionMenuSelect?.(

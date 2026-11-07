@@ -5,6 +5,7 @@ import { ConnectionShell, type ConnectionShellItem } from "../../src/ConnectionS
 import { ConnectionSurface } from "../../src/ConnectionSurface";
 import { HappyAgentCreateBotPage } from "../../src/HappyAgentCreateBotPage";
 import { HappyAgentCreateTaskPage } from "../../src/HappyAgentCreateTaskPage";
+import type { MenuItem } from "../../src/Menu";
 import { commandShortcut } from "../../src/keyboardShortcut";
 import { ModalOverlay } from "../../src/ModalOverlay";
 import { Sidebar } from "../../src/Sidebar";
@@ -27,6 +28,17 @@ const labels: Record<(typeof screens)[number], string> = {
     bot: "New bot",
     palette: "Command palette",
 };
+/** What the window's New row offers: the Surface kinds, then a bot. */
+const createItems: MenuItem[] = [
+    { kind: "item", id: "todo", icon: "tasks", label: "New todo list" },
+    { kind: "item", id: "document", icon: "doc", label: "New document" },
+    { kind: "item", id: "calendar", icon: "calendar", label: "New calendar" },
+    { kind: "item", id: "system_monitor", icon: "pulse", label: "New system monitor" },
+    { kind: "item", id: "chat", icon: "users", label: "New chat" },
+    { kind: "item", id: "vault", icon: "vault", label: "New vault" },
+    { kind: "separator" },
+    { kind: "item", id: "bot", icon: "agents", label: "New bot" },
+];
 const connections: ConnectionShellItem[] = [
     { id: "home", label: "This Mac", local: true, status: "connected" },
     { id: "studio", label: "Studio", local: false, status: "connected", working: true },
@@ -88,6 +100,12 @@ export function HeaderShortcutsFlowPage() {
                                                     composeLabel="New task"
                                                     composeShortcut={commandShortcut("n")}
                                                     onCompose={noop}
+                                                    createRow={{
+                                                        afterSectionId: "surfaces",
+                                                        label: "New",
+                                                        items: createItems,
+                                                        onSelect: noop,
+                                                    }}
                                                     onItemSelect={noop}
                                                     searchRow={{
                                                         label: "Search",
@@ -95,6 +113,25 @@ export function HeaderShortcutsFlowPage() {
                                                         onOpen: noop,
                                                     }}
                                                     sections={[
+                                                        {
+                                                            id: "surfaces",
+                                                            items: [
+                                                                {
+                                                                    id: "feed",
+                                                                    kind: "project",
+                                                                    label: "Activity",
+                                                                    icon: "feed",
+                                                                    tint: "red",
+                                                                },
+                                                                {
+                                                                    id: "artifacts",
+                                                                    kind: "project",
+                                                                    label: "Artifacts",
+                                                                    icon: "doc",
+                                                                    tint: "purple",
+                                                                },
+                                                            ],
+                                                        },
                                                         {
                                                             id: "bots",
                                                             label: "Bots",

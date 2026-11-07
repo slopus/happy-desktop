@@ -347,7 +347,9 @@
     margin-top: 12px;
 }
 
-/* New chat is a SidebarRow; keep the same 2px row rhythm before the first menu. */
+/* New chat is a SidebarRow; keep the same 2px row rhythm before the first menu,
+   and under Search above it. */
+.happy-sidebar__search-tooltip + .happy-sidebar__compose,
 .happy-sidebar__compose + .happy-sidebar__section,
 .happy-sidebar__actions + .happy-sidebar__section {
     margin-top: 2px;
@@ -958,8 +960,19 @@
     white-space: nowrap;
 }
 
-.happy-sidebar__item:hover {
+.happy-sidebar__item:hover,
+.happy-sidebar__item[aria-haspopup="menu"][aria-expanded="true"] {
     background: var(--happy-hover-fill);
+}
+
+/* New is the last row of the section it closes, at that section's 2px row
+   rhythm, and the next section keeps its usual 12px from it. */
+.happy-sidebar__section + .happy-sidebar__create {
+    margin-top: 2px;
+}
+
+.happy-sidebar__create + .happy-sidebar__section {
+    margin-top: 12px;
 }
 
 /* A section heading is arranged like any row, the same open or folded: only
@@ -1368,7 +1381,8 @@
 }
 
 /* The compose pencil's ink is bottom-heavy; lift it to the row's optical center. */
-.happy-sidebar__compose .happy-sidebar__item-leading {
+.happy-sidebar__compose .happy-sidebar__item-leading,
+.happy-sidebar__create .happy-sidebar__item-leading {
     transform: translateY(-1px);
 }
 
@@ -1479,6 +1493,20 @@
 .happy-sidebar__item[data-kind="action"] {
     color: var(--text-secondary);
 }
+
+/* New stays quieter than the rows above it until it is reached for. */
+.happy-sidebar__item.happy-sidebar__create,
+.happy-sidebar__item.happy-sidebar__create .happy-sidebar__item-leading {
+    color: var(--header-tint-secondary);
+}
+
+.happy-sidebar__item.happy-sidebar__create:hover,
+.happy-sidebar__item.happy-sidebar__create:hover .happy-sidebar__item-leading,
+.happy-sidebar__item.happy-sidebar__create[aria-expanded="true"],
+.happy-sidebar__item.happy-sidebar__create[aria-expanded="true"] .happy-sidebar__item-leading {
+    color: var(--text-secondary);
+}
+
 /* Archived channels stay in place and clickable but dim uniformly so the state
    reads distinctly from an ordinary resting (already secondary-grey) row. The
    uniform alpha keeps every child glyph's optical centroid unchanged. */

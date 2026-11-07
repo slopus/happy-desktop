@@ -2682,6 +2682,9 @@ function surfaceRowId(surfaceId: string): string {
     return `${SURFACE_ROW_PREFIX}${surfaceId}`;
 }
 
+/** The New row's entry for a bot, beside the Surface kinds the heading's + offers. */
+const SIDEBAR_CREATE_BOT = "bot";
+
 /** What the sidebar heading's + offers to make, in the order it lists them. */
 const SURFACE_CREATE_OFFERS: readonly {
     readonly kind: HappyAgentSurfaceCreateKind;
@@ -2962,8 +2965,8 @@ function surfaceTargetLink(
 }
 
 /**
- * The first group in the sidebar, under no heading. Artifacts leads it, the
- * Feed under it; both are always there, never move, and nothing is dragged
+ * The first group in the sidebar, under no heading. Activity leads it,
+ * Artifacts under it; both are always there, never move, and nothing is dragged
  * past them. The reader's
  * Surfaces follow in their own order and are dragged among themselves only.
  * Every type is listed by its own name and picture, including a type this
@@ -2994,8 +2997,8 @@ function happyAgentTopSection(
                   error: `Could not join “${refused ?? "this Surface"}”. ${failure.error.message}`,
               }),
         items: [
-            ARTIFACTS_SIDEBAR_ITEM,
             { ...FEED_SIDEBAR_ITEM, ...(feedUnread > 0 ? { badge: feedUnread } : {}) },
+            ARTIFACTS_SIDEBAR_ITEM,
             ...(catalog.availability === "available"
                 ? catalog.joined.map((surface) =>
                       surfaceSidebarItem(
@@ -3352,15 +3355,17 @@ const INBOX_ITEM = "inbox";
 
 /**
  * The row that opens the addressed Happy Agent's artifacts. It gathers from
- * every chat on the machine at once, so it heads the sidebar's first group
- * rather than being filed under any one of them, and it never moves.
+ * every chat on the machine at once, so it sits in the sidebar's first group,
+ * directly under Activity, rather than being filed under any one of them, and
+ * it never moves.
  */
 const ARTIFACTS_ITEM = "artifacts";
 
 /**
  * The row that opens the reader's feed on the addressed Happy Agent: what
- * happened there, newest change first. It sits directly under Artifacts and,
- * like it, never moves; it counts what the reader has not looked at yet.
+ * happened there, newest change first. It heads the sidebar's first group and,
+ * like Artifacts under it, never moves; it counts what the reader has not
+ * looked at yet.
  */
 const FEED_ITEM = "feed";
 
@@ -3836,6 +3841,53 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
             onSettingsOpen={props.onSettingsOpen}
         />
     );
+    const surfaceCreateSelect = (id: string): void => {
+        const offer = SURFACE_CREATE_OFFERS.find((entry) => entry.kind === id);
+        if (offer !== undefined) surfaceCatalogStore.createOpen(offer.kind);
+    };
+    // New closes the first group, under Artifacts, Activity and the Surfaces,
+    // above Bots: everything else this Happy Agent can make, by the flows the
+    // headings already offer. It stays through an outage with every entry
+    // unavailable, so it never comes and goes.
+    const sidebarCreateSurfaces =
+        sidebarTaskCreateHappyAgent && surfaceCatalog.availability === "available"
+            ? surfaceCreateMenu(surfaceSupport)
+            : [];
+    const sidebarCreateItems: MenuItem[] = sidebarTaskCreateHappyAgent
+        ? [
+              ...sidebarCreateSurfaces,
+              ...(props.onBotCreateOpen
+                  ? [
+                        ...(sidebarCreateSurfaces.length > 0
+                            ? [{ kind: "separator" as const }]
+                            : []),
+                        {
+                            kind: "item" as const,
+                            id: SIDEBAR_CREATE_BOT,
+                            icon: "agents" as const,
+                            label: "New bot",
+                        },
+                    ]
+                  : []),
+          ].map((item) =>
+              item.kind === "item" && sidebarTaskCreateHappyAgent.status !== "connected"
+                  ? { ...item, disabled: true }
+                  : item,
+          )
+        : [];
+    const sidebarCreateRow =
+        sidebarTaskCreateHappyAgent && sidebarCreateItems.length > 0
+            ? {
+                  afterSectionId: happyAgentSurfacesSectionId(sidebarTaskCreateHappyAgent.id),
+                  label: "New",
+                  items: sidebarCreateItems,
+                  onSelect: (id: string) => {
+                      if (id === SIDEBAR_CREATE_BOT)
+                          props.onBotCreateOpen?.(sidebarTaskCreateHappyAgent.id);
+                      else surfaceCreateSelect(id);
+                  },
+              }
+            : undefined;
     const sidebar = (
         <Sidebar
             actions={pinned}
@@ -3862,12 +3914,10 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                           label: "New…",
                           menu: surfaceCreateMenu(surfaceSupport),
                       },
-                      onHeaderMenuSelect: (id: string) => {
-                          const offer = SURFACE_CREATE_OFFERS.find((entry) => entry.kind === id);
-                          if (offer !== undefined) surfaceCatalogStore.createOpen(offer.kind);
-                      },
+                      onHeaderMenuSelect: surfaceCreateSelect,
                   }
                 : {})}
+            {...(sidebarCreateRow ? { createRow: sidebarCreateRow } : {})}
             numberShortcuts
             numberShortcutTargets={projectShortcutTargets(
                 directory,
