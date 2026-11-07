@@ -29,6 +29,17 @@ Streaming updates, composer growth, and resizing surrounding chrome reconcile
 without a delayed visual correction: a chat following its newest content stays
 pinned there, while a reader parked in history keeps the same visual anchor.
 
+## Host-less (cloud-only) mode
+
+A computer that only uses Happy Cloud never runs a local Happy Agent. Nothing
+starts, installs, or waits on one until the person explicitly asks to set this
+computer up. Happy Cloud's servers are reached directly by the app, so they work
+with no host: the rail still shows this computer's place, which offers the setup
+instead of being reported broken, and the first cloud server opens by default.
+Setting the computer up later adds the host without closing the cloud servers
+already open. Their sign-ins outlive a restart where the operating system can
+encrypt them, and only then.
+
 ## How we get there
 
 First, make every known Happy Agent a stable app lifetime independent of its connection
