@@ -1533,6 +1533,7 @@ export function happyAgentSessionListStoreCreate(
         | {
               readonly source: readonly HappyAgentTask[];
               readonly joined: readonly HappyAgentTask[];
+              readonly joinedPositions: readonly number[];
               readonly browsable: readonly HappyAgentTask[];
               readonly archived: readonly HappyAgentTask[];
           }
@@ -1577,13 +1578,40 @@ export function happyAgentSessionListStoreCreate(
                 pendingMutationIds.delete(mutationId);
             }
         }
-        if (taskCatalogLists?.source !== catalogTasks)
+        if (taskCatalogLists?.source !== catalogTasks) {
+            const previous = taskCatalogLists;
+            let joined: readonly HappyAgentTask[];
+            let joinedPositions: readonly number[];
+            // Metadata and conversation updates cannot change membership order. Reuse
+            // its source positions only while every partition/sort input is unchanged.
+            if (
+                previous !== undefined &&
+                previous.source.length === catalogTasks.length &&
+                catalogTasks.every((task, index) => {
+                    const before = previous.source[index]!;
+                    return (
+                        task === before ||
+                        (task.id === before.id &&
+                            task.archived === before.archived &&
+                            task.membership?.orderKey === before.membership?.orderKey)
+                    );
+                })
+            ) {
+                joinedPositions = previous.joinedPositions;
+                joined = joinedPositions.map((position) => catalogTasks[position]!);
+            } else {
+                joined = happyAgentTasksJoined(catalogTasks);
+                const positions = new Map(catalogTasks.map((task, index) => [task, index]));
+                joinedPositions = joined.map((task) => positions.get(task)!);
+            }
             taskCatalogLists = {
                 source: catalogTasks,
-                joined: happyAgentTasksJoined(catalogTasks),
+                joined,
+                joinedPositions,
                 browsable: happyAgentTasksBrowsable(catalogTasks),
                 archived: happyAgentTasksArchived(catalogTasks),
             };
+        }
         const listed = taskCatalogLists.joined;
         let joined = subtaskArchivesApply(
             taskLeaves.size === 0 && taskArchives.size === 0
