@@ -75,39 +75,53 @@ function stringOf(value: unknown): string | undefined {
     return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
 }
 
-/** `~/.aws/credentials`: one access key pair per profile. */
-function awsProfilesRead(text: string): { profile: string; secret: string }[] {
-    const profiles: { profile: string; secret: string }[] = [];
-    let profile: string | undefined;
-    let values: Record<string, string> = {};
-    const flush = (): void => {
-        const id = values.aws_access_key_id;
-        const key = values.aws_secret_access_key;
-        if (profile !== undefined && id && key)
-            profiles.push({
-                profile,
-                secret: JSON.stringify({
-                    accessKeyId: id,
-                    secretAccessKey: key,
-                    ...(values.aws_session_token ? { sessionToken: values.aws_session_token } : {}),
-                }),
-            });
-    };
+/** The sections of an AWS INI file, by name, with their keys lowercased. */
+function iniSections(text: string): Map<string, Record<string, string>> {
+    const sections = new Map<string, Record<string, string>>();
+    let current: Record<string, string> | undefined;
     for (const raw of text.split(/\r?\n/u)) {
         const line = raw.trim();
         if (line === "" || line.startsWith("#") || line.startsWith(";")) continue;
         const section = /^\[(.+)\]$/u.exec(line);
         if (section) {
-            flush();
-            profile = section[1]!.trim();
-            values = {};
+            current = {};
+            sections.set(section[1]!.trim(), current);
             continue;
         }
         const pair = /^([A-Za-z_]+)\s*=\s*(.*)$/u.exec(line);
-        if (pair) values[pair[1]!.toLowerCase()] = pair[2]!.trim();
+        if (pair && current) current[pair[1]!.toLowerCase()] = pair[2]!.trim();
     }
-    flush();
-    return profiles;
+    return sections;
+}
+
+/**
+ * `~/.aws/credentials`: one access key pair per profile, with the region its
+ * profile names in `~/.aws/config` when it names one.
+ */
+function awsProfilesRead(
+    credentials: string,
+    config: string | undefined,
+): { profile: string; secret: string }[] {
+    const regions = config === undefined ? new Map() : iniSections(config);
+    return [...iniSections(credentials)].flatMap(([profile, values]) => {
+        const id = values.aws_access_key_id;
+        const key = values.aws_secret_access_key;
+        if (!id || !key) return [];
+        const region =
+            values.region ??
+            regions.get(profile === "default" ? "default" : `profile ${profile}`)?.region;
+        return [
+            {
+                profile,
+                secret: JSON.stringify({
+                    accessKeyId: id,
+                    secretAccessKey: key,
+                    ...(values.aws_session_token ? { sessionToken: values.aws_session_token } : {}),
+                    ...(region ? { region } : {}),
+                }),
+            },
+        ];
+    });
 }
 
 /** Claude Code's sign-in in the macOS keychain, asked for only when the person scans. */
@@ -186,6 +200,13 @@ export function credentialImportCreate(options: { readonly home?: string } = {})
                     ...(stringOf(process.env.AWS_SESSION_TOKEN)
                         ? { sessionToken: stringOf(process.env.AWS_SESSION_TOKEN) }
                         : {}),
+                    ...(stringOf(process.env.AWS_REGION ?? process.env.AWS_DEFAULT_REGION)
+                        ? {
+                              region: stringOf(
+                                  process.env.AWS_REGION ?? process.env.AWS_DEFAULT_REGION,
+                              ),
+                          }
+                        : {}),
                 }),
             );
 
@@ -229,7 +250,12 @@ export function credentialImportCreate(options: { readonly home?: string } = {})
             stringOf(process.env.AWS_SHARED_CREDENTIALS_FILE) ?? join(home, ".aws", "credentials");
         const aws = await fileRead(awsPath);
         if (aws)
-            for (const { profile, secret } of awsProfilesRead(aws))
+            for (const { profile, secret } of awsProfilesRead(
+                aws,
+                await fileRead(
+                    stringOf(process.env.AWS_CONFIG_FILE) ?? join(home, ".aws", "config"),
+                ),
+            ))
                 add(
                     "bedrock",
                     "aws_keys",
