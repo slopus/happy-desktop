@@ -2,6 +2,7 @@ import {
     type BotGroup,
     type HappyAgentBotSubtask,
     type GitChangeSnapshot,
+    type GroupsChanges,
     type GroupSession,
     type ProjectGroup,
     type TaskGroup,
@@ -17,6 +18,8 @@ import {
     type HappyAgentProjectAvatar,
     type HappyAgentProjectCatalog,
     type HappyAgentProjectId,
+    type HappyAgentSessionCatalogChanges,
+    type HappyAgentSessionCatalogGroup,
     type HappyAgentSessionCatalogSnapshot,
     type HappyAgentSessionCatalogSource,
     type HappyAgentSessionId,
@@ -39,7 +42,9 @@ export function happyAgentCatalogSourceCreate(
     baseUrl: string,
 ): HappyAgentSessionCatalogSource {
     const base = baseUrl.replace(/\/$/, "");
-    let snapshot: HappyAgentSessionCatalogSnapshot | undefined;
+    let snapshot: CatalogSnapshot | undefined;
+    /** Set when a publish went unprojected, so the next one cannot be said to follow the last. */
+    let skipped = false;
     let connection: ReturnType<HappyAgentConnection["connectGroups"]> | undefined;
     let disposed = false;
     const listeners = new Set<() => void>();
@@ -53,9 +58,17 @@ export function happyAgentCatalogSourceCreate(
         projects: readonly ProjectGroup[],
         bots: readonly BotGroup[],
         tasks: readonly TaskGroup[],
+        changes: GroupsChanges | undefined,
     ): void => {
         if (disposed) return;
-        snapshot = catalogProject(projects, bots, tasks, base);
+        const previous = snapshot;
+        snapshot =
+            (previous !== undefined &&
+                changes !== undefined &&
+                !skipped &&
+                catalogChanged(previous, projects, bots, tasks, changes.projects)) ||
+            catalogProject(projects, bots, tasks, base);
+        skipped = false;
         for (const waiter of waiting) waiter.resolve(snapshot);
         waiting.clear();
         for (const listener of listeners) listener();
@@ -71,9 +84,12 @@ export function happyAgentCatalogSourceCreate(
     const start = (): void => {
         if (disposed || connection) return;
         connection = happyAgent.connectGroups({
-            onChange: (projects, state, bots, tasks) => {
-                if (!state.sessionsComplete) return;
-                publish(projects, bots, tasks);
+            onChange: (projects, state, bots, tasks, changes) => {
+                if (!state.sessionsComplete) {
+                    skipped = true;
+                    return;
+                }
+                publish(projects, bots, tasks, changes);
             },
             onError: fail,
         });
@@ -113,35 +129,216 @@ export function happyAgentCatalogSourceCreate(
     };
 }
 
+/**
+ * One catalog as the connection's groups state it. Bots and tasks are short and
+ * listed eagerly; the projects, worktrees and flat session list are drawn from the
+ * project groups the first time anyone reads them, so a publish that changed one
+ * project costs that project, and readers that only look up a project by id never
+ * pay for the rest.
+ */
+class CatalogSnapshot implements HappyAgentSessionCatalogSnapshot {
+    readonly catalog: HappyAgentProjectCatalog;
+    #sessions: readonly HappyAgentSessionSummary[] | undefined;
+
+    constructor(
+        /** The connection's groups this was projected from, and each one's projection. */
+        readonly groupsSource: readonly ProjectGroup[],
+        readonly groups: readonly GroupProjection[],
+        /** Where each project sits in both lists. */
+        readonly at: ReadonlyMap<string, number>,
+        bots: readonly HappyAgentBot[],
+        tasks: readonly HappyAgentTask[],
+        readonly archivedSessions: readonly HappyAgentSessionSummary[],
+        readonly changes?: HappyAgentSessionCatalogChanges,
+    ) {
+        let projects: readonly HappyAgentProject[] | undefined;
+        let worktrees: readonly HappyAgentWorktree[] | undefined;
+        this.catalog = {
+            bots,
+            tasks,
+            get projects() {
+                return (projects ??= groups.map((group) => group.project));
+            },
+            get worktrees() {
+                return (worktrees ??= groups.flatMap((group) => group.worktrees));
+            },
+        };
+    }
+
+    get sessions(): readonly HappyAgentSessionSummary[] {
+        if (this.#sessions === undefined) {
+            const sessions: HappyAgentSessionSummary[] = [];
+            for (const group of this.groups) {
+                sessions.push(...group.sessions);
+                for (const worktree of group.worktrees)
+                    sessions.push(...(group.worktreeSessions.get(worktree.id) ?? []));
+            }
+            this.#sessions = sessions;
+        }
+        return this.#sessions;
+    }
+
+    group(projectId: HappyAgentProjectId): HappyAgentSessionCatalogGroup | undefined {
+        const at = this.at.get(projectId);
+        return at === undefined ? undefined : this.groups[at];
+    }
+}
+
 function catalogProject(
     groups: readonly ProjectGroup[],
     botGroups: readonly BotGroup[],
     taskGroups: readonly TaskGroup[],
     baseUrl: string,
-): HappyAgentSessionCatalogSnapshot {
-    const projects: HappyAgentProject[] = [];
-    const worktrees: HappyAgentWorktree[] = [];
-    const sessions: HappyAgentSessionSummary[] = [];
-    const archivedSessions: HappyAgentSessionSummary[] = [];
+): CatalogSnapshot {
+    const projected = groups.map((group) => groupProject(group, baseUrl));
+    return new CatalogSnapshot(
+        groups,
+        projected,
+        new Map(groups.map((group, at) => [group.id, at])),
+        // A bot's conversation is stated on the bot and deliberately kept out of
+        // the flat session list: that list is grouped under projects, and a bot
+        // is not one. The chat itself is opened by id, which needs no catalog
+        // entry.
+        botGroups.map(botProject),
+        // A task's conversation is stated on the task for the same reason a
+        // bot's is, and its subtasks nest under it the same way.
+        taskGroups.map(taskProject),
+        archivedSessionsProject(projected),
+    );
+}
 
-    for (const group of groups) {
-        const projected = groupProject(group, baseUrl);
-        projects.push(projected.project);
-        worktrees.push(...projected.worktrees);
-        sessions.push(...projected.sessions);
-        archivedSessions.push(...projected.archivedSessions);
+/**
+ * `previous` brought forward to `groups`, in which only the projects in `changed`
+ * were replaced, each in its own place. `undefined` when that is not what
+ * happened, or when a changed project files a session somewhere other than the
+ * group it names, which only a reader filing the whole list settles.
+ */
+function catalogChanged(
+    previous: CatalogSnapshot,
+    groups: readonly ProjectGroup[],
+    botGroups: readonly BotGroup[],
+    taskGroups: readonly TaskGroup[],
+    changed: ReadonlySet<string>,
+): CatalogSnapshot | undefined {
+    if (groups.length !== previous.groupsSource.length) return undefined;
+    const baseUrl = previous.groups[0]?.baseUrl;
+    let projected: GroupProjection[] | undefined;
+    let archivedSessions = previous.archivedSessions;
+    const projects = new Set<HappyAgentProjectId>();
+    for (const projectId of changed) {
+        const at = previous.at.get(projectId);
+        const group = at === undefined ? undefined : groups[at];
+        if (at === undefined || group === undefined || group.id !== projectId) return undefined;
+        const before = previous.groups[at]!;
+        const projection = groupProject(group, baseUrl!, before);
+        if (!projection.regular) return undefined;
+        if (projection === before) continue;
+        projected ??= [...previous.groups];
+        projected[at] = projection;
+        projects.add(projectId as HappyAgentProjectId);
+        if (!elementsSame(before.archivedSessions, projection.archivedSessions))
+            archivedSessions = archivedSessionsMerge(
+                archivedSessions,
+                before.archivedSessions,
+                projection.archivedSessions,
+                at,
+            );
     }
+    return new CatalogSnapshot(
+        groups,
+        projected ?? previous.groups,
+        previous.at,
+        elementsReuse(previous.catalog.bots, botGroups.map(botProject)),
+        elementsReuse(previous.catalog.tasks, taskGroups.map(taskProject)),
+        archivedSessions,
+        { previous, projects },
+    );
+}
 
-    archivedSessions.sort((left, right) => (right.archivedAt ?? 0) - (left.archivedAt ?? 0));
-    // A bot's conversation is stated on the bot and deliberately kept out of the
-    // flat session list: that list is grouped under projects, and a bot is not
-    // one. The chat itself is opened by id, which needs no catalog entry.
-    const bots = botGroups.map(botProject);
-    // A task's conversation is stated on the task for the same reason a bot's
-    // is, and its subtasks nest under it the same way.
-    const tasks = taskGroups.map(taskProject);
-    const catalog: HappyAgentProjectCatalog = { bots, projects, tasks, worktrees };
-    return { archivedSessions, catalog, sessions };
+/*
+ * The archived list is newest-archived first; sessions archived at the same moment
+ * keep catalog order, by project and then within it. Each archived row remembers
+ * the place of the project it came from, so one project's archive can be merged
+ * into the list without sorting the rest again.
+ */
+const archivedProjectAt = new WeakMap<HappyAgentSessionSummary, number>();
+
+function archivedCompare(left: HappyAgentSessionSummary, right: HappyAgentSessionSummary): number {
+    return (right.archivedAt ?? 0) - (left.archivedAt ?? 0);
+}
+
+function archivedSessionsProject(
+    groups: readonly GroupProjection[],
+): readonly HappyAgentSessionSummary[] {
+    const archived: HappyAgentSessionSummary[] = [];
+    groups.forEach((group, at) => {
+        for (const session of group.archivedSessions) {
+            archivedProjectAt.set(session, at);
+            archived.push(session);
+        }
+    });
+    return archived.sort(archivedCompare);
+}
+
+/**
+ * `archived` with the archive of the project at `at` changed from `before` to `after`: for each moment a row was archived
+ * at that the change touched, that project's run of rows archived then is found by
+ * binary search and replaced with the project's own rows for the moment, which are
+ * already in catalog order. The rest of the list is copied, not visited.
+ */
+function archivedSessionsMerge(
+    archived: readonly HappyAgentSessionSummary[],
+    before: readonly HappyAgentSessionSummary[],
+    after: readonly HappyAgentSessionSummary[],
+    at: number,
+): readonly HappyAgentSessionSummary[] {
+    const moments = new Set<number>();
+    const kept = new Set(after);
+    for (const session of before) if (!kept.has(session)) moments.add(session.archivedAt ?? 0);
+    const prior = new Set(before);
+    for (const session of after) if (!prior.has(session)) moments.add(session.archivedAt ?? 0);
+    const merged = [...archived];
+    for (const moment of moments) {
+        const run = after.filter((session) => (session.archivedAt ?? 0) === moment);
+        for (const session of run) archivedProjectAt.set(session, at);
+        const low = archivedBound(merged, moment, at, false);
+        const high = archivedBound(merged, moment, at, true);
+        merged.splice(low, high - low, ...run);
+    }
+    return merged;
+}
+
+/**
+ * The first row of `archived` that sorts after the rows archived at `moment` in the
+ * project at `at` — or, unless `past`, the first that does not sort before them.
+ */
+function archivedBound(
+    archived: readonly HappyAgentSessionSummary[],
+    moment: number,
+    at: number,
+    past: boolean,
+): number {
+    let low = 0;
+    let high = archived.length;
+    while (low < high) {
+        const middle = (low + high) >>> 1;
+        const row = archived[middle]!;
+        const order = moment - (row.archivedAt ?? 0) || (archivedProjectAt.get(row) ?? 0) - at;
+        if (order < 0 || (past && order === 0)) low = middle + 1;
+        else high = middle;
+    }
+    return low;
+}
+
+function elementsSame<T>(left: readonly T[], right: readonly T[]): boolean {
+    if (left === right) return true;
+    if (left.length !== right.length) return false;
+    for (let at = 0; at < left.length; at += 1) if (left[at] !== right[at]) return false;
+    return true;
+}
+
+function elementsReuse<T>(previous: readonly T[], next: readonly T[]): readonly T[] {
+    return elementsSame(previous, next) ? previous : next;
 }
 
 function subtasksProject(tasks: BotGroup["subtasks"]): readonly HappyAgentBotSubtask[] {
@@ -210,12 +407,11 @@ function taskProject(task: TaskGroup): HappyAgentTask {
     return value;
 }
 
-interface GroupProjection {
+interface GroupProjection extends HappyAgentSessionCatalogGroup {
     readonly baseUrl: string;
-    readonly project: HappyAgentProject;
-    readonly worktrees: readonly HappyAgentWorktree[];
-    readonly sessions: readonly HappyAgentSessionSummary[];
     readonly archivedSessions: readonly HappyAgentSessionSummary[];
+    /** Whether every active session is in the list of the group it names. */
+    readonly regular: boolean;
 }
 
 /*
@@ -224,33 +420,127 @@ interface GroupProjection {
  */
 const groupProjections = new WeakMap<ProjectGroup, GroupProjection>();
 
-function groupProject(group: ProjectGroup, baseUrl: string): GroupProjection {
+function groupProject(
+    group: ProjectGroup,
+    baseUrl: string,
+    /** The same project's last projection, whose unchanged records are handed back. */
+    previous?: GroupProjection,
+): GroupProjection {
     const cached = groupProjections.get(group);
     if (cached?.baseUrl === baseUrl) return cached;
     const projectId = group.id as HappyAgentProjectId;
+    const own = ownerSessionsProject(group.sessions, projectId, undefined);
+    let regular = own.regular;
     const worktrees: HappyAgentWorktree[] = [];
-    const sessions: HappyAgentSessionSummary[] = [];
-    const archivedSessions: HappyAgentSessionSummary[] = [];
-    const sessionsAdd = (listed: readonly GroupSession[]): void => {
-        for (const session of listed)
-            (session.archived ? archivedSessions : sessions).push(
-                sessionProject(session, projectId),
-            );
-    };
-    sessionsAdd(group.sessions);
-    for (const workspace of group.workspaces) {
-        worktrees.push(worktreeProject(workspace, projectId));
-        sessionsAdd(workspace.sessions);
-    }
+    const worktreeSessions = new Map<HappyAgentWorktreeId, readonly HappyAgentSessionSummary[]>();
+    const archivedSessions: HappyAgentSessionSummary[] = [...own.archived];
+    group.workspaces.forEach((workspace, at) => {
+        const before = previous?.worktrees[at];
+        worktrees.push(
+            worktreeProject(workspace, projectId, before?.id === workspace.id ? before : undefined),
+        );
+        const listed = ownerSessionsProject(
+            workspace.sessions,
+            projectId,
+            workspace.id as HappyAgentWorktreeId,
+        );
+        regular &&= listed.regular;
+        if (listed.active.length > 0)
+            worktreeSessions.set(workspace.id as HappyAgentWorktreeId, listed.active);
+        archivedSessions.push(...listed.archived);
+    });
     const projection: GroupProjection = {
         baseUrl,
-        project: projectProject(group, baseUrl),
-        worktrees,
-        sessions,
-        archivedSessions,
+        project: recordReuse(previous?.project, projectProject(group, baseUrl)),
+        worktrees:
+            previous !== undefined && elementsSame(previous.worktrees, worktrees)
+                ? previous.worktrees
+                : worktrees,
+        sessions: own.active,
+        worktreeSessions,
+        archivedSessions:
+            previous !== undefined && elementsSame(previous.archivedSessions, archivedSessions)
+                ? previous.archivedSessions
+                : archivedSessions,
+        regular,
     };
     groupProjections.set(group, projection);
     return projection;
+}
+
+interface OwnerSessions {
+    readonly active: readonly HappyAgentSessionSummary[];
+    readonly archived: readonly HappyAgentSessionSummary[];
+    readonly regular: boolean;
+}
+
+/* A list the connection did not change is the very same list, and is split once. */
+const ownerSessionsCache = new WeakMap<
+    readonly GroupSession[],
+    {
+        readonly projectId: string;
+        readonly worktreeId: string | undefined;
+        readonly value: OwnerSessions;
+    }
+>();
+
+/**
+ * One owner's sessions split into active and archived, and whether each active
+ * one names the owner it is listed under: the project itself, or the worktree.
+ */
+function ownerSessionsProject(
+    listed: readonly GroupSession[],
+    projectId: HappyAgentProjectId,
+    worktreeId: HappyAgentWorktreeId | undefined,
+): OwnerSessions {
+    const cached = ownerSessionsCache.get(listed);
+    if (cached?.projectId === projectId && cached.worktreeId === worktreeId) return cached.value;
+    const active: HappyAgentSessionSummary[] = [];
+    const archived: HappyAgentSessionSummary[] = [];
+    let regular = true;
+    for (const session of listed) {
+        const summary = sessionProject(session, projectId);
+        if (session.archived) archived.push(summary);
+        else {
+            active.push(summary);
+            if (summary.worktreeId !== worktreeId) regular = false;
+        }
+    }
+    const value: OwnerSessions = { active, archived, regular };
+    ownerSessionsCache.set(listed, { projectId, worktreeId, value });
+    return value;
+}
+
+/**
+ * `previous` when `next` says exactly the same, field for field — one level into a
+ * nested record such as an avatar, which is drawn afresh each time.
+ */
+function recordReuse<T extends object>(previous: T | undefined, next: T): T {
+    if (previous === undefined) return next;
+    const before = previous as Record<string, unknown>;
+    const after = next as Record<string, unknown>;
+    const keys = Object.keys(after);
+    if (keys.length !== Object.keys(before).length) return next;
+    for (const key of keys) {
+        const left = before[key];
+        const right = after[key];
+        if (left === right) continue;
+        if (
+            typeof left !== "object" ||
+            typeof right !== "object" ||
+            left === null ||
+            right === null ||
+            Array.isArray(left) ||
+            Array.isArray(right)
+        )
+            return next;
+        const leftNested = left as Record<string, unknown>;
+        const rightNested = right as Record<string, unknown>;
+        const nested = Object.keys(rightNested);
+        if (nested.length !== Object.keys(leftNested).length) return next;
+        if (nested.some((field) => leftNested[field] !== rightNested[field])) return next;
+    }
+    return previous;
 }
 
 /* The connection likewise hands back the very same workspace group when nothing in it changed. */
@@ -259,10 +549,11 @@ const worktreeProjections = new WeakMap<WorkspaceGroup, HappyAgentWorktree>();
 function worktreeProject(
     workspace: WorkspaceGroup,
     projectId: HappyAgentProjectId,
+    previous?: HappyAgentWorktree,
 ): HappyAgentWorktree {
     const cached = worktreeProjections.get(workspace);
     if (cached?.projectId === projectId) return cached;
-    const worktree: HappyAgentWorktree = {
+    const worktree: HappyAgentWorktree = recordReuse(previous, {
         id: workspace.id as HappyAgentWorktreeId,
         projectId,
         name: workspace.name,
@@ -278,7 +569,7 @@ function worktreeProject(
         // a reason rather than keeping the last one it had.
         ...(workspace.error === undefined ? {} : { error: workspace.error }),
         ...gitProject(workspace.git),
-    };
+    });
     worktreeProjections.set(workspace, worktree);
     return worktree;
 }
