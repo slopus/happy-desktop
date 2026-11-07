@@ -1249,7 +1249,7 @@ export interface HappyAgentConnection {
      * the first user message it accepts, so a bot can be asked for and put to
      * work in one breath.
      */
-    createBot(name?: string): BotCreationRequest;
+    createBot(name?: string, options?: { readonly isAdmin?: boolean }): BotCreationRequest;
     /** Puts a picture on a bot, guarded by its version like every other bot mutation. */
     setBotAvatar(botId: string, image: HappyAgentAvatarImage): MutationId;
     archiveBot(botId: string): MutationId;

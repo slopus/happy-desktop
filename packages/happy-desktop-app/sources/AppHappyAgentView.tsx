@@ -10926,6 +10926,8 @@ function HappyAgentCreateBotSurface(props: {
             emptyContent={
                 <HappyAgentCreateBotPage
                     {...(botCreate.error === undefined ? {} : { error: botCreate.error })}
+                    admin={botCreate.isAdmin}
+                    onAdminChange={(admin) => store.botCreateAdminUpdate(admin)}
                     faceSlot={botCreate.faceSlot}
                     faces={botCreate.faces}
                     name={botCreate.name}

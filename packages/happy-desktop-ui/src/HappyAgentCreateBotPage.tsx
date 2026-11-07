@@ -2,6 +2,7 @@ import type { CSSProperties, MouseEvent } from "react";
 import { Banner } from "./Banner";
 import { BotFace, botFaceCredit } from "./BotFace";
 import { Button } from "./Button";
+import { Switch } from "./Switch";
 import { TextField } from "./TextField";
 
 /** One of the four faces on offer, by position. */
@@ -20,6 +21,10 @@ export type HappyAgentCreateBotPageProps = {
     error?: string;
     /** Why the bot cannot currently be made on its Happy Agent. */
     submitDisabledReason?: string;
+    /** Whether the bot is made an admin bot. */
+    admin?: boolean;
+    /** Turns admin on or off. Omitted, the page offers no admin choice. */
+    onAdminChange?: (admin: boolean) => void;
     onNameChange: (name: string) => void;
     onFacePick: (slot: HappyAgentCreateBotFaceSlot) => void;
     onFacesRoll: () => void;
@@ -183,6 +188,18 @@ export function HappyAgentCreateBotPage(props: HappyAgentCreateBotPageProps) {
                     placeholder="Name, generated if left blank"
                     value={props.name}
                 />
+                {props.onAdminChange ? (
+                    <Switch
+                        checked={props.admin === true}
+                        className="happy-agent-create-bot__admin"
+                        data-testid="happy-agent-create-bot-admin"
+                        description="Can create bots, change other bots' settings, and permanently delete bots, tasks, projects, and workspaces."
+                        disabled={submitting}
+                        label="Admin"
+                        onChange={props.onAdminChange}
+                        size="small"
+                    />
+                ) : null}
                 {props.submitDisabledReason ? (
                     <p
                         className="happy-agent-create-bot__reason"

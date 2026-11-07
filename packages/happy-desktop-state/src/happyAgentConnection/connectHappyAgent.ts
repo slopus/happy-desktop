@@ -5727,7 +5727,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                 `bot:${botId}`,
             );
         },
-        createBot(name) {
+        createBot(name, options) {
             // All three identities are named here and handed to the daemon,
             // which takes them as the bot's own. The bot id doubles as the
             // mutation key, so a request repeated after a dropped answer
@@ -5745,6 +5745,8 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                         // absent name as "name it from the first message", and
                         // an empty string as a name it must refuse.
                         ...(name === undefined ? {} : { name }),
+                        // Left out unless asked for, as older daemons expect.
+                        ...(options?.isAdmin === true ? { isAdmin: true } : {}),
                         workspaceId,
                     },
                     { signal: rootController.signal },
