@@ -133,6 +133,7 @@ import { happyShareLinkClicksRoute } from "./happyShareLinkClicks";
 import { startupValuesStoreCreate, type StartupValuesStore } from "./startupValuesStore";
 import { browserDevBridgeCreate } from "./browserDevBridge";
 import { cloudWebBridgeCreate } from "./cloudWebBridge";
+import { cloudWebFaviconFollow } from "./cloudWebFavicon";
 import { localWebBuild } from "./localWebBuild";
 import {
     localWebUpdateStoreCreate,
@@ -1864,6 +1865,8 @@ if (mediaPreviewBridge) {
         });
         appDisposers.push(() => happyLinkInbox[Symbol.dispose]());
         appDisposers.push(happyAgents.subscribe(happyLinkInbox.targetsChange));
+        // The cloud web app's tab wears its server's picture.
+        if (cloudWeb) appDisposers.push(cloudWebFaviconFollow(happyAgents));
         // A Happy link the reader followed in an artifact or HTML preview page
         // opens on the Happy Agent on screen, as the same link in a message
         // does. One that names an instance is a page's word about where it
