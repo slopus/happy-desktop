@@ -212,7 +212,9 @@ function HappyAgentRootContent({ context }: { readonly context: HappyAgentRouter
     // an already materialized workspace must keep its mounted UI and drafts.
     const setup = entry?.setup;
     if (!context.connectionOnboarding) return <Outlet />;
-    const signIn = entry?.session ? undefined : entry?.signIn;
+    // A server whose sign-in ended shows nothing but the way back in, even
+    // while the session it ended is still being taken down.
+    const signIn = entry?.signIn;
     const signInEmpty = signIn ? happyAgentSignInEmpty(signIn) : undefined;
     // While the browser is open the one act is stopping that sign-in.
     const signInAct =
@@ -221,31 +223,34 @@ function HappyAgentRootContent({ context }: { readonly context: HappyAgentRouter
             : context.happyAgents.happyAgentSignIn;
     // A server that wants a sign-in before its first workspace has nothing to
     // show but the way in, so the window says that rather than waiting.
-    const content = entry?.session ? (
-        <Outlet />
-    ) : entry && signInEmpty ? (
-        <>
-            <WindowDragRegion />
-            <EmptyState
-                data-testid="happy-agent-sign-in"
-                description={signInEmpty.description}
-                icon={signInEmpty.icon}
-                size="panel"
-                title={signInEmpty.title}
-                {...(signInEmpty.actionLabel && signInAct
-                    ? {
-                          action: {
-                              label: signInEmpty.actionLabel,
-                              onClick: () => signInAct(entry.id),
-                          },
-                      }
-                    : {})}
+    const content =
+        entry && signInEmpty ? (
+            <>
+                <WindowDragRegion />
+                <EmptyState
+                    data-testid="happy-agent-sign-in"
+                    description={signInEmpty.description}
+                    icon={signInEmpty.icon}
+                    size="panel"
+                    title={signInEmpty.title}
+                    {...(signInEmpty.actionLabel && signInAct
+                        ? {
+                              action: {
+                                  label: signInEmpty.actionLabel,
+                                  onClick: () => signInAct(entry.id),
+                              },
+                          }
+                        : {})}
+                />
+            </>
+        ) : entry?.session ? (
+            <Outlet />
+        ) : (
+            <SplashScreen
+                note={entry?.message ?? `Connecting to ${entry?.label ?? "Happy Agent"}…`}
             />
-        </>
-    ) : (
-        <SplashScreen note={entry?.message ?? `Connecting to ${entry?.label ?? "Happy Agent"}…`} />
-    );
-    if (!setup) return content;
+        );
+    if (!setup || signInEmpty) return content;
     return (
         <HappyAgentOnboardingBoundary
             store={setup.onboarding}
@@ -1206,6 +1211,16 @@ export function happyAgentRouterGroupForget(
     // notification above. One that is not — a window still starting up — has to
     // be told, the same way the router tells itself when it commits a location
     // with nothing listening.
+    if (changed && router.history.subscribers.size === 0)
+        void router.load({ action: { type: "REPLACE" } });
+}
+
+/** Forgets every place in one connection whose sign-in ended. */
+export function happyAgentRouterConnectionForget(
+    router: HappyAgentRouter,
+    happyAgentId: string,
+): void {
+    const changed = router.history.connectionForget(happyAgentId);
     if (changed && router.history.subscribers.size === 0)
         void router.load({ action: { type: "REPLACE" } });
 }

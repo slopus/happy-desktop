@@ -1,3 +1,5 @@
+import { cloudWebLocked, cloudWebRefreshCreate, cloudWebStorageErase } from "./cloudWebRefresh";
+
 declare const __HAPPY_CLOUD_WEB__: boolean;
 
 /**
@@ -44,19 +46,40 @@ export async function cloudWebSessionRead(): Promise<boolean> {
 }
 
 const originalFetch: typeof globalThis.fetch = globalThis.fetch.bind(globalThis);
-let refreshing: Promise<boolean> | undefined;
 
-/** One refresh at a time, however many requests were refused together. */
-function refresh(): Promise<boolean> {
-    refreshing ??= originalFetch(REFRESH_PATH, { method: "POST", credentials: "same-origin" })
-        .then(
+const refresh = cloudWebRefreshCreate({
+    post: () =>
+        originalFetch(REFRESH_PATH, { method: "POST", credentials: "same-origin" }).then(
             (response) => response.ok,
-            () => false,
-        )
-        .finally(() => {
-            refreshing = undefined;
-        });
-    return refreshing;
+        ),
+    locked: cloudWebLocked,
+    storage: globalThis.localStorage,
+    now: () => Date.now(),
+});
+
+let sessionEnded = false;
+const sessionEndListeners = new Set<() => void>();
+
+/** Whether this page's session ended; it then shows only the way to sign in. */
+export function cloudWebSessionEnded(): boolean {
+    return sessionEnded;
+}
+
+/** Calls `listener` once when this page's session ends. */
+export function cloudWebSessionEndSubscribe(listener: () => void): () => void {
+    sessionEndListeners.add(listener);
+    return () => sessionEndListeners.delete(listener);
+}
+
+/**
+ * Ends this page's session: everything the origin stored for this server is
+ * erased, and the page shows nothing but a Sign in button.
+ */
+export function cloudWebSessionEnd(): void {
+    if (sessionEnded) return;
+    sessionEnded = true;
+    void cloudWebStorageErase();
+    for (const listener of sessionEndListeners) listener();
 }
 
 function sameOriginApi(input: RequestInfo | URL): boolean {
@@ -67,21 +90,24 @@ function sameOriginApi(input: RequestInfo | URL): boolean {
 
 /**
  * A request to the page's own `/v0/*` refused with 401 refreshes the edge's
- * cookies once and is sent again; refused again, the page signs in. Every
+ * cookies once and is sent again; refused again, the session has ended. Every
  * other request goes out untouched.
  */
 if (cloudWeb)
     globalThis.fetch = async (input, init) => {
         if (!sameOriginApi(input)) return originalFetch(input, init);
+        // Once the session ended nothing is sent: a refused request would only
+        // spend another refresh on cookies the edge already gave up.
+        if (sessionEnded) return new Response(null, { status: 401 });
         // A Request body can be read once, so the retry sends a copy.
         const retry = input instanceof Request ? input.clone() : input;
         const response = await originalFetch(input, init);
         if (response.status !== 401) return response;
-        if (!(await refresh())) {
-            cloudWebSignIn();
+        if (!(await refresh(Date.now()))) {
+            cloudWebSessionEnd();
             return response;
         }
         const again = await originalFetch(retry, init);
-        if (again.status === 401) cloudWebSignIn();
+        if (again.status === 401) cloudWebSessionEnd();
         return again;
     };

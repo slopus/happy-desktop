@@ -1,6 +1,12 @@
 // First, so the cloud web app's session handling is in place before any
 // module captures `fetch`.
-import { CLOUD_WEB_PICKER_URL, cloudWeb, cloudWebSignOut } from "./cloudWeb";
+import {
+    CLOUD_WEB_PICKER_URL,
+    cloudWeb,
+    cloudWebSessionEndSubscribe,
+    cloudWebSignIn,
+    cloudWebSignOut,
+} from "./cloudWeb";
 import { useSyncExternalStore, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { RouterProvider } from "@tanstack/react-router";
@@ -13,6 +19,7 @@ import {
     happyAgentWelcomeSlides,
     happyAgentRouterConversationOpen,
     happyAgentRouterGroupOpen,
+    happyAgentRouterConnectionForget,
     happyAgentRouterGroupForget,
     happyAgentRouterHappyLinkOpen,
     happyAgentRouterSubtasksForget,
@@ -85,6 +92,7 @@ import {
     SetupHandoff,
     SetupPage,
     ThemeScope,
+    EmptyState,
     WelcomeScreen,
     ZoomIndicator,
     ConnectionShell,
@@ -146,6 +154,7 @@ import { DesktopHtmlPreviewView } from "./desktopHtmlPreviewView";
 import { desktopPreferencesCreate } from "./desktopPreferences";
 import { desktopHistoryPersistence } from "./desktopHistory";
 import { desktopConnectionUiCreate, type DesktopConnectionUi } from "./desktopConnectionUi";
+import { desktopConnectionDataErase } from "./desktopConnectionDataErase";
 import { desktopConnectionPreferencesCreate } from "./desktopConnectionPreferences";
 import { desktopModelPreferencesCreate } from "./desktopModelPreferences";
 import { desktopCloudAuthRouterCreate, type DesktopCloudAuthEvent } from "./desktopCloudAuthRouter";
@@ -1230,6 +1239,23 @@ const bridge =
     (cloudWeb ? cloudWebBridgeCreate() : browserLocal ? browserDevBridgeCreate() : undefined);
 desktopRowHeightCheckInstall();
 const root = createRoot(document.getElementById("root")!);
+// The cloud web app's session ended: its data is already being erased, and the
+// whole page becomes the way to sign in again, with nothing else on it.
+if (cloudWeb)
+    cloudWebSessionEndSubscribe(() =>
+        root.render(
+            <DesktopAppearance appearance={appearanceStoreCreate()}>
+                <EmptyState
+                    action={{ label: "Sign in", onClick: cloudWebSignIn }}
+                    data-testid="cloud-web-signed-out"
+                    description="Your sign-in to this server ended. Sign in to see its work."
+                    icon="lock"
+                    size="panel"
+                    title="Sign in required"
+                />
+            </DesktopAppearance>,
+        ),
+    );
 // A todo list is laid over a picture; fetching and decoding both of them now
 // means opening a list paints its background with it instead of a frame later.
 happyAgentSurfaceBackdropsPreload();
@@ -1536,8 +1562,11 @@ if (mediaPreviewBridge) {
         // settings, followed below as every connection opens; the window keeps
         // the last of them it knew, and its unsent changes, so a machine going
         // offline and coming back finds every choice where it was left.
-        const { store: attention, connectionFollow: attentionFollow } =
-            happyAgentAttentionStoreOwnedCreate({ persistence: desktopAttentionPersistence() });
+        const {
+            store: attention,
+            connectionFollow: attentionFollow,
+            connectionForget: attentionForget,
+        } = happyAgentAttentionStoreOwnedCreate({ persistence: desktopAttentionPersistence() });
         // Whether this window offers the features that are not finished yet. It
         // is kept beside the arrangement above and for the same reason: it says
         // what this installation shows, so no machine has a say in it.
@@ -1686,6 +1715,20 @@ if (mediaPreviewBridge) {
                     open,
                 ),
             modelPreferencePersistence: preferencesFor,
+            connectionDataErase: (happyAgentId) =>
+                desktopConnectionDataErase({
+                    happyAgentId,
+                    storage: localStorage,
+                    forget: [
+                        (id) => {
+                            const router = connectionUis.get(id)?.router;
+                            if (router) happyAgentRouterConnectionForget(router, id);
+                            happyAgentRouterConnectionForget(happyAgentRouter, id);
+                        },
+                        attentionForget,
+                        (id) => modelPreferences.get(id)?.erase(),
+                    ],
+                }),
             // Remote connections ride through the local daemon, so a local
             // restart must degrade the local surface alone rather than pruning
             // the remotes off the rail the instant the daemon reports an empty

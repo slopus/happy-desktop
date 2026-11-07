@@ -236,6 +236,11 @@ export interface HappyAgentDirectoryDeps {
     /** Desktop-wide model memory for this window's Happy Agent connection. */
     readonly modelPreferencePersistence: (id: string) => HappyAgentModelPreferencePersistence;
     /**
+     * Erases what this machine keeps of one Happy Cloud server whose sign-in
+     * ended: its places, preferences and settings copies. Other servers' stay.
+     */
+    readonly connectionDataErase?: (happyAgentId: string) => void;
+    /**
      * Whether the local daemon is mid-restart. Remote connections are proxied
      * through it, and a restarting daemon comes back reporting an empty
      * connection registry for a beat before it repopulates. That empty read is
@@ -275,6 +280,8 @@ interface LocalHappyAgent {
     nodeUnsubscribe?: () => void;
     protocolMismatch?: HappyAgentProtocolMismatch;
     url?: string;
+    /** Opens this remote's connection afresh, with nothing carried over. */
+    reopen?: () => void;
     entry: HappyAgentDirectoryEntry;
 }
 
@@ -511,6 +518,17 @@ export function happyAgentDirectoryStoreCreate(
             (remote.entry.serverUrl !== undefined &&
                 remoteId !== undefined &&
                 deps.serverSessions?.get().sessions.get(remoteId) === undefined);
+        // A Happy Cloud server's data does not outlive its sign-in here: the
+        // session and everything it holds go, and so does what the window
+        // stored for it. Signing out ends it as surely as a refused refresh;
+        // a first sign-in has nothing to erase.
+        if (remote.entry.happyCloud && (!first || remote.entry.session)) {
+            connectionClose(remote);
+            deps.connectionDataErase?.(remote.entry.id);
+            // A fresh connection waits for the next sign-in, as a server never
+            // signed in to does.
+            remote.reopen?.();
+        }
         remote.entry = {
             ...remote.entry,
             status: "error",
@@ -718,6 +736,7 @@ export function happyAgentDirectoryStoreCreate(
                 ? undefined
                 : happyCloudServerNameOf(happyAgent.entry.remoteId);
         connectionClose(happyAgent);
+        happyAgent.reopen = () => connectionOpen(happyAgent, client, hostServicesUrl);
         happyAgent.url = happyAgentHttpUrl;
         happyAgent.connection = happyAgentConnectionOpen({
             cloudHost: deps.cloudHostFor(happyAgent.entry.id),
@@ -1056,6 +1075,8 @@ export function happyAgentDirectoryStoreCreate(
                 if (localRestarting) continue;
                 connectionClose(remote);
                 remotes.delete(id);
+                // A Happy Cloud server taken off the rail leaves nothing behind.
+                if (remote.entry.happyCloud) deps.connectionDataErase?.(id);
             }
             for (const item of membership.items) {
                 if (!item.remoteId) continue;

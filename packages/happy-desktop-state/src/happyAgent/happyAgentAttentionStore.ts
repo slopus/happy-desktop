@@ -268,7 +268,11 @@ export function happyAgentAttentionStoreOwnedCreate(options: HappyAgentAttention
             });
         },
     };
-    return { store, connectionFollow: driver.connectionFollow };
+    return {
+        store,
+        connectionFollow: driver.connectionFollow,
+        connectionForget: driver.connectionForget,
+    };
 }
 function botIdsWith(
     ids: ReadonlySet<HappyAgentBotId>,

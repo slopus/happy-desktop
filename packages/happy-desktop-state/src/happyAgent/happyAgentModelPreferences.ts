@@ -203,6 +203,8 @@ export function happyAgentModelPreferencesOwnedCreate(options: {
 }): {
     readonly preferences: HappyAgentModelPreferencePersistence;
     readonly connectionFollow: (source: HappyAgentUserSettingsSource) => () => void;
+    /** Forgets every choice and its stored copy, as when the server's sign-in ended. */
+    readonly erase: () => void;
 } {
     const driver = happyAgentUserSettingsCreate<HappyAgentModelPreferenceDocument>({
         empty: EMPTY,
@@ -233,5 +235,6 @@ export function happyAgentModelPreferencesOwnedCreate(options: {
             subscribe: driver.subscribe,
         },
         connectionFollow: (source) => driver.connectionFollow(CONNECTION, source),
+        erase: () => driver.connectionForget(CONNECTION),
     };
 }

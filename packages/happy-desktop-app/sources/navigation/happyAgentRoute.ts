@@ -347,6 +347,11 @@ export function happyAgentRouteSame(one: HappyAgentRoute, other: HappyAgentRoute
     return happyAgentRoutePath(one) === happyAgentRoutePath(other);
 }
 
+/** Whether a place belongs to one connection: anything addressed by its id. */
+export function happyAgentRouteInConnection(route: HappyAgentRoute, happyAgentId: string): boolean {
+    return "happyAgentId" in route && route.happyAgentId === happyAgentId;
+}
+
 /**
  * Whether a place sits inside one machine's group — the group itself, a
  * conversation, or a file in it. Everything else exists in its own right and

@@ -1,6 +1,6 @@
 import type { DesktopConfig, HappyDesktopBridge } from "../shared/desktopContract";
 import { browserDevBridgeCreate } from "./browserDevBridge";
-import { cloudWebSessionRead, cloudWebSignIn } from "./cloudWeb";
+import { cloudWebSessionEnd, cloudWebSessionRead } from "./cloudWeb";
 
 const CONFIG_KEY = "happy.desktop.config";
 const CONFIG_EMPTY: DesktopConfig = {
@@ -56,8 +56,8 @@ export function cloudWebBridgeCreate(): HappyDesktopBridge {
         desktopConfigUpdate: async (_previous, next) => configWrite(next),
         runtimeGet: async () => {
             if (!(await cloudWebSessionRead())) {
-                cloudWebSignIn();
-                // The page is leaving; nothing here is ever ready.
+                cloudWebSessionEnd();
+                // The page shows only Sign in now; nothing here is ever ready.
                 return new Promise<never>(() => undefined);
             }
             const host = window.location.hostname;

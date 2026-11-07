@@ -1,5 +1,6 @@
 import { createHistory, type HistoryLocation, type RouterHistory } from "@tanstack/react-router";
 import {
+    happyAgentRouteInConnection,
     happyAgentRouteInGroup,
     happyAgentRouteParse,
     happyAgentRoutePath,
@@ -62,6 +63,12 @@ export interface HappyAgentRouterHistory extends RouterHistory {
      * can go without disturbing where they stand.
      */
     groupForget(happyAgentId: string, groupId: string): boolean;
+    /**
+     * Removes every place in one connection, as when its sign-in ended and
+     * nothing of it may stay on this machine. A reader standing in one lands
+     * on the home address.
+     */
+    connectionForget(happyAgentId: string): boolean;
     /**
      * Removes every remembered settings page. A reader in settings lands on the
      * most recent place they were before it, or on the home address when
@@ -764,6 +771,11 @@ export function happyAgentHistoryCreate(
         groupForget: (happyAgentId: string, groupId: string): boolean =>
             forget(
                 (route) => happyAgentRouteInGroup(route, happyAgentId, groupId),
+                HAPPY_AGENT_ROUTE_HOME,
+            ),
+        connectionForget: (happyAgentId: string): boolean =>
+            forget(
+                (route) => happyAgentRouteInConnection(route, happyAgentId),
                 HAPPY_AGENT_ROUTE_HOME,
             ),
         settingsForget: (): boolean =>

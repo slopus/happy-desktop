@@ -563,6 +563,16 @@ export function happyAgentUserSettingsCreate<T>(options: Options<T>) {
             commit(connectionId);
             flushStart(connectionId);
         },
+        /**
+         * Erases everything kept for one connection: its last known settings,
+         * its unsent changes, and its stored copy. For a server whose sign-in
+         * ended, whose data must not outlive the sign-in on this machine.
+         */
+        connectionForget(connectionId: string): void {
+            followers.get(connectionId)?.stop();
+            if (!records.delete(connectionId)) return;
+            commit(connectionId);
+        },
         connectionFollow(connectionId: string, source: HappyAgentUserSettingsSource) {
             followers.get(connectionId)?.stop();
             const active = new AbortController();
