@@ -62,6 +62,8 @@ export interface HappyAgentCredentialImportHost {
 }
 
 export interface HappyAgentCredentialImportSnapshot {
+    /** Whether the import dialog is on screen. */
+    readonly open: boolean;
     /**
      * - `idle`: nothing looked for yet.
      * - `scanning`: looking.
@@ -89,6 +91,10 @@ export interface HappyAgentCredentialImportSnapshot {
 export interface HappyAgentCredentialImportStore {
     get(): HappyAgentCredentialImportSnapshot;
     subscribe(listener: () => void): () => void;
+    /** Shows the import dialog and looks again, with the last shell choice. */
+    dialogOpen(): void;
+    /** Hides the dialog; an import already sent still finishes. */
+    dialogClose(): void;
     /** Looks again; a new scan forgets the last one's picks and results. */
     scanStart(options: { readonly shell: boolean }): void;
     /** Picks or unpicks one importable entry. */
@@ -112,6 +118,7 @@ export function happyAgentCredentialImportStoreCreate(
     deps: HappyAgentCredentialImportStoreDeps,
 ): HappyAgentCredentialImportStore {
     const store = createStore<HappyAgentCredentialImportSnapshot>()(() => ({
+        open: false,
         phase: "idle",
         found: [],
         picked: NO_PICKS,
@@ -147,9 +154,18 @@ export function happyAgentCredentialImportStoreCreate(
     const scopeDefault = (): HappyAgentCredentialImportScope =>
         store.getState().teamAllowed ? "team" : "private";
 
-    return {
+    const actions: HappyAgentCredentialImportStore = {
         get: () => store.getState(),
         subscribe: (listener) => (disposed ? () => undefined : store.subscribe(listener)),
+        dialogOpen() {
+            if (disposed || store.getState().open) return;
+            store.setState({ open: true }, false);
+            actions.scanStart({ shell: store.getState().shellScanned });
+        },
+        dialogClose() {
+            if (disposed || !store.getState().open) return;
+            store.setState({ open: false }, false);
+        },
         scanStart(options) {
             const current = store.getState();
             if (disposed || current.phase === "scanning" || current.phase === "importing") return;
@@ -232,9 +248,11 @@ export function happyAgentCredentialImportStoreCreate(
             disposed = true;
         },
     };
+    return actions;
 }
 
 const INERT_SNAPSHOT: HappyAgentCredentialImportSnapshot = {
+    open: false,
     phase: "idle",
     found: [],
     picked: NO_PICKS,
@@ -247,6 +265,8 @@ const INERT_SNAPSHOT: HappyAgentCredentialImportSnapshot = {
 export const happyAgentCredentialImportStoreNoop: HappyAgentCredentialImportStore = {
     get: () => INERT_SNAPSHOT,
     subscribe: () => () => undefined,
+    dialogOpen: () => undefined,
+    dialogClose: () => undefined,
     scanStart: () => undefined,
     pickToggle: () => undefined,
     pickScopeUpdate: () => undefined,

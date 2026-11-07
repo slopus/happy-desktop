@@ -549,7 +549,6 @@ export function credentialImportCreate(options: { readonly home?: string } = {})
             if (entry?.secret === undefined || entry.found.use.kind !== "import") return undefined;
             return { found: entry.found, kind: entry.found.use.credential, secret: entry.secret };
         },
-        vendorName: (vendor: DesktopCredentialVendor): string => VENDOR_NAMES[vendor],
         forget,
     };
 }
@@ -594,7 +593,12 @@ export async function credentialImportSend(input: {
                 kind: entry.kind,
                 secret: entry.secret,
                 label: entry.found.label,
-                target: { name: input.importer.vendorName(entry.found.vendor), scope: item.scope },
+                // The team's container for a vendor has the vendor's own ID;
+                // a private key goes to the member's own container.
+                target:
+                    item.scope === "team"
+                        ? { providerId: entry.found.vendor }
+                        : { scope: "private" },
             },
         });
     }

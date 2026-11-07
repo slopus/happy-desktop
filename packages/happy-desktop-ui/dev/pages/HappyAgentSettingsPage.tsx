@@ -1370,7 +1370,10 @@ export function HappyAgentSettingsBlueprintPage() {
                     title="Providers"
                 >
                     <HappyAgentCredentialImport
+                        onClose={noop}
                         onImport={noop}
+                        onOpen={noop}
+                        open
                         onPickScopeChange={noop}
                         onPickToggle={noop}
                         onScan={noop}

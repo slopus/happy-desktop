@@ -435,6 +435,27 @@
 
 /* ---- Credential import -------------------------------------------------- */
 
+.happy-agent-credential-import {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.happy-agent-credential-import__pending {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 52px;
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 18px;
+}
+
+/* The shell choice and "Look again" share one row under the list. */
+.happy-agent-credential-import .happy-agent-credential-import__actions {
+    justify-content: space-between;
+}
+
 .happy-agent-credential-import__actions {
     display: flex;
     align-items: center;

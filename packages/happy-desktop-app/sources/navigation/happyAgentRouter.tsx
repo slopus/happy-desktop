@@ -1007,8 +1007,9 @@ export function happyAgentRouterHappyLinkOpen(
     }
     if (link.type === "settings") {
         const section = happyAgentSettingsSectionOf(link.page);
-        if (section !== undefined)
-            void router.navigate({ params: { section }, to: "/settings/$section" });
+        if (section === undefined) return;
+        void router.navigate({ params: { section }, to: "/settings/$section" });
+        if (link.page === "providers/import") session.credentialImport?.()?.dialogOpen();
         return;
     }
     const reference = link.reference;

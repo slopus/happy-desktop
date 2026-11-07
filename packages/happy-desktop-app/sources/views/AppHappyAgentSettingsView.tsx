@@ -1383,6 +1383,9 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                 <>
                     {credentialImportStore ? (
                         <HappyAgentCredentialImport
+                            open={credentialImport.open}
+                            onOpen={() => credentialImportStore.dialogOpen()}
+                            onClose={() => credentialImportStore.dialogClose()}
                             phase={credentialImport.phase}
                             rows={credentialImportRows(credentialImport, providers.providers)}
                             shellScanned={credentialImport.shellScanned}

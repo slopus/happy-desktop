@@ -4922,14 +4922,18 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
     const instanceId = active?.instanceId;
     const linkCopy = (href: string): string | undefined =>
         isHappyUrl(href) ? shareLink(instanceId, href) : href;
-    // A message's settings link opens that page here, and only navigates.
+    // A message's settings link opens that page here, and only navigates;
+    // the import page is Providers with its import dialog showing.
     const onSettingsSectionOpen = props.onSettingsSectionOpen;
     const settingsLinks: MessageSettingsLinks | undefined = onSettingsSectionOpen
         ? {
               has: (page) => happyAgentSettingsSectionOf(page) !== undefined,
               open: (page) => {
                   const section = happyAgentSettingsSectionOf(page);
-                  if (section !== undefined) onSettingsSectionOpen(section);
+                  if (section === undefined) return;
+                  onSettingsSectionOpen(section);
+                  if (page === "providers/import")
+                      active?.session?.credentialImport?.()?.dialogOpen();
               },
           }
         : undefined;

@@ -2,6 +2,8 @@ import { Banner } from "../../Banner";
 import { Box } from "../../Box";
 import { Button } from "../../Button";
 import { Checkbox } from "../../Checkbox";
+import { Modal } from "../../Modal";
+import { ModalOverlay } from "../../ModalOverlay";
 import { SegmentedControl } from "../../SegmentedControl";
 import { Spinner } from "../../Spinner";
 import { HappyAgentSettingsSection } from "./HappyAgentSettingsShell";
@@ -44,6 +46,8 @@ export type HappyAgentCredentialImportRow =
       });
 
 export interface HappyAgentCredentialImportProps {
+    /** Whether the import dialog is on screen. */
+    readonly open: boolean;
     readonly phase: "idle" | "scanning" | "ready" | "importing";
     readonly rows: readonly HappyAgentCredentialImportRow[];
     /** Whether the last look also read the login shell's environment. */
@@ -51,6 +55,8 @@ export interface HappyAgentCredentialImportProps {
     /** Whether the member may add credentials for the whole team. */
     readonly teamAllowed: boolean;
     readonly error?: string;
+    onOpen: () => void;
+    onClose: () => void;
     onScan: (options: { readonly shell: boolean }) => void;
     onPickToggle: (id: string) => void;
     onPickScopeChange: (id: string, scope: HappyAgentCredentialImportScope) => void;
@@ -60,97 +66,121 @@ export interface HappyAgentCredentialImportProps {
 }
 
 /**
- * Settings › Providers › Import: model provider keys already on this
- * computer, and which of them to copy to the server. A subscription's
- * sign-in is never copied — the server signs in on its own.
+ * Settings › Providers › Import: a row that opens a dialog listing the model
+ * provider keys already on this computer, and which of them to copy to the
+ * server. A subscription's sign-in is never copied — the server signs in on
+ * its own.
  */
 export function HappyAgentCredentialImport(props: HappyAgentCredentialImportProps) {
+    return (
+        <HappyAgentSettingsSection
+            description="Copies model provider keys already on this computer to this server. Nothing is sent until you pick what to import."
+            title="Import from this computer"
+        >
+            <Box className="happy-agent-credential-import__actions">
+                <Button onClick={props.onOpen} size="small" variant="secondary">
+                    Import keys…
+                </Button>
+            </Box>
+            {props.open ? <HappyAgentCredentialImportDialog {...props} /> : null}
+        </HappyAgentSettingsSection>
+    );
+}
+
+function HappyAgentCredentialImportDialog(props: HappyAgentCredentialImportProps) {
     const busy = props.phase === "scanning" || props.phase === "importing";
     const pickedCount = props.rows.filter((row) => row.use === "import" && row.picked).length;
     return (
-        <HappyAgentSettingsSection
-            description="Copies model provider keys already on this computer to this server. Nothing is sent until you import it."
-            title="Import from this computer"
+        <ModalOverlay
+            onDismiss={() => {
+                if (props.phase !== "importing") props.onClose();
+            }}
         >
-            {props.error ? (
-                <Banner tone="danger" title="Nothing imported">
-                    {props.error}
-                </Banner>
-            ) : null}
-            {props.phase === "idle" || (props.phase === "scanning" && props.rows.length === 0) ? (
-                <Box className="happy-agent-credential-import__actions">
-                    <Button
-                        icon="search"
-                        loading={props.phase === "scanning"}
-                        onClick={() => props.onScan({ shell: false })}
-                        size="small"
-                        variant="secondary"
-                    >
-                        Look for keys
-                    </Button>
-                    <Checkbox
-                        checked={false}
-                        disabled={busy}
-                        label="Also check my shell environment"
-                        onChange={() => props.onScan({ shell: true })}
-                    />
-                </Box>
-            ) : (
-                <>
-                    <Box
-                        className="happy-agent-credential-import__list"
-                        data-happy-desktop-ui="happy-agent-credential-import-list"
-                    >
-                        {props.rows.map((row) => (
-                            <HappyAgentCredentialImportRowView
-                                busy={busy}
-                                key={row.id}
-                                row={row}
-                                teamAllowed={props.teamAllowed}
-                                onPickScopeChange={props.onPickScopeChange}
-                                onPickToggle={props.onPickToggle}
-                                {...(props.onSignIn ? { onSignIn: props.onSignIn } : {})}
-                            />
-                        ))}
-                        {props.rows.length === 0 ? (
-                            <span className="happy-agent-credential-import__empty">
-                                No model provider keys on this computer.
-                            </span>
-                        ) : null}
-                    </Box>
-                    <Box className="happy-agent-credential-import__actions">
-                        {pickedCount > 0 || props.phase === "importing" ? (
-                            <Button
-                                disabled={busy && props.phase !== "importing"}
-                                loading={props.phase === "importing"}
-                                onClick={props.onImport}
-                                size="small"
-                                variant="primary"
-                            >
-                                {pickedCount === 1
-                                    ? "Import 1 key"
-                                    : `Import ${String(pickedCount)} keys`}
-                            </Button>
-                        ) : null}
+            <Modal
+                footer={
+                    <>
                         <Button
-                            disabled={busy}
-                            loading={props.phase === "scanning"}
-                            onClick={() => props.onScan({ shell: props.shellScanned })}
-                            size="small"
+                            disabled={props.phase === "importing"}
+                            onClick={props.onClose}
                             variant="ghost"
                         >
-                            Look again
+                            Close
                         </Button>
+                        <Button
+                            disabled={pickedCount === 0 && props.phase !== "importing"}
+                            loading={props.phase === "importing"}
+                            onClick={props.onImport}
+                        >
+                            {pickedCount === 1
+                                ? "Import 1 key"
+                                : pickedCount === 0
+                                  ? "Import"
+                                  : `Import ${String(pickedCount)} keys`}
+                        </Button>
+                    </>
+                }
+                icon="lock"
+                onClose={props.phase === "importing" ? undefined : props.onClose}
+                size="large"
+                title="Import keys from this computer"
+            >
+                <Box
+                    className="happy-agent-credential-import"
+                    data-happy-desktop-ui="happy-agent-credential-import"
+                >
+                    {props.error ? (
+                        <Banner tone="danger" title="Nothing imported">
+                            {props.error}
+                        </Banner>
+                    ) : null}
+                    {props.phase === "scanning" && props.rows.length === 0 ? (
+                        <Box className="happy-agent-credential-import__pending">
+                            <Spinner size={16} />
+                            <span>Looking for keys on this computer…</span>
+                        </Box>
+                    ) : (
+                        <Box
+                            className="happy-agent-credential-import__list"
+                            data-happy-desktop-ui="happy-agent-credential-import-list"
+                        >
+                            {props.rows.map((row) => (
+                                <HappyAgentCredentialImportRowView
+                                    busy={busy}
+                                    key={row.id}
+                                    row={row}
+                                    teamAllowed={props.teamAllowed}
+                                    onPickScopeChange={props.onPickScopeChange}
+                                    onPickToggle={props.onPickToggle}
+                                    {...(props.onSignIn ? { onSignIn: props.onSignIn } : {})}
+                                />
+                            ))}
+                            {props.rows.length === 0 ? (
+                                <span className="happy-agent-credential-import__empty">
+                                    No model provider keys on this computer.
+                                </span>
+                            ) : null}
+                        </Box>
+                    )}
+                    <Box className="happy-agent-credential-import__actions">
                         <Checkbox
                             checked={props.shellScanned}
                             disabled={busy}
                             label="Also check my shell environment"
                             onChange={(shell) => props.onScan({ shell })}
                         />
+                        <Button
+                            disabled={busy}
+                            loading={props.phase === "scanning" && props.rows.length > 0}
+                            onClick={() => props.onScan({ shell: props.shellScanned })}
+                            size="small"
+                            variant="ghost"
+                        >
+                            Look again
+                        </Button>
                     </Box>
-                </>
-            )}
-        </HappyAgentSettingsSection>
+                </Box>
+            </Modal>
+        </ModalOverlay>
     );
 }
 
