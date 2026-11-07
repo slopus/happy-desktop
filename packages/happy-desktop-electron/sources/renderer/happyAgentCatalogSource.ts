@@ -130,8 +130,8 @@ export function happyAgentCatalogSourceCreate(
 }
 
 /**
- * One catalog as the connection's groups state it. Bots and tasks are short and
- * listed eagerly; the projects, worktrees and flat session list are drawn from the
+ * One catalog as the connection's groups state it. Bot/task projections keep their
+ * source-array identity; projects, worktrees and the flat session list are drawn from the
  * project groups the first time anyone reads them, so a publish that changed one
  * project costs that project, and readers that only look up a project by id never
  * pay for the rest.
@@ -147,6 +147,9 @@ class CatalogSnapshot implements HappyAgentSessionCatalogSnapshot {
         readonly groups: readonly GroupProjection[],
         /** Where each project sits in both lists. */
         readonly at: ReadonlyMap<string, number>,
+        /** Immutable inputs, so unrelated updates do not even scan these collections. */
+        readonly botsSource: readonly BotGroup[],
+        readonly tasksSource: readonly TaskGroup[],
         bots: readonly HappyAgentBot[],
         tasks: readonly HappyAgentTask[],
         readonly archivedSessions: readonly HappyAgentSessionSummary[],
@@ -196,6 +199,8 @@ function catalogProject(
         groups,
         projected,
         new Map(groups.map((group, at) => [group.id, at])),
+        botGroups,
+        taskGroups,
         // A bot's conversation is stated on the bot and deliberately kept out of
         // the flat session list: that list is grouped under projects, and a bot
         // is not one. The chat itself is opened by id, which needs no catalog
@@ -249,8 +254,14 @@ function catalogChanged(
         groups,
         projected ?? previous.groups,
         previous.at,
-        elementsReuse(previous.catalog.bots, botGroups.map(botProject)),
-        elementsReuse(previous.catalog.tasks, taskGroups.map(taskProject)),
+        botGroups,
+        taskGroups,
+        botGroups === previous.botsSource
+            ? previous.catalog.bots
+            : elementsReuse(previous.catalog.bots, botGroups.map(botProject)),
+        taskGroups === previous.tasksSource
+            ? previous.catalog.tasks
+            : elementsReuse(previous.catalog.tasks, taskGroups.map(taskProject)),
         archivedSessions,
         { previous: previous.revision, projects },
     );
