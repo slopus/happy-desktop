@@ -1520,6 +1520,20 @@ export function happyAgentSessionListStoreCreate(
     };
 
     /**
+     * The three task lists depend only on the immutable catalog array. A project-session
+     * update keeps that array, so it must not filter/sort all tasks or deep-compare the
+     * resulting lists again. Local intents are applied below, never stored in this cache.
+     */
+    let taskCatalogLists:
+        | {
+              readonly source: readonly HappyAgentTask[];
+              readonly joined: readonly HappyAgentTask[];
+              readonly browsable: readonly HappyAgentTask[];
+              readonly archived: readonly HappyAgentTask[];
+          }
+        | undefined;
+
+    /**
      * The reader's list and the browsable directory, with this window's pending
      * leaves and moves laid over the host's catalog. Each pending act is settled
      * here the moment the catalog agrees with it, so it never outlives the
@@ -1558,10 +1572,18 @@ export function happyAgentSessionListStoreCreate(
                 pendingMutationIds.delete(mutationId);
             }
         }
-        let joined: readonly HappyAgentTask[] = subtaskArchivesApply(
-            happyAgentTasksJoined(catalogTasks).filter(
-                (task) => !taskLeaves.has(task.id) && !taskArchives.has(task.id),
-            ),
+        if (taskCatalogLists?.source !== catalogTasks)
+            taskCatalogLists = {
+                source: catalogTasks,
+                joined: happyAgentTasksJoined(catalogTasks),
+                browsable: happyAgentTasksBrowsable(catalogTasks),
+                archived: happyAgentTasksArchived(catalogTasks),
+            };
+        const listed = taskCatalogLists.joined;
+        let joined = subtaskArchivesApply(
+            taskLeaves.size === 0 && taskArchives.size === 0
+                ? listed
+                : listed.filter((task) => !taskLeaves.has(task.id) && !taskArchives.has(task.id)),
         );
         if (taskOrder !== undefined) {
             if (orderMatches(joined, taskOrder.order)) {
@@ -1571,8 +1593,8 @@ export function happyAgentSessionListStoreCreate(
         }
         return {
             tasks: joined,
-            taskDirectory: happyAgentTasksBrowsable(catalogTasks),
-            tasksArchived: happyAgentTasksArchived(catalogTasks),
+            taskDirectory: taskCatalogLists.browsable,
+            tasksArchived: taskCatalogLists.archived,
         };
     };
 
@@ -1584,13 +1606,17 @@ export function happyAgentSessionListStoreCreate(
         if (previous === next) return previous;
         const byId = new Map(previous.map((task) => [task.id, task]));
         let changed = previous.length !== next.length;
+        let reused = false;
         const merged = next.map((task, index) => {
             const before = byId.get(task.id);
             const kept = before !== undefined && deepEqual(before, task) ? before : task;
             if (kept !== previous[index]) changed = true;
+            if (kept !== task) reused = true;
             return kept;
         });
-        return changed ? merged : previous;
+        // Preserve the projector's array too when its rows already have the right identity.
+        // Its next unchanged publication can then take the constant-time identity check.
+        return changed ? (reused ? merged : next) : previous;
     };
 
     const tasksJoiningProject = (
