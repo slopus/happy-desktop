@@ -22,7 +22,16 @@ plan.
 
 Read `docs/releases.md` before release work. Desktop and renderer releases default
 to previews; production must be explicit. Use the existing main-dispatched,
-single-run workflows with version and notes, preserving signing and source checks.
+single-run workflows with notes, preserving signing and source checks.
+
+Versions are CalVer and always computed, never chosen: stable `YYYY.M.C`,
+preview `YYYY.M.C-preview.N` (UTC year and month, month not zero-padded). C
+counts the month's stable releases; a preview takes the next stable C and the
+next N for it. Dispatch release workflows without a `version` and let
+`scripts/release/desktopVersion.mjs` derive it from the `v*` tags. Do not type,
+guess, or reuse a version, return to `X.Y.Z` numbering, drop the `-preview.N`
+suffix, zero-pad the month, or bump source manifests: they stay at `0.0.0` and
+release builds stamp the computed version. See `docs/releases.md` → "Versions".
 Renderer-only requests never implicitly ship a native app. Do not release, deploy,
 restart, or push as a side effect of implementing release tooling.
 
