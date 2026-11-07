@@ -22,6 +22,8 @@ export interface AgentCatalogIndex {
     readonly found: ReadonlyMap<string, { readonly agent: Agent; readonly rank: number }>;
     /** The rank of every owner whose tree holds each agent. */
     readonly holders: ReadonlyMap<string, ReadonlySet<number>>;
+    readonly botAt: ReadonlyMap<string, number>;
+    readonly taskAt: ReadonlyMap<string, number>;
     readonly workspaceAt: ReadonlyMap<string, number>;
     readonly projectAt: ReadonlyMap<string, number>;
 }
@@ -30,6 +32,8 @@ interface IndexWritable {
     catalog: AgentCatalog;
     readonly found: Map<string, { readonly agent: Agent; readonly rank: number }>;
     readonly holders: Map<string, Set<number>>;
+    readonly botAt: Map<string, number>;
+    readonly taskAt: Map<string, number>;
     readonly workspaceAt: Map<string, number>;
     readonly projectAt: Map<string, number>;
 }
@@ -99,6 +103,8 @@ function indexBuild(catalog: AgentCatalog): IndexWritable {
         catalog,
         found: new Map(),
         holders: new Map(),
+        botAt: positionsOf(catalog.bots),
+        taskAt: positionsOf(catalog.tasks),
         workspaceAt: positionsOf(catalog.workspaces),
         projectAt: positionsOf(catalog.projects),
     };
@@ -214,6 +220,8 @@ export function agentCatalogIndexed(
         right: readonly T[],
     ): boolean => left === right || left.every((owner, at) => owner.id === right[at]!.id);
     if (
+        !ownerIdsSame(before.bots, catalog.bots) ||
+        !ownerIdsSame(before.tasks, catalog.tasks) ||
         !ownerIdsSame(before.workspaces, catalog.workspaces) ||
         !ownerIdsSame(before.projects, catalog.projects)
     )
@@ -360,8 +368,10 @@ export function agentCatalogOwnerUpdate<Kind extends keyof AgentCatalogOwners>(
             ? index.workspaceAt.get(id)
             : kind === "project"
               ? index.projectAt.get(id)
-              : list.findIndex((owner) => owner.id === id);
-    if (at === undefined || at < 0) return undefined;
+              : kind === "bot"
+                ? index.botAt.get(id)
+                : index.taskAt.get(id);
+    if (at === undefined) return undefined;
     const previous = list[at]!;
     const next = update(previous);
     if (next === previous) return { catalog, previous, next };

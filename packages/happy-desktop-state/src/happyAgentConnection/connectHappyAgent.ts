@@ -1187,11 +1187,17 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         return at === undefined ? undefined : index.catalog.workspaces[at];
     };
 
-    const botOf = (botId: string): Bot | undefined =>
-        groupsStore.getState().bots.find((candidate) => candidate.id === botId);
+    const botOf = (botId: string): Bot | undefined => {
+        const index = agentIndexCurrent();
+        const at = index.botAt.get(botId);
+        return at === undefined ? undefined : index.catalog.bots[at];
+    };
 
-    const taskOf = (taskId: string): Task | undefined =>
-        groupsStore.getState().tasks.find((candidate) => candidate.id === taskId);
+    const taskOf = (taskId: string): Task | undefined => {
+        const index = agentIndexCurrent();
+        const at = index.taskAt.get(taskId);
+        return at === undefined ? undefined : index.catalog.tasks[at];
+    };
 
     const agentOf = (agentId: string): Agent | undefined => {
         const held = agentIndexCurrent().found.get(agentId);
