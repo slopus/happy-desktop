@@ -134,6 +134,12 @@ export interface HappyAgentSessionListSnapshot {
      */
     readonly subtaskFailures: ReadonlyMap<HappyAgentSessionId, HappyAgentSubtaskFailure>;
     /**
+     * Bots whose archive this window asked for and the host refused, such as a
+     * server's Chief of Staff or its last admin bot. The bot is still listed,
+     * so the reason stays beside it until the reader archives it again.
+     */
+    readonly botFailures: ReadonlyMap<HappyAgentBotId, HappyAgentBotFailure>;
+    /**
      * Worktrees this window asked for that the host refused, by the identity it
      * refused them under — which is the identity the worktree would have had, so
      * the reader who was sent to that address finds the refusal waiting there
@@ -157,6 +163,11 @@ export interface HappyAgentTaskFailure {
 /** A refused act on one bot subtask, and the host's reason. */
 export interface HappyAgentSubtaskFailure {
     readonly action: "archive" | "reorder";
+    readonly error: UserError;
+}
+
+export interface HappyAgentBotFailure {
+    readonly action: "archive";
     readonly error: UserError;
 }
 
@@ -674,6 +685,7 @@ export function happyAgentSessionListStoreCreate(
     const NO_SESSION_CREATE_FAILURES: ReadonlyMap<HappyAgentSessionId, UserError> = new Map();
     const NO_SUBTASK_FAILURES: ReadonlyMap<HappyAgentSessionId, HappyAgentSubtaskFailure> =
         new Map();
+    const NO_BOT_FAILURES: ReadonlyMap<HappyAgentBotId, HappyAgentBotFailure> = new Map();
     const NO_BOTS_CREATING: readonly HappyAgentBotCreating[] = [];
     const NO_TASKS: readonly HappyAgentTask[] = [];
     const NO_TASK_FAILURES: ReadonlyMap<HappyAgentTaskId, HappyAgentTaskFailure> = new Map();
@@ -681,6 +693,7 @@ export function happyAgentSessionListStoreCreate(
 
     const store = createStore<HappyAgentSessionListSnapshot>()(() => ({
         archivedSessions: [],
+        botFailures: NO_BOT_FAILURES,
         bots: [],
         botsCreating: NO_BOTS_CREATING,
         catalogRevision: 0,
@@ -1294,6 +1307,15 @@ export function happyAgentSessionListStoreCreate(
         const failures = new Map(subtaskFailures);
         failures.delete(sessionId);
         store.setState({ ...store.getState(), subtaskFailures: failures });
+    };
+
+    /** Archiving a bot again withdraws the reason its last archive was refused. */
+    const botFailureWithdraw = (botId: HappyAgentBotId): void => {
+        const { botFailures } = store.getState();
+        if (!botFailures.has(botId)) return;
+        const failures = new Map(botFailures);
+        failures.delete(botId);
+        store.setState({ ...store.getState(), botFailures: failures });
     };
 
     /** The conversation whose children `sessionId` is listed among. */
@@ -2159,8 +2181,12 @@ export function happyAgentSessionListStoreCreate(
             subtaskArchives.get(refusedSubtask.sessionId) === rejection.mutationId
         )
             subtaskArchives.delete(refusedSubtask.sessionId);
+        let botFailures = previous.botFailures;
         for (const [botId, mutationId] of botArchives)
-            if (mutationId === rejection.mutationId) botArchives.delete(botId);
+            if (mutationId === rejection.mutationId) {
+                botArchives.delete(botId);
+                botFailures = new Map(botFailures).set(botId, { action: "archive", error });
+            }
         // A refused leave or archive puts its row back in this same publication.
         const refusedRemoval = removalWaiters.has(rejection.mutationId);
         const subtaskFailures =
@@ -2184,6 +2210,7 @@ export function happyAgentSessionListStoreCreate(
         });
         store.setState({
             ...previous,
+            botFailures,
             mutationError: error,
             projectCreateFailures,
             sessionCreateFailures,
@@ -2983,6 +3010,7 @@ export function happyAgentSessionListStoreCreate(
                 const pending = botArchives.get(botId);
                 if (pending !== undefined) return pending;
                 if (!internal.getState().catalog.bots.some((bot) => bot.id === botId)) return true;
+                botFailureWithdraw(botId);
                 const mutationId = connectMutationTrack(deps.connectActions.archiveBot(botId));
                 botArchives.set(botId, mutationId);
                 return mutationId;

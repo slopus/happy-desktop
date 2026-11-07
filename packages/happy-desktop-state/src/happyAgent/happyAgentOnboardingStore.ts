@@ -7,15 +7,59 @@ import {
     type HappyMobileOnboardingStore,
 } from "../onboarding/happyMobileOnboardingStore.js";
 
-export interface HappyAgentOnboardingSnapshot {
-    readonly state?: {
+/** Happy Cloud's Chief of Staff: `done` once its name is confirmed in its chat. */
+export interface HappyAgentOnboardingChiefOfStaff {
+    readonly done: boolean;
+    readonly name: string | null;
+    readonly botId: string | null;
+}
+
+/**
+ * Whether a provider can answer a turn. `readyNow` also counts cooldowns and
+ * rate limits, which `done` and `signedIn` leave out.
+ */
+export interface HappyAgentOnboardingProviders {
+    readonly done: boolean;
+    readonly signedIn: readonly string[];
+    readonly readyNow: boolean;
+}
+
+export interface HappyAgentOnboardingState {
+    readonly completed: boolean;
+    readonly steps: {
+        readonly profile: { readonly done: boolean };
+        readonly project: { readonly done: boolean };
+        readonly providers: { readonly done: boolean; readonly signedIn: readonly string[] };
+        /** Present on a Happy Cloud server. */
+        readonly chiefOfStaff?: HappyAgentOnboardingChiefOfStaff;
+    };
+    /**
+     * Happy Cloud's server-wide setup: complete once the Chief of Staff is named.
+     * Absent on a Happy Agent, where `completed` is the whole answer.
+     */
+    readonly server?: {
+        readonly completed: boolean;
+        readonly steps: {
+            readonly providers: HappyAgentOnboardingProviders;
+            readonly chiefOfStaff: HappyAgentOnboardingChiefOfStaff;
+        };
+    };
+    /**
+     * Happy Cloud's setup for the reader: complete once their profile is saved.
+     * Naming the Chief of Staff happens in its chat, so a member who has a
+     * profile is let into the server without waiting for it.
+     */
+    readonly member?: {
         readonly completed: boolean;
         readonly steps: {
             readonly profile: { readonly done: boolean };
-            readonly project: { readonly done: boolean };
-            readonly providers: { readonly done: boolean; readonly signedIn: readonly string[] };
+            readonly providers: HappyAgentOnboardingProviders;
         };
     };
+}
+
+export interface HappyAgentOnboardingSnapshot {
+    readonly state?: HappyAgentOnboardingState;
     readonly pending: boolean;
     /** Authenticated setup endpoints are ready even before protected sync starts. */
     readonly available: boolean;
@@ -30,12 +74,52 @@ export interface HappyAgentOnboardingStore {
     [Symbol.dispose](): void;
 }
 
+function chiefOfStaffEqual(
+    left: HappyAgentOnboardingChiefOfStaff | undefined,
+    right: HappyAgentOnboardingChiefOfStaff | undefined,
+): boolean {
+    if (left === right) return true;
+    if (!left || !right) return false;
+    return left.done === right.done && left.name === right.name && left.botId === right.botId;
+}
+
+function providersEqual(
+    left: HappyAgentOnboardingProviders,
+    right: HappyAgentOnboardingProviders,
+): boolean {
+    return (
+        left.done === right.done &&
+        left.readyNow === right.readyNow &&
+        left.signedIn.length === right.signedIn.length &&
+        left.signedIn.every((provider, index) => provider === right.signedIn[index])
+    );
+}
+
 function onboardingStatesEqual(
     left: HappyAgentOnboardingSnapshot["state"],
     right: HappyAgentOnboardingSnapshot["state"],
 ): boolean {
     if (left === right) return true;
     if (!left || !right) return false;
+    if (!chiefOfStaffEqual(left.steps.chiefOfStaff, right.steps.chiefOfStaff)) return false;
+    if (left.server !== right.server) {
+        if (!left.server || !right.server) return false;
+        if (
+            left.server.completed !== right.server.completed ||
+            !providersEqual(left.server.steps.providers, right.server.steps.providers) ||
+            !chiefOfStaffEqual(left.server.steps.chiefOfStaff, right.server.steps.chiefOfStaff)
+        )
+            return false;
+    }
+    if (left.member !== right.member) {
+        if (!left.member || !right.member) return false;
+        if (
+            left.member.completed !== right.member.completed ||
+            left.member.steps.profile.done !== right.member.steps.profile.done ||
+            !providersEqual(left.member.steps.providers, right.member.steps.providers)
+        )
+            return false;
+    }
     return (
         left.completed === right.completed &&
         left.steps.profile.done === right.steps.profile.done &&
@@ -126,6 +210,10 @@ export function happyAgentOnboardingStoreCreate(
         )
             return;
         if (!snapshot.state.steps.profile.done) return;
+        // Happy Cloud completes on its own once the Chief of Staff is named in
+        // its chat, and refuses an earlier completion. Its members need nothing
+        // after their profile.
+        if (snapshot.state.member) return;
         if (!mobileUnsubscribe) mobileUnsubscribe = mobile.subscribe(setupSynchronize);
         const status = mobile.get().status;
         // Remote setup ends here. Its first project is created later in the workspace.

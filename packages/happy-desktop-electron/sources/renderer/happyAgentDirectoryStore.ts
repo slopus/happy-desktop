@@ -79,6 +79,7 @@ const connectionsPersistence: HappyAgentConnectionsPersistence = {
 };
 const PROJECT_ADD_IDLE: HappyAgentProjectAddSnapshot = { pending: false };
 const NO_SUBTASK_FAILURES: HappyAgentSessionListSnapshot["subtaskFailures"] = new Map();
+const NO_BOT_FAILURES: HappyAgentSessionListSnapshot["botFailures"] = new Map();
 const NO_TASKS: HappyAgentSessionListSnapshot["tasks"] = [];
 const NO_TASK_FAILURES: HappyAgentSessionListSnapshot["taskFailures"] = new Map();
 
@@ -112,6 +113,11 @@ export interface HappyAgentDirectoryEntry {
     readonly instanceId?: string;
     /** A team server added by its address: that address, as the host Happy Agent normalized it. */
     readonly serverUrl?: string;
+    /**
+     * A Happy Cloud server. It refuses to archive, delete, or demote its Chief
+     * of Staff, so nothing offers to.
+     */
+    readonly happyCloud?: true;
     /** This Happy Agent runs no workspaces, so it has no projects to offer. */
     readonly workspacesUnavailable?: true;
     /**
@@ -128,6 +134,8 @@ export interface HappyAgentDirectoryEntry {
     readonly projectAdd: HappyAgentProjectAddSnapshot;
     /** Bot subtasks whose archive or move the host refused, with the reason to show. */
     readonly subtaskFailures: HappyAgentSessionListSnapshot["subtaskFailures"];
+    /** Bots whose archive the host refused, with the reason to show. */
+    readonly botFailures: HappyAgentSessionListSnapshot["botFailures"];
     /** This Happy Agent's tasks the reader has joined, in the reader's own order. */
     readonly tasks: HappyAgentSessionListSnapshot["tasks"];
     /** Task acts the host refused, with the reason to show. */
@@ -194,6 +202,8 @@ export interface HappyAgentDirectoryDeps {
      * Each is listed while the shell reports a sign-in state for it.
      */
     readonly cloud?: boolean;
+    /** The cloud web app, where this window's own Happy Agent is a Happy Cloud server. */
+    readonly localHappyCloud?: boolean;
     readonly conversationOpen: (happyAgentId: string, location: HappyAgentSessionLocation) => void;
     readonly groupOpen: (happyAgentId: string, groupId: string) => void;
     /**
@@ -276,6 +286,7 @@ function projectsRead(
     | "projectsStatus"
     | "projectAdd"
     | "subtaskFailures"
+    | "botFailures"
     | "tasks"
     | "taskFailures"
 > {
@@ -289,6 +300,7 @@ function projectsRead(
             projects.type === "ready" ? "ready" : projects.type === "error" ? "error" : "loading",
         projectAdd: workspace.projectAdd,
         subtaskFailures: workspace.list.subtaskFailures,
+        botFailures: workspace.list.botFailures,
         tasks: workspace.list.tasks,
         taskFailures: workspace.list.taskFailures,
     };
@@ -304,6 +316,7 @@ function projectsMatch(
         | "projectsStatus"
         | "projectAdd"
         | "subtaskFailures"
+        | "botFailures"
         | "tasks"
         | "taskFailures"
     >,
@@ -315,6 +328,7 @@ function projectsMatch(
         entry.projectsStatus === next.projectsStatus &&
         entry.projectAdd === next.projectAdd &&
         entry.subtaskFailures === next.subtaskFailures &&
+        entry.botFailures === next.botFailures &&
         entry.tasks === next.tasks &&
         entry.taskFailures === next.taskFailures
     );
@@ -406,12 +420,14 @@ export function happyAgentDirectoryStoreCreate(
         entry: {
             id: LOCAL_HAPPY_AGENT_ID,
             label: "This Mac",
+            ...(deps.localHappyCloud ? { happyCloud: true as const } : {}),
             bots: [],
             botsCreating: [],
             projects: [],
             projectsStatus: "loading",
             projectAdd: PROJECT_ADD_IDLE,
             subtaskFailures: NO_SUBTASK_FAILURES,
+            botFailures: NO_BOT_FAILURES,
             tasks: NO_TASKS,
             taskFailures: NO_TASK_FAILURES,
             status: "connecting",
@@ -653,6 +669,7 @@ export function happyAgentDirectoryStoreCreate(
             projectsStatus: "loading",
             projectAdd: PROJECT_ADD_IDLE,
             subtaskFailures: NO_SUBTASK_FAILURES,
+            botFailures: NO_BOT_FAILURES,
             tasks: NO_TASKS,
             taskFailures: NO_TASK_FAILURES,
             session: undefined,
@@ -971,6 +988,9 @@ export function happyAgentDirectoryStoreCreate(
                                     ? {}
                                     : { instanceId: item.instanceId }),
                                 ...(item.url === undefined ? {} : { serverUrl: item.url }),
+                                ...(happyCloudServerNameOf(item.remoteId) === undefined
+                                    ? {}
+                                    : { happyCloud: true as const }),
                                 label: item.name,
                                 bots: [],
                                 botsCreating: [],
@@ -978,6 +998,7 @@ export function happyAgentDirectoryStoreCreate(
                                 projectsStatus: "loading",
                                 projectAdd: PROJECT_ADD_IDLE,
                                 subtaskFailures: NO_SUBTASK_FAILURES,
+                                botFailures: NO_BOT_FAILURES,
                                 tasks: NO_TASKS,
                                 taskFailures: NO_TASK_FAILURES,
                                 status: "connecting",

@@ -531,6 +531,11 @@ export interface AppHappyAgentEntry {
     readonly instanceId?: string;
     /** A team server added by its address: that address, as the host Happy Agent normalized it. */
     readonly serverUrl?: string;
+    /**
+     * A Happy Cloud server. It refuses to archive, delete, or demote its Chief
+     * of Staff, so nothing here offers to.
+     */
+    readonly happyCloud?: true;
     /** This Happy Agent runs no workspaces, so it has no projects to offer. */
     readonly workspacesUnavailable?: true;
     readonly projects: readonly HappyAgentProjectGroup[];
@@ -564,6 +569,14 @@ export interface AppHappyAgentEntry {
     readonly subtaskFailures?: ReadonlyMap<
         string,
         { readonly action: "archive" | "reorder"; readonly error: { readonly message: string } }
+    >;
+    /**
+     * Bots whose archive the host refused, by bot. The reason is stated under
+     * the Bots heading for as long as the bot is still listed. Absent reads as none.
+     */
+    readonly botFailures?: ReadonlyMap<
+        string,
+        { readonly action: "archive"; readonly error: { readonly message: string } }
     >;
     /**
      * The tasks the reader has joined on this Happy Agent, in the reader's own
@@ -1519,6 +1532,8 @@ function rowMenuItems(
      * the window keeps no such record, and the row offers neither act.
      */
     botAttention: ((bot: HappyAgentBot) => HappyAgentBotAttention) | undefined,
+    /** Whether this server keeps its Chief of Staff for good, as Happy Cloud does. */
+    chiefOfStaffKept: boolean,
 ): MenuItem[] {
     // A subtask's title is the daemon's to write, so archiving is all its row
     // offers. The task stops and leaves its bot; its history and its worktree
@@ -1559,31 +1574,41 @@ function rowMenuItems(
                 : []),
         ];
     const bot = bots.find((candidate) => candidate.workspaceId === item.id);
-    if (bot)
-        return [
-            { kind: "item", id: ROW_MENU_RENAME, label: "Rename bot", icon: "edit" },
-            ...(bot.stories === undefined
-                ? []
-                : [
+    if (bot) {
+        // Happy Cloud's Chief of Staff can be renamed and given a new face,
+        // but never archived.
+        const archivable = !(chiefOfStaffKept && bot.systemKey === "chief_of_staff");
+        const groups: MenuItem[][] = [
+            [
+                { kind: "item", id: ROW_MENU_RENAME, label: "Rename bot", icon: "edit" },
+                ...(bot.stories === undefined
+                    ? []
+                    : [
+                          {
+                              kind: "item" as const,
+                              id: ROW_MENU_STORIES,
+                              label: "Stories",
+                              checked: bot.stories,
+                          },
+                      ]),
+            ],
+            botAttention ? botAttentionMenuItems(botAttention(bot)) : [],
+            archivable
+                ? [
                       {
-                          kind: "item" as const,
-                          id: ROW_MENU_STORIES,
-                          label: "Stories",
-                          checked: bot.stories,
+                          kind: "item",
+                          id: ROW_MENU_ARCHIVE,
+                          label: "Archive bot",
+                          icon: "archive",
+                          danger: true,
                       },
-                  ]),
-            { kind: "separator" },
-            ...(botAttention
-                ? [...botAttentionMenuItems(botAttention(bot)), { kind: "separator" } as const]
-                : []),
-            {
-                kind: "item",
-                id: ROW_MENU_ARCHIVE,
-                label: "Archive bot",
-                icon: "archive",
-                danger: true,
-            },
+                  ]
+                : [],
         ];
+        return groups
+            .filter((group) => group.length > 0)
+            .flatMap((group, index) => (index === 0 ? group : [{ kind: "separator" }, ...group]));
+    }
     const owner = rowOwnerFind(projects, item.id);
     if (!owner) return [];
     if (owner.worktreeId)
@@ -2540,6 +2565,7 @@ function happyAgentSections(
                 : {}),
             ...hiddenBotsAction(happyAgent, attention),
             ...subtaskFailureError(happyAgent, happyAgent.bots),
+            ...botFailureError(happyAgent),
             // With the Projects list left out, what the Happy Agent said when it
             // failed still needs a heading to stand under.
             ...(projectsVisibilityConnection(projectsVisibility, happyAgent.id).projectsHidden &&
@@ -3066,6 +3092,17 @@ function subtaskFailureError(
             return {
                 error: `Could not ${failure.action === "archive" ? "archive" : "move"} “${task.conversation.title}”. ${failure.error.message}`,
             };
+    }
+    return {};
+}
+
+/** The Bots heading's word on a bot archive the host refused, while that bot is listed. */
+function botFailureError(happyAgent: AppHappyAgentEntry): Pick<SidebarSection, "error"> {
+    const failures = happyAgent.botFailures;
+    if (failures === undefined || failures.size === 0) return {};
+    for (const bot of happyAgent.bots) {
+        const failure = failures.get(bot.id);
+        if (failure) return { error: `Could not archive “${bot.name}”. ${failure.error.message}` };
     }
     return {};
 }
@@ -3951,6 +3988,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                         props.attention
                             ? (bot) => happyAgentBotAttention(attention, happyAgent.id, bot.id)
                             : undefined,
+                        happyAgent.happyCloud === true,
                     ),
                 );
             }}

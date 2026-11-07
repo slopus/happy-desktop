@@ -84,7 +84,10 @@ export function HappyAgentOnboardingBoundary(props: {
         ...(online ? {} : { unavailable: "Happy can't reach this Happy Agent right now." }),
     });
     const profileAvailable = props.online || snapshot.available === true;
-    if (!snapshot.state || snapshot.state.completed) return props.children;
+    // A Happy Cloud member is in once their profile is saved. The server's own
+    // setup, naming its Chief of Staff, happens in that bot's chat.
+    if (!snapshot.state || snapshot.state.completed || snapshot.state.member?.completed)
+        return props.children;
     if (!welcome.welcomeAcknowledged)
         return (
             <WelcomeScreen

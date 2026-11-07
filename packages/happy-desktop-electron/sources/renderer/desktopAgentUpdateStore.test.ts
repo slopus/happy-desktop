@@ -95,6 +95,7 @@ function directoryCreate() {
             activeHappyAgentId: LOCAL_HAPPY_AGENT_ID,
             happyAgents: [
                 {
+                    botFailures: new Map(),
                     bots: [],
                     botsCreating: [],
                     id: LOCAL_HAPPY_AGENT_ID,
