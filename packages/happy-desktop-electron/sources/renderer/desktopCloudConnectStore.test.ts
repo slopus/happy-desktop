@@ -19,6 +19,7 @@ function cloudCreate(passwordSignIn: DesktopHappyCloud["passwordSignIn"]) {
         serverRemove: vi.fn(),
         accountSignOut: vi.fn(),
         passwordSignIn: vi.fn(passwordSignIn),
+        credentialScan: vi.fn(async () => []),
     };
     return cloud;
 }

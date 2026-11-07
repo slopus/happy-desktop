@@ -94,6 +94,7 @@ const bridge: HappyDesktopBridge = {
                   accountSignOut: () => ipcRenderer.invoke(desktopIpc.happyCloudAccountSignOut),
                   passwordSignIn: (login: string, password: string) =>
                       ipcRenderer.invoke(desktopIpc.happyCloudPasswordSignIn, login, password),
+                  credentialScan: () => ipcRenderer.invoke(desktopIpc.happyCloudCredentialScan),
               },
           }
         : {}),

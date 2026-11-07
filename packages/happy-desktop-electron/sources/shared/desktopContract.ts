@@ -29,6 +29,35 @@ export type DesktopHappyCloudAvailability =
     | { readonly available: true }
     | { readonly available: false; readonly reason: "taken" | "reserved" | "invalid" };
 
+/** The vendor a credential found on this computer is for, as Happy Cloud names it. */
+export type DesktopCredentialVendor =
+    | "openai"
+    | "anthropic"
+    | "grok"
+    | "bedrock"
+    | "codex"
+    | "claude-code";
+
+/** How a found credential signs in: a key, an AWS key pair, or a subscription's sign-in. */
+export type DesktopCredentialKind = "api_key" | "aws_keys" | "oauth";
+
+/**
+ * A model provider credential the shell found on this computer. Never the
+ * secret: only enough for a person to recognize and pick it.
+ */
+export interface DesktopCredentialFound {
+    /** Names this entry of the last scan; not stable across scans. */
+    readonly id: string;
+    readonly vendor: DesktopCredentialVendor;
+    readonly kind: DesktopCredentialKind;
+    /** Where it was found, such as `~/.codex/auth.json` or `$OPENAI_API_KEY`. */
+    readonly source: string;
+    /** A suggested name for it. */
+    readonly label: string;
+    /** The last four characters behind dots. */
+    readonly masked: string;
+}
+
 /** The accounts API, asked by the shell with the account's token. */
 export interface DesktopHappyCloud {
     serversList(): Promise<DesktopServerSignInResult<readonly HappyCloudServer[]>>;
@@ -49,6 +78,12 @@ export interface DesktopHappyCloud {
     accountSignOut(): Promise<void>;
     /** Signs in to a test account; the shell sends the password to accounts and keeps none of it. */
     passwordSignIn(login: string, password: string): Promise<DesktopServerSignInResult<void>>;
+    /**
+     * Looks for model provider credentials on this computer, where the
+     * vendors' own tools keep them. The shell holds what it found for a few
+     * minutes and answers with masked entries only.
+     */
+    credentialScan(): Promise<readonly DesktopCredentialFound[]>;
 }
 
 export interface DesktopCloudAuthConfiguration {
@@ -1175,6 +1210,7 @@ export const desktopIpc = {
     happyCloudServerRemove: "happy:happy-cloud:server-remove",
     happyCloudAccountSignOut: "happy:happy-cloud:account-sign-out",
     happyCloudPasswordSignIn: "happy:happy-cloud:password-sign-in",
+    happyCloudCredentialScan: "happy:happy-cloud:credential-scan",
     serverSessionsChanged: "happy:server-sessions:changed",
     happyLinkExternalReceived: "happy:happy-link:external-received",
     happyLinkExternalTake: "happy:happy-link:external-take",

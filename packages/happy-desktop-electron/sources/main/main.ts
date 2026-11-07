@@ -132,6 +132,7 @@ import { doNotTrackEnabled, doNotTrackEnvironment } from "../shared/doNotTrack";
 import { powerSavingInstall } from "./powerSaving";
 import { cloudAuthProductionRedirectUri, serverOAuthRedirectUri } from "../shared/cloudAuthConfig";
 import { cloudAuthCallbackRead } from "./cloudAuthCallback";
+import { credentialImportCreate } from "./credentialImport";
 import { happyExternalLinkUrl } from "./happyLink";
 
 if (process.platform !== "darwin" && process.platform !== "linux" && process.platform !== "win32") {
@@ -2012,6 +2013,7 @@ void app
         });
         if (happyCloud) {
             const cloud = happyCloud;
+            const credentialImport = credentialImportCreate();
             const name = (value: unknown): string => {
                 if (typeof value !== "string" || value.length > 64)
                     throw new Error("Happy asked about an invalid server name.");
@@ -2062,6 +2064,10 @@ void app
                     return cloud.passwordSignIn(login, password);
                 },
             );
+            ipcMain.handle(desktopIpc.happyCloudCredentialScan, (event) => {
+                desktopDaemonSenderRequire(event.sender);
+                return credentialImport.scan();
+            });
             ipcMain.handle(desktopIpc.happyCloudAccountSignOut, (event) => {
                 desktopDaemonSenderRequire(event.sender);
                 cloud.accountSignOut();
