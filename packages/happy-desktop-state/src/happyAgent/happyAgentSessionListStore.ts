@@ -13,6 +13,7 @@ import { UserError } from "../types.js";
 import {
     happyAgentProjectGroupsPreserve,
     happyAgentProjectGroupsProjectorCreate,
+    type HappyAgentSessionCatalogGroup,
     happyAgentSessionGroupIdOf,
     type HappyAgentProjectGroup,
 } from "./happyAgentProjectGroupProject.js";
@@ -624,6 +625,20 @@ export interface HappyAgentSessionCatalogSnapshot {
     readonly sessions: readonly HappyAgentSessionSummary[];
     /** The host's complete archived catalog in newest-archived-first presentation order. */
     readonly archivedSessions: readonly HappyAgentSessionSummary[];
+    /** How this snapshot differs from the one its source handed out just before it, when known. */
+    readonly changes?: HappyAgentSessionCatalogChanges;
+    /** One project's contents, stated without listing the whole catalog. */
+    group?(projectId: HappyAgentProjectId): HappyAgentSessionCatalogGroup | undefined;
+}
+
+/**
+ * The projects one snapshot changed. Every other project is exactly as `previous`
+ * states it, and none was added, removed, or moved; the changed ones are read
+ * through `group`, so a reader that followed `previous` projects them alone.
+ */
+export interface HappyAgentSessionCatalogChanges {
+    readonly previous: HappyAgentSessionCatalogSnapshot;
+    readonly projects: ReadonlySet<HappyAgentProjectId>;
 }
 
 export interface HappyAgentSessionCatalogSource {
@@ -698,7 +713,14 @@ export function happyAgentSessionListStoreCreate(
         // not there has been withdrawn. Both refuse, and they say different
         // things.
         readonly catalogListed: boolean;
-        readonly sessions: readonly HappyAgentSessionSummary[];
+        /** The catalog read last applied, whose session list is this surface's own unless overridden. */
+        readonly snapshot: HappyAgentSessionCatalogSnapshot | undefined;
+        /**
+         * This window's own session list while it differs from the snapshot's:
+         * a pending archive or restore, a row read here, a row taken out ahead
+         * of the host. `undefined` while the snapshot's list stands as it is.
+         */
+        readonly sessionsLocal: readonly HappyAgentSessionSummary[] | undefined;
         readonly archivedSessions: readonly HappyAgentSessionSummary[];
         /**
          * Counts the changes the authoritative reads have made to what this
@@ -734,8 +756,89 @@ export function happyAgentSessionListStoreCreate(
         catalogRevision: 0,
         optimisticProjectOrder: undefined,
         optimisticWorkspaceOrders: new Map(),
-        sessions: [],
+        sessionsLocal: undefined,
+        snapshot: undefined,
     }));
+
+    /**
+     * `referencesPreserve`, answering `next` itself when every reference it kept
+     * is `next`'s, so the next read can be judged against it by identity.
+     */
+    const referencesSettle = <T>(previous: readonly T[], next: readonly T[]): readonly T[] => {
+        const kept = referencesPreserve(previous, next);
+        return kept !== previous &&
+            kept.length === next.length &&
+            kept.every((entry, index) => entry === next[index])
+            ? next
+            : kept;
+    };
+
+    /** The active sessions this surface lists, the snapshot's unless overridden here. */
+    const sessionsOf = (
+        state: HappyAgentSessionListInternalState = internal.getState(),
+    ): readonly HappyAgentSessionSummary[] => state.sessionsLocal ?? state.snapshot?.sessions ?? [];
+
+    /*
+     * The snapshot's sessions by id, kept beside it so a lookup on every list
+     * update does not walk the list. Patched with each changed snapshot, built
+     * again on first use after any other one.
+     */
+    let sessionIndex: Map<HappyAgentSessionId, HappyAgentSessionSummary> | undefined;
+    let sessionIndexOf: HappyAgentSessionCatalogSnapshot | undefined;
+
+    const sessionFind = (sessionId: string): HappyAgentSessionSummary | undefined => {
+        const state = internal.getState();
+        if (state.sessionsLocal !== undefined)
+            return state.sessionsLocal.find((candidate) => candidate.id === sessionId);
+        const snapshot = state.snapshot;
+        if (snapshot === undefined) return undefined;
+        if (sessionIndex === undefined || sessionIndexOf !== snapshot) {
+            sessionIndex = new Map(snapshot.sessions.map((session) => [session.id, session]));
+            sessionIndexOf = snapshot;
+        }
+        return sessionIndex.get(sessionId as HappyAgentSessionId);
+    };
+
+    /** Brings the session index from `changes.previous` forward to `snapshot`. */
+    const sessionIndexAdvance = (
+        snapshot: HappyAgentSessionCatalogSnapshot,
+        changes: HappyAgentSessionCatalogChanges,
+    ): void => {
+        if (sessionIndex === undefined || sessionIndexOf !== changes.previous) {
+            sessionIndex = undefined;
+            return;
+        }
+        const index = sessionIndex;
+        // Every list's departures before any list's arrivals, so a session that
+        // moved between two lists of the batch is not taken out after it arrived.
+        const added: (readonly HappyAgentSessionSummary[])[] = [];
+        const listReplace = (
+            before: readonly HappyAgentSessionSummary[] | undefined,
+            after: readonly HappyAgentSessionSummary[] | undefined,
+        ): void => {
+            if (before === after) return;
+            for (const session of before ?? [])
+                if (index.get(session.id) === session) index.delete(session.id);
+            if (after !== undefined) added.push(after);
+        };
+        for (const projectId of changes.projects) {
+            const before = changes.previous.group?.(projectId);
+            const after = snapshot.group?.(projectId);
+            if (before === after) continue;
+            listReplace(before?.sessions, after?.sessions);
+            const worktrees = new Set([
+                ...(before?.worktreeSessions.keys() ?? []),
+                ...(after?.worktreeSessions.keys() ?? []),
+            ]);
+            for (const worktreeId of worktrees)
+                listReplace(
+                    before?.worktreeSessions.get(worktreeId),
+                    after?.worktreeSessions.get(worktreeId),
+                );
+        }
+        for (const list of added) for (const session of list) index.set(session.id, session);
+        sessionIndexOf = snapshot;
+    };
 
     /*
      * One projector for the list as published, another for the host's own
@@ -744,6 +847,23 @@ export function happyAgentSessionListStoreCreate(
      */
     const projectGroups = happyAgentProjectGroupsProjectorCreate();
     const authoritativeGroups = happyAgentProjectGroupsProjectorCreate();
+    /**
+     * The snapshot whose own lists `projectGroups` last projected, so the next
+     * snapshot that names it as its previous one projects only what it changed.
+     * Any other projection — of this window's own list — forgets it.
+     */
+    let projectedSnapshot: HappyAgentSessionCatalogSnapshot | undefined;
+    /** What `authoritativeProjects` was last brought forward from. */
+    let authoritativeProjectedLast: readonly HappyAgentProjectGroup[] | undefined;
+    let authoritativeArchivedObserved: readonly HappyAgentSessionSummary[] | undefined;
+    /** Projects this window's own lists, which no snapshot states. */
+    const projectLocal = (
+        catalog: HappyAgentProjectCatalog,
+        sessions: readonly HappyAgentSessionSummary[],
+    ): readonly HappyAgentProjectGroup[] => {
+        projectedSnapshot = undefined;
+        return projectGroups(catalog, sessions);
+    };
 
     const listeners = new Set<() => void>();
     let active = false;
@@ -1288,6 +1408,8 @@ export function happyAgentSessionListStoreCreate(
         projected: readonly HappyAgentProjectGroup[],
     ): readonly HappyAgentProjectGroup[] => {
         const { optimisticProjectOrder, optimisticWorkspaceOrders } = internal.getState();
+        if (optimisticProjectOrder === undefined && optimisticWorkspaceOrders.size === 0)
+            return projected;
         return orderByIds(
             projected.map((project) => {
                 const order = optimisticWorkspaceOrders.get(project.id);
@@ -1307,6 +1429,7 @@ export function happyAgentSessionListStoreCreate(
 
     const optimisticOrdersConfirm = (projected: readonly HappyAgentProjectGroup[]): void => {
         const { optimisticProjectOrder, optimisticWorkspaceOrders } = internal.getState();
+        if (optimisticProjectOrder === undefined && optimisticWorkspaceOrders.size === 0) return;
         let nextProjectOrder = optimisticProjectOrder;
         if (
             optimisticProjectOrder !== undefined &&
@@ -1497,9 +1620,9 @@ export function happyAgentSessionListStoreCreate(
     ): readonly HappyAgentSubtaskRoot[] => [...catalog.bots, ...catalog.tasks];
 
     const publish = (
-        projected: readonly HappyAgentProjectGroup[] = projectGroups(
+        projected: readonly HappyAgentProjectGroup[] = projectLocal(
             internal.getState().catalog,
-            internal.getState().sessions,
+            sessionsOf(),
         ),
         archivedSessions: readonly HappyAgentSessionSummary[] = internal.getState()
             .archivedSessions,
@@ -1516,8 +1639,13 @@ export function happyAgentSessionListStoreCreate(
             // identity of the worktrees and conversation rows nested inside it — so a
             // reconcile that changed one session does not replace every project row,
             // and a worktree changing phase does not replace its siblings.
+            // The projector already hands back every group, worktree and row it did
+            // not change as the very object it was, and a changed one only when it
+            // is not equal to the last, so its list is published as it stands.
+            // Rows moved here ahead of the host are new objects, and only those
+            // are matched by id against what is on screen.
             const projects =
-                previous.projects.type === "ready"
+                previous.projects.type === "ready" && ordered !== projected
                     ? happyAgentProjectGroupsPreserve(previous.projects.value, ordered)
                     : ordered;
             const botsCreating = botsCreatingProject(bots, previous.botsCreating);
@@ -1570,9 +1698,7 @@ export function happyAgentSessionListStoreCreate(
      * meant to judge from that value rather than from what the store kept.
      */
     interface CatalogObservation {
-        readonly catalog: HappyAgentProjectCatalog;
-        readonly sessions: readonly HappyAgentSessionSummary[];
-        readonly archivedSessions: readonly HappyAgentSessionSummary[];
+        readonly snapshot: HappyAgentSessionCatalogSnapshot;
         readonly superseded: boolean;
     }
 
@@ -1622,26 +1748,49 @@ export function happyAgentSessionListStoreCreate(
                 // is the read order, and a later read must not be allowed to think
                 // this one never happened just because the host had nothing new.
                 appliedSequence = token;
-                const pending = sessionArchiveIntentsApply(
-                    snapshot.sessions,
-                    observedArchivedSessions,
-                );
+                // Only a pending archive or restore makes this window's list
+                // differ from the snapshot's, and only then is that list read.
+                const pending =
+                    sessionArchiveIntents.size === 0
+                        ? undefined
+                        : sessionArchiveIntentsApply(snapshot.sessions, observedArchivedSessions);
+                const sessionsLocal =
+                    pending === undefined || pending.sessions === snapshot.sessions
+                        ? undefined
+                        : pending.sessions;
+                const archivedSessions = pending?.archivedSessions ?? observedArchivedSessions;
                 const bots = nameIntentsApply(
                     subtaskOrdersApply(botAvatarIntentsApply(snapshot.catalog.bots)),
                 );
                 const tasks = nameIntentsApply(subtaskOrdersApply(snapshot.catalog.tasks));
                 internal.setState({
-                    archivedSessions: pending.archivedSessions,
+                    archivedSessions,
                     catalog:
                         bots === snapshot.catalog.bots && tasks === snapshot.catalog.tasks
                             ? snapshot.catalog
                             : { ...snapshot.catalog, bots, tasks },
                     catalogListed: true,
-                    sessions: pending.sessions,
+                    sessionsLocal,
+                    snapshot,
                 });
-                const projected = projectGroups(snapshot.catalog, pending.sessions);
+                // A snapshot that says what it changed since the one projected
+                // last costs only those projects.
+                const { changes } = snapshot;
+                const changed =
+                    sessionsLocal === undefined &&
+                    changes !== undefined &&
+                    changes.previous === projectedSnapshot &&
+                    snapshot.group !== undefined
+                        ? projectGroups.changed(changes.projects, (projectId) =>
+                              snapshot.group!(projectId),
+                          )
+                        : undefined;
+                if (changes !== undefined) sessionIndexAdvance(snapshot, changes);
+                const projected =
+                    changed ?? projectGroups(snapshot.catalog, sessionsLocal ?? snapshot.sessions);
+                projectedSnapshot = sessionsLocal === undefined ? snapshot : undefined;
                 const authoritativeProjected =
-                    pending.sessions === snapshot.sessions
+                    sessionsLocal === undefined
                         ? projected
                         : authoritativeGroups(snapshot.catalog, snapshot.sessions);
                 optimisticOrdersConfirm(authoritativeProjected);
@@ -1650,20 +1799,33 @@ export function happyAgentSessionListStoreCreate(
                 // confirms it, and a read describing the same catalog twice is
                 // not. Reusing that read's references keeps the equal case
                 // identical rather than merely equal, which is what lets the
-                // comparison be an identity check.
+                // comparison be an identity check. A projection of changed
+                // projects alone already hands back every other group as it was
+                // and each changed one only when it is not equal to the last, so
+                // when the authoritative list is that last one it is judged by
+                // identity alone.
                 const { authoritativeArchivedSessions, authoritativeProjects } =
                     internal.getState();
                 const authoritative =
                     authoritativeProjects === undefined
                         ? authoritativeProjected
-                        : referencesPreserve(authoritativeProjects, authoritativeProjected);
+                        : authoritativeProjected === authoritativeProjectedLast
+                          ? authoritativeProjects
+                          : changed !== undefined &&
+                              authoritativeProjects === authoritativeProjectedLast
+                            ? authoritativeProjected
+                            : referencesSettle(authoritativeProjects, authoritativeProjected);
+                authoritativeProjectedLast = authoritativeProjected;
                 const archived =
                     authoritativeArchivedSessions === undefined
                         ? observedArchivedSessions
-                        : referencesPreserve(
-                              authoritativeArchivedSessions,
-                              observedArchivedSessions,
-                          );
+                        : observedArchivedSessions === authoritativeArchivedObserved
+                          ? authoritativeArchivedSessions
+                          : referencesSettle(
+                                authoritativeArchivedSessions,
+                                observedArchivedSessions,
+                            );
+                authoritativeArchivedObserved = observedArchivedSessions;
                 if (
                     authoritative !== authoritativeProjects ||
                     archived !== authoritativeArchivedSessions
@@ -1674,23 +1836,14 @@ export function happyAgentSessionListStoreCreate(
                         catalogRevision: state.catalogRevision + 1,
                     }));
                 }
-                publish(projected, pending.archivedSessions);
+                publish(projected, archivedSessions);
                 worktreesSettle();
                 botsSettle();
                 tasksSettle();
                 projectArchivesConfirmAbsent();
                 worktreeArchivesConfirmAbsent();
             }
-            return {
-                ok: true,
-                observed: {
-                    archivedSessions: observedArchivedSessions,
-                    catalog: snapshot.catalog,
-                    sessions: snapshot.sessions,
-                    superseded,
-                },
-                token,
-            };
+            return { ok: true, observed: { snapshot, superseded }, token };
         } catch (error) {
             return { ok: false, error, superseded: token <= appliedSequence, token };
         }
@@ -2355,15 +2508,11 @@ export function happyAgentSessionListStoreCreate(
                 )
             )
                 return false;
-            const known = internal
-                .getState()
-                .sessions.find((candidate) => candidate.id === sessionId);
+            const known = sessionFind(sessionId);
             return known !== undefined && known.parentSessionId !== undefined;
         },
         async sessionLocationRead(sessionId) {
-            const listed = internal
-                .getState()
-                .sessions.find((candidate) => candidate.id === sessionId);
+            const listed = sessionFind(sessionId);
             // A session the list does not carry is not necessarily gone: a
             // subagent never takes a row, and a session started a moment ago
             // may not have been reconciled yet. Asking the host is what tells
@@ -2381,8 +2530,8 @@ export function happyAgentSessionListStoreCreate(
             return locationListed(location) ? location : undefined;
         },
         sessionRead(sessionId, knownUnread) {
-            const { catalog, sessions } = internal.getState();
-            const session = sessions.find((candidate) => candidate.id === sessionId);
+            const { catalog } = internal.getState();
+            const session = sessionFind(sessionId);
             // A bot's one conversation is carried on the bot itself and never
             // joins the flat session list, so both halves of reading it happen
             // on the catalog copy instead. Both halves matter: the open chat is
@@ -2406,7 +2555,7 @@ export function happyAgentSessionListStoreCreate(
             if (!unread && knownUnread !== true) return;
             if (session?.unreadReason !== undefined) {
                 internal.setState({
-                    sessions: sessions.map((candidate) =>
+                    sessionsLocal: sessionsOf().map((candidate) =>
                         candidate.id === sessionId ? sessionReadLocally(candidate) : candidate,
                     ),
                 });
@@ -2483,9 +2632,7 @@ export function happyAgentSessionListStoreCreate(
                 // closing a tab must feel immediate. A failed archive is
                 // recorded in `mutationError`; its rejection then reconciles
                 // the authoritative catalog and puts the row back.
-                const closing = internal
-                    .getState()
-                    .sessions.find((existing) => existing.id === sessionId);
+                const closing = sessionFind(sessionId);
                 internal.setState((state) => {
                     return {
                         archivedSessions: closing
@@ -2496,7 +2643,9 @@ export function happyAgentSessionListStoreCreate(
                                   ),
                               ]
                             : state.archivedSessions,
-                        sessions: state.sessions.filter((existing) => existing.id !== sessionId),
+                        sessionsLocal: sessionsOf(state).filter(
+                            (existing) => existing.id !== sessionId,
+                        ),
                     };
                 });
                 publish();
@@ -2512,19 +2661,18 @@ export function happyAgentSessionListStoreCreate(
             }),
         async sessionRestore(sessionId) {
             const state = internal.getState();
-            if (state.sessions.some((existing) => existing.id === sessionId))
-                return { type: "restored" };
+            if (sessionFind(sessionId) !== undefined) return { type: "restored" };
             const restoring = state.archivedSessions.find((existing) => existing.id === sessionId);
             store.setState({ ...store.getState(), mutationError: undefined });
             internal.setState((current) => ({
                 archivedSessions: current.archivedSessions.filter(
                     (existing) => existing.id !== sessionId,
                 ),
-                sessions:
+                sessionsLocal:
                     restoring === undefined ||
-                    current.sessions.some((existing) => existing.id === sessionId)
-                        ? current.sessions
-                        : [...current.sessions, restoring],
+                    sessionsOf(current).some((existing) => existing.id === sessionId)
+                        ? current.sessionsLocal
+                        : [...sessionsOf(current), restoring],
             }));
             publish();
             return await new Promise<HappyAgentSessionRestoreResult>((resolve) => {
@@ -2643,8 +2791,8 @@ export function happyAgentSessionListStoreCreate(
         },
         worktreeReorder: (projectId, worktreeId, afterId) =>
             mutate(async () => {
-                const { catalog, sessions } = internal.getState();
-                const projected = projectGroups(catalog, sessions);
+                const { catalog } = internal.getState();
+                const projected = projectLocal(catalog, sessionsOf());
                 const current = store.getState().projects;
                 const peers =
                     (current.type === "ready" ? current.value : projected).find(
@@ -2670,8 +2818,8 @@ export function happyAgentSessionListStoreCreate(
             }),
         projectReorder: (projectId, afterId) =>
             mutate(async () => {
-                const { catalog, sessions } = internal.getState();
-                const projected = projectGroups(catalog, sessions);
+                const { catalog } = internal.getState();
+                const projected = projectLocal(catalog, sessionsOf());
                 const current = store.getState().projects;
                 const visible = current.type === "ready" ? current.value : projected;
                 if (!visible.some((project) => project.id === projectId)) return;

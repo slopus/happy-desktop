@@ -4,6 +4,7 @@ import {
     happyAgentProjectWriteRefusal,
     happyAgentWorktreeWriteRefusal,
 } from "./happyAgentGroupAccess.js";
+import { sortedPatch, sortedPatchMapped } from "../utils/sortedPatch.js";
 import { deepEqual } from "./happyAgentSupport.js";
 import type {
     HappyAgentGroupId,
@@ -147,45 +148,84 @@ export function happyAgentProjectGroupsProject(
 }
 
 /**
- * `happyAgentProjectGroupsProject` for one reader that projects the same catalog
- * over and over. The catalog source hands back the very same project, worktree and
- * session objects for everything a change did not touch, so a group whose inputs
- * are all identical to the last projection's is that projection's group, and only
- * the groups a change reached are built again. A rebuilt group that turns out
+ * One project's contents as a catalog source states them: the project, its
+ * worktrees, and the active sessions filed under each — every session in the
+ * list of the group it names — in catalog order. A source that can answer for
+ * one project lets a reader project that project alone.
+ */
+export interface HappyAgentSessionCatalogGroup {
+    readonly project: HappyAgentProject;
+    readonly worktrees: readonly HappyAgentWorktree[];
+    /** The project's own active sessions, subagents included. */
+    readonly sessions: readonly HappyAgentSessionSummary[];
+    /** Each worktree's active sessions, subagents included; a worktree with none may be absent. */
+    readonly worktreeSessions: ReadonlyMap<
+        HappyAgentWorktreeId,
+        readonly HappyAgentSessionSummary[]
+    >;
+}
+
+/** `happyAgentProjectGroupsProject` for one reader that projects the same catalog over and over. */
+export interface HappyAgentProjectGroupsProjector {
+    (
+        catalog: HappyAgentProjectCatalog,
+        sessions: readonly HappyAgentSessionSummary[],
+    ): readonly HappyAgentProjectGroup[];
+    /**
+     * The groups of the last projection with only `projects` projected again,
+     * each from its own contents as `groupOf` states them. Every other project is
+     * taken to be exactly as last projected, and none to have been added,
+     * removed, or moved; `undefined` says a whole projection is needed instead.
+     */
+    changed(
+        projects: ReadonlySet<HappyAgentProjectId>,
+        groupOf: (projectId: HappyAgentProjectId) => HappyAgentSessionCatalogGroup | undefined,
+    ): readonly HappyAgentProjectGroup[] | undefined;
+}
+
+/**
+ * The catalog source hands back the very same project, worktree and session
+ * objects for everything a change did not touch, so a group whose inputs are all
+ * identical to the last projection's is that projection's group, and only the
+ * groups a change reached are built again. Within one, only the rows that changed
+ * are moved, by binary search, in its sorted lists. A rebuilt group that turns out
  * equal to the one it replaces is the one it replaces, so a change the list does
  * not show — a timestamp the row does not carry — leaves every reference alone.
  */
-export function happyAgentProjectGroupsProjectorCreate(): (
-    catalog: HappyAgentProjectCatalog,
-    sessions: readonly HappyAgentSessionSummary[],
-) => readonly HappyAgentProjectGroup[] {
-    interface WorktreeProjection {
-        readonly source: HappyAgentWorktree;
+export function happyAgentProjectGroupsProjectorCreate(): HappyAgentProjectGroupsProjector {
+    /** One group's top-level sessions in catalog order, sorted, and drawn as rows. */
+    interface Rows {
         readonly sessions: readonly HappyAgentSessionSummary[];
+        readonly sorted: readonly HappyAgentSessionSummary[];
+        readonly conversations: readonly ConversationSummary[];
+    }
+    interface WorktreeProjection extends Rows {
+        readonly source: HappyAgentWorktree;
         readonly value: HappyAgentWorktreeGroup;
     }
-    interface ProjectProjection {
+    interface ProjectProjection extends Rows {
         readonly source: HappyAgentProject;
-        readonly sessions: readonly HappyAgentSessionSummary[];
-        readonly worktrees: readonly HappyAgentWorktreeGroup[];
+        /** The project's listed worktrees in catalog order, and sorted the way the list shows them. */
+        readonly worktrees: readonly WorktreeProjection[];
+        readonly worktreesSorted: readonly HappyAgentWorktreeGroup[];
         readonly value: HappyAgentProjectGroup;
     }
-    let worktreeProjections = new Map<HappyAgentWorktreeId, WorktreeProjection>();
-    let projectProjections = new Map<HappyAgentProjectId, ProjectProjection>();
-    let projectedWorktrees: readonly HappyAgentWorktree[] = [];
-    let projectedProjects: readonly HappyAgentProject[] = [];
+    const worktreeProjections = new Map<HappyAgentWorktreeId, WorktreeProjection>();
+    const projectProjections = new Map<HappyAgentProjectId, ProjectProjection>();
     let groups: readonly HappyAgentProjectGroup[] = [];
     let groupIndex = new Map<HappyAgentProjectId, number>();
 
     /*
-     * The buckets the last call filed its sessions into, and where each session
-     * sat. The source hands back the very same flat list but for the sessions a
-     * change touched, so when none of those moved between groups the buckets are
-     * patched in place of being filed again.
+     * The flat input the last whole projection filed, kept so the next flat one can
+     * be patched: the buckets its sessions went into and where each session sat,
+     * and the catalog lists it projected. A projection of changed groups alone
+     * leaves these behind, and the next flat one files everything again.
      */
-    let bucketed: readonly HappyAgentSessionSummary[] = [];
+    let bucketed: readonly HappyAgentSessionSummary[] | undefined;
     let buckets = new Map<string, HappyAgentSessionSummary[]>();
     let slots: (readonly [string, number] | undefined)[] = [];
+    let projectedWorktrees: readonly HappyAgentWorktree[] | undefined;
+    let projectedProjects: readonly HappyAgentProject[] | undefined;
 
     const bucketsFile = (sessions: readonly HappyAgentSessionSummary[]): void => {
         buckets = new Map();
@@ -213,7 +253,7 @@ export function happyAgentProjectGroupsProjectorCreate(): (
     const bucketsPatch = (
         sessions: readonly HappyAgentSessionSummary[],
     ): ReadonlySet<string> | undefined => {
-        if (sessions.length !== bucketed.length) return undefined;
+        if (bucketed === undefined || sessions.length !== bucketed.length) return undefined;
         let patched: Map<string, HappyAgentSessionSummary[]> | undefined;
         for (let index = 0; index < sessions.length; index += 1) {
             const session = sessions[index]!;
@@ -243,8 +283,39 @@ export function happyAgentProjectGroupsProjectorCreate(): (
         return new Set(patched.keys());
     };
 
-    const worktreeProject = (worktree: HappyAgentWorktree): WorktreeProjection => {
-        const listed = buckets.get(worktreeKey(worktree.id)) ?? NO_SESSIONS;
+    /**
+     * A group's rows brought forward from `previous` to `sessions`, in the
+     * arrangement the host records. The sessions are sorted here rather than
+     * trusted in arrival order because an optimistic reorder rewrites only the
+     * moved row's key: sorting on the key is what moves the row.
+     */
+    const rowsProject = (
+        previous: Rows | undefined,
+        sessions: readonly HappyAgentSessionSummary[],
+    ): Rows => {
+        if (previous === undefined) {
+            const sorted = [...sessions].sort(byOrderKey);
+            return {
+                sessions,
+                sorted,
+                conversations: sorted.map(happyAgentConversationSummaryProject),
+            };
+        }
+        const patched = sortedPatchMapped(
+            previous.sorted,
+            previous.conversations,
+            previous.sessions,
+            sessions,
+            byOrderKey,
+            happyAgentConversationSummaryProject,
+        );
+        return { sessions, sorted: patched.sorted, conversations: patched.mapped };
+    };
+
+    const worktreeProject = (
+        worktree: HappyAgentWorktree,
+        listed: readonly HappyAgentSessionSummary[],
+    ): WorktreeProjection => {
         const previous = worktreeProjections.get(worktree.id);
         if (
             previous !== undefined &&
@@ -252,24 +323,16 @@ export function happyAgentProjectGroupsProjectorCreate(): (
             elementsSame(previous.sessions, listed)
         )
             return previous;
-        return {
-            source: worktree,
-            sessions: listed,
-            value: settled(
-                previous?.value,
-                worktreeGroup(
-                    worktree,
-                    conversationsSettled(previous?.value.conversations, listed),
-                ),
-            ),
-        };
+        const rows = rowsProject(previous, listed);
+        const value = settled(previous?.value, worktreeGroup(worktree, rows.conversations));
+        return { ...rows, conversations: value.conversations, source: worktree, value };
     };
 
     const projectProject = (
         project: HappyAgentProject,
-        worktrees: readonly HappyAgentWorktreeGroup[],
+        worktrees: readonly WorktreeProjection[],
+        listed: readonly HappyAgentSessionSummary[],
     ): ProjectProjection => {
-        const listed = buckets.get(projectKey(project.id)) ?? NO_SESSIONS;
         const previous = projectProjections.get(project.id);
         if (
             previous !== undefined &&
@@ -278,47 +341,69 @@ export function happyAgentProjectGroupsProjectorCreate(): (
             elementsSame(previous.worktrees, worktrees)
         )
             return previous;
-        return {
-            source: project,
-            sessions: listed,
-            worktrees,
-            value: settled(
-                previous?.value,
-                projectGroup(
-                    project,
-                    conversationsSettled(previous?.value.conversations, listed),
-                    previous !== undefined && elementsSame(previous.value.worktrees, worktrees)
-                        ? previous.value.worktrees
-                        : worktrees,
-                ),
+        const rows = rowsProject(previous, listed);
+        const values = worktrees.map((worktree) => worktree.value);
+        const worktreesSorted =
+            previous === undefined
+                ? [...values].sort(byOrderKey)
+                : sortedPatch(
+                      previous.worktreesSorted,
+                      previous.worktrees.map((worktree) => worktree.value),
+                      values,
+                      byOrderKey,
+                  );
+        const value = settled(
+            previous?.value,
+            projectGroup(
+                project,
+                rows.conversations,
+                previous !== undefined && elementsSame(previous.value.worktrees, worktreesSorted)
+                    ? previous.value.worktrees
+                    : worktreesSorted,
             ),
+        );
+        return {
+            ...rows,
+            conversations: value.conversations,
+            source: project,
+            worktrees,
+            worktreesSorted: value.worktrees,
+            value,
         };
     };
 
     const projectAll = (catalog: HappyAgentProjectCatalog): readonly HappyAgentProjectGroup[] => {
-        const worktreesNext = new Map<HappyAgentWorktreeId, WorktreeProjection>();
-        const worktreesByProject = new Map<HappyAgentProjectId, HappyAgentWorktreeGroup[]>();
+        const worktreesByProject = new Map<HappyAgentProjectId, WorktreeProjection[]>();
+        const worktreesListed = new Set<HappyAgentWorktreeId>();
         for (const worktree of catalog.worktrees) {
             if (!worktreeListed(worktree)) continue;
             // A worktree is listed as soon as it exists, before anything has run in
             // it: it was created deliberately and is where the next session goes, so
             // an empty one is a destination rather than clutter.
-            const projection = worktreeProject(worktree);
-            worktreesNext.set(worktree.id, projection);
-            mapAppend(worktreesByProject, worktree.projectId).push(projection.value);
+            const projection = worktreeProject(
+                worktree,
+                buckets.get(worktreeKey(worktree.id)) ?? NO_SESSIONS,
+            );
+            worktreeProjections.set(worktree.id, projection);
+            worktreesListed.add(worktree.id);
+            mapAppend(worktreesByProject, worktree.projectId).push(projection);
         }
-        worktreeProjections = worktreesNext;
+        for (const id of worktreeProjections.keys())
+            if (!worktreesListed.has(id)) worktreeProjections.delete(id);
 
-        const projectsNext = new Map<HappyAgentProjectId, ProjectProjection>();
+        const projectsListed = new Set<HappyAgentProjectId>();
         const next = catalog.projects.map((project) => {
             const projection = projectProject(
                 project,
-                (worktreesByProject.get(project.id) ?? []).sort(byOrderKey),
+                worktreesByProject.get(project.id) ?? NO_WORKTREES,
+                buckets.get(projectKey(project.id)) ?? NO_SESSIONS,
             );
-            projectsNext.set(project.id, projection);
+            projectProjections.set(project.id, projection);
+            projectsListed.add(project.id);
             return projection.value;
         });
-        projectProjections = projectsNext;
+        for (const id of projectProjections.keys())
+            if (!projectsListed.has(id)) projectProjections.delete(id);
         next.sort(byOrderKey);
         projectedWorktrees = catalog.worktrees;
         projectedProjects = catalog.projects;
@@ -329,18 +414,33 @@ export function happyAgentProjectGroupsProjectorCreate(): (
         return groups;
     };
 
+    /** Puts `projection` in its project's place, copying the list the first time. */
+    const groupReplace = (
+        next: HappyAgentProjectGroup[] | undefined,
+        projection: ProjectProjection,
+    ): HappyAgentProjectGroup[] | undefined => {
+        const previous = projectProjections.get(projection.source.id);
+        projectProjections.set(projection.source.id, projection);
+        if (previous?.value === projection.value) return next;
+        const copy = next ?? [...groups];
+        copy[groupIndex.get(projection.source.id)!] = projection.value;
+        return copy;
+    };
+
     /**
-     * Projects only what changed since the last call: the worktrees and projects
-     * whose records were replaced and the groups whose sessions were. Answers
-     * `undefined` when something was added, removed, listed, unlisted, or moved,
-     * because only a full projection settles a new arrangement.
+     * Projects only what changed since the last flat call: the worktrees and
+     * projects whose records were replaced and the groups whose sessions were.
+     * Answers `undefined` when something was added, removed, listed, unlisted, or
+     * moved, because only a full projection settles a new arrangement.
      */
-    const projectChanged = (
+    const projectFlatChanged = (
         catalog: HappyAgentProjectCatalog,
         patched: ReadonlySet<string>,
     ): readonly HappyAgentProjectGroup[] | undefined => {
         const { projects, worktrees } = catalog;
         if (
+            projectedWorktrees === undefined ||
+            projectedProjects === undefined ||
             worktrees.length !== projectedWorktrees.length ||
             projects.length !== projectedProjects.length
         )
@@ -353,7 +453,6 @@ export function happyAgentProjectGroupsProjectorCreate(): (
             if (
                 worktree.id !== before.id ||
                 worktree.projectId !== before.projectId ||
-                worktree.orderKey !== before.orderKey ||
                 worktreeListed(worktree) !== worktreeListed(before)
             )
                 return undefined;
@@ -385,15 +484,15 @@ export function happyAgentProjectGroupsProjectorCreate(): (
                     projectsDirty.set(projection.source.id, projection.source);
             }
         }
-        const worktreesReplaced = new Map<HappyAgentWorktreeId, HappyAgentWorktreeGroup>();
         for (const worktree of worktreesDirty.values()) {
             const previous = worktreeProjections.get(worktree.id);
             if (previous === undefined) return undefined;
-            const projection = worktreeProject(worktree);
+            const projection = worktreeProject(
+                worktree,
+                buckets.get(worktreeKey(worktree.id)) ?? NO_SESSIONS,
+            );
             if (projection === previous) continue;
             worktreeProjections.set(worktree.id, projection);
-            if (projection.value === previous.value) continue;
-            worktreesReplaced.set(worktree.id, projection.value);
             const project = projectProjections.get(worktree.projectId);
             if (project !== undefined && !projectsDirty.has(project.source.id))
                 projectsDirty.set(project.source.id, project.source);
@@ -401,21 +500,17 @@ export function happyAgentProjectGroupsProjectorCreate(): (
         let next: HappyAgentProjectGroup[] | undefined;
         for (const project of projectsDirty.values()) {
             const previous = projectProjections.get(project.id);
-            const index = groupIndex.get(project.id);
-            if (previous === undefined || index === undefined) return undefined;
-            // No worktree's key changed, so the replaced ones keep their places.
-            const projectWorktrees =
-                worktreesReplaced.size === 0
-                    ? previous.worktrees
-                    : previous.worktrees.map(
-                          (worktree) => worktreesReplaced.get(worktree.id) ?? worktree,
-                      );
-            const projection = projectProject(project, projectWorktrees);
-            if (projection === previous) continue;
-            projectProjections.set(project.id, projection);
-            if (projection.value === previous.value) continue;
-            next ??= [...groups];
-            next[index] = projection.value;
+            if (previous === undefined || !groupIndex.has(project.id)) return undefined;
+            next = groupReplace(
+                next,
+                projectProject(
+                    project,
+                    previous.worktrees.map(
+                        (worktree) => worktreeProjections.get(worktree.source.id) ?? worktree,
+                    ),
+                    buckets.get(projectKey(project.id)) ?? NO_SESSIONS,
+                ),
+            );
         }
         projectedWorktrees = worktrees;
         projectedProjects = projects;
@@ -423,17 +518,74 @@ export function happyAgentProjectGroupsProjectorCreate(): (
         return groups;
     };
 
-    return (catalog, sessions) => {
+    const projector = (
+        catalog: HappyAgentProjectCatalog,
+        sessions: readonly HappyAgentSessionSummary[],
+    ): readonly HappyAgentProjectGroup[] => {
         const patched = sessions === bucketed ? NO_KEYS : bucketsPatch(sessions);
         if (patched !== undefined) {
-            const projected = projectChanged(catalog, patched);
+            const projected = projectFlatChanged(catalog, patched);
             if (projected !== undefined) return projected;
         } else bucketsFile(sessions);
         return projectAll(catalog);
     };
+
+    projector.changed = (
+        projects: ReadonlySet<HappyAgentProjectId>,
+        groupOf: (projectId: HappyAgentProjectId) => HappyAgentSessionCatalogGroup | undefined,
+    ): readonly HappyAgentProjectGroup[] | undefined => {
+        // Whatever this changes, the flat input last filed no longer describes it.
+        bucketed = undefined;
+        projectedWorktrees = undefined;
+        projectedProjects = undefined;
+        let next: HappyAgentProjectGroup[] | undefined;
+        for (const projectId of projects) {
+            const group = groupOf(projectId);
+            const previous = projectProjections.get(projectId);
+            if (
+                group === undefined ||
+                previous === undefined ||
+                !groupIndex.has(projectId) ||
+                group.project.id !== projectId ||
+                group.project.orderKey !== previous.source.orderKey
+            )
+                return undefined;
+            const worktrees: WorktreeProjection[] = [];
+            for (const worktree of group.worktrees) {
+                if (!worktreeListed(worktree)) continue;
+                const projection = worktreeProject(
+                    worktree,
+                    topLevelOf(group.worktreeSessions.get(worktree.id)),
+                );
+                worktreeProjections.set(worktree.id, projection);
+                worktrees.push(projection);
+            }
+            const kept = new Set(worktrees.map((worktree) => worktree.source.id));
+            // A worktree that moved to another changed project keeps that project's entry.
+            for (const worktree of previous.worktrees)
+                if (
+                    !kept.has(worktree.source.id) &&
+                    worktreeProjections.get(worktree.source.id)?.source.projectId === projectId
+                )
+                    worktreeProjections.delete(worktree.source.id);
+            next = groupReplace(
+                next,
+                projectProject(
+                    group.project,
+                    elementsSame(previous.worktrees, worktrees) ? previous.worktrees : worktrees,
+                    topLevelOf(group.sessions),
+                ),
+            );
+        }
+        if (next !== undefined) groups = next;
+        return groups;
+    };
+
+    return projector;
 }
 
 const NO_KEYS: ReadonlySet<string> = new Set();
+const NO_WORKTREES: readonly never[] = [];
 const WORKTREE_PREFIX = "worktree:";
 const PROJECT_PREFIX = "project:";
 
@@ -448,6 +600,26 @@ function projectKey(id: HappyAgentProjectId): string {
 /** The bucket a top-level session is filed in: its worktree's, or else its project's. */
 function bucketKey(session: HappyAgentSessionSummary): string {
     return session.worktreeId ? worktreeKey(session.worktreeId) : projectKey(session.projectId);
+}
+
+/** A list's top-level sessions, the very same list each time it is asked about the same one. */
+const topLevels = new WeakMap<
+    readonly HappyAgentSessionSummary[],
+    readonly HappyAgentSessionSummary[]
+>();
+
+function topLevelOf(
+    sessions: readonly HappyAgentSessionSummary[] | undefined,
+): readonly HappyAgentSessionSummary[] {
+    if (sessions === undefined || sessions.length === 0) return NO_SESSIONS;
+    let topLevel = topLevels.get(sessions);
+    if (topLevel === undefined) {
+        topLevel = sessions.some((session) => session.parentSessionId !== undefined)
+            ? sessions.filter((session) => session.parentSessionId === undefined)
+            : sessions;
+        topLevels.set(sessions, topLevel);
+    }
+    return topLevel;
 }
 
 /**
@@ -465,17 +637,6 @@ const NO_SESSIONS: readonly HappyAgentSessionSummary[] = [];
 /** `next`, or `previous` when the two describe the very same row. */
 function settled<T>(previous: T | undefined, next: T): T {
     return previous !== undefined && deepEqual(previous, next) ? previous : next;
-}
-
-/** One group's rows, reusing the previous array when every row came back the same. */
-function conversationsSettled(
-    previous: readonly ConversationSummary[] | undefined,
-    sessions: readonly HappyAgentSessionSummary[],
-): readonly ConversationSummary[] {
-    const conversations = conversationsOf(sessions);
-    return previous !== undefined && elementsSame(previous, conversations)
-        ? previous
-        : conversations;
 }
 
 /** Whether two lists hold the very same items in the same order. */
@@ -720,17 +881,6 @@ function byOrderKey(
     const rightKey = right.orderKey ?? right.id;
     if (leftKey !== rightKey) return leftKey < rightKey ? -1 : 1;
     return left.id < right.id ? -1 : left.id > right.id ? 1 : 0;
-}
-
-/**
- * One group's rows in the arrangement the host records. The sessions are sorted
- * here rather than trusted in arrival order because an optimistic reorder
- * rewrites only the moved row's key: sorting on the key is what moves the row.
- */
-function conversationsOf(
-    sessions: readonly HappyAgentSessionSummary[] | undefined,
-): readonly ConversationSummary[] {
-    return [...(sessions ?? [])].sort(byOrderKey).map(happyAgentConversationSummaryProject);
 }
 
 function activityOf(
