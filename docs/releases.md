@@ -1,10 +1,10 @@
 # Requested previews
 
-Release requests default to preview; production must be explicit. An agent chooses
-an unused `X.Y.Z-preview.N` version from release history and writes user-facing
-Markdown notes covering every included commit. Do not ask the person to type a
-version. Merging to `main` no longer deploys the hosted renderer; all previews
-are explicitly requested.
+Release requests default to preview; production must be explicit. The release
+workflow computes the version (see [Versions](#versions)); an agent writes
+user-facing Markdown notes covering every included commit. Do not choose or type a
+version, and do not ask the person for one. Merging to `main` no longer deploys the
+hosted renderer; all previews are explicitly requested.
 
 Validation uses one depth flag for the same stability tests and gyms. Before a
 preview, run `pnpm --dir packages/happy-desktop-ui test --depth=cheap` and
@@ -26,20 +26,21 @@ it to production. Passing tests or CI alone does not count as that use. If it ha
 keep it in preview and explain what still needs to be tried. No fixed soak duration or previously
 published preview is required.
 
-For Agent/native versions, inspect GitHub releases and tags. Renderer previews
-have no release tag: inspect `gh run list --workflow local-web-pages.yml`; run
-names contain their versions and successful deployments identify what shipped.
+For Agent/native versions, inspect GitHub releases and tags. A renderer preview
+claims its version's tag but publishes no GitHub Release; inspect
+`gh run list --workflow local-web-pages.yml`, where successful deployments identify
+what shipped and each run's summary names its version.
 
 | Request                  | Dispatch from `main`                                                                  | Delivery                                                                                                                        |
 | ------------------------ | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
 | Happy Agent preview      | Agent repository's `release-happy-agent.yml`: version, release_notes, prerelease=true | Agent binaries for Nightly                                                                                                      |
-| Desktop native preview   | `desktop-release.yml`: version, release_notes, prerelease=true                        | Signed macOS arm64/x64 and Windows x64 standard and Nightly apps and updater manifests, plus standard Linux x64/arm64 AppImages |
+| Desktop native preview   | `desktop-release.yml`: release_notes, prerelease=true                                 | Signed macOS arm64/x64 and Windows x64 standard and Nightly apps and updater manifests, plus standard Linux x64/arm64 AppImages |
 | Nightly native preview   | `desktop-release.yml`: as above, plus nightly_only=true                               | Signed macOS and Windows Nightly apps, `nightly-mac.yml` and `nightly.yml` only                                                 |
-| Desktop renderer preview | `local-web-pages.yml`: version, release_notes                                         | Hosted renderer at `https://local.app.happy.engineering` only                                                                   |
+| Desktop renderer preview | `local-web-pages.yml`: release_notes                                                  | Hosted renderer at `https://local.app.happy.engineering` only                                                                   |
 
 Each workflow validates and builds the requested source, then publishes in the same
 run. No prepare/publish coordinator, bump-after-build commit, or artifact promotion
-is needed. Preview versions are embedded without changing source manifests. Native
+is needed. Versions are embedded without changing source manifests. Native
 previews keep signing, notarization, verification, and checksum manifests; they do
 not replace GitHub's latest stable release. Existing release tags/assets must not
 be overwritten. Renderer metadata contains the version and full source SHA; notes
@@ -62,8 +63,10 @@ issue or pull request. GitHub notifies everyone a release mentions, so include i
 the person who asked for the release has approved those names. Happy Agent's short notes files
 carry the same people for the update card; see its release-agent skill.
 
-Use `gh workflow run ... --ref main` with `-f version=<chosen-version>` and
+Use `gh workflow run ... --ref main` with
 `-F release_notes=@.context/release-notes.md` (the `@` reads the file contents).
+Desktop and renderer workflows compute their version, so pass no `version`; the Agent
+workflow takes the version its own release instructions describe.
 For Agent/native previews also pass `-F prerelease=true`; renderer has no such input.
 A request for Happy Nightly alone also passes `-F nightly_only=true`: the run then
 builds, signs, notarizes, and publishes only the macOS and Windows Nightly apps and
@@ -84,13 +87,11 @@ it.
 
 Immediately before dispatching production, verify both the explicit user request for this product
 and our actual use of this candidate. Native production uses the same workflow with
-`prerelease=false` and stable `X.Y.Z`, shipping both app flavors on macOS and Windows.
+`prerelease=false`, which computes the stable `YYYY.M.C`, shipping both app flavors on macOS and Windows.
 Windows installers are always Azure-signed (see `windows-release-ci.md`) and retain
 their installed-app and Agent checks. Windows previews run only the Electron host's
 tests, since the macOS verify job runs the full suite on the same commit first; stable
-Windows runs the full suite. Native previews ship both app flavors on macOS and Windows unless `nightly_only` is set. Preserve the existing
-requirement that root and Electron manifests match that stable version: update them
-before dispatch under normal Git authorization. Standard bundles its renderer, so
+Windows runs the full suite. Native previews ship both app flavors on macOS and Windows unless `nightly_only` is set. Standard bundles its renderer, so
 production renderer delivery requires explicit native-release scope.
 
 Every app flavor defaults to stable Agent/native updates. Settings → General →
@@ -103,6 +104,32 @@ Existing Agent activation/drain controls,
 native install-on-quit/install action, and compatibility guards remain unchanged.
 Ship an initial stable native update so older Nightly hosts gain preview support;
 a hosted renderer refresh cannot update Electron host code.
+
+## Versions
+
+Desktop versions are CalVer: `YYYY.M.C` for a stable release and
+`YYYY.M.C-preview.N` for a preview. The month is not zero-padded (`2026.9.3`, never
+`2026.09.3`), because a leading zero is not a semantic version and electron-updater
+rejects it. Year and month are UTC at release time.
+
+- C counts stable releases: the current month's highest stable C plus one, else 1.
+- A preview previews the next stable C, and N is one more than the highest N already
+  taken for that `YYYY.M.C`, else 1. Native and renderer previews share N.
+- November 2026, for example: `2026.11.1-preview.1`, `2026.11.1-preview.2`, stable
+  `2026.11.1`, then `2026.11.2-preview.1`. If December starts before `2026.11.2`
+  ships, the next preview is `2026.12.1-preview.1`.
+
+`scripts/release/desktopVersion.mjs next stable|preview` computes the version from the
+`vYYYY.M.*` tags after fetching them; legacy `v0.0.x` tags are ignored. Both release
+workflows run it, and a `version` input, when given, must equal its answer. A
+renderer preview claims its tag before building, so a native release that was
+building at the time fails at publish and asks to be re-dispatched. Source manifests
+stay at the `0.0.0` development version; only release builds stamp a real one.
+
+Every CalVer version is newer than every `0.0.x` one, and the update feed already in
+installed apps still finds GitHub prereleases carrying a `-preview.N` version, so
+existing installs on either channel and flavor move onto CalVer releases with no
+bridging release.
 
 ## Homebrew and Linux
 

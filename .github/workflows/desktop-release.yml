@@ -1,12 +1,13 @@
 name: Release Happy Desktop
-run-name: Release Happy Desktop v${{ inputs.version }}
+run-name: Release Happy Desktop ${{ inputs.version || (inputs.prerelease && 'next preview' || 'next stable') }}
 
 on:
     workflow_dispatch:
         inputs:
             version:
-                description: Semantic version without v; previews use X.Y.Z-preview.N
-                required: true
+                description: Optional. Empty computes the next YYYY.M.C or YYYY.M.C-preview.N from release tags; a given version must equal it
+                required: false
+                default: ""
                 type: string
             release_notes:
                 description: Markdown changelog to include in the GitHub Release
@@ -36,8 +37,6 @@ concurrency:
     cancel-in-progress: false
 
 env:
-    RELEASE_TAG: v${{ inputs.version }}
-    RELEASE_VERSION: ${{ inputs.version }}
     RELEASE_PRERELEASE: ${{ inputs.prerelease }}
     RELEASE_NIGHTLY_ONLY: ${{ inputs.nightly_only }}
     RELEASE_SKIP_LOCAL_WEB_X64: ${{ inputs.skip_local_web_x64 }}
@@ -49,7 +48,7 @@ jobs:
         if: ${{ !inputs.nightly_only }}
         uses: ./.github/workflows/build-linux.yml
         with:
-            version: ${{ inputs.version }}
+            version: ${{ needs.verify.outputs.version }}
             release_analytics: true
         secrets:
             HAPPY_POSTHOG_API_KEY: ${{ secrets.HAPPY_POSTHOG_API_KEY }}
@@ -61,7 +60,7 @@ jobs:
         needs: verify
         uses: ./.github/workflows/build-windows.yml
         with:
-            version: ${{ inputs.version }}
+            version: ${{ needs.verify.outputs.version }}
             nightly_only: ${{ inputs.nightly_only }}
             # A preview runs the Windows-specific tests only; the verify job it needs has
             # already run the full `pnpm test` on this commit. Both prove onboarding
@@ -76,6 +75,8 @@ jobs:
         name: Verify release inputs and source
         runs-on: macos-15
         timeout-minutes: 60
+        outputs:
+            version: ${{ steps.inputs.outputs.version }}
 
         steps:
             - name: Check out source
@@ -92,22 +93,16 @@ jobs:
                   node-version: "24"
                   cache: pnpm
 
-            - name: Verify release inputs
+            - name: Verify release inputs and compute the version
+              id: inputs
               shell: bash
               env:
                   GH_TOKEN: ${{ github.token }}
                   RELEASE_NOTES: ${{ inputs.release_notes }}
+                  REQUESTED_VERSION: ${{ inputs.version }}
               run: |
                   if [[ "$GITHUB_REF" != "refs/heads/main" ]]; then
                     echo "Desktop releases must be dispatched from main." >&2
-                    exit 1
-                  fi
-                  pattern='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
-                  if [[ "$RELEASE_PRERELEASE" == true ]]; then
-                    pattern='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)-preview\.(0|[1-9][0-9]*)$'
-                  fi
-                  if [[ ! "$RELEASE_VERSION" =~ $pattern ]]; then
-                    echo "Use X.Y.Z-preview.N for previews, or X.Y.Z with prerelease=false for production." >&2
                     exit 1
                   fi
                   if [[ "$RELEASE_NIGHTLY_ONLY" == true && "$RELEASE_PRERELEASE" != true ]]; then
@@ -127,16 +122,10 @@ jobs:
                     echo "Desktop releases must start from the current main branch." >&2
                     exit 1
                   fi
-                  ROOT_VERSION="$(node -p "require('./package.json').version")"
-                  DESKTOP_VERSION="$(node -p "require('./packages/happy-desktop-electron/package.json').version")"
-                  if [[ "$RELEASE_PRERELEASE" != true && "$RELEASE_VERSION" != "$ROOT_VERSION" ]]; then
-                    echo "Requested version $RELEASE_VERSION does not match root package version $ROOT_VERSION." >&2
-                    exit 1
-                  fi
-                  if [[ "$DESKTOP_VERSION" != "$ROOT_VERSION" ]]; then
-                    echo "Desktop package version $DESKTOP_VERSION does not match root package version $ROOT_VERSION." >&2
-                    exit 1
-                  fi
+                  CHANNEL=stable
+                  if [[ "$RELEASE_PRERELEASE" == true ]]; then CHANNEL=preview; fi
+                  RELEASE_VERSION="$(node scripts/release/desktopVersion.mjs next "$CHANNEL" "$REQUESTED_VERSION")"
+                  RELEASE_TAG="v$RELEASE_VERSION"
                   if git rev-parse --verify --quiet "refs/tags/$RELEASE_TAG" >/dev/null; then
                     echo "Tag $RELEASE_TAG already exists." >&2
                     exit 1
@@ -145,6 +134,8 @@ jobs:
                     echo "Release $RELEASE_TAG already exists." >&2
                     exit 1
                   fi
+                  printf 'version=%s\n' "$RELEASE_VERSION" >> "$GITHUB_OUTPUT"
+                  printf 'Releasing Happy %s.\n' "$RELEASE_TAG" >> "$GITHUB_STEP_SUMMARY"
 
             - name: Install dependencies
               run: pnpm install --frozen-lockfile
@@ -173,6 +164,7 @@ jobs:
         runs-on: ${{ matrix.runner }}
         timeout-minutes: 60
         env:
+            RELEASE_VERSION: ${{ needs.verify.outputs.version }}
             APPLE_API_ISSUER: ${{ secrets.APPLE_NOTARY_ISSUER_ID }}
             APPLE_API_KEY_ID: ${{ secrets.APPLE_NOTARY_KEY_ID }}
             APPLE_NOTARY_KEY_P8_BASE64: ${{ secrets.APPLE_NOTARY_KEY_P8_BASE64 }}
@@ -262,7 +254,7 @@ jobs:
             - name: Build hosted local renderer
               if: matrix.arch == 'arm64' && matrix.flavor == 'local-web'
               env:
-                  HAPPY_LOCAL_WEB_BUILD_ID: ${{ inputs.version }}-${{ github.sha }}
+                  HAPPY_LOCAL_WEB_BUILD_ID: ${{ needs.verify.outputs.version }}-${{ github.sha }}
               run: pnpm desktop:local:web
 
             - name: Upload hosted local renderer
@@ -285,6 +277,9 @@ jobs:
         timeout-minutes: 15
         permissions:
             contents: write
+        env:
+            RELEASE_TAG: v${{ needs.verify.outputs.version }}
+            RELEASE_VERSION: ${{ needs.verify.outputs.version }}
 
         steps:
             - name: Check out the verified commit
@@ -316,12 +311,9 @@ jobs:
                     echo "The verified commit is no longer on main." >&2
                     exit 1
                   fi
-                  if git rev-parse --verify --quiet "refs/tags/$RELEASE_TAG" >/dev/null; then
-                    echo "Tag $RELEASE_TAG was created while this release was building." >&2
-                    exit 1
-                  fi
-                  if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-                    echo "Release $RELEASE_TAG was created while this release was building." >&2
+                  if git rev-parse --verify --quiet "refs/tags/$RELEASE_TAG" >/dev/null ||
+                    gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+                    echo "$RELEASE_TAG was taken while this release was building, likely by a renderer preview; re-dispatch to release as the next version." >&2
                     exit 1
                   fi
 
@@ -398,6 +390,12 @@ jobs:
                   done
                   if [[ "$RELEASE_NIGHTLY_ONLY" != true ]]; then
                     assets+=(packages/happy-desktop-electron/release/linux/*.AppImage)
+                  fi
+                  # Claim the tag atomically: creating an existing ref fails, where
+                  # `gh release create` would silently adopt a renderer preview's tag.
+                  if ! gh api "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/$RELEASE_TAG" -f sha="$GITHUB_SHA" >/dev/null; then
+                    echo "$RELEASE_TAG was taken while this release was building, likely by a renderer preview; re-dispatch to release as the next version." >&2
+                    exit 1
                   fi
                   arguments=("$RELEASE_TAG" --draft --target "$GITHUB_SHA" --title "Happy $RELEASE_TAG" --notes-file .release/notes.md)
                   if [[ "$RELEASE_PRERELEASE" == true ]]; then arguments+=(--prerelease --latest=false); fi

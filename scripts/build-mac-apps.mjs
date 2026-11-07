@@ -5,6 +5,7 @@ import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse } from "yaml";
 import { desktopFlavorNames, desktopFlavorRead } from "./desktopFlavors.mjs";
+import { desktopBuildVersion } from "./release/desktopVersion.mjs";
 import { packagedMainModulesVerify } from "./verify-packaged-main-modules.mjs";
 
 const workspace = resolve(fileURLToPath(new URL("..", import.meta.url)));
@@ -12,9 +13,7 @@ const desktopDirectory = join(workspace, "packages", "happy-desktop-electron");
 const require = createRequire(join(desktopDirectory, "package.json"));
 const { Arch, Platform, build } = require("electron-builder");
 const packageJson = JSON.parse(await readFile(join(desktopDirectory, "package.json"), "utf8"));
-const releaseVersion = process.env.RELEASE_VERSION ?? packageJson.version;
-if (!/^\d+\.\d+\.\d+(?:-preview\.(?:0|[1-9]\d*))?$/u.test(releaseVersion))
-    throw new Error("RELEASE_VERSION must be a stable or numbered preview version.");
+const releaseVersion = desktopBuildVersion(process.env.RELEASE_VERSION, packageJson.version);
 packageJson.version = releaseVersion;
 const localWebOrigin = "https://local.app.happy.engineering";
 const flavor = argument("--flavor", ["all", ...desktopFlavorNames], "all");

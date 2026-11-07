@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse } from "yaml";
 import { desktopFlavorRead } from "./desktopFlavors.mjs";
+import { desktopBuildVersion } from "./release/desktopVersion.mjs";
 import { packagedMainModulesVerify } from "./verify-packaged-main-modules.mjs";
 
 if (process.platform !== "win32") throw new Error("Windows releases require a Windows builder.");
@@ -16,10 +17,8 @@ const desktop = join(workspace, "packages", "happy-desktop-electron");
 const require = createRequire(join(desktop, "package.json"));
 const { build, Platform, Arch } = require("electron-builder");
 const metadata = JSON.parse(await readFile(join(desktop, "package.json"), "utf8"));
-// Previews embed their version in the package without changing the source manifest.
-const version = process.env.RELEASE_VERSION || metadata.version;
-if (!/^\d+\.\d+\.\d+(?:-preview\.(?:0|[1-9]\d*))?$/u.test(version))
-    throw new Error("RELEASE_VERSION must be a stable or numbered preview version.");
+// Releases embed their version in the package without changing the source manifest.
+const version = desktopBuildVersion(process.env.RELEASE_VERSION, metadata.version);
 // Every Windows build is signed; a missing setting fails rather than producing an unsigned one.
 const signing = {};
 for (const [option, variable] of Object.entries({

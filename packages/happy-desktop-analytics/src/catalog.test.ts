@@ -7,6 +7,7 @@ import {
     ANALYTICS_MODEL_FAMILY_RULES,
     ANALYTICS_VALUE_PATTERNS,
     analyticsFlavor,
+    analyticsVersion,
     analyticsValueAllowed,
     type AnalyticsPropertyRule,
 } from "./analyticsCatalog";
@@ -186,9 +187,16 @@ it("names model families with the catalog's own prefix table, in its order", () 
 
 it("tells a numbered preview from the release of the same numbers", () => {
     expect(
-        ["0.0.104", "0.0.104-preview.1", "0.0.104-preview.01", "0.0.104-beta.1", "0.0.0-test"].map(
-            (version) => analyticsFlavor({ nightly: false, version }),
-        ),
-    ).toEqual(["standard", "preview", "standard", "standard", "standard"]);
+        [
+            "0.0.104",
+            "0.0.104-preview.1",
+            "0.0.104-preview.01",
+            "0.0.104-beta.1",
+            "0.0.0-test",
+            "2026.11.1",
+            "2026.11.1-preview.2",
+        ].map((version) => analyticsFlavor({ nightly: false, version })),
+    ).toEqual(["standard", "preview", "standard", "standard", "standard", "standard", "preview"]);
+    expect(analyticsVersion("2026.11.1-preview.2")).toBe("2026.11.1");
     expect(analyticsFlavor({ nightly: true, version: "0.0.104-preview.1" })).toBe("nightly");
 });

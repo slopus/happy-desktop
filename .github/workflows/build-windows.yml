@@ -4,7 +4,7 @@ on:
     workflow_call:
         inputs:
             version:
-                description: Version to embed, X.Y.Z or X.Y.Z-preview.N; empty uses the package version.
+                description: Version to embed, YYYY.M.C or YYYY.M.C-preview.N; empty builds the 0.0.0 development version.
                 type: string
                 default: ""
             nightly_only:

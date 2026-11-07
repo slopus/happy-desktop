@@ -50,6 +50,21 @@ describe("version gates", () => {
             expect(happyAgentVersionAtLeast(version, minimum)).toBe(true);
         expect(happyAgentVersionAtLeast(undefined, minimum)).toBe(false);
     });
+    it("accept CalVer daemons against the semantic version gates", () => {
+        for (const daemon of ["2026.11.1", "2026.11.1-preview.1", "2026.1.12-preview.3"])
+            expect(
+                serverCompatibility({ daemon, protocol: MINIMUM_HAPPY_AGENT_PROTOCOL_VERSION })
+                    .status,
+            ).toBe("compatible");
+        expect(happyAgentVersionAtLeast("2026.11.1-preview.1", "0.4.87-preview.5")).toBe(true);
+        expect(happyAgentVersionAtLeast("2026.11.1-preview.2", "2026.11.1-preview.10")).toBe(false);
+        expect(happyAgentVersionAtLeast("2026.11.1-preview.10", "2026.11.1-preview.2")).toBe(true);
+        expect(happyAgentVersionAtLeast("2026.11.1-preview.9", "2026.11.1")).toBe(false);
+        expect(happyAgentVersionAtLeast("2026.11.1", "2026.11.1-preview.9")).toBe(true);
+        expect(happyAgentVersionAtLeast("2026.11.2-preview.1", "2026.11.1")).toBe(true);
+        expect(happyAgentVersionAtLeast("2026.12.1-preview.1", "2026.11.9")).toBe(true);
+        expect(happyAgentVersionAtLeast("2027.1.1", "2026.12.30")).toBe(true);
+    });
     it("orders a preview before the release it previews", () => {
         expect(happyAgentVersionAtLeast("0.4.44-preview.3", "0.4.44")).toBe(false);
         expect(happyAgentVersionAtLeast("0.4.44", "0.4.44")).toBe(true);

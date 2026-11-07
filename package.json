@@ -1,6 +1,6 @@
 {
     "name": "happy-desktop-workspace",
-    "version": "0.0.103",
+    "version": "0.0.0",
     "private": true,
     "description": "Happy local desktop client for Happy Agent",
     "license": "MIT",
@@ -27,7 +27,7 @@
         "blueprint": "PORTLESS_LAN=0 PORTLESS_LAN_IP= PORTLESS_TLD=localhost pnpm exec portless run --name happy-desktop-blueprint node scripts/dev-blueprint.mjs",
         "blueprint:screens": "node scripts/blueprint-screens.mjs",
         "build": "pnpm -r --if-present build",
-        "test": "pnpm -r --if-present test",
+        "test": "node --test \"scripts/release/*.test.mjs\" && pnpm -r --if-present test",
         "test:watch": "pnpm -r --parallel --if-present test:watch",
         "typecheck": "tsc --project tsconfig.json && pnpm -r --if-present typecheck",
         "format": "oxfmt --write eslint scripts tsconfig.json && pnpm -r --if-present format",

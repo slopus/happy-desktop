@@ -114,6 +114,32 @@ describe("desktopUpdateFeedResolve", () => {
         ).resolves.toMatchObject({ version: "0.0.104-preview.1" });
     });
 
+    it("moves legacy installs onto CalVer releases", async () => {
+        const releases = [
+            { version: "2026.11.2-preview.1", assets: [...macStandard, ...windowsNightly] },
+            { version: "2026.11.1", assets: [...macStandard, ...windowsNightly] },
+            { version: "2026.11.1-preview.2", assets: [...macStandard, ...windowsNightly] },
+            { version: "0.0.104-preview.4", assets: [...macStandard, ...windowsNightly] },
+            { version: "0.0.103", assets: [...macStandard, ...windowsNightly] },
+        ];
+        await expect(
+            resolve(releases, { preview: true, flavor: "standard", platform: "darwin" }),
+        ).resolves.toMatchObject({ version: "2026.11.2-preview.1" });
+        await expect(
+            resolve(releases, { preview: false, flavor: "local-web", platform: "win32" }),
+        ).resolves.toMatchObject({ version: "2026.11.1" });
+        await expect(
+            resolve(releases.slice(2), { preview: true, flavor: "local-web", platform: "win32" }),
+        ).resolves.toMatchObject({ version: "2026.11.1-preview.2" });
+        await expect(
+            resolve([{ version: "2026.12.1-preview.1", assets: macStandard }, ...releases], {
+                preview: true,
+                flavor: "standard",
+                platform: "darwin",
+            }),
+        ).resolves.toMatchObject({ version: "2026.12.1-preview.1" });
+    });
+
     it("fails when no release carries the Windows manifest", async () => {
         await expect(
             resolve([{ version: "0.0.103", assets: [...macStandard, ...macNightly] }], {
