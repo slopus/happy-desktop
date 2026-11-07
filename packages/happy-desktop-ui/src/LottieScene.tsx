@@ -35,6 +35,7 @@ import robotUrl from "./assets/animations/robot.json?url";
 import snailUrl from "./assets/animations/snail.json?url";
 import sparklesUrl from "./assets/animations/sparkles.json?url";
 import spiderCatchingBugUrl from "./assets/animations/spider-catching-bug.json?url";
+import ticketsUrl from "./assets/animations/tickets.json?url";
 import wandUrl from "./assets/animations/wand.json?url";
 
 /**
@@ -60,6 +61,7 @@ import wandUrl from "./assets/animations/wand.json?url";
  * - `snail` — something is being read right now, and it is taking a moment.
  * - `sparkles` — the absence is the good outcome; there is nothing left to do.
  * - `spider-catching-bug` — a safety net helps catch unintended agent actions.
+ * - `tickets` — finished work is kept here, and none has been kept yet.
  * - `wand` — the thing that is missing is one you can make right here.
  *
  * See `assets/animations/PROVENANCE.md` for where they came from and what was
@@ -84,6 +86,7 @@ export type LottieSceneName =
     | "snail"
     | "sparkles"
     | "spider-catching-bug"
+    | "tickets"
     | "wand";
 
 /**
@@ -114,6 +117,7 @@ const SOURCES: Record<LottieSceneName, string> = {
     snail: snailUrl,
     sparkles: sparklesUrl,
     "spider-catching-bug": spiderCatchingBugUrl,
+    tickets: ticketsUrl,
     wand: wandUrl,
 };
 

@@ -90,6 +90,7 @@ export function HappyAgentArtifactsPanel(props: HappyAgentArtifactsPanelProps) {
                     ) : null}
                     {count === 0 ? (
                         <EmptyState
+                            animation={catalog.loading ? undefined : "tickets"}
                             description={
                                 catalog.loading
                                     ? undefined

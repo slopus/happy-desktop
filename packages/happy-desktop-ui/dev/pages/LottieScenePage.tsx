@@ -23,7 +23,7 @@ export function LottieScenePage() {
             title="LottieScene"
         >
             <Specimen
-                detail="The nineteen shipped animations at the panel size, each holding its final frame. Alien monster: people and agents share one live session. Cherry blossom: a new friendship began. Closed lock: access is secured. Cloud: work runs on hardware that is not this machine. Confetti ball: a milestone just completed. Disguised face: this machine's identity is being defined. Front-facing baby chick: a new social identity is ready to meet people. Hatching chick: something new was created. Llama: several models are combined on one job. Mirror ball: one session, channel, or moment a whole circle is in at once. Hear-no-evil monkey: nobody outside can listen to this. Open hands: a social invitation awaits a response. Owl: we are looking and nothing is found yet. Party: a group shares a celebration. Robot: an agent is ready and waiting to be told what to do. Snail: something is being read and it is taking a moment. Sparkles: the absence is the good outcome. Spider catching a bug: a safety net helps catch unintended agent actions. Wand: the missing thing is one you can make here."
+                detail="The twenty shipped animations at the panel size, each holding its final frame. Alien monster: people and agents share one live session. Cherry blossom: a new friendship began. Closed lock: access is secured. Cloud: work runs on hardware that is not this machine. Confetti ball: a milestone just completed. Disguised face: this machine's identity is being defined. Front-facing baby chick: a new social identity is ready to meet people. Hatching chick: something new was created. Llama: several models are combined on one job. Mirror ball: one session, channel, or moment a whole circle is in at once. Hear-no-evil monkey: nobody outside can listen to this. Open hands: a social invitation awaits a response. Owl: we are looking and nothing is found yet. Party: a group shares a celebration. Robot: an agent is ready and waiting to be told what to do. Snail: something is being read and it is taking a moment. Sparkles: the absence is the good outcome. Spider catching a bug: a safety net helps catch unintended agent actions. Tickets: finished work is kept here, and none has been kept yet. Wand: the missing thing is one you can make here."
                 label="The vocabulary"
                 number="01"
                 stage="surface"
@@ -135,6 +135,12 @@ export function LottieScenePage() {
                         name="spider-catching-bug"
                         play="on-demand"
                         replayLabel="Play the spider catching a bug again"
+                        size={128}
+                    />
+                    <LottieScene
+                        name="tickets"
+                        play="on-demand"
+                        replayLabel="Play the tickets again"
                         size={128}
                     />
                     <LottieScene

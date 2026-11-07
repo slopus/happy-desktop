@@ -22,6 +22,22 @@ keyframe, before the bug's departure begins at source frame 254.
 The existing worker renderer clips playback with a segment;
 replays and reduced-motion holds use the same end frame. The asset is unchanged.
 
+## Tickets
+
+`tickets.json` was supplied by the project owner on 7 November 2026. The JSON is
+the supplied TGS-derived payload copied without editing or retiming, including
+its `tgs` key, which the renderer ignores like every other file's here. It is
+Lottie 5.5.2, 512×512, 60fps, frames 60–240 (three seconds), 18 layers, and has
+no raster or external image assets. Like the spider, its in-point is not 0; the
+renderer plays from the in-point, so no segment is needed and the scene ends and
+holds on its own last frame. The supplied file records no author or upstream
+license metadata.
+
+The scene means **finished work is kept here, and none has been kept yet**. It
+belongs to the settled empty artifacts list, on the page and in the side panel.
+While the catalog is still loading, and when filters match nothing, the list
+keeps its plain glyph.
+
 ## Where these came from
 
 The original five files were copied from `happy-list` (the Happy Coder React
@@ -59,6 +75,7 @@ August 2026. Their upstream sources are not recorded in the files.
 | `robot.json`                   | `eeabc392ba20328ce97452eb826dddf3e306129e360ce4847c3b48470ffc053b` | Lottie 5.5.2, 512×512, 60fps, 180f, 13 layers | 343 KB / 30 KB gz |
 | `snail.json`                   | `6a9c7b648681ae9d15b31455a76f7d47c5f53d6d72da10b8e43ba134fbd47a2c` | Lottie 5.5.2, 512×512, 60fps, 180f, 19 layers | 368 KB / 42 KB gz |
 | `sparkles.json`                | `b14e504ce3467a6ba1c519348dee9fc4e05286b9e4f058f33df9175865bde4b9` | Lottie 5.5.2, 512×512, 60fps, 180f, 23 layers | 104 KB / 8 KB gz  |
+| `tickets.json`                 | `8715ac66cadbd7cba548b81f7366e190592a7c515811c0df69d65ac8e9db51d4` | Lottie 5.5.2, 512×512, 60fps, 180f, 18 layers | 597 KB / 61 KB gz |
 | `unicorn.json`                 | `1e250cde4b49782d9c3140faaf50bee1bfbe88478ac794bf0c92402ff9b01b60` | Lottie 5.5.2, 512×512, 60fps, 180f, 31 layers | 463 KB / 60 KB gz |
 | `wand.json`                    | `8de70508fe1ebdeb08fc7005820329696f28ec84adc94f3cc4362cf7d3e72870` | Lottie 5.5.2, 512×512, 60fps, 176f, 30 layers | 193 KB / 16 KB gz |
 

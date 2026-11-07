@@ -143,6 +143,11 @@ export function HappyAgentArtifactsPage(props: HappyAgentArtifactsPageProps) {
                     ) : null}
                     {count === 0 ? (
                         <EmptyState
+                            // The tickets belong to the settled absence only:
+                            // while the catalog is still being read nothing is
+                            // known yet, and a filter that matched nothing is a
+                            // miss, which keeps its glyph.
+                            animation={catalog.loading || filtered ? undefined : "tickets"}
                             description={
                                 catalog.loading
                                     ? "Reading what this Happy Agent has published."
