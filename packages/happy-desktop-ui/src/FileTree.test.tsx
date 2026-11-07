@@ -95,11 +95,11 @@ it("holds FileTree row grid, indentation, disclosure, git decorations, and selec
     expect(
         view.$('[data-testid="tree"] [data-scrollbar-viewport]').element.getAttribute("role"),
     ).toBe("tree");
-    /* The root is a scroll host: a grid holding the viewport and its track
+    /* The root is a scroll host: a flex column holding the native viewport
        (see styles/scrollbar.css). The viewport is the column the rows stack in. */
     expect(root.computedStyles(["box-sizing", "display", "background-color"])).toEqual({
         "box-sizing": "border-box",
-        display: "grid",
+        display: "flex",
         "background-color": "rgba(0, 0, 0, 0)",
     });
     expect(

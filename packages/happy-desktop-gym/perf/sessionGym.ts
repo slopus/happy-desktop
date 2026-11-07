@@ -1714,11 +1714,13 @@ const scrolling = await measure("scroll-large", page, cdp, requests, async () =>
         String.raw`(() => { const v = [...document.querySelectorAll('[data-happy-desktop-ui="message-list"] .happy-message-list__viewport')].find((e) => e.checkVisibility()); v.scrollTop = v.scrollHeight; })()`,
     );
     await page.waitForTimeout(500);
-    // The track takes the pointer only while the bar shows, so scroll a notch first, as a reader would.
     await list.hover();
     await page.mouse.wheel(0, -SCROLL_DELTA);
     await page.waitForTimeout(100);
-    const thumbBox = await list.locator(".happy-scrollbar__thumb").first().boundingBox();
+    // The bar is the scrollport's native one: its thumb is where the scroll offset puts it.
+    const thumbBox = (await page.evaluate(
+        String.raw`(() => { const v = [...document.querySelectorAll('[data-happy-desktop-ui="message-list"] .happy-message-list__viewport')].find((e) => e.checkVisibility()); const r = v.getBoundingClientRect(); const width = v.offsetWidth - v.clientWidth; if (width <= 0 || v.scrollHeight <= v.clientHeight) return null; const height = Math.max(24, (v.clientHeight * v.clientHeight) / v.scrollHeight); return { x: r.left + v.clientWidth, y: r.top + ((v.clientHeight - height) * v.scrollTop) / (v.scrollHeight - v.clientHeight), width, height }; })()`,
+    )) as { x: number; y: number; width: number; height: number } | null;
     let drag: { lags: number[]; slowFrames: number; frames: number } | undefined;
     if (thumbBox !== null && thumbBox.height > 0) {
         const x = thumbBox.x + thumbBox.width / 2;

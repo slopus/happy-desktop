@@ -334,11 +334,11 @@ it("holds Composer geometry, colors, and typography", async () => {
     );
     expect(textareaScroll.bounds()).toEqual({ x: 40, y: 41, width: 520, height: 22 });
     expect(textarea.bounds()).toEqual({ x: 40, y: textareaY(), width: 512, height: 22 });
-    expect(
-        view
-            .$('[data-testid="composer-default"] [data-scrollbar-track][data-axis="vertical"]')
-            .bounds().width,
-    ).toBe(8);
+    // The draft's scroller keeps the bar's 8px lane beside the text from the start.
+    if (CSS.supports("selector(::-webkit-scrollbar)")) {
+        const scroller = textareaScroll.element.firstElementChild as HTMLElement;
+        expect(scroller.offsetWidth - scroller.clientWidth).toBe(8);
+    }
     expect(
         textarea.computedStyles([
             "background-color",
@@ -663,12 +663,8 @@ it.skipIf(!growsDraft())(
             box: 176,
             overflows: true,
         });
-        const scrollbarHost = textarea.closest<HTMLElement>("[data-scrollbar-host]")!;
-        await expect.poll(() => scrollbarHost.hasAttribute("data-scrollbar-overflow-y")).toBe(true);
-        expect(
-            getComputedStyle(scrollbarHost.querySelector<HTMLElement>(".happy-scrollbar__thumb")!)
-                .display,
-        ).not.toBe("none");
+        expect(textarea.scrollHeight).toBeGreaterThan(textarea.clientHeight);
+        expect(textarea.offsetWidth - textarea.clientWidth).toBeGreaterThan(0);
         while (textarea.value.length > beforeCap.value.length) {
             await userEvent.keyboard("{Backspace}");
         }

@@ -527,12 +527,13 @@ it("scrolls overflowing traces edge to edge and centers loading, error, and empt
         display: "flex",
         "justify-content": "center",
     });
-    /* The state fills the whole scrollport region below the header. */
+    /* The state fills the whole scrollport region below the header, beside
+       the native bar's lane. */
     const loadingBody = view.$(
         '[data-testid="tp-loading"] [data-happy-desktop-ui="agent-trace-panel-body"]',
     );
     expect(loading.bounds()).toMatchObject({
-        width: loadingBody.bounds().width,
+        width: loadingBody.element.querySelector("[data-scrollbar-viewport]")!.clientWidth,
         height: loadingBody.bounds().height,
     });
 

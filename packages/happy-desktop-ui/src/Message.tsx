@@ -1104,11 +1104,23 @@ function messageListKeyReach(event: KeyboardEvent, element: HTMLElement): number
     if (event.key === "ArrowDown") return 40;
     return element.clientHeight * 0.875;
 }
-/** The padding/border-free viewport uses an overlaid scrollbar, so its resolved
- * CSS width is also its content width. Unlike clientWidth, this retains flex
- * layout's fractions without including ancestor zoom or transforms. */
+/** The padding/border-free viewport is a content box, so its resolved CSS width
+ * is its content width, without the native bar's lane. Unlike clientWidth, this
+ * retains flex layout's fractions without including ancestor zoom or transforms. */
 function messageListViewportWidth(element: HTMLElement): number {
     return Number.parseFloat(element.ownerDocument.defaultView!.getComputedStyle(element).width);
+}
+/**
+ * Device pixels per layout pixel of the scrollport. Its layout width is the
+ * content width plus the native bar's lane (the scrollport has no padding or
+ * border), so both sides of the ratio measure the same box.
+ */
+function messageListViewportScale(element: HTMLElement, width: number): number {
+    return (
+        (element.getBoundingClientRect().width /
+            (width + element.offsetWidth - element.clientWidth)) *
+        element.ownerDocument.defaultView!.devicePixelRatio
+    );
 }
 function messageListViewportHeight(element: HTMLElement): number {
     return Number.parseFloat(element.ownerDocument.defaultView!.getComputedStyle(element).height);
@@ -1226,6 +1238,8 @@ export function MessageList(props: MessageListProps) {
     const wheelScrollPending = useRef(false);
     /* Scrollbar or keyboard input whose native scroll has not been reported. */
     const nativeInputPending = useRef(false);
+    /* The pointer went down on the native scrollbar and has not come up. */
+    const scrollbarDragging = useRef(false);
     /* The end, as the maximum scrollTop, when the reader last wheeled or keyed
        down: their animation is headed for it even after streaming moves it. */
     const readerEndTop = useRef<number | undefined>(undefined);
@@ -1293,10 +1307,7 @@ export function MessageList(props: MessageListProps) {
         if (
             !initialPositionApplied.current ||
             pendingFollowerTop.current !== undefined ||
-            !(
-                nativeInputPending.current ||
-                element.parentElement?.hasAttribute("data-scrollbar-dragging") === true
-            )
+            !(nativeInputPending.current || scrollbarDragging.current)
         )
             return false;
         const top = element.scrollTop;
@@ -2133,10 +2144,7 @@ export function MessageList(props: MessageListProps) {
             const boxMatches =
                 Math.abs(width - geometry.width) <= 1 / 64 &&
                 Math.abs(height - geometry.height) <= 1 / 64;
-            const scale = boxMatches
-                ? (element.getBoundingClientRect().width / width) *
-                  element.ownerDocument.defaultView!.devicePixelRatio
-                : 0;
+            const scale = boxMatches ? messageListViewportScale(element, width) : 0;
             const zoomChanged =
                 scale > 0 &&
                 viewportScale.current > 0 &&
@@ -2640,8 +2648,7 @@ export function MessageList(props: MessageListProps) {
         const element = list.current;
         const scale =
             element && nextWidth > 0
-                ? (element.getBoundingClientRect().width / nextWidth) *
-                  element.ownerDocument.defaultView!.devicePixelRatio
+                ? messageListViewportScale(element, nextWidth)
                 : viewportScale.current;
         const zoomChanged =
             viewportScale.current > 0 && Math.abs(scale / viewportScale.current - 1) > 0.01;
@@ -3529,9 +3536,6 @@ export function MessageList(props: MessageListProps) {
         }
         let previousScrollTop = element.scrollTop;
         scrollHeightBaseline.current = element.scrollHeight;
-        /* The scrollbar's track sits beside the scrollport, so its clicks,
-           drags, and wheels reach the host but never the scrollport itself. */
-        const host = element.parentElement;
         /* A wheel notch or key animates over many frames, each a native write
            whose scroll event waits for the next frame. The reader's input
            stays pending until the animation has been still for a while, so a
@@ -3554,15 +3558,28 @@ export function MessageList(props: MessageListProps) {
             nativeInputExpiry = undefined;
             nativeInputPending.current = false;
         };
-        const onTrackInput = (event: Event) => {
-            if (event.target instanceof Element && event.target.closest("[data-scrollbar-track]"))
-                nativeInputBegin();
+        /* The native bar is part of the scrollport's own box, outside its
+           client area: a press there lands on the scrollport itself, past the
+           width or height its content is laid out in. */
+        const onScrollbarPress = (event: PointerEvent) => {
+            if (
+                event.target !== element ||
+                (event.offsetX < element.clientWidth && event.offsetY < element.clientHeight)
+            )
+                return;
+            scrollbarDragging.current = true;
+            nativeInputBegin();
+        };
+        const onScrollbarRelease = () => {
+            scrollbarDragging.current = false;
         };
         const onWheelInput = (event: WheelEvent) => {
             if (!event.ctrlKey && event.deltaY !== 0) nativeInputBegin();
         };
-        host?.addEventListener("pointerdown", onTrackInput, { capture: true });
-        host?.addEventListener("wheel", onTrackInput, { capture: true, passive: true });
+        element.addEventListener("pointerdown", onScrollbarPress);
+        targetWindow.addEventListener("pointerup", onScrollbarRelease, { capture: true });
+        targetWindow.addEventListener("pointercancel", onScrollbarRelease, { capture: true });
+        targetWindow.addEventListener("blur", onScrollbarRelease);
         element.addEventListener("wheel", onWheelInput, { capture: true, passive: true });
         element.addEventListener("scrollend", nativeInputEnd);
         const onScroll = () => {
@@ -3659,9 +3676,7 @@ export function MessageList(props: MessageListProps) {
                 /* A live end moves between any two scroll events, so changed
                    content blocks only a move nobody asked for: a reader who
                    wheels, keys, or drags down to the end follows it. */
-                (!contentHeightChanged ||
-                    wheelDirection > 0 ||
-                    element.parentElement?.hasAttribute("data-scrollbar-dragging") === true) &&
+                (!contentHeightChanged || wheelDirection > 0 || scrollbarDragging.current) &&
                 atEnd
             )
                 escapedFromFollow.current = false;
@@ -3764,8 +3779,13 @@ export function MessageList(props: MessageListProps) {
             element.removeEventListener("keydown", onKeyDown);
             element.removeEventListener("touchstart", onGeometryScrollIntent);
             element.removeEventListener("wheel", onWheel);
-            host?.removeEventListener("pointerdown", onTrackInput, { capture: true });
-            host?.removeEventListener("wheel", onTrackInput, { capture: true });
+            element.removeEventListener("pointerdown", onScrollbarPress);
+            targetWindow.removeEventListener("pointerup", onScrollbarRelease, { capture: true });
+            targetWindow.removeEventListener("pointercancel", onScrollbarRelease, {
+                capture: true,
+            });
+            targetWindow.removeEventListener("blur", onScrollbarRelease);
+            onScrollbarRelease();
             element.removeEventListener("wheel", onWheelInput, { capture: true });
             element.removeEventListener("scrollend", nativeInputEnd);
             nativeInputEnd();

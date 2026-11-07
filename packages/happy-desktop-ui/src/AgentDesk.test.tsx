@@ -213,8 +213,9 @@ it("holds AgentDesk geometry, colors, and typography in the 340px shell panel", 
     // Running tiles: raised surface, radius 10, padding 12.
     const tileOne = view.$(".happy-agent-desk__run:nth-of-type(1)");
     const tileTwo = view.$(".happy-agent-desk__run:nth-of-type(2)");
-    expect(tileOne.bounds()).toEqual({ x: 14, y: 60, width: 312, height: 79 });
-    expect(tileTwo.bounds()).toEqual({ x: 14, y: 147, width: 312, height: 55 });
+    // The body keeps the native bar's 8px lane at its trailing edge.
+    expect(tileOne.bounds()).toEqual({ x: 14, y: 60, width: 304, height: 79 });
+    expect(tileTwo.bounds()).toEqual({ x: 14, y: 147, width: 304, height: 55 });
     expect(tileOne.computedStyles(["background-color", "border-radius", "padding-top"])).toEqual({
         "background-color": "rgb(240, 240, 242)",
         "border-radius": "10px",
@@ -240,7 +241,7 @@ it("holds AgentDesk geometry, colors, and typography in the 340px shell panel", 
         '.happy-agent-desk__run:nth-of-type(1) [data-happy-desktop-ui="agent-desk-run-eta"]',
     );
     const etaBounds = eta.bounds();
-    expect(etaBounds.x + etaBounds.width).toBe(314);
+    expect(etaBounds.x + etaBounds.width).toBe(306);
     expect(eta.computedStyle("color")).toBe("rgb(73, 69, 79)");
     expect(eta.textMetrics().font).toEqual({
         family: "happy Mono, ui-monospace, monospace",
@@ -279,7 +280,7 @@ it("holds AgentDesk geometry, colors, and typography in the 340px shell panel", 
     const track = view.$(
         '.happy-agent-desk__run:nth-of-type(1) [data-happy-desktop-ui="agent-desk-run-track"]',
     );
-    expect(track.bounds()).toEqual({ x: 26, y: 124, width: 288, height: 3 });
+    expect(track.bounds()).toEqual({ x: 26, y: 124, width: 280, height: 3 });
     expect(track.computedStyles(["background-color", "border-radius", "overflow-y"])).toEqual({
         "background-color": "rgb(245, 245, 245)",
         "border-radius": "999px",
@@ -290,7 +291,7 @@ it("holds AgentDesk geometry, colors, and typography in the 340px shell panel", 
         '.happy-agent-desk__run:nth-of-type(1) [data-happy-desktop-ui="agent-desk-run-fill"]',
     );
     expect(fill.height()).toBe(3);
-    expect(Math.abs(fill.width() - 288 * 0.62)).toBeLessThanOrEqual(0.1);
+    expect(Math.abs(fill.width() - 280 * 0.62)).toBeLessThanOrEqual(0.1);
     expect(fill.computedStyle("background-color")).toBe("rgb(43, 172, 204)");
 
     // Section labels: 24px rows, 11px mono uppercase faint. Bottom-anchored
@@ -299,7 +300,7 @@ it("holds AgentDesk geometry, colors, and typography in the 340px shell panel", 
     // at 24px for QUEUED (the Q tail descends to the box edge) and 22.5px
     // for DONE TODAY (baseline + antialiasing) in every engine.
     const queuedLabel = view.$('[data-section="queued"]');
-    expect(queuedLabel.bounds()).toEqual({ x: 14, y: 214, width: 312, height: 24 });
+    expect(queuedLabel.bounds()).toEqual({ x: 14, y: 214, width: 304, height: 24 });
     expect(
         queuedLabel.computedStyles([
             "color",
@@ -323,7 +324,7 @@ it("holds AgentDesk geometry, colors, and typography in the 340px shell panel", 
     expect(view.$('[data-section="done"]').bounds()).toEqual({
         x: 14,
         y: 338,
-        width: 312,
+        width: 304,
         height: 24,
     });
     const doneLabelInk = await ink(view, '[data-section="done"]', 12);
@@ -336,7 +337,7 @@ it("holds AgentDesk geometry, colors, and typography in the 340px shell panel", 
     const queuedRows = desk.element.querySelectorAll('[data-happy-desktop-ui="agent-desk-queued"]');
     expect(queuedRows.length).toBe(2);
     const queuedOne = view.$('[data-happy-desktop-ui="agent-desk-queued"]');
-    expect(queuedOne.bounds()).toEqual({ x: 14, y: 246, width: 312, height: 36 });
+    expect(queuedOne.bounds()).toEqual({ x: 14, y: 246, width: 304, height: 36 });
     expect(
         queuedOne.computedStyles([
             "background-color",
@@ -396,7 +397,7 @@ it("holds AgentDesk geometry, colors, and typography in the 340px shell panel", 
 
     // Done rows: 32px quiet wash, mint check, no strike-through.
     const doneOne = view.$('[data-happy-desktop-ui="agent-desk-done"]');
-    expect(doneOne.bounds()).toEqual({ x: 14, y: 370, width: 312, height: 32 });
+    expect(doneOne.bounds()).toEqual({ x: 14, y: 370, width: 304, height: 32 });
     expect(
         doneOne.computedStyles(["background-color", "border-radius", "border-top-width"]),
     ).toEqual({
@@ -841,7 +842,7 @@ it("stays fluid, clamps progress, and scrolls overflowing content", async () => 
     const narrowTile = view.$(
         '[data-testid="desk-narrow"] [data-happy-desktop-ui="agent-desk-run"]',
     );
-    expect(narrowTile.bounds()).toEqual({ x: 14, y: 60, width: 252, height: 44 });
+    expect(narrowTile.bounds()).toEqual({ x: 14, y: 60, width: 244, height: 44 });
     expect(
         narrow.element.querySelector('[data-happy-desktop-ui="agent-desk-run-track"]'),
     ).toBeNull();
@@ -861,12 +862,12 @@ it("stays fluid, clamps progress, and scrolls overflowing content", async () => 
     expect(wideTracks[1]!.getAttribute("aria-valuenow")).toBe("0");
     expect(wideTracks[2]!.getAttribute("aria-valuenow")).toBe("25");
     expect(wideTracks[3]!.getAttribute("aria-valuenow")).toBe("62");
-    const fillWidths = [348, 0, 87, 215.76];
+    const fillWidths = [340, 0, 85, 210.8];
     for (const [index, expected] of fillWidths.entries()) {
         const track = view.$(
             `[data-testid="desk-wide"] .happy-agent-desk__run:nth-of-type(${index + 1}) [data-happy-desktop-ui="agent-desk-run-track"]`,
         );
-        expect(track.bounds().width, `track ${index}`).toBe(348);
+        expect(track.bounds().width, `track ${index}`).toBe(340);
         expect(track.height(), `track ${index}`).toBe(3);
         const fill = view.$(
             `[data-testid="desk-wide"] .happy-agent-desk__run:nth-of-type(${index + 1}) [data-happy-desktop-ui="agent-desk-run-fill"]`,

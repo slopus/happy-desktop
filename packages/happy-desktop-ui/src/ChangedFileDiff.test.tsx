@@ -1,5 +1,4 @@
 import { expect, it } from "vitest";
-import { userEvent } from "vitest/browser";
 import "./theme.css";
 import "./styles/scrollbar.css";
 import "./styles/changed-file-diff.css";
@@ -54,7 +53,7 @@ it("renders HEAD and working-tree text through Pierre Diffs in the active appear
     expect(getComputedStyle(renderer!).colorScheme).toBe("dark");
 });
 
-it("overlays the vertical diff thumb without taking width from its rows", async () => {
+it("keeps the vertical diff bar in a lane at the pane edge", async () => {
     const view = createRenderer();
     const content = Array.from(
         { length: 140 },
@@ -86,19 +85,11 @@ it("overlays the vertical diff thumb without taking width from its rows", async 
         .toBeGreaterThan(100);
 
     const viewport = root.element.querySelector("[data-scrollbar-viewport]") as HTMLElement;
-    const track = view.$('[data-testid="long-diff"] [data-scrollbar-track][data-axis="vertical"]');
-    const thumb = view.$('[data-testid="long-diff"] .happy-scrollbar__thumb');
+    const bounds = viewport.getBoundingClientRect();
     expect(viewport.scrollHeight).toBeGreaterThan(viewport.clientHeight);
-    expect(viewport.offsetWidth - viewport.clientWidth).toBe(0);
-    expect(track.bounds().width).toBe(8);
-    expect(track.bounds().x + track.bounds().width).toBe(root.bounds().x + root.bounds().width);
-    expect(renderer.getBoundingClientRect().right).toBe(viewport.getBoundingClientRect().right);
-    expect(thumb.bounds().width).toBe(8);
-    expect(thumb.computedStyle("border-right-width")).toBe("2px");
-    expect(thumb.computedStyle("background-color")).toBe("rgba(128, 128, 128, 0.32)");
-
-    await userEvent.click(track.element, {
-        position: { x: 4, y: track.bounds().height - 4 },
-    });
-    expect(viewport.scrollTop).toBeGreaterThan(0);
+    // The native bar's lane runs down the pane's own trailing edge.
+    if (CSS.supports("selector(::-webkit-scrollbar)"))
+        expect(viewport.offsetWidth - viewport.clientWidth).toBe(8);
+    expect(bounds.right).toBe(root.element.getBoundingClientRect().right);
+    expect(renderer.getBoundingClientRect().right).toBe(bounds.left + viewport.clientWidth);
 });

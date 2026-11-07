@@ -1,7 +1,6 @@
 import { partitionComponentProps } from "./componentProps";
 import { useCallback, useId, useRef, type CSSProperties } from "react";
 import { Icon, type IconName } from "./Icon";
-import { ScrollbarTracks, useScrollbarController } from "./Scrollbar";
 import { useFocusOnType } from "./useFocusOnType";
 export type TextFieldType = "text" | "email" | "password" | "search";
 export type TextFieldSize = "small" | "medium" | "large";
@@ -67,19 +66,10 @@ const MULTILINE_LINE_HEIGHT = 20;
  * leading icon, hint, and error message. Props-only and fully controlled.
  */
 export function TextField(props: TextFieldProps) {
-    const scrollbarController = useScrollbarController("vertical");
-    const textareaHost = useCallback(
-        (element: HTMLDivElement | null) => scrollbarController.hostSet(element),
-        [scrollbarController],
-    );
     const controlEl = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
-    const textareaAttach = useCallback(
-        (element: HTMLTextAreaElement | null) => {
-            controlEl.current = element;
-            scrollbarController.viewportSet(element);
-        },
-        [scrollbarController],
-    );
+    const textareaAttach = useCallback((element: HTMLTextAreaElement | null) => {
+        controlEl.current = element;
+    }, []);
     const [local] = partitionComponentProps(props, [
         "aria-label",
         "autoComplete",
@@ -183,19 +173,15 @@ export function TextField(props: TextFieldProps) {
                 ) : null}
 
                 {local.multiline ? (
-                    <div
-                        className="happy-text-field__textarea-scroll"
-                        data-scrollbar-axes="vertical"
-                        data-scrollbar-host=""
-                        data-scrollbar-placement="stable-gutter"
-                        ref={textareaHost}
-                    >
+                    <div className="happy-text-field__textarea-scroll">
                         <textarea
                             aria-label={local["aria-label"]}
                             aria-describedby={describedBy()}
                             aria-invalid={invalid() ? "true" : undefined}
                             className="happy-text-field__input"
                             data-happy-desktop-ui="text-field-input"
+                            data-scrollbar-axes="vertical"
+                            data-scrollbar-viewport=""
                             disabled={local.disabled}
                             id={fieldId()}
                             name={local.name}
@@ -208,7 +194,6 @@ export function TextField(props: TextFieldProps) {
                             style={{ height: `${rows() * MULTILINE_LINE_HEIGHT}px` }}
                             value={local.value ?? ""}
                         />
-                        <ScrollbarTracks controller={scrollbarController} />
                     </div>
                 ) : (
                     <input

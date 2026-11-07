@@ -391,7 +391,7 @@
 .happy-calendar-week__all-day {
     display: flex;
     flex: none;
-    /* The time grid's track overlays its edge, so these rows keep its width clear too. */
+    /* The time grid's scrollport keeps the bar's lane at its edge, so these rows keep it clear too. */
     padding-right: var(--happy-scrollbar-track);
 }
 
@@ -509,7 +509,6 @@
     display: flex;
     flex: none;
     box-sizing: border-box;
-    padding-right: var(--happy-scrollbar-track);
 }
 
 .happy-calendar-week__hours {

@@ -2794,9 +2794,10 @@ it.skipIf(!pageZoom)(
             chat.publish();
             h.redraw();
             await settle();
-            await h.resize(420, 880, 1);
+            // 880px of content plus the native bar's 8px lane: the reply wraps as it was recorded.
+            await h.resize(420, 888, 1);
             await settle();
-            await h.resize(420, 880, 0.5);
+            await h.resize(420, 888, 0.5);
             await settle();
             const before = snapshot(h);
             expect(before.position?.type, "zoomed sparse reply is not parked").toBe("row");

@@ -216,10 +216,9 @@ it("grows to its 640x461 cap for a long list: field, scrolling results, and a fo
         "overflow-y": "auto",
         "padding-left": "0px",
         "padding-top": "0px",
-        /* No reserved lane: the bar is laid over the content's inset, so the
-           638px body above is the full width between the card's borders
-           whether or not the list is long enough to scroll. */
-        "scrollbar-gutter": "auto",
+        /* The native bar's lane is reserved before the list is long enough to
+           scroll, so the rows keep one width either way. */
+        "scrollbar-gutter": "stable",
     });
     const bodyContent = view.$(
         '[data-testid="cp"] [data-happy-desktop-ui="command-palette-body-content"]',

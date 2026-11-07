@@ -145,7 +145,7 @@ function dotsBuild(
     const stamp = dotStamp(diameter);
     const origins = width === 0 || height === 0 ? [] : dotOrigins(width, height, diameter);
     const css = (pixels: number) => `${pixels / ratio}px`;
-    const dots = origins.map((origin, dot) => {
+    const dots = origins.map((origin) => {
         const element = document.createElement("span");
         element.className = "happy-spinner__braille-dot";
         element.style.left = css(origin[0]);

@@ -44,7 +44,7 @@
 
 /* The editor owns the scrollport: the file scrolls inside the pane it was given
    rather than growing the pane to the height of its text. Its bar is the
-   product's shared custom track — see styles/scrollbar.css. */
+   browser's own, painted by styles/scrollbar.css. */
 .happy-code-editor .cm-scroller {
     overflow: auto;
     font-family: inherit;

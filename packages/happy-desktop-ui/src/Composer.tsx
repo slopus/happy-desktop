@@ -36,7 +36,6 @@ import { ComposerMentionLayer } from "./ComposerMentionLayer";
 import { ConfirmPopover } from "./ConfirmPopover";
 import { EmojiPicker, type EmojiItem } from "./EmojiPicker";
 import { Icon, type IconName } from "./Icon";
-import { ScrollbarTracks, useScrollbarController } from "./Scrollbar";
 import { focusUnlessWritingElsewhere, useFocusOnType } from "./useFocusOnType";
 /* ---- ContextChips ----------------------------------------------------- */
 export type ContextKind = "file" | "run";
@@ -478,67 +477,44 @@ export function Composer(props: ComposerProps) {
     const fileInputEl = useRef<HTMLInputElement>(null);
     const inputEl = useRef<HTMLDivElement>(null);
     const textareaEl = useRef<HTMLTextAreaElement>(null);
-    const draftScrollbarController = useScrollbarController("vertical");
-    /* In a mentioning composer the textarea grows to its whole draft and a
-       wrapper scrolls it together with the mention layer behind it: one
-       scroller, so the compositor moves the text and its tints in the same
-       frame. A layer copying the textarea's own scrollTop would trail it by a
-       frame wherever scrolling runs off the main thread. The wrapper is the
-       scrollbar's viewport; its ref runs after the textarea's, so it replaces
-       the textarea there. */
-    const mentionScrollerAttach = useCallback(
-        (element: HTMLDivElement | null) => {
-            if (element) draftScrollbarController.viewportSet(element);
-        },
-        [draftScrollbarController],
-    );
-    const draftScrollbarHost = useCallback(
-        (element: HTMLDivElement | null) => draftScrollbarController.hostSet(element),
-        [draftScrollbarController],
-    );
-    const textareaAttach = useCallback(
-        (element: HTMLTextAreaElement | null) => {
-            textareaEl.current = element;
-            draftScrollbarController.viewportSet(element);
-            const targetWindow = element?.ownerDocument.defaultView;
-            if (!element || !targetWindow) return;
-            const blockSize = element.style.getPropertyValue("block-size");
-            const blockSizePriority = element.style.getPropertyPriority("block-size");
-            const fieldSizing = element.style.getPropertyValue("field-sizing");
-            const fieldSizingPriority = element.style.getPropertyPriority("field-sizing");
-            let releaseFrame: number | undefined;
-            const sizingRelease = () => {
-                if (releaseFrame === undefined) return;
-                targetWindow.cancelAnimationFrame(releaseFrame);
-                releaseFrame = undefined;
-                element.style.setProperty("block-size", blockSize, blockSizePriority);
-                element.style.setProperty("field-sizing", fieldSizing, fieldSizingPriority);
-            };
-            const sizingHold = () => {
-                /* Chromium's content-sized textarea can move the sibling
-                 * transcript's native scroll offset while deleting its final
-                 * character, before `input` and despite unchanged final geometry.
-                 * Hold the committed box through the native edit; the
-                 * resulting draft resumes ordinary content sizing before React
-                 * handles it. No transcript render or scroll correction is needed. */
-                element.style.blockSize = targetWindow.getComputedStyle(element).blockSize;
-                element.style.setProperty("field-sizing", "fixed");
-                if (releaseFrame !== undefined) targetWindow.cancelAnimationFrame(releaseFrame);
-                // A canceled beforeinput has no input event to release the hold.
-                releaseFrame = targetWindow.requestAnimationFrame(sizingRelease);
-            };
-            element.addEventListener("beforeinput", sizingHold);
-            element.addEventListener("input", sizingRelease);
-            return () => {
-                element.removeEventListener("beforeinput", sizingHold);
-                element.removeEventListener("input", sizingRelease);
-                sizingRelease();
-                textareaEl.current = null;
-                draftScrollbarController.viewportSet(null);
-            };
-        },
-        [draftScrollbarController],
-    );
+    const textareaAttach = useCallback((element: HTMLTextAreaElement | null) => {
+        textareaEl.current = element;
+        const targetWindow = element?.ownerDocument.defaultView;
+        if (!element || !targetWindow) return;
+        const blockSize = element.style.getPropertyValue("block-size");
+        const blockSizePriority = element.style.getPropertyPriority("block-size");
+        const fieldSizing = element.style.getPropertyValue("field-sizing");
+        const fieldSizingPriority = element.style.getPropertyPriority("field-sizing");
+        let releaseFrame: number | undefined;
+        const sizingRelease = () => {
+            if (releaseFrame === undefined) return;
+            targetWindow.cancelAnimationFrame(releaseFrame);
+            releaseFrame = undefined;
+            element.style.setProperty("block-size", blockSize, blockSizePriority);
+            element.style.setProperty("field-sizing", fieldSizing, fieldSizingPriority);
+        };
+        const sizingHold = () => {
+            /* Chromium's content-sized textarea can move the sibling
+             * transcript's native scroll offset while deleting its final
+             * character, before `input` and despite unchanged final geometry.
+             * Hold the committed box through the native edit; the
+             * resulting draft resumes ordinary content sizing before React
+             * handles it. No transcript render or scroll correction is needed. */
+            element.style.blockSize = targetWindow.getComputedStyle(element).blockSize;
+            element.style.setProperty("field-sizing", "fixed");
+            if (releaseFrame !== undefined) targetWindow.cancelAnimationFrame(releaseFrame);
+            // A canceled beforeinput has no input event to release the hold.
+            releaseFrame = targetWindow.requestAnimationFrame(sizingRelease);
+        };
+        element.addEventListener("beforeinput", sizingHold);
+        element.addEventListener("input", sizingRelease);
+        return () => {
+            element.removeEventListener("beforeinput", sizingHold);
+            element.removeEventListener("input", sizingRelease);
+            sizingRelease();
+            textareaEl.current = null;
+        };
+    }, []);
     const wasBusy = useRef(Boolean(props.disabled || props.pending));
     const [mentionStart, setMentionStart] = useState<number | null>(null);
     const [typedMentionQuery, setTypedMentionQuery] = useState("");
@@ -1285,27 +1261,18 @@ export function Composer(props: ComposerProps) {
                     data-happy-desktop-ui="composer-input"
                     ref={inputEl}
                 >
-                    <div
-                        className="happy-composer__textarea-scroll"
-                        data-scrollbar-always=""
-                        data-scrollbar-axes="vertical"
-                        data-scrollbar-host=""
-                        data-scrollbar-placement="stable-gutter"
-                        ref={draftScrollbarHost}
-                    >
+                    <div className="happy-composer__textarea-scroll" data-scrollbar-always="">
                         {!mentionsSupported() ? (
                             draftTextarea
                         ) : (
                             <div
                                 className="happy-composer__mention-scroller"
                                 onScroll={(event) => draftFadeSync(event.currentTarget)}
-                                ref={mentionScrollerAttach}
                             >
                                 <ComposerMentionLayer tags={draft.tags} text={mentionLayerText} />
                                 {draftTextarea}
                             </div>
                         )}
-                        <ScrollbarTracks controller={draftScrollbarController} />
                     </div>
                     {/* Decorative edge fades: the draft dissolves into the card
                         where it runs past the visible lines, so a clipped line

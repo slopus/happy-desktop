@@ -8,7 +8,7 @@ import {
     type BaseCodeOptions,
 } from "@pierre/diffs";
 import { codeBlockLanguage } from "./codeBlockLanguage";
-import { PIERRE_PANE_CSS, pierreCodeSurfacePhase } from "./pierreCodeSurface";
+import { PIERRE_PANE_CSS } from "./pierreCodeSurface";
 
 /** The artifact components' host-renderer contract, /api/v1/code.js. */
 export const version = 1;
@@ -99,7 +99,6 @@ export async function renderDiff(
         hunkSeparators: "simple",
         lineHoverHighlight: "both",
         lineDiffType: "word-alt",
-        onPostRender: (node, _instance, phase) => pierreCodeSurfacePhase(node, phase),
     });
     return mount(target, instance, (container) => {
         // A sticky line-number gutter cannot mask scrolling source with a
@@ -127,7 +126,6 @@ export async function renderCode(
         disableFileHeader: input.path === null,
         disableErrorHandling: true,
         disableLineNumbers: !input.lineNumbers,
-        onPostRender: (node, _instance, phase) => pierreCodeSurfacePhase(node, phase),
     });
     return mount(target, instance, (container) => {
         instance.render({

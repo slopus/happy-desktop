@@ -321,7 +321,15 @@ it("never puts a scrollbar drag back when the stream commits before its scroll e
         await frame();
         const viewport = fixture.viewport();
         expect(viewport.scrollTop).toBe(viewport.scrollHeight - viewport.clientHeight);
-        viewport.parentElement!.setAttribute("data-scrollbar-dragging", "");
+        // A press on the native bar: past the client area, on the scrollport itself.
+        const bounds = viewport.getBoundingClientRect();
+        viewport.dispatchEvent(
+            new PointerEvent("pointerdown", {
+                bubbles: true,
+                clientX: bounds.left + viewport.clientWidth + 1,
+                clientY: bounds.top + 10,
+            }),
+        );
         let wanted = viewport.scrollTop;
         for (let step = 0; step < 4; step += 1) {
             wanted -= 20;
@@ -330,7 +338,7 @@ it("never puts a scrollbar drag back when the stream commits before its scroll e
             await frame();
             expect(Math.abs(viewport.scrollTop - wanted), `step ${String(step)}`).toBeLessThan(1);
         }
-        viewport.parentElement!.removeAttribute("data-scrollbar-dragging");
+        window.dispatchEvent(new PointerEvent("pointerup", { bubbles: true }));
         fixture.grow();
         await frame();
         await frame();

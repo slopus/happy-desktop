@@ -61,7 +61,8 @@
     flex: none;
     flex-direction: column;
     width: 100%;
-    padding: 0 var(--happy-panel-inset) var(--happy-panel-inset);
+    padding: 0 var(--happy-panel-scroll-trailing-inset) var(--happy-panel-inset)
+        var(--happy-panel-inset);
 }
 
 .happy-file-tree__virtual-sizer {

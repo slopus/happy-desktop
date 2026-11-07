@@ -1223,6 +1223,9 @@
 }
 
 .happy-message-list__viewport {
+    /* The row model reads the resolved width as the measure rows lay out at;
+       a content box keeps the native bar's lane out of it. */
+    box-sizing: content-box;
     display: flex;
     flex-direction: column;
     overflow-y: auto;

@@ -241,6 +241,9 @@
     font-synthesis: none;
     resize: none;
     overflow-y: auto;
+    /* The bar's lane is kept before the draft overflows, so typing the line
+       that starts scrolling never rewraps the lines above it. */
+    scrollbar-gutter: stable;
     outline: none;
     /* Engine-scoped optical correction (see the corrections block below).
      * transform keeps layout — card height and auto-grow math — untouched. */
@@ -256,17 +259,20 @@
  */
 /* One scroller for the draft and its tints: the textarea grows to the whole
    draft inside it, at the textarea's own eight-line cap, so the compositor
-   moves both together. */
+   moves both together. A layer copying the textarea's own scrollTop would
+   trail it by a frame wherever scrolling runs off the main thread. */
 .happy-composer__mention-scroller {
     position: relative;
     min-width: 0;
     max-block-size: 176px;
     overflow-y: auto;
+    scrollbar-gutter: stable;
 }
 
 .happy-composer__mention-scroller > .happy-composer__textarea {
     max-block-size: none;
     overflow: hidden;
+    scrollbar-gutter: auto;
 }
 
 .happy-composer__mention-layer {

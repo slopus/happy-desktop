@@ -40,12 +40,12 @@
     --happy-subheader-inset: 4px;
 
     /* Every scrolling list panel — the sidebar, the file listings, any column
-       of rows — is inset from both of its edges by the same number. The custom
-       scrollbar is laid over the trailing inset rather than beside it, so the
-       promise holds, and rows keep their width, whether or not the panel
-       overflows. Its 6px ink starts 2px inside a row's edge and ends 2px short
-       of the panel's, which keeps it on the row's trailing padding and clear
-       of anything the row draws there.
+       of rows — is inset from both of its edges by the same number. The
+       scrollbar is the browser's own and keeps a stable lane at the panel's
+       trailing edge whether or not the panel overflows, so a scrolling panel's
+       trailing inset is only what remains of that number past the lane —
+       `--happy-panel-scroll-trailing-inset` — and rows keep one width either
+       way.
 
        A row's own horizontal padding is stated here too, because the two
        together are what a reader sees on the trailing side: a row's last mark
@@ -71,10 +71,14 @@
        day it changes. */
     --happy-panel-inset: 6px;
     --happy-panel-row-padding: 10px;
+    --happy-panel-scroll-trailing-inset: max(
+        0px,
+        calc(var(--happy-panel-inset) - var(--happy-scrollbar-track))
+    );
 
-    /* The bar every scrollport lays over its trailing edge — see
-       styles/scrollbar.css. It reserves no room, so content never rewraps when
-       overflow begins; only a text input keeps a stable lane for it.
+    /* The native bar every scrollport draws — see styles/scrollbar.css. A
+       vertical scrollport reserves its lane before it overflows, so content
+       never rewraps when overflow begins.
 
        The ink is the bar the reader sees. The edge inset is clear space on the
        far side of it alone — between the ink and the scrollport's outer edge — so
@@ -82,12 +86,11 @@
     --happy-scrollbar-ink: 6px;
     --happy-scrollbar-edge-inset: 2px;
     --happy-scrollbar-track: calc(var(--happy-scrollbar-ink) + var(--happy-scrollbar-edge-inset));
-    --happy-scrollbar-color: transparent;
     --happy-scrollbar-quiet-color: rgb(128 128 128 / 0.32);
     --happy-scrollbar-active-color: rgb(128 128 128 / 0.5);
     --happy-scrollbar-interaction-color: rgb(128 128 128 / 0.68);
     --happy-scrollbar-rest-color: transparent;
-    --happy-scrollbar-surface-color: transparent;
+    --happy-scrollbar-surface-color: var(--happy-scrollbar-active-color);
 
     --text: #000000;
     --text-destructive: #f44336;

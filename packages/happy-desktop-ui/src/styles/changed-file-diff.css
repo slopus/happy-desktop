@@ -61,14 +61,15 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    scrollbar-gutter: auto;
 }
 
 .happy-changed-file-diff[data-mode="unified"] .happy-changed-file-diff__viewport,
 .happy-changed-file-diff[data-mode="split"] .happy-changed-file-diff__viewport {
-    --happy-code-trailing-clearance: calc(var(--happy-scrollbar-track) + 1ch);
     display: block;
     overflow-x: hidden;
     overflow-y: auto;
+    scrollbar-gutter: stable;
 }
 
 /* The file itself is a whole viewer that owns its own scrolling — a document

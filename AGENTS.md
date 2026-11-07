@@ -154,6 +154,14 @@ other visual rule. Any change to drag, drop, reorder or list reconciliation must
 keep `packages/happy-desktop-ui/src/Sidebar.chaos.test.tsx` passing in all three
 engines, which is this rule's enforcement. See `DESIGN.md` → "Nothing jumps".
 
+## Scrollbars
+
+Never use JS-driven scrollbars; always native scrollbars styled with CSS. Every
+scrollport keeps the browser's own bar, painted by the one shared rule in
+`packages/happy-desktop-ui/src/styles/scrollbar.css`. Do not hide a native bar
+to draw a DOM thumb, position a thumb from scroll events or observers, or toggle
+scrollbar visibility from script. See `DESIGN.md` → "The scrollbar".
+
 ## Icons
 
 Every icon is a font glyph from the two families Happy itself uses — Ionicons

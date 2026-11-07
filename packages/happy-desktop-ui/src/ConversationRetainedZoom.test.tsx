@@ -177,9 +177,11 @@ for (const mode of ["zoom", "panel"] as const) {
                 const viewport = view.container.querySelector<HTMLElement>(
                     '[data-view-id="a"] .happy-message-list__viewport',
                 )!;
+                // The content box is the scrollport less its native bar's lane.
+                const lane = viewport.offsetWidth - viewport.clientWidth;
                 const geometryObserved = new Promise<void>((resolve) => {
                     geometryObserver = new ResizeObserver((entries) => {
-                        if (Math.abs(entries[0]!.contentRect.width - 410) < 1) resolve();
+                        if (Math.abs(entries[0]!.contentRect.width + lane - 410) < 1) resolve();
                     });
                     geometryObserver.observe(viewport);
                 });

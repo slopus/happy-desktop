@@ -192,7 +192,7 @@ it("puts the stories row first in the scrolling list, so it scrolls away with th
     const port = viewport.getBoundingClientRect();
     const box = row.getBoundingClientRect();
     expect(box.top).toBeCloseTo(port.top, 0);
-    expect(row.parentElement!.getBoundingClientRect().width).toBeCloseTo(port.width, 0);
+    expect(row.parentElement!.getBoundingClientRect().width).toBeCloseTo(viewport.clientWidth, 0);
     expect(ui(root, "sidebar-item")[0]!.getBoundingClientRect().top).toBeCloseTo(
         firstRowOff + leading.getBoundingClientRect().height,
         0,

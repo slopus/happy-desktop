@@ -104,6 +104,8 @@
     flex-direction: column;
     align-items: center;
     overflow: auto;
+    /* A lane on both edges, so the centred page stays on the window's centre line. */
+    scrollbar-gutter: stable both-edges;
 }
 
 /*

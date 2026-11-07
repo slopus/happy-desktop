@@ -373,7 +373,8 @@ it("holds Sidebar geometry, row treatments, and optical alignment", async () => 
             .$('[data-testid="full"] .happy-sidebar__compose .happy-sidebar__item-label')
             .textMetrics().text,
     ).toContain("Create");
-    expect(compose.bounds().width).toBe(348);
+    // The panel's trailing inset is what remains of it past the native bar's lane.
+    expect(compose.bounds().width).toBe(346);
     expect(compose.bounds().height).toBe(32);
     expect(compose.bounds().x).toBe(6);
     expect(compose.bounds().y).toBe(62);
@@ -418,13 +419,14 @@ it("holds Sidebar geometry, row treatments, and optical alignment", async () => 
             .computedStyles(["padding-left", "padding-right", "padding-top"]),
     ).toEqual({
         "padding-left": "6px",
-        "padding-right": "6px",
+        /* The trailing inset is what remains past the native bar's 8px lane. */
+        "padding-right": "0px",
         "padding-top": "6px",
     });
 
     const row = (id: string) => view.$(`[data-testid="full"] [data-item-id="${id}"]`);
     /* 32px rows on the grid: gaps 2, sections 12 apart, heads 24. */
-    expect(row("inbox").bounds()).toEqual({ x: 6, y: 96, width: 348, height: 32 });
+    expect(row("inbox").bounds()).toEqual({ x: 6, y: 96, width: 346, height: 32 });
     expect(row("my-issues").bounds().y).toBe(130);
     expect(row("agent-runs").bounds().y).toBe(164);
     expect(row("launch-week").bounds().y).toBe(234);

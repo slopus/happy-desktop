@@ -36,7 +36,6 @@ import {
 } from "@codemirror/view";
 import { tags } from "@lezer/highlight";
 import { useCallback, useLayoutEffect, useRef, type CSSProperties } from "react";
-import { ScrollbarTracks, useScrollbarController } from "./Scrollbar";
 
 /**
  * The token palette, as CSS custom properties.
@@ -559,47 +558,37 @@ export function CodeEditor(props: CodeEditorProps) {
     // rather than closing over the ones the view was created with.
     const latest = useRef(props);
     const handle = useRef<EditorHandle | undefined>(undefined);
-    const scrollbarController = useScrollbarController("both");
-    const hostAttach = useCallback(
-        (element: HTMLDivElement | null) => scrollbarController.hostSet(element),
-        [scrollbarController],
-    );
-    const attach = useCallback(
-        (host: HTMLDivElement | null) => {
-            if (host === null) return;
-            const current = latest.current;
-            const document = editorDocumentAcquire(current);
-            editorBridgeUpdate(document.bridge, current);
-            const view = new EditorView({
-                parent: host,
-                state: document.state,
-            });
-            const created: EditorHandle = {
-                document,
-                mounted: true,
-                view,
-            };
-            document.owner = created;
-            handle.current = created;
-            scrollbarController.viewportSet(view.scrollDOM);
-            if (
-                document.languageName !== current.name &&
-                document.languageRequestName !== current.name &&
-                document.languageFailedName !== current.name
-            )
-                languageReconfigure(document, current.name);
-            return () => {
-                if (handle.current === created) handle.current = undefined;
-                scrollbarController.viewportSet(null);
-                created.mounted = false;
-                created.document.state = view.state;
-                if (created.document.owner === created) created.document.owner = undefined;
-                editorDocumentRelease(created.document);
-                view.destroy();
-            };
-        },
-        [scrollbarController],
-    );
+    const attach = useCallback((host: HTMLDivElement | null) => {
+        if (host === null) return;
+        const current = latest.current;
+        const document = editorDocumentAcquire(current);
+        editorBridgeUpdate(document.bridge, current);
+        const view = new EditorView({
+            parent: host,
+            state: document.state,
+        });
+        const created: EditorHandle = {
+            document,
+            mounted: true,
+            view,
+        };
+        document.owner = created;
+        handle.current = created;
+        if (
+            document.languageName !== current.name &&
+            document.languageRequestName !== current.name &&
+            document.languageFailedName !== current.name
+        )
+            languageReconfigure(document, current.name);
+        return () => {
+            if (handle.current === created) handle.current = undefined;
+            created.mounted = false;
+            created.document.state = view.state;
+            if (created.document.owner === created) created.document.owner = undefined;
+            editorDocumentRelease(created.document);
+            view.destroy();
+        };
+    }, []);
     // eslint-disable-next-line happy-react/no-layout-effect -- CodeMirror is an imperative document; this is the only boundary where the authoritative text, the file's grammar, and the read-only state reach it, and the view itself is created and destroyed by the ref callback above
     useLayoutEffect(() => {
         latest.current = props;
@@ -677,15 +666,10 @@ export function CodeEditor(props: CodeEditorProps) {
             className={["happy-code-editor", props.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui="code-editor"
             data-read-only={props.readOnly ? "" : undefined}
-            data-scrollbar-axes="both"
-            data-scrollbar-host=""
-            data-scrollbar-placement="overlay"
             data-testid={props["data-testid"]}
-            ref={hostAttach}
             style={props.style}
         >
             <div className="happy-code-editor__mount" ref={attach} />
-            <ScrollbarTracks axes="both" controller={scrollbarController} />
         </div>
     );
 }

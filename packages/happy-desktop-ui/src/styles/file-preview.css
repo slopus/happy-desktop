@@ -147,7 +147,6 @@
 }
 
 .happy-file-preview__source-viewport {
-    --happy-code-trailing-clearance: calc(var(--happy-scrollbar-track) + 1ch);
     overflow: auto;
 }
 

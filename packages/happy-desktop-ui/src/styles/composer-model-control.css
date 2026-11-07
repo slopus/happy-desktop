@@ -224,6 +224,11 @@
     padding: 0 var(--happy-panel-inset);
 }
 
+/* The native bar keeps its lane beside the rows; the inset past it is all that is left. */
+.happy-composer-model-control__list-content {
+    padding-right: var(--happy-panel-scroll-trailing-inset);
+}
+
 .happy-composer-model-control__service,
 .happy-composer-model-control__account-list,
 .happy-composer-model-control__members {

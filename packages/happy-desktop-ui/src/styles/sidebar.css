@@ -300,6 +300,7 @@
     flex-direction: column;
     box-sizing: border-box;
     padding: var(--happy-panel-inset);
+    padding-right: var(--happy-panel-scroll-trailing-inset);
     padding-bottom: calc(var(--happy-panel-inset) + var(--happy-sidebar-floor));
 }
 
@@ -361,8 +362,8 @@
     flex: none;
     flex-direction: column;
     min-width: 0;
-    margin: calc(-1 * var(--happy-panel-inset)) calc(-1 * var(--happy-panel-inset))
-        var(--happy-panel-inset);
+    margin: calc(-1 * var(--happy-panel-inset)) calc(-1 * var(--happy-panel-scroll-trailing-inset))
+        var(--happy-panel-inset) calc(-1 * var(--happy-panel-inset));
 }
 
 .happy-sidebar__body-accessory {

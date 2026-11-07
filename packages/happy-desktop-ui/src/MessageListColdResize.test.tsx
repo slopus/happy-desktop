@@ -19,7 +19,6 @@ it.each([
     { target: 25, nextHeight: 620 },
     { target: 10, nextHeight: 800, native: "write" },
     { target: 10, nextHeight: 800, native: "wheel" },
-    { target: 10, nextHeight: 800, native: "track" },
     { target: 10, nextHeight: 1223.875, native: "write" },
 ])(
     "publishes the visible view when hidden before native event or resize delivery: %j",
@@ -106,7 +105,7 @@ it.each([
             const committedTop = viewport().scrollTop;
             const element = viewport();
             let nativeTop = committedTop;
-            if (native === "wheel" || native === "track") {
+            if (native === "wheel") {
                 let hidden = false;
                 const hideBeforeTarget = (event: Event) => {
                     if (event.target !== element || element.scrollTop === committedTop) return;
@@ -116,13 +115,7 @@ it.each([
                 };
                 document.addEventListener("scroll", hideBeforeTarget, true);
                 try {
-                    const target =
-                        native === "track"
-                            ? view.container.querySelector<HTMLElement>(
-                                  '[data-scrollbar-track][data-axis="vertical"]',
-                              )!
-                            : element;
-                    await userEvent.wheel(target, { delta: { y: 200 } });
+                    await userEvent.wheel(element, { delta: { y: 200 } });
                     await expect.poll(() => hidden).toBe(true);
                     expect(nativeTop - committedTop).toBeGreaterThan(1);
                 } finally {
@@ -152,6 +145,21 @@ it.each([
             // Pending geometry keeps its committed view, even if native input
             // arrived in the same task. An unchanged box keeps the native move.
             const movement = nextHeight === 800 ? nativeTop - committedTop : 0;
+            console.log(
+                "DBG",
+                JSON.stringify({
+                    committed,
+                    warm,
+                    nativeTop,
+                    committedTop,
+                    top: element.scrollTop,
+                    cw: element.clientWidth,
+                    ow: element.offsetWidth,
+                    sh: element.scrollHeight,
+                    ch: element.clientHeight,
+                    saved,
+                }),
+            );
             for (let i = 0; i < warm.length; i++)
                 expect(Math.abs(warm[i]! - (committed[i]! - movement))).toBeLessThanOrEqual(1);
             update(nextHeight, true, true);

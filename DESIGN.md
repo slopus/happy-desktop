@@ -381,35 +381,32 @@ it, a short fade in the surface's own tone marks the edge instead.
 
 ### The scrollbar
 
-Every scrolling surface uses the shared scrollbar. Its pointer track is always
-8px, its ink is always 6px, and neither changes size between states or surfaces.
+Every scrolling surface uses the browser's native scrollbar, painted by the one
+shared rule in `packages/happy-desktop-ui/src/styles/scrollbar.css`. No script
+draws, positions, reveals, or hides any part of it: the browser owns scrolling,
+dragging, paging, momentum, hit testing, and the thumb's size and position.
+Its track is always 8px — 6px of ink plus a 2px clear edge — and neither changes
+size between states or surfaces.
 
-- Automatic is the default. Trusted user scroll input reveals the thumb,
-  continued input keeps it visible, and stopping starts a two-second hold
-  followed by a 480ms fade. Programmatic scrolling, streaming, and resize never
-  reveal it. Hovering or dragging the track pins it visible.
-- Always visible uses three restrained neutral strengths: 0.32 inactive, 0.50
-  on the surface that would receive the wheel, and 0.68 on track hover or drag.
-  Automatic uses the latter two after reveal.
-- Every ordinary surface overlays the track on the scrollport's trailing edge
-  (and bottom edge for horizontal overflow). Nothing reserves space that
-  appears or disappears, so overflow beginning or ending never moves, narrows,
-  or rewraps content. Row panels keep the track over their trailing panel
-  inset, where the ink stays clear of row text and trailing marks; other
-  surfaces keep at least 8px of trailing padding under it. Painted file, diff,
-  and editor rows still reach the pane edge, and code keeps `8px + 1ch` of
-  trailing text clearance in both wrap modes.
-- Text inputs — the composer and multiline text fields — are the exception:
-  they always reserve the 8px lane beside their text, so a thumb never covers
-  what is typed and text never rewraps when overflow begins. The composer also
-  keeps an overflowing thumb visible in either appearance mode.
-
-The browser remains responsible for scrolling, momentum, selection, and scroll
-position. Happy hides only its chrome and paints a shared DOM track because
-native thumbs cannot provide the required fixed geometry and lifecycle states.
-Pierre's horizontal code scrollport is the sole implementation exception: its
-markup lives inside third-party shadow DOM, so its native thumb is styled to the
-same visual contract without mutating vendor structure.
+- Automatic is the default. The thumb is transparent at rest and appears while
+  the pointer is over its scrollport or the scrollport has keyboard focus.
+  Always visible keeps a quiet thumb at rest.
+- Three restrained neutral strengths: 0.32 quiet, 0.50 on the hovered or
+  focused scrollport, and 0.68 while the thumb itself is hovered or dragged.
+  Changes are immediate; a native bar cannot fade.
+- The track is transparent and the thumb is fully rounded, in both appearances.
+- A vertical scrollport keeps its lane (`scrollbar-gutter: stable`) from the
+  start, so overflow beginning or ending never moves, narrows, or rewraps
+  content. Row panels give the lane their trailing inset
+  (`--happy-panel-scroll-trailing-inset`). A scrollport that is only clipped in
+  some state gives the lane back with `scrollbar-gutter: auto`.
+- Never set `scrollbar-width` or `scrollbar-color` where `::-webkit-scrollbar`
+  is supported: Chromium stops honouring the pseudo-elements on any element that
+  sets either. Only engines without them get the standard properties, from the
+  same file.
+- Pierre's code columns live in third-party shadow DOM, which page rules do not
+  reach; the same file is inlined into their stylesheet, so they wear the
+  identical bar.
 
 ## Text that does not fit
 

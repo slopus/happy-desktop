@@ -41,14 +41,9 @@ export { CodeBlock, codeBlockLanguage, type CodeBlockProps } from "./CodeBlock";
 export { CodeEditor, type CodeEditorProps, type CodeEditorReveal } from "./CodeEditor";
 export {
     ScrollArea,
-    ScrollbarTrack,
-    ScrollbarTracks,
-    scrollbarControllerCreate,
     type ScrollAreaProps,
     type ScrollbarAxes,
     type ScrollbarAxis,
-    type ScrollbarController,
-    type ScrollbarPlacement,
 } from "./Scrollbar";
 export { CodeHighlightWorkers } from "./CodeHighlightWorkers";
 export { SplashScreen, type SplashScreenProps } from "./SplashScreen";
