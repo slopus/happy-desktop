@@ -1940,7 +1940,7 @@ function providerRows(
             ? {
                   keys: {
                       addable: provider.credentials.keyed,
-                      ...(provider.type === "bedrock" ? { region: true } : {}),
+                      ...(provider.type === "bedrock" ? { aws: true } : {}),
                       source: provider.credentials.source,
                       list: provider.credentials.list.map((credential) => ({
                           id: credential.id,

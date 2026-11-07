@@ -3,6 +3,7 @@ import type { BadgeVariant } from "../../Badge";
 import { Banner } from "../../Banner";
 import { Box } from "../../Box";
 import { Button } from "../../Button";
+import { SegmentedControl } from "../../SegmentedControl";
 import { TextField } from "../../TextField";
 import { EmptyState } from "../../EmptyState";
 import { Icon } from "../../Icon";
@@ -47,18 +48,31 @@ export interface HappyAgentProviderKeys {
     readonly list: readonly HappyAgentProviderKeyRow[];
     /** Whether a key can be added here; subscriptions sign in instead. */
     readonly addable: boolean;
-    /** Amazon Bedrock also asks which AWS region its key is for. */
-    readonly region?: boolean;
+    /**
+     * Amazon Bedrock: takes AWS access keys as well as an API key, and asks
+     * for the region, which applies to every Bedrock key on the server.
+     */
+    readonly aws?: boolean;
     /** Whose key answers now: the team's, Happy Cloud's, or nobody's. */
     readonly source: "tenant" | "operator" | null;
 }
 
 /** What adding a team key sends. */
-export interface HappyAgentProviderKeyInput {
-    readonly label: string;
-    readonly apiKey: string;
-    readonly region?: string;
-}
+export type HappyAgentProviderKeyInput =
+    | {
+          readonly kind: "apiKey";
+          readonly label: string;
+          readonly apiKey: string;
+          readonly region?: string;
+      }
+    | {
+          readonly kind: "aws";
+          readonly label: string;
+          readonly accessKeyId: string;
+          readonly secretAccessKey: string;
+          readonly sessionToken?: string;
+          readonly region?: string;
+      };
 
 export interface HappyAgentProviderRow {
     readonly id: string;
@@ -333,45 +347,28 @@ function HappyAgentProviderKeyList(props: {
     readonly onKeyEnabledChange?: (providerId: string, keyId: string, enabled: boolean) => void;
     readonly onKeyRemove?: (providerId: string, keyId: string) => void;
 }) {
-    const [draft, setDraft] = useState<
-        | {
-              readonly label: string;
-              readonly apiKey: string;
-              readonly region: string;
-              readonly busy: boolean;
-              readonly error?: string;
-          }
-        | undefined
-    >(undefined);
+    const [draft, setDraft] = useState<KeyDraft | undefined>(undefined);
     const submit = (): void => {
         if (!draft || draft.busy || !props.onKeyAdd) return;
-        const label = draft.label.trim() || "Team key";
-        const apiKey = draft.apiKey.trim();
-        if (!apiKey) {
-            setDraft({ ...draft, error: "Paste the API key." });
+        const input = keyInput(draft, props.keys.aws === true);
+        if (typeof input === "string") {
+            setDraft({ ...draft, error: input });
             return;
         }
         setDraft({ ...draft, busy: true, error: undefined });
-        const region = draft.region.trim();
-        void props
-            .onKeyAdd(props.providerId, {
-                label,
-                apiKey,
-                ...(props.keys.region && region ? { region } : {}),
-            })
-            .then(
-                () => setDraft(undefined),
-                (error: unknown) =>
-                    setDraft((current) =>
-                        current
-                            ? {
-                                  ...current,
-                                  busy: false,
-                                  error: error instanceof Error ? error.message : String(error),
-                              }
-                            : current,
-                    ),
-            );
+        void props.onKeyAdd(props.providerId, input).then(
+            () => setDraft(undefined),
+            (error: unknown) =>
+                setDraft((current) =>
+                    current
+                        ? {
+                              ...current,
+                              busy: false,
+                              error: error instanceof Error ? error.message : String(error),
+                          }
+                        : current,
+                ),
+        );
     };
     return (
         <Box
@@ -435,21 +432,81 @@ function HappyAgentProviderKeyList(props: {
                             size="small"
                             value={draft.label}
                         />
-                        <TextField
-                            autoComplete="off"
-                            disabled={draft.busy}
-                            label="API key"
-                            onSubmit={submit}
-                            onValueChange={(apiKey) => setDraft({ ...draft, apiKey })}
-                            size="small"
-                            type="password"
-                            value={draft.apiKey}
-                        />
-                        {props.keys.region ? (
+                        {props.keys.aws ? (
+                            <SegmentedControl
+                                aria-label="Kind of key"
+                                disabled={draft.busy}
+                                onChange={(kind) =>
+                                    setDraft({
+                                        ...draft,
+                                        kind: kind === "aws" ? "aws" : "apiKey",
+                                        error: undefined,
+                                    })
+                                }
+                                segments={[
+                                    { value: "apiKey", label: "API key" },
+                                    { value: "aws", label: "Access keys" },
+                                ]}
+                                size="small"
+                                value={draft.kind}
+                            />
+                        ) : null}
+                        {draft.kind === "apiKey" ? (
+                            <TextField
+                                autoComplete="off"
+                                disabled={draft.busy}
+                                label="API key"
+                                onSubmit={submit}
+                                onValueChange={(apiKey) => setDraft({ ...draft, apiKey })}
+                                size="small"
+                                type="password"
+                                value={draft.apiKey}
+                            />
+                        ) : (
+                            <>
+                                <TextField
+                                    autoComplete="off"
+                                    disabled={draft.busy}
+                                    label="Access key ID"
+                                    onSubmit={submit}
+                                    onValueChange={(accessKeyId) =>
+                                        setDraft({ ...draft, accessKeyId })
+                                    }
+                                    size="small"
+                                    value={draft.accessKeyId}
+                                />
+                                <TextField
+                                    autoComplete="off"
+                                    disabled={draft.busy}
+                                    label="Secret access key"
+                                    onSubmit={submit}
+                                    onValueChange={(secretAccessKey) =>
+                                        setDraft({ ...draft, secretAccessKey })
+                                    }
+                                    size="small"
+                                    type="password"
+                                    value={draft.secretAccessKey}
+                                />
+                                <TextField
+                                    autoComplete="off"
+                                    disabled={draft.busy}
+                                    hint="Optional. Only for temporary credentials."
+                                    label="Session token"
+                                    onSubmit={submit}
+                                    onValueChange={(sessionToken) =>
+                                        setDraft({ ...draft, sessionToken })
+                                    }
+                                    size="small"
+                                    type="password"
+                                    value={draft.sessionToken}
+                                />
+                            </>
+                        )}
+                        {props.keys.aws ? (
                             <TextField
                                 disabled={draft.busy}
-                                hint="Optional. The AWS region this key is for."
-                                label="Region"
+                                hint="Optional. Applies to every Bedrock key on this server."
+                                label="AWS region"
                                 onSubmit={submit}
                                 onValueChange={(region) => setDraft({ ...draft, region })}
                                 placeholder="us-east-1"
@@ -491,9 +548,7 @@ function HappyAgentProviderKeyList(props: {
                             aria-label={`Add an API key for ${props.providerName}`}
                             disabled={props.unavailable}
                             icon="plus"
-                            onClick={() =>
-                                setDraft({ label: "", apiKey: "", region: "", busy: false })
-                            }
+                            onClick={() => setDraft(KEY_DRAFT_EMPTY)}
                             size="small"
                             variant="secondary"
                         >
@@ -504,6 +559,54 @@ function HappyAgentProviderKeyList(props: {
             ) : null}
         </Box>
     );
+}
+
+interface KeyDraft {
+    readonly kind: "apiKey" | "aws";
+    readonly label: string;
+    readonly apiKey: string;
+    readonly accessKeyId: string;
+    readonly secretAccessKey: string;
+    readonly sessionToken: string;
+    readonly region: string;
+    readonly busy: boolean;
+    readonly error?: string;
+}
+
+const KEY_DRAFT_EMPTY: KeyDraft = {
+    kind: "apiKey",
+    label: "",
+    apiKey: "",
+    accessKeyId: "",
+    secretAccessKey: "",
+    sessionToken: "",
+    region: "",
+    busy: false,
+};
+
+/** What the draft sends, or what is still missing from it. */
+function keyInput(draft: KeyDraft, aws: boolean): HappyAgentProviderKeyInput | string {
+    const label = draft.label.trim() || "Team key";
+    const region = aws ? draft.region.trim() : "";
+    const regioned = region ? { region } : {};
+    if (draft.kind === "apiKey") {
+        const apiKey = draft.apiKey.trim();
+        if (!apiKey) return "Paste the API key.";
+        return { kind: "apiKey", label, apiKey, ...regioned };
+    }
+    const accessKeyId = draft.accessKeyId.trim();
+    const secretAccessKey = draft.secretAccessKey.trim();
+    const sessionToken = draft.sessionToken.trim();
+    if (!accessKeyId || !secretAccessKey)
+        return "Paste the access key ID and the secret access key.";
+    return {
+        kind: "aws",
+        label,
+        accessKeyId,
+        secretAccessKey,
+        ...(sessionToken ? { sessionToken } : {}),
+        ...regioned,
+    };
 }
 
 function providerMeta(provider: HappyAgentProviderRow): string {

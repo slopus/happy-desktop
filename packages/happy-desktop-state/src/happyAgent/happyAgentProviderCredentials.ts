@@ -32,12 +32,25 @@ export interface HappyAgentProviderCredentials {
     readonly keyed: boolean;
 }
 
-/** What adding an API key sends. Bedrock also takes the AWS region its key is for. */
-export interface HappyAgentProviderCredentialInput {
-    readonly label: string;
-    readonly apiKey: string;
-    readonly region?: string;
-}
+/**
+ * What adding a team key sends: an API key, or for Amazon Bedrock AWS access
+ * keys instead. Bedrock's region applies to every Bedrock key on the server.
+ */
+export type HappyAgentProviderCredentialInput =
+    | {
+          readonly kind: "apiKey";
+          readonly label: string;
+          readonly apiKey: string;
+          readonly region?: string;
+      }
+    | {
+          readonly kind: "aws";
+          readonly label: string;
+          readonly accessKeyId: string;
+          readonly secretAccessKey: string;
+          readonly sessionToken?: string;
+          readonly region?: string;
+      };
 
 /**
  * The Happy Cloud routes for a provider's team keys. The transport is the
@@ -163,7 +176,15 @@ export function happyAgentProviderCredentialsApiCreate(options: {
         credentialAdd: (providerId, input) =>
             send("POST", credentials(providerId), {
                 label: input.label,
-                apiKey: input.apiKey,
+                ...(input.kind === "apiKey"
+                    ? { apiKey: input.apiKey }
+                    : {
+                          accessKeyId: input.accessKeyId,
+                          secretAccessKey: input.secretAccessKey,
+                          ...(input.sessionToken === undefined
+                              ? {}
+                              : { sessionToken: input.sessionToken }),
+                      }),
                 ...(input.region === undefined ? {} : { region: input.region }),
             }),
         credentialEnabledUpdate: (providerId, credentialId, enabled) =>

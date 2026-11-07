@@ -374,7 +374,7 @@ const cloudProviders: readonly HappyAgentProviderRow[] = [
     {
         enabled: false,
         id: "bedrock",
-        keys: { addable: true, list: [], region: true, source: null },
+        keys: { addable: true, aws: true, list: [], source: null },
         models: [],
         name: "Amazon Bedrock",
         serviceTiers: [],
