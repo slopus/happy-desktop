@@ -137,6 +137,7 @@ export function happyAgentCatalogSourceCreate(
  * pay for the rest.
  */
 class CatalogSnapshot implements HappyAgentSessionCatalogSnapshot {
+    readonly revision = Symbol();
     readonly catalog: HappyAgentProjectCatalog;
     #sessions: readonly HappyAgentSessionSummary[] | undefined;
 
@@ -251,7 +252,7 @@ function catalogChanged(
         elementsReuse(previous.catalog.bots, botGroups.map(botProject)),
         elementsReuse(previous.catalog.tasks, taskGroups.map(taskProject)),
         archivedSessions,
-        { previous, projects },
+        { previous: previous.revision, projects },
     );
 }
 

@@ -621,6 +621,8 @@ export interface HappyAgentSessionListDeps {
 }
 
 export interface HappyAgentSessionCatalogSnapshot {
+    /** Opaque identity for incremental lineage, without retaining a predecessor snapshot. */
+    readonly revision?: symbol;
     readonly catalog: HappyAgentProjectCatalog;
     readonly sessions: readonly HappyAgentSessionSummary[];
     /** The host's complete archived catalog in newest-archived-first presentation order. */
@@ -632,12 +634,13 @@ export interface HappyAgentSessionCatalogSnapshot {
 }
 
 /**
- * The projects one snapshot changed. Every other project is exactly as `previous`
- * states it, and none was added, removed, or moved; the changed ones are read
- * through `group`, so a reader that followed `previous` projects them alone.
+ * The projects one snapshot changed since the snapshot identified by `previous`.
+ * Every other project is unchanged, and none was added, removed, or moved. A reader
+ * holding that predecessor projects the changed groups alone; other readers rebuild.
+ * Only its identity is carried here: owning the predecessor would retain all history.
  */
 export interface HappyAgentSessionCatalogChanges {
-    readonly previous: HappyAgentSessionCatalogSnapshot;
+    readonly previous: symbol;
     readonly projects: ReadonlySet<HappyAgentProjectId>;
 }
 
@@ -804,8 +807,10 @@ export function happyAgentSessionListStoreCreate(
         snapshot: HappyAgentSessionCatalogSnapshot,
         changes: HappyAgentSessionCatalogChanges,
     ): void => {
-        if (sessionIndex === undefined || sessionIndexOf !== changes.previous) {
+        const previous = sessionIndexOf;
+        if (sessionIndex === undefined || previous?.revision !== changes.previous) {
             sessionIndex = undefined;
+            sessionIndexOf = undefined;
             return;
         }
         const index = sessionIndex;
@@ -822,7 +827,7 @@ export function happyAgentSessionListStoreCreate(
             if (after !== undefined) added.push(after);
         };
         for (const projectId of changes.projects) {
-            const before = changes.previous.group?.(projectId);
+            const before = previous.group?.(projectId);
             const after = snapshot.group?.(projectId);
             if (before === after) continue;
             listReplace(before?.sessions, after?.sessions);
@@ -1805,7 +1810,7 @@ export function happyAgentSessionListStoreCreate(
                 const changed =
                     sessionsLocal === undefined &&
                     changes !== undefined &&
-                    changes.previous === projectedSnapshot &&
+                    changes.previous === projectedSnapshot?.revision &&
                     snapshot.group !== undefined
                         ? projectGroups.changed(changes.projects, (projectId) =>
                               snapshot.group!(projectId),
