@@ -4,8 +4,8 @@
  *
  * The page is the inset grouped card list Happy's phones draw: on the grouped
  * background, one card per date under a small heading, each row an avatar,
- * the subject's name, and who did what to it. The cards are read down a
- * column narrower than the one the other pages of the main lane share,
+ * the subject's name, and who did what to it. The cards are read down the
+ * one content column a chat and the other pages of the main lane share,
  * centred in the lane the same way, and the header, the view switch, and the
  * cards stand on its gutter. Every row is one fixed
  * height, and a post — an artifact with a cover or a summary — is as tall as
@@ -18,15 +18,10 @@
  * from theme roles.
  */
 
-/* The feed reads down a column narrower than the lane's, so a square cover
-   across a card stays a picture rather than a wall. The header, the bar, and
-   the cards all stand on it. The band inset is resolved again against it:
-   the theme's copy was resolved against the lane's measure. */
+/* The feed reads down the lane's content column, the chat's width, so moving
+   between a chat and the feed does not move what is being read. The header,
+   the bar, and the cards all stand on it. */
 .happy-agent-feed {
-    --happy-content-measure: 640px;
-    --happy-content-inline: calc(
-        max(0px, (100% - var(--happy-content-measure)) / 2) + var(--happy-content-gutter)
-    );
     display: flex;
     flex: 1 1 0%;
     flex-direction: column;
