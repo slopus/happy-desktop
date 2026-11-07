@@ -104,6 +104,24 @@ export function WelcomeScreenPage() {
             </Specimen>
 
             <Specimen
+                detail="a quieter second way in under the primary action · ghost button 8px below it · offered when this shell can connect to Happy Cloud without setting up this computer"
+                label="Second way in"
+                number="01b"
+                stage="surface"
+            >
+                <WindowFrame>
+                    <WelcomeScreen
+                        actionLabel="Get started"
+                        appearance="system"
+                        onAction={noop}
+                        onAppearanceChange={noop}
+                        secondaryAction={{ label: "Connect to Happy Cloud", onAction: noop }}
+                        slides={[brand, agents, build, clear]}
+                    />
+                </WindowFrame>
+            </Specimen>
+
+            <Specimen
                 detail="the same deck rotated so it opens mid-slideshow on a Lottie slide · the scene and the smaller mark share the same 160px stage, so the words start at the same y"
                 label="Mid-slideshow scene"
                 number="02"

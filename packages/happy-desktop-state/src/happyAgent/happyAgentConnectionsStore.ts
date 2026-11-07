@@ -316,3 +316,62 @@ export function happyAgentConnectionsStoreCreate(
         },
     };
 }
+
+/**
+ * The connections of a computer that runs no Happy Agent: only the direct
+ * ones, Happy Cloud's servers, after the place this computer's own would take.
+ * Nothing is read and nothing can be reordered, because no host keeps a
+ * roster. Until the person picks one, the first direct connection is shown,
+ * since this computer has no work of its own to show.
+ */
+export function happyAgentConnectionsDirectStoreCreate(): HappyAgentConnectionsStore {
+    const local: HappyAgentConnectionItem = { id: "local", name: "This Mac" };
+    let snapshot: HappyAgentConnectionsSnapshot = {
+        items: [local],
+        selectedId: "local",
+        reordering: false,
+    };
+    let chosen = false;
+    const listeners = new Set<() => void>();
+    const publish = (next: HappyAgentConnectionsSnapshot): void => {
+        snapshot = next;
+        for (const listener of listeners) listener();
+    };
+    return {
+        get: () => snapshot,
+        subscribe(listener) {
+            listeners.add(listener);
+            return () => listeners.delete(listener);
+        },
+        connectionsDirectSet(items) {
+            const direct = snapshot.items.slice(1);
+            if (
+                items.length === direct.length &&
+                items.every(
+                    (item, index) =>
+                        item.id === direct[index]!.id && item.name === direct[index]!.name,
+                )
+            )
+                return;
+            const next = [local, ...items];
+            const kept = next.some((entry) => entry.id === snapshot.selectedId);
+            publish({
+                ...snapshot,
+                items: next,
+                selectedId:
+                    kept && (chosen || snapshot.selectedId !== "local")
+                        ? snapshot.selectedId
+                        : (items[0]?.id ?? "local"),
+            });
+        },
+        connectionSelect(id) {
+            if (!snapshot.items.some((item) => item.id === id)) return;
+            chosen = true;
+            if (id !== snapshot.selectedId) publish({ ...snapshot, selectedId: id });
+        },
+        connectionReorder() {},
+        [Symbol.dispose]() {
+            listeners.clear();
+        },
+    };
+}

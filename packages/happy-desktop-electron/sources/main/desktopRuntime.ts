@@ -130,15 +130,20 @@ export class DesktopRuntime implements AsyncDisposable {
                     ...(options.deviceBridges ? { deviceBridges: options.deviceBridges } : {}),
                     ...(options.debug ? { debug: options.debug } : {}),
                 }));
-        const configuredActive = settings?.topologies.find(
-            ({ id }) => id === settings.activeTopologyId,
-        );
-        const active = configuredActive ??
-            settings?.topologies[0] ?? {
-                id: desktopTopologyIdCreate(),
-                mode: "local" as const,
+        // Only a computer someone asked to run a Happy Agent starts one. Until
+        // then the runtime is off, and Happy Cloud works without it.
+        if (!settings) {
+            this.snapshotValue = {
+                phase: "off",
+                ...(this.rendererHttpUrl ? { directHttpUrl: this.rendererHttpUrl } : {}),
+                targets: this.targets(),
+                update: idleUpdate,
             };
-        if (!settings?.topologies.some(({ id }) => id === active.id)) this.persistOnSuccess = true;
+            return;
+        }
+        const active =
+            settings.topologies.find(({ id }) => id === settings.activeTopologyId) ??
+            settings.topologies[0]!;
         this.activeTopology = active;
         this.snapshotValue = {
             phase: "starting",
@@ -353,6 +358,16 @@ export class DesktopRuntime implements AsyncDisposable {
                 id: desktopTopologyIdCreate(),
                 mode: "local" as const,
             };
+            // Asking is what makes this computer run one, so the next launch
+            // starts it again even when this attempt does not get that far.
+            if (!this.settings?.topologies.some(({ id }) => id === topology.id)) {
+                const settings = desktopSettingsActivate(this.settings, topology);
+                await desktopSettingsWrite(
+                    join(this.paths.root, "desktop-settings.json"),
+                    settings,
+                );
+                this.settings = settings;
+            }
             await this.startValidated(topology, true);
         });
     }

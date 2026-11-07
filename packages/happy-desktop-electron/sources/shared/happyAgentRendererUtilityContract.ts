@@ -8,6 +8,12 @@ export interface RendererLiveAttempt {
     readonly connectionId?: string;
 }
 
+/**
+ * Launch argument naming the cross-origin renderer the utility lets in before
+ * any daemon backs it, followed directly by that origin.
+ */
+export const rendererUtilityOriginArgument = "--happy-agent-renderer-origin=";
+
 /** Private main <-> utility-process protocol. Neither side sends this to Chromium. */
 export type RendererUtilityInput =
     | {

@@ -640,7 +640,7 @@ function DesktopOnboardingGate(props: {
 const onboardingClock = happyAgentClockStoreCreate();
 
 function desktopLocalPhase(snapshot: DesktopRuntimeSnapshot): boolean {
-    if (snapshot.phase === "choosing") return false;
+    if (snapshot.phase === "choosing" || snapshot.phase === "off") return false;
     if (snapshot.phase === "ready") return snapshot.mode === "local";
     return snapshot.request.mode === "local";
 }
@@ -731,6 +731,20 @@ function DesktopRenderer(props: DesktopRendererProps) {
                     props.welcome.welcomeAcknowledge();
                 }}
                 onAppearanceChange={(mode) => props.appearance.appearanceSelect(mode)}
+                // Someone who only uses Happy Cloud goes straight there and
+                // this computer is never set up to run a Happy Agent.
+                {...(props.cloudConnect
+                    ? {
+                          secondaryAction: {
+                              label: "Connect to Happy Cloud",
+                              onAction: () => {
+                                  desktopBootSkip();
+                                  props.welcome.welcomeAcknowledge();
+                                  props.cloudConnect?.connectOpen();
+                              },
+                          },
+                      }
+                    : {})}
                 slides={happyAgentWelcomeSlides}
             />
         );
@@ -1042,6 +1056,43 @@ const unavailableDaemonStore: AppHappyAgentDaemonStore = {
     subscribe: () => () => undefined,
 };
 
+/**
+ * This computer's place in the rail while it runs no Happy Agent. Nothing is
+ * started until the person asks for it here; Happy Cloud works without it.
+ */
+function DesktopLocalOffScreen(props: {
+    cloudConnect?: DesktopCloudConnectStore;
+    onboarding: LocalOnboardingStore;
+}) {
+    const setup = useSyncExternalStore(
+        props.onboarding.subscribe,
+        props.onboarding.get,
+        props.onboarding.get,
+    );
+    return (
+        <SetupPage
+            action={{
+                busy: setup.pending === true,
+                label: "Set up this computer",
+                onSelect: () => props.onboarding.agentSetupBegin(),
+            }}
+            copy="Set up Happy Agent to run agents on this computer's files and tools. Happy Cloud works without it."
+            data-testid="desktop-local-off-screen"
+            scene="cloud-variation"
+            {...(setup.failure ? { status: { label: setup.failure.message } } : {})}
+            {...(props.cloudConnect
+                ? {
+                      secondary: {
+                          label: "Connect to Happy Cloud",
+                          onSelect: props.cloudConnect.connectOpen,
+                      },
+                  }
+                : {})}
+            title="Happy Agent isn't running here"
+        />
+    );
+}
+
 function DesktopRuntimeContent(
     props: DesktopRendererProps & {
         hostedUpdate: LocalWebUpdateSnapshot;
@@ -1055,6 +1106,13 @@ function DesktopRuntimeContent(
         props.happyAgents.get,
     );
     const materialized = directory.happyAgents.some((entry) => entry.session !== undefined);
+    if (snapshot?.phase === "off")
+        return (
+            <DesktopLocalOffScreen
+                {...(props.cloudConnect ? { cloudConnect: props.cloudConnect } : {})}
+                onboarding={props.onboarding}
+            />
+        );
     if (!snapshot && !materialized)
         return (
             <DesktopStartupScreen

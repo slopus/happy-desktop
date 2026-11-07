@@ -1,5 +1,6 @@
 import {
     HappyAgentClient,
+    happyAgentConnectionsDirectStoreCreate,
     happyAgentConnectionsStoreCreate,
     happyShareLinkParse,
     happyAgentNodeStoreCreate,
@@ -908,19 +909,34 @@ export function happyAgentDirectoryStoreCreate(
                 ? value.activeTarget
                 : undefined;
         if (!target) {
+            // A computer that runs no Happy Agent still reaches Happy Cloud,
+            // straight through the window's own route, with nothing to host it.
+            if (value?.phase === "off" && value.directHttpUrl !== undefined && !roster) {
+                const base = value.directHttpUrl.replace(/\/$/u, "");
+                rosterOpen(
+                    happyAgentConnectionsDirectStoreCreate(),
+                    new HappyAgentClient({ endpoint: base, token: "happy-local-capability" }),
+                    base,
+                );
+            }
             const unavailable =
-                value?.phase === "starting"
-                    ? { status: "connecting" as const, message: value.message }
-                    : value?.phase === "error"
-                      ? { status: "error" as const, message: value.message }
-                      : {
-                            status: happyAgent.entry.session
-                                ? ("disconnected" as const)
-                                : ("connecting" as const),
-                            message: happyAgent.entry.session
-                                ? "The local Happy Agent is disconnected."
-                                : "Connecting to the local Happy Agent.",
-                        };
+                value?.phase === "off"
+                    ? {
+                          status: "disconnected" as const,
+                          message: "Happy Agent isn't set up on this computer.",
+                      }
+                    : value?.phase === "starting"
+                      ? { status: "connecting" as const, message: value.message }
+                      : value?.phase === "error"
+                        ? { status: "error" as const, message: value.message }
+                        : {
+                              status: happyAgent.entry.session
+                                  ? ("disconnected" as const)
+                                  : ("connecting" as const),
+                              message: happyAgent.entry.session
+                                  ? "The local Happy Agent is disconnected."
+                                  : "Connecting to the local Happy Agent.",
+                          };
             happyAgent.entry = { ...happyAgent.entry, ...unavailable };
             publish();
             return;
@@ -947,107 +963,126 @@ export function happyAgentDirectoryStoreCreate(
         };
         const base = target.happyAgentHttpUrl.replace(/\/$/u, "");
         if (happyAgent.url !== base) {
-            rosterUnsubscribe?.();
-            roster?.[Symbol.dispose]();
             const client = new HappyAgentClient({
                 endpoint: base,
                 token: "happy-local-capability",
             });
             connectionOpen(happyAgent, client, base);
-            roster = happyAgentConnectionsStoreCreate(
+            rosterOpen(
+                happyAgentConnectionsStoreCreate(
+                    client,
+                    happyAgent.connection!.sync,
+                    connectionsPersistence,
+                ),
                 client,
-                happyAgent.connection!.sync,
-                connectionsPersistence,
+                base,
             );
-            const rosterReconcile = (): void => {
-                const membership = roster!.get();
-                // A local restart takes the daemon down and brings it back with an
-                // empty registry for a beat. Pruning against that would collapse
-                // the rail and unmount every remote workspace, so known remotes
-                // are held through it and reconciled once the daemon reports its
-                // real membership again.
-                const localRestarting = deps.localRestarting?.() === true;
-                for (const [id, remote] of remotes) {
-                    if (membership.items.some((item) => item.id === id)) continue;
-                    if (localRestarting) continue;
-                    connectionClose(remote);
-                    remotes.delete(id);
-                }
-                for (const item of membership.items) {
-                    if (!item.remoteId) continue;
-                    let remote = remotes.get(item.id);
-                    if (!remote) {
-                        remote = {
-                            entry: {
-                                id: item.id,
-                                remoteId: item.remoteId,
-                                ...(item.organizationId === undefined
-                                    ? {}
-                                    : { organizationId: item.organizationId }),
-                                ...(item.instanceId === undefined
-                                    ? {}
-                                    : { instanceId: item.instanceId }),
-                                ...(item.url === undefined ? {} : { serverUrl: item.url }),
-                                ...(happyCloudServerNameOf(item.remoteId) === undefined
-                                    ? {}
-                                    : { happyCloud: true as const }),
-                                label: item.name,
-                                bots: [],
-                                botsCreating: [],
-                                projects: [],
-                                projectsStatus: "loading",
-                                projectAdd: PROJECT_ADD_IDLE,
-                                subtaskFailures: NO_SUBTASK_FAILURES,
-                                botFailures: NO_BOT_FAILURES,
-                                tasks: NO_TASKS,
-                                taskFailures: NO_TASK_FAILURES,
-                                status: "connecting",
-                            },
-                        };
-                        remotes.set(item.id, remote);
-                        connectionOpen(
-                            remote,
-                            client.connection(item.remoteId),
-                            `${base}/connections/${item.remoteId}`,
-                        );
-                    } else {
-                        // The roster names a remote's instance before it has
-                        // connected here, so its links are matched at once.
-                        const instanceId = instanceIdRead(remote, item);
-                        if (
-                            remote.entry.label !== item.name ||
-                            remote.entry.organizationId !== item.organizationId ||
-                            remote.entry.instanceId !== instanceId ||
-                            remote.entry.serverUrl !== item.url
-                        ) {
-                            const {
-                                organizationId: _previous,
-                                serverUrl: _url,
-                                ...entry
-                            } = remote.entry;
-                            remote.entry = {
-                                ...entry,
-                                label: item.name,
-                                ...(item.organizationId === undefined
-                                    ? {}
-                                    : { organizationId: item.organizationId }),
-                                ...(item.url === undefined ? {} : { serverUrl: item.url }),
-                                instanceId,
-                            };
-                        }
-                    }
-                }
-                publish();
-            };
-            rosterUnsubscribe = roster.subscribe(() => {
-                rosterReconcile();
-                sessionsReconcile();
-            });
-            // The membership last confirmed is opened now, before the daemon is asked again.
-            rosterReconcile();
-            sessionsReconcile();
         }
         publish();
+    };
+
+    /**
+     * Makes `next` the roster every remote is opened from, through `client` at
+     * `base`. Remotes it still lists keep their connections, so a computer that
+     * sets up its own Happy Agent keeps its Happy Cloud servers open.
+     */
+    const rosterOpen = (
+        next: HappyAgentConnectionsStore,
+        client: HappyAgentClient,
+        base: string,
+    ): void => {
+        rosterUnsubscribe?.();
+        roster?.[Symbol.dispose]();
+        roster = next;
+        const rosterReconcile = (): void => {
+            const membership = next.get();
+            // A local restart takes the daemon down and brings it back with an
+            // empty registry for a beat. Pruning against that would collapse
+            // the rail and unmount every remote workspace, so known remotes
+            // are held through it and reconciled once the daemon reports its
+            // real membership again.
+            const localRestarting = deps.localRestarting?.() === true;
+            for (const [id, remote] of remotes) {
+                if (membership.items.some((item) => item.id === id)) continue;
+                if (localRestarting) continue;
+                connectionClose(remote);
+                remotes.delete(id);
+            }
+            for (const item of membership.items) {
+                if (!item.remoteId) continue;
+                let remote = remotes.get(item.id);
+                if (!remote) {
+                    remote = {
+                        entry: {
+                            id: item.id,
+                            remoteId: item.remoteId,
+                            ...(item.organizationId === undefined
+                                ? {}
+                                : { organizationId: item.organizationId }),
+                            ...(item.instanceId === undefined
+                                ? {}
+                                : { instanceId: item.instanceId }),
+                            ...(item.url === undefined ? {} : { serverUrl: item.url }),
+                            ...(happyCloudServerNameOf(item.remoteId) === undefined
+                                ? {}
+                                : { happyCloud: true as const }),
+                            label: item.name,
+                            bots: [],
+                            botsCreating: [],
+                            projects: [],
+                            projectsStatus: "loading",
+                            projectAdd: PROJECT_ADD_IDLE,
+                            subtaskFailures: NO_SUBTASK_FAILURES,
+                            botFailures: NO_BOT_FAILURES,
+                            tasks: NO_TASKS,
+                            taskFailures: NO_TASK_FAILURES,
+                            status: "connecting",
+                        },
+                    };
+                    remotes.set(item.id, remote);
+                    connectionOpen(
+                        remote,
+                        client.connection(item.remoteId),
+                        `${base}/connections/${item.remoteId}`,
+                    );
+                } else {
+                    // The roster names a remote's instance before it has
+                    // connected here, so its links are matched at once.
+                    const instanceId = instanceIdRead(remote, item);
+                    if (
+                        remote.entry.label !== item.name ||
+                        remote.entry.organizationId !== item.organizationId ||
+                        remote.entry.instanceId !== instanceId ||
+                        remote.entry.serverUrl !== item.url
+                    ) {
+                        const {
+                            organizationId: _previous,
+                            serverUrl: _url,
+                            ...entry
+                        } = remote.entry;
+                        remote.entry = {
+                            ...entry,
+                            label: item.name,
+                            ...(item.organizationId === undefined
+                                ? {}
+                                : { organizationId: item.organizationId }),
+                            ...(item.url === undefined ? {} : { serverUrl: item.url }),
+                            instanceId,
+                        };
+                    }
+                }
+            }
+            publish();
+        };
+        // The direct connections are known before the roster first answers.
+        sessionsReconcile();
+        rosterUnsubscribe = next.subscribe(() => {
+            rosterReconcile();
+            sessionsReconcile();
+        });
+        // The membership last confirmed is opened now, before the daemon is asked again.
+        rosterReconcile();
+        sessionsReconcile();
     };
 
     return {

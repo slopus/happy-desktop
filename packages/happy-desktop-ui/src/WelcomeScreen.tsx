@@ -36,6 +36,8 @@ export interface WelcomeScreenProps {
     /** Optional decorative scenery behind the welcome deck. */
     readonly backdrop?: WelcomeScreenBackdrop;
     onAction(): void;
+    /** A quieter second way in, under the primary action. */
+    readonly secondaryAction?: { readonly label: string; onAction(): void };
     /** Which appearance this window is on. */
     readonly appearance: HappyAgentAppearanceChoice;
     onAppearanceChange(appearance: HappyAgentAppearanceChoice): void;
@@ -99,6 +101,7 @@ export function WelcomeScreen(props: WelcomeScreenProps) {
         "actionLabel",
         "backdrop",
         "onAction",
+        "secondaryAction",
         "appearance",
         "onAppearanceChange",
     ]);
@@ -141,13 +144,24 @@ export function WelcomeScreen(props: WelcomeScreenProps) {
                         tint={local.backdrop?.kind === "sky" ? "sky" : "surface"}
                     />
 
-                    <Button
-                        className="happy-welcome-screen__action"
-                        onClick={local.onAction}
-                        size="large"
-                    >
-                        {local.actionLabel ?? "Go Happy"}
-                    </Button>
+                    <div className="happy-welcome-screen__actions">
+                        <Button
+                            className="happy-welcome-screen__action"
+                            onClick={local.onAction}
+                            size="large"
+                        >
+                            {local.actionLabel ?? "Go Happy"}
+                        </Button>
+                        {local.secondaryAction ? (
+                            <Button
+                                className="happy-welcome-screen__secondary"
+                                onClick={local.secondaryAction.onAction}
+                                variant="ghost"
+                            >
+                                {local.secondaryAction.label}
+                            </Button>
+                        ) : null}
+                    </div>
                 </div>
             </ScrollArea>
 

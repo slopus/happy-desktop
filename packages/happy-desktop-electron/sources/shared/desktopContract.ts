@@ -431,6 +431,22 @@ export type DesktopRuntimeSnapshot =
           targets: readonly DesktopTopologyTarget[];
           update: DesktopUpdateSnapshot;
       }
+    /**
+     * Nobody has asked this computer to run a Happy Agent, so none is started:
+     * someone who uses only Happy Cloud never has one. Setting one up is the
+     * person's explicit `runtimeStart`.
+     */
+    | {
+          phase: "off";
+          /**
+           * Where the window reaches the connections this app makes itself,
+           * Happy Cloud's servers, with no Happy Agent behind it. Absent when
+           * this shell has no such route.
+           */
+          directHttpUrl?: string;
+          targets: readonly DesktopTopologyTarget[];
+          update: DesktopUpdateSnapshot;
+      }
     | {
           phase: "starting";
           message: string;

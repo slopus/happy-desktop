@@ -111,9 +111,25 @@
  * Wide enough to read as the way out of this screen rather than as an ordinary
  * button that happens to be centred, and never wider than the slogan measure.
  */
+.happy-welcome-screen__actions {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+}
+
 .happy-welcome-screen__action {
     flex: none;
     min-width: 240px;
+}
+
+.happy-welcome-screen__secondary {
+    flex: none;
+}
+
+.happy-welcome-screen[data-backdrop="sky"] .happy-welcome-screen__secondary {
+    color: var(--onboarding-foreground);
 }
 
 /* The native palette supplies contrasting ink and an inverse action label. */

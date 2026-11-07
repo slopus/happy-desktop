@@ -904,6 +904,20 @@ export function localOnboardingStoreCreate(
             attempt(bridge.daemonUpgrade(), "Happy could not update Happy Agent.");
         },
         agentSetupBegin() {
+            // A computer that has never run Happy Agent starts it only when
+            // asked here; everything after that is setup's own sequence.
+            // The welcome asks before anything here is watched, so the runtime
+            // is read rather than taken from this store's last snapshot.
+            attempt(
+                bridge
+                    .runtimeGet()
+                    .then((runtime) =>
+                        runtime.phase === "off"
+                            ? bridge.runtimeStart({ mode: "local" })
+                            : undefined,
+                    ),
+                "Happy could not start setting up Happy Agent.",
+            );
             if (agentSetupActive) return;
             agentSetupActive = true;
             setupSynchronize();

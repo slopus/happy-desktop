@@ -1378,12 +1378,12 @@ function runtimeIdentity(runtime: DesktopRuntimeSnapshot): string {
 }
 
 /**
- * Whether Happy is being asked to run on this machine. Choosing has not asked
+ * Whether Happy is being asked to run on this machine. Choosing and off have not asked
  * for anything yet, a ready runtime says which mode it is in, and every other
  * phase is working on a request that names one.
  */
 function runtimeLocal(runtime: DesktopRuntimeSnapshot): boolean {
-    if (runtime.phase === "choosing") return false;
+    if (runtime.phase === "choosing" || runtime.phase === "off") return false;
     if (runtime.phase === "ready") return runtime.mode === "local";
     return runtime.request.mode === "local";
 }

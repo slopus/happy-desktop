@@ -151,8 +151,10 @@ export function desktopAgentBrokenStoreCreate(input: {
         const mounted =
             runtime?.phase === "ready" ||
             directory.happyAgents.some((entry) => entry.session !== undefined);
+        // A computer that runs no Happy Agent has none to be broken.
         const broken =
             mounted &&
+            runtime?.phase !== "off" &&
             local !== undefined &&
             local.protocolMismatch === undefined &&
             (local.status === "error" || local.status === "disconnected");

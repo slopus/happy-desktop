@@ -78,6 +78,7 @@ import {
     type DesktopPreviewNavigationStep,
     type DesktopAppearanceMode,
 } from "../shared/desktopContract";
+import { rendererUtilityOriginArgument } from "../shared/happyAgentRendererUtilityContract";
 import {
     desktopReactDevtoolsMessageValidate,
     type DesktopProfilerBuildMode,
@@ -639,6 +640,9 @@ function desktopDebugRuntimeLog(snapshot: ReturnType<DesktopRuntime["get"]>): vo
     switch (snapshot.phase) {
         case "choosing":
             desktopDebugLog("runtime phase=choosing");
+            return;
+        case "off":
+            desktopDebugLog("runtime phase=off");
             return;
         case "starting":
             desktopDebugLog(`runtime phase=starting: ${snapshot.message}`);
@@ -1745,12 +1749,24 @@ void app
         }
         if (!desktopWindowsHidden && !app.isPackaged && applicationIconPath)
             app.dock?.setIcon(applicationIconPath);
+        // A hosted local renderer and the Vite development renderer both call
+        // the loopback proxy cross-origin. Only their exact, build-owned origin
+        // receives CORS access.
+        const rendererOrigin =
+            desktopFlavor.kind === "local-web"
+                ? desktopFlavor.rendererOrigin
+                : developmentRendererOrigin;
         happyAgentRendererSession = await happyAgentRendererSessionCreate(
             electronSession.defaultSession,
             () =>
                 utilityProcess.fork(
                     join(import.meta.dirname, "happyAgentRendererUtility.js"),
-                    desktopDebugEnabled ? ["--happy-agent-transport-debug"] : [],
+                    [
+                        ...(desktopDebugEnabled ? ["--happy-agent-transport-debug"] : []),
+                        ...(rendererOrigin
+                            ? [`${rendererUtilityOriginArgument}${rendererOrigin}`]
+                            : []),
+                    ],
                     { serviceName: "Happy Agent HTTP transport" },
                 ),
             desktopDebugEnabled ? desktopDebugLog : undefined,
@@ -1846,10 +1862,6 @@ void app
             debug: desktopDebugLog,
             environment: launchEnvironment,
         });
-        const rendererOrigin =
-            desktopFlavor.kind === "local-web"
-                ? desktopFlavor.rendererOrigin
-                : developmentRendererOrigin;
         runtime = await DesktopRuntime.create(
             {
                 root: desktopRoot,
@@ -1859,9 +1871,6 @@ void app
                 ...(happyAgentRendererSession
                     ? { rendererProxy: happyAgentRendererSession.proxy }
                     : {}),
-                // A hosted local renderer and the Vite development renderer both
-                // call the loopback proxy cross-origin. Only their exact,
-                // build-owned origin receives CORS access.
                 ...(rendererOrigin ? { rendererOrigin } : {}),
                 ...(htmlPreviewProxy ? { htmlPreview: htmlPreviewProxy } : {}),
                 ...(artifactSites ? { artifactSite: artifactSites } : {}),

@@ -12,7 +12,11 @@ import {
 import type { ServerRemoteCredential } from "../shared/serverRemoteAuthorization";
 import { happyAgentProxyHandle } from "../main/happyAgentProxyHandle";
 import { happyCloudConnectionOf, happyCloudForward } from "../main/happyCloudForward";
-import { happyAgentRendererProxyCreate } from "../main/happyAgentRendererProxy";
+import {
+    happyAgentRendererOrigin,
+    happyAgentRendererProxyCreate,
+    type HappyAgentRendererTarget,
+} from "../main/happyAgentRendererProxy";
 import { happyAgentRequestTimingCreate } from "../main/happyAgentRequestTiming";
 import {
     happyAgentLiveBridgeCreate,
@@ -76,9 +80,29 @@ function localForward(
     request.pipe(outgoing);
 }
 
+/** The daemon a backing reaches, for the requests that need one. */
+interface RendererDaemon {
+    readonly id: number;
+    readonly client: HappyAgentDaemonClient;
+    readonly bridgeUrl: string;
+}
+
+function localUnavailable(response: ServerResponse): void {
+    response
+        .writeHead(503, { "content-type": "application/json", "cache-control": "no-store" })
+        .end(
+            JSON.stringify({
+                error: "Happy Agent isn't running on this computer.",
+                code: "local_unavailable",
+            }),
+        );
+}
+
 export async function happyAgentRendererUtilityServerCreate(
     send: (message: RendererUtilityOutput) => void,
     debugEnabled: boolean,
+    /** The one cross-origin renderer allowed in while no daemon backs this transport. */
+    daemonlessOrigin?: string,
 ) {
     const debug = debugEnabled ? (text: string) => send({ type: "debug", text }) : undefined;
     const proxy = await happyAgentRendererProxyCreate(debug, "transport");
@@ -148,6 +172,118 @@ export async function happyAgentRendererUtilityServerCreate(
                 send({ type: "live-attempt-reserve", reservationId: id, backingId, attempt });
             }),
     });
+    /**
+     * What answers while no daemon backs this transport, as on a computer that
+     * only uses Happy Cloud: Happy Cloud's servers, which never go through a
+     * Happy Agent, and a refusal for everything else.
+     */
+    const daemonless: HappyAgentRendererTarget = {
+        // Never dialled: every upgrade is refused here first.
+        url: happyAgentRendererOrigin,
+        terminalCapability: "",
+        upgradeHandle(_request, socket) {
+            socket.end("HTTP/1.1 503 Service Unavailable\r\nConnection: close\r\n\r\n");
+            return true;
+        },
+        requestHandle: (request, response, url) =>
+            requestRoute(request, response, url, daemonlessOrigin, undefined),
+    };
+    const requestRoute = (
+        request: IncomingMessage,
+        response: ServerResponse,
+        url: URL,
+        allowedOrigin: string | undefined,
+        daemon: RendererDaemon | undefined,
+    ): void => {
+        const path = url.pathname;
+        if (localRoute(path)) {
+            if (daemon) localForward(request, response, url, daemon.bridgeUrl);
+            else localUnavailable(response);
+            return;
+        }
+        if (path !== "/health" && path !== "/v0" && !path.startsWith("/v0/")) {
+            response.writeHead(404, { "cache-control": "no-store" }).end();
+            return;
+        }
+        const origin = request.headers.origin;
+        const crossOrigin = allowedOrigin !== undefined && origin === allowedOrigin;
+        if (
+            origin !== undefined &&
+            origin !== "null" &&
+            !origin.startsWith("file:") &&
+            !crossOrigin
+        ) {
+            response.writeHead(403).end();
+            return;
+        }
+        if (crossOrigin) {
+            response.setHeader("access-control-allow-origin", allowedOrigin);
+            response.setHeader("access-control-expose-headers", "*");
+            response.setHeader("vary", "origin");
+        }
+        if (request.method === "OPTIONS") {
+            if (!crossOrigin) {
+                response.writeHead(403).end();
+                return;
+            }
+            const method = request.headers["access-control-request-method"]?.trim();
+            const headers = request.headers["access-control-request-headers"]?.trim();
+            response
+                .writeHead(204, {
+                    "access-control-allow-headers":
+                        headers ||
+                        "authorization, content-type, if-match, x-happy-agent-mutation-id",
+                    "access-control-allow-methods": method
+                        ? `${method}, OPTIONS`
+                        : "DELETE, GET, HEAD, PATCH, POST, PUT, OPTIONS",
+                    ...(request.headers["access-control-request-private-network"] === "true"
+                        ? { "access-control-allow-private-network": "true" }
+                        : {}),
+                    "access-control-max-age": "600",
+                })
+                .end();
+            return;
+        }
+        const cloud = happyCloudConnectionOf(path);
+        if (cloud !== undefined) {
+            happyCloudForward(request, response, url, remoteTokens[cloud]);
+            return;
+        }
+        if (!daemon) {
+            localUnavailable(response);
+            return;
+        }
+        const onTiming = happyAgentRequestTimingCreate(response, debug);
+        void live
+            .handle(request, response, url)
+            .then(
+                (handled) =>
+                    handled ||
+                    happyAgentProxyHandle({
+                        client: daemon.client,
+                        method: request.method ?? "GET",
+                        path,
+                        query: url.searchParams,
+                        request,
+                        response,
+                        ...(onTiming ? { onTiming } : {}),
+                        onConnectionError: () => {
+                            if (activeId === daemon.id)
+                                send({ type: "unavailable", id: daemon.id });
+                        },
+                    }),
+            )
+            .then(
+                (handled) => {
+                    if (!handled && !response.headersSent) response.writeHead(404).end();
+                },
+                () => {
+                    if (response.headersSent) response.destroy();
+                    else response.writeHead(502, { "cache-control": "no-store" }).end();
+                },
+            );
+    };
+    await proxy.targetSet(daemonless);
     return {
         port: proxy.port,
         username: proxy.username,
@@ -194,103 +330,21 @@ export async function happyAgentRendererUtilityServerCreate(
                     activeId = undefined;
                     detach = undefined;
                     activeClient = undefined;
+                    await proxy.targetSet(daemonless);
                 }
                 return;
             }
             const client = new HappyAgentDaemonClient(message.transport, remote);
             const id = message.id;
             backings.set(client, id);
+            const daemon = { id, client, bridgeUrl: message.bridgeUrl };
             const next = await proxy.targetSet({
                 url: message.bridgeUrl,
                 terminalCapability: message.terminalCapability,
                 upgradeHandle: (request, socket, head, url) =>
                     live.upgrade(request, socket, head, url),
-                requestHandle(request, response, url) {
-                    const path = url.pathname;
-                    if (localRoute(path)) {
-                        localForward(request, response, url, message.bridgeUrl);
-                        return;
-                    }
-                    if (path !== "/health" && path !== "/v0" && !path.startsWith("/v0/")) {
-                        response.writeHead(404, { "cache-control": "no-store" }).end();
-                        return;
-                    }
-                    const origin = request.headers.origin;
-                    const crossOrigin =
-                        message.allowedOrigin !== undefined && origin === message.allowedOrigin;
-                    if (
-                        origin !== undefined &&
-                        origin !== "null" &&
-                        !origin.startsWith("file:") &&
-                        !crossOrigin
-                    ) {
-                        response.writeHead(403).end();
-                        return;
-                    }
-                    if (crossOrigin) {
-                        response.setHeader("access-control-allow-origin", message.allowedOrigin!);
-                        response.setHeader("access-control-expose-headers", "*");
-                        response.setHeader("vary", "origin");
-                    }
-                    if (request.method === "OPTIONS") {
-                        if (!crossOrigin) {
-                            response.writeHead(403).end();
-                            return;
-                        }
-                        const method = request.headers["access-control-request-method"]?.trim();
-                        const headers = request.headers["access-control-request-headers"]?.trim();
-                        response
-                            .writeHead(204, {
-                                "access-control-allow-headers":
-                                    headers ||
-                                    "authorization, content-type, if-match, x-happy-agent-mutation-id",
-                                "access-control-allow-methods": method
-                                    ? `${method}, OPTIONS`
-                                    : "DELETE, GET, HEAD, PATCH, POST, PUT, OPTIONS",
-                                ...(request.headers["access-control-request-private-network"] ===
-                                "true"
-                                    ? { "access-control-allow-private-network": "true" }
-                                    : {}),
-                                "access-control-max-age": "600",
-                            })
-                            .end();
-                        return;
-                    }
-                    const cloud = happyCloudConnectionOf(path);
-                    if (cloud !== undefined) {
-                        happyCloudForward(request, response, url, remoteTokens[cloud]);
-                        return;
-                    }
-                    const onTiming = happyAgentRequestTimingCreate(response, debug);
-                    void live
-                        .handle(request, response, url)
-                        .then(
-                            (handled) =>
-                                handled ||
-                                happyAgentProxyHandle({
-                                    client,
-                                    method: request.method ?? "GET",
-                                    path,
-                                    query: url.searchParams,
-                                    request,
-                                    response,
-                                    ...(onTiming ? { onTiming } : {}),
-                                    onConnectionError: () => {
-                                        if (activeId === id) send({ type: "unavailable", id });
-                                    },
-                                }),
-                        )
-                        .then(
-                            (handled) => {
-                                if (!handled && !response.headersSent)
-                                    response.writeHead(404).end();
-                            },
-                            () => {
-                                if (response.headersSent) response.destroy();
-                                else response.writeHead(502, { "cache-control": "no-store" }).end();
-                            },
-                        );
-                },
+                requestHandle: (request, response, url) =>
+                    requestRoute(request, response, url, message.allowedOrigin, daemon),
             });
             detach = next;
             activeId = id;
