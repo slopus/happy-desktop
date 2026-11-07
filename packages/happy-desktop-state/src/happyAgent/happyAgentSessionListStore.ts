@@ -1609,19 +1609,28 @@ export function happyAgentSessionListStoreCreate(
         next: readonly Row[],
     ): readonly Row[] => {
         if (previous === next) return previous;
-        const byId = new Map(previous.map((task) => [task.id, task]));
+        // Most catalog updates replace a few rows without moving them. Match those
+        // unique entity IDs in place; build an index only if a row actually moved.
+        let byId: Map<string, Row> | undefined;
         let changed = previous.length !== next.length;
-        let reused = false;
-        const merged = next.map((task, index) => {
-            const before = byId.get(task.id);
+        let merged: Row[] | undefined;
+        for (let index = 0; index < next.length; index += 1) {
+            const task = next[index]!;
+            let before: Row | undefined = previous[index];
+            if (before?.id !== task.id) {
+                byId ??= new Map(previous.map((row) => [row.id, row]));
+                before = byId.get(task.id);
+            }
             const kept = before !== undefined && deepEqual(before, task) ? before : task;
             if (kept !== previous[index]) changed = true;
-            if (kept !== task) reused = true;
-            return kept;
-        });
+            if (kept !== task) {
+                merged ??= next.slice();
+                merged[index] = kept;
+            }
+        }
         // Preserve the projector's array too when its rows already have the right identity.
         // Its next unchanged publication can then take the constant-time identity check.
-        return changed ? (reused ? merged : next) : previous;
+        return changed ? (merged ?? next) : previous;
     };
 
     const tasksJoiningProject = (
