@@ -1175,6 +1175,16 @@ function rowsOwnerOf(workspace: Workspace | undefined): string {
     ]);
 }
 
+/** The workspace inputs read by session and subtask rows, excluding its agent trees and Git. */
+export function workspaceSessionContextSame(before: Workspace, after: Workspace): boolean {
+    return (
+        before.kind === after.kind &&
+        before.botId === after.botId &&
+        before.projectId === after.projectId &&
+        workspacePath(before) === workspacePath(after)
+    );
+}
+
 /** What each group's rows were projected from, so the same owner's next group can patch them. */
 const rowsSources = new WeakMap<ProjectGroup | WorkspaceGroup, GroupRows>();
 

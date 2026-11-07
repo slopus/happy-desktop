@@ -72,6 +72,7 @@ import {
     projectShapeSame,
     projectTasks,
     replaceResource,
+    workspaceSessionContextSame,
     workspaceShapeSame,
     type SessionProjectionInput,
     type TranscriptMessage,
@@ -313,11 +314,13 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
     const nextId = cuid2Create(now);
     const sessions = new Map<string, SessionEntry>();
     const userSessions = new Map<string, Set<SessionEntry>>();
+    let userProfilesRevision = 0;
     const users = userProfilesCreate({
         client,
         endpoint,
         signal: rootController.signal,
         changed: (id) => {
+            userProfilesRevision += 1;
             // Version/timestamp-only changes never reach here. Only conversations
             // referencing this identity need their denormalized rows reconciled.
             for (const entry of userSessions.get(id) ?? []) {
@@ -533,6 +536,27 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         | undefined;
     /** Where each published project group sits. */
     let groupsAt: ReadonlyMap<string, number> = new Map();
+
+    /**
+     * Inputs of the last bot/task projection. Unrelated project-agent and Git updates must
+     * not sort, walk, and deeply compare every bot/task tree on every catalog publication.
+     * Known workspace replacements advance this pointer only when their row context is
+     * unchanged; any untracked replacement conservatively invalidates both projections.
+     */
+    let ownedGroupsTracked:
+        | {
+              readonly config: DaemonConfig;
+              readonly bots: readonly Bot[];
+              readonly tasks: readonly Task[];
+              readonly workspaces: readonly Workspace[];
+              readonly memberships: readonly TaskMembership[];
+              readonly draftsRevision: number;
+              readonly modesRevision: number;
+              readonly profilesRevision: number;
+              readonly currentUserId: string | undefined;
+              readonly storiesSupported: boolean;
+          }
+        | undefined;
 
     reportDebug({
         detail: debugDetail({ endpoint }),
@@ -829,33 +853,66 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         if (config !== undefined) {
             const daemonConfig = config;
             changes = groupsProject(daemonConfig);
-            groupsStore.setState((current) => ({
-                botGroups: entitiesSettle(
-                    current.botGroups,
-                    projectBots(
-                        current.bots,
-                        workspaceOf,
-                        endpoint,
-                        daemonConfig,
-                        agentDrafts,
-                        agentModes,
-                        sync.source.health()?.capabilities?.storyFeed === true,
-                    ),
-                ),
-                taskGroups: entitiesSettle(
-                    current.taskGroups,
-                    projectTasks(
-                        current.tasks,
-                        current.taskMemberships,
-                        workspaceOf,
-                        endpoint,
-                        daemonConfig,
-                        taskOwnerOf,
-                        agentDrafts,
-                        agentModes,
-                    ),
-                ),
-            }));
+            const current = groupsStore.getState();
+            const tracked = ownedGroupsTracked;
+            const storiesSupported = sync.source.health()?.capabilities?.storyFeed === true;
+            const contextSame =
+                tracked !== undefined &&
+                tracked.config === daemonConfig &&
+                tracked.workspaces === current.workspaces &&
+                tracked.draftsRevision === agentDrafts.revision &&
+                tracked.modesRevision === agentModes.revision;
+            const botGroups =
+                contextSame &&
+                tracked.bots === current.bots &&
+                tracked.storiesSupported === storiesSupported
+                    ? current.botGroups
+                    : entitiesSettle(
+                          current.botGroups,
+                          projectBots(
+                              current.bots,
+                              workspaceOf,
+                              endpoint,
+                              daemonConfig,
+                              agentDrafts,
+                              agentModes,
+                              storiesSupported,
+                          ),
+                      );
+            const taskGroups =
+                contextSame &&
+                tracked.tasks === current.tasks &&
+                tracked.memberships === current.taskMemberships &&
+                tracked.profilesRevision === userProfilesRevision &&
+                tracked.currentUserId === currentUserId
+                    ? current.taskGroups
+                    : entitiesSettle(
+                          current.taskGroups,
+                          projectTasks(
+                              current.tasks,
+                              current.taskMemberships,
+                              workspaceOf,
+                              endpoint,
+                              daemonConfig,
+                              taskOwnerOf,
+                              agentDrafts,
+                              agentModes,
+                          ),
+                      );
+            ownedGroupsTracked = {
+                config: daemonConfig,
+                bots: current.bots,
+                tasks: current.tasks,
+                workspaces: current.workspaces,
+                memberships: current.taskMemberships,
+                draftsRevision: agentDrafts.revision,
+                modesRevision: agentModes.revision,
+                profilesRevision: userProfilesRevision,
+                currentUserId,
+                storiesSupported,
+            };
+            if (botGroups !== current.botGroups || taskGroups !== current.taskGroups)
+                groupsStore.setState({ botGroups, taskGroups });
         }
         const state = groupState();
         const { botGroups, groups, taskGroups } = groupsStore.getState();
@@ -1169,6 +1226,9 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
             groupsTracked.workspaces === held.workspaces;
         const stored = agentCatalogStore(index, agent, tracked ? groupsDirtyMark : undefined);
         if (stored !== held) groupsStore.setState({ ...stored });
+        // Agent storage replaces only workspace trees, not the context bot/task rows read.
+        if (ownedGroupsTracked?.workspaces === held.workspaces)
+            ownedGroupsTracked = { ...ownedGroupsTracked, workspaces: stored.workspaces };
         if (tracked && groupsTracked !== undefined)
             groupsTracked = {
                 ...groupsTracked,
@@ -1204,11 +1264,20 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         if (updated === undefined) return false;
         if (updated.catalog === held) return true;
         groupsStore.setState({ ...updated.catalog });
-        if (!tracked || groupsTracked === undefined) return true;
         const { previous, next } = updated as {
             readonly previous: AgentCatalogOwners[keyof AgentCatalogOwners];
             readonly next: AgentCatalogOwners[keyof AgentCatalogOwners];
         };
+        if (
+            kind === "workspace" &&
+            ownedGroupsTracked?.workspaces === held.workspaces &&
+            workspaceSessionContextSame(previous as Workspace, next as Workspace)
+        )
+            ownedGroupsTracked = {
+                ...ownedGroupsTracked,
+                workspaces: updated.catalog.workspaces,
+            };
+        if (!tracked || groupsTracked === undefined) return true;
         if (kind === "workspace") {
             const before = previous as Workspace;
             const after = next as Workspace;
