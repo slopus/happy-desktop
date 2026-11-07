@@ -146,6 +146,7 @@
 @import "./styles/usage-ring.css";
 @import "./styles/tool-call-preview.css";
 @import "./styles/context-meter.css";
+@import "./styles/compute-chip.css";
 @import "./styles/conversation.css";
 @import "./styles/chat-conversation.css";
 @import "./styles/happy-agent-usage.css";

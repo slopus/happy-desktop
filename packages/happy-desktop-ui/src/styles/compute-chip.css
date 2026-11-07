@@ -1,0 +1,40 @@
+/*
+ * C-337 ComputeChip: quiet text in the composer's control row, the same size
+ * as the controls beside it, with a status dot after a bound machine.
+ */
+.happy-compute-chip {
+    display: inline-flex;
+    flex: 0 1 auto;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    height: 28px;
+    padding: 0 8px;
+    color: var(--text-secondary);
+    font-family: var(--happy-font-ui);
+    font-size: 12px;
+    line-height: 18px;
+    white-space: nowrap;
+}
+
+.happy-compute-chip[data-kind="none"] {
+    opacity: 0.72;
+}
+
+.happy-compute-chip__label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.happy-compute-chip__dot {
+    flex: none;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background-color: var(--status-connected);
+}
+
+.happy-compute-chip[data-online="false"] .happy-compute-chip__dot {
+    background-color: var(--status-default);
+}

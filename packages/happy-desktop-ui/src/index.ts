@@ -441,6 +441,7 @@ export { DelegatedAgentActivity, type DelegatedAgentActivityProps } from "./Dele
 export { ContextMenu, type ContextMenuProps } from "./ContextMenu";
 export { LinkContextMenu, LinkCopyContext, type LinkContextMenuProps } from "./LinkContextMenu";
 export { ContextMeter, type ContextMeterProps } from "./ContextMeter";
+export { ComputeChip, type ComputeChipCompute, type ComputeChipProps } from "./ComputeChip";
 export {
     fileTreeBuild,
     fileTreeExpanded,
