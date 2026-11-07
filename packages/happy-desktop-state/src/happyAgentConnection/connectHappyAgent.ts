@@ -556,16 +556,14 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
               readonly tasks: readonly Task[];
               readonly workspaces: readonly Workspace[];
               readonly memberships: readonly TaskMembership[];
-              readonly draftsRevision: number;
-              readonly modesRevision: number;
               readonly profilesRevision: number;
               readonly currentUserId: string | undefined;
               readonly storiesSupported: boolean;
           }
         | undefined;
 
-    // An owner replacement changes only its own projection. The dependency checks at
-    // publication discard these weak caches whenever any input outside that owner changes.
+    // An owner replacement changes only its own projection. Shared context changes discard
+    // these caches; draft/mode journals let unaffected current owners carry their rows forward.
     let botRows = new WeakMap<Bot, BotGroup>();
     let taskRows = new WeakMap<Task, TaskGroup>();
 
@@ -787,9 +785,10 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
     };
 
     /** The project groups as `projectGroupsChanged` brings them forward. */
-    const groupsProject = (daemonConfig: DaemonConfig): GroupsChanges | undefined => {
-        const draftsChanged = agentDrafts.changesTake();
-        const modesChanged = agentModes.changesTake();
+    const groupsProject = (
+        daemonConfig: DaemonConfig,
+        touchedAgents: ReadonlySet<string> | undefined,
+    ): GroupsChanges | undefined => {
         const gitChanged = gitStates.changesTake();
         const current = groupsStore.getState();
         const tracked = groupsTracked;
@@ -804,12 +803,10 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
             tracked.config === daemonConfig &&
             tracked.projects === current.projects &&
             tracked.workspaces === current.workspaces &&
-            draftsChanged !== undefined &&
-            modesChanged !== undefined &&
+            touchedAgents !== undefined &&
             gitChanged !== undefined
         ) {
             const index = agentIndexCurrent();
-            const touchedAgents = new Set([...draftsChanged, ...modesChanged]);
             for (const agentId of touchedAgents)
                 agentHolderProjects(index, agentId, groupsDirtyMark);
             for (const ownerId of gitChanged) {
@@ -863,7 +860,15 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         let changes: GroupsChanges | undefined = GROUPS_UNCHANGED;
         if (config !== undefined) {
             const daemonConfig = config;
-            changes = groupsProject(daemonConfig);
+            // Consume each journal once and share its keys across all owner projections.
+            // A cleared journal has unknown keys and conservatively invalidates every row.
+            const draftsChanged = agentDrafts.changesTake();
+            const modesChanged = agentModes.changesTake();
+            const touchedAgents =
+                draftsChanged === undefined || modesChanged === undefined
+                    ? undefined
+                    : new Set([...draftsChanged, ...modesChanged]);
+            changes = groupsProject(daemonConfig, touchedAgents);
             const current = groupsStore.getState();
             const tracked = ownedGroupsTracked;
             const storiesSupported = sync.source.health()?.capabilities?.storyFeed === true;
@@ -871,8 +876,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                 tracked !== undefined &&
                 tracked.config === daemonConfig &&
                 tracked.workspaces === current.workspaces &&
-                tracked.draftsRevision === agentDrafts.revision &&
-                tracked.modesRevision === agentModes.revision;
+                touchedAgents !== undefined;
             const botContextSame = contextSame && tracked.storiesSupported === storiesSupported;
             const taskContextSame =
                 contextSame &&
@@ -881,8 +885,46 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                 tracked.currentUserId === currentUserId;
             if (!botContextSame) botRows = new WeakMap();
             if (!taskContextSame) taskRows = new WeakMap();
+            let botsTouched = false;
+            let tasksTouched = false;
+            if (
+                (botContextSame || taskContextSame) &&
+                touchedAgents !== undefined &&
+                touchedAgents.size > 0
+            ) {
+                const index = agentIndexCurrent();
+                for (const agentId of touchedAgents)
+                    for (const rank of index.holders.get(agentId) ?? []) {
+                        if (rank < current.bots.length) {
+                            botRows.delete(current.bots[rank]!);
+                            botsTouched = true;
+                        } else if (rank < current.bots.length + current.tasks.length) {
+                            taskRows.delete(current.tasks[rank - current.bots.length]!);
+                            tasksTouched = true;
+                        }
+                    }
+                // Only carry current owner versions across a context change. An old
+                // cached object might later reappear after its draft/mode changed while
+                // it was absent; keeping that historical cache entry would make it stale.
+                if (botContextSame) {
+                    const previous = botRows;
+                    botRows = new WeakMap();
+                    for (const bot of current.bots) {
+                        const row = previous.get(bot);
+                        if (row !== undefined) botRows.set(bot, row);
+                    }
+                }
+                if (taskContextSame) {
+                    const previous = taskRows;
+                    taskRows = new WeakMap();
+                    for (const task of current.tasks) {
+                        const row = previous.get(task);
+                        if (row !== undefined) taskRows.set(task, row);
+                    }
+                }
+            }
             const botGroups =
-                botContextSame && tracked.bots === current.bots
+                botContextSame && !botsTouched && tracked.bots === current.bots
                     ? current.botGroups
                     : entitiesSettle(
                           current.botGroups,
@@ -902,7 +944,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                           },
                       );
             const taskGroups =
-                taskContextSame && tracked.tasks === current.tasks
+                taskContextSame && !tasksTouched && tracked.tasks === current.tasks
                     ? current.taskGroups
                     : entitiesSettle(
                           current.taskGroups,
@@ -928,8 +970,6 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                 tasks: current.tasks,
                 workspaces: current.workspaces,
                 memberships: current.taskMemberships,
-                draftsRevision: agentDrafts.revision,
-                modesRevision: agentModes.revision,
                 profilesRevision: userProfilesRevision,
                 currentUserId,
                 storiesSupported,
