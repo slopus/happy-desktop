@@ -325,6 +325,69 @@ export function agentCatalogStore(
     return stored;
 }
 
+/** The owners of a catalog by kind. */
+export interface AgentCatalogOwners {
+    readonly bot: Bot;
+    readonly task: Task;
+    readonly workspace: Workspace;
+    readonly project: Project;
+}
+
+/**
+ * The index's catalog with the owner of `kind` and `id` replaced in its place by `update` of
+ * it, and the index moved onto that catalog; the same catalog when `update` returns the owner
+ * it was given. `undefined` when the catalog holds no such owner or `update` renames it.
+ *
+ * Only that owner's trees are visited, and not at all when it keeps its agents, so storing a
+ * record costs the record rather than the catalog.
+ */
+export function agentCatalogOwnerUpdate<Kind extends keyof AgentCatalogOwners>(
+    index: AgentCatalogIndex,
+    kind: Kind,
+    id: string,
+    update: (current: AgentCatalogOwners[Kind]) => AgentCatalogOwners[Kind],
+):
+    | {
+          readonly catalog: AgentCatalog;
+          readonly previous: AgentCatalogOwners[Kind];
+          readonly next: AgentCatalogOwners[Kind];
+      }
+    | undefined {
+    const { catalog } = index;
+    const list = catalog[OWNER_LISTS[kind]] as readonly AgentCatalogOwners[Kind][];
+    const at =
+        kind === "workspace"
+            ? index.workspaceAt.get(id)
+            : kind === "project"
+              ? index.projectAt.get(id)
+              : list.findIndex((owner) => owner.id === id);
+    if (at === undefined || at < 0) return undefined;
+    const previous = list[at]!;
+    const next = update(previous);
+    if (next === previous) return { catalog, previous, next };
+    if (next.id !== id) return undefined;
+    const owners = [...list];
+    owners[at] = next;
+    const stored: AgentCatalog = { ...catalog, [OWNER_LISTS[kind]]: owners };
+    const base =
+        kind === "bot"
+            ? 0
+            : kind === "task"
+              ? catalog.bots.length
+              : kind === "workspace"
+                ? catalog.bots.length + catalog.tasks.length
+                : catalog.bots.length + catalog.tasks.length + catalog.workspaces.length;
+    indexAdvance(index as IndexWritable, stored, [base + at]);
+    return { catalog: stored, previous, next };
+}
+
+const OWNER_LISTS = {
+    bot: "bots",
+    task: "tasks",
+    workspace: "workspaces",
+    project: "projects",
+} as const satisfies Record<keyof AgentCatalogOwners, keyof AgentCatalog>;
+
 /** Names the project of every workspace and project whose trees hold `agentId`. */
 export function agentHolderProjects(
     index: AgentCatalogIndex,

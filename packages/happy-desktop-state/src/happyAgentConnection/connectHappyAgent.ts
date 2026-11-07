@@ -1,8 +1,10 @@
 import {
     agentCatalogIndexed,
+    agentCatalogOwnerUpdate,
     agentCatalogStore,
     agentHolderProjects,
     type AgentCatalogIndex,
+    type AgentCatalogOwners,
 } from "./agentCatalogIndex.js";
 import {
     applyMessageDelta,
@@ -57,6 +59,7 @@ import {
     entitiesSettle,
     draftPreviewOf,
     modeOf,
+    ownerResourceMerge,
     ownerResourceReplace,
     projectElements,
     projectBots,
@@ -66,8 +69,10 @@ import {
     RevisedMap,
     projectNumericIdentity,
     projectSession,
+    projectShapeSame,
     projectTasks,
     replaceResource,
+    workspaceShapeSame,
     type SessionProjectionInput,
     type TranscriptMessage,
 } from "./projection.js";
@@ -1177,6 +1182,63 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         }
     };
 
+    /**
+     * Puts one held owner's new record in its place, moving the agent index with it and telling
+     * the group journal which project it reached, so a record that keeps the project and
+     * worktree lists as they were costs its own group rather than the catalog. One that lists,
+     * unlists, moves or reorders a group leaves the next publish to project everything.
+     * `false` when no such owner is held, and nothing was stored.
+     */
+    const ownerUpdate = <Kind extends keyof AgentCatalogOwners>(
+        kind: Kind,
+        id: string,
+        update: (current: AgentCatalogOwners[Kind]) => AgentCatalogOwners[Kind],
+    ): boolean => {
+        const index = agentIndexCurrent();
+        const held = index.catalog;
+        const tracked =
+            groupsTracked !== undefined &&
+            groupsTracked.projects === held.projects &&
+            groupsTracked.workspaces === held.workspaces;
+        const updated = agentCatalogOwnerUpdate(index, kind, id, update);
+        if (updated === undefined) return false;
+        if (updated.catalog === held) return true;
+        groupsStore.setState({ ...updated.catalog });
+        if (!tracked || groupsTracked === undefined) return true;
+        const { previous, next } = updated as {
+            readonly previous: AgentCatalogOwners[keyof AgentCatalogOwners];
+            readonly next: AgentCatalogOwners[keyof AgentCatalogOwners];
+        };
+        if (kind === "workspace") {
+            const before = previous as Workspace;
+            const after = next as Workspace;
+            if (!workspaceShapeSame(before, after)) {
+                groupsTracked = undefined;
+                return true;
+            }
+            if (after.projectId !== null) groupsDirtyMark(after.projectId);
+        } else if (kind === "project") {
+            if (!projectShapeSame(previous as Project, next as Project)) {
+                groupsTracked = undefined;
+                return true;
+            }
+            groupsDirtyMark(id);
+        }
+        groupsTracked = {
+            ...groupsTracked,
+            projects: updated.catalog.projects,
+            workspaces: updated.catalog.workspaces,
+        };
+        return true;
+    };
+
+    /** Stores a scan's facts on the workspace and, for a project's root, on the project too. */
+    const gitFactsStore = (workspaceId: string, facts: Workspace["git"]): void => {
+        // A project's root workspace shares its id, so both records carry the facts.
+        ownerUpdate("workspace", workspaceId, (workspace) => ({ ...workspace, git: facts }));
+        ownerUpdate("project", workspaceId, (project) => ({ ...project, git: facts }));
+    };
+
     /** Publishes the stored agent to its own session and to every parent that lists it. */
     const announceAgent = (agent: Agent): void => {
         const entry = sessions.get(agent.id);
@@ -1345,18 +1407,20 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
             .getState()
             .projects.find((candidate) => candidate.id === project.id);
         if (!shouldAdoptVersion(current, project)) return false;
-        groupsStore.setState((state) => ({
-            projects: ownerResourceReplace(state.projects, project),
-        }));
+        if (!ownerUpdate("project", project.id, (held) => ownerResourceMerge(held, project)))
+            groupsStore.setState((state) => ({
+                projects: ownerResourceReplace(state.projects, project),
+            }));
         publishGroups(deltas);
         return true;
     };
 
     const adoptWorkspace = (workspace: Workspace, deltas: readonly GroupDelta[] = []): boolean => {
         if (!shouldAdoptVersion(workspaceOf(workspace.id), workspace)) return false;
-        groupsStore.setState((state) => ({
-            workspaces: ownerResourceReplace(state.workspaces, workspace),
-        }));
+        if (!ownerUpdate("workspace", workspace.id, (held) => ownerResourceMerge(held, workspace)))
+            groupsStore.setState((state) => ({
+                workspaces: ownerResourceReplace(state.workspaces, workspace),
+            }));
         publishGroups(deltas);
         return true;
     };
@@ -2226,14 +2290,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
             )
                 continue;
             gitStates.set(workspaceId, gitSnapshotStateUpdate(gitStates.get(workspaceId), git));
-            groupsStore.setState((state) => ({
-                workspaces: state.workspaces.map((workspace) =>
-                    workspace.id === workspaceId ? { ...workspace, git: git.facts } : workspace,
-                ),
-                projects: state.projects.map((project) =>
-                    project.id === workspaceId ? { ...project, git: git.facts } : project,
-                ),
-            }));
+            gitFactsStore(workspaceId, git.facts);
             changed = true;
         }
         if (changed) publishGroups();
@@ -2347,9 +2404,12 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                     .projects.find((candidate) => candidate.id === project.id);
                 if (latest !== undefined && latest.version.localeCompare(project.version) > 0)
                     return;
-                groupsStore.setState((state) => ({
-                    projects: ownerResourceReplace(state.projects, project),
-                }));
+                if (
+                    !ownerUpdate("project", project.id, (held) => ownerResourceMerge(held, project))
+                )
+                    groupsStore.setState((state) => ({
+                        projects: ownerResourceReplace(state.projects, project),
+                    }));
                 publishGroups();
             }),
         );
@@ -2363,9 +2423,14 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                     const latest = workspaceOf(workspace.id);
                     if (latest !== undefined && latest.version.localeCompare(workspace.version) > 0)
                         return;
-                    groupsStore.setState((state) => ({
-                        workspaces: ownerResourceReplace(state.workspaces, workspace),
-                    }));
+                    if (
+                        !ownerUpdate("workspace", workspace.id, (held) =>
+                            ownerResourceMerge(held, workspace),
+                        )
+                    )
+                        groupsStore.setState((state) => ({
+                            workspaces: ownerResourceReplace(state.workspaces, workspace),
+                        }));
                     publishGroups();
                 }),
         );
@@ -2468,12 +2533,16 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                     projectRefetch(event.payload.projectId);
                     return;
                 }
-                groupsStore.setState((state) => ({
-                    projects: ownerResourceReplace(state.projects, {
-                        ...applyChanges(current, event.payload.changes),
-                        version: event.payload.version,
-                    }),
-                }));
+                const project = {
+                    ...applyChanges(current, event.payload.changes),
+                    version: event.payload.version,
+                };
+                if (
+                    !ownerUpdate("project", project.id, (held) => ownerResourceMerge(held, project))
+                )
+                    groupsStore.setState((state) => ({
+                        projects: ownerResourceReplace(state.projects, project),
+                    }));
                 publishGroups();
                 return;
             }
@@ -2527,12 +2596,12 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                     );
                     return;
                 }
-                groupsStore.setState((state) => ({
-                    bots: replaceResource(state.bots, {
-                        ...applyChanges(current, event.payload.changes),
-                        version: event.payload.version,
-                    }),
-                }));
+                const bot = {
+                    ...applyChanges(current, event.payload.changes),
+                    version: event.payload.version,
+                };
+                if (!ownerUpdate("bot", bot.id, () => bot))
+                    groupsStore.setState((state) => ({ bots: replaceResource(state.bots, bot) }));
                 publishGroups();
                 return;
             }
@@ -2567,7 +2636,10 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                     ...applyChanges(current, event.payload.changes),
                     version: event.payload.version,
                 };
-                groupsStore.setState((state) => ({ tasks: replaceResource(state.tasks, updated) }));
+                if (!ownerUpdate("task", updated.id, () => updated))
+                    groupsStore.setState((state) => ({
+                        tasks: replaceResource(state.tasks, updated),
+                    }));
                 taskOwnersEnsure([updated]);
                 publishGroups();
                 return;
@@ -2587,12 +2659,18 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                     workspaceRefetch(event.payload.workspaceId);
                     return;
                 }
-                groupsStore.setState((state) => ({
-                    workspaces: ownerResourceReplace(state.workspaces, {
-                        ...applyChanges(current, event.payload.changes),
-                        version: event.payload.version,
-                    }),
-                }));
+                const workspace = {
+                    ...applyChanges(current, event.payload.changes),
+                    version: event.payload.version,
+                };
+                if (
+                    !ownerUpdate("workspace", workspace.id, (held) =>
+                        ownerResourceMerge(held, workspace),
+                    )
+                )
+                    groupsStore.setState((state) => ({
+                        workspaces: ownerResourceReplace(state.workspaces, workspace),
+                    }));
                 publishGroups();
                 return;
             }
@@ -2759,14 +2837,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                 if (current && !current.invalidated && current.current.scannedAt >= git.scannedAt)
                     return;
                 gitStates.set(workspaceId, gitSnapshotStateUpdate(gitStates.get(workspaceId), git));
-                groupsStore.setState((state) => ({
-                    workspaces: state.workspaces.map((workspace) =>
-                        workspace.id === workspaceId ? { ...workspace, git: git.facts } : workspace,
-                    ),
-                    projects: state.projects.map((project) =>
-                        project.id === workspaceId ? { ...project, git: git.facts } : project,
-                    ),
-                }));
+                gitFactsStore(workspaceId, git.facts);
                 publishGroups();
                 return;
             }

@@ -565,6 +565,26 @@ interface GroupContext {
     readonly touchedAgents?: ReadonlySet<string>;
 }
 
+/**
+ * Whether a project's new record leaves the project lists as they were: listed or not, and
+ * under the same key. Such a change reaches the project's own group alone.
+ */
+export function projectShapeSame(before: Project, after: Project): boolean {
+    return projectListed(before) === projectListed(after) && before.orderKey === after.orderKey;
+}
+
+/**
+ * Whether a workspace's new record leaves the worktree lists as they were: listed or not, in
+ * the same project, under the same key. Such a change reaches its project's group alone.
+ */
+export function workspaceShapeSame(before: Workspace, after: Workspace): boolean {
+    return (
+        workspaceListed(before) === workspaceListed(after) &&
+        before.projectId === after.projectId &&
+        before.orderKey === after.orderKey
+    );
+}
+
 function projectListed(project: Project): boolean {
     return project.archivedAt === null && project.status === "active";
 }
@@ -619,6 +639,7 @@ function projectGroup(
     if (reusable && revision !== undefined && cached.revision === revision) return cached.value;
     const sessions = sessionsProject(
         agents,
+        root,
         (agent) =>
             projectAgent(agent, root, endpoint, config, drafts.get(agent.id), modes.get(agent.id)),
         previous,
@@ -797,15 +818,20 @@ export function ownerResourceReplace<T extends { id: string; agents: Agent[] }>(
 ): readonly T[] {
     const current = resources.find((candidate) => candidate.id === resource.id);
     if (current === undefined) return replaceResource(resources, resource);
+    return replaceResource(resources, ownerResourceMerge(current, resource));
+}
+
+/** `resource` in place of `current`, carrying over the archived agents `current` holds. */
+export function ownerResourceMerge<T extends { id: string; agents: Agent[] }>(
+    current: T,
+    resource: T,
+): T {
     const kept = current.agents.filter(
         (agent) =>
             agent.archivedAt !== null &&
             !resource.agents.some((candidate) => candidate.id === agent.id),
     );
-    return replaceResource(
-        resources,
-        kept.length === 0 ? resource : { ...resource, agents: [...resource.agents, ...kept] },
-    );
+    return kept.length === 0 ? resource : { ...resource, agents: [...resource.agents, ...kept] };
 }
 
 /**
@@ -1085,6 +1111,7 @@ function projectWorkspace(
     if (reusable && revision !== undefined && cached.revision === revision) return cached.value;
     const rows = sessionsProject(
         agents,
+        workspace,
         (agent) =>
             projectAgent(
                 agent,
@@ -1130,6 +1157,22 @@ interface GroupRows {
     readonly agents: readonly Agent[];
     readonly rows: readonly GroupSession[];
     readonly sorted: readonly GroupSession[];
+    /** What the rows read of the workspace they were projected in; see `rowsOwnerOf`. */
+    readonly owner: string;
+}
+
+/**
+ * Everything a row reads of the workspace it is projected in. A workspace record whose
+ * answer changed has every row projected again; any other change to it reaches no row.
+ */
+function rowsOwnerOf(workspace: Workspace | undefined): string {
+    if (workspace === undefined) return "";
+    return JSON.stringify([
+        workspace.kind,
+        workspace.botId ?? null,
+        workspace.projectId,
+        workspacePath(workspace),
+    ]);
 }
 
 /** What each group's rows were projected from, so the same owner's next group can patch them. */
@@ -1143,14 +1186,16 @@ const rowsSources = new WeakMap<ProjectGroup | WorkspaceGroup, GroupRows>();
  */
 function sessionsProject(
     agents: readonly Agent[],
+    workspace: Workspace | undefined,
     project: (agent: Agent) => GroupSession,
     previous: ProjectGroup | WorkspaceGroup | undefined,
     touched: ReadonlySet<string> | undefined,
 ): GroupRows {
+    const owner = rowsOwnerOf(workspace);
     const source = previous === undefined ? undefined : rowsSources.get(previous);
-    if (source === undefined || touched === undefined) {
+    if (source === undefined || touched === undefined || source.owner !== owner) {
         const rows = agents.map(project);
-        return { agents, rows, sorted: [...rows].sort(rowCompare) };
+        return { agents, rows, sorted: [...rows].sort(rowCompare), owner };
     }
     if (source.agents === agents && touched.size === 0) return source;
     let rows: readonly GroupSession[];
@@ -1166,7 +1211,12 @@ function sessionsProject(
         }
         rows = patched ?? source.rows;
     } else rows = agents.map(project);
-    return { agents, rows, sorted: sortedPatch(source.sorted, source.rows, rows, rowCompare) };
+    return {
+        agents,
+        rows,
+        sorted: sortedPatch(source.sorted, source.rows, rows, rowCompare),
+        owner,
+    };
 }
 
 /** `orderCompare` over the rows, which carry their agent's key. */
