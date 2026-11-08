@@ -28,6 +28,14 @@ const VIEWS: ReadonlyMap<string, MessageReferenceView> = new Map([
     ["artifact:gone", { type: "text", label: "Old onboarding deck" }],
     ["agent:reviewer", { type: "link", label: "Review the release notes", busy: false }],
     ["agent:builder", { type: "link", label: "Release build", busy: true }],
+    [
+        "agent:packager",
+        {
+            type: "link",
+            label: "Package the signed desktop build and upload it to the preview channel",
+            busy: true,
+        },
+    ],
     ["workspace:quiet", { type: "link", label: "happy-references", busy: false }],
     ["workspace:cloning", { type: "link", label: "happy-onboarding", busy: true }],
     ["project:desktop", { type: "link", label: "happy-desktop", busy: false }],
@@ -137,7 +145,7 @@ export function MessageReferencesPage() {
                 </div>
             </Specimen>
             <Specimen
-                detail="An agent working, a workspace and a project being prepared · ShimmerText sheen, inherit tone, inline"
+                detail="An agent working, a workspace and a project being prepared · ShimmerText sheen, inherit tone, inline · a wrapped link carries one band across all of its lines"
                 label="Busy references"
                 number="02"
                 stage="app"
@@ -148,6 +156,8 @@ export function MessageReferencesPage() {
                             "Handed the packaging to [](happy://agents/builder), which is still working.",
                             "",
                             "The new checkout [](happy://workspaces/cloning) is being prepared, and [](happy://projects/importing) is still cloning.",
+                            "",
+                            "A long one wraps like prose, and one band crosses every line of it: [](happy://agents/packager).",
                         ].join("\n"),
                     ),
                 )}

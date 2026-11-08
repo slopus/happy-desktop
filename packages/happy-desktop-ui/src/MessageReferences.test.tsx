@@ -281,6 +281,38 @@ it("shimmers a busy reference inline without moving its words", async () => {
         expect(busy.top - busyOrigin.top).toBeCloseTo(idle.top - idleOrigin.top, 1);
         expect(busy.width).toBeCloseTo(idle.width, 1);
     }
+
+    // One band crosses every line the link wraps onto: its ramp is anchored to the
+    // rectangle around all of the run's line fragments and slides on the
+    // compositor. An engine that cannot mask by glyphs or anchor the ramp breathes.
+    const sweeps =
+        (CSS.supports("mask-clip", "text") || CSS.supports("-webkit-mask-clip", "text")) &&
+        CSS.supports("anchor-name", "--a") &&
+        CSS.supports("anchor-scope", "--a");
+    const animations = shimmer!.getAnimations({ subtree: true }) as CSSAnimation[];
+    expect(animations.map((animation) => animation.animationName)).toEqual([
+        sweeps ? "happy-shimmer-text-slide" : "happy-shimmer-text-breathe",
+    ]);
+    if (!sweeps) return;
+    const fragments = [...shimmer!.getClientRects()];
+    expect(fragments.length, "the run itself wraps").toBeGreaterThan(1);
+    const ramp = shimmer!.querySelector(".happy-shimmer-text__ramp")!;
+    const box = ramp.getBoundingClientRect();
+    expect(box.left).toBeCloseTo(Math.min(...fragments.map((rect) => rect.left)), 1);
+    expect(box.right).toBeCloseTo(Math.max(...fragments.map((rect) => rect.right)), 1);
+    expect(box.top).toBeCloseTo(Math.min(...fragments.map((rect) => rect.top)) + 0.5, 1);
+    expect(box.bottom).toBeCloseTo(Math.max(...fragments.map((rect) => rect.bottom)) - 0.5, 1);
+    const transformAt = async (time: number) => {
+        for (const animation of animations) {
+            animation.pause();
+            animation.currentTime = time;
+        }
+        await nextFrame();
+        return getComputedStyle(ramp, "::before").transform;
+    };
+    const start = await transformAt(0);
+    expect(await transformAt(800), "the band moves across the run").not.toBe(start);
+    expect(getComputedStyle(ramp, "::before").transform).not.toBe("none");
 });
 
 it("reads unknown, deleted, malformed, and unknown-kind references as plain text", async () => {

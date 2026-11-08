@@ -187,9 +187,33 @@ export function ShimmerTextPage() {
             </Specimen>
 
             <Specimen
+                detail="An inline run breaks where its words would and carries one band across every line it wraps onto, parked at the same steps as the filmstrip"
+                label="Wrapping inline"
+                number="06"
+                stage="app"
+            >
+                <div style={column}>
+                    {PHASES.map((phase) => (
+                        <div key={phase} style={{ ...cell, width: "280px" }}>
+                            <span style={caption}>phase {phase}</span>
+                            <span style={{ fontSize: "14px", lineHeight: "21px" }}>
+                                Packaging is running in{" "}
+                                <span style={{ textDecoration: "underline" }}>
+                                    <ShimmerText inline phase={phase} sweep="sheen" tone="inherit">
+                                        the long release packaging task
+                                    </ShimmerText>
+                                </span>{" "}
+                                and should finish soon.
+                            </span>
+                        </div>
+                    ))}
+                </div>
+            </Specimen>
+
+            <Specimen
                 detail="Live, unparked: the only specimen on this page that animates, and the one to review cadence against"
                 label="Running"
-                number="06"
+                number="07"
                 stage="surface"
             >
                 <div style={column}>

@@ -20,12 +20,17 @@
  * whatever its length: a label of two words and a label of ten are read at the
  * same speed.
  *
- * A run that wraps like prose cannot carry one sliding box — an absolutely
- * placed box inside a split inline has no width to slide across — and an engine
- * without a text mask clip cannot hide a box behind glyphs. Both of those
- * breathe instead: the run's opacity eases between its resting strength and the
- * band's, which is the same move toward the page and back, still on the
- * compositor.
+ * A run that wraps like prose has no one box of its own: an absolutely placed
+ * box inside a split inline has no width to slide across. Its ramp is anchored
+ * to the run instead, and the anchor box of a split inline is the rectangle
+ * around every one of its line fragments, so the ramp covers each line the run
+ * wraps onto and the glyph mask cuts it back to the letters. The band then
+ * crosses the wrapped run as one band, at the same height on every line.
+ *
+ * An engine without a text mask clip cannot hide a box behind glyphs, and one
+ * without anchor positioning cannot give a wrapping run its box. Those breathe
+ * instead: the run's opacity eases between its resting strength and the band's,
+ * which is the same move toward the page and back, still on the compositor.
  *
  * Every colour the sweep paints is mixed against `--surface` rather than toward
  * transparency, so it is solid and a rendering test can assert an exact `rgb()`
@@ -63,72 +68,112 @@
 }
 
 /*
- * The compositor sweep. Chromium masks by glyphs only through the prefixed
- * `-webkit-mask-clip: text`; the unprefixed `mask-clip` does not take `text`
- * there, so the prefixed test is the one that decides it in Electron.
+ * The compositor sweep, for a reader who has not asked for less motion. Chromium
+ * masks by glyphs only through the prefixed `-webkit-mask-clip: text`; the
+ * unprefixed `mask-clip` does not take `text` there, so the prefixed test is the
+ * one that decides it in Electron.
  */
-@supports (mask-clip: text) or (-webkit-mask-clip: text) {
-    .happy-shimmer-text[data-layered] {
-        position: relative;
-        /* The glyphs paint at the resting colour beneath the ramp, so a sliver
-           the ramp does not reach still reads as resting text. */
-        -webkit-text-fill-color: var(--happy-shimmer-rest);
-        animation-name: none;
-        -webkit-mask-image: linear-gradient(black, black);
-        mask-image: linear-gradient(black, black);
-        -webkit-mask-clip: text;
-        mask-clip: text;
+@media (prefers-reduced-motion: no-preference) {
+    @supports (mask-clip: text) or (-webkit-mask-clip: text) {
+        .happy-shimmer-text:not([data-inline]) {
+            position: relative;
+            /* The glyphs paint at the resting colour beneath the ramp, so a
+               sliver the ramp does not reach still reads as resting text. */
+            -webkit-text-fill-color: var(--happy-shimmer-rest);
+            animation-name: none;
+            -webkit-mask-image: linear-gradient(black, black);
+            mask-image: linear-gradient(black, black);
+            -webkit-mask-clip: text;
+            mask-clip: text;
+        }
+
+        .happy-shimmer-text:not([data-inline]) > .happy-shimmer-text__ramp {
+            position: absolute;
+            /*
+             * Half a pixel short of the run's top and bottom. A run that sits on
+             * a fractional pixel has a partly covered first or last row, and the
+             * glyph mask is cut at the run's rounded edge, so that row would show
+             * the ramp unmasked as a faint line. No glyph reaches into it at an
+             * ordinary line height.
+             */
+            inset: 0.5px 0;
+            display: block;
+            /* The ramp overhangs the run by two widths; it must not widen a
+               scroll container, and nothing outside the run was ever painted. */
+            overflow: clip;
+            pointer-events: none;
+        }
+
+        .happy-shimmer-text > .happy-shimmer-text__ramp::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            /* A pixel of resting colour past each end, so neither end of the
+               ramp ever stops on a glyph that sits on a fractional pixel: the
+               ramp repeats under its clear borders, and both its ends are at
+               rest. */
+            left: -1px;
+            box-sizing: content-box;
+            width: 300%;
+            border-inline: 1px solid transparent;
+            background-image: linear-gradient(
+                90deg,
+                var(--happy-shimmer-rest) 0%,
+                var(--happy-shimmer-rest) 40%,
+                var(--happy-shimmer-highlight) 50%,
+                var(--happy-shimmer-rest) 60%,
+                var(--happy-shimmer-rest) 100%
+            );
+            /* Its own layer from the first frame, so starting the loop never
+               waits on a repaint to promote it. */
+            will-change: transform;
+            animation-name: happy-shimmer-text-slide;
+            animation-duration: var(--happy-shimmer-duration);
+            animation-timing-function: linear;
+            animation-iteration-count: infinite;
+            animation-delay: calc(-1 * var(--happy-shimmer-offset) * var(--happy-shimmer-duration));
+        }
+
+        .happy-shimmer-text[data-paused] > .happy-shimmer-text__ramp::before {
+            animation-play-state: paused;
+        }
     }
 
-    .happy-shimmer-text[data-layered] > .happy-shimmer-text__ramp {
-        position: absolute;
-        /*
-         * Half a pixel short of the run's top and bottom. A run that sits on a
-         * fractional pixel has a partly covered first or last row, and the
-         * glyph mask is cut at the run's rounded edge, so that row would show
-         * the ramp unmasked as a faint line. No glyph reaches into it at an
-         * ordinary line height.
-         */
-        inset: 0.5px 0;
-        display: block;
-        /* The ramp overhangs the run by two widths; it must not widen a scroll
-           container, and nothing outside the run was ever painted. */
-        overflow: clip;
-        pointer-events: none;
-    }
+    /*
+     * The wrapping sweep. The run is the ramp's containing block and its anchor
+     * at once, and `anchor-scope` keeps the name to this one run, so every link
+     * in a message anchors its own ramp and never a neighbour's. The ramp is out
+     * of flow, so it takes no part in where the lines break.
+     */
+    @supports ((mask-clip: text) or (-webkit-mask-clip: text)) and (anchor-name: --a) and
+        (anchor-scope: --a) {
+        .happy-shimmer-text[data-inline] {
+            position: relative;
+            anchor-name: --happy-shimmer-run;
+            anchor-scope: --happy-shimmer-run;
+            -webkit-text-fill-color: var(--happy-shimmer-rest);
+            animation-name: none;
+            -webkit-mask-image: linear-gradient(black, black);
+            mask-image: linear-gradient(black, black);
+            -webkit-mask-clip: text;
+            mask-clip: text;
+        }
 
-    .happy-shimmer-text[data-layered] > .happy-shimmer-text__ramp::before {
-        content: "";
-        position: absolute;
-        top: 0;
-        bottom: 0;
-        /* A pixel of resting colour past each end, so neither end of the ramp
-           ever stops on a glyph that sits on a fractional pixel: the ramp
-           repeats under its clear borders, and both its ends are at rest. */
-        left: -1px;
-        box-sizing: content-box;
-        width: 300%;
-        border-inline: 1px solid transparent;
-        background-image: linear-gradient(
-            90deg,
-            var(--happy-shimmer-rest) 0%,
-            var(--happy-shimmer-rest) 40%,
-            var(--happy-shimmer-highlight) 50%,
-            var(--happy-shimmer-rest) 60%,
-            var(--happy-shimmer-rest) 100%
-        );
-        /* Its own layer from the first frame, so starting the loop never
-           waits on a repaint to promote it. */
-        will-change: transform;
-        animation-name: happy-shimmer-text-slide;
-        animation-duration: var(--happy-shimmer-duration);
-        animation-timing-function: linear;
-        animation-iteration-count: infinite;
-        animation-delay: calc(-1 * var(--happy-shimmer-offset) * var(--happy-shimmer-duration));
-    }
-
-    .happy-shimmer-text[data-paused] > .happy-shimmer-text__ramp::before {
-        animation-play-state: paused;
+        .happy-shimmer-text[data-inline] > .happy-shimmer-text__ramp {
+            position: absolute;
+            position-anchor: --happy-shimmer-run;
+            /* Half a pixel inside the top of the first line and the bottom of
+               the last, for the same fractional row the single-line ramp
+               avoids. */
+            top: calc(anchor(top) + 0.5px);
+            right: anchor(right);
+            bottom: calc(anchor(bottom) + 0.5px);
+            left: anchor(left);
+            display: block;
+            overflow: clip;
+            pointer-events: none;
+        }
     }
 }
 
@@ -159,8 +204,8 @@
     }
 }
 
-/* An inline run breaks wherever the words around it would. It breathes, so
-   turning the shimmer on and off never reflows the text or the row it is in. */
+/* An inline run breaks wherever the words around it would, so turning the
+   shimmer on and off never reflows the text or the row it is in. */
 .happy-shimmer-text[data-inline] {
     display: inline;
 }
@@ -223,15 +268,5 @@
 @media (prefers-reduced-motion: reduce) {
     .happy-shimmer-text {
         animation: none;
-    }
-
-    .happy-shimmer-text[data-layered] {
-        -webkit-text-fill-color: currentColor;
-        -webkit-mask-image: none;
-        mask-image: none;
-    }
-
-    .happy-shimmer-text[data-layered] > .happy-shimmer-text__ramp {
-        display: none;
     }
 }

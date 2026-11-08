@@ -36,8 +36,8 @@ export type ShimmerTextProps = {
      * run inside a paragraph — a link in a message — has to break exactly where
      * its words would without the shimmer, so turning the sweep on and off
      * never reflows the text or the row it is in. A run split across lines
-     * has no one box for the band to cross, so the whole run breathes instead:
-     * its opacity eases toward the band's strength and back on the same loop.
+     * still carries one band: it crosses every line the run wraps onto at once,
+     * over the rectangle those lines share.
      */
     inline?: boolean;
     /** One sweep, in milliseconds. */
@@ -74,8 +74,9 @@ export type ShimmerTextProps = {
  * Every frame of the loop is a compositor frame, so the shimmer stays smooth
  * while the main thread is busy, as it is at launch: the ramp is a box of its
  * own that slides behind the run's glyphs — text or a font icon — which mask
- * it, so a frame repaints and rasterises nothing. A wrapping inline run cannot
- * carry one sliding box, and breathes its opacity instead.
+ * it, so a frame repaints and rasterises nothing. A wrapping inline run anchors
+ * that box to the rectangle around all of its lines. An engine that cannot mask
+ * by glyphs, or cannot anchor a wrapping run, breathes the run's opacity instead.
  */
 export function ShimmerText(props: ShimmerTextProps) {
     const [local] = partitionComponentProps(props, [
@@ -97,13 +98,11 @@ export function ShimmerText(props: ShimmerTextProps) {
         const phase = local.phase ?? 0;
         return ((phase % 1) + 1) % 1;
     };
-    const layered = () => !local.inline;
     return (
         <span
             className={["happy-shimmer-text", local.className].filter(Boolean).join(" ")}
             data-happy-desktop-ui={local["data-happy-desktop-ui"] ?? "shimmer-text"}
             data-inline={local.inline ? "" : undefined}
-            data-layered={layered() ? "" : undefined}
             data-paused={paused() ? "" : undefined}
             data-sweep={local.sweep ?? "lift"}
             data-testid={local["data-testid"]}
@@ -119,7 +118,7 @@ export function ShimmerText(props: ShimmerTextProps) {
             }
         >
             {local.children}
-            {layered() ? <span aria-hidden="true" className="happy-shimmer-text__ramp" /> : null}
+            <span aria-hidden="true" className="happy-shimmer-text__ramp" />
         </span>
     );
 }
