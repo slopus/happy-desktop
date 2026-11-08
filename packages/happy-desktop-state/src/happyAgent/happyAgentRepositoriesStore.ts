@@ -86,7 +86,7 @@ export interface HappyAgentRepositoryBranches {
 
 /**
  * Settings › Repositories on Happy Cloud: the team's code sources, which a
- * task or subtask starts in. Repository events are not typed by this client
+ * task's agent attaches to work on. Repository events are not typed by this client
  * yet, so the list is read again every few seconds while it is on screen.
  */
 export interface HappyAgentRepositoriesStore {
@@ -108,8 +108,7 @@ export interface HappyAgentRepositoriesStore {
     /** Deletes the open repository; rejects with the reason to show. */
     repositoryDelete(): Promise<void>;
     /**
-     * Reads a repository's branches into `branches`, for its dialog or for
-     * starting work in one. Read once per repository; a failed read is tried
+     * Reads a repository's branches into `branches`, for its dialog. Read once per repository; a failed read is tried
      * again on the next ask. Viewers may not list branches.
      */
     branchesLoad(repositoryId: string): void;

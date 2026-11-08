@@ -454,15 +454,6 @@ export {
     type RepositoryChipRepository,
 } from "./RepositoryChip";
 export {
-    HappyAgentCreateSubtaskPage,
-    type HappyAgentCreateSubtaskPageProps,
-} from "./HappyAgentCreateSubtaskPage";
-export {
-    HappyAgentRepositoryBranchPicker,
-    type HappyAgentRepositoryBranchPickerProps,
-    type HappyAgentRepositoryBranchPickerRepository,
-} from "./HappyAgentRepositoryBranchPicker";
-export {
     fileTreeBuild,
     fileTreeExpanded,
     fileTreeFlatten,

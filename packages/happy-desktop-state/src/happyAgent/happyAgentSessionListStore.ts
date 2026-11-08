@@ -1,8 +1,4 @@
-import type {
-    MutationRejectedDelta,
-    HappyAgentConnection,
-    TaskRepository,
-} from "../happyAgentConnection/index.js";
+import type { MutationRejectedDelta, HappyAgentConnection } from "../happyAgentConnection/index.js";
 import type { HappyAgentClient } from "@slopus/happy-agent-client";
 import { createStore } from "zustand/vanilla";
 import { happyAgentBotSubtasks, type HappyAgentSubtaskRoot } from "./happyAgentBotSubtasks.js";
@@ -278,8 +274,6 @@ export interface HappyAgentTaskCreateInput {
     readonly name?: string;
     /** The model, effort, access mode, and speed its conversation starts with. */
     readonly selection?: HappyAgentSelection;
-    /** The Happy Cloud repository and branch it works in. */
-    readonly repository?: TaskRepository;
 }
 
 export type HappyAgentSessionListOutput = {
@@ -3141,7 +3135,6 @@ export function happyAgentSessionListStoreCreate(
             const name = input.name?.trim();
             const request = deps.connectActions.createTask(
                 name === undefined || name.length === 0 ? undefined : name,
-                input.repository,
             );
             const taskId = request.taskId as HappyAgentTaskId;
             let created = false;

@@ -1,10 +1,6 @@
 import type { CSSProperties } from "react";
 import { Banner } from "./Banner";
 import { Button } from "./Button";
-import {
-    HappyAgentRepositoryBranchPicker,
-    type HappyAgentRepositoryBranchPickerProps,
-} from "./HappyAgentRepositoryBranchPicker";
 import { TextField } from "./TextField";
 
 export type HappyAgentCreateTaskPageProps = {
@@ -16,8 +12,6 @@ export type HappyAgentCreateTaskPageProps = {
     error?: string;
     /** Why the task cannot currently be made on its Happy Agent. */
     submitDisabledReason?: string;
-    /** On Happy Cloud, the repository and branch the task works in. */
-    repository?: Omit<HappyAgentRepositoryBranchPickerProps, "disabled">;
     onNameChange: (name: string) => void;
     /** Makes the task without saying anything to it. */
     onSubmit: () => void;
@@ -80,9 +74,6 @@ export function HappyAgentCreateTaskPage(props: HappyAgentCreateTaskPageProps) {
                 className="happy-agent-create-task__below"
                 data-happy-desktop-ui="happy-agent-create-task-below"
             >
-                {props.repository ? (
-                    <HappyAgentRepositoryBranchPicker {...props.repository} disabled={submitting} />
-                ) : null}
                 <div
                     className="happy-agent-create-task__row"
                     data-happy-desktop-ui="happy-agent-create-task-row"

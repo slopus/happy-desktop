@@ -489,6 +489,20 @@ export type HappyAgentCompute =
           readonly online?: boolean;
       };
 
+/**
+ * The Happy Cloud repository a task's agent attached, and how its checkout
+ * went. The agent attaches it itself; the person only sees it.
+ */
+export interface HappyAgentRepositoryBinding {
+    readonly repositoryId: string;
+    /** The repository's name when it was attached. */
+    readonly name: string;
+    readonly branch: string;
+    readonly checkout: "pending" | "ready" | "failed";
+    /** Why the checkout failed, in words for a person. */
+    readonly error?: string;
+}
+
 export interface HappyAgentContextGauge {
     readonly usedTokens: number;
     readonly remainingTokens: number;

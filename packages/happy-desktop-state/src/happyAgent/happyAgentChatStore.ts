@@ -44,6 +44,7 @@ import type {
     HappyAgentImageInput,
     HappyAgentMenusSnapshot,
     HappyAgentCompute,
+    HappyAgentRepositoryBinding,
     HappyAgentContextGauge,
     HappyAgentModel,
     HappyAgentModelCatalog,
@@ -631,6 +632,8 @@ export interface HappyAgentChatSnapshot {
     readonly title?: string;
     /** Where its tools run, on a Happy Cloud server; absent on a Happy Agent. */
     readonly compute?: HappyAgentCompute;
+    /** The repository its agent attached, on a Happy Cloud server. */
+    readonly repository?: HappyAgentRepositoryBinding;
     readonly cwd?: string;
     readonly draft?: string;
     readonly draftUpdatedAt?: number;
@@ -1177,6 +1180,7 @@ export function happyAgentChatStoreCreate(
             archived: connected?.archived ?? false,
             ...(connected?.title === undefined ? {} : { title: connected.title }),
             ...(connected?.compute === undefined ? {} : { compute: connected.compute }),
+            ...(connected?.repository === undefined ? {} : { repository: connected.repository }),
             ...(connected?.cwd === undefined ? {} : { cwd: connected.cwd }),
             ...(connected?.draft === undefined ? {} : { draft: connected.draft }),
             ...(connected?.draftUpdatedAt === undefined

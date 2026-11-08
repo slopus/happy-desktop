@@ -27,6 +27,7 @@ import { happyAgentConversationActivityProject } from "../happyAgent/happyAgentC
 import type {
     HappyAgentAnsweredUserInput,
     HappyAgentCompute,
+    HappyAgentRepositoryBinding,
     HappyAgentSubtaskActivity,
 } from "../happyAgent/happyAgentTypes.js";
 import type { UserProfile } from "./userProfiles.js";
@@ -145,6 +146,37 @@ export function modeOf(
     return stored ?? defaultMode(config);
 }
 
+/**
+ * The repository the agent attached on Happy Cloud. `agent.repository` is not
+ * in happy-agent-client's agent type yet, so the wire field is read here, at
+ * that boundary, and carried typed from here on.
+ */
+function repositoryProject(agent: object): HappyAgentRepositoryBinding | undefined {
+    const wire = (agent as { readonly repository?: unknown }).repository;
+    if (typeof wire !== "object" || wire === null) return undefined;
+    const repository = wire as Record<string, unknown>;
+    const checkout = (repository.checkout ?? {}) as Record<string, unknown>;
+    const error = checkout.error as { readonly message?: unknown } | string | null | undefined;
+    if (typeof repository.repositoryId !== "string" || typeof repository.branch !== "string")
+        return undefined;
+    const message =
+        typeof error === "string"
+            ? error
+            : typeof error?.message === "string"
+              ? error.message
+              : undefined;
+    return {
+        repositoryId: repository.repositoryId,
+        name: typeof repository.name === "string" ? repository.name : repository.repositoryId,
+        branch: repository.branch,
+        checkout:
+            checkout.status === "ready" || checkout.status === "failed"
+                ? checkout.status
+                : "pending",
+        ...(message ? { error: message } : {}),
+    };
+}
+
 /** The cloud's compute binding, as the conversation shows it. */
 function computeProject(compute: AgentCompute): HappyAgentCompute {
     const status =
@@ -235,6 +267,7 @@ export function projectSession(input: SessionProjectionInput): SessionState {
         ...(agent.title === null ? {} : { title: agent.title }),
         titleStatus: agent.titleStatus,
         ...(agent.compute === undefined ? {} : { compute: computeProject(agent.compute) }),
+        ...((repository) => (repository ? { repository } : {}))(repositoryProject(agent)),
         effort: mode.effort,
         ...(serviceTier === undefined ? {} : { serviceTier }),
         permissionMode: mode.permissionMode,

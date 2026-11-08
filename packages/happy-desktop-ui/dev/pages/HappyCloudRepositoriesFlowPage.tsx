@@ -1,13 +1,9 @@
-import type { ComposerSnapshot } from "happy-desktop-state";
 import type { ReactNode } from "react";
-import { ConversationDock } from "../../src/ConversationDock";
-import { ConversationView } from "../../src/ConversationView";
 import {
     ComposerFooterBar,
     ComputeChip,
     ContextMeter,
     HAPPY_AGENT_REPOSITORY_CREDENTIAL_AUTOMATIC,
-    HappyAgentCreateSubtaskPage,
     HappyAgentRepositoriesSettings,
     HappyAgentRepositoryAddDialog,
     HappyAgentRepositoryDeleteDialog,
@@ -153,19 +149,17 @@ const detail: HappyAgentRepositoryDialogProps = {
 };
 
 const chips: readonly { label: string; repository: RepositoryChipRepository }[] = [
-    { label: "none", repository: { kind: "none" } },
     {
         label: "checking out",
-        repository: { kind: "bound", name: "rig", branch: "juno/fix-login", checkout: "pending" },
+        repository: { name: "rig", branch: "juno/fix-login", checkout: "pending" },
     },
     {
         label: "ready",
-        repository: { kind: "bound", name: "rig", branch: "juno/fix-login", checkout: "ready" },
+        repository: { name: "rig", branch: "juno/fix-login", checkout: "ready" },
     },
     {
         label: "failed",
         repository: {
-            kind: "bound",
             name: "rig",
             branch: "juno/fix-login",
             checkout: "failed",
@@ -174,85 +168,12 @@ const chips: readonly { label: string; repository: RepositoryChipRepository }[] 
     },
 ];
 
-const WORK =
-    "The invoice totals are off by a cent on multi-currency orders. Find where the rounding happens and fix it with a test.";
-
-function Subtask(props: { name?: string; repositoryId?: string; branch?: string }) {
-    return (
-        <HappyAgentCreateSubtaskPage
-            {...(props.branch ? { branch: props.branch } : {})}
-            branches={props.repositoryId ? ["main", "release", "next"] : []}
-            name={props.name ?? ""}
-            onBranchChange={noop}
-            onNameChange={noop}
-            onRepositoryChange={noop}
-            onSubmit={noop}
-            repositories={repositories.map((repository) => ({
-                id: repository.id,
-                name: repository.name,
-                ...(repository.defaultBranch ? { defaultBranch: repository.defaultBranch } : {}),
-            }))}
-            taskName="Billing cleanup"
-            {...(props.repositoryId ? { repositoryId: props.repositoryId } : {})}
-        />
-    );
-}
-
-/** The new subtask's page over its conversation's composer, in the window's content region. */
-function subtaskRegion(panel: ReactNode, text: string) {
-    const composer: ComposerSnapshot = {
-        agentUserIds: [],
-        attachments: [],
-        capabilities: { commands: [], mentions: false, shellMode: false },
-        focused: false,
-        mentionCandidates: [],
-        revision: 0,
-        scopeId: "subtask-create",
-        submission: { status: "idle" },
-        text,
-    };
-    return (
-        <div
-            style={{
-                background: "var(--surface)",
-                border: "1px solid var(--surface-pressed-overlay)",
-                borderRadius: "8px",
-                display: "flex",
-                height: "640px",
-                overflow: "hidden",
-                width: "1000px",
-            }}
-        >
-            <ConversationView
-                dock={
-                    <ConversationDock
-                        composer={composer}
-                        composerFooterControl={
-                            <ComposerFooterBar
-                                leading={<span style={{ fontSize: 12 }}>Auto</span>}
-                                note="Sending also creates the subtask"
-                            />
-                        }
-                        composerPlaceholder="What should it work on?"
-                        onComposerAttachmentRemove={noop}
-                        onComposerAttachmentsSelect={noop}
-                        onComposerSend={noop}
-                        onComposerValueChange={noop}
-                    />
-                }
-                emptyContent={panel}
-                entries={[]}
-            />
-        </div>
-    );
-}
-
 export function HappyCloudRepositoriesFlowPage() {
     return (
         <ComponentPage
             contract="Props only"
             number={componentNumber}
-            summary="A Happy Cloud server's repositories: the list, adding one and checking access, one repository's detail, deleting it, what a viewer sees, starting a subtask in one, and the read-only repository chip beside the compute chip."
+            summary="A Happy Cloud server's repositories: the list, adding one and checking access, one repository's detail, deleting it, what a viewer sees, and the read-only chip for the repository a task's agent attached, beside the compute chip."
             title="Happy Cloud repositories flow"
             width={WINDOWS[0].width + 96}
         >
@@ -357,7 +278,7 @@ export function HappyCloudRepositoriesFlowPage() {
                 />
             </Screen>
             <Specimen
-                detail="none · checking out · checked out · checkout failed, each beside the compute chip"
+                detail="checking out · checked out · checkout failed, each beside the compute chip · shown once the agent attached a repository"
                 label="Repository chip in the composer row"
                 number="11"
                 stage="surface"
@@ -384,25 +305,6 @@ export function HappyCloudRepositoriesFlowPage() {
                         </div>
                     ))}
                 </div>
-            </Specimen>
-            <Specimen
-                detail="a new subtask of a task: no repository yet"
-                label="New subtask"
-                number="12"
-                stage="app"
-            >
-                {subtaskRegion(<Subtask />, "")}
-            </Specimen>
-            <Specimen
-                detail="started in a repository on an existing branch; sending creates it there"
-                label="New subtask in a repository"
-                number="13"
-                stage="app"
-            >
-                {subtaskRegion(
-                    <Subtask branch="release" name="Invoice rounding" repositoryId="rig" />,
-                    WORK,
-                )}
             </Specimen>
         </ComponentPage>
     );

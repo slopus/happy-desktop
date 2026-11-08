@@ -1,4 +1,4 @@
-import type { SidebarReadAheadRows, TaskRepository } from "../happyAgentConnection/types.js";
+import type { SidebarReadAheadRows } from "../happyAgentConnection/types.js";
 import { happyAgentPanelChatOpen, type HappyAgentPanelChatHandle } from "./happyAgentPanelChat.js";
 import type { HappyAgentDeviceBridgesStore } from "./happyAgentDeviceBridgesStore.js";
 import type { HappyAgentDeviceBridgeSupportStore } from "./happyAgentDeviceBridgeSupportStore.js";
@@ -144,6 +144,7 @@ import type {
     HappyAgentProjectId,
     HappyAgentQueuedMessage,
     HappyAgentCompute,
+    HappyAgentRepositoryBinding,
     HappyAgentContextGauge,
     HappyAgentOpenInTarget,
     HappyAgentWorkspaceFiles,
@@ -327,6 +328,8 @@ export interface HappyAgentConversationSnapshot {
     readonly contextGauge?: HappyAgentContextGauge;
     /** Where its tools run, on a Happy Cloud server; absent on a Happy Agent. */
     readonly compute?: HappyAgentCompute;
+    /** The repository its agent attached, on a Happy Cloud server. */
+    readonly repository?: HappyAgentRepositoryBinding;
     readonly activityPanelOpen: boolean;
     /** The transcript image opened full size, if any. */
     readonly openImage?: HappyAgentOpenImage;
@@ -966,8 +969,6 @@ export interface HappyAgentTaskCreateSnapshot {
     readonly composer: ComposerSource;
     /** The pickers the task's conversation will start with, once the catalog is read. */
     readonly menus?: HappyAgentMenusSnapshot;
-    /** The Happy Cloud repository and branch it will work in; absent, none. */
-    readonly repository?: TaskRepository;
     /** True while the task is being made; the surface stays up and inert. */
     readonly submitting: boolean;
     /** A refused creation, said on the surface rather than thrown away. */
@@ -2100,10 +2101,6 @@ export interface HappyAgentWorkspaceStore {
     taskCreateMessageSend(): void;
     /** Makes the task without saying anything to it, as `botCreateSubmit` does a bot. */
     taskCreateSubmit(): Promise<void>;
-    /** Chooses the Happy Cloud repository the task works in, on a branch of its own; none, none. */
-    taskCreateRepositoryUpdate(repositoryId: string | undefined): void;
-    /** Chooses the branch of that repository; none gives the task a branch of its own. */
-    taskCreateBranchUpdate(branch: string | undefined): void;
     /** Opens the name dialog for a task. Any member may rename it. */
     taskRenameOpen(taskId: HappyAgentTaskId): void;
     /**
@@ -2642,8 +2639,6 @@ export function happyAgentWorkspaceStoreCreate(
         readonly name: string;
         readonly faces: HappyAgentBotFaceSeeds;
         readonly faceSlot: HappyAgentBotFaceSlot;
-        /** A task's repository; a bot has none. */
-        readonly repository?: TaskRepository;
         readonly submitting: boolean;
         readonly error?: string;
     }
@@ -3081,6 +3076,7 @@ export function happyAgentWorkspaceStoreCreate(
             ...(chat.usageError !== undefined ? { usageError: chat.usageError } : {}),
             ...(chat.contextGauge ? { contextGauge: chat.contextGauge } : {}),
             ...(chat.compute ? { compute: chat.compute } : {}),
+            ...(chat.repository ? { repository: chat.repository } : {}),
             activityPanelOpen: chat.activityPanelOpen,
             ...(chat.openImage ? { openImage: chat.openImage } : {}),
             ...(chat.menus ? { menus: chat.menus } : pendingMenus ? { menus: pendingMenus } : {}),
@@ -5899,9 +5895,6 @@ export function happyAgentWorkspaceStoreCreate(
             botCreate = undefined;
             taskCreate = {
                 name: botCreateDraft.name,
-                ...(botCreateDraft.repository === undefined
-                    ? {}
-                    : { repository: botCreateDraft.repository }),
                 submitting: botCreateDraft.submitting,
                 ...(botCreateDraft.error === undefined ? {} : { error: botCreateDraft.error }),
                 composer: composerState,
@@ -5910,8 +5903,7 @@ export function happyAgentWorkspaceStoreCreate(
             return;
         }
         taskCreate = undefined;
-        const { repository: _none, ...bot } = botCreateDraft;
-        botCreate = { ...bot, composer: composerState, ...menus };
+        botCreate = { ...botCreateDraft, composer: composerState, ...menus };
     };
 
     /**
@@ -6066,9 +6058,6 @@ export function happyAgentWorkspaceStoreCreate(
                     ? await list.taskCreate({
                           ...(name.length === 0 ? {} : { name }),
                           ...(selection === undefined ? {} : { selection }),
-                          ...(pending.repository === undefined
-                              ? {}
-                              : { repository: pending.repository }),
                       })
                     : await list.botCreate({
                           ...(name.length === 0 ? {} : { name }),
@@ -8493,31 +8482,6 @@ export function happyAgentWorkspaceStoreCreate(
         },
         async taskCreateSubmit() {
             if (createKind === "task") await createDraftSubmit();
-        },
-        taskCreateRepositoryUpdate(repositoryId) {
-            if (createKind !== "task" || !botCreateDraft || botCreateDraft.submitting) return;
-            const { repository: _previous, ...rest } = botCreateDraft;
-            botCreateDraft =
-                repositoryId === undefined ? rest : { ...rest, repository: { repositoryId } };
-            recompute();
-        },
-        taskCreateBranchUpdate(branch) {
-            const repository = botCreateDraft?.repository;
-            if (
-                createKind !== "task" ||
-                !botCreateDraft ||
-                botCreateDraft.submitting ||
-                !repository
-            )
-                return;
-            botCreateDraft = {
-                ...botCreateDraft,
-                repository: {
-                    repositoryId: repository.repositoryId,
-                    ...(branch === undefined || branch === "" ? {} : { branch }),
-                },
-            };
-            recompute();
         },
         taskRenameOpen(taskId) {
             if (projectArchive?.submitting) return;

@@ -196,32 +196,6 @@ export function HappyAgentCreateTaskBlueprintPage() {
                     ),
                 )}
             </Specimen>
-            <Specimen
-                detail="on Happy Cloud · the repository and branch the task works in sit over the name · no branch chosen gives it one of its own from the default branch"
-                label="In a repository"
-                number="05"
-                stage="app"
-            >
-                {region(
-                    taskCreationSpecimen(
-                        <HappyAgentCreateTaskPage
-                            {...HANDLERS}
-                            name="Invoice rounding"
-                            repository={{
-                                branches: ["main", "release", "next"],
-                                onBranchChange: noop,
-                                onRepositoryChange: noop,
-                                repositories: [
-                                    { id: "rig", name: "rig", defaultBranch: "main" },
-                                    { id: "billing", name: "billing", defaultBranch: "main" },
-                                ],
-                                repositoryId: "rig",
-                            }}
-                        />,
-                        WORK,
-                    ),
-                )}
-            </Specimen>
         </ComponentPage>
     );
 }

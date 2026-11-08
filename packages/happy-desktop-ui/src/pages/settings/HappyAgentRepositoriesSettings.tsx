@@ -64,7 +64,7 @@ export interface HappyAgentRepositoriesSettingsProps {
 
 /**
  * Settings › Repositories on a Happy Cloud server: the team's code sources.
- * Work starts in one as a subtask, which checks it out in its own sandbox.
+ * A task's agent attaches one itself and checks it out in its own sandbox.
  */
 export function HappyAgentRepositoriesSettings(props: HappyAgentRepositoriesSettingsProps) {
     if (props.error)
@@ -86,7 +86,7 @@ export function HappyAgentRepositoriesSettings(props: HappyAgentRepositoriesSett
                 <EmptyState
                     description={
                         props.manage
-                            ? "Add a repository, then start subtasks in it."
+                            ? "Add a repository so agents can work on its code."
                             : "Nobody has added a repository yet, and your role can't add one."
                     }
                     icon="repository"
@@ -107,7 +107,7 @@ export function HappyAgentRepositoriesSettings(props: HappyAgentRepositoriesSett
         <HappyAgentSettingsSection
             description={
                 props.manage
-                    ? "The code your team works on. A task started in one checks it out in its own sandbox."
+                    ? "The code your team works on. An agent working on one checks it out in its own sandbox."
                     : "The code your team works on. Your role can see them but not change them."
             }
             title="Repositories"
@@ -453,7 +453,7 @@ export function HappyAgentRepositoryDialog(props: HappyAgentRepositoryDialogProp
                                     Delete this repository
                                 </span>
                                 <span className="happy-agent-repositories__meta">
-                                    Subtasks working in it keep their checkouts.
+                                    Tasks working in it keep their checkouts.
                                 </span>
                             </Box>
                             <Button
@@ -479,7 +479,7 @@ export interface HappyAgentRepositoryDeleteDialogProps {
     onDelete: () => Promise<void>;
 }
 
-/** Confirms deleting a repository, and says what happens to the subtasks in it. */
+/** Confirms deleting a repository, and says what happens to the tasks in it. */
 export function HappyAgentRepositoryDeleteDialog(props: HappyAgentRepositoryDeleteDialogProps) {
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | undefined>();
@@ -519,9 +519,9 @@ export function HappyAgentRepositoryDeleteDialog(props: HappyAgentRepositoryDele
             >
                 <Box className="happy-agent-repositories__confirm">
                     <p>
-                        It leaves the team’s repositories, and no new task can start in it.
-                        Subtasks already working in it keep their checkouts. The repository itself
-                        is not touched.
+                        It leaves the team’s repositories, and no agent can attach it any more.
+                        Tasks already working in it keep their checkouts. The repository itself is
+                        not touched.
                     </p>
                     {error ? (
                         <Banner tone="danger" title="Not deleted">

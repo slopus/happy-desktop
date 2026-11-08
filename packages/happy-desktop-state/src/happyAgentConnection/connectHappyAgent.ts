@@ -97,7 +97,6 @@ import type {
     ServerCompatibility,
     TaskOwner,
     TaskGroup,
-    TaskRepository,
 } from "./types.js";
 import { sidebarReadAheadOrder, type SidebarReadAheadRows } from "./types.js";
 
@@ -5939,7 +5938,7 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         unarchiveTask(taskId) {
             return taskArchivalSet(taskId, false);
         },
-        createTask(name, repository) {
+        createTask(name) {
             // As with a bot, all three identities are named here, and the task
             // id doubles as the mutation key so a request repeated after a
             // dropped answer settles on the task already made.
@@ -5947,23 +5946,18 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
             const workspaceId = nextId();
             const agentId = nextId();
             const task = (async () => {
-                // The repository is Happy Cloud's, which this client does
-                // not type yet; it is sent with the rest of the body.
-                const body: Parameters<typeof client.createTask>[0] & {
-                    readonly repository?: TaskRepository;
-                } = {
-                    agentId,
-                    id: taskId,
-                    mutationId: taskId,
-                    // Left out rather than sent blank: an absent name is
-                    // what asks the host to name it from the first message.
-                    ...(name === undefined ? {} : { name }),
-                    ...(repository === undefined ? {} : { repository }),
-                    workspaceId,
-                };
-                const response = await client.createTask(body, {
-                    signal: rootController.signal,
-                });
+                const response = await client.createTask(
+                    {
+                        agentId,
+                        id: taskId,
+                        mutationId: taskId,
+                        // Left out rather than sent blank: an absent name is
+                        // what asks the host to name it from the first message.
+                        ...(name === undefined ? {} : { name }),
+                        workspaceId,
+                    },
+                    { signal: rootController.signal },
+                );
                 // The task and the caller's place at the top of their list,
                 // adopted now so the caller about to open it finds it listed.
                 taskResponseAdopt(response);
