@@ -39,6 +39,9 @@ import { useDevicePixelRatio } from "./devicePixelRatio";
 import { SidebarSectionContext, SidebarSectionTail } from "./SidebarSectionDetails";
 import { sidebarSectionsReuser } from "./sidebarSectionsReuser";
 /** One control on a row: its glyph, what it does, and when it shows. */
+/** What a private row's lock says. */
+const SIDEBAR_PRIVATE_LABEL = "Only you can see this conversation";
+
 export type SidebarItemAction = {
     icon: IconName;
     label: string;
@@ -218,6 +221,11 @@ export type SidebarItem = {
      * go without the sidebar claiming they already went there.
      */
     voiceFocus?: boolean;
+    /**
+     * Only the reader can see this conversation, such as their own Chief of
+     * Staff on a team: a small lock after the name, which says so on hover.
+     */
+    private?: boolean;
     /** A live story, outlined on the mark (accent unseen, grey seen); the mark opens it. */
     story?: "unseen" | "seen";
     /** Its ring's key, and its live and watched stories: an arc each once there are two. */
@@ -2435,6 +2443,21 @@ function SidebarRow({
                                 item().label
                             )}
                         </span>
+                        {item().private ? (
+                            <Tooltip
+                                className="happy-sidebar__item-private"
+                                label={SIDEBAR_PRIVATE_LABEL}
+                            >
+                                <span
+                                    aria-label={SIDEBAR_PRIVATE_LABEL}
+                                    className="happy-sidebar__item-private-mark"
+                                    data-happy-desktop-ui="sidebar-item-private"
+                                    role="img"
+                                >
+                                    <Icon name="lock" size={12} />
+                                </span>
+                            </Tooltip>
+                        ) : null}
                         {item().voiceFocus ? (
                             <span
                                 aria-label="Voice focus"

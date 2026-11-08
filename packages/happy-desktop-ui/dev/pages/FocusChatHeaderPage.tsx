@@ -104,6 +104,7 @@ function FocusWindow(props: { readonly mode: "light" | "dark" }) {
                                   face={{ placeholderSeed: "juno" }}
                                   name="Juno"
                                   onSkip={() => setReleased(true)}
+                                  private
                                   setup="@acme"
                               />
                           ),
@@ -129,6 +130,21 @@ export function FocusChatHeaderPage() {
                         face={{ placeholderSeed: "juno" }}
                         name="Juno"
                         onSkip={noop}
+                        setup="@acme"
+                    />,
+                )}
+            </Specimen>
+            <Specimen
+                detail="a member’s own Chief of Staff on a team · the lock says only they see it"
+                label="Private"
+                number="01p"
+            >
+                {band(
+                    <FocusChatHeader
+                        face={{ placeholderSeed: "olga-chief" }}
+                        name="Olga’s Chief of Staff"
+                        onSkip={noop}
+                        private
                         setup="@acme"
                     />,
                 )}

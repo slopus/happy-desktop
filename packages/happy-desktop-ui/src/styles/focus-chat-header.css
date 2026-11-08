@@ -48,6 +48,23 @@
     color: var(--text-secondary);
 }
 
+/* The lock sits in the band's drag lane but takes the pointer, for its tooltip;
+   a long name ellipsizes before it. */
+.happy-tooltip.happy-focus-chat-header__private {
+    flex: none;
+    -webkit-app-region: no-drag;
+    app-region: no-drag;
+}
+
+.happy-focus-chat-header__private-mark {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    color: var(--text-secondary);
+}
+
 .happy-focus-chat-header__actions {
     display: flex;
     flex: none;

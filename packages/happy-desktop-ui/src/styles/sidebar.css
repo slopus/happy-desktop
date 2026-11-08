@@ -1689,6 +1689,33 @@
     height: 16px;
 }
 
+/* A private row's lock follows its name in the row's quieter colour: it tells
+   the reader something about the conversation, not that anything happened. The
+   name gives up its width first, so a long name ellipsizes before the lock, and
+   the row's other marks keep the trailing edge. */
+.happy-sidebar__item-label:has(+ .happy-sidebar__item-private) {
+    flex: 0 1 auto;
+}
+
+.happy-tooltip.happy-sidebar__item-private {
+    flex: none;
+    margin-right: auto;
+}
+
+/* In a lane the run already keeps the name and its marks together. */
+.happy-sidebar__item-main > .happy-tooltip.happy-sidebar__item-private {
+    margin-right: 0;
+}
+
+.happy-sidebar__item-private-mark {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    color: var(--text-secondary);
+}
+
 /* Takes the heading's free space so the microphone stands beside the label
    rather than midway between it and the heading's controls. */
 .happy-sidebar__section-voice {
