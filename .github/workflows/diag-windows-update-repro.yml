@@ -59,6 +59,7 @@ jobs:
               run: |
                   $preview = if ('${{ matrix.scenario }}' -eq 'updater') { 'on' } else { 'keep' }
                   $install = if ('${{ matrix.scenario }}' -eq 'updater') { '1' } else { '0' }
+                  $env:DIAG_CDP_PORT = '9333'
                   node "$env:RUNNER_TEMP\drv\drive.mjs" 1-setup-0.0.103 $env:HAPPY_EXE $env:OUT 10 $preview $install
                   ./.github/diag/capture.ps1 -Label 1-0.0.103-ready-app-running -Out $env:OUT
             - name: Quit 0.0.103 (daemon stays) and move to 0.0.104-preview.4
@@ -98,6 +99,7 @@ jobs:
             - name: 0.0.104-preview.4 launch and setup
               if: always()
               run: |
+                  $env:DIAG_CDP_PORT = '9334'
                   node "$env:RUNNER_TEMP\drv\drive.mjs" 3-0.0.104-preview.4 $env:HAPPY_EXE $env:OUT 8
                   ./.github/diag/capture.ps1 -Label 3-0.0.104-after-setup -Out $env:OUT
                   taskkill /IM Happy.exe /T; Start-Sleep 8; taskkill /IM Happy.exe /T /F
@@ -115,6 +117,7 @@ jobs:
                   $p = Start-Process "$env:RUNNER_TEMP\inst\Happy-0.0.103-x64.exe" -ArgumentList '/S' -PassThru -Wait
                   "installer exit $($p.ExitCode); version now $((Get-Item $env:HAPPY_EXE).VersionInfo.ProductVersion)"
                   ./.github/diag/capture.ps1 -Label 4a-reinstalled-0.0.103 -Out $env:OUT
+                  $env:DIAG_CDP_PORT = '9335'
                   node "$env:RUNNER_TEMP\drv\drive.mjs" 4-reinstall-0.0.103 $env:HAPPY_EXE $env:OUT 8
                   ./.github/diag/capture.ps1 -Label 4b-reinstall-after-setup -Out $env:OUT
                   taskkill /IM Happy.exe /T /F

@@ -12,7 +12,8 @@ import { chromium } from "playwright-core";
 const [label, exe, outDir, minutesText, previewUpdates = "keep"] = process.argv.slice(2);
 const minutes = Number(minutesText);
 mkdirSync(outDir, { recursive: true });
-const port = 9333;
+// A port of its own per launch: a port an earlier launch used may still be held.
+const port = Number(process.env.DIAG_CDP_PORT ?? 9333);
 const started = Date.now();
 const stamp = () => `+${((Date.now() - started) / 1000).toFixed(1)}s`;
 const log = (line) => {
@@ -23,11 +24,12 @@ const log = (line) => {
 
 // A file rather than a pipe: the app outlives this driver and keeps writing.
 const appLog = openSync(join(outDir, `app-${label}.log`), "a");
-const child = spawn(exe, [], {
+// `--debug` rather than HAPPY_DESKTOP_DEBUG, so the opt-in is not inherited
+// by the Agent daemon Happy starts.
+const child = spawn(exe, ["--debug"], {
     env: {
         ...process.env,
         DO_NOT_TRACK: "1",
-        HAPPY_DESKTOP_DEBUG: "1",
         HAPPY_DEBUG_RENDERER_PORT: String(port),
         HAPPY_DESKTOP_WINDOWS_HIDDEN: "1",
     },

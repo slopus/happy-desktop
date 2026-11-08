@@ -14,6 +14,11 @@ Section 'processes' {
     Get-CimInstance Win32_Process | Where-Object { $_.Name -match 'happy' } |
         Select-Object ProcessId, ParentProcessId, Name, CreationDate, ExecutablePath, CommandLine | Format-List
 }
+Section 'listening ports of happy processes' {
+    $ids = @(Get-Process | Where-Object { $_.Name -match 'happy' } | ForEach-Object Id)
+    Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Where-Object { $ids -contains $_.OwningProcess -or ($_.LocalPort -ge 9330 -and $_.LocalPort -le 9340) } |
+        Select-Object LocalAddress, LocalPort, OwningProcess, @{ n = 'Process'; e = { (Get-Process -Id $_.OwningProcess -ErrorAction SilentlyContinue).Name } } | Format-Table -AutoSize
+}
 Section 'handles under .happy' { & "$env:RUNNER_TEMP\handle\handle64.exe" -accepteula -nobanner $happyHome }
 Section 'handles held by happy-agent' { & "$env:RUNNER_TEMP\handle\handle64.exe" -accepteula -nobanner -p happy-agent }
 Section '.happy tree (depth 3)' {
