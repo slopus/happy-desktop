@@ -226,6 +226,13 @@ export type SidebarItem = {
      * Staff on a team: a small lock after the name, which says so on hover.
      */
     private?: boolean;
+    /**
+     * Point the reader at this row once, as something names it — the task
+     * onboarding just started — with one fading wash of colour. It moves
+     * nothing. `onItemHighlightEnd` hears when the wash has faded, so the owner
+     * can stop asking; set again later, the row is pointed at again.
+     */
+    highlight?: boolean;
     /** A live story, outlined on the mark (accent unseen, grey seen); the mark opens it. */
     story?: "unseen" | "seen";
     /** Its ring's key, and its live and watched stories: an arc each once there are two. */
@@ -571,6 +578,8 @@ export type SidebarProps = Omit<HTMLAttributes<HTMLElement>, "style"> & {
     onItemSecondaryAction?: (id: string) => void;
     /** Invoked when the outline of a row's `story` is clicked. */
     onItemStoryOpen?: (id: string) => void;
+    /** Invoked when a row's `highlight` has faded. */
+    onItemHighlightEnd?: (id: string) => void;
     /**
      * Enables arranging the pinned `actions` and reports the one move a drag or
      * a keyboard move made. Without it the pinned rows are fixed, which is what
@@ -1564,6 +1573,7 @@ interface SidebarRowHandlers {
     readonly secondaryAction: (key: string) => void;
     readonly select: (id: string) => void;
     readonly storyOpen: (key: string) => void;
+    readonly highlightEnd: (key: string) => void;
 }
 
 /** One section row, rendered again only when its own props change. */
@@ -1629,6 +1639,7 @@ const SidebarListRow = memo(function SidebarListRow({
             onPointerUp={rest.reorderable ? (event) => handlers.pointerUp(rowId, event) : undefined}
             onCollapseToggle={canCollapse ? () => handlers.collapseToggle(rowId) : undefined}
             onStoryOpen={canStoryOpen ? () => handlers.storyOpen(rowId) : undefined}
+            onHighlightEnd={rest.item.highlight ? () => handlers.highlightEnd(rowId) : undefined}
             onAction={canAction ? () => handlers.action(rowId) : undefined}
             onSecondaryAction={
                 canSecondaryAction ? () => handlers.secondaryAction(rowId) : undefined
@@ -1681,6 +1692,8 @@ function SidebarRow({
     onCollapseToggle?: () => void;
     /** Opens the row's live story; absent when it has none. */
     onStoryOpen?: () => void;
+    /** The row's `highlight` has faded. */
+    onHighlightEnd?: () => void;
     /**
      * The row holds rows under it that its `collapsed` shows or hides, whether
      * or not it draws a fold control: it says so to assistive technology.
@@ -2168,6 +2181,7 @@ function SidebarRow({
             data-unread={unread() ? "" : undefined}
             data-muted={item().muted ? "" : undefined}
             data-voice-focus={item().voiceFocus ? "" : undefined}
+            data-highlight={item().highlight ? "" : undefined}
             data-dragging={props.dragging ? "" : undefined}
             data-grabbed={props.grabbed ? "" : undefined}
             disabled={props.disabled}
@@ -2175,6 +2189,14 @@ function SidebarRow({
                 if (!props.rename) props.onSelect(item().id);
             }}
             onContextMenu={(event) => props.onContextMenu?.(item(), event)}
+            onAnimationEnd={(event) => {
+                // Only the row's own wash: its name and marks animate too.
+                if (
+                    event.target === event.currentTarget &&
+                    event.animationName === "happy-sidebar-item-highlight"
+                )
+                    props.onHighlightEnd?.();
+            }}
             onKeyDown={(event) => {
                 if (
                     event.key === (props.tabStop === undefined ? "Enter" : "F2") &&
@@ -2747,6 +2769,7 @@ export function Sidebar(props: SidebarProps) {
         "onItemAction",
         "onItemSecondaryAction",
         "onItemStoryOpen",
+        "onItemHighlightEnd",
         "onItemMenuSelect",
         "onItemCollapseToggle",
         "itemFoldControls",
@@ -4232,6 +4255,8 @@ export function Sidebar(props: SidebarProps) {
                 void latest().act(key, ({ item }) => latest().local.onItemAction?.(item.id)),
             storyOpen: (key) =>
                 void latest().act(key, ({ item }) => latest().local.onItemStoryOpen?.(item.id)),
+            highlightEnd: (key) =>
+                void latest().act(key, ({ item }) => latest().local.onItemHighlightEnd?.(item.id)),
             collapseToggle: (key) => {
                 // A section folds from a click on the whole row, and the click
                 // that ends a drag of one is not that.
