@@ -1,4 +1,5 @@
 import type { ExperimentsDocument, ExperimentsPersistence } from "happy-desktop-state";
+import type { HappyDesktopBridge } from "../shared/desktopContract";
 
 export const EXPERIMENTS_KEY = "happy.experiments.v1";
 
@@ -27,4 +28,17 @@ export function desktopExperimentsPersistence(): ExperimentsPersistence {
             }
         },
     };
+}
+
+/**
+ * Whether this build offers experimental onboarding before anyone chooses: a
+ * development checkout (its window carries a build identity, or it is the
+ * browser development server) and Nightly (the published hosted renderer). A
+ * production build, and the cloud web app, wait until someone turns it on.
+ */
+export function desktopExperimentalOnboardingOffered(
+    bridge: Pick<HappyDesktopBridge, "buildIdentity">,
+    build: { readonly hosted: boolean; readonly browserDevelopment: boolean },
+): boolean {
+    return bridge.buildIdentity !== undefined || build.hosted || build.browserDevelopment;
 }

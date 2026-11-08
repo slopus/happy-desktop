@@ -179,7 +179,10 @@ import { desktopProfilerStoreCreate } from "./desktopProfilerStore";
 import { desktopMetricsStoreCreate } from "./desktopMetricsStore";
 import { desktopDaemonStoreCreate } from "./desktopDaemonStore";
 import { desktopAgentReleaseNotesStoreCreate } from "./desktopAgentReleaseNotesStore";
-import { desktopExperimentsPersistence } from "./desktopExperiments";
+import {
+    desktopExperimentalOnboardingOffered,
+    desktopExperimentsPersistence,
+} from "./desktopExperiments";
 import { desktopMobilePairingMethodPersistence } from "./desktopMobilePairingMethod";
 import {
     desktopProjectsVisibilityPersistence,
@@ -1689,7 +1692,20 @@ if (mediaPreviewBridge) {
         // Whether this window offers the features that are not finished yet. It
         // is kept beside the arrangement above and for the same reason: it says
         // what this installation shows, so no machine has a say in it.
-        const experiments = experimentsStoreCreate(desktopExperimentsPersistence());
+        //
+        // Onboarding as a conversation is still being finished: a development
+        // checkout and Nightly offer it until someone turns it off, and a
+        // production build only once someone turns it on.
+        const experiments = experimentsStoreCreate(desktopExperimentsPersistence(), undefined, {
+            onboarding: desktopExperimentalOnboardingOffered(desktopBridge, {
+                hosted: localWebBuild !== undefined,
+                browserDevelopment: browserLocal && !cloudWeb,
+            }),
+        });
+        const chatOnboardingGate = {
+            get: () => experiments.get().onboarding,
+            subscribe: experiments.subscribe,
+        };
         // Which way a phone pairs first: the person's pick, else what the
         // direct-connection rollout says once PostHog answers (Relay until then).
         const { store: mobilePairingMethod, defaultMethodReceived: mobilePairingDefaultReceived } =
@@ -1780,6 +1796,7 @@ if (mediaPreviewBridge) {
         const happyAgents = happyAgentDirectoryStoreCreate(desktopBridge, runtimeStore, {
             cloudHostFor: auth.hostFor,
             welcome,
+            chatOnboardingGate,
             ...(cloudWeb ? { localHappyCloud: true } : {}),
             // Asked for only after the window is up, by when the inbox is.
             happyLinkReceive: (url) => happyLinkInbox.linkReceive(url),

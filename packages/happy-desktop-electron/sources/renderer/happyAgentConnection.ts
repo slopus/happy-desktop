@@ -23,6 +23,7 @@ import {
     type HappyAgentDefaultModelStore,
     type HappyAgentProviderClisStore,
     type HappyAgentSessionId,
+    type HappyAgentChatOnboardingGate,
     type WelcomeStore,
     type HappyAgentOnboardingStore,
     HappyAgentApiError,
@@ -411,6 +412,12 @@ export function happyAgentConnectionOpen(input: {
      */
     readonly welcome: WelcomeStore;
     /**
+     * Whether the window takes onboarding a Happy Agent runs as a
+     * conversation: the "Experimental onboarding" switch. Absent, it does
+     * wherever the Happy Agent offers it.
+     */
+    readonly chatOnboardingGate?: HappyAgentChatOnboardingGate;
+    /**
      * Where the daemon answers. The proxy forwards the daemon's own `/v0`
      * namespace as it stands, so this one origin serves the protocol client,
      * the catalog, and the desktop-local host routes alike.
@@ -523,6 +530,7 @@ export function happyAgentConnectionOpen(input: {
         onMobileSkip: () => desktopHappyMobileOnboardingSkip(input.happyAgentId),
         guidedMobileSetup: input.guidedMobileSetup,
         mobileConnector,
+        ...(input.chatOnboardingGate ? { chatOnboardingGate: input.chatOnboardingGate } : {}),
     });
     const onboarding = pairingObserve
         ? { ...onboardingStore, mobile: pairingObserve.onboarding(onboardingStore.mobile) }
@@ -577,6 +585,7 @@ export function happyAgentConnectionOpen(input: {
             chatOnboardingOpen();
         },
         ...(input.serverRestart ? { serverRestart: input.serverRestart } : {}),
+        ...(input.chatOnboardingGate ? { gate: input.chatOnboardingGate } : {}),
     });
     let providerClis: HappyAgentProviderClisStore | undefined;
     let defaultModel: HappyAgentDefaultModelStore | undefined;

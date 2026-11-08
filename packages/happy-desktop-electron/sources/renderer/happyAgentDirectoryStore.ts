@@ -30,6 +30,7 @@ import type {
     HappyAgentSessionListSnapshot,
     HappyAgentSessionLocation,
     TerminalColorScheme,
+    HappyAgentChatOnboardingGate,
     WelcomeStore,
 } from "happy-desktop-state";
 import type { HappyDesktopBridge } from "../shared/desktopContract";
@@ -185,6 +186,8 @@ export interface HappyAgentDirectoryDeps {
     readonly cloudHostFor: (id: string) => HappyAgentCloudHost;
     /** The window's welcome, which every connection shares rather than showing its own. */
     readonly welcome: WelcomeStore;
+    /** The "Experimental onboarding" switch, which every connection follows. */
+    readonly chatOnboardingGate?: HappyAgentChatOnboardingGate;
     /**
      * Opens a link.happy.page share link a page or message asked to open as a
      * web page: it carries a Happy instance link, which opens in the app on
@@ -768,6 +771,7 @@ export function happyAgentDirectoryStoreCreate(
                 : host,
             happyAgentId: happyAgent.entry.id,
             welcome: deps.welcome,
+            ...(deps.chatOnboardingGate ? { chatOnboardingGate: deps.chatOnboardingGate } : {}),
             client,
             hostServicesUrl,
             // A Happy Agent on another machine is what this computer's devices

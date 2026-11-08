@@ -26,3 +26,30 @@ it.each([false, true])(
         expect(experimentsStoreCreate(persistence).get()).toEqual(store.get());
     },
 );
+
+it.each([false, true])(
+    "offers experimental onboarding as the build says (%s) until someone chooses",
+    (offered) => {
+        let saved: unknown;
+        const persistence = {
+            read: () => saved,
+            write: (document: ExperimentsDocument) => {
+                saved = document;
+            },
+        };
+        const defaults = { onboarding: offered };
+        const store = experimentsStoreCreate(persistence, undefined, defaults);
+        expect(store.get().onboarding).toBe(offered);
+        // Another feature's switch keeps this one following the build.
+        store.featureUpdate("voice", true, "experiments");
+        expect(saved).toEqual({ voice: true });
+        expect(
+            experimentsStoreCreate(persistence, undefined, { onboarding: !offered }).get(),
+        ).toMatchObject({ onboarding: !offered, voice: true });
+        // Once chosen, the choice outlasts any build's default.
+        store.featureUpdate("onboarding", !offered, "experiments");
+        expect(experimentsStoreCreate(persistence, undefined, defaults).get().onboarding).toBe(
+            !offered,
+        );
+    },
+);

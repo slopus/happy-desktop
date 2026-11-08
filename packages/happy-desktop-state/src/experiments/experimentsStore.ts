@@ -2,11 +2,13 @@
 export const EXPERIMENTAL_FEATURES = [
     { id: "inbox", label: "Inbox" },
     { id: "voice", label: "Voice calls" },
+    { id: "onboarding", label: "Experimental onboarding" },
 ] as const;
 
 export type ExperimentalFeature = (typeof EXPERIMENTAL_FEATURES)[number]["id"];
 export type ExperimentsSnapshot = Readonly<Record<ExperimentalFeature, boolean>>;
-export type ExperimentsDocument = ExperimentsSnapshot;
+/** The features someone chose on this installation; the rest follow the build's default. */
+export type ExperimentsDocument = Partial<ExperimentsSnapshot>;
 
 export interface ExperimentsPersistence {
     read(): unknown;
@@ -36,6 +38,7 @@ export interface ExperimentsStore {
 const DISABLED: ExperimentsSnapshot = {
     inbox: false,
     voice: false,
+    onboarding: false,
 };
 
 /**
@@ -44,29 +47,38 @@ const DISABLED: ExperimentsSnapshot = {
  */
 const LEGACY_SWITCH_FEATURES: ReadonlySet<ExperimentalFeature> = new Set(["inbox", "voice"]);
 
-/** Each feature is its own choice on this installation. */
-function documentParse(value: unknown): ExperimentsSnapshot {
-    if (typeof value !== "object" || value === null) return DISABLED;
+/** The features chosen on this installation: each by its own switch, or by the old single one. */
+function documentParse(value: unknown): ExperimentsDocument {
+    if (typeof value !== "object" || value === null) return {};
     const legacy =
-        "experimentalFeaturesEnabled" in value && value.experimentalFeaturesEnabled === true;
-    const enabled = (id: ExperimentalFeature) =>
-        id in value ? Reflect.get(value, id) === true : legacy && LEGACY_SWITCH_FEATURES.has(id);
-    return {
-        inbox: enabled("inbox"),
-        voice: enabled("voice"),
-    };
+        "experimentalFeaturesEnabled" in value
+            ? value.experimentalFeaturesEnabled === true
+            : undefined;
+    const chosen: Partial<Record<ExperimentalFeature, boolean>> = {};
+    for (const { id } of EXPERIMENTAL_FEATURES) {
+        if (id in value) chosen[id] = Reflect.get(value, id) === true;
+        else if (legacy !== undefined && LEGACY_SWITCH_FEATURES.has(id)) chosen[id] = legacy;
+    }
+    return chosen;
 }
 
 export function experimentsStoreCreate(
     persistence?: ExperimentsPersistence,
     onOutput: (output: ExperimentsOutput) => void = () => undefined,
+    /**
+     * What this build offers before anyone chooses, feature by feature. A
+     * development build turns on what is still being finished; absent, every
+     * feature waits to be turned on.
+     */
+    defaults: Partial<ExperimentsSnapshot> = {},
 ): ExperimentsStore {
-    let snapshot: ExperimentsSnapshot;
+    let chosen: ExperimentsDocument;
     try {
-        snapshot = documentParse(persistence?.read());
+        chosen = documentParse(persistence?.read());
     } catch {
-        snapshot = DISABLED;
+        chosen = {};
     }
+    let snapshot: ExperimentsSnapshot = { ...DISABLED, ...defaults, ...chosen };
     const listeners = new Set<() => void>();
     return {
         get: () => snapshot,
@@ -79,8 +91,9 @@ export function experimentsStoreCreate(
         featureUpdate(feature, enabled, source) {
             if (snapshot[feature] === enabled) return;
             snapshot = { ...snapshot, [feature]: enabled };
+            chosen = { ...chosen, [feature]: enabled };
             try {
-                persistence?.write(snapshot);
+                persistence?.write(chosen);
             } catch {
                 // Denied storage still preserves this window's choice until it closes.
             }

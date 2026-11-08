@@ -72,7 +72,73 @@ function serverOf(options: { read: OnboardingFlow; started?: OnboardingFlow }) {
     return { deps, startOnboardingFlow, conversationOpen, options, reconcile };
 }
 
+/** The "Experimental onboarding" switch, flipped by the test. */
+function gateOf(initial: boolean) {
+    let value = initial;
+    const listeners = new Set<() => void>();
+    return {
+        get: () => value,
+        subscribe(listener: () => void) {
+            listeners.add(listener);
+            return () => listeners.delete(listener);
+        },
+        set(next: boolean) {
+            value = next;
+            for (const listener of listeners) listener();
+        },
+    };
+}
+
 describe("happyAgentChatOnboardingStore", () => {
+    it("never starts a server's flow while experimental onboarding is off", async () => {
+        const server = serverOf({ read: flowOf({ status: "not_started", recipe: "team-owner" }) });
+        const getOnboardingFlow = vi.spyOn(server.deps.client, "getOnboardingFlow");
+        const gate = gateOf(false);
+        const store = happyAgentChatOnboardingStoreCreate({ ...server.deps, gate });
+        const stop = store.subscribe(() => undefined);
+        store.begin();
+        server.reconcile();
+
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        expect(store.get()).toEqual({ status: "unsupported", begun: false });
+        expect(getOnboardingFlow).not.toHaveBeenCalled();
+        expect(server.startOnboardingFlow).not.toHaveBeenCalled();
+        expect(server.conversationOpen).not.toHaveBeenCalled();
+        stop();
+        store[Symbol.dispose]();
+    });
+
+    it("reads and begins a server's flow once experimental onboarding is turned on, and lets go when it is turned off", async () => {
+        const started = flowOf({
+            version: "0190a000-0000-7000-8000-000000000002",
+            status: "running",
+            recipe: "team-owner",
+            agentId: "chief-of-staff",
+        });
+        const server = serverOf({
+            read: flowOf({ status: "not_started", recipe: "team-owner" }),
+            started,
+        });
+        const gate = gateOf(false);
+        const store = happyAgentChatOnboardingStoreCreate({ ...server.deps, gate });
+        const stop = store.subscribe(() => undefined);
+        store.begin();
+        expect(store.get().status).toBe("unsupported");
+
+        gate.set(true);
+        await vi.waitFor(() => expect(store.get().status).toBe("available"));
+        store.begin();
+        await vi.waitFor(() =>
+            expect(server.conversationOpen).toHaveBeenCalledWith("chief-of-staff"),
+        );
+        expect(server.startOnboardingFlow).toHaveBeenCalledTimes(1);
+
+        gate.set(false);
+        expect(store.get()).toEqual({ status: "unsupported", begun: false });
+        stop();
+        store[Symbol.dispose]();
+    });
+
     it("opens a viewer's Welcome when their start answers with a flow already finished", async () => {
         const server = serverOf({
             read: flowOf({ status: "not_started" }),

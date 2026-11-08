@@ -49,6 +49,16 @@ export interface HappyAgentChatOnboardingStore {
     [Symbol.dispose](): void;
 }
 
+/**
+ * Whether this window takes the onboarding a server runs as a conversation.
+ * Off, every server is treated as one without it: the window keeps its own
+ * welcome and setup, and no flow is ever started.
+ */
+export interface HappyAgentChatOnboardingGate {
+    get(): boolean;
+    subscribe(listener: () => void): () => void;
+}
+
 export interface HappyAgentChatOnboardingStoreDeps {
     readonly client: Pick<
         HappyAgentClient,
@@ -63,6 +73,8 @@ export interface HappyAgentChatOnboardingStoreDeps {
      * restart it, as for a team server.
      */
     readonly serverRestart?: () => Promise<void>;
+    /** Absent, onboarding runs wherever the server offers it. */
+    readonly gate?: HappyAgentChatOnboardingGate;
 }
 
 const CHECKING: HappyAgentChatOnboardingSnapshot = { status: "checking", begun: false };
@@ -154,6 +166,8 @@ export function happyAgentChatOnboardingStoreCreate(
     const mutationIdNext = cuid2Create(Date.now);
     let disposed = false;
     let follower: AbortController | undefined;
+    let gateStop: (() => void) | undefined;
+    const enabled = (): boolean => deps.gate?.get() ?? true;
     let reading: AbortController | undefined;
     let readAgain = false;
     let retry: ReturnType<typeof setTimeout> | undefined;
@@ -220,6 +234,10 @@ export function happyAgentChatOnboardingStoreCreate(
     /** Reads the flow once, or once more after the read already out. */
     const refresh = (): void => {
         if (disposed || listeners.size === 0) return;
+        if (!enabled()) {
+            set({ status: "unsupported", flow: undefined, begun: false, error: undefined });
+            return;
+        }
         if (deps.sync.health()?.capabilities?.chatOnboarding !== true) {
             // A server that has not answered yet is still being checked; one
             // that answered without the capability does not run it.
@@ -272,7 +290,14 @@ export function happyAgentChatOnboardingStoreCreate(
      */
     const startIfOwed = (): void => {
         const flow = store.getState().flow;
-        if (disposed || starting || flow === undefined || flow.status !== "not_started") return;
+        if (
+            disposed ||
+            starting ||
+            !enabled() ||
+            flow === undefined ||
+            flow.status !== "not_started"
+        )
+            return;
         starting = true;
         startMutationId ??= mutationIdNext();
         const mutationId = startMutationId;
@@ -296,6 +321,8 @@ export function happyAgentChatOnboardingStoreCreate(
         if (disposed || follower !== undefined || listeners.size === 0) return;
         const active = new AbortController();
         follower = active;
+        // Turning it on or off reads the server again, or forgets its flow.
+        gateStop = deps.gate?.subscribe(refresh);
         void (async () => {
             for await (const input of deps.sync.follow({
                 signal: active.signal,
@@ -332,6 +359,8 @@ export function happyAgentChatOnboardingStoreCreate(
     const stop = (): void => {
         follower?.abort();
         follower = undefined;
+        gateStop?.();
+        gateStop = undefined;
         reading?.abort();
         reading = undefined;
         readAgain = false;
@@ -356,7 +385,7 @@ export function happyAgentChatOnboardingStoreCreate(
             };
         },
         begin() {
-            if (disposed || store.getState().begun) return;
+            if (disposed || !enabled() || store.getState().begun) return;
             set({ begun: true });
             const flow = store.getState().flow;
             if (flow !== undefined) flowTake(flow);
