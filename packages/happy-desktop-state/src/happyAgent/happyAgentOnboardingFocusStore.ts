@@ -73,7 +73,8 @@ export const happyAgentOnboardingFocusStoreNoop: HappyAgentOnboardingFocusStore 
  * Whether a setup's onboarding holds its window: the conversation it runs in
  * has started and not finished, or a step of its own setup comes first, and
  * the person hasn't let it go. Requirements met is not the end: the
- * conversation holds the window until its flow says it finished.
+ * conversation holds the window until its flow says it finished. Classic
+ * setup, where there is no such conversation, holds nothing.
  */
 export function happyAgentOnboardingFocused(input: {
     readonly onboarding: HappyAgentOnboardingSnapshot;
@@ -88,6 +89,9 @@ export function happyAgentOnboardingFocused(input: {
         return flow.status === "not_started"
             ? state !== undefined && !state.completed
             : flow.status !== "finished";
+    // A daemon or server with no conversation to run it in sets up the classic
+    // way and opens the app; there is nothing to hold the window for.
+    if (input.chatOnboarding.status === "unsupported") return false;
     return state !== undefined && !state.completed && state.member?.completed !== true;
 }
 
