@@ -64,12 +64,13 @@ export function desktopTeamSetupPersistence(): DesktopTeamSetupPersistence {
     };
 }
 
-const ONBOARDING_FOCUS_KEY = "happy.onboarding.focus.v1";
+const ONBOARDING_FOCUS_KEY = "happy.onboarding.focus.v2";
 
 /**
  * The setups the person let go of with "Skip setup" during experimental
- * onboarding, kept by the window like the welcome: a relaunch keeps the app
- * layout for them rather than returning to focus.
+ * onboarding, and the first tasks already pointed at, kept by the window like
+ * the welcome: a relaunch keeps the app layout for them rather than returning
+ * to focus, and points at nothing twice.
  */
 export function desktopOnboardingFocusPersistence(): HappyAgentOnboardingFocusPersistence {
     return {
@@ -81,9 +82,9 @@ export function desktopOnboardingFocusPersistence(): HappyAgentOnboardingFocusPe
                 return undefined;
             }
         },
-        write(released) {
+        write(saved) {
             try {
-                localStorage.setItem(ONBOARDING_FOCUS_KEY, JSON.stringify(released));
+                localStorage.setItem(ONBOARDING_FOCUS_KEY, JSON.stringify(saved));
             } catch {
                 // A storage-denied renderer lets the setup go until the window closes.
             }

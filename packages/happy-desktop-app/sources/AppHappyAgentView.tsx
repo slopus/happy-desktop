@@ -37,6 +37,7 @@ import {
     happyAgentChatOnboardingStoreNoop,
     happyAgentConversationSpeaker,
     happyAgentOnboardingFocused,
+    happyAgentOnboardingTaskHighlights,
     happyAgentOnboardingFocusStoreNoop,
     happyAgentOnboardingSkippable,
     type HappyAgentOnboardingFocusStore,
@@ -2520,6 +2521,27 @@ function voiceFocusRowIds(focus: GptLiveVoiceFocus): string[] {
 }
 
 /**
+ * The sections with the rows onboarding just named pointed at once: the first
+ * tasks it started, as the window lets go of focus.
+ */
+function sectionsHighlighted(
+    sections: readonly SidebarSection[],
+    rows: ReadonlyMap<string, string>,
+): SidebarSection[] {
+    if (rows.size === 0) return [...sections];
+    return sections.map((section) =>
+        section.items.some((item) => rows.has(item.id))
+            ? {
+                  ...section,
+                  items: section.items.map((item) =>
+                      rows.has(item.id) ? { ...item, highlight: true } : item,
+                  ),
+              }
+            : section,
+    );
+}
+
+/**
  * The sections with the reader's folding applied and the row a voice call
  * points at marked, separately from the row the window has selected.
  *
@@ -3671,6 +3693,22 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                 setup={active.teamName === undefined ? active.label : `@${active.teamName}`}
             />
         ) : undefined;
+    // The first tasks onboarding started, by their rows under Tasks, each
+    // pointed at once as the window lets go.
+    const highlightTaskIds =
+        active && experimental.onboarding
+            ? happyAgentOnboardingTaskHighlights({
+                  chatOnboarding: setupChatOnboarding,
+                  highlighted: onboardingFocus.highlighted,
+              })
+            : [];
+    const highlightRows = new Map(
+        active === undefined
+            ? []
+            : (active.tasks ?? [])
+                  .filter((task) => highlightTaskIds.includes(task.id))
+                  .map((task) => [happyAgentItemId(active.id, task.workspaceId), task.id] as const),
+    );
     const viewerId = happyAgentOwnerAuthor.id;
     const activeAvailability = active ? happyAgentEntryAvailability(active) : undefined;
     const addressedProject =
@@ -4544,6 +4582,10 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                         : workspace.worktreeCreate(owner.project.id)
                 ).catch(() => undefined);
             }}
+            onItemHighlightEnd={(id) => {
+                const taskId = highlightRows.get(id);
+                if (taskId !== undefined) onboardingFocusStore.taskHighlightEnd(taskId);
+            }}
             // The cog on a project row. Only project rows carry one, and the
             // settings surface is the same one the row's menu opens.
             onItemSecondaryAction={(id) => {
@@ -4673,25 +4715,30 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                     feedUnread,
                 ),
                 ...sectionsVoiceFocused(
-                    happyAgentSections(
-                        directory,
-                        titleShimmerEnabled,
-                        projectsVisibility,
-                        attention,
-                        props.sidebarCollapse
-                            ? // A navigation into a folded-away Projects list
-                              // shows it while voice points there.
-                              voiceFocus?.reason === "navigation" &&
-                              voiceFocusInProjects(voiceFocus, directory)
-                                ? new Set(
-                                      [...sidebarCollapse.collapsed].filter(
-                                          (id) =>
-                                              id !==
-                                              happyAgentSectionId(voiceFocus.target.connectionId),
-                                      ),
-                                  )
-                                : sidebarCollapse.collapsed
-                            : undefined,
+                    sectionsHighlighted(
+                        happyAgentSections(
+                            directory,
+                            titleShimmerEnabled,
+                            projectsVisibility,
+                            attention,
+                            props.sidebarCollapse
+                                ? // A navigation into a folded-away Projects list
+                                  // shows it while voice points there.
+                                  voiceFocus?.reason === "navigation" &&
+                                  voiceFocusInProjects(voiceFocus, directory)
+                                    ? new Set(
+                                          [...sidebarCollapse.collapsed].filter(
+                                              (id) =>
+                                                  id !==
+                                                  happyAgentSectionId(
+                                                      voiceFocus.target.connectionId,
+                                                  ),
+                                          ),
+                                      )
+                                    : sidebarCollapse.collapsed
+                                : undefined,
+                        ),
+                        highlightRows,
                     ),
                     sidebarCollapse.collapsed,
                     voiceFocus,
