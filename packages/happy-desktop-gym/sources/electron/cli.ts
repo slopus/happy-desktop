@@ -18,9 +18,10 @@ import {
     GYM_PERSONA_TEAMMATE,
     GYM_PERSONA_VIEWER,
     gymTeamOnboardingRecord,
+    type GymTeamWay,
 } from "./teamOnboardingRecording.js";
 import type { GymProfile, GymWorkloadName } from "./types.js";
-import { writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
 
@@ -127,7 +128,7 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
     }
     if (command === "record-team-onboarding") {
         if (!flags.out) throw new Error("record-team-onboarding requires --out ABSOLUTE_PATH.mkv.");
-        if (!flags.server) throw new Error("record-team-onboarding requires --server URL.");
+        const way = await teamWayRead(flags);
         const login = process.env.HAPPY_GYM_TEAM_LOGIN;
         const password = process.env.HAPPY_GYM_TEAM_PASSWORD;
         if (!login || !password)
@@ -142,8 +143,7 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
         const recording = await gymTeamOnboardingRecord({
             out: resolve(flags.out),
             ...(persona ? { persona } : {}),
-            serverUrl: flags.server,
-            serverName: flags.serverName ?? "Acme",
+            way,
             login,
             password,
             ...(flags.invite ? { invites: flags.invite } : {}),
@@ -232,6 +232,13 @@ function parseFlags(args: readonly string[]): {
     readonly persona?: string;
     readonly machine?: string;
     readonly relaunchAfter?: number;
+    readonly teamCreate?: string;
+    readonly teamJoin?: string;
+    readonly from?: string;
+    readonly accounts?: string;
+    readonly servers?: string;
+    readonly joinFrom?: string;
+    readonly joinRole?: string;
 } {
     const result: {
         profile?: string;
@@ -252,6 +259,13 @@ function parseFlags(args: readonly string[]): {
         persona?: string;
         machine?: string;
         relaunchAfter?: number;
+        teamCreate?: string;
+        teamJoin?: string;
+        from?: string;
+        accounts?: string;
+        servers?: string;
+        joinFrom?: string;
+        joinRole?: string;
     } = {};
     for (let index = 0; index < args.length; index += 1) {
         const value = args[index];
@@ -282,6 +296,18 @@ function parseFlags(args: readonly string[]): {
             result.invitesOut = requiredValue(value, next, () => index++);
         else if (value === "--persona") result.persona = requiredValue(value, next, () => index++);
         else if (value === "--machine") result.machine = requiredValue(value, next, () => index++);
+        else if (value === "--team-create")
+            result.teamCreate = requiredValue(value, next, () => index++);
+        else if (value === "--team-join")
+            result.teamJoin = requiredValue(value, next, () => index++);
+        else if (value === "--from") result.from = requiredValue(value, next, () => index++);
+        else if (value === "--accounts")
+            result.accounts = requiredValue(value, next, () => index++);
+        else if (value === "--servers") result.servers = requiredValue(value, next, () => index++);
+        else if (value === "--join-from")
+            result.joinFrom = requiredValue(value, next, () => index++);
+        else if (value === "--join-role")
+            result.joinRole = requiredValue(value, next, () => index++);
         else if (value === "--relaunch-after") {
             const turns = Number(requiredValue(value, next, () => index++));
             if (!Number.isInteger(turns) || turns < 0)
@@ -290,6 +316,48 @@ function parseFlags(args: readonly string[]): {
         } else throw new Error(`Unknown option '${value}'.`);
     }
     return result;
+}
+
+/**
+ * How a team take reaches its team: a server listed by `--server`, or Happy
+ * Cloud's Create a team or Join a team on a local stack. A join's invite code is
+ * read from the invites file a take wrote, so it is never on a command line.
+ */
+async function teamWayRead(flags: ReturnType<typeof parseFlags>): Promise<GymTeamWay> {
+    const team = flags.teamCreate ?? flags.teamJoin;
+    if (team === undefined) {
+        if (!flags.server)
+            throw new Error(
+                "record-team-onboarding requires --server URL or --team-create/--team-join NAME.",
+            );
+        return { kind: "listed", serverUrl: flags.server, serverName: flags.serverName ?? "Acme" };
+    }
+    if (flags.teamCreate !== undefined && flags.teamJoin !== undefined)
+        throw new Error("Choose one of --team-create and --team-join.");
+    if (!flags.accounts || !flags.servers)
+        throw new Error("A Happy Cloud team takes --accounts URL and --servers TEMPLATE.");
+    const from = flags.from ?? "welcome";
+    if (from !== "welcome" && from !== "rail") throw new Error("--from is welcome or rail.");
+    let code: string | undefined;
+    if (flags.teamJoin !== undefined) {
+        if (!flags.joinFrom || !flags.joinRole)
+            throw new Error("--team-join takes --join-from INVITES.json and --join-role ROLE.");
+        const invites = JSON.parse(await readFile(resolve(flags.joinFrom), "utf8")) as {
+            readonly role: string;
+            readonly code: string;
+        }[];
+        code = invites.find((invite) => invite.role === flags.joinRole)?.code;
+        if (code === undefined) throw new Error(`No ${flags.joinRole} invite in --join-from.`);
+    }
+    return {
+        kind: "cloud",
+        from,
+        path: flags.teamJoin === undefined ? "create" : "join",
+        team,
+        ...(code === undefined ? {} : { code }),
+        accountsUrl: flags.accounts,
+        serverUrlTemplate: flags.servers,
+    };
 }
 
 function requiredValue(option: string, value: string | undefined, advance: () => void): string {
@@ -337,6 +405,10 @@ Commands:
   record-team-onboarding --out PATH.mkv --server URL [--server-name NAME]
                          [--persona owner|admin|teammate|viewer]
                          [--invite ROLE]... [--invites-out PATH.json]
+  record-team-onboarding --out PATH.mkv (--team-create NAME | --team-join NAME
+                         --join-from INVITES.json --join-role ROLE) [--from welcome|rail]
+                         --accounts URL --servers 'http://{name}.localhost:PORT/'
+                         [--persona ...] [--invite ROLE]... [--invites-out PATH.json]
   clean --root PATH
 
 Workloads:
