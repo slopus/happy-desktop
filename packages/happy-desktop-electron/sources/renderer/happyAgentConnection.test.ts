@@ -1,11 +1,14 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { welcomeStoreCreate, type WelcomeStore } from "happy-desktop-state";
 import { fakeHappyAgentDaemonCreate } from "happy-desktop-state/testing";
 import type {
     DesktopRuntimeSnapshot,
     HappyDesktopBridge,
     LocalOnboardingSnapshot,
 } from "../shared/desktopContract";
+import { desktopHappyMobileOnboardingSkip } from "./desktopHappyMobileOnboarding";
+import { desktopWelcomePersistence } from "./desktopWelcome";
 import { happyAgentConnectionOpen, type HappyAgentConnectionHandle } from "./happyAgentConnection";
 import { localOnboardingStoreCreate, localOnboardingView } from "./localOnboardingStore";
 
@@ -47,7 +50,7 @@ afterEach(() => {
 
 function connectionOpen(
     daemon: ReturnType<typeof fakeHappyAgentDaemonCreate>,
-    options: { readonly local: boolean },
+    options: { readonly local: boolean; readonly welcome?: WelcomeStore },
 ): HappyAgentConnectionHandle {
     const handle = happyAgentConnectionOpen({
         client: daemon.client,
@@ -71,6 +74,7 @@ function connectionOpen(
         memberProfileRequired: !options.local,
         modelPreferencePersistence: { read: () => undefined, write: () => undefined },
         terminalColorScheme: () => "light",
+        welcome: options.welcome ?? welcomeStoreCreate(),
     });
     handles.push(handle);
     return handle;
@@ -109,6 +113,46 @@ it("keeps a remote member without a profile out of the workspace", async () => {
     expect(handle.get()).toBeUndefined();
     expect(daemon.callCount("getDesktopBootstrap")).toBe(1);
     expect(daemon.streamLiveCount()).toBe(0);
+});
+
+it("never welcomes a person to a team server once the window has", async () => {
+    const daemon = fakeHappyAgentDaemonCreate();
+    daemon.onboardingSet(freshMachineOnboarding);
+    const welcome = welcomeStoreCreate(desktopWelcomePersistence());
+    welcome.welcomeAcknowledge();
+    const handle = connectionOpen(daemon, { local: false, welcome });
+
+    await vi.waitFor(() => expect(handle.setup?.onboarding.get().available).toBe(true));
+    // The server's setup opens on the member's profile, not on a second welcome.
+    expect(handle.setup?.welcome.get().welcomeAcknowledged).toBe(true);
+    // Nor does a later launch, which reads the window's one record back.
+    const relaunched = connectionOpen(daemon, {
+        local: false,
+        welcome: welcomeStoreCreate(desktopWelcomePersistence()),
+    });
+    expect(relaunched.setup?.welcome.get().welcomeAcknowledged).toBe(true);
+});
+
+it("begins a team server's setup when the window's welcome is read after it opened", async () => {
+    const daemon = fakeHappyAgentDaemonCreate();
+    daemon.onboardingSet({
+        ...freshMachineOnboarding,
+        steps: { ...freshMachineOnboarding.steps, profile: { done: true } },
+    });
+    const completeOnboarding = vi.fn(async () => undefined);
+    Object.assign(daemon.client, { completeOnboarding });
+    desktopHappyMobileOnboardingSkip("remote");
+    const welcome = welcomeStoreCreate(desktopWelcomePersistence());
+    const handle = connectionOpen(daemon, { local: false, welcome });
+    const onboarding = handle.setup!.onboarding;
+    unsubscribes.push(onboarding.subscribe(() => undefined));
+
+    await vi.waitFor(() => expect(onboarding.get().available).toBe(true));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(completeOnboarding).not.toHaveBeenCalled();
+
+    welcome.welcomeAcknowledge();
+    await vi.waitFor(() => expect(completeOnboarding).toHaveBeenCalledTimes(1));
 });
 
 it("loads the workspace without reading health, onboarding, profile, or config apart", async () => {
@@ -245,6 +289,7 @@ it("follows a daemon restarted behind the same endpoint onto its version and mod
             write: () => undefined,
         },
         terminalColorScheme: () => "light",
+        welcome: welcomeStoreCreate(),
     });
     handles.push(handle);
     await vi.waitFor(() => expect(handle.get()).toBeDefined());

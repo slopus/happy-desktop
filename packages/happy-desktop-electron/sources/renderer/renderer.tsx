@@ -1779,6 +1779,7 @@ if (mediaPreviewBridge) {
         if (serverHost) appDisposers.push(() => serverHost.sessions[Symbol.dispose]());
         const happyAgents = happyAgentDirectoryStoreCreate(desktopBridge, runtimeStore, {
             cloudHostFor: auth.hostFor,
+            welcome,
             ...(cloudWeb ? { localHappyCloud: true } : {}),
             // Asked for only after the window is up, by when the inbox is.
             happyLinkReceive: (url) => happyLinkInbox.linkReceive(url),

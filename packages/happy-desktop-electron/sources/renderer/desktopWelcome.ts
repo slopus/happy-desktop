@@ -7,14 +7,14 @@ const WELCOME_KEY = "happy.welcome.v1";
  * the window's own storage rather than anything a Happy Agent holds, because the welcome
  * is about the person in front of this app: a machine they connect to later has
  * no idea whether they have read it, and reconnecting must never introduce them
- * to Happy a second time.
+ * to Happy a second time. So there is one record for the window, and every
+ * connection shares the window's one store of it.
  */
-export function desktopWelcomePersistence(id = "local"): WelcomePersistence {
-    const key = id === "local" ? WELCOME_KEY : `${WELCOME_KEY}:${id}`;
+export function desktopWelcomePersistence(): WelcomePersistence {
     return {
         read() {
             try {
-                const value = localStorage.getItem(key);
+                const value = localStorage.getItem(WELCOME_KEY);
                 return value ? (JSON.parse(value) as WelcomeDocument) : undefined;
             } catch {
                 return undefined;
@@ -22,7 +22,7 @@ export function desktopWelcomePersistence(id = "local"): WelcomePersistence {
         },
         write(document) {
             try {
-                localStorage.setItem(key, JSON.stringify(document));
+                localStorage.setItem(WELCOME_KEY, JSON.stringify(document));
             } catch {
                 // A storage-denied renderer still lets this window past the
                 // welcome; it will simply offer it again next launch.

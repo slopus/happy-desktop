@@ -4,7 +4,6 @@ export function desktopConnectionStorageKeys(happyAgentId: string): readonly str
         `happy.connection-preferences.v1:${happyAgentId}`,
         `happy.model-settings.v1:${happyAgentId}`,
         `happy.connection-history.v1:${happyAgentId}`,
-        `happy.welcome.v1:${happyAgentId}`,
     ];
 }
 
