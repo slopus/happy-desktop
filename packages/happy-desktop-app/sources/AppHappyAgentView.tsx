@@ -5075,7 +5075,9 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
     // Read once per connection: the session and its stores keep one identity
     // for its lifetime, so every conversation surface keeps its figures too.
     const conversationExtras = happyAgentConversationExtras(active?.session, {
-        teamServer: active?.happyCloud === true,
+        // A team server is Happy Cloud's or one added by its address; this
+        // machine's own Happy Agent and a remote installation are neither.
+        teamServer: active?.happyCloud === true || active?.serverUrl !== undefined,
         linkOpen: props.onExternalLinkOpen ?? openExternalLink,
     });
     return (

@@ -191,21 +191,36 @@ export async function gymChatOfferRead(page: Page, persona: GymPersona): Promise
     return { kind: "none" };
 }
 
+/** How many times one label may be pressed in a run: a question can come back, a loop cannot. */
+const LABEL_PRESSES_MAX = 3;
+
 /**
- * The label this persona presses among `labels`, or undefined when none suits
- * them. A label already pressed once is not pressed again, so a person who
- * cannot finish a step tries the others and then stops, rather than circling.
+ * What this person has said in a run: how often they pressed each label, and
+ * what they typed. A label pressed `LABEL_PRESSES_MAX` times is not pressed
+ * again, so a person who cannot finish a step tries the others and then stops
+ * rather than circling, while "Not now" still answers each optional question.
  */
+export type GymPersonaAnswers = {
+    readonly presses: Map<string, number>;
+    readonly typed: Set<string>;
+};
+
+export function gymPersonaAnswersCreate(): GymPersonaAnswers {
+    return { presses: new Map(), typed: new Set() };
+}
+
+/** The label this persona presses among `labels`, or undefined when none suits them. */
 export function gymPersonaChoice(
     persona: GymPersona,
     labels: readonly string[],
-    pressed: ReadonlySet<string> = new Set(),
+    answers: GymPersonaAnswers = gymPersonaAnswersCreate(),
 ): number | undefined {
     const allowed = labels
         .map((label, index) => ({ label: label.trim(), index }))
         .filter(
             ({ label }) =>
-                !pressed.has(label) && !persona.avoids.some((pattern) => pattern.test(label)),
+                (answers.presses.get(label) ?? 0) < LABEL_PRESSES_MAX &&
+                !persona.avoids.some((pattern) => pattern.test(label)),
         );
     for (const pattern of persona.prefers) {
         const found = allowed.find(({ label }) => pattern.test(label));
@@ -222,17 +237,18 @@ export async function gymPersonaTurn(
     page: Page,
     persona: GymPersona,
     driver: GymPersonaDriver,
-    /** What this person already pressed or typed, which they do not repeat. */
-    answered: Set<string>,
+    /** What this person already pressed or typed in this run. */
+    answers: GymPersonaAnswers,
 ): Promise<boolean> {
     const offer = await gymChatOfferRead(page, persona);
     switch (offer.kind) {
         case "none":
             return false;
         case "buttons": {
-            const choice = gymPersonaChoice(persona, offer.labels, answered);
+            const choice = gymPersonaChoice(persona, offer.labels, answers);
             if (choice === undefined) return false;
-            answered.add((offer.labels[choice] ?? "").trim());
+            const label = (offer.labels[choice] ?? "").trim();
+            answers.presses.set(label, (answers.presses.get(label) ?? 0) + 1);
             await driver.read(await offer.block.locator("xpath=..").innerText());
             await driver.press(offer.block.locator("button:not([disabled])").nth(choice));
             return true;
@@ -251,10 +267,11 @@ export async function gymPersonaTurn(
             return false;
         case "composer": {
             const answer = persona.answers.find(
-                (candidate) => candidate.when.test(offer.prompt) && !answered.has(candidate.text),
+                (candidate) =>
+                    candidate.when.test(offer.prompt) && !answers.typed.has(candidate.text),
             );
             if (!answer) return false;
-            answered.add(answer.text);
+            answers.typed.add(answer.text);
             await driver.read(offer.prompt);
             await driver.type(offer.composer, answer.text);
             await driver.pause(300, 700);

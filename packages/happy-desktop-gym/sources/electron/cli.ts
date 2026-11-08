@@ -5,6 +5,7 @@ import { gymSmokeRun } from "./smoke.js";
 import { gymPublicRepositoryAttach } from "./publicRepository.js";
 import { gymLiveVoiceRun } from "./liveVoice.js";
 import { gymOnboardingRecord } from "./onboardingRecording.js";
+import { gymTeamOnboardingRecord } from "./teamOnboardingRecording.js";
 import type { GymProfile, GymWorkloadName } from "./types.js";
 import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
@@ -82,6 +83,25 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
         console.log(JSON.stringify({ command, ...recording }, null, 2));
         return;
     }
+    if (command === "record-team-onboarding") {
+        if (!flags.out) throw new Error("record-team-onboarding requires --out ABSOLUTE_PATH.mkv.");
+        if (!flags.server) throw new Error("record-team-onboarding requires --server URL.");
+        const login = process.env.HAPPY_GYM_TEAM_LOGIN;
+        const password = process.env.HAPPY_GYM_TEAM_PASSWORD;
+        if (!login || !password)
+            throw new Error(
+                "Set HAPPY_GYM_TEAM_LOGIN and HAPPY_GYM_TEAM_PASSWORD for the server's sign-in.",
+            );
+        const recording = await gymTeamOnboardingRecord({
+            out: resolve(flags.out),
+            serverUrl: flags.server,
+            serverName: flags.serverName ?? "Acme",
+            login,
+            password,
+        });
+        console.log(JSON.stringify({ command, ...recording }, null, 2));
+        return;
+    }
     if (command === "attach-repository") {
         if (!flags.repository) throw new Error("--repository is required.");
         await gymPublicRepositoryAttach(required(flags, "root"), flags.repository);
@@ -143,6 +163,8 @@ function parseFlags(args: readonly string[]): {
     readonly out?: string;
     readonly providers?: string;
     readonly daemonEnv?: readonly string[];
+    readonly server?: string;
+    readonly serverName?: string;
 } {
     const result: {
         profile?: string;
@@ -156,6 +178,8 @@ function parseFlags(args: readonly string[]): {
         out?: string;
         providers?: string;
         daemonEnv?: string[];
+        server?: string;
+        serverName?: string;
     } = {};
     for (let index = 0; index < args.length; index += 1) {
         const value = args[index];
@@ -175,6 +199,9 @@ function parseFlags(args: readonly string[]): {
         else if (value === "--out") result.out = requiredValue(value, next, () => index++);
         else if (value === "--providers")
             result.providers = requiredValue(value, next, () => index++);
+        else if (value === "--server") result.server = requiredValue(value, next, () => index++);
+        else if (value === "--server-name")
+            result.serverName = requiredValue(value, next, () => index++);
         else if (value === "--daemon-env")
             (result.daemonEnv ??= []).push(requiredValue(value, next, () => index++));
         else throw new Error(`Unknown option '${value}'.`);
@@ -222,6 +249,7 @@ Commands:
   smoke
   live-voice --auth-file ABSOLUTE_CODEX_AUTH_PATH [--artifact-dir PATH] [--pool-default]
   record-onboarding --out PATH.mkv [--root PATH] [--providers HAPPY_TOML] [--daemon-env NAME]...
+  record-team-onboarding --out PATH.mkv --server URL [--server-name NAME]
   clean --root PATH
 
 Workloads:
