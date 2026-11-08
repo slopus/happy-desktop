@@ -1,5 +1,6 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { ElectronApplication, Page } from "playwright";
 
 import { happyAgentRuntimeCreate } from "./happyAgentRuntime.js";
@@ -96,7 +97,19 @@ export async function gymTeamOnboardingRecord(options: {
     // the team server's onboarding alone.
     await mkdir(join(paths.happyHome, "agent"), { recursive: true });
     await writeFile(join(paths.happyHome, "agent", "onboarding-v0"), "");
-    const runtime = await happyAgentRuntimeCreate(paths, undefined, NO_PROVIDERS);
+    // A local stack's server answers only at `<name>.localhost`, which the
+    // daemon's resolver is taught here, as a browser already resolves it.
+    const local = new URL(options.serverUrl).hostname.endsWith(".localhost");
+    const runtime = await happyAgentRuntimeCreate(
+        paths,
+        undefined,
+        NO_PROVIDERS,
+        local
+            ? {
+                  NODE_OPTIONS: `--require=${fileURLToPath(new URL("./localhostResolve.cjs", import.meta.url))}`,
+              }
+            : {},
+    );
     const screenshots: string[] = [];
     const shot = async (page: Page, label: string) => {
         const path = join(
@@ -264,14 +277,18 @@ async function browserOpened(app: ElectronApplication, timeoutMs: number): Promi
 }
 
 /**
- * Signs in on the development sign-in page main opened, as its form would,
- * and answers with the address it redirects the browser to.
+ * Signs in on the sign-in page main opened, as its password form would, and
+ * answers with the address it redirects the browser to. The form carries the
+ * page's own request, and both the development page's field names and Happy
+ * Cloud accounts' hidden test-account form.
  */
 async function devSignIn(authorization: string, login: string, password: string): Promise<string> {
     const url = new URL(authorization);
     const form = new URLSearchParams(url.searchParams);
     form.set("username", login);
+    form.set("login", login);
     form.set("password", password);
+    form.set("action", "password");
     const response = await fetch(`${url.origin}${url.pathname}`, {
         method: "POST",
         body: form,
