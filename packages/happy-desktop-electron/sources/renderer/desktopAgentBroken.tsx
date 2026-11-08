@@ -151,11 +151,14 @@ export function desktopAgentBrokenStoreCreate(input: {
         const mounted =
             runtime?.phase === "ready" ||
             directory.happyAgents.some((entry) => entry.session !== undefined);
-        // A computer that runs no Happy Agent has none to be broken.
+        // A computer that runs no Happy Agent has none to be broken. The web
+        // app's own server is a Happy Cloud server, not an agent to restart:
+        // its refusals, such as a profile still to save, are its own screens.
         const broken =
             mounted &&
             runtime?.phase !== "off" &&
             local !== undefined &&
+            local.happyCloud !== true &&
             local.protocolMismatch === undefined &&
             (local.status === "error" || local.status === "disconnected");
         if (!broken || restarting || reconnecting) {

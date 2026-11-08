@@ -1183,6 +1183,9 @@ function DesktopRuntimeContent(
             browserPasswordsAvailable={props.browserPasswordsAvailable}
             bridge={props.bridge}
             commandPalette={props.commandPalette}
+            // The web app's one connection is a Happy Cloud server, which
+            // admits a member only once their profile is saved.
+            connectionOnboarding={cloudWeb}
             {...(props.daemon
                 ? {
                       agentReleaseNotes: props.agentReleaseNotes,
