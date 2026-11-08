@@ -1,0 +1,39 @@
+/* The Happy Cloud web app's page while it has no sign-in. */
+
+.happy-cloud-web-sign-in {
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    width: 100%;
+    height: 100%;
+
+    background-color: var(--surface);
+}
+
+.happy-cloud-web-sign-in__test {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 280px;
+}
+
+.happy-cloud-web-sign-in__error {
+    min-height: 16px;
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+    text-align: center;
+}
+
+.happy-cloud-web-sign-in__error[data-tone="attention"] {
+    color: var(--text-destructive);
+}
+
+/* The empty state sits above the form instead of filling the page. */
+.happy-cloud-web-sign-in > .happy-empty-state {
+    height: auto;
+}

@@ -15,6 +15,7 @@ const LOGIN_PATH = "/auth/login";
 const REFRESH_PATH = "/auth/refresh";
 const SESSION_PATH = "/auth/session";
 const LOGOUT_PATH = "/auth/logout";
+const PASSWORD_PATH = "/auth/password";
 /** Where a person signs out to and switches servers from. */
 export const CLOUD_WEB_PICKER_URL = "https://happybases.com/";
 
@@ -22,6 +23,36 @@ export const CLOUD_WEB_PICKER_URL = "https://happybases.com/";
 export function cloudWebSignIn(): void {
     const back = `${window.location.pathname}${window.location.search}${window.location.hash}`;
     window.location.assign(`${LOGIN_PATH}?return=${encodeURIComponent(back)}`);
+}
+
+/**
+ * Signs in to a test account at the edge, which takes only accounts an
+ * operator created. Resolves with the refusal to show, or reloads the page
+ * into its new session.
+ */
+export async function cloudWebPasswordSignIn(
+    login: string,
+    password: string,
+): Promise<string | undefined> {
+    let response: Response;
+    try {
+        response = await originalFetch(PASSWORD_PATH, {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { accept: "application/json", "content-type": "application/json" },
+            body: JSON.stringify({ login, password }),
+        });
+    } catch {
+        return "Happy Cloud isn't reachable right now.";
+    }
+    if (response.ok) {
+        window.location.reload();
+        return undefined;
+    }
+    const body = (await response.json().catch(() => undefined)) as
+        | { readonly error?: unknown }
+        | undefined;
+    return typeof body?.error === "string" ? body.error : "Signing in didn't work.";
 }
 
 /** Signs out at the edge, then leaves for the server picker. */

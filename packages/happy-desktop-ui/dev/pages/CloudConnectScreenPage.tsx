@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { CloudConnectScreen, type CloudConnectView } from "../../src/CloudConnectScreen";
+import { CloudWebSignInScreen } from "../../src/CloudWebSignInScreen";
 import { ThemeScope } from "../../src/ThemeScope";
 import { ComponentPage, FullScreenSpecimen } from "../kit";
 
@@ -191,6 +192,49 @@ export function CloudConnectScreenPage() {
                                     view={specimen.view}
                                 />
                             </ThemeScope>,
+                        )}
+                    </FullScreenSpecimen>
+                );
+            })}
+            {(
+                [
+                    [
+                        "web-signed-out",
+                        "Web · signed out",
+                        "the web app with no sign-in",
+                        undefined,
+                    ],
+                    [
+                        "web-test-sign-in",
+                        "Web · test sign-in",
+                        "revealed by pressing the page ten times, after a refusal",
+                        {
+                            login: "qa-desktop-profile",
+                            password: "",
+                            error: "That login or password is wrong.",
+                        },
+                    ],
+                ] as const
+            ).map(([slug, label, detail, test], index) => {
+                const number = String(specimens.length + index + 1).padStart(2, "0");
+                return (
+                    <FullScreenSpecimen
+                        detail={detail}
+                        key={slug}
+                        label={label}
+                        number={number}
+                        screen={`${number}-${slug}`}
+                        window={WINDOW}
+                    >
+                        {frame(
+                            <CloudWebSignInScreen
+                                onScreenPress={noop}
+                                onSignIn={noop}
+                                onTestLoginChange={noop}
+                                onTestPasswordChange={noop}
+                                onTestSignIn={noop}
+                                {...(test ? { testSignIn: test } : {})}
+                            />,
                         )}
                     </FullScreenSpecimen>
                 );

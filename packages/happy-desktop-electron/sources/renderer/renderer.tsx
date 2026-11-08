@@ -92,7 +92,7 @@ import {
     SetupHandoff,
     SetupPage,
     ThemeScope,
-    EmptyState,
+    CloudWebSignInScreen,
     WelcomeScreen,
     ZoomIndicator,
     ConnectionShell,
@@ -142,6 +142,7 @@ import { startupValuesStoreCreate, type StartupValuesStore } from "./startupValu
 import { browserDevBridgeCreate } from "./browserDevBridge";
 import { cloudWebBridgeCreate } from "./cloudWebBridge";
 import { cloudWebTabFollow } from "./cloudWebTab";
+import { cloudWebSignInStoreCreate, type CloudWebSignInStore } from "./cloudWebSignInStore";
 import { localWebBuild } from "./localWebBuild";
 import {
     localWebUpdateStoreCreate,
@@ -1239,23 +1240,19 @@ const bridge =
     (cloudWeb ? cloudWebBridgeCreate() : browserLocal ? browserDevBridgeCreate() : undefined);
 desktopRowHeightCheckInstall();
 const root = createRoot(document.getElementById("root")!);
-// The cloud web app's session ended: its data is already being erased, and the
-// whole page becomes the way to sign in again, with nothing else on it.
-if (cloudWeb)
+// The cloud web app has no session, on a first visit or after one ended (its
+// data is then already being erased): the whole page becomes the way to sign in,
+// with nothing else on it.
+if (cloudWeb) {
+    const signIn = cloudWebSignInStoreCreate();
     cloudWebSessionEndSubscribe(() =>
         root.render(
             <DesktopAppearance appearance={appearanceStoreCreate()}>
-                <EmptyState
-                    action={{ label: "Sign in", onClick: cloudWebSignIn }}
-                    data-testid="cloud-web-signed-out"
-                    description="Your sign-in to this server ended. Sign in to see its work."
-                    icon="lock"
-                    size="panel"
-                    title="Sign in required"
-                />
+                <CloudWebSignedOut store={signIn} />
             </DesktopAppearance>,
         ),
     );
+}
 // A todo list is laid over a picture; fetching and decoding both of them now
 // means opening a list paints its background with it instead of a frame later.
 happyAgentSurfaceBackdropsPreload();
@@ -2136,4 +2133,28 @@ if (mediaPreviewBridge) {
             version: 1,
         });
     });
+}
+
+/** The cloud web app's page while it has no sign-in. */
+function CloudWebSignedOut(props: { readonly store: CloudWebSignInStore }) {
+    const { test } = useSyncExternalStore(props.store.subscribe, props.store.get, props.store.get);
+    return (
+        <CloudWebSignInScreen
+            onScreenPress={props.store.screenPress}
+            onSignIn={cloudWebSignIn}
+            onTestLoginChange={props.store.testLoginUpdate}
+            onTestPasswordChange={props.store.testPasswordUpdate}
+            onTestSignIn={props.store.testSignInSubmit}
+            {...(test
+                ? {
+                      testSignIn: {
+                          login: test.login,
+                          password: test.password,
+                          busy: test.busy,
+                          ...(test.error === undefined ? {} : { error: test.error }),
+                      },
+                  }
+                : {})}
+        />
+    );
 }
