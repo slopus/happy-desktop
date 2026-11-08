@@ -49,6 +49,11 @@ export interface WelcomeScreenProps {
     readonly children?: ReactNode;
     /** A hidden, pointer-only press on the deck's art. */
     readonly onArtPress?: () => void;
+    /**
+     * Quieter ways in, side by side under the primary action, such as
+     * creating or joining a team.
+     */
+    readonly secondaryActions?: readonly { readonly label: string; onAction(): void }[];
     /** Which appearance this window is on. */
     readonly appearance: HappyAgentAppearanceChoice;
     /** Omit to leave out the corner switcher, on a screen inside the app. */
@@ -118,6 +123,7 @@ export function WelcomeScreen(props: WelcomeScreenProps) {
         "secondaryAction",
         "children",
         "onArtPress",
+        "secondaryActions",
         "appearance",
         "onAppearanceChange",
     ]);
@@ -183,6 +189,20 @@ export function WelcomeScreen(props: WelcomeScreenProps) {
                             >
                                 {local.secondaryAction.label}
                             </Button>
+                        ) : null}
+                        {local.secondaryActions && local.secondaryActions.length > 0 ? (
+                            <div className="happy-welcome-screen__secondaries">
+                                {local.secondaryActions.map((action) => (
+                                    <Button
+                                        className="happy-welcome-screen__secondary"
+                                        key={action.label}
+                                        onClick={action.onAction}
+                                        variant="ghost"
+                                    >
+                                        {action.label}
+                                    </Button>
+                                ))}
+                            </div>
                         ) : null}
                     </div>
                 </div>

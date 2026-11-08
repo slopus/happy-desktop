@@ -148,6 +148,15 @@ export type AppShellProps = Omit<HTMLAttributes<HTMLDivElement>, "style"> & {
     panelResizeLabel?: string;
     /** Reports pointer or DOM-focus ownership for this exact shell instance. */
     onFocusedPaneChange?: (pane: AppShellFocusedPane) => void;
+    /**
+     * Focus: the workspace alone in the window, under this band, while a
+     * setup's onboarding runs (focus chat). The sidebar folds away with its
+     * controls and shortcut; the workspace's own tab band and the panel step
+     * aside beneath the band, keeping their place, so nothing under them
+     * moves. When focus ends the sidebar slides in, the one glide this shell
+     * makes, and the band's place goes back to the tabs.
+     */
+    focus?: ReactNode;
 };
 export type AppShellFocusedPane = "workspace" | "panel";
 const SIDEBAR_DEFAULT_WIDTH = 288;
@@ -400,6 +409,7 @@ export function AppShell(props: AppShellProps) {
         "panelFooterFloating",
         "panelResizeLabel",
         "onFocusedPaneChange",
+        "focus",
     ]);
     const onFocusedPaneChange = local.onFocusedPaneChange;
     const workspaceReadableWidth = local.workspaceReadableWidth;
@@ -435,7 +445,26 @@ export function AppShell(props: AppShellProps) {
         local.sidebarDefaultCollapsed ?? false,
     );
     const sidebarCollapsedControlled = local.sidebarCollapsed !== undefined;
-    const sidebarCollapsed = local.sidebarCollapsed ?? sidebarCollapsedLocal;
+    const focus = local.focus !== undefined && local.focus !== null && local.focus !== false;
+    // The fold the person chose, which focus covers without changing.
+    const sidebarCollapsedChosen = local.sidebarCollapsed ?? sidebarCollapsedLocal;
+    const sidebarCollapsed = focus || sidebarCollapsedChosen;
+    // Leaving focus slides an open sidebar in once; the slide ends with its
+    // own transition. Read against the last render, so it starts in the same
+    // commit that unfolds the sidebar.
+    const [focusSeen, setFocusSeen] = useState(focus);
+    const [sidebarSliding, setSidebarSliding] = useState(false);
+    if (focusSeen !== focus) {
+        setFocusSeen(focus);
+        setSidebarSliding(
+            !focus &&
+                !sidebarCollapsedChosen &&
+                Boolean(local.sidebar) &&
+                local.navigationChrome === "integrated" &&
+                local.sidebarCollapsible === true &&
+                local.sidebarCollapsedLayout === "overlay",
+        );
+    }
     const onSidebarCollapsedChange = local.onSidebarCollapsedChange;
     const setSidebarCollapsed = (collapsed: boolean) => {
         if (!sidebarCollapsedControlled) setSidebarCollapsedLocal(collapsed);
@@ -479,7 +508,7 @@ export function AppShell(props: AppShellProps) {
         laneMaxWidthOf(panelCap, panelMin, railFootprint + sidebarOccupied, workspaceMin);
     const sidebarInteractive = local.sidebarCollapsible === true;
     const sidebarSized = sidebarInteractive || local.sidebarDefaultWidth !== undefined;
-    const sidebarShortcut = local.sidebarShortcut === true && sidebarInteractive;
+    const sidebarShortcut = local.sidebarShortcut === true && sidebarInteractive && !focus;
     // eslint-disable-next-line happy-react/no-layout-effect -- the window-wide sidebar chord works regardless of which descendant control owns focus
     useLayoutEffect(() => {
         if (!sidebarShortcut) return;
@@ -621,36 +650,37 @@ export function AppShell(props: AppShellProps) {
             : sidebarSized
               ? sidebarMin
               : FIXED_SIDEBAR_MIN_WIDTH;
-    const revealButton = sidebarHidden ? (
-        <button
-            aria-label={local.sidebarExpandLabel ?? "Show sidebar"}
-            aria-keyshortcuts={sidebarShortcut ? SIDEBAR_SHORTCUT.aria : undefined}
-            className="happy-desktop-app-shell__reveal-button"
-            data-floating={revealFloating ? "" : undefined}
-            data-happy-desktop-ui="app-shell-reveal-button"
-            data-shortcut-hint={sidebarShortcut ? "" : undefined}
-            onClick={() => setSidebarCollapsed(false)}
-            type="button"
-        >
-            {/* 16, not the 14 of a bare affordance: this glyph answers the
+    const revealButton =
+        sidebarHidden && !focus ? (
+            <button
+                aria-label={local.sidebarExpandLabel ?? "Show sidebar"}
+                aria-keyshortcuts={sidebarShortcut ? SIDEBAR_SHORTCUT.aria : undefined}
+                className="happy-desktop-app-shell__reveal-button"
+                data-floating={revealFloating ? "" : undefined}
+                data-happy-desktop-ui="app-shell-reveal-button"
+                data-shortcut-hint={sidebarShortcut ? "" : undefined}
+                onClick={() => setSidebarCollapsed(false)}
+                type="button"
+            >
+                {/* 16, not the 14 of a bare affordance: this glyph answers the
                 sidebar's own 16px row icons across the divider, and an outline
                 fills only 14 of its 16 box, so a 14 box would set 12.25px of
                 ink beside 14px of ink. */}
-            <Icon name="sidebar-expand" size={16} />
-            {sidebarShortcut ? (
-                <KeyCap
-                    className="happy-shortcut-hint--floating"
-                    decorative
-                    keys={SIDEBAR_SHORTCUT.caps}
-                />
-            ) : null}
-        </button>
-    ) : null;
+                <Icon name="sidebar-expand" size={16} />
+                {sidebarShortcut ? (
+                    <KeyCap
+                        className="happy-shortcut-hint--floating"
+                        decorative
+                        keys={SIDEBAR_SHORTCUT.caps}
+                    />
+                ) : null}
+            </button>
+        ) : null;
     // Floating, the control is the bare button rather than a lane wrapping it:
     // a wrapper around a control docked over native window chrome is what stops
     // the pointer reaching it, so the collapsed toggle is structurally the same
     // element as the expanded one and only its position differs.
-    const reveal = revealFloating ? (
+    const reveal = focus ? null : revealFloating ? (
         revealButton
     ) : sidebarHidden ? (
         <div
@@ -689,56 +719,63 @@ export function AppShell(props: AppShellProps) {
     const sidebarToggleLabel = sidebarHidden
         ? (local.sidebarExpandLabel ?? "Show sidebar")
         : (local.sidebarCollapseLabel ?? "Hide sidebar");
-    const sidebarControls = sidebarTravel ? (
-        <div
-            className="happy-desktop-app-shell__sidebar-controls"
-            data-collapsed={sidebarHidden ? "" : undefined}
-            data-happy-desktop-ui="app-shell-sidebar-controls"
-        >
-            {/* Keep the tooltip anchored to the toggle itself. */}
-            <Tooltip
-                align="start"
-                className="happy-desktop-app-shell__sidebar-tip"
-                label={sidebarToggleLabel}
-                placement="bottom"
-                shortcut={sidebarShortcut ? SIDEBAR_SHORTCUT : undefined}
+    const sidebarControls =
+        sidebarTravel && !focus ? (
+            <div
+                className="happy-desktop-app-shell__sidebar-controls"
+                data-collapsed={sidebarHidden ? "" : undefined}
+                data-happy-desktop-ui="app-shell-sidebar-controls"
             >
-                <button
-                    aria-label={sidebarToggleLabel}
-                    aria-keyshortcuts={sidebarShortcut ? SIDEBAR_SHORTCUT.aria : undefined}
-                    aria-pressed={!sidebarHidden}
-                    className="happy-desktop-app-shell__sidebar-toggle"
-                    data-happy-desktop-ui={
-                        sidebarHidden ? "app-shell-reveal-button" : "app-shell-sidebar-collapse"
-                    }
-                    onClick={() => setSidebarCollapsed(!sidebarHidden)}
-                    type="button"
-                >
-                    <Icon name={sidebarHidden ? "sidebar-expand" : "sidebar-collapse"} size={16} />
-                </button>
-            </Tooltip>
-            {local.sidebarCollapsedAction && (sidebarHidden || !local.sidebarOwnsCreate) ? (
+                {/* Keep the tooltip anchored to the toggle itself. */}
                 <Tooltip
                     align="start"
-                    label={local.sidebarCollapsedAction.label}
+                    className="happy-desktop-app-shell__sidebar-tip"
+                    label={sidebarToggleLabel}
                     placement="bottom"
-                    shortcut={local.sidebarCollapsedAction.shortcut}
+                    shortcut={sidebarShortcut ? SIDEBAR_SHORTCUT : undefined}
                 >
                     <button
-                        aria-label={local.sidebarCollapsedAction.label}
-                        aria-keyshortcuts={local.sidebarCollapsedAction.shortcut?.aria}
-                        className="happy-desktop-app-shell__new-work"
-                        data-happy-desktop-ui="app-shell-collapsed-action"
-                        onClick={local.sidebarCollapsedAction.onClick}
+                        aria-label={sidebarToggleLabel}
+                        aria-keyshortcuts={sidebarShortcut ? SIDEBAR_SHORTCUT.aria : undefined}
+                        aria-pressed={!sidebarHidden}
+                        className="happy-desktop-app-shell__sidebar-toggle"
+                        data-happy-desktop-ui={
+                            sidebarHidden ? "app-shell-reveal-button" : "app-shell-sidebar-collapse"
+                        }
+                        onClick={() => setSidebarCollapsed(!sidebarHidden)}
                         type="button"
                     >
-                        <Icon name="compose" size={16} />
+                        <Icon
+                            name={sidebarHidden ? "sidebar-expand" : "sidebar-collapse"}
+                            size={16}
+                        />
                     </button>
                 </Tooltip>
-            ) : null}
-            <span aria-hidden="true" className="happy-desktop-app-shell__sidebar-controls-rule" />
-        </div>
-    ) : null;
+                {local.sidebarCollapsedAction && (sidebarHidden || !local.sidebarOwnsCreate) ? (
+                    <Tooltip
+                        align="start"
+                        label={local.sidebarCollapsedAction.label}
+                        placement="bottom"
+                        shortcut={local.sidebarCollapsedAction.shortcut}
+                    >
+                        <button
+                            aria-label={local.sidebarCollapsedAction.label}
+                            aria-keyshortcuts={local.sidebarCollapsedAction.shortcut?.aria}
+                            className="happy-desktop-app-shell__new-work"
+                            data-happy-desktop-ui="app-shell-collapsed-action"
+                            onClick={local.sidebarCollapsedAction.onClick}
+                            type="button"
+                        >
+                            <Icon name="compose" size={16} />
+                        </button>
+                    </Tooltip>
+                ) : null}
+                <span
+                    aria-hidden="true"
+                    className="happy-desktop-app-shell__sidebar-controls-rule"
+                />
+            </div>
+        ) : null;
     const sidebarEdge = sidebarHidden ? 0 : clamp(sidebarWidth, sidebarMin, sidebarMax);
     const mainStyle: CSSProperties = {
         minWidth: `${sidebarLayoutMin + WORKSPACE_MIN_WIDTH}px`,
@@ -769,7 +806,10 @@ export function AppShell(props: AppShellProps) {
                         ? ""
                         : undefined
                 }
-                data-connection-rail={local.connectionRail ? "" : undefined}
+                // The rail stands aside while focus holds the window.
+                data-connection-rail={local.connectionRail && !focus ? "" : undefined}
+                data-focus={focus ? "" : undefined}
+                data-sidebar-sliding={sidebarSliding ? "" : undefined}
                 onContextMenu={(event) => {
                     rest.onContextMenu?.(event);
                     if (event.defaultPrevented || !(event.target instanceof Element)) return;
@@ -857,7 +897,12 @@ export function AppShell(props: AppShellProps) {
                                     }
                                     data-happy-desktop-ui="app-shell-sidebar"
                                     data-resizable={sidebarInteractive ? "" : undefined}
+                                    data-sliding={sidebarSliding ? "" : undefined}
                                     data-travel={sidebarTravel ? "" : undefined}
+                                    onTransitionEnd={(event) => {
+                                        if (event.target === event.currentTarget)
+                                            setSidebarSliding(false);
+                                    }}
                                     style={sidebarStyle}
                                 >
                                     {local.sidebar}
@@ -1005,6 +1050,14 @@ export function AppShell(props: AppShellProps) {
                 a control that punches a hole in one has to come after it — the
                 same order the sidebar's own toggle already sits in. */}
                 {revealFloating ? reveal : null}
+                {focus ? (
+                    <div
+                        className="happy-desktop-app-shell__focus"
+                        data-happy-desktop-ui="app-shell-focus"
+                    >
+                        {local.focus}
+                    </div>
+                ) : null}
                 {/* The window's overlay lane. A modal-class surface written
                 deep in the product hangs here instead, so its z-index is
                 resolved against the window rather than against whatever

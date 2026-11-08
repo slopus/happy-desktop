@@ -320,6 +320,20 @@ const INVITE_STATES: readonly {
         },
     },
     {
+        id: "C-338r2",
+        label: "Invite code, ready message",
+        detail: "Copy invite puts a ready message on the clipboard · Copy code · Make another",
+        state: {
+            ...INVITE_READY,
+            created: {
+                code: "QX7M-4KDP",
+                detail: "Joins acme as Member · Expires in 7 days · Shown only here",
+                message:
+                    "Join @acme on Happy. Get the app at happy.engineering, choose Join a team, and enter @acme with this invite code: QX7M-4KDP. It works for 7 days.",
+            },
+        },
+    },
+    {
         id: "C-338s",
         label: "Invite, refused",
         detail: "the server's reason, over the role still picked",

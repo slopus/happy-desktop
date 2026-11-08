@@ -59,6 +59,11 @@ export interface HappyAgentProfileSnapshot {
     readonly name: string;
     /** True while the fields differ from what is stored. */
     readonly dirty: boolean;
+    /**
+     * The email as stored, or as a team server offers it from the sign-in
+     * for a member who has saved none yet. Empty when there is neither.
+     */
+    readonly storedEmail: string;
     readonly loading: boolean;
     readonly saving: boolean;
     /** The stored profile could not be read. */
@@ -117,6 +122,7 @@ export interface HappyAgentProfileStoreDeps {
 
 const EMPTY: HappyAgentProfileSnapshot = {
     dirty: false,
+    storedEmail: "",
     email: "",
     loading: true,
     name: "",
@@ -171,9 +177,11 @@ export function happyAgentProfileStoreCreate(
         const dirty = dirtyAgainst(profile, fields);
         const saved = profile !== undefined && profile.name !== "";
         const photo = photoEqual(current.photo, profile?.photo) ? current.photo : profile?.photo;
+        const storedEmail = profile?.email ?? "";
         if (
             fields.email === current.email &&
             fields.name === current.name &&
+            storedEmail === current.storedEmail &&
             dirty === current.dirty &&
             saved === current.saved &&
             current.loading === false &&
@@ -185,6 +193,7 @@ export function happyAgentProfileStoreCreate(
             ...current,
             ...fields,
             dirty,
+            storedEmail,
             saved,
             loading: false,
             error: undefined,

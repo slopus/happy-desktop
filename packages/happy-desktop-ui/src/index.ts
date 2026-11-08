@@ -689,6 +689,16 @@ export {
     type CloudConnectView,
 } from "./CloudConnectScreen";
 export {
+    TeamSetupScreen,
+    type TeamSetupAvailability,
+    type TeamSetupPath,
+    type TeamSetupScreenProps,
+    type TeamSetupTeam,
+    type TeamSetupTeamCheck,
+    type TeamSetupView,
+} from "./TeamSetupScreen";
+export { FocusChatHeader, type FocusChatHeaderProps } from "./FocusChatHeader";
+export {
     HappyLinkNoticeDialog,
     type HappyLinkNoticeDialogProps,
     type HappyLinkNoticeView,

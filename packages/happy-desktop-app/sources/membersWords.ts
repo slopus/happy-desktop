@@ -13,6 +13,25 @@ export function membersExpiresText(expiresAt: number): string {
     return "Expires soon";
 }
 
+/**
+ * The ready message [Copy invite] puts on the clipboard, never in chat: where
+ * to get Happy, and the team and code to join with.
+ */
+export function membersInviteMessage(input: {
+    readonly serverName: string;
+    readonly code: string;
+    readonly expiresAt: number;
+}): string {
+    const hours = Math.floor((input.expiresAt - Date.now()) / 3_600_000);
+    const lasts =
+        hours >= 48
+            ? `It works for ${String(Math.floor(hours / 24))} days.`
+            : hours >= 2
+              ? `It works for ${String(hours)} hours.`
+              : "It works for a little while longer.";
+    return `Join @${input.serverName} on Happy. Get the app at happy.engineering, choose Join a team, and enter @${input.serverName} with this invite code: ${input.code}. ${lasts}`;
+}
+
 /** "Joined Nov 8". */
 export function membersJoinedText(joinedAt: number): string {
     return `Joined ${new Date(joinedAt).toLocaleDateString([], { month: "short", day: "numeric" })}`;

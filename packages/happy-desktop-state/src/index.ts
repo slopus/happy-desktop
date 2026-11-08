@@ -264,6 +264,7 @@ export * from "./happyAgent/happyAgentSecurityPolicyStore.js";
 export * from "./happyAgent/happyAgentSecretsStore.js";
 export * from "./happyAgent/happyAgentGlobalSkillsStore.js";
 export * from "./happyAgent/happyAgentChatOnboardingStore.js";
+export * from "./happyAgent/happyAgentOnboardingFocusStore.js";
 export * from "./happyAgent/happyAgentProviderClisStore.js";
 export * from "./happyAgent/happyAgentDefaultModelStore.js";
 export * from "./happyAgent/happyAgentSessionListStore.js";

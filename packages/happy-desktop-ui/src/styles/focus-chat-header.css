@@ -1,0 +1,57 @@
+/*
+ * C-342 FocusChatHeader — the band over focus chat. It fills AppShell's focus
+ * band: who is talking and for which setup on the leading edge, "Skip setup"
+ * on the trailing one. The band is a window drag lane; only Skip takes the
+ * pointer.
+ */
+
+.happy-focus-chat-header {
+    box-sizing: border-box;
+    display: flex;
+    flex: 1;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-width: 0;
+    padding-right: var(--happy-panel-inset);
+    font-family: var(--happy-font-ui);
+}
+
+.happy-focus-chat-header__who {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.happy-focus-chat-header__title {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    min-width: 0;
+    overflow: hidden;
+    font-size: 13px;
+    line-height: 18px;
+    white-space: nowrap;
+}
+
+.happy-focus-chat-header__name {
+    overflow: hidden;
+    color: var(--text);
+    font-weight: 600;
+    text-overflow: ellipsis;
+}
+
+.happy-focus-chat-header__dot,
+.happy-focus-chat-header__setup {
+    flex: none;
+    color: var(--text-secondary);
+}
+
+.happy-focus-chat-header__actions {
+    display: flex;
+    flex: none;
+    align-items: center;
+    -webkit-app-region: no-drag;
+    app-region: no-drag;
+}

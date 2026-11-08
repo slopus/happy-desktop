@@ -86,15 +86,28 @@ export function ConnectionShell(props: {
     /** A row was chosen from an entry's context menu. */
     readonly onItemMenuSelect?: (id: string, actionId: string) => void;
     /**
-     * A "+" tile after the last connection. While it is offered the rail shows
-     * even beside Home alone, so the first connection can be added from it.
+     * A "+" tile after the last connection: one way to add a connection, or a
+     * menu of them. While it is offered the rail shows even beside Home alone,
+     * so the first connection can be added from it.
      */
-    readonly add?: { readonly label: string; readonly onAdd: () => void };
+    readonly add?:
+        | { readonly label: string; readonly onAdd: () => void }
+        | {
+              readonly label: string;
+              readonly items: readonly { readonly id: string; readonly label: string }[];
+              readonly onSelect: (id: string) => void;
+          };
+    /**
+     * The rail steps aside while a setup is onboarding: the setup fills the
+     * window, and the rail comes back once it is released.
+     */
+    readonly railHidden?: boolean;
 }) {
     // Which entry's menu is open and where the pointer asked for it. The menu
     // is this rail's own passing state; what it offers belongs to the caller.
     const [menu, setMenu] = useState<{
-        readonly id: string;
+        /** The entry whose menu this is, or `undefined` for the "+" tile's. */
+        readonly id: string | undefined;
         readonly items: readonly MenuItem[];
         readonly x: number;
         readonly y: number;
@@ -123,7 +136,7 @@ export function ConnectionShell(props: {
     );
     return (
         <div className="happy-connections" data-happy-desktop-ui="connection-shell">
-            {(props.items.length > 1 || props.add) && !props.collapsed ? (
+            {(props.items.length > 1 || props.add) && !props.collapsed && !props.railHidden ? (
                 <nav
                     className="happy-connections__rail"
                     aria-label="Connections"
@@ -251,9 +264,36 @@ export function ConnectionShell(props: {
                                     className="happy-connections__item happy-connections__add"
                                     type="button"
                                     aria-label={props.add.label}
+                                    {...("items" in props.add
+                                        ? {
+                                              "aria-haspopup": "menu" as const,
+                                              "aria-expanded":
+                                                  (menu !== undefined && menu.id === undefined) ||
+                                                  undefined,
+                                          }
+                                        : {})}
                                     title={props.add.label}
                                     data-happy-desktop-ui="connection-add"
-                                    onClick={props.add.onAdd}
+                                    onClick={(event) => {
+                                        const add = props.add;
+                                        if (!add) return;
+                                        if (!("items" in add)) {
+                                            add.onAdd();
+                                            return;
+                                        }
+                                        // The menu hangs beside the tile, level with its top.
+                                        const box = event.currentTarget.getBoundingClientRect();
+                                        setMenu({
+                                            id: undefined,
+                                            items: add.items.map((item) => ({
+                                                kind: "item",
+                                                id: item.id,
+                                                label: item.label,
+                                            })),
+                                            x: box.right + 8,
+                                            y: box.top,
+                                        });
+                                    }}
                                 >
                                     <Icon name="plus" size={20} />
                                 </button>
@@ -290,7 +330,9 @@ export function ConnectionShell(props: {
                     onClose={() => setMenu(undefined)}
                     onSelect={(actionId) => {
                         setMenu(undefined);
-                        props.onItemMenuSelect?.(menu.id, actionId);
+                        const add = props.add;
+                        if (menu.id !== undefined) props.onItemMenuSelect?.(menu.id, actionId);
+                        else if (add && "items" in add) add.onSelect(actionId);
                     }}
                     width={216}
                     x={menu.x}

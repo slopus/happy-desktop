@@ -1,6 +1,6 @@
 import type { WelcomeSlide } from "happy-desktop-ui";
 
-/** The same welcome deck for the main app and each connection's onboarding. */
+/** The window's one welcome deck, shown once per install. */
 export const happyAgentWelcomeSlides: readonly WelcomeSlide[] = [
     {
         art: { kind: "logo" },
@@ -16,13 +16,13 @@ export const happyAgentWelcomeSlides: readonly WelcomeSlide[] = [
     },
     {
         art: { kind: "scene", name: "llama" },
-        copy: "Let Claude plan, Codex build, and Grok review—or run them side by side and compare. The context stays together across every handoff.",
+        copy: "Let Claude plan, Codex build, and Grok review, or run them side by side and compare. The context stays together across every handoff.",
         id: "mix",
         title: "One harness. Every agent.",
     },
     {
         art: { kind: "scene", name: "wand" },
-        copy: "Happy is open source and built to be changed. Run it on your hardware, in your cloud, or in ours—then change Happy to fit your team’s needs.",
+        copy: "Happy is open source and built to be changed. Run it on your hardware, in your cloud, or in ours, then change Happy to fit your team’s needs.",
         id: "open",
         title: "Yours to run. Yours to change.",
     },

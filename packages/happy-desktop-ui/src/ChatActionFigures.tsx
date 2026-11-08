@@ -428,8 +428,16 @@ export interface ChatInviteFigureProps {
     /** Whether the reader is an owner, who alone may invite another owner. */
     readonly owner: boolean;
     readonly creating: boolean;
-    /** The code just made, shown here this once, and what it lets someone do, worded. */
-    readonly created?: { readonly code: string; readonly detail: string };
+    /**
+     * The code just made, shown here this once, and what it lets someone do,
+     * worded. `message` is the ready invite [Copy invite] puts on the
+     * clipboard: where to get Happy, the team, and the code.
+     */
+    readonly created?: {
+        readonly code: string;
+        readonly detail: string;
+        readonly message?: string;
+    };
     /** Why the server could not be read, or refused the last invite. */
     readonly error?: string;
     /** Makes a code for the role. Absent in an older message, which only shows how things stand. */
@@ -480,7 +488,18 @@ export function ChatInviteFigure(props: ChatInviteFigureProps) {
                 {created ? (
                     <>
                         <span className="happy-chat-figure__invite-code">{created.code}</span>
-                        <CopyButton caption="Copy" label="Copy invite code" text={created.code} />
+                        {created.message ? (
+                            <CopyButton
+                                caption="Copy invite"
+                                label="Copy the invite message"
+                                text={created.message}
+                            />
+                        ) : null}
+                        <CopyButton
+                            caption={created.message ? "Copy code" : "Copy"}
+                            label="Copy invite code"
+                            text={created.code}
+                        />
                         {props.onCreatedDismiss ? (
                             <Button
                                 onClick={props.onCreatedDismiss}

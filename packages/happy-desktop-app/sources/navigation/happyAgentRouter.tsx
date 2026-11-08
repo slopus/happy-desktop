@@ -15,12 +15,14 @@ import { happyAgentRoutePathParse } from "./happyAgentRoute";
 import { useSyncExternalStore } from "react";
 import { HappyAgentOnboardingBoundary } from "../components/HappyAgentOnboardingBoundary";
 import {
+    experimentsStoreNoop,
     happyAgentFileLinkParse,
     happyAgentProviderAddPageOf,
     parseHappyUrl,
 } from "happy-desktop-state";
 import type {
     AppearanceStore,
+    HappyAgentOnboardingFocusStore,
     HappyAgentArtifactId,
     CommandPaletteStore,
     ExperimentsStore,
@@ -152,6 +154,11 @@ export interface HappyAgentRouterContext {
      * in a host that remembers no such choice, which withholds them.
      */
     readonly experiments?: ExperimentsStore;
+    /**
+     * Which setups the person let go of during experimental onboarding, so the
+     * window shows the app for them. Absent, no setup ever takes the window.
+     */
+    readonly onboardingFocus?: HappyAgentOnboardingFocusStore;
     /** Which way pairing pages offer a phone first; absent, Relay. */
     readonly mobilePairingMethod?: MobilePairingMethodStore;
     /**
@@ -213,6 +220,12 @@ function HappyAgentRootContent({ context }: { readonly context: HappyAgentRouter
         context.happyAgents.get,
         context.happyAgents.get,
     );
+    const experimentsStore = context.experiments ?? experimentsStoreNoop;
+    const experiments = useSyncExternalStore(
+        experimentsStore.subscribe,
+        experimentsStore.get,
+        experimentsStore.get,
+    );
     const entry = directory.happyAgents[0];
     // Sessions survive reconnects. Only the first connection gets a splash;
     // an already materialized workspace must keep its mounted UI and drafts.
@@ -221,7 +234,12 @@ function HappyAgentRootContent({ context }: { readonly context: HappyAgentRouter
     // A server whose sign-in ended shows nothing but the way back in, even
     // while the session it ended is still being taken down.
     const signIn = entry?.signIn;
-    const signInEmpty = signIn ? happyAgentSignInEmpty(signIn) : undefined;
+    const signInEmpty = signIn
+        ? happyAgentSignInEmpty(
+              signIn,
+              experiments.onboarding && entry?.happyCloud === true ? "team" : "server",
+          )
+        : undefined;
     // While the browser is open the one act is stopping that sign-in.
     const signInAct =
         signIn?.phase === "browser"
@@ -260,12 +278,12 @@ function HappyAgentRootContent({ context }: { readonly context: HappyAgentRouter
     return (
         <HappyAgentOnboardingBoundary
             store={setup.onboarding}
-            welcome={setup.welcome}
             appearance={context.appearance}
             profile={setup.profile}
             clock={setup.clock}
             online={entry?.status === "connected"}
             onRetry={setup.retry}
+            profileFromAccount={experiments.onboarding}
             {...(context.mobilePairingMethod
                 ? { mobilePairingMethod: context.mobilePairingMethod }
                 : {})}
@@ -670,6 +688,7 @@ function HappyAgentWorkspaceLayout() {
             {...(context.agentUpdate ? { agentUpdate: context.agentUpdate } : {})}
             {...(context.agentReleaseNotes ? { agentReleaseNotes: context.agentReleaseNotes } : {})}
             {...(context.experiments ? { experiments: context.experiments } : {})}
+            {...(context.onboardingFocus ? { onboardingFocus: context.onboardingFocus } : {})}
             {...(context.projectsVisibility
                 ? { projectsVisibility: context.projectsVisibility }
                 : {})}
