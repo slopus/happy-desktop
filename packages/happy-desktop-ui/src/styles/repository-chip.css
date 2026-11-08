@@ -1,0 +1,32 @@
+/*
+ * C-338 RepositoryChip: quiet text beside the compute chip in the composer's
+ * control row, the same size as the controls around it.
+ */
+.happy-repository-chip {
+    display: inline-flex;
+    flex: 0 1 auto;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    height: 28px;
+    padding: 0 8px;
+    color: var(--text-secondary);
+    font-family: var(--happy-font-ui);
+    font-size: 12px;
+    line-height: 18px;
+    white-space: nowrap;
+}
+
+.happy-repository-chip[data-kind="none"] {
+    opacity: 0.72;
+}
+
+.happy-repository-chip[data-checkout="failed"] {
+    color: var(--status-error);
+}
+
+.happy-repository-chip__label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}

@@ -449,6 +449,20 @@ export {
     type ComputeChipProps,
 } from "./ComputeChip";
 export {
+    RepositoryChip,
+    type RepositoryChipProps,
+    type RepositoryChipRepository,
+} from "./RepositoryChip";
+export {
+    HappyAgentCreateSubtaskPage,
+    type HappyAgentCreateSubtaskPageProps,
+} from "./HappyAgentCreateSubtaskPage";
+export {
+    HappyAgentRepositoryBranchPicker,
+    type HappyAgentRepositoryBranchPickerProps,
+    type HappyAgentRepositoryBranchPickerRepository,
+} from "./HappyAgentRepositoryBranchPicker";
+export {
     fileTreeBuild,
     fileTreeExpanded,
     fileTreeFlatten,
@@ -1113,6 +1127,20 @@ export {
     type HappyAgentMemberRow,
     type HappyAgentMembersSettingsProps,
 } from "./pages/settings/HappyAgentMembersSettings";
+export {
+    HAPPY_AGENT_REPOSITORY_CREDENTIAL_AUTOMATIC,
+    HappyAgentRepositoriesSettings,
+    HappyAgentRepositoryAddDialog,
+    HappyAgentRepositoryDeleteDialog,
+    HappyAgentRepositoryDialog,
+    type HappyAgentRepositoriesSettingsProps,
+    type HappyAgentRepositoryAddDialogProps,
+    type HappyAgentRepositoryCheck,
+    type HappyAgentRepositoryCredentialOption,
+    type HappyAgentRepositoryDeleteDialogProps,
+    type HappyAgentRepositoryDialogProps,
+    type HappyAgentRepositoryRow,
+} from "./pages/settings/HappyAgentRepositoriesSettings";
 export {
     HappyAgentCredentialImport,
     type HappyAgentCredentialImportProps,

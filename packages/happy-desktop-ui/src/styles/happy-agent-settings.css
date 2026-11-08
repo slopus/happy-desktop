@@ -1031,3 +1031,189 @@
     font-size: 13px;
     line-height: 18px;
 }
+
+/* ---- Repositories -------------------------------------------------------- */
+
+.happy-agent-repositories__empty {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    justify-content: center;
+    min-height: 360px;
+}
+
+.happy-agent-repositories__list {
+    display: flex;
+    flex-direction: column;
+}
+
+.happy-agent-repositories__row {
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    min-height: 56px;
+    padding: 8px 0;
+    border: 0;
+    border-bottom: 1px solid var(--divider);
+    background: none;
+    color: var(--text-secondary);
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+}
+
+.happy-agent-repositories__row:hover .happy-agent-repositories__name {
+    text-decoration: underline;
+}
+
+.happy-agent-repositories__icon {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background-color: var(--surface-high);
+    color: var(--text);
+}
+
+.happy-agent-repositories__text {
+    display: flex;
+    flex: 1 1 0%;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.happy-agent-repositories__name {
+    overflow: hidden;
+    color: var(--text);
+    font-size: 13px;
+    line-height: 18px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-agent-repositories__meta,
+.happy-agent-repositories__access {
+    overflow: hidden;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-agent-repositories__access {
+    flex: none;
+}
+
+.happy-agent-repositories__access[data-access="reachable"] {
+    color: var(--status-connected);
+}
+
+.happy-agent-repositories__access[data-access="failed"] {
+    color: var(--status-error);
+}
+
+.happy-agent-repositories__actions,
+.happy-agent-repositories__check-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 0;
+}
+
+.happy-agent-repositories__form {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.happy-agent-repositories__check {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+}
+
+.happy-agent-repositories__check[data-state="ok"] {
+    color: var(--status-connected);
+}
+
+.happy-agent-repositories__url {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.happy-agent-repositories__url code {
+    flex: 1 1 0%;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--text-secondary);
+    font-family: var(--happy-font-mono);
+    font-size: 12px;
+    line-height: 16px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-agent-repositories__inline {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+}
+
+.happy-agent-repositories__facts {
+    display: flex;
+    flex-wrap: wrap;
+    row-gap: 8px;
+    font-size: 13px;
+    line-height: 18px;
+}
+
+.happy-agent-repositories__facts > :nth-child(odd) {
+    flex: 0 0 140px;
+    color: var(--text-secondary);
+}
+
+.happy-agent-repositories__facts > :nth-child(even) {
+    flex: 1 0 calc(100% - 140px);
+    color: var(--text);
+}
+
+.happy-agent-repositories__danger {
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 52px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--divider);
+}
+
+.happy-agent-repositories__danger {
+    border-top: 1px solid var(--divider);
+    border-bottom: 0;
+}
+
+.happy-agent-repositories__confirm {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.happy-agent-repositories__confirm p {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 18px;
+}

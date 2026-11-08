@@ -1019,6 +1019,16 @@ export interface BotCreationRequest {
  * host is asked, and the host's answer. The host puts the caller's membership
  * at the top of their list; both are adopted before `task` settles.
  */
+/**
+ * The team repository on Happy Cloud a new task works in, and its branch:
+ * an existing branch is checked out, a new name is made from the default
+ * branch, and none gives the task a branch of its own.
+ */
+export interface TaskRepository {
+    readonly repositoryId: string;
+    readonly branch?: string;
+}
+
 export interface TaskCreationRequest {
     readonly taskId: string;
     readonly workspaceId: string;
@@ -1271,9 +1281,10 @@ export interface HappyAgentConnection {
     /**
      * Creates a task owned by the caller and joined at the top of their list.
      * Without a name the host calls it "New Task" and names it from its first
-     * message. The task id doubles as the retry key.
+     * message. With a repository, Happy Cloud checks it out in the task's
+     * sandbox. The task id doubles as the retry key.
      */
-    createTask(name?: string): TaskCreationRequest;
+    createTask(name?: string, repository?: TaskRepository): TaskCreationRequest;
     /** Renames a task for everyone, guarded by its version; ends automatic naming. */
     renameTask(taskId: string, name: string): MutationId;
     close(): void;

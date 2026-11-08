@@ -150,6 +150,9 @@ export interface HappyAgentSession {
     readonly providers: HappyAgentProvidersStore;
     readonly members: () => import("happy-desktop-state").HappyAgentMembersStore | undefined;
     readonly computes: () => import("happy-desktop-state").HappyAgentComputesStore | undefined;
+    readonly repositories: () =>
+        | import("happy-desktop-state").HappyAgentRepositoriesStore
+        | undefined;
     readonly cloudProviders: () =>
         | import("happy-desktop-state").HappyAgentCloudProvidersStore
         | undefined;
@@ -486,6 +489,13 @@ export function happyAgentConnectionOpen(input: {
     const onboarding = pairingObserve
         ? { ...onboardingStore, mobile: pairingObserve.onboarding(onboardingStore.mobile) }
         : onboardingStore;
+    // Happy Cloud's own routes, over the same transport as the daemon's.
+    const cloudRequest = input.happyCloud
+        ? happyCloudRequestCreate({
+              endpoint: directClient.endpoint,
+              token: "happy-local-capability",
+          })
+        : undefined;
     const client: HappyAgentWorkspaceClient = happyAgentWorkspaceClientCreate({
         client: directClient,
         providerCredentials: happyAgentProviderCredentialsApiCreate({
@@ -493,14 +503,10 @@ export function happyAgentConnectionOpen(input: {
             token: "happy-local-capability",
         }),
         ...(input.credentialImportHost ? { credentialImportHost: input.credentialImportHost } : {}),
-        ...(input.happyCloud
+        ...(cloudRequest
             ? {
-                  cloudProviders: happyAgentCloudProvidersApiCreate(
-                      happyCloudRequestCreate({
-                          endpoint: directClient.endpoint,
-                          token: "happy-local-capability",
-                      }),
-                  ),
+                  cloudRequest,
+                  cloudProviders: happyAgentCloudProvidersApiCreate(cloudRequest),
               }
             : {}),
         ...(input.cloudServer
@@ -662,6 +668,7 @@ export function happyAgentConnectionOpen(input: {
                     providers: client.providers(),
                     credentialImport: () => client.credentialImport(),
                     cloudProviders: () => client.cloudProviders(),
+                    repositories: () => client.repositories(),
                     members: () => client.members(),
                     computes: () => client.computes(),
                     voiceSettings: client.voiceSettings(),

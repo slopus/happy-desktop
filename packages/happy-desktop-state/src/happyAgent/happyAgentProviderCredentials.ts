@@ -235,7 +235,12 @@ function customProviderRead(value: unknown): HappyAgentCustomProviderDefinition 
  * the endpoint its client uses, with the same bearer. Answers the parsed body,
  * or rejects with a `UserError` carrying the server's own words and `code`.
  */
-export type HappyCloudRequest = (method: string, path: string, body?: unknown) => Promise<unknown>;
+export type HappyCloudRequest = (
+    method: string,
+    path: string,
+    body?: unknown,
+    headers?: Readonly<Record<string, string>>,
+) => Promise<unknown>;
 
 export function happyCloudRequestCreate(options: {
     readonly endpoint: string;
@@ -243,7 +248,12 @@ export function happyCloudRequestCreate(options: {
     readonly fetch?: typeof fetch;
 }): HappyCloudRequest {
     const base = options.endpoint.replace(/\/$/u, "");
-    return async (method: string, path: string, body?: unknown): Promise<unknown> => {
+    return async (
+        method: string,
+        path: string,
+        body?: unknown,
+        headers?: Readonly<Record<string, string>>,
+    ): Promise<unknown> => {
         const request = options.fetch ?? fetch;
         let response: Response;
         try {
@@ -253,6 +263,7 @@ export function happyCloudRequestCreate(options: {
                     accept: "application/json",
                     authorization: `Bearer ${options.token}`,
                     ...(body === undefined ? {} : { "content-type": "application/json" }),
+                    ...headers,
                 },
                 ...(body === undefined ? {} : { body: JSON.stringify(body) }),
             });

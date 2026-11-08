@@ -29,6 +29,7 @@ export type IconName =
     | "file-diff"
     | "close"
     | "branch"
+    | "repository"
     | "merge"
     | "spark"
     | "doc"
@@ -211,6 +212,7 @@ const glyphs: Record<IconName, IconGlyph> = {
     // for the review stream and nothing else.
     "file-diff": { set: "octicons", name: "file-diff" },
     branch: { set: "octicons", name: "git-branch" },
+    repository: { set: "octicons", name: "repo" },
     merge: { set: "octicons", name: "git-merge" },
     spark: { set: "ionicons", name: "sparkles-outline" },
     doc: { set: "ionicons", name: "document-text-outline" },

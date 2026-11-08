@@ -31,7 +31,11 @@ import {
     type GptLiveVoiceFocus,
     type HappyAgentSidebarProject,
     type HappyShareLinkRole,
+    type HappyAgentRepositoriesSnapshot,
+    type HappyAgentRepositoriesStore,
+    type TaskRepository,
     happyAgentComputesStoreNoop,
+    happyAgentRepositoriesStoreNoop,
 } from "happy-desktop-state";
 import { AppGptLivePhone } from "./gptLive/AppGptLivePhone";
 import { conversationInlinePagesCreate, inlineArtifactsStoreNoop } from "./conversationInlinePages";
@@ -288,6 +292,7 @@ import {
     type FileTreeBuildEntry,
     HappyAgentCreateBotPage,
     HappyAgentCreateTaskPage,
+    type HappyAgentRepositoryBranchPickerProps,
     HappyAgentProjectCloneDialog,
     HappyAgentTaskBrowseDialog,
     HappyAgentSurfaceCreateDialog,
@@ -691,6 +696,13 @@ export interface AppHappyAgentSession {
     readonly members?: () => import("happy-desktop-state").HappyAgentMembersStore | undefined;
     /** The chip's compute picker, on a Happy Cloud server; absent or undefined elsewhere. */
     readonly computes?: () => import("happy-desktop-state").HappyAgentComputesStore | undefined;
+    /**
+     * Settings › Repositories and the repository a new task starts in, on a
+     * Happy Cloud server; absent or undefined elsewhere.
+     */
+    readonly repositories?: () =>
+        | import("happy-desktop-state").HappyAgentRepositoriesStore
+        | undefined;
     /**
      * Settings › AI providers, on a Happy Cloud server in the desktop or on
      * the web; absent or undefined elsewhere.
@@ -4646,6 +4658,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                     <HappyAgentCreateTaskSurface
                         happyAgentOnline={activeHappyAgentOnline}
                         providerUsage={active.session.providerUsage}
+                        repositories={active.session.repositories?.()}
                         workspace={active.session.workspace}
                         {...(activeAvailability?.refusal === undefined
                             ? {}
@@ -10983,6 +10996,30 @@ function HappyAgentCreateBotSurface(props: {
     );
 }
 
+/** The repository and branch picker over a new task's name, from the team's repositories. */
+function taskCreateRepositoryProps(
+    snapshot: HappyAgentRepositoriesSnapshot,
+    chosen: TaskRepository | undefined,
+    handlers: Pick<HappyAgentRepositoryBranchPickerProps, "onRepositoryChange" | "onBranchChange">,
+): Omit<HappyAgentRepositoryBranchPickerProps, "disabled"> {
+    const repository = chosen
+        ? snapshot.repositories.find((entry) => entry.id === chosen.repositoryId)
+        : undefined;
+    const branches = repository ? snapshot.branches.get(repository.id) : undefined;
+    return {
+        ...handlers,
+        repositories: snapshot.repositories.map((entry) => ({
+            id: entry.id,
+            name: entry.name,
+            ...(entry.defaultBranch ? { defaultBranch: entry.defaultBranch } : {}),
+        })),
+        ...(chosen ? { repositoryId: chosen.repositoryId } : {}),
+        ...(chosen?.branch === undefined ? {} : { branch: chosen.branch }),
+        branches: branches?.names ?? [],
+        ...(branches?.loading ? { branchesLoading: true } : {}),
+    };
+}
+
 /**
  * Where a task is made, as a bot is: the conversation it is about to become,
  * with the name and Create in the body and the task's own composer under it.
@@ -10993,6 +11030,8 @@ function HappyAgentCreateBotSurface(props: {
 function HappyAgentCreateTaskSurface(props: {
     happyAgentOnline: () => boolean;
     providerUsage?: HappyAgentProviderUsageStore;
+    /** On Happy Cloud, the repositories the task may start in. */
+    repositories?: HappyAgentRepositoriesStore | undefined;
     unavailable?: string;
     workspace: HappyAgentWorkspaceStore;
 }) {
@@ -11000,6 +11039,13 @@ function HappyAgentCreateTaskSurface(props: {
         reactFrameSubscribe(props.workspace),
         props.workspace.get,
         props.workspace.get,
+    );
+    // Read, and re-read every few seconds, only while a task is being made here.
+    const repositoriesStore = props.repositories ?? happyAgentRepositoriesStoreNoop;
+    const repositories = useSyncExternalStore(
+        repositoriesStore.subscribe,
+        repositoriesStore.get,
+        repositoriesStore.get,
     );
     const taskCreate = snapshot.taskCreate;
     const modelUsageWatch = useComposerModelUsageWatch(props.providerUsage);
@@ -11074,6 +11120,24 @@ function HappyAgentCreateTaskSurface(props: {
                 <HappyAgentCreateTaskPage
                     {...(taskCreate.error === undefined ? {} : { error: taskCreate.error })}
                     name={taskCreate.name}
+                    {...(props.repositories === undefined ||
+                    (!repositories.loading && repositories.repositories.length === 0)
+                        ? {}
+                        : {
+                              repository: taskCreateRepositoryProps(
+                                  repositories,
+                                  taskCreate.repository,
+                                  {
+                                      onRepositoryChange: (repositoryId) => {
+                                          store.taskCreateRepositoryUpdate(repositoryId);
+                                          if (repositoryId !== undefined)
+                                              props.repositories?.branchesLoad(repositoryId);
+                                      },
+                                      onBranchChange: (branch) =>
+                                          store.taskCreateBranchUpdate(branch),
+                                  },
+                              ),
+                          })}
                     // Controlled, so the value reaches React inside its event,
                     // as the bot's name does.
                     onNameChange={(name) =>

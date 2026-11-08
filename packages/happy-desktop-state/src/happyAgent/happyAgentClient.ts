@@ -125,6 +125,10 @@ import {
 } from "./happyAgentCloudProvidersStore.js";
 import type { HappyAgentCloudProvidersApi } from "./happyAgentCloudProviders.js";
 import {
+    happyAgentRepositoriesStoreCreate,
+    type HappyAgentRepositoriesStore,
+} from "./happyAgentRepositoriesStore.js";
+import {
     happyAgentMembersStoreCreate,
     type HappyAgentMembersStore,
 } from "./happyAgentMembersStore.js";
@@ -247,6 +251,8 @@ export interface HappyAgentWorkspaceClient {
      * adding keys and sign-ins to it. Undefined anywhere but Happy Cloud.
      */
     cloudProviders(): HappyAgentCloudProvidersStore | undefined;
+    /** Settings › Repositories on Happy Cloud; undefined anywhere else. */
+    repositories(): HappyAgentRepositoriesStore | undefined;
     /**
      * Settings › Members: who is on a Happy Cloud server, their roles and
      * invites. Undefined anywhere but a Happy Cloud server.
@@ -472,6 +478,8 @@ export interface HappyAgentWorkspaceClientDeps {
      * providers in the model pickers.
      */
     readonly cloudProviders?: HappyAgentCloudProvidersApi;
+    /** Happy Cloud's own routes, on every Happy Cloud connection, in the desktop and on the web. */
+    readonly cloudRequest?: HappyCloudRequest;
     /** A Happy Cloud server's own routes, and how this window drops the server. */
     readonly cloudServer?: {
         readonly serverName: string;
@@ -659,6 +667,7 @@ export function happyAgentWorkspaceClientCreate(
     let providersStore: HappyAgentProvidersStore | undefined;
     let credentialImportStore: HappyAgentCredentialImportStore | undefined;
     let cloudProvidersStore: HappyAgentCloudProvidersStore | undefined;
+    let repositoriesStore: HappyAgentRepositoriesStore | undefined;
     let membersStore: HappyAgentMembersStore | undefined;
     let computesStore: HappyAgentComputesStore | undefined;
     let voiceSettingsStore: HappyAgentVoiceSettingsStore | undefined;
@@ -1048,6 +1057,13 @@ export function happyAgentWorkspaceClientCreate(
             });
             return cloudProvidersStore;
         },
+        repositories() {
+            if (disposed) throw new Error("The Happy Agent client is disposed.");
+            const request = deps.cloudRequest;
+            if (!request) return undefined;
+            repositoriesStore ??= happyAgentRepositoriesStoreCreate({ request });
+            return repositoriesStore;
+        },
         members() {
             if (disposed) throw new Error("The Happy Agent client is disposed.");
             const cloud = deps.cloudServer;
@@ -1258,6 +1274,8 @@ export function happyAgentWorkspaceClientCreate(
             credentialImportStore = undefined;
             cloudProvidersStore?.[Symbol.dispose]();
             cloudProvidersStore = undefined;
+            repositoriesStore?.[Symbol.dispose]();
+            repositoriesStore = undefined;
             membersStore?.[Symbol.dispose]();
             membersStore = undefined;
             computesStore?.[Symbol.dispose]();

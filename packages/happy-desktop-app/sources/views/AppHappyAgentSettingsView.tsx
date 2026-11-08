@@ -57,6 +57,7 @@ import {
     happyAgentProvidersStoreNoop,
     happyAgentCredentialImportStoreNoop,
     happyAgentCloudProvidersStoreNoop,
+    happyAgentRepositoriesStoreNoop,
     happyAgentCloudConnectionName,
     happyAgentProviderAddLinkParse,
     type HappyAgentCloudProvidersStore,
@@ -121,6 +122,7 @@ import {
     HappyCloudWebSettings,
 } from "happy-desktop-ui";
 import { HappyAgentVersionProvider } from "../HappyAgentVersionProvider";
+import { AppRepositoriesSettings } from "./AppRepositoriesSettings";
 import {
     AppMobileDirectSection,
     appMobileDirectOff,
@@ -153,6 +155,8 @@ export const HAPPY_AGENT_SETTINGS_CATEGORIES: readonly HappyAgentSettingsCategor
     { icon: "globe", id: "providers", label: "Providers" },
     // Who is on a Happy Cloud server; offered only there.
     { icon: "users", id: "members", label: "Members" },
+    // The team's code on a Happy Cloud server; offered only there.
+    { icon: "repository", id: "repositories", label: "Repositories" },
     // Usage sits after Providers because it is the same accounts read the other
     // way round: which of them exist, then what each has spent.
     { icon: "zap", id: "usage", label: "Usage" },
@@ -658,12 +662,14 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
     );
     const host = hostHappyAgent(directory);
     const membersStore = host?.session?.members?.();
+    const repositoriesStore = host?.session?.repositories?.();
     // A category the host cannot serve is left out of the list rather than
     // shown and refused.
     const categories = HAPPY_AGENT_SETTINGS_CATEGORIES.filter(
         (category) =>
             (category.id !== "servers" || props.servers !== undefined) &&
-            (category.id !== "members" || membersStore !== undefined),
+            (category.id !== "members" || membersStore !== undefined) &&
+            (category.id !== "repositories" || repositoriesStore !== undefined),
     );
     const hostAvailability = host?.session
         ? happyAgentAvailabilityProject(host.session.connection.get(), true, {
@@ -807,6 +813,14 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
         (membersShown ?? happyAgentMembersStoreNoop).subscribe,
         (membersShown ?? happyAgentMembersStoreNoop).get,
         (membersShown ?? happyAgentMembersStoreNoop).get,
+    );
+    // The repository list is read, and re-read every few seconds, only while
+    // Repositories is on screen.
+    const repositoriesShown = section === "repositories" ? repositoriesStore : undefined;
+    const repositories = useSyncExternalStore(
+        (repositoriesShown ?? happyAgentRepositoriesStoreNoop).subscribe,
+        (repositoriesShown ?? happyAgentRepositoriesStoreNoop).get,
+        (repositoriesShown ?? happyAgentRepositoriesStoreNoop).get,
     );
     // AI providers exist only on Happy Cloud; the list is followed while
     // Providers is on screen.
@@ -1577,6 +1591,10 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                         />
                     ) : null}
                 </>
+            ) : section === "repositories" ? (
+                repositoriesShown ? (
+                    <AppRepositoriesSettings snapshot={repositories} store={repositoriesShown} />
+                ) : null
             ) : section === "members" ? (
                 membersShown ? (
                     <HappyAgentMembersSettings
