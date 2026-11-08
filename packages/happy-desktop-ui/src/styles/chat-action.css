@@ -479,30 +479,41 @@
     line-height: 20px;
 }
 
+/* Fixed columns, so every row's name, role and status start on one line
+   down the list, across the figure's 560px:
+     20 mark · 8 · 160 name · 8 · 72 role · 8 · status · 8 · 72 action */
 .happy-chat-figure__member-name {
-    min-width: 0;
+    flex: none;
+    width: 160px;
     overflow: hidden;
     font-weight: 500;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-.happy-chat-figure__member-role,
-.happy-chat-figure__member-status {
+.happy-chat-figure__member-role {
     flex: none;
+    width: 72px;
+    overflow: hidden;
     color: var(--text-secondary);
+    text-overflow: ellipsis;
     white-space: nowrap;
 }
 
 .happy-chat-figure__member-status {
-    margin-left: auto;
+    flex: 1 1 0;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--text-secondary);
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .happy-chat-figure__member-action {
     display: flex;
     flex: none;
     justify-content: flex-end;
-    width: 64px;
+    width: 72px;
 }
 
 .happy-chat-figure__member[data-pending] .happy-chat-figure__member-name {

@@ -7886,6 +7886,7 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                 }}
                 referenceEntities={messageReferenceEntities(workspace.list)}
                 {...chiefOfStaffNameProps(workspace.list.bots)}
+                {...conversationBotNameProps(workspace.list.bots, conversation)}
                 {...(props.referenceSurfaces ? { referenceSurfaces: props.referenceSurfaces } : {})}
                 onReferenceGroupOpen={referenceGroupOpen}
                 onStoryOpen={props.onStoryOpen}
@@ -9327,6 +9328,17 @@ function HappyAgentComposerDock(
  * tabs are files and tools — because two of them on one screen would be two
  * places to type the same first message.
  */
+/** The live name of the bot whose conversation this is, when it is a bot's. */
+function conversationBotNameProps(
+    bots: readonly HappyAgentBot[],
+    conversation: HappyAgentWorkspaceSnapshot["conversation"],
+): { botName?: string } {
+    if (conversation.type !== "ready") return {};
+    const id = conversation.value.conversationId;
+    const bot = bots.find((candidate) => candidate.conversation.id === id);
+    return bot ? { botName: bot.name } : {};
+}
+
 /** The Chief of Staff bot's live name, for copy that names it, when this Happy Agent lists one. */
 function chiefOfStaffNameProps(bots: readonly HappyAgentBot[]): { chiefOfStaffName?: string } {
     const chief = bots.find((bot) => bot.systemKey === "chief_of_staff");
@@ -9485,6 +9497,8 @@ function HappyAgentConversationBody(props: {
     referenceEntities: MessageReferenceEntities;
     /** The Chief of Staff bot's live name, while this Happy Agent lists one. */
     chiefOfStaffName?: string;
+    /** The live name of the bot whose conversation this is, which its messages show. */
+    botName?: string;
     /** Opens a group a reference names, on one of its conversations or where it was left. */
     onReferenceGroupOpen: (groupId: HappyAgentGroupId, agentId?: string) => void;
     onStoryOpen?: (storyId: string) => void;
@@ -9554,6 +9568,7 @@ function HappyAgentConversationBody(props: {
                 {...(props.chiefOfStaffName === undefined
                     ? {}
                     : { chiefOfStaffName: props.chiefOfStaffName })}
+                {...(props.botName === undefined ? {} : { botName: props.botName })}
                 onReferenceGroupOpen={props.onReferenceGroupOpen}
                 onStoryOpen={props.onStoryOpen}
                 {...(props.referenceSurfaces ? { referenceSurfaces: props.referenceSurfaces } : {})}
@@ -9958,6 +9973,8 @@ function HappyAgentConversationSurface(props: {
     referenceEntities: MessageReferenceEntities;
     /** The Chief of Staff bot's live name, while this Happy Agent lists one. */
     chiefOfStaffName?: string;
+    /** The live name of the bot whose conversation this is, which its messages show. */
+    botName?: string;
     /** Opens a group a reference names, on one of its conversations or where it was left. */
     onReferenceGroupOpen: (groupId: HappyAgentGroupId, agentId?: string) => void;
     onStoryOpen?: (storyId: string) => void;
@@ -10177,7 +10194,12 @@ function HappyAgentConversationSurface(props: {
             // opens, so the conversation's own introduction does not flash in
             // before it.
             emptyContent={onboardingComposer ? ONBOARDING_EMPTY : props.emptyContent}
-            agentAuthor={agentAuthor}
+            // A bot's conversation speaks under the name its owner gave it.
+            agentAuthor={
+                props.botName === undefined
+                    ? agentAuthor
+                    : { ...agentAuthor, displayName: props.botName }
+            }
             activityControl={
                 activityTotal > 0 ? (
                     <HappyAgentActivityControl

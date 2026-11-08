@@ -163,6 +163,9 @@ const FIGURES: ChatActionFigures = {
 
 const SETTINGS_LINKS = { has: () => true, open: noop };
 
+/* Onboarding runs in the Chief of Staff bot's conversation, which speaks under its live name. */
+const CHIEF_OF_STAFF: ConversationAuthor = { ...agentAuthor, displayName: "Chief of Staff" };
+
 let sequence = 0;
 function message(
     sender: ConversationAuthor,
@@ -339,7 +342,7 @@ function TranscriptWindow(props: {
                     <ConversationView
                         actionFigures={FIGURES}
                         actionsPressable
-                        agentAuthor={agentAuthor}
+                        agentAuthor={CHIEF_OF_STAFF}
                         dock={
                             <ConversationDock
                                 composer={COMPOSER}

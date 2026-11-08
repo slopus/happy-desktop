@@ -83,6 +83,12 @@ export type ConversationEntryViewProps = {
     failure?: ConversationEntryFailureProps;
     /** Identity heading for the first activity in an agent turn. */
     activityAuthor?: ConversationAuthor;
+    /**
+     * How the conversation's own agent is shown, such as a bot under the name
+     * its owner gave it. Its messages carry this identity's ID, and take its
+     * name and face from here.
+     */
+    agentAuthor?: ConversationAuthor;
     /** Identity id of the reader, so their own messages take the own treatment. */
     viewerId?: string;
     /**
@@ -570,7 +576,10 @@ export function ConversationEntryView(props: ConversationEntryViewProps) {
         );
 
     const message = entry.message;
-    const author = message.sender;
+    const author =
+        props.agentAuthor !== undefined && message.sender?.id === props.agentAuthor.id
+            ? props.agentAuthor
+            : message.sender;
     const own = author !== undefined && author.id === props.viewerId;
     const images = imagesOf(message.attachments);
     const linked = message.attachments.filter(
