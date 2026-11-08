@@ -31,24 +31,28 @@ const log = (line) => {
     appendFileSync(join(outDir, `timeline-${label}.log`), `${text}\n`);
 };
 
-// A file rather than a pipe: the app outlives this driver and keeps writing.
-const appLog = openSync(join(outDir, `app-${label}.log`), "a");
-// `--debug` rather than HAPPY_DESKTOP_DEBUG, so the opt-in is not inherited
-// by the Agent daemon Happy starts.
-const child = spawn(exe, ["--debug"], {
-    env: {
-        ...process.env,
-        DO_NOT_TRACK: "1",
-        HAPPY_DEBUG_RENDERER_PORT: String(port),
-        HAPPY_DESKTOP_WINDOWS_HIDDEN: "1",
-    },
-    stdio: ["ignore", appLog, appLog],
-    detached: true,
-});
-child.unref();
-child.on("exit", (code, signal) => log(`app exited code=${code} signal=${signal}`));
-writeFileSync(join(outDir, `app-${label}.pid`), String(child.pid));
-log(`launched ${exe} pid=${child.pid} preview=${previewUpdates} until=${until}`);
+//   DIAG_ATTACH=1   attach to the Happy already running on DIAG_CDP_PORT instead of launching one
+const attach = process.env.DIAG_ATTACH === "1";
+if (!attach) {
+    // A file rather than a pipe: the app outlives this driver and keeps writing.
+    const appLog = openSync(join(outDir, `app-${label}.log`), "a");
+    // `--debug` rather than HAPPY_DESKTOP_DEBUG, so the opt-in is not inherited
+    // by the Agent daemon Happy starts.
+    const child = spawn(exe, ["--debug"], {
+        env: {
+            ...process.env,
+            DO_NOT_TRACK: "1",
+            HAPPY_DEBUG_RENDERER_PORT: String(port),
+            HAPPY_DESKTOP_WINDOWS_HIDDEN: "1",
+        },
+        stdio: ["ignore", appLog, appLog],
+        detached: true,
+    });
+    child.unref();
+    child.on("exit", (code, signal) => log(`app exited code=${code} signal=${signal}`));
+    writeFileSync(join(outDir, `app-${label}.pid`), String(child.pid));
+    log(`launched ${exe} pid=${child.pid} preview=${previewUpdates} until=${until}`);
+} else log(`attaching to the running Happy preview=${previewUpdates} until=${until}`);
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 let browser;

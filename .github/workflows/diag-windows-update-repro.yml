@@ -22,6 +22,8 @@ jobs:
                 # quit-mid-agent-download: Preview updates turned on; Happy quits while it
                 #   fetches the Agent preview in the background; 0.0.104-preview.4 installed over it.
                 # manual-preview: 0.0.104-preview.4 installed over it by hand, Preview updates on.
+                # Each runs with Defender real-time protection on and the Windows
+                # sandbox set up after first-run setup, as onboarding does.
                 scenario: [updater, quit-mid-agent-download, manual-preview]
         defaults:
             run:
@@ -49,7 +51,10 @@ jobs:
                   gh release download v0.0.103 -R slopus/happy-desktop -p 'Happy-0.0.103-x64.exe' -D "$env:RUNNER_TEMP\inst"
                   gh release download v0.0.104-preview.4 -R slopus/happy-desktop -p 'Happy-0.0.104-preview.4-x64.exe' -D "$env:RUNNER_TEMP\inst"
                   Get-ChildItem "$env:RUNNER_TEMP\inst"
-                  Get-MpComputerStatus | Select-Object RealTimeProtectionEnabled, AntivirusEnabled | Format-List
+                  # A person's machine scans new executables; the runner's Defender is off by default.
+                  Set-MpPreference -DisableRealtimeMonitoring $false
+                  Start-Sleep 5
+                  Get-MpComputerStatus | Select-Object RealTimeProtectionEnabled, AntivirusEnabled, AMRunningMode | Format-List
             - name: Install stable 0.0.103
               run: |
                   $p = Start-Process "$env:RUNNER_TEMP\inst\Happy-0.0.103-x64.exe" -ArgumentList '/S' -PassThru -Wait
@@ -60,15 +65,35 @@ jobs:
                   ./.github/diag/capture.ps1 -Label 0-installed-0.0.103 -Out $env:OUT
             - name: 0.0.103 first-run setup to Agent ready
               run: |
-                  $env:DIAG_CDP_PORT = '9333'
-                  switch ($env:SCENARIO) {
-                      'updater' { $env:DIAG_PREVIEW = 'on-after-ready'; $env:DIAG_UNTIL = 'update-downloaded' }
-                      'quit-mid-agent-download' { $env:DIAG_PREVIEW = 'on-after-ready'; $env:DIAG_UNTIL = 'agent-downloading' }
-                      default { $env:DIAG_PREVIEW = 'keep'; $env:DIAG_UNTIL = 'ready' }
-                  }
+                  $env:DIAG_CDP_PORT = '9333'; $env:DIAG_PREVIEW = 'keep'; $env:DIAG_UNTIL = 'ready'
                   node "$env:RUNNER_TEMP\drv\drive.mjs" 1-setup-0.0.103 $env:HAPPY_EXE $env:OUT 12
+                  ./.github/diag/capture.ps1 -Label 1-0.0.103-ready -Out $env:OUT
+                  exit 0
+            - name: Windows sandbox setup, as onboarding's Set up sandbox does
+              if: always()
+              run: |
+                  $happy = "$env:USERPROFILE\.happy"
+                  $selected = (Get-Content -Raw "$happy\dist\config.json" | ConvertFrom-Json).selectedVersion
+                  $agent = "$happy\dist\version\$selected\happy-agent.exe"
+                  "status before: $(& $agent sandbox status --json 2>&1)"
+                  $job = Start-Job { param($a) & $a sandbox setup --json 2>&1 } -ArgumentList $agent
+                  if (-not (Wait-Job $job -Timeout 600)) { 'sandbox setup timed out'; Stop-Job $job }
+                  "setup: $(Receive-Job $job)"
+                  "status after: $(& $agent sandbox status --json 2>&1)"
+                  foreach ($path in @($happy, "$happy\dist", "$happy\dist\version", "$happy\dist\version\$selected", "$happy\dist\config.json", "$happy\windows-sandbox", "$happy\agent")) {
+                      if (Test-Path $path) { "--- $path owner $((Get-Acl $path).Owner)"; icacls $path }
+                  }
+                  Get-ChildItem $happy -Force | Format-Table Name, LastWriteTime -AutoSize
+                  ./.github/diag/capture.ps1 -Label 1b-after-sandbox-setup -Out $env:OUT
+                  exit 0
+            - name: Preview updates on in the running 0.0.103
+              if: always() && matrix.scenario != 'manual-preview'
+              run: |
+                  $env:DIAG_CDP_PORT = '9333'; $env:DIAG_ATTACH = '1'; $env:DIAG_PREVIEW = 'on-after-ready'
+                  $env:DIAG_UNTIL = if ($env:SCENARIO -eq 'updater') { 'update-downloaded' } else { 'agent-downloading' }
+                  node "$env:RUNNER_TEMP\drv\drive.mjs" 1c-preview-on-0.0.103 $env:HAPPY_EXE $env:OUT 12
                   "DRIVE1_EXIT=$LASTEXITCODE" >> $env:GITHUB_ENV
-                  ./.github/diag/capture.ps1 -Label 1-0.0.103-app-running -Out $env:OUT
+                  ./.github/diag/capture.ps1 -Label 1c-0.0.103-preview-on -Out $env:OUT
                   exit 0
             - name: Leave 0.0.103 (daemon stays) for 0.0.104-preview.4
               if: always()
