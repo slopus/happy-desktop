@@ -570,10 +570,10 @@ export interface ChatMembersFigureProps {
 
 /**
  * A team server's people, in the reply that shows them: everyone who joined,
- * and the codes still waiting for someone. Three rows show; more scroll in
- * place, so the box never grows.
+ * and the codes still waiting for someone. Two rows show; more scroll in
+ * place, so the box never grows and the menu under it never moves.
  *
- *   24 head · 8 · 108 list (three 36 rows) = 140
+ *   24 head · 8 · 72 list (two 36 rows) = 104
  */
 export function ChatMembersFigure(props: ChatMembersFigureProps) {
     const empty = props.error ?? (props.loading ? "Reading who is on this server…" : undefined);
