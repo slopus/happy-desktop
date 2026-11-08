@@ -4,6 +4,7 @@ import { gymRunClean, gymRunsRootResolve } from "./paths.js";
 import { gymSmokeRun } from "./smoke.js";
 import { gymPublicRepositoryAttach } from "./publicRepository.js";
 import { gymLiveVoiceRun } from "./liveVoice.js";
+import { gymOnboardingRecord } from "./onboardingRecording.js";
 import type { GymProfile, GymWorkloadName } from "./types.js";
 import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
@@ -59,6 +60,16 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
             artifactDirectory: flags.artifactDir,
             poolDefault: flags.poolDefault,
         });
+        return;
+    }
+    if (command === "record-onboarding") {
+        if (!flags.out) throw new Error("record-onboarding requires --out ABSOLUTE_PATH.mkv.");
+        const recording = await gymOnboardingRecord({
+            out: resolve(flags.out),
+            ...(flags.root ? { root: flags.root } : {}),
+            ...(flags.providers ? { providersFile: resolve(flags.providers) } : {}),
+        });
+        console.log(JSON.stringify({ command, ...recording }, null, 2));
         return;
     }
     if (command === "attach-repository") {
@@ -119,6 +130,8 @@ function parseFlags(args: readonly string[]): {
     readonly repository?: string;
     readonly authFile?: string;
     readonly poolDefault?: boolean;
+    readonly out?: string;
+    readonly providers?: string;
 } {
     const result: {
         profile?: string;
@@ -129,6 +142,8 @@ function parseFlags(args: readonly string[]): {
         repository?: string;
         authFile?: string;
         poolDefault?: boolean;
+        out?: string;
+        providers?: string;
     } = {};
     for (let index = 0; index < args.length; index += 1) {
         const value = args[index];
@@ -145,6 +160,9 @@ function parseFlags(args: readonly string[]): {
         else if (value === "--auth-file")
             result.authFile = requiredValue(value, next, () => index++);
         else if (value === "--pool-default") result.poolDefault = true;
+        else if (value === "--out") result.out = requiredValue(value, next, () => index++);
+        else if (value === "--providers")
+            result.providers = requiredValue(value, next, () => index++);
         else throw new Error(`Unknown option '${value}'.`);
     }
     return result;
@@ -189,6 +207,7 @@ Commands:
   run [--profile PROFILE] [--root PATH] [--workload WORKLOAD] [--ui-trace]
   smoke
   live-voice --auth-file ABSOLUTE_CODEX_AUTH_PATH [--artifact-dir PATH] [--pool-default]
+  record-onboarding --out PATH.mkv [--root PATH] [--providers HAPPY_TOML]
   clean --root PATH
 
 Workloads:

@@ -82,8 +82,16 @@ export type ChatActionFigures = {
      * in an older message it only shows the pairing as it stands.
      */
     readonly phonePairing?: (live: boolean) => ReactNode;
-    /** One provider CLI's live sign-in, and its install where this machine does that. */
-    readonly providerCli?: (cliId: string, target: "team" | "private" | undefined) => ReactNode;
+    /**
+     * One provider CLI's live sign-in, and its install where this machine does
+     * that. Live, its controls work; in an older message it only shows the CLI
+     * as it stands.
+     */
+    readonly providerCli?: (
+        cliId: string,
+        target: "team" | "private" | undefined,
+        live: boolean,
+    ) => ReactNode;
     /** The live default model for new chats. */
     readonly defaultModel?: ReactNode;
     /**
@@ -268,7 +276,7 @@ function ChatActionFigureView(props: {
                     data-figure="provider-cli"
                     data-happy-desktop-ui="chat-action-provider-cli"
                 >
-                    {props.figures?.providerCli?.(figure.cliId, figure.target)}
+                    {props.figures?.providerCli?.(figure.cliId, figure.target, props.live)}
                 </div>
             );
         case "setting":
