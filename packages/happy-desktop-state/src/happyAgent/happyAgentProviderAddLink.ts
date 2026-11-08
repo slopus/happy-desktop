@@ -38,7 +38,13 @@ export function happyAgentProviderAddLinkParse(
     const vendor = params.get("vendor");
     let flow = FLOWS[path];
     if (path === "providers/add/api-key") {
-        if (vendor !== "openai" && vendor !== "anthropic") return undefined;
+        if (
+            vendor !== "openai" &&
+            vendor !== "anthropic" &&
+            vendor !== "grok" &&
+            vendor !== "bedrock"
+        )
+            return undefined;
         flow = { kind: "apiKey", vendor };
     } else if (vendor !== null) return undefined;
     if (!flow || keys.some((key) => key !== "to" && key !== "vendor")) return undefined;
