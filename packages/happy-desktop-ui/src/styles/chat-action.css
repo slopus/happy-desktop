@@ -227,7 +227,7 @@
      provider CLI  24 head · 4 · 40 line (two lines at most) · 8 · 36 controls = 112
      setting       24 head · 8 · 36 controls · 8 · 20 line                    =  96
      invite        24 head · 8 · 36 controls · 8 · 20 line                    =  96
-     members       24 head · 8 · 108 list (three 36 rows, then scrolling)     = 140
+     members       24 head · 8 · 72 list (two 36 rows, then scrolling)       = 104
      settings      24 head · 4 · 20 line · 8 · 36 controls                    =  92 */
 .happy-chat-action__figure {
     width: 560px;
@@ -251,7 +251,7 @@
 }
 
 .happy-chat-action__figure[data-figure="members"] {
-    height: 140px;
+    height: 104px;
 }
 
 .happy-chat-figure {
@@ -459,12 +459,14 @@
 }
 
 /* Everyone on the server, then the codes still waiting, in rows that line up
-   their marks with every other block's. Past three rows the list scrolls. */
+   their marks with every other block's. Past two rows the list scrolls in
+   place: a box that grew with its rows would move the menu under it whenever
+   someone joins or a code is made. */
 .happy-chat-figure__members {
     display: flex;
     flex: none;
     flex-direction: column;
-    height: 108px;
+    height: 72px;
     overflow-y: auto;
 }
 

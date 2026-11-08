@@ -389,7 +389,7 @@ const MEMBERS_STATES: readonly {
     {
         id: "C-338w",
         label: "Members, many",
-        detail: "past three rows the list scrolls in place",
+        detail: "past two rows the list scrolls in place",
         state: {
             ...MEMBERS_READY,
             summary: "4 people · 1 code waiting",
@@ -513,7 +513,7 @@ export function ChatActionFiguresPage() {
                         stage="surface"
                     >
                         <div style={column}>
-                            <DimensionRule label="560 wide · 140 fixed" />
+                            <DimensionRule label="560 wide · 104 fixed" />
                             <ChatActionBlock
                                 block={MEMBERS}
                                 figures={{
