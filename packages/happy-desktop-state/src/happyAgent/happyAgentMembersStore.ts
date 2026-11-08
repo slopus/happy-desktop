@@ -1,4 +1,6 @@
+import type { HappyAgentEvent } from "@slopus/happy-agent-client";
 import { createStore } from "zustand/vanilla";
+import type { HappyAgentSync } from "../happyAgentConnection/happyAgentSync.js";
 import { UserError } from "../types.js";
 import type { HappyCloudRequest } from "./happyAgentProviderCredentials.js";
 import { happyAgentUserError, referencesPreserve } from "./happyAgentSupport.js";
@@ -14,6 +16,12 @@ export interface HappyAgentMember {
     readonly roleId: string;
     /** When they joined, in milliseconds since the epoch. */
     readonly joinedAt: number;
+    /**
+     * Whether they have opened the server since joining with a code. Until
+     * they do, the server has no profile for them, and `name` is their
+     * account's.
+     */
+    readonly arrived: boolean;
     /** Whether this is the person reading. */
     readonly self: boolean;
     /** A role change or removal this window asked for and the server hasn't answered. */
@@ -66,10 +74,10 @@ export interface HappyAgentMembersSnapshot {
 }
 
 /**
- * Settings › Members on a Happy Cloud server: who is on it, their roles,
- * invites, and leaving or deleting the server. Members have no realtime
- * channel this client reads yet, so the list is re-read every few seconds
- * while the category is on screen and not at all otherwise.
+ * Who is on a team server, their roles and invites, and leaving or deleting
+ * the server: Settings › Members, and the members and invite figures a reply
+ * holds. While anything shows it, the list is read again whenever the server
+ * says a member, an invite or a profile changed, and not at all otherwise.
  */
 export interface HappyAgentMembersStore {
     get(): HappyAgentMembersSnapshot;
@@ -91,13 +99,26 @@ export interface HappyAgentMembersStoreDeps {
     readonly serverName: string;
     /** The server's own routes, over the connection's transport. */
     readonly request: HappyCloudRequest;
+    /** The connection's events, which say when members or invites change. */
+    readonly sync: HappyAgentSync;
     /** The reader's user ID on this server, which picks them out of the list. */
     readonly selfUserId: () => Promise<string | null>;
     /** Drops the server from this window once the reader no longer belongs to it. */
     readonly serverForget: () => Promise<void>;
 }
 
-const MEMBERS_POLL_INTERVAL_MS = 4_000;
+/**
+ * What changes the list. Nobody is announced when they join with a code: the
+ * server learns at their first request, which makes their profile, so a
+ * profile change reads both the members and the invites again.
+ */
+const MEMBERS_EVENTS: readonly HappyAgentEvent["type"][] = [
+    "member.updated",
+    "member.removed",
+    "invite.created",
+    "invite.removed",
+    "profile.updated",
+];
 const NO_INVITES: readonly HappyAgentInvite[] = [];
 
 interface MembersRead {
@@ -157,7 +178,9 @@ export function happyAgentMembersStoreCreate(
     let selfUserId: Promise<string | null> | undefined;
     let disposed = false;
     let reading = false;
-    let timer: ReturnType<typeof setTimeout> | undefined;
+    /** A change the server announced while a read was already on its way. */
+    let readAgain = false;
+    let follower: AbortController | undefined;
 
     const publish = (): void => {
         if (!last) return;
@@ -172,6 +195,7 @@ export function happyAgentMembersStoreCreate(
                     name: member.name,
                     roleId: member.roleId,
                     joinedAt: member.joinedAt,
+                    arrived: member.userId !== null,
                     self: read.selfUserId !== null && member.userId === read.selfUserId,
                     saving: saving.has(member.id),
                 }),
@@ -238,46 +262,67 @@ export function happyAgentMembersStoreCreate(
         };
     };
 
-    const timerCancel = (): void => {
-        if (timer === undefined) return;
-        clearTimeout(timer);
-        timer = undefined;
-    };
-
-    const schedule = (): void => {
-        if (disposed || listeners.size === 0 || timer !== undefined) return;
-        timer = setTimeout(() => {
-            timer = undefined;
-            load();
-        }, MEMBERS_POLL_INTERVAL_MS);
-    };
-
     function load(): void {
-        if (disposed || listeners.size === 0 || reading) return;
-        timerCancel();
+        if (disposed || listeners.size === 0) return;
+        if (reading) {
+            readAgain = true;
+            return;
+        }
         reading = true;
+        readAgain = false;
+        const settle = (): void => {
+            reading = false;
+            if (readAgain) load();
+        };
         void fetchAll().then(
             (read) => {
-                reading = false;
-                if (disposed) return;
-                last = read;
-                publish();
-                schedule();
+                if (!disposed) {
+                    last = read;
+                    publish();
+                }
+                settle();
             },
             (error: unknown) => {
-                reading = false;
-                if (disposed) return;
                 // A failed refresh keeps what was read; only the first read shows the error.
-                if (store.getState().loading)
+                if (!disposed && store.getState().loading)
                     store.setState({ loading: false, error: happyAgentUserError(error) }, false);
-                schedule();
+                settle();
             },
         );
     }
 
-    const reread = (): void => {
-        timerCancel();
+    const reread = load;
+
+    /** Reads the list, then again each time the server says it changed, until nothing shows it. */
+    const follow = (): void => {
+        if (follower || disposed) return;
+        const active = new AbortController();
+        follower = active;
+        void (async () => {
+            for await (const input of deps.sync.follow({
+                signal: active.signal,
+                events: MEMBERS_EVENTS,
+            })) {
+                if (input.kind === "error") continue;
+                if (
+                    input.kind === "bootstrap" ||
+                    input.kind === "reconcile" ||
+                    input.update.kind === "event" ||
+                    input.update.kind === "connected"
+                )
+                    load();
+            }
+        })()
+            .catch(() => undefined)
+            .finally(() => {
+                if (follower === active) follower = undefined;
+            });
         load();
+    };
+
+    const followStop = (): void => {
+        follower?.abort();
+        follower = undefined;
     };
 
     /** Marks one member or invite as changing until the server answers. */
@@ -309,14 +354,14 @@ export function happyAgentMembersStoreCreate(
             if (disposed) return () => undefined;
             listeners.add(listener);
             const unsubscribe = store.subscribe(listener);
-            if (listeners.size === 1) load();
+            if (listeners.size === 1) follow();
             let released = false;
             return () => {
                 if (released) return;
                 released = true;
                 unsubscribe();
                 listeners.delete(listener);
-                if (listeners.size === 0) timerCancel();
+                if (listeners.size === 0) followStop();
             };
         },
         memberRoleUpdate(memberId, roleId) {
@@ -403,7 +448,7 @@ export function happyAgentMembersStoreCreate(
         },
         [Symbol.dispose]() {
             disposed = true;
-            timerCancel();
+            followStop();
             listeners.clear();
         },
     };

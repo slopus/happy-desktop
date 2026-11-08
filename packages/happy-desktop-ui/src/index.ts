@@ -590,9 +590,14 @@ export {
 } from "./ChatActionBlock";
 export {
     ChatDefaultModelFigure,
+    ChatInviteFigure,
+    ChatMembersFigure,
     ChatProviderCliFigure,
     ChatSettingsFigure,
     type ChatDefaultModelFigureProps,
+    type ChatInviteFigureProps,
+    type ChatMembersFigureProps,
+    type ChatMembersFigureRow,
     type ChatProviderCliFigureProps,
     type ChatSettingsFigureType,
 } from "./ChatActionFigures";

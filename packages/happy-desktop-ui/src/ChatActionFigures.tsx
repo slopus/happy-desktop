@@ -417,10 +417,251 @@ function duplicateNamed(
     return seen > 1;
 }
 
-/** The team figures a reply may hold, each drawn as the way into one Settings page. */
+export interface ChatInviteFigureProps {
+    /** The role the reply suggested, picked until the reader picks another. */
+    readonly role?: string;
+    /** True until the server's roles are read. */
+    readonly loading: boolean;
+    readonly roles: readonly { readonly id: string; readonly name: string }[];
+    /** Whether the reader may invite people to this server. */
+    readonly manage: boolean;
+    /** Whether the reader is an owner, who alone may invite another owner. */
+    readonly owner: boolean;
+    readonly creating: boolean;
+    /** The code just made, shown here this once, and what it lets someone do, worded. */
+    readonly created?: { readonly code: string; readonly detail: string };
+    /** Why the server could not be read, or refused the last invite. */
+    readonly error?: string;
+    /** Makes a code for the role. Absent in an older message, which only shows how things stand. */
+    onCreate?: (roleId: string) => void;
+    /** Puts the code away, to make another. */
+    onCreatedDismiss?: () => void;
+    /** Freezes the spinner on one frame, for the Blueprint. */
+    readonly spinnerFrame?: number;
+}
+
+/**
+ * A team server's invite, in the reply that asks for one: pick a role, make a
+ * code, copy it. The code is the server's answer to this window alone; it is
+ * drawn only here, while the figure stands, and never written into the chat.
+ *
+ *   24 head · 8 · 36 controls · 8 · 20 line = 96
+ */
+export function ChatInviteFigure(props: ChatInviteFigureProps) {
+    const [picked, setPicked] = useState<string | undefined>(undefined);
+    const offered = props.roles.filter((role) => role.id !== "owner" || props.owner);
+    const roleId =
+        [picked, props.role, "member"].find(
+            (candidate) => candidate !== undefined && offered.some((role) => role.id === candidate),
+        ) ??
+        offered[0]?.id ??
+        "";
+    const roleName = offered.find((role) => role.id === roleId)?.name ?? roleId;
+    const usable = props.onCreate !== undefined && props.manage && !props.loading;
+    const created = props.created;
+    const line = props.error
+        ? props.error
+        : props.loading
+          ? "Reading this server's roles…"
+          : !props.manage
+            ? "Only owners and admins invite people here."
+            : created
+              ? created.detail
+              : `Anyone with the code joins as ${roleName}, until it expires.`;
+    return (
+        <div
+            className="happy-chat-figure happy-chat-figure--invite"
+            data-happy-desktop-ui="chat-figure-invite"
+        >
+            <div className="happy-chat-figure__head">
+                <span className="happy-chat-figure__name">Invite teammates</span>
+            </div>
+            <div className="happy-chat-figure__controls">
+                {created ? (
+                    <>
+                        <span className="happy-chat-figure__invite-code">{created.code}</span>
+                        <CopyButton caption="Copy" label="Copy invite code" text={created.code} />
+                        {props.onCreatedDismiss ? (
+                            <Button
+                                onClick={props.onCreatedDismiss}
+                                size="medium"
+                                variant="outline"
+                            >
+                                Make another
+                            </Button>
+                        ) : null}
+                    </>
+                ) : props.manage ? (
+                    <>
+                        <Select
+                            aria-label="Role for the invite"
+                            disabled={!usable || props.creating}
+                            onValueChange={setPicked}
+                            options={offered.map((role) => ({ value: role.id, label: role.name }))}
+                            placeholder={props.loading ? "Loading…" : "No roles"}
+                            size="medium"
+                            value={roleId}
+                            width={160}
+                        />
+                        <Button
+                            disabled={!usable || roleId === ""}
+                            loading={props.creating}
+                            onClick={() => props.onCreate?.(roleId)}
+                            size="medium"
+                            variant="outline"
+                        >
+                            Create invite code
+                        </Button>
+                    </>
+                ) : null}
+            </div>
+            <div
+                className="happy-chat-figure__line"
+                data-error={props.error ? "" : undefined}
+                role="status"
+            >
+                <span className="happy-chat-figure__mark">
+                    {props.error ? (
+                        <Ionicon name="alert-circle" size={16} />
+                    ) : props.loading ? (
+                        <Spinner
+                            size={16}
+                            {...(props.spinnerFrame === undefined
+                                ? {}
+                                : { frame: props.spinnerFrame })}
+                        />
+                    ) : (
+                        <Ionicon name="information-circle-outline" size={16} />
+                    )}
+                </span>
+                <span className="happy-chat-figure__text">{line}</span>
+            </div>
+        </div>
+    );
+}
+
+/** One row of the members figure: someone on the server, or a code still waiting. */
+export interface ChatMembersFigureRow {
+    /** A member's account, or an invite's ID; what revoking an invite names. */
+    readonly id: string;
+    readonly kind: "member" | "invite";
+    /** Their name, or what the code is. */
+    readonly name: string;
+    readonly role: string;
+    /** Joined, not here yet, or waiting, already worded. */
+    readonly status: string;
+    /** Someone who has not opened the server yet, or a code nobody has used. */
+    readonly pending: boolean;
+    /** A revoke this window asked for and the server hasn't answered. */
+    readonly saving: boolean;
+}
+
+export interface ChatMembersFigureProps {
+    readonly loading: boolean;
+    readonly error?: string;
+    /** Who is on the server, then the codes still waiting. */
+    readonly rows: readonly ChatMembersFigureRow[];
+    /** How many people, and how many codes wait, worded. */
+    readonly summary: string;
+    /** Revokes a waiting code. Absent for someone who may not, and in an older message. */
+    onInviteRevoke?: (inviteId: string) => void;
+    readonly spinnerFrame?: number;
+}
+
+/**
+ * A team server's people, in the reply that shows them: everyone who joined,
+ * and the codes still waiting for someone. Three rows show; more scroll in
+ * place, so the box never grows.
+ *
+ *   24 head · 8 · 108 list (three 36 rows) = 140
+ */
+export function ChatMembersFigure(props: ChatMembersFigureProps) {
+    const empty = props.error ?? (props.loading ? "Reading who is on this server…" : undefined);
+    return (
+        <div
+            className="happy-chat-figure happy-chat-figure--members"
+            data-happy-desktop-ui="chat-figure-members"
+        >
+            <div className="happy-chat-figure__head">
+                <span className="happy-chat-figure__name">Members</span>
+                {empty === undefined ? (
+                    <span className="happy-chat-figure__vendor">{props.summary}</span>
+                ) : null}
+            </div>
+            {empty !== undefined ? (
+                <div
+                    className="happy-chat-figure__line"
+                    data-error={props.error ? "" : undefined}
+                    role="status"
+                >
+                    <span className="happy-chat-figure__mark">
+                        {props.error ? (
+                            <Ionicon name="alert-circle" size={16} />
+                        ) : (
+                            <Spinner
+                                size={16}
+                                {...(props.spinnerFrame === undefined
+                                    ? {}
+                                    : { frame: props.spinnerFrame })}
+                            />
+                        )}
+                    </span>
+                    <span className="happy-chat-figure__text">{empty}</span>
+                </div>
+            ) : (
+                <div className="happy-chat-figure__members" role="list">
+                    {props.rows.map((row) => (
+                        <div
+                            className="happy-chat-figure__member"
+                            data-happy-desktop-ui="chat-figure-member"
+                            data-kind={row.kind}
+                            data-pending={row.pending ? "" : undefined}
+                            key={`${row.kind}:${row.id}`}
+                            role="listitem"
+                        >
+                            <span className="happy-chat-figure__mark">
+                                <Ionicon
+                                    name={
+                                        row.kind === "invite"
+                                            ? "mail-outline"
+                                            : row.pending
+                                              ? "time-outline"
+                                              : "person-circle-outline"
+                                    }
+                                    size={16}
+                                />
+                            </span>
+                            <span className="happy-chat-figure__member-name">{row.name}</span>
+                            <span className="happy-chat-figure__member-role">{row.role}</span>
+                            <span className="happy-chat-figure__member-status">{row.status}</span>
+                            {/* Where codes can be revoked, every row keeps the
+                                column, so the statuses end on one edge. */}
+                            {props.onInviteRevoke ? (
+                                <span className="happy-chat-figure__member-action">
+                                    {row.kind === "invite" ? (
+                                        <Button
+                                            disabled={row.saving}
+                                            onClick={() => props.onInviteRevoke?.(row.id)}
+                                            size="small"
+                                            variant="ghost"
+                                        >
+                                            Revoke
+                                        </Button>
+                                    ) : null}
+                                </span>
+                            ) : null}
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+}
+
+/** The team figures a reply may hold that are drawn as the way into one Settings page. */
 export type ChatSettingsFigureType = Extract<
     ChatFigure["type"],
-    "invite" | "members" | "providers" | "computeJoin" | "serverLink"
+    "providers" | "computeJoin" | "serverLink"
 >;
 
 /** Each team figure's Settings page, and what its way in says. */
@@ -428,18 +669,6 @@ export const CHAT_SETTINGS_FIGURES: ReadonlyMap<
     ChatSettingsFigureType,
     { readonly page: string; readonly title: string; readonly detail: string }
 > = new Map([
-    [
-        "invite",
-        {
-            page: "members",
-            title: "Invite teammates",
-            detail: "Owners and admins create invite codes in Members.",
-        },
-    ],
-    [
-        "members",
-        { page: "members", title: "Members", detail: "Everyone on this server, and their roles." },
-    ],
     [
         "providers",
         {

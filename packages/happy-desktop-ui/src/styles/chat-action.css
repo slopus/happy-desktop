@@ -9,7 +9,8 @@
  *   steps      rows of a 16px mark + label (+ muted detail), 8px apart
  *   status     one row: a 16px mark + muted text
  *   tree       the app's file tree, every folder open
- *   figure     one fixed box per figure, whatever state it draws
+ *   figure     one fixed box per figure, whatever state it draws, flat on
+ *              the chat like everything else in a reply
  *
  * Every row's mark sits in a 20px-wide slot so labels line up across blocks.
  * Nothing changes size when a choice is made, so the height the transcript
@@ -19,12 +20,21 @@
     display: flex;
     box-sizing: border-box;
     min-width: 0;
-    margin: 0;
     padding: 0;
     color: var(--text);
     font-family: var(--happy-font-ui);
     font-size: 16px;
     line-height: 24px;
+}
+
+/* In a reply, a block keeps 16px from the text or block on either side, twice
+   the paragraphs' 8px, so a figure, its menu and the words around them read as
+   separate steps. The reply body is a Markdown flow whose blocks stack by top
+   margin, so the gap follows that flow's own rule rather than a flex gap.
+   `CHAT_ACTION_BLOCK_GAP` gives the row-height model the same 16px. */
+.happy-message__body--markdown > * + .happy-chat-action,
+.happy-message__body--markdown > .happy-chat-action + * {
+    margin-top: 16px;
 }
 
 /* A row of buttons starts on the text column: the first button's border lines
@@ -160,9 +170,42 @@
     max-width: 420px;
 }
 
-/* The codes that download the phone app, side by side. */
+/* The codes that download the phone app, side by side, each over the name of
+   the store it leads to. 32px apart, so each code keeps its quiet zone clear. */
 .happy-chat-action__phone {
-    gap: 16px;
+    gap: 32px;
+}
+
+.happy-chat-action__store {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+}
+
+.happy-chat-action__store-name {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-secondary);
+    font-size: 14px;
+    line-height: 20px;
+}
+
+/* Nothing in a reply is raised: a code sits flat on the chat, with no tile,
+   padding, corner or shadow. It keeps only its own paper, the symbol's quiet
+   zone, which a light chat does not show and a dark one needs for a camera to
+   read it. The place a pairing code holds while it is on its way is empty. */
+.happy-chat-action .happy-qr-code {
+    padding: 0;
+    border-radius: 0;
+    box-shadow: none;
+}
+
+.happy-chat-action .happy-mobile-pairing__placeholder {
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
 }
 
 /* The live pairing: one box for the code, the emoji and the result alike,
@@ -183,6 +226,8 @@
 
      provider CLI  24 head · 4 · 40 line (two lines at most) · 8 · 36 controls = 112
      setting       24 head · 8 · 36 controls · 8 · 20 line                    =  96
+     invite        24 head · 8 · 36 controls · 8 · 20 line                    =  96
+     members       24 head · 8 · 108 list (three 36 rows, then scrolling)     = 140
      settings      24 head · 4 · 20 line · 8 · 36 controls                    =  92 */
 .happy-chat-action__figure {
     width: 560px;
@@ -199,6 +244,14 @@
 
 .happy-chat-action__figure[data-figure="settings"] {
     height: 92px;
+}
+
+.happy-chat-action__figure[data-figure="invite"] {
+    height: 96px;
+}
+
+.happy-chat-action__figure[data-figure="members"] {
+    height: 140px;
 }
 
 .happy-chat-figure {
@@ -264,6 +317,20 @@
     margin-top: 4px;
 }
 
+.happy-chat-figure--invite .happy-chat-figure__line {
+    height: 20px;
+    margin-top: 8px;
+}
+
+/* The head, then the list or the line that stands in for it, 8px apart. */
+.happy-chat-figure--members {
+    gap: 8px;
+}
+
+.happy-chat-figure--members .happy-chat-figure__line {
+    height: 20px;
+}
+
 .happy-chat-figure__line[data-error],
 .happy-chat-figure__line[data-error] .happy-chat-figure__mark,
 .happy-chat-figure__line[data-state="failed"] .happy-chat-figure__mark {
@@ -299,7 +366,9 @@
 }
 
 .happy-chat-figure--setting .happy-chat-figure__text,
-.happy-chat-figure--settings .happy-chat-figure__text {
+.happy-chat-figure--settings .happy-chat-figure__text,
+.happy-chat-figure--invite .happy-chat-figure__text,
+.happy-chat-figure--members .happy-chat-figure__text {
     -webkit-line-clamp: 1;
     line-clamp: 1;
 }
@@ -366,8 +435,82 @@
 }
 
 .happy-chat-figure--setting .happy-chat-figure__controls,
-.happy-chat-figure--settings .happy-chat-figure__controls {
+.happy-chat-figure--settings .happy-chat-figure__controls,
+.happy-chat-figure--invite .happy-chat-figure__controls {
     margin-top: 8px;
+}
+
+/* The code an invite just made, read aloud or typed by a teammate: the
+   reply's size in the mono face, spaced so its characters stay apart. */
+.happy-chat-figure__invite-code {
+    min-width: 0;
+    overflow: hidden;
+    font-family: var(--happy-font-mono);
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-chat-figure__controls > .happy-copy-button {
+    flex: none;
+    opacity: 1;
+}
+
+/* Everyone on the server, then the codes still waiting, in rows that line up
+   their marks with every other block's. Past three rows the list scrolls. */
+.happy-chat-figure__members {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    height: 108px;
+    overflow-y: auto;
+}
+
+.happy-chat-figure__member {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 8px;
+    height: 36px;
+    min-width: 0;
+    font-size: 14px;
+    line-height: 20px;
+}
+
+.happy-chat-figure__member-name {
+    min-width: 0;
+    overflow: hidden;
+    font-weight: 500;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-chat-figure__member-role,
+.happy-chat-figure__member-status {
+    flex: none;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+.happy-chat-figure__member-status {
+    margin-left: auto;
+}
+
+.happy-chat-figure__member-action {
+    display: flex;
+    flex: none;
+    justify-content: flex-end;
+    width: 64px;
+}
+
+.happy-chat-figure__member[data-pending] .happy-chat-figure__member-name {
+    color: var(--text-secondary);
+}
+
+.happy-chat-figure__member > .happy-chat-figure__mark {
+    color: var(--text-secondary);
 }
 
 .happy-chat-figure__code {

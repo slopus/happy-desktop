@@ -95,7 +95,7 @@ const TREE = blockOf(`<ul data-tree>
 </ul>`);
 
 const PHONE_APP = blockOf(`<figure data-phone-app></figure>`);
-const INVITE = blockOf(`<figure data-invite data-role="member"></figure>`);
+const TEAM_PROVIDERS = blockOf(`<figure data-providers data-scope="team"></figure>`);
 const SERVER_LINK = blockOf(`<figure data-server-link></figure>`);
 
 /* The settings pages a team window has; opening one is the reader's own navigation. */
@@ -223,7 +223,7 @@ export function ChatActionBlockPage() {
                     </div>
                 </Specimen>
                 <Specimen
-                    detail="download codes need nothing live · a team figure is the way into its Settings page, disabled where this window has none"
+                    detail="download codes need nothing live, flat on the chat · a team figure without a live view is the way into its Settings page, disabled where this window has none"
                     label="Figures"
                     number="C-330h"
                     stage="surface"
@@ -231,7 +231,7 @@ export function ChatActionBlockPage() {
                     <MessageSettingsLinksContext.Provider value={SETTINGS_LINKS}>
                         <div style={column}>
                             <ChatActionBlock block={PHONE_APP} />
-                            <ChatActionBlock block={INVITE} />
+                            <ChatActionBlock block={TEAM_PROVIDERS} />
                             <ChatActionBlock block={SERVER_LINK} />
                             <ChatActionBlock
                                 block={blockOf(`<figure data-compute-join></figure>`)}

@@ -65,7 +65,6 @@ import {
     happyAgentProviderAddLinkParse,
     type HappyAgentCloudProvidersStore,
     happyAgentMembersStoreNoop,
-    type HappyAgentMembersSnapshot,
     type HappyAgentCredentialImportSnapshot,
     happyAgentSecretsStoreNoop,
     happyAgentVoiceSettingsStoreNoop,
@@ -126,6 +125,12 @@ import {
     HappyCloudWebSettings,
 } from "happy-desktop-ui";
 import { HappyAgentVersionProvider } from "../HappyAgentVersionProvider";
+import {
+    membersExpiresText,
+    membersJoinedText,
+    membersRoleName,
+    membersUsesText,
+} from "../membersWords";
 import { AppRepositoriesSettings } from "./AppRepositoriesSettings";
 import { happyAgentSettingsCategoryAvailable } from "../happyAgentSettingsCategoryAvailable";
 import {
@@ -1620,24 +1625,23 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                             ? {
                                   inviteCreated: {
                                       code: members.inviteCreated.code,
-                                      roleName: roleNameOf(members, members.inviteCreated.roleId),
-                                      expires: expiresText(members.inviteCreated.expiresAt),
+                                      roleName: membersRoleName(
+                                          members,
+                                          members.inviteCreated.roleId,
+                                      ),
+                                      expires: membersExpiresText(members.inviteCreated.expiresAt),
                                   },
                               }
                             : {})}
                         invites={members.invites.map((invite) => ({
                             id: invite.id,
-                            roleName: roleNameOf(members, invite.roleId),
+                            roleName: membersRoleName(members, invite.roleId),
                             expires: [
-                                ...(invite.uses === 0
-                                    ? []
-                                    : [
-                                          invite.uses === 1
-                                              ? "Used once"
-                                              : `Used ${String(invite.uses)} times`,
-                                      ]),
-                                expiresText(invite.expiresAt),
-                            ].join(" · "),
+                                membersUsesText(invite.uses),
+                                membersExpiresText(invite.expiresAt),
+                            ]
+                                .filter((part) => part !== undefined)
+                                .join(" · "),
                             saving: invite.saving,
                         }))}
                         loading={members.loading}
@@ -1647,10 +1651,7 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                             ...(member.userId === null ? {} : { userId: member.userId }),
                             name: member.name ?? "Someone who hasn't signed in yet",
                             roleId: member.roleId,
-                            joined: `Joined ${new Date(member.joinedAt).toLocaleDateString([], {
-                                month: "short",
-                                day: "numeric",
-                            })}`,
+                            joined: membersJoinedText(member.joinedAt),
                             self: member.self,
                             saving: member.saving,
                         }))}
@@ -2509,14 +2510,3 @@ function providerTypeName(provider: HappyAgentProviderEntry): { typeName?: strin
 }
 
 /** A role's name, or its ID when the team's roles don't list it. */
-function roleNameOf(members: HappyAgentMembersSnapshot, roleId: string): string {
-    return members.roles.find((role) => role.id === roleId)?.name ?? roleId;
-}
-
-/** "Expires in 3 days", "Expires in 5 hours" or "Expires soon". */
-function expiresText(expiresAt: number): string {
-    const hours = Math.floor((expiresAt - Date.now()) / 3_600_000);
-    if (hours >= 48) return `Expires in ${String(Math.floor(hours / 24))} days`;
-    if (hours >= 2) return `Expires in ${String(hours)} hours`;
-    return "Expires soon";
-}

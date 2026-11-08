@@ -4,17 +4,27 @@ import {
     type HappyAgentChatOnboardingStore,
     type HappyAgentClockStore,
     type HappyAgentDefaultModelStore,
+    type HappyAgentMembersStore,
     type HappyAgentMobileConnectorStore,
     type HappyAgentProviderClisStore,
     type HappyAgentProviderCliTarget,
 } from "happy-desktop-state";
 import {
     ChatDefaultModelFigure,
+    ChatInviteFigure,
+    ChatMembersFigure,
     ChatProviderCliFigure,
     ChatSettingsFigure,
     MobileDirectPairingPanel,
     type ChatActionFigures,
+    type ChatMembersFigureRow,
 } from "happy-desktop-ui";
+import {
+    membersExpiresText,
+    membersJoinedText,
+    membersRoleName,
+    membersUsesText,
+} from "../membersWords";
 
 /**
  * What the conversations on the open Happy Agent add to what they draw: the
@@ -39,12 +49,15 @@ export type HappyAgentConversationExtrasSource = {
     readonly providerClis?: () => HappyAgentProviderClisStore;
     readonly defaultModel?: () => HappyAgentDefaultModelStore;
     readonly mobileConnector?: () => HappyAgentMobileConnectorStore;
+    /** A team server's members and invites; undefined anywhere else. */
+    readonly members?: () => HappyAgentMembersStore | undefined;
     readonly clock: HappyAgentClockStore;
 };
 
 /**
- * One connection's extras. A team server's own figures — invite, members,
- * compute, the phone's server link — are drawn as ways into its Settings.
+ * One connection's extras. A team server's invite and members are drawn live
+ * from its members store; its other figures — providers, compute, the phone's
+ * server link — are drawn as ways into its Settings.
  */
 export function happyAgentConversationExtras(
     source: HappyAgentConversationExtrasSource | undefined,
@@ -54,6 +67,7 @@ export function happyAgentConversationExtras(
     const providerClis = source.providerClis?.();
     const defaultModel = source.defaultModel?.();
     const phone = source.mobileConnector?.();
+    const members = options.teamServer ? source.members?.() : undefined;
     const clock = source.clock;
     return {
         chatOnboarding: source.chatOnboarding ?? happyAgentChatOnboardingStoreNoop,
@@ -84,6 +98,16 @@ export function happyAgentConversationExtras(
                 : {}),
             ...(defaultModel
                 ? { defaultModel: <HappyAgentChatDefaultModel store={defaultModel} /> }
+                : {}),
+            ...(members
+                ? {
+                      invite: (role: string | undefined, live: boolean) => (
+                          <HappyAgentChatInvite live={live} role={role} store={members} />
+                      ),
+                      members: (live: boolean) => (
+                          <HappyAgentChatMembers live={live} store={members} />
+                      ),
+                  }
                 : {}),
             ...(options.teamServer ? { teamSettings: true as const } : {}),
         },
@@ -180,4 +204,106 @@ function HappyAgentChatProviderCli(props: {
 function HappyAgentChatDefaultModel(props: { readonly store: HappyAgentDefaultModelStore }) {
     const state = useSyncExternalStore(props.store.subscribe, props.store.get, props.store.get);
     return <ChatDefaultModelFigure onChange={props.store.defaultModelUpdate} state={state} />;
+}
+
+/**
+ * A team server's invite where a reply asks for one: a role, and a code made
+ * for it. The code is the server's answer to this window alone, kept only in
+ * the members store and drawn only here; nothing writes it into the chat.
+ */
+function HappyAgentChatInvite(props: {
+    readonly store: HappyAgentMembersStore;
+    readonly role: string | undefined;
+    readonly live: boolean;
+}) {
+    const members = useSyncExternalStore(props.store.subscribe, props.store.get, props.store.get);
+    const store = props.store;
+    // Only the reply the conversation stands on shows the code: an older one
+    // asking for an invite never repeats it.
+    const created = props.live ? members.inviteCreated : undefined;
+    return (
+        <ChatInviteFigure
+            creating={members.inviteCreating}
+            {...(created
+                ? {
+                      created: {
+                          code: created.code,
+                          detail: [
+                              `Joins ${members.serverName} as ${membersRoleName(members, created.roleId)}`,
+                              membersExpiresText(created.expiresAt),
+                              "Shown only here",
+                          ].join(" · "),
+                      },
+                  }
+                : {})}
+            {...((members.error ?? members.saveError)
+                ? { error: (members.error ?? members.saveError)!.message }
+                : {})}
+            loading={members.loading}
+            manage={members.manage}
+            {...(props.live
+                ? { onCreate: store.inviteCreate, onCreatedDismiss: store.inviteCreatedDismiss }
+                : {})}
+            owner={members.roleId === "owner"}
+            {...(props.role ? { role: props.role } : {})}
+            roles={members.roles}
+        />
+    );
+}
+
+/**
+ * A team server's people where a reply shows them: everyone who joined, then
+ * the codes still waiting. Live, someone who manages members may revoke a code.
+ */
+function HappyAgentChatMembers(props: {
+    readonly store: HappyAgentMembersStore;
+    readonly live: boolean;
+}) {
+    const members = useSyncExternalStore(props.store.subscribe, props.store.get, props.store.get);
+    const store = props.store;
+    const rows: ChatMembersFigureRow[] = [
+        ...members.members.map(
+            (member): ChatMembersFigureRow => ({
+                id: member.id,
+                kind: "member",
+                name: `${member.name ?? "Someone new"}${member.self ? " (you)" : ""}`,
+                role: membersRoleName(members, member.roleId),
+                status: member.arrived
+                    ? membersJoinedText(member.joinedAt)
+                    : `Hasn't opened ${members.serverName} yet`,
+                pending: !member.arrived,
+                saving: member.saving,
+            }),
+        ),
+        ...members.invites.map(
+            (invite): ChatMembersFigureRow => ({
+                id: invite.id,
+                kind: "invite",
+                name: "Invite code",
+                role: membersRoleName(members, invite.roleId),
+                status: [
+                    membersUsesText(invite.uses) ?? "Waiting",
+                    membersExpiresText(invite.expiresAt),
+                ].join(" · "),
+                pending: invite.uses === 0,
+                saving: invite.saving,
+            }),
+        ),
+    ];
+    const people = members.members.length;
+    const codes = members.invites.length;
+    return (
+        <ChatMembersFigure
+            {...(members.error ? { error: members.error.message } : {})}
+            loading={members.loading}
+            {...(props.live && members.manage ? { onInviteRevoke: store.inviteRevoke } : {})}
+            rows={rows}
+            summary={[
+                people === 1 ? "1 person" : `${String(people)} people`,
+                ...(codes === 0
+                    ? []
+                    : [codes === 1 ? "1 code waiting" : `${String(codes)} codes waiting`]),
+            ].join(" · ")}
+        />
+    );
 }

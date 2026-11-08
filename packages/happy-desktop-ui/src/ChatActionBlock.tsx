@@ -95,9 +95,19 @@ export type ChatActionFigures = {
     /** The live default model for new chats. */
     readonly defaultModel?: ReactNode;
     /**
-     * A team server's own figures — invite, members, providers, compute, the
-     * phone's server link — drawn as the way into the Settings page that does
-     * each, which opens through the conversation's settings links.
+     * A team server's invite: a role, a code made for it, shown this once.
+     * Live, it makes codes; in an older message it only shows how things stand.
+     */
+    readonly invite?: (role: string | undefined, live: boolean) => ReactNode;
+    /**
+     * A team server's members, and the codes still waiting for someone. Live,
+     * a waiting code can be revoked; in an older message it only shows them.
+     */
+    readonly members?: (live: boolean) => ReactNode;
+    /**
+     * A team server's other figures — providers, compute, the phone's server
+     * link — drawn as the way into the Settings page that does each, which
+     * opens through the conversation's settings links.
      */
     readonly teamSettings?: true;
 };
@@ -110,6 +120,8 @@ export function chatActionFigureTypes(
     if (figures?.phonePairing !== undefined) types.add("phonePair");
     if (figures?.providerCli !== undefined) types.add("providerCli");
     if (figures?.defaultModel !== undefined) types.add("setting");
+    if (figures?.invite !== undefined) types.add("invite");
+    if (figures?.members !== undefined) types.add("members");
     if (figures?.teamSettings === true)
         for (const type of CHAT_SETTINGS_FIGURES.keys()) types.add(type);
     return types;
@@ -228,6 +240,12 @@ function pressOf(
     return () => onInvoke({ controlIndex, choice, action, label: button.label, values: [] });
 }
 
+/** The stores the phone app comes from, each code captioned with where it leads. */
+const PHONE_STORES = [
+    { name: "App Store", icon: "logo-apple-appstore", url: HAPPY_MOBILE_STORE_URLS.ios },
+    { name: "Google Play", icon: "logo-google-playstore", url: HAPPY_MOBILE_STORE_URLS.android },
+] as const;
+
 /**
  * One fixed box per figure, whatever state it draws, so the height the
  * transcript reserved for it holds from missing to signed in, or from a code
@@ -246,18 +264,15 @@ function ChatActionFigureView(props: {
                     className="happy-chat-action happy-chat-action__phone"
                     data-happy-desktop-ui="chat-action-phone-app"
                 >
-                    <QRCode
-                        data={HAPPY_MOBILE_STORE_URLS.ios}
-                        label="iPhone"
-                        mark="app-store"
-                        size={120}
-                    />
-                    <QRCode
-                        data={HAPPY_MOBILE_STORE_URLS.android}
-                        label="Android"
-                        mark="google-play"
-                        size={120}
-                    />
+                    {PHONE_STORES.map((store) => (
+                        <div className="happy-chat-action__store" key={store.name}>
+                            <QRCode data={store.url} label={`Happy on ${store.name}`} size={120} />
+                            <span className="happy-chat-action__store-name">
+                                <Ionicon name={store.icon} size={16} />
+                                {store.name}
+                            </span>
+                        </div>
+                    ))}
                 </div>
             );
         case "phonePair":
@@ -290,7 +305,25 @@ function ChatActionFigureView(props: {
                 </div>
             );
         case "invite":
+            return (
+                <div
+                    className="happy-chat-action happy-chat-action__figure"
+                    data-figure="invite"
+                    data-happy-desktop-ui="chat-action-invite"
+                >
+                    {props.figures?.invite?.(figure.role, props.live)}
+                </div>
+            );
         case "members":
+            return (
+                <div
+                    className="happy-chat-action happy-chat-action__figure"
+                    data-figure="members"
+                    data-happy-desktop-ui="chat-action-members"
+                >
+                    {props.figures?.members?.(props.live)}
+                </div>
+            );
         case "providers":
         case "computeJoin":
         case "serverLink":
@@ -674,6 +707,14 @@ const measured = new WeakMap<ChatActionBlockModel, Map<string, number>>();
  * The markup laid out is React's own rendering of the typed block, with every
  * string escaped as text; the agent's HTML never reaches the document.
  */
+/**
+ * The space between an action block and the reply's text or block beside it:
+ * twice the paragraphs' own, so a figure, its menu and the words around them
+ * read as separate steps. `chat-action.css` draws it; the row-height model
+ * adds it.
+ */
+export const CHAT_ACTION_BLOCK_GAP = 16;
+
 export function chatActionBlockHeight(block: ChatActionBlockModel, width: number): number {
     if (typeof document === "undefined") return 0;
     const key = `${String(width)}|${String(messageTextLayoutFontGenerationGet())}`;
