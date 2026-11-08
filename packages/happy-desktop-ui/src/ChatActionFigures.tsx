@@ -643,7 +643,7 @@ export function ChatMembersFigure(props: ChatMembersFigureProps) {
                                             disabled={row.saving}
                                             onClick={() => props.onInviteRevoke?.(row.id)}
                                             size="small"
-                                            variant="ghost"
+                                            variant="outline"
                                         >
                                             Revoke
                                         </Button>

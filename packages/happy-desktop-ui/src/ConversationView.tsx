@@ -219,7 +219,11 @@ export type ConversationViewProps = {
      * lands on that line without anything above it moving.
      */
     leadingHeader?: ConversationLeadingHeader;
-    /** Agent identity shown when a tool/activity row opens a turn before prose exists. */
+    /**
+     * How the conversation's own agent is shown: on its messages, which carry
+     * this identity's ID, and when a tool/activity row opens a turn before
+     * prose exists.
+     */
     agentAuthor?: ConversationAuthor;
     /** Identity id of the reader, so their own messages take the own treatment. */
     viewerId?: string;
@@ -1294,6 +1298,9 @@ export function ConversationView(props: ConversationViewProps) {
                                         : { streamingCaret: props.streamingCaret })}
                                     {...(entry.kind === "message" && entry.contextNote !== undefined
                                         ? { contextNote: entry.contextNote }
+                                        : {})}
+                                    {...(props.agentAuthor
+                                        ? { agentAuthor: props.agentAuthor }
                                         : {})}
                                     activityAuthor={
                                         props.agentAuthor &&
