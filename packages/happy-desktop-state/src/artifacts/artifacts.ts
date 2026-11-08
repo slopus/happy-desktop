@@ -5,7 +5,7 @@ import type { HappyAgentArtifactSiteOpening } from "../happyAgent/happyAgentHost
 import type { HappyAgentSessionId } from "../happyAgent/happyAgentTypes.js";
 import { happyAgentUserError } from "../happyAgent/happyAgentSupport.js";
 import { UserError } from "../types.js";
-import type { HappyAgentArtifactId } from "./artifactTypes.js";
+import type { HappyAgentArtifactId, HappyAgentArtifactLive } from "./artifactTypes.js";
 import {
     happyAgentArtifactCatalogStoreCreate,
     type HappyAgentArtifactCatalogStore,
@@ -69,7 +69,23 @@ export interface HappyAgentArtifacts {
      * resolves with its id. Rejects with a displayable `UserError`.
      */
     artifactCreate(agentId: HappyAgentSessionId): Promise<HappyAgentArtifactId>;
+    /**
+     * Reads whether an artifact is a live page, and the address it shows: the
+     * numbered version's when `version` names one, else the latest's. Resolves
+     * `undefined` for an artifact that is not live, is deleted, or cannot be
+     * read; it never rejects, so opening falls back to the viewer.
+     */
+    liveRead(
+        artifactId: HappyAgentArtifactId,
+        version?: number,
+    ): Promise<HappyAgentArtifactLiveTarget | undefined>;
     [Symbol.dispose](): void;
+}
+
+/** A live artifact as a browser tab opens it: its address, and the title it is known by. */
+export interface HappyAgentArtifactLiveTarget {
+    readonly title: string;
+    readonly live: HappyAgentArtifactLive;
 }
 
 export interface HappyAgentArtifactsDeps {
@@ -193,6 +209,24 @@ export function happyAgentArtifactsCreate(deps: HappyAgentArtifactsDeps): HappyA
         },
         people() {
             return peopleOf().store;
+        },
+        async liveRead(artifactId, version) {
+            if (disposed) return undefined;
+            try {
+                const { artifact } = await deps.client.getArtifact(artifactId);
+                if (artifact.status === "deleted") return undefined;
+                const live =
+                    version === undefined || version === artifact.latestVersion
+                        ? artifact.live
+                        : (await deps.client.getArtifactVersion(artifactId, version)).version.live;
+                if (!live) return undefined;
+                return {
+                    title: artifact.title,
+                    live: { url: live.url, networkId: live.networkId },
+                };
+            } catch {
+                return undefined;
+            }
         },
         async artifactCreate(agentId) {
             if (disposed) throw new UserError("This Happy Agent is no longer connected.");

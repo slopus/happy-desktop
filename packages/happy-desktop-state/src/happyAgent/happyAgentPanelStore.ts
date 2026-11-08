@@ -2,7 +2,7 @@ import type {
     HappyAgentTerminalHandle,
     HappyAgentTerminalStore,
 } from "./happyAgentTerminalStore.js";
-import type { HappyAgentArtifactId } from "../artifacts/artifactTypes.js";
+import type { HappyAgentArtifactId, HappyAgentArtifactLive } from "../artifacts/artifactTypes.js";
 import type {
     HappyAgentBrowserNetworkId,
     HappyAgentGroupId,
@@ -64,6 +64,13 @@ export type HappyAgentPanelTabSnapshot =
           readonly networkId?: HappyAgentBrowserNetworkId;
           /** Last committed main-frame location, restored if the surface remounts. */
           readonly url: string;
+          /**
+           * The live artifact this page is. Its traffic leaves only through
+           * that artifact's own restricted proxy, on the network the artifact
+           * was made on (`networkId`), in a browser profile of the artifact's
+           * own, never the workspace browser's.
+           */
+          readonly artifactId?: HappyAgentArtifactId;
       })
     | (HappyAgentPanelTabSnapshotBase & {
           readonly kind: "chat";
@@ -307,6 +314,17 @@ export interface HappyAgentPanelStore {
      * is bound once; a tab already bound keeps its network.
      */
     browserNetworkBind(tabId: HappyAgentPanelTabId, networkId: HappyAgentBrowserNetworkId): void;
+    /**
+     * Shows a live artifact's page in a browser tab of the open group bound to
+     * that artifact, selecting the tab already showing it rather than adding
+     * another, and opens the panel. The tab's agent is the open conversation's,
+     * so without one nothing is shown and this returns `false`.
+     */
+    artifactBrowserOpen(
+        artifactId: HappyAgentArtifactId,
+        live: HappyAgentArtifactLive,
+        label: string,
+    ): boolean;
     /** Reconciles Chromium-owned location/title metadata into one browser tab. */
     browserUpdate(tabId: HappyAgentPanelTabId, update: HappyAgentBrowserUpdate): void;
     tabSelect(tabId: HappyAgentPanelTabId): void;
@@ -410,7 +428,8 @@ function tabSame(
             before.url === next.url &&
             before.workspaceId === next.workspaceId &&
             before.agentId === next.agentId &&
-            before.networkId === next.networkId
+            before.networkId === next.networkId &&
+            before.artifactId === next.artifactId
         );
     if (before.kind === "artifact")
         return (
@@ -513,6 +532,9 @@ export function happyAgentPanelStoreCreate(deps: HappyAgentPanelDeps): HappyAgen
                               workspaceId: tab.groupId,
                               agentId: tab.agentId,
                               ...(tab.networkId === undefined ? {} : { networkId: tab.networkId }),
+                              ...(tab.artifactId === undefined
+                                  ? {}
+                                  : { artifactId: tab.artifactId }),
                           },
                       ]
                     : [],
@@ -532,6 +554,9 @@ export function happyAgentPanelStoreCreate(deps: HappyAgentPanelDeps): HappyAgen
                                   ...(tab.networkId === undefined
                                       ? {}
                                       : { networkId: tab.networkId }),
+                                  ...(tab.artifactId === undefined
+                                      ? {}
+                                      : { artifactId: tab.artifactId }),
                               },
                           ];
                 if (tab.kind === "chat" && tab.agentId !== undefined)
@@ -656,6 +681,7 @@ export function happyAgentPanelStoreCreate(deps: HappyAgentPanelDeps): HappyAgen
                 agentId,
                 networkId,
                 placement: tab.placement,
+                ...(tab.artifactId === undefined ? {} : { artifactId: tab.artifactId }),
             })),
             active: activeIndex >= 0 ? { type: "browser", index: activeIndex } : { type: "files" },
             ...(recentByGroup.get(group)?.length ? { recent: recentByGroup.get(group) } : {}),
@@ -686,6 +712,7 @@ export function happyAgentPanelStoreCreate(deps: HappyAgentPanelDeps): HappyAgen
         network: HappyAgentBrowserNetworkId | undefined,
         candidate?: string,
         label?: string,
+        artifactId?: HappyAgentArtifactId,
     ): boolean => {
         const url = candidate === undefined ? "about:blank" : browserUrl(candidate);
         if (!url) return false;
@@ -698,6 +725,7 @@ export function happyAgentPanelStoreCreate(deps: HappyAgentPanelDeps): HappyAgen
             groupId: group,
             agentId: agent,
             ...(network === undefined ? {} : { networkId: network }),
+            ...(artifactId === undefined ? {} : { artifactId }),
             placement: "panel",
             url,
         });
@@ -718,7 +746,14 @@ export function happyAgentPanelStoreCreate(deps: HappyAgentPanelDeps): HappyAgen
         if (!memory) return;
         if (memory.recent?.length) recentByGroup.set(group, memory.recent);
         for (const browser of memory.browsers) {
-            browserTabAdd(group, browser.agentId, browser.networkId, browser.url, browser.label);
+            browserTabAdd(
+                group,
+                browser.agentId,
+                browser.networkId,
+                browser.url,
+                browser.label,
+                browser.artifactId,
+            );
             // A page left in the main content comes back to the main content.
             // Where it was being read is part of how the group was arranged.
             const added = tabs.at(-1);
@@ -1078,6 +1113,27 @@ export function happyAgentPanelStoreCreate(deps: HappyAgentPanelDeps): HappyAgen
             chromeByGroup.set(group, { open: true });
             remember(group);
         },
+        artifactBrowserOpen(artifactId, live, label) {
+            if (disposed || !groupId || !conversationId) return false;
+            const agent = conversationId;
+            const url = browserUrl(live.url);
+            if (!url) return false;
+            readerTabShow(
+                (tab) => tab.kind === "browser" && tab.artifactId === artifactId,
+                (id, group) => ({
+                    id,
+                    kind: "browser",
+                    label: label.trim().slice(0, 80) || browserLabel(url),
+                    groupId: group,
+                    agentId: agent,
+                    networkId: live.networkId as HappyAgentBrowserNetworkId,
+                    artifactId,
+                    placement: "panel",
+                    url,
+                }),
+            );
+            return true;
+        },
         browserNetworkBind(tabId, network) {
             if (disposed) return;
             const tab = tabs.find(
@@ -1101,7 +1157,9 @@ export function happyAgentPanelStoreCreate(deps: HappyAgentPanelDeps): HappyAgen
             }
             if (update.title !== undefined) tab.title = update.title.trim() || undefined;
             tab.label = tab.title ? tab.title.slice(0, 80) : browserLabel(tab.url ?? "about:blank");
-            if (tab.url !== undefined && tab.url !== "about:blank")
+            // A live artifact's page is reached only through its own proxy, so
+            // it is never offered again as a page of the workspace's browser.
+            if (tab.artifactId === undefined && tab.url !== undefined && tab.url !== "about:blank")
                 recentRemember(tab.groupId, tab.url, tab.label);
             remember(tab.groupId);
             recompute();

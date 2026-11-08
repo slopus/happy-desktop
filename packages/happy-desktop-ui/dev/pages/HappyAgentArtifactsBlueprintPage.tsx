@@ -981,6 +981,21 @@ export function HappyAgentArtifactsBlueprintPage() {
             </FullScreenSpecimen>
 
             <FullScreenSpecimen
+                detail="The same tab toolbar in a wide pane: it spans the pane at a tab toolbar's small inset rather than standing on the content column, since what it heads is the whole page."
+                label="Viewer · side panel, wide"
+                screen="31-panel-wide-1100x760"
+                window={{ width: 1100, height: 760 }}
+                number="31"
+            >
+                <HappyAgentArtifactViewer
+                    {...panelViewerHandlers}
+                    labels={labels}
+                    tab
+                    viewer={landingViewer}
+                />
+            </FullScreenSpecimen>
+
+            <FullScreenSpecimen
                 detail="The slot paints nothing of its own: a page that declares the light and dark schemes and names no colours reads on the surface around it, in either appearance."
                 label="Viewer · web page, on the surface"
                 screen="19-html-plain-1100x760"
@@ -1079,7 +1094,7 @@ export function HappyAgentArtifactsBlueprintPage() {
             </Specimen>
 
             <FullScreenSpecimen
-                detail="A live artifact is its recorded address, drawn by the host's browser on the network the artifact was made on and in a profile of its own — here an inert stand-in. Its placeholder file is never shown or listed."
+                detail="On the Artifacts page, a live artifact is its recorded address, drawn by the host's browser on the network the artifact was made on and in a profile of its own — here an inert stand-in — across the whole pane under a header at a header's own inset. Its placeholder file is never shown or listed. Open in tab moves it into a browser tab beside the conversation."
                 label="Viewer · live page"
                 screen="27-live-1100x760"
                 window={{ width: 1100, height: 760 }}
@@ -1088,7 +1103,25 @@ export function HappyAgentArtifactsBlueprintPage() {
                 <HappyAgentArtifactViewer
                     {...viewerHandlers}
                     labels={labels}
+                    onLiveOpen={noop}
                     renderLive={() => <LivePageStandIn />}
+                    viewer={devServerViewer}
+                />
+            </FullScreenSpecimen>
+
+            <FullScreenSpecimen
+                detail="A live artifact pinned at an older version, beside a chat: the tab's slim toolbar spans the panel at a tab toolbar's small inset, and Open in tab moves the page into a browser tab of its own, with the browser's toolbar."
+                label="Viewer · live page, side panel"
+                screen="30-live-panel-560x760"
+                window={{ width: 560, height: 760 }}
+                number="30"
+            >
+                <HappyAgentArtifactViewer
+                    {...panelViewerHandlers}
+                    labels={labels}
+                    onLiveOpen={noop}
+                    renderLive={() => <LivePageStandIn />}
+                    tab
                     viewer={devServerViewer}
                 />
             </FullScreenSpecimen>

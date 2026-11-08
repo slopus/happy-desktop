@@ -31,20 +31,17 @@
 /* ---- Header band -------------------------------------------------------
    The band itself is the shared PanelHeader, so its height, inset, and drag
    contract are a chat header's. These rules only lay out what it carries:
-   the title and its subtitle on one baseline, then the trailing controls,
-   standing on the content column's edges. Back docks 4px nearer the column's
-   edge than a title, as an edge control does in any header. */
+   the title and its subtitle on one baseline, then the trailing controls.
+   The catalog's stands on the content column its list is read down. The
+   viewer's spans the whole pane at a header's own inset, since what it heads
+   — a page, a picture, an app — is the whole pane; only a document is read
+   down the column, under it. */
 
-.happy-agent-artifacts__header,
-.happy-panel-header.happy-agent-artifact-viewer__header {
+.happy-agent-artifacts__header {
     padding-inline: var(--happy-content-inline);
 }
 
-.happy-panel-header.happy-agent-artifact-viewer__header[data-edge-control] {
-    padding-inline: calc(var(--happy-content-inline) - 4px);
-}
-
-/* Under a tab strip: a slim toolbar 4px and 8px short of the column's gutter,
+/* Under a tab strip: a slim toolbar at a tab toolbar's own small edge inset,
    with the smaller title a tab's content carries. */
 .happy-agent-artifact-header--compact {
     display: flex;
@@ -54,7 +51,7 @@
     box-sizing: border-box;
     width: 100%;
     height: 36px;
-    padding: 0 calc(var(--happy-content-inline) - 8px) 0 calc(var(--happy-content-inline) - 4px);
+    padding: 0 8px 0 12px;
 }
 
 .happy-agent-artifact-header--compact .happy-agent-artifact-header__title {

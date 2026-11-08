@@ -3,6 +3,7 @@ import type { HappyAgentTerminalHandle } from "./happyAgentTerminalStore.js";
 import { happyAgentPanelStoreCreate, type HappyAgentPanelStore } from "./happyAgentPanelStore.js";
 import type { HappyAgentGroupId, HappyAgentSessionId } from "./happyAgentTypes.js";
 import type { HappyAgentPanelMemory } from "./happyAgentWorkspaceMemory.js";
+import type { HappyAgentArtifactId } from "../artifacts/artifactTypes.js";
 
 const GROUP_A = "grp_a" as HappyAgentGroupId;
 const GROUP_B = "grp_b" as HappyAgentGroupId;
@@ -121,4 +122,52 @@ it("closes the pane with its last tab and brings Files back", () => {
     store.panelToggle();
     store.filesClose();
     expect(store.get()).toMatchObject({ open: false, filesViewOpen: true });
+});
+
+it("opens a live artifact as a browser tab bound to it, and selects that tab again", () => {
+    const memory = new Map<HappyAgentGroupId, HappyAgentPanelMemory>();
+    const { store } = panelCreate(memory);
+    const artifactId = "art_live" as HappyAgentArtifactId;
+    const live = { url: "http://localhost:5173/", networkId: "net_agent" };
+    expect(store.artifactBrowserOpen(artifactId, live, "Playground")).toBe(true);
+    const tab = store.get().tabs[0]!;
+    expect(store.get().tabs).toEqual([
+        {
+            id: tab.id,
+            kind: "browser",
+            label: "Playground",
+            placement: "panel",
+            url: "http://localhost:5173/",
+            workspaceId: GROUP_A,
+            agentId: AGENT,
+            networkId: "net_agent",
+            artifactId,
+        },
+    ]);
+    expect(store.get().open).toBe(true);
+    expect(store.get().activeViewId).toBe(tab.id);
+
+    // Opened again, the tab already showing it comes forward; no second one.
+    store.filesSelect();
+    expect(store.artifactBrowserOpen(artifactId, live, "Playground")).toBe(true);
+    expect(store.get().tabs).toHaveLength(1);
+    expect(store.get().activeViewId).toBe(tab.id);
+
+    // It stays bound to the artifact across a restart, and its pages are never
+    // offered again as pages of the workspace's own browser.
+    store.browserUpdate(tab.id, { url: "http://localhost:5173/world", title: "World model" });
+    expect(store.get().browserRecent).toEqual([]);
+    expect(panelCreate(memory).store.get().tabs).toMatchObject([
+        { kind: "browser", artifactId, networkId: "net_agent", url: "http://localhost:5173/world" },
+    ]);
+});
+
+it("opens no artifact tab without a conversation to hold it", () => {
+    const store = happyAgentPanelStoreCreate({
+        terminalOpen: () => ({}) as unknown as HappyAgentTerminalHandle,
+    });
+    store.scopeApply(GROUP_A, undefined);
+    const live = { url: "http://localhost:5173/", networkId: "net_agent" };
+    expect(store.artifactBrowserOpen("art_live" as HappyAgentArtifactId, live, "Page")).toBe(false);
+    expect(store.get().tabs).toEqual([]);
 });

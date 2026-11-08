@@ -87,6 +87,7 @@ it("reads the latest version's cover, summary, and background", async () => {
         },
         summary: "Revenue up 18% QoQ.\n\nEnterprise seats led.",
         background: "#16171c",
+        live: null,
     });
 });
 

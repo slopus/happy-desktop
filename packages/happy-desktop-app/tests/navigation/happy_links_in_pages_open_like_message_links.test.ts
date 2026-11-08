@@ -46,6 +46,13 @@ function windowWith() {
         bots: [],
         tasks: [],
     };
+    // A page that is not live, already read: its link opens the panel's viewer.
+    const titles = new Map([
+        [
+            "art_one",
+            { type: "ready", title: "One", status: "active", latestVersion: 2, live: null },
+        ],
+    ]);
     const workspace = {
         get: () => ({ list, groupResume: new Map([["prj_one", "ses_one"]]) }),
         fileLinkOpen: (link: unknown, kind: unknown) => files.push({ link, kind }),
@@ -60,7 +67,7 @@ function windowWith() {
                 {
                     id: "local",
                     instanceId: "aaaaaaaaaaaaaaaaaaaaaaaa",
-                    session: { workspace, artifacts: {} },
+                    session: { workspace, artifacts: { titles: () => ({ get: () => titles }) } },
                 },
             ],
         }),

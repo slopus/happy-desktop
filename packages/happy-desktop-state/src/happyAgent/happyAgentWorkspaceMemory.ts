@@ -1,3 +1,4 @@
+import type { HappyAgentArtifactId } from "../artifacts/artifactTypes.js";
 import type { HappyAgentFileTabKind } from "./happyAgentWorkspaceStore.js";
 import type {
     HappyAgentBrowserNetworkId,
@@ -48,6 +49,8 @@ export interface HappyAgentPanelBrowserMemory {
      * written down was.
      */
     readonly placement?: HappyAgentViewPlacement;
+    /** The live artifact the page is, which it is reached through; absent for a workspace page. */
+    readonly artifactId?: HappyAgentArtifactId;
 }
 
 /**
@@ -321,6 +324,9 @@ function panelParse(value: unknown): HappyAgentPanelMemory | undefined {
             label: typeof browser.label === "string" ? browser.label : browser.url,
             agentId: browser.agentId as HappyAgentSessionId,
             networkId: browser.networkId as HappyAgentBrowserNetworkId,
+            ...(typeof browser.artifactId === "string" && browser.artifactId.length > 0
+                ? { artifactId: browser.artifactId as HappyAgentArtifactId }
+                : {}),
         });
     }
     const active: HappyAgentPanelViewMemory =

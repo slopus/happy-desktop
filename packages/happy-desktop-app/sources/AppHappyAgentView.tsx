@@ -33,6 +33,7 @@ import {
     type HappyShareLinkRole,
 } from "happy-desktop-state";
 import { AppGptLivePhone } from "./gptLive/AppGptLivePhone";
+import { artifactBesideOpen } from "./artifactOpen";
 import {
     artifactLiveRendererCreate,
     conversationInlinePagesCreate,
@@ -54,6 +55,7 @@ import type {
     HappyAgentArtifactCatalogStore,
     HappyAgentArtifactChatContext,
     HappyAgentArtifactId,
+    HappyAgentArtifactLive,
     HappyAgentArtifactPlaces,
     HappyAgentArtifacts,
     HappyAgentArtifactTitlesSnapshot,
@@ -3601,6 +3603,50 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
     };
     const happyAgentOf = (happyAgentId: string) =>
         directory.happyAgents.find((happyAgent) => happyAgent.id === happyAgentId);
+    /**
+     * Opens a live artifact's page from the Artifacts page as a browser tab
+     * beside the conversation the reader is in, and shows that conversation.
+     * Absent with no conversation to sit beside.
+     */
+    const artifactLiveTabOpen = ((): ArtifactLiveTabOpen | undefined => {
+        const session = active?.session;
+        const address = session?.workspace.get().address;
+        const groupId = address?.groupId;
+        const conversationId = address?.conversationId;
+        if (!session || !active || groupId === undefined || conversationId === undefined)
+            return undefined;
+        return (artifactId, live, title) => {
+            if (session.workspace.panel.artifactBrowserOpen(artifactId, live, title))
+                props.onChatSelect(active.id, groupId, conversationId);
+        };
+    })();
+    /**
+     * Opens an artifact named outside a conversation: the command palette, the
+     * sidebar, the feed, the artifacts list. A live artifact is a web page, so
+     * it opens as a browser tab beside the conversation the reader is in, and
+     * the window shows that conversation. Anything else, or a live artifact
+     * with no conversation to sit beside, opens the artifact's own page.
+     */
+    const artifactOpen = props.onArtifactOpen
+        ? (happyAgentId: string, artifactId: string): void => {
+              const pageOpen = () => props.onArtifactOpen!(happyAgentId, artifactId);
+              const session = happyAgentOf(happyAgentId)?.session;
+              const address = session?.workspace.get().address;
+              const groupId = address?.groupId;
+              const conversationId = address?.conversationId;
+              if (!session?.artifacts || groupId === undefined || conversationId === undefined) {
+                  pageOpen();
+                  return;
+              }
+              artifactBesideOpen({
+                  artifacts: session.artifacts,
+                  panel: session.workspace.panel,
+                  artifactId: artifactId as HappyAgentArtifactId,
+                  otherwise: pageOpen,
+                  liveOpened: () => props.onChatSelect(happyAgentId, groupId, conversationId),
+              });
+          }
+        : undefined;
     // The pinned row carries a live count, so the window subscribes to the
     // addressed Happy Agent's inbox whether or not the inbox itself is open: the point of
     // the count is to be seen while the reader is doing something else.
@@ -3706,8 +3752,8 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
         const target = surface.target;
         if (target?.state !== "available") return false;
         if (target.kind === "artifact") {
-            if (props.onArtifactOpen === undefined) return false;
-            props.onArtifactOpen(happyAgent.id, target.id);
+            if (artifactOpen === undefined) return false;
+            artifactOpen(happyAgent.id, target.id);
             return true;
         }
         const place =
@@ -4589,7 +4635,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
         onUpdateApply: props.onUpdateApply,
         onTaskCreateOpen: props.onTaskCreateOpen,
         onSurfaceOpen: props.onSurfaceOpen,
-        onArtifactOpen: props.onArtifactOpen,
+        ...(artifactOpen ? { onArtifactOpen: artifactOpen } : {}),
         ...(props.onSurfaceOpen && active?.session?.surfaces
             ? {
                   onVaultItemOpen: (happyAgentId: string, surfaceId: string, itemId: string) => {
@@ -4673,6 +4719,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                 <>
                     <HappyAgentArtifactsSurface
                         artifacts={artifacts}
+                        {...(artifactLiveTabOpen ? { onLiveOpen: artifactLiveTabOpen } : {})}
                         {...(props.browserContent
                             ? {
                                   artifactLive: artifactLiveRendererCreate(
@@ -4725,7 +4772,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                     onSubjectOpen={(subject) => {
                         switch (subject.type) {
                             case "artifact":
-                                props.onArtifactOpen?.(active.id, subject.id);
+                                artifactOpen?.(active.id, subject.id);
                                 return;
                             case "surface":
                                 props.onSurfaceOpen?.(active.id, subject.id);
@@ -4926,7 +4973,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                               artifacts: active.session.artifacts,
                               ...(props.artifactPage ? { artifactPage: props.artifactPage } : {}),
                               onArtifactOpen: (artifactId: string) =>
-                                  props.onArtifactOpen?.(active.id, artifactId),
+                                  artifactOpen?.(active.id, artifactId),
                           }
                         : {})}
                 />
@@ -5929,6 +5976,8 @@ function HappyAgentArtifactsSurface(props: {
     artifactPage?: HtmlPreviewRenderer;
     /** Shows a live artifact's page, where the host has a browser for it. */
     artifactLive?: ArtifactLiveRenderer;
+    /** Opens a live artifact's page as a browser tab beside the conversation the reader is in. */
+    onLiveOpen?: ArtifactLiveTabOpen;
     artifactId?: HappyAgentArtifactId;
     /** The instance this machine's health named, which a link naming an instance must match. */
     instanceId?: string;
@@ -5967,6 +6016,7 @@ function HappyAgentArtifactsSurface(props: {
                               artifactId={props.artifactId}
                               {...(props.artifactPage ? { artifactPage: props.artifactPage } : {})}
                               {...(props.artifactLive ? { artifactLive: props.artifactLive } : {})}
+                              {...(props.onLiveOpen ? { onLiveOpen: props.onLiveOpen } : {})}
                               artifacts={props.artifacts}
                               {...(props.instanceId === undefined
                                   ? {}
@@ -6022,6 +6072,7 @@ function HappyAgentArtifactViewerSurface(props: {
     artifacts: HappyAgentArtifacts;
     artifactPage?: HtmlPreviewRenderer;
     artifactLive?: ArtifactLiveRenderer;
+    onLiveOpen?: ArtifactLiveTabOpen;
     artifactId: HappyAgentArtifactId;
     labels: HappyAgentArtifactLabels;
     /** The instance this machine's health named, which a link naming an instance must match. */
@@ -6076,6 +6127,15 @@ function HappyAgentArtifactViewerSurface(props: {
             onVersionsLoadMore={store.versionsNextLoad}
             {...(props.artifactPage ? { renderPage: props.artifactPage } : {})}
             {...(props.artifactLive ? { renderLive: props.artifactLive } : {})}
+            {...(props.onLiveOpen && viewer.artifact.type === "ready"
+                ? {
+                      onLiveOpen: (live: HappyAgentArtifactLive) => {
+                          const artifact = viewer.artifact;
+                          if (artifact.type === "ready")
+                              props.onLiveOpen!(artifact.value.id, live, artifact.value.title);
+                      },
+                  }
+                : {})}
             {...(surfaces.availability === "available"
                 ? {
                       surface: {
@@ -6725,6 +6785,7 @@ function HappyAgentArtifactPanelViewerSurface(props: {
     entities?: MessageReferences;
     artifactPage?: HtmlPreviewRenderer;
     artifactLive?: ArtifactLiveRenderer;
+    onLiveOpen?: ArtifactLiveTabOpen;
     places: HappyAgentArtifactPlaces;
     view: HappyAgentPanelArtifactView;
 }) {
@@ -6756,6 +6817,15 @@ function HappyAgentArtifactPanelViewerSurface(props: {
             onVersionsLoadMore={store.versionsNextLoad}
             {...(props.artifactPage ? { renderPage: props.artifactPage } : {})}
             {...(props.artifactLive ? { renderLive: props.artifactLive } : {})}
+            {...(props.onLiveOpen && viewer.artifact.type === "ready"
+                ? {
+                      onLiveOpen: (live: HappyAgentArtifactLive) => {
+                          const artifact = viewer.artifact;
+                          if (artifact.type === "ready")
+                              props.onLiveOpen!(artifact.value.id, live, artifact.value.title);
+                      },
+                  }
+                : {})}
             tab
             viewer={viewer.artifactId === artifactId ? viewer : VIEWER_OPENING}
         />
@@ -6773,6 +6843,7 @@ function HappyAgentArtifactTabSurface(props: {
     entities?: MessageReferences;
     artifactPage?: HtmlPreviewRenderer;
     artifactLive?: ArtifactLiveRenderer;
+    onLiveOpen?: ArtifactLiveTabOpen;
     places: HappyAgentArtifactPlaces;
     tab: Extract<HappyAgentPanelTabSnapshot, { kind: "artifact" }>;
 }) {
@@ -6804,11 +6875,27 @@ function HappyAgentArtifactTabSurface(props: {
             onVersionsLoadMore={store.versionsNextLoad}
             {...(props.artifactPage ? { renderPage: props.artifactPage } : {})}
             {...(props.artifactLive ? { renderLive: props.artifactLive } : {})}
+            {...(props.onLiveOpen && viewer.artifact.type === "ready"
+                ? {
+                      onLiveOpen: (live: HappyAgentArtifactLive) => {
+                          const artifact = viewer.artifact;
+                          if (artifact.type === "ready")
+                              props.onLiveOpen!(artifact.value.id, live, artifact.value.title);
+                      },
+                  }
+                : {})}
             tab
             viewer={viewer.artifactId === artifactId ? viewer : VIEWER_OPENING}
         />
     );
 }
+
+/** Opens a live artifact's page as a browser tab, bound to that artifact. */
+type ArtifactLiveTabOpen = (
+    artifactId: HappyAgentArtifactId,
+    live: HappyAgentArtifactLive,
+    title: string,
+) => void;
 
 /**
  * What the viewer shows in the one commit between an address naming an
@@ -7630,7 +7717,12 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
         ...(props.artifacts
             ? {
                   onArtifactOpen: (artifactId: HappyAgentArtifactId, version?: number) =>
-                      props.workspace.panel.artifactViewOpen(artifactId, version),
+                      artifactBesideOpen({
+                          artifacts: props.artifacts!,
+                          panel: props.workspace.panel,
+                          artifactId,
+                          ...(version === undefined ? {} : { version }),
+                      }),
               }
             : {}),
     });
@@ -8511,13 +8603,18 @@ function HappyAgentWorkspaceSurface(props: HappyAgentWorkspaceSurfaceProps) {
                                                 "changed",
                                             );
                                         props.workspace.panel.filesSelect();
-                                    } else if (id.startsWith(FLOATY_ARTIFACT_PREFIX))
-                                        props.workspace.panel.artifactViewOpen(
-                                            id.slice(
-                                                FLOATY_ARTIFACT_PREFIX.length,
-                                            ) as HappyAgentArtifactId,
-                                        );
-                                    else {
+                                    } else if (id.startsWith(FLOATY_ARTIFACT_PREFIX)) {
+                                        const artifactId = id.slice(
+                                            FLOATY_ARTIFACT_PREFIX.length,
+                                        ) as HappyAgentArtifactId;
+                                        if (props.artifacts)
+                                            artifactBesideOpen({
+                                                artifacts: props.artifacts,
+                                                panel: props.workspace.panel,
+                                                artifactId,
+                                            });
+                                        else props.workspace.panel.artifactViewOpen(artifactId);
+                                    } else {
                                         const agent = [
                                             ...floatyAgents.current,
                                             ...floatyAgents.history,
@@ -10102,7 +10199,12 @@ function HappyAgentConversationSurface(props: {
                   // A reference opens beside the conversation, the way a file
                   // the transcript names does, rather than leaving it.
                   onArtifactOpen: (artifactId: HappyAgentArtifactId, version?: number) =>
-                      workspace.panel.artifactViewOpen(artifactId, version),
+                      artifactBesideOpen({
+                          artifacts: props.artifacts!,
+                          panel: workspace.panel,
+                          artifactId,
+                          ...(version === undefined ? {} : { version }),
+                      }),
               }
             : {}),
     });
@@ -10121,7 +10223,14 @@ function HappyAgentConversationSurface(props: {
               workspaceId: props.groupId,
               agentId: conversation.conversationId,
               artifactOpen: (artifactId, version) =>
-                  workspace.panel.artifactViewOpen(artifactId, version),
+                  props.artifacts
+                      ? artifactBesideOpen({
+                            artifacts: props.artifacts,
+                            panel: workspace.panel,
+                            artifactId,
+                            ...(version === undefined ? {} : { version }),
+                        })
+                      : workspace.panel.artifactViewOpen(artifactId, version),
               pageOpen: (url) => workspace.panel.browserAdd(url),
               entities: references,
           })
@@ -11759,6 +11868,11 @@ function HappyAgentPanelBody(props: {
                         props.artifacts && props.panel.artifactView ? (
                             <HappyAgentArtifactPanelViewerSurface
                                 artifacts={props.artifacts.artifacts}
+                                onLiveOpen={(artifactId, live, title) => {
+                                    // The page takes the artifact tab's place.
+                                    if (props.store.artifactBrowserOpen(artifactId, live, title))
+                                        props.store.artifactViewClose();
+                                }}
                                 {...(props.browserContent
                                     ? {
                                           artifactLive: artifactLiveRendererCreate(
@@ -12008,39 +12122,57 @@ function HappyAgentToolBodies(props: {
                         renderContent={
                             props.browserContent
                                 ? (browserProps) =>
-                                      props.browserContent!({
-                                          ...browserProps,
-                                          retention: { id: tab.id, owner: props.store },
-                                          target: {
-                                              connectionId: props.browserConnectionId,
-                                              workspaceId: tab.workspaceId,
-                                              agentId: tab.agentId,
-                                              ...(tab.networkId === undefined
-                                                  ? {}
-                                                  : { networkId: tab.networkId }),
-                                          },
-                                          browserNetworkResolved: (networkId) =>
-                                              props.store.browserNetworkBind(
-                                                  tab.id,
-                                                  networkId as HappyAgentBrowserNetworkId,
-                                              ),
-                                          // A page's popup opens beside it, on
-                                          // its own agent and network.
-                                          browserPopupRequested: (url) => {
-                                              const networkId = props.store
-                                                  .get()
-                                                  .browserTabs.find(
-                                                      (browser) => browser.id === tab.id,
-                                                  )?.networkId;
-                                              if (networkId === undefined) return;
-                                              props.store.browserPopupAdd(
-                                                  url,
-                                                  tab.workspaceId,
-                                                  tab.agentId,
-                                                  networkId,
-                                              );
-                                          },
-                                      })
+                                      tab.artifactId !== undefined && tab.networkId !== undefined
+                                          ? // A live artifact's page: only its own
+                                            // restricted proxy, in its own profile,
+                                            // on the network it was made on. A page
+                                            // it opens is not given a workspace tab.
+                                            props.browserContent!({
+                                                ...browserProps,
+                                                retention: { id: tab.id, owner: props.store },
+                                                target: {
+                                                    connectionId: props.browserConnectionId,
+                                                    artifactId: tab.artifactId,
+                                                    networkId: tab.networkId,
+                                                    recovery: {
+                                                        workspaceId: tab.workspaceId,
+                                                        agentId: tab.agentId,
+                                                    },
+                                                },
+                                            })
+                                          : props.browserContent!({
+                                                ...browserProps,
+                                                retention: { id: tab.id, owner: props.store },
+                                                target: {
+                                                    connectionId: props.browserConnectionId,
+                                                    workspaceId: tab.workspaceId,
+                                                    agentId: tab.agentId,
+                                                    ...(tab.networkId === undefined
+                                                        ? {}
+                                                        : { networkId: tab.networkId }),
+                                                },
+                                                browserNetworkResolved: (networkId) =>
+                                                    props.store.browserNetworkBind(
+                                                        tab.id,
+                                                        networkId as HappyAgentBrowserNetworkId,
+                                                    ),
+                                                // A page's popup opens beside it, on
+                                                // its own agent and network.
+                                                browserPopupRequested: (url) => {
+                                                    const networkId = props.store
+                                                        .get()
+                                                        .browserTabs.find(
+                                                            (browser) => browser.id === tab.id,
+                                                        )?.networkId;
+                                                    if (networkId === undefined) return;
+                                                    props.store.browserPopupAdd(
+                                                        url,
+                                                        tab.workspaceId,
+                                                        tab.agentId,
+                                                        networkId,
+                                                    );
+                                                },
+                                            })
                                 : undefined
                         }
                     />
@@ -12049,6 +12181,11 @@ function HappyAgentToolBodies(props: {
                 props.artifacts ? (
                     <HappyAgentArtifactTabSurface
                         artifacts={props.artifacts.artifacts}
+                        onLiveOpen={(artifactId, live, title) => {
+                            // The page takes this tab's place, beside the chat.
+                            if (props.store.artifactBrowserOpen(artifactId, live, title))
+                                props.store.tabClose(active.id);
+                        }}
                         {...(props.browserContent
                             ? {
                                   artifactLive: artifactLiveRendererCreate(

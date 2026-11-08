@@ -17,6 +17,7 @@ import {
 import type {
     HappyAgentArtifactCover,
     HappyAgentArtifactId,
+    HappyAgentArtifactLive,
     HappyAgentArtifactType,
 } from "./artifactTypes.js";
 
@@ -39,6 +40,11 @@ export type HappyAgentArtifactTitle =
           readonly summary: string | null;
           /** The colour the latest version asks to be shown on, or `null` for none. */
           readonly background: string | null;
+          /**
+           * The address the latest version shows when the artifact is a live
+           * page, or `null`: opening it opens that page in a browser tab.
+           */
+          readonly live: HappyAgentArtifactLive | null;
       }
     /** No artifact has this id on this Happy Agent, or this reader cannot see it. */
     | { readonly type: "missing" };
@@ -171,6 +177,9 @@ export function happyAgentArtifactTitlesStoreCreate(
                     cover,
                     summary: happyAgentArtifactSummaryProject(artifact),
                     background: happyAgentArtifactBackground(artifact.background) ?? null,
+                    live: artifact.live
+                        ? { url: artifact.live.url, networkId: artifact.live.networkId }
+                        : null,
                 });
             })
             .catch(() => undefined)

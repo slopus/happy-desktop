@@ -9,6 +9,7 @@ import {
     type HappyAgentArtifactDeletion,
     type HappyAgentArtifactFileLink,
     type HappyAgentArtifactId,
+    type HappyAgentArtifactLive,
     type HappyAgentArtifactMarkdownView,
     type HappyAgentArtifactVersion,
     type HappyAgentArtifactViewerSnapshot,
@@ -94,6 +95,12 @@ export interface HappyAgentArtifactViewerProps {
      */
     renderLive?: ArtifactLiveRenderer;
     /**
+     * Opens the live page on screen as a browser tab bound to the artifact,
+     * where it has the browser's own toolbar. Absent where there is no tab
+     * to open it in.
+     */
+    onLiveOpen?: (live: HappyAgentArtifactLive) => void;
+    /**
      * Reads and opens the `happy://` links to Happy entities a Markdown
      * version carries, as a message's do. Absent, each reads as its label.
      */
@@ -174,6 +181,11 @@ export function HappyAgentArtifactViewer(props: HappyAgentArtifactViewerProps) {
         if (document.fullscreenElement === stage.current) fullScreenExit();
         else onBack?.();
     };
+    const live =
+        artifact?.status === "active" && viewer.content.type === "live"
+            ? viewer.content.live
+            : undefined;
+    const onLiveOpen = props.onLiveOpen;
     const back = props.onBack ? (
         <Button
             aria-label="Back"
@@ -216,6 +228,18 @@ export function HappyAgentArtifactViewer(props: HappyAgentArtifactViewerProps) {
                                         variant="ghost"
                                     >
                                         Full screen
+                                    </Button>
+                                ) : null}
+                                {live && onLiveOpen ? (
+                                    <Button
+                                        data-testid="happy-agent-artifact-live-open"
+                                        icon="open-external"
+                                        onClick={() => onLiveOpen(live)}
+                                        size="small"
+                                        title="Open this page in a browser tab"
+                                        variant="ghost"
+                                    >
+                                        Open in tab
                                     </Button>
                                 ) : null}
                                 {diffOffered ? (

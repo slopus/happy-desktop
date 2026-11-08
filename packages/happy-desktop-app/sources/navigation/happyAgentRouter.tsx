@@ -55,6 +55,7 @@ import {
     type LivePerformanceStore,
     type MediaWindowOpener,
 } from "happy-desktop-ui";
+import { artifactBesideOpen } from "../artifactOpen";
 import { messageReferenceEntities, messageReferenceSurfaceNames } from "../messageReferences";
 import {
     AppHappyAgentView,
@@ -1036,10 +1037,12 @@ export function happyAgentRouterHappyLinkOpen(
             // a step of its own, and Back returns to the page it was followed
             // from. The viewer's address names no version; it shows the latest.
             if (happyAgentRouterWorkspaceVisible(router))
-                session.workspace.panel.artifactViewOpen(
-                    reference.id as HappyAgentArtifactId,
-                    reference.version,
-                );
+                artifactBesideOpen({
+                    artifacts: session.artifacts,
+                    panel: session.workspace.panel,
+                    artifactId: reference.id as HappyAgentArtifactId,
+                    ...(reference.version === undefined ? {} : { version: reference.version }),
+                });
             else
                 void router.navigate({
                     params: { artifactId: reference.id, happyAgentId },
