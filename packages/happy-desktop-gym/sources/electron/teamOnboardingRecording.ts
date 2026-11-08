@@ -1,6 +1,6 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, join } from "node:path";
-import type { ElectronApplication, Page } from "playwright";
+import type { ElectronApplication, Locator, Page } from "playwright";
 
 import { happyAgentRuntimeCreate } from "./happyAgentRuntime.js";
 import {
@@ -103,21 +103,47 @@ export interface GymTeamOnboardingRecording {
 }
 
 /**
- * Records a team owner's first run against a team server: the desktop starts on
- * this machine's own Happy Agent, already set up, with the team server listed in
- * its roster. The persona signs in to the server, saves the profile the server
- * asks for, and takes the onboarding the server runs in a conversation.
+ * How the person reaches the team: a server already listed by its address, or
+ * Happy Cloud's Create a team or Join a team, from the welcome or from the
+ * rail's "+" once this machine is set up.
+ */
+export type GymTeamWay =
+    | {
+          readonly kind: "listed";
+          /** The team server, such as `http://127.0.0.1:39310/`. */
+          readonly serverUrl: string;
+          readonly serverName: string;
+      }
+    | {
+          readonly kind: "cloud";
+          readonly from: "welcome" | "rail";
+          readonly path: "create" | "join";
+          /** The team's name, without the "@". */
+          readonly team: string;
+          /** Joining only: the invite code, typed on the join page and nowhere else. */
+          readonly code?: string;
+          /**
+           * Where Happy Cloud lives for this run, handed to main as a development
+           * run's `HAPPY_CLOUD_ACCOUNTS_URL` and `HAPPY_CLOUD_SERVER_URL`.
+           */
+          readonly accountsUrl: string;
+          readonly serverUrlTemplate: string;
+      };
+
+/**
+ * Records a person's first run on a team: the desktop starts on this machine's
+ * own Happy Agent, already set up. They reach the team the way `way` says,
+ * sign in, save the profile the server asks for, and take the onboarding the
+ * server runs in a conversation.
  *
- * The server's sign-in page is a browser page on any real machine. Here the
- * gym catches the page main would open, signs in on it as the given account,
- * and hands main the `happy://oauth/callback` address the page redirects to, as
- * the system would. Nothing in main is replaced but the browser it opens.
+ * A sign-in page is a browser page on any real machine. Here the gym catches
+ * the page main would open, signs in on it as the given account, and hands
+ * main the `happy://oauth/callback` address the page redirects to, as the
+ * system would. Nothing in main is replaced but the browser it opens.
  */
 export async function gymTeamOnboardingRecord(options: {
     readonly out: string;
-    /** The team server, such as `http://127.0.0.1:39310/`. */
-    readonly serverUrl: string;
-    readonly serverName: string;
+    readonly way: GymTeamWay;
     readonly login: string;
     readonly password: string;
     readonly persona?: GymPersona;
@@ -156,8 +182,9 @@ export async function gymTeamOnboardingRecord(options: {
         screenshots.push(path);
     };
     try {
+        const way = options.way;
         await runtime.client.profileNameSet(persona.name);
-        await runtime.client.serverAdd(options.serverUrl, options.serverName);
+        if (way.kind === "listed") await runtime.client.serverAdd(way.serverUrl, way.serverName);
         const entrypoint = electronEntrypointResolve(paths.workspaceRoot);
         const app = await gymElectronLaunch({
             args: [`--user-data-dir=${paths.electronUserData}`, entrypoint.main],
@@ -166,6 +193,12 @@ export async function gymTeamOnboardingRecord(options: {
                 ...runtime.environment,
                 ...linuxDisplayEnvironment(),
                 HAPPY_DESKTOP_GYM_ELECTRON_USER_DATA: paths.electronUserData,
+                ...(way.kind === "cloud"
+                    ? {
+                          HAPPY_CLOUD_ACCOUNTS_URL: way.accountsUrl,
+                          HAPPY_CLOUD_SERVER_URL: way.serverUrlTemplate,
+                      }
+                    : {}),
             },
             executablePath: entrypoint.executable,
             timeout: 60_000,
@@ -188,31 +221,28 @@ export async function gymTeamOnboardingRecord(options: {
             try {
                 await driver.read(await welcome.innerText());
                 await shot(page, "welcome");
-                await driver.press(welcome.locator(".happy-welcome-screen__action").first());
-                // This machine is already set up, so the interface follows,
-                // with the team server in the rail, signed out.
-                const server = page.locator(
-                    `button.happy-connections__item[aria-label^="${options.serverName}"]`,
-                );
-                await server.waitFor({ state: "visible", timeout: 60_000 });
-                await driver.pause(1_500, 2_200);
-                await shot(page, "interface");
-                await driver.press(server);
-                const signIn = page.getByRole("button", { name: /^Sign in/u }).first();
-                await signIn.waitFor({ state: "visible", timeout: 60_000 });
-                await driver.pause(1_500, 2_200);
-                await shot(page, "signed-out");
-                await driver.press(signIn);
-                const authorization = await browserOpened(app, 30_000);
-                const callback = await devSignIn(authorization, options.login, options.password);
-                // The browser tab a person would see is not recorded; its
-                // sign-in takes them a few seconds.
-                await driver.pause(2_500, 3_500);
-                await app.evaluate(({ app: electronApp }, url) => {
-                    electronApp.emit("open-url", { preventDefault: () => undefined }, url);
-                }, callback);
-                await driver.pause(2_000, 2_600);
-                await shot(page, "signed-in");
+                if (way.kind === "listed") {
+                    await driver.press(welcome.locator(".happy-welcome-screen__action").first());
+                    // This machine is already set up, so the interface follows,
+                    // with the team server in the rail, signed out.
+                    const server = page.locator(
+                        `button.happy-connections__item[aria-label^="${way.serverName}"]`,
+                    );
+                    await server.waitFor({ state: "visible", timeout: 60_000 });
+                    await driver.pause(1_500, 2_200);
+                    await shot(page, "interface");
+                    await driver.press(server);
+                    const signIn = page.getByRole("button", { name: /^Sign in/u }).first();
+                    await signIn.waitFor({ state: "visible", timeout: 60_000 });
+                    await driver.pause(1_500, 2_200);
+                    await shot(page, "signed-out");
+                    await driver.press(signIn);
+                    await browserSignIn(app, driver, options.login, options.password);
+                    await driver.pause(2_000, 2_600);
+                    await shot(page, "signed-in");
+                } else {
+                    await cloudTeamReach(app, page, driver, way, options, shot);
+                }
                 await profileSave(page, driver, persona);
                 const started = Date.now();
                 let idleSince = Date.now();
@@ -319,6 +349,99 @@ async function onboardingFinished(
     );
 }
 
+/**
+ * Reaches a Happy Cloud team the way a person would: Create a team or Join a
+ * team on the welcome, or from the rail's "+" once this machine is set up;
+ * Happy Cloud's sign-in in the browser; then the team's name, and for joining
+ * the invite code, on the team's page; until the page lets the window go.
+ */
+async function cloudTeamReach(
+    app: ElectronApplication,
+    page: Page,
+    driver: GymPersonaDriver,
+    way: Extract<GymTeamWay, { kind: "cloud" }>,
+    account: { readonly login: string; readonly password: string },
+    shot: (page: Page, label: string) => Promise<void>,
+): Promise<void> {
+    const label = way.path === "create" ? "Create a team" : "Join a team";
+    const welcome = page.locator('[data-happy-desktop-ui="welcome-screen"]');
+    if (way.from === "welcome") {
+        await driver.press(welcome.getByRole("button", { name: label, exact: true }));
+    } else {
+        await driver.press(welcome.locator(".happy-welcome-screen__action").first());
+        const add = page.getByRole("button", { name: "Add a team", exact: true });
+        await add.waitFor({ state: "visible", timeout: 60_000 });
+        await driver.pause(1_500, 2_200);
+        await shot(page, "interface");
+        await driver.press(add);
+        const item = page
+            .locator('[data-testid="connection-menu"]')
+            .getByText(label, { exact: true });
+        await item.waitFor({ state: "visible", timeout: 10_000 });
+        await driver.pause(500, 900);
+        await driver.press(item);
+    }
+    const screen = page.locator('[data-happy-desktop-ui="team-setup-screen"]');
+    await screen.waitFor({ state: "visible", timeout: 30_000 });
+    await driver.pause(1_200, 1_800);
+    await shot(page, "signing-in");
+    await browserSignIn(app, driver, account.login, account.password);
+    if (way.path === "create") {
+        const name = screen.getByRole("textbox", { name: "Team name" });
+        await name.waitFor({ state: "visible", timeout: 30_000 });
+        await driver.read(await screen.innerText());
+        await driver.type(name, way.team);
+        const create = screen.getByRole("button", { name: "Create team", exact: true });
+        await expectEnabled(create, 20_000);
+        await driver.pause(600, 1_000);
+        await shot(page, "team-named");
+        await driver.press(create);
+    } else {
+        if (way.code === undefined) throw new Error("Joining a team takes an invite code.");
+        const team = screen.getByRole("textbox", { name: "Team", exact: true });
+        await team.waitFor({ state: "visible", timeout: 30_000 });
+        await driver.read(await screen.innerText());
+        await driver.type(team, way.team);
+        await driver.pause(400, 800);
+        await driver.type(screen.getByRole("textbox", { name: "Invite code" }), way.code);
+        const join = screen.getByRole("button", { name: "Join team", exact: true });
+        await expectEnabled(join, 20_000);
+        await driver.pause(600, 1_000);
+        await shot(page, "invite-entered");
+        await driver.press(join);
+    }
+    await screen.waitFor({ state: "hidden", timeout: 90_000 });
+    await driver.pause(1_500, 2_200);
+    await shot(page, "team-opened");
+}
+
+async function expectEnabled(target: Locator, timeoutMs: number): Promise<void> {
+    const deadline = Date.now() + timeoutMs;
+    while (!(await target.isEnabled().catch(() => false))) {
+        if (Date.now() > deadline) throw new Error("The page's button never became available.");
+        await new Promise((resolve) => setTimeout(resolve, 200));
+    }
+}
+
+/**
+ * Signs in on the sign-in page main just opened in the browser, as the account,
+ * and hands main the address it redirects to. The browser tab a person would see
+ * is not recorded; its sign-in takes them a few seconds.
+ */
+async function browserSignIn(
+    app: ElectronApplication,
+    driver: GymPersonaDriver,
+    login: string,
+    password: string,
+): Promise<void> {
+    const authorization = await browserOpened(app, 30_000);
+    const callback = await devSignIn(authorization, login, password);
+    await driver.pause(2_500, 3_500);
+    await app.evaluate(({ app: electronApp }, url) => {
+        electronApp.emit("open-url", { preventDefault: () => undefined }, url);
+    }, callback);
+}
+
 /** Keeps the pages main would open in the person's browser, rather than opening them. */
 async function browserCatch(app: ElectronApplication): Promise<void> {
     await app.evaluate(({ shell }) => {
@@ -333,10 +456,12 @@ async function browserCatch(app: ElectronApplication): Promise<void> {
 async function browserOpened(app: ElectronApplication, timeoutMs: number): Promise<string> {
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
-        const opened = await app.evaluate(
-            () => (globalThis as { gymOpened?: string[] }).gymOpened ?? [],
-        );
-        const found = opened.find((url) => url.includes("/authorize"));
+        // Each page is taken once, so a later sign-in waits for its own.
+        const found = await app.evaluate(() => {
+            const opened = (globalThis as { gymOpened?: string[] }).gymOpened ?? [];
+            const index = opened.findIndex((url) => url.includes("/authorize"));
+            return index < 0 ? undefined : opened.splice(index, 1)[0];
+        });
         if (found !== undefined) return found;
         await new Promise((resolve) => setTimeout(resolve, 200));
     }
