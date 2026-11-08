@@ -27,7 +27,6 @@ export interface HappyCloudServer {
     /** The server's own name for itself, or `name` while it has none. */
     readonly displayName: string;
     readonly url: string;
-    readonly role: "owner" | "member";
     /**
      * The server's picture: its ThumbHash, painted until the bytes arrive
      * through `DesktopHappyCloud.imageRead`. Absent when it has none.

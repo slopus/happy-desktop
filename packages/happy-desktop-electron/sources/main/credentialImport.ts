@@ -32,11 +32,14 @@ const HOLD_MS = 10 * 60_000;
 /** How long the login shell may take to print its environment. */
 const SHELL_TIMEOUT_MS = 10_000;
 
-/** The vendors Happy Cloud takes each kind of credential for. */
+/**
+ * The vendors Happy Cloud takes each kind of credential for. A Claude Code
+ * token is not among them: Claude is used on a server through its own sign-in.
+ */
 const IMPORTABLE: Readonly<Record<DesktopCredentialKind, readonly DesktopCredentialVendor[]>> = {
     api_key: ["openai", "grok", "bedrock"],
     aws_keys: ["bedrock"],
-    oauth_token: ["claude-code"],
+    oauth_token: [],
 };
 
 const VENDOR_NAMES: Readonly<Record<DesktopCredentialVendor, string>> = {
@@ -123,12 +126,16 @@ export function credentialMask(secret: string): string {
 
 /** What Happy Cloud can do with one copyable credential. */
 function useOf(vendor: DesktopCredentialVendor, kind: DesktopCredentialKind): DesktopCredentialUse {
-    return IMPORTABLE[kind].includes(vendor)
-        ? { kind: "import", credential: kind }
-        : {
-              kind: "unsupported",
-              reason: `Happy Cloud can't use ${VENDOR_NAMES[vendor]} keys yet.`,
-          };
+    if (IMPORTABLE[kind].includes(vendor)) return { kind: "import", credential: kind };
+    if (kind === "oauth_token")
+        return {
+            kind: "unsupported",
+            reason: `A ${VENDOR_NAMES[vendor]} token can't be shared. Sign in to ${VENDOR_NAMES[vendor]} on the server instead.`,
+        };
+    return {
+        kind: "unsupported",
+        reason: `Happy Cloud can't use ${VENDOR_NAMES[vendor]} keys yet.`,
+    };
 }
 
 function homeShort(path: string, home: string): string {
@@ -484,7 +491,7 @@ export function credentialImportCreate(options: { readonly home?: string } = {})
                 .join(" · ");
             add({
                 vendor: "claude-code",
-                use: { kind: "signIn", providerId: "claude" },
+                use: { kind: "signIn", providerId: "claude-code" },
                 source: claudeOauth ? homeShort(claudeFile, home) : "Keychain · Claude Code",
                 label: "Claude subscription",
                 ...(account ? { account } : {}),

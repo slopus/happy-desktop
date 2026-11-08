@@ -395,7 +395,6 @@ function serverRead(value: unknown): HappyCloudServer | undefined {
                 : server.name,
         // The address is this build's, from the name: never one the API hands over.
         url: happyCloudServerUrl(server.name),
-        role: server.role === "owner" ? "owner" : "member",
         ...(typeof image?.thumbhash === "string" ? { image: { thumbhash: image.thumbhash } } : {}),
     };
 }
