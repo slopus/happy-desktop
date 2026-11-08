@@ -3006,6 +3006,15 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                 publishGroupDeltas([delta]);
                 return;
             }
+            case "onboarding.flow.updated": {
+                // Onboarding switches its conversation's route as it moves (an AI
+                // chosen, or one that didn't answer), and says so only through
+                // its flow, so the stored mode is read again.
+                const flowAgentId = event.payload.flow.agentId;
+                if (flowAgentId !== null && sessions.has(flowAgentId))
+                    refetchAgentMode(flowAgentId);
+                return;
+            }
             case "profile.updated":
                 if (event.payload.userId !== undefined) {
                     const userId = event.payload.userId;
@@ -3319,7 +3328,16 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         }
         if (message.role === "user") {
             rememberUserMessageId(message.id);
-            adoptMessageMode(agentId, message.mode);
+            // A message already held says nothing new about the mode when only
+            // its status changes: its acceptance must not put back a mode the
+            // server has switched away from since it was sent.
+            if (
+                current?.role !== "user" ||
+                current.mode == null ||
+                message.mode == null ||
+                !modesEqual(current.mode, message.mode)
+            )
+                adoptMessageMode(agentId, message.mode);
         } else if (
             message.role === "service" &&
             message.failure?.resolution?.action === "switched"
