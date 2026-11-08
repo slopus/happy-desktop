@@ -5,8 +5,9 @@ import type {
 } from "../conversation/conversationEntry.js";
 import type { ChatElement } from "../happyAgentConnection/index.js";
 import { happyAgentBotSubtasks } from "./happyAgentBotSubtasks.js";
+import { happyAgentTaskSpeaker } from "./happyAgentConversationSpeaker.js";
 import type { HappyAgentSessionListSnapshot } from "./happyAgentSessionListStore.js";
-import type { HappyAgentTask } from "./happyAgentTypes.js";
+import type { HappyAgentBot, HappyAgentTask } from "./happyAgentTypes.js";
 
 /**
  * Who an agent is, for a transcript that received a message from it. Happy
@@ -38,9 +39,10 @@ function taskFace(task: HappyAgentTask): ConversationAgentFace {
 
 /**
  * Every agent the session list names, by agent id: each bot and task by its
- * own name and face, and every other conversation — a subtask, a project's
- * session — by its title and the placeholder its id picks. Bots and tasks
- * come last so they win over a conversation listed under a project too.
+ * own name and face, a task that speaks as a bot by that bot's, and every
+ * other conversation — a subtask, a project's session — by its title and the
+ * placeholder its id picks. Bots and tasks come last so they win over a
+ * conversation listed under a project too.
  */
 export function happyAgentAgentIdentitiesIndex(
     list: HappyAgentSessionListSnapshot,
@@ -60,17 +62,27 @@ export function happyAgentAgentIdentitiesIndex(
         }
     for (const subtask of happyAgentBotSubtasks([...list.bots, ...list.taskDirectory]))
         titled(subtask.conversation);
-    for (const task of list.taskDirectory)
-        index.set(task.conversation.id, { name: task.name, face: taskFace(task) });
-    for (const bot of list.bots)
-        index.set(bot.conversation.id, {
-            name: bot.name,
-            face:
-                bot.avatar === undefined
-                    ? { kind: "placeholder", seed: bot.id }
-                    : { kind: "image", url: bot.avatar.url },
-        });
+    for (const task of list.taskDirectory) {
+        const speaker = happyAgentTaskSpeaker(list.bots, task);
+        index.set(
+            task.conversation.id,
+            speaker === undefined
+                ? { name: task.name, face: taskFace(task) }
+                : botIdentity(speaker),
+        );
+    }
+    for (const bot of list.bots) index.set(bot.conversation.id, botIdentity(bot));
     return index;
+}
+
+function botIdentity(bot: HappyAgentBot): ConversationAgentIdentity {
+    return {
+        name: bot.name,
+        face:
+            bot.avatar === undefined
+                ? { kind: "placeholder", seed: bot.id }
+                : { kind: "image", url: bot.avatar.url },
+    };
 }
 
 /**

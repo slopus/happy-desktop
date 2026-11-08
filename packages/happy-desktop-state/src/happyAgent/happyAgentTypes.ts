@@ -157,6 +157,12 @@ export interface HappyAgentTask {
      * where every task is the reader's own and no owner is shown.
      */
     readonly owner: HappyAgentTaskOwner | null;
+    /**
+     * The built-in bot its agent speaks as, by system key: a team's Welcome task
+     * speaks as the Chief of Staff, under that bot's live name and picture.
+     * Absent for every other task.
+     */
+    readonly speaksAs?: { readonly systemKey: string };
     readonly path: string;
     readonly displayPath: string;
     readonly createdAt: number;

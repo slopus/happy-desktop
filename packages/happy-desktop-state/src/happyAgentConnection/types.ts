@@ -825,6 +825,12 @@ export interface TaskGroup {
      * where every task is the viewer's own and no owner is shown.
      */
     owner: TaskOwner | null;
+    /**
+     * The built-in bot the task's agent speaks as, by its system key: a team's
+     * Welcome task is its Chief of Staff to the teammate it welcomes. Absent
+     * for every other task, and from servers that never say.
+     */
+    speaksAs?: { systemKey: string };
     /** The task's one conversation. */
     session: GroupSession;
     /** Active, user-interactive child tasks in the daemon's explicit tree order. */
