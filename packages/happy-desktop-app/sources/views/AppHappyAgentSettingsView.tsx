@@ -1782,7 +1782,7 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                     onTitleShimmerChange={(enabled) =>
                         titleShimmerStore.titleShimmerUpdate(enabled)
                     }
-                    {...(props.projectsVisibility && host
+                    {...(!happyCloud && props.projectsVisibility && host
                         ? {
                               projectsHidden: projectsVisibilityConnection(
                                   projectsVisibility,
