@@ -1090,6 +1090,7 @@ export function projectTasks(
                           },
                       }),
                 owner: ownerOf(task),
+                ...(task.speaksAs ? { speaksAs: { systemKey: task.speaksAs.systemKey } } : {}),
                 session: taskSessionUnread(
                     projectAgent(
                         task.agent,

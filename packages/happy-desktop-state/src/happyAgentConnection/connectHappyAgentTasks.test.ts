@@ -173,6 +173,65 @@ it("keeps tasks and memberships current from the realtime events", async () => {
     expect(taskIn(watch.tasks, "task_b")?.name).toBe("Beta");
 });
 
+it("carries the bot a Welcome task speaks as, from the bootstrap, a created task, and a patch", async () => {
+    const daemon = fakeHappyAgentDaemonCreate();
+    daemon.taskSeed({
+        id: "task_welcome",
+        name: "Welcome to @acme",
+        speaksAs: { systemKey: "chief_of_staff" },
+        joinedKey: "a1",
+    });
+    // Servers that never say, like the standalone daemon, leave it out.
+    daemon.taskSeed({ id: "task_plain", name: "Docs", speaksAs: null });
+    const { watch } = harnessOpen(daemon);
+    await vi.waitFor(() => expect(watch.tasks).toHaveLength(2));
+    await vi.waitFor(() => expect(daemon.streamLiveCount()).toBe(1));
+    expect(taskIn(watch.tasks, "task_welcome")?.speaksAs).toEqual({
+        systemKey: "chief_of_staff",
+    });
+    expect(taskIn(watch.tasks, "task_plain")).not.toHaveProperty("speaksAs");
+
+    const created = daemon.taskSeed({
+        id: "task_second",
+        name: "Welcome to @beta",
+        speaksAs: { systemKey: "chief_of_staff" },
+    });
+    daemon.eventEmit("task.created", { task: created });
+    await vi.waitFor(() =>
+        expect(taskIn(watch.tasks, "task_second")?.speaksAs).toEqual({
+            systemKey: "chief_of_staff",
+        }),
+    );
+
+    // A patch that names the field changes it, here to speaking as itself.
+    const before = daemon.taskGet("task_welcome");
+    const version = daemon.versionNext();
+    daemon.taskReplace({ ...before, speaksAs: null, version });
+    daemon.eventEmit("task.updated", {
+        taskId: "task_welcome",
+        previousVersion: before.version,
+        version,
+        changes: { speaksAs: null },
+    });
+    await vi.waitFor(() =>
+        expect(taskIn(watch.tasks, "task_welcome")).not.toHaveProperty("speaksAs"),
+    );
+    // One that doesn't name it keeps it.
+    const second = daemon.taskGet("task_second");
+    const renamed = daemon.versionNext();
+    daemon.taskReplace({ ...second, name: "Welcome to beta", version: renamed });
+    daemon.eventEmit("task.updated", {
+        taskId: "task_second",
+        previousVersion: second.version,
+        version: renamed,
+        changes: { name: "Welcome to beta" },
+    });
+    await vi.waitFor(() =>
+        expect(taskIn(watch.tasks, "task_second")?.name).toBe("Welcome to beta"),
+    );
+    expect(taskIn(watch.tasks, "task_second")?.speaksAs).toEqual({ systemKey: "chief_of_staff" });
+});
+
 it("joins, moves, and leaves through the task routes, putting a join at the top", async () => {
     const daemon = fakeHappyAgentDaemonCreate();
     daemon.taskSeed({ id: "task_a", joinedKey: "a1" });

@@ -406,6 +406,9 @@ function taskProject(task: TaskGroup): HappyAgentTask {
                       ...(task.owner.name === undefined ? {} : { name: task.owner.name }),
                       ...(task.owner.avatar === undefined ? {} : { avatar: task.owner.avatar }),
                   },
+        ...(task.speaksAs === undefined
+            ? {}
+            : { speaksAs: { systemKey: task.speaksAs.systemKey } }),
         path: task.path,
         displayPath: task.path,
         createdAt: task.createdAt,
