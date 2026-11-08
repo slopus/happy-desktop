@@ -171,6 +171,11 @@ async function proxyRequest(
                     forwardedHeaders(upstreamResponse.headers),
                 );
                 upstreamResponse.on("error", () => tunnel?.destroy());
+                // A body cut short leaves Chromium waiting for the rest of it;
+                // failing the response is what tells it the page broke off.
+                upstreamResponse.once("close", () => {
+                    if (!upstreamResponse.complete) response.destroy();
+                });
                 upstreamResponse.pipe(response);
                 upstreamResponse.once("end", () => tunnel?.destroy());
             },
@@ -288,14 +293,40 @@ function tunnelAuthority(url: string): string | undefined {
  * treats a failure on either side as an ordinary end of tunnel. Only one end of a
  * CONNECT tunnel needs to disappear for the relayed write to the other to fail,
  * which is normal browsing, not a proxy fault worth crashing over.
+ *
+ * A side that ends cleanly may still have bytes queued for the other — often the
+ * tail of a response — so the other is ended, and destroyed only once those are
+ * written. A side that fails or is torn down takes the other with it at once.
  */
-function relay(first: Duplex, second: Duplex): void {
+export function relay(first: Duplex, second: Duplex): void {
     first.on("error", () => second.destroy());
     second.on("error", () => first.destroy());
-    first.once("close", () => second.destroy());
-    second.once("close", () => first.destroy());
+    relayClose(first, second);
+    relayClose(second, first);
     first.pipe(second);
     second.pipe(first);
+}
+
+/** How long a cleanly ended tunnel waits for its other side to take the rest. */
+const RELAY_DRAIN_MS = 30_000;
+
+function relayClose(from: Duplex, to: Duplex): void {
+    from.once("close", () => {
+        if (to.destroyed) return;
+        if (from.errored || !from.readableEnded || to.writableFinished) {
+            to.destroy();
+            return;
+        }
+        // A peer that stops reading must not hold the socket forever.
+        const timer = setTimeout(() => to.destroy(), RELAY_DRAIN_MS);
+        timer.unref();
+        to.once("finish", () => {
+            clearTimeout(timer);
+            to.destroy();
+        });
+        to.once("close", () => clearTimeout(timer));
+        to.end();
+    });
 }
 
 function proxyAuthorized(request: IncomingMessage, authorization: string): boolean {
