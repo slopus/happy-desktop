@@ -9931,6 +9931,9 @@ function happyAgentDelegatedElapsedMs(
     return startedAt === undefined ? undefined : Math.max(0, now - startedAt);
 }
 
+/** An empty conversation where onboarding is about to speak: nothing yet. */
+const ONBOARDING_EMPTY = <></>;
+
 function HappyAgentConversationSurface(props: {
     /**
      * The instance this machine's health named, which a link naming an
@@ -10168,7 +10171,10 @@ function HappyAgentConversationSurface(props: {
         <ConversationView
             references={references}
             {...(inlinePages ? { inlinePages } : {})}
-            emptyContent={props.emptyContent}
+            // Onboarding speaks first here, a moment after the conversation
+            // opens, so the conversation's own introduction does not flash in
+            // before it.
+            emptyContent={onboardingComposer ? ONBOARDING_EMPTY : props.emptyContent}
             agentAuthor={agentAuthor}
             activityControl={
                 activityTotal > 0 ? (

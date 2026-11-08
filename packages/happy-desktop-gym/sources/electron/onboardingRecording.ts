@@ -36,6 +36,12 @@ export interface GymOnboardingRecording {
     readonly ended: "finished" | "idle" | "limit";
     /** Each step the flow reported, in order, with `null` once the model leads. */
     readonly flowSteps: readonly (string | null)[];
+    /**
+     * Milliseconds from pressing the welcome's action: what the window showed,
+     * and when the Happy Agent's journal says its onboarding events happened.
+     * One machine's clock serves both.
+     */
+    readonly timeline: Readonly<Record<string, number>>;
     readonly composerStates: readonly {
         readonly disabled: boolean;
         readonly placeholder: string;
@@ -123,6 +129,7 @@ export async function gymOnboardingRecord(options: {
             let turns = 0;
             let ended: GymOnboardingRecording["ended"] = "limit";
             const flowSteps: (string | null)[] = [];
+            const timeline: Record<string, number> = {};
             /**
              * Whether the flow has finished, noting each new step it reports on
              * the way. Requirements met (`completedVersion`) is not the end of
@@ -144,6 +151,8 @@ export async function gymOnboardingRecord(options: {
                 await driver.read(await welcome.innerText());
                 await shot(page, "welcome");
                 await driver.press(welcome.locator(".happy-welcome-screen__action").first());
+                const pressedAt = Date.now();
+                watchTimeline(page, pressedAt, timeline);
                 const answered = new Set<string>();
                 let idleSince = Date.now();
                 while (Date.now() - started < limitMs) {
@@ -186,6 +195,7 @@ export async function gymOnboardingRecord(options: {
             } finally {
                 recorded = await video.stop();
             }
+            await journalTimeline(runtime, timeline);
             await gymElectronInvisibleAssert(app);
             return {
                 root: paths.root,
@@ -195,6 +205,7 @@ export async function gymOnboardingRecord(options: {
                 turns,
                 ended,
                 flowSteps,
+                timeline,
                 composerStates,
             };
         } finally {
@@ -202,5 +213,60 @@ export async function gymOnboardingRecord(options: {
         }
     } finally {
         await runtime.stop();
+    }
+}
+
+/**
+ * Notes, once each, when the window first shows a conversation and its first
+ * reply, relative to the welcome's press. Stops after a minute.
+ */
+function watchTimeline(
+    page: import("playwright").Page,
+    pressedAt: number,
+    timeline: Record<string, number>,
+): void {
+    const marks: readonly (readonly [string, string])[] = [
+        ["conversationShown", '[data-happy-desktop-ui="composer-textarea"]'],
+        ["firstReplyShown", '[data-happy-desktop-ui="message"]:not([data-own])'],
+    ];
+    const tick = async (): Promise<void> => {
+        for (const [name, selector] of marks) {
+            if (timeline[name] !== undefined) continue;
+            const visible = await page
+                .locator(selector)
+                .first()
+                .isVisible()
+                .catch(() => false);
+            if (visible) timeline[name] = Date.now() - pressedAt;
+        }
+        if (marks.every(([name]) => timeline[name] !== undefined)) return;
+        if (Date.now() - pressedAt > 60_000) return;
+        setTimeout(() => void tick(), 100);
+    };
+    timeline.welcomePressed = 0;
+    timeline.pressedAtEpochMs = pressedAt;
+    void tick();
+}
+
+/** When the Happy Agent's journal says onboarding started and its first run spoke. */
+async function journalTimeline(
+    runtime: { readonly client: import("./happyAgentProtocol.js").GymHappyAgentClient },
+    timeline: Record<string, number>,
+): Promise<void> {
+    const pressedAt = timeline.pressedAtEpochMs;
+    if (pressedAt === undefined) return;
+    const events = await runtime.client.journalEvents().catch(() => []);
+    const first = (type: string): number | undefined => {
+        const found = events.find((entry) => entry.event.type === type);
+        return found === undefined ? undefined : found.event.occurredAt - pressedAt;
+    };
+    for (const [name, type] of [
+        ["flowUpdated", "onboarding.flow.updated"],
+        ["runStarted", "run.started"],
+        ["messageCreated", "message.created"],
+        ["messageDelta", "message.delta"],
+    ] as const) {
+        const at = first(type);
+        if (at !== undefined) timeline[name] = at;
     }
 }
