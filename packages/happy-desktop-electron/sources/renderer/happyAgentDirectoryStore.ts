@@ -762,6 +762,7 @@ export function happyAgentDirectoryStoreCreate(
             // A Happy Agent on another machine is what this computer's devices
             // and ports can reach; the local one already has them.
             deviceBridges: happyAgent.entry.remoteId !== undefined,
+            ...(happyAgent.entry.happyCloud || cloudName !== undefined ? { happyCloud: true } : {}),
             // Only the shell reads this computer's credentials, and only a
             // Happy Cloud server takes them. Leaving or deleting the server
             // takes it out of this window, as removing it from the rail does.

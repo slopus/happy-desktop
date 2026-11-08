@@ -1,5 +1,9 @@
 import type { HappyAgentSync } from "../happyAgentConnection/happyAgentSync.js";
 import { UserError } from "../types.js";
+import {
+    happyAgentCloudConnectionsCatalogProject,
+    type HappyAgentCloudConnection,
+} from "./happyAgentCloudProviders.js";
 import { happyAgentMenusDerive } from "./happyAgentMenusStore.js";
 import { happyAgentModelCatalogProject } from "./happyAgentProject.js";
 import { deepEqual } from "./happyAgentSupport.js";
@@ -157,6 +161,14 @@ export interface HappyAgentModelStoreOptions {
      */
     readonly sync?: HappyAgentSync;
     readonly preferencePersistence?: HappyAgentModelPreferencePersistence;
+    /**
+     * Happy Cloud's connections, which replace the configuration's providers
+     * in every picker so a conversation is sent the exact connection the
+     * person chose. Read with the first catalog and again on every
+     * `config.updated`; until the first answer, the configuration's own
+     * providers stand.
+     */
+    readonly connectionsRead?: () => Promise<readonly HappyAgentCloudConnection[]>;
 }
 
 /**
@@ -238,7 +250,16 @@ export function happyAgentModelStoreCreate(
      * not a change: keeping the old reference is what lets every picker and
      * chat that derived from it stand still.
      */
-    const catalogAdopt = (catalog: HappyAgentModelCatalog): HappyAgentModelStoreReadySnapshot => {
+    /** The configuration's catalog last adopted, which the connections are projected onto. */
+    let configured: HappyAgentModelCatalog | undefined;
+    let connections: readonly HappyAgentCloudConnection[] | undefined;
+    const catalogAdopt = (
+        configuredCatalog: HappyAgentModelCatalog,
+    ): HappyAgentModelStoreReadySnapshot => {
+        configured = configuredCatalog;
+        const catalog = connections
+            ? happyAgentCloudConnectionsCatalogProject(configuredCatalog, connections)
+            : configuredCatalog;
         if (snapshot.type === "ready" && deepEqual(snapshot.catalog, catalog)) return snapshot;
         const defaultSelection = defaultSelectionResolve(catalog, document);
         const ready: HappyAgentModelStoreReadySnapshot = {
@@ -262,6 +283,23 @@ export function happyAgentModelStoreCreate(
     let catalogRetry: ReturnType<typeof setTimeout> | undefined;
     let follow: AbortController | undefined;
     let disposed = false;
+
+    // Only the newest connections read may land, as for the catalog.
+    let connectionsGeneration = 0;
+    const connectionsReload = async (): Promise<void> => {
+        const read = options.connectionsRead;
+        if (!read) return;
+        const generation = ++connectionsGeneration;
+        try {
+            const answer = await read();
+            if (disposed || generation !== connectionsGeneration) return;
+            connections = answer;
+            if (configured) catalogAdopt(configured);
+        } catch {
+            // The configuration's providers keep working; the next
+            // `config.updated` or reconnect asks again.
+        }
+    };
 
     const catalogRetryCancel = (): void => {
         if (catalogRetry !== undefined) clearTimeout(catalogRetry);
@@ -314,16 +352,22 @@ export function happyAgentModelStoreCreate(
                     ++catalogGeneration;
                     catalogReadFailed = false;
                     catalogAdopt(happyAgentModelCatalogProject(input.bootstrap.config));
+                    if (!greeting) void connectionsReload();
                 } else if (input.kind === "reconcile") {
                     // The first load was sent, or answered from the connection's
                     // current configuration, after this subscription was
                     // installed, so it already answers for everything before.
-                    if (!greeting && !loadPromise) catalogReload(active.signal);
+                    if (!greeting && !loadPromise) {
+                        catalogReload(active.signal);
+                        void connectionsReload();
+                    }
                 } else if (
                     (input.update.kind === "connected" && catalogReadFailed) ||
                     (input.update.kind === "event" && input.update.event.type === "config.updated")
-                )
+                ) {
                     catalogReload(active.signal);
+                    void connectionsReload();
+                }
             }
         })().catch(() => undefined);
     };
@@ -343,34 +387,41 @@ export function happyAgentModelStoreCreate(
             if (loadPromise) return loadPromise;
             if (snapshot.type === "error") publish({ type: "loading" });
             followStart();
+            const connectionsFirst = connectionsReload();
             const current = options.catalogCurrent?.();
-            if (current !== undefined) {
+            if (current !== undefined && !options.connectionsRead) {
                 ++catalogGeneration;
                 return Promise.resolve(catalogAdopt(current));
             }
             const generation = ++catalogGeneration;
-            loadPromise = options.catalogRead().then(
-                (catalog) => {
-                    loadPromise = undefined;
-                    // A disposed store publishes nothing; its connection is gone.
-                    if (disposed) throw new UserError("This Happy Agent connection is closed.");
-                    // A newer catalog already arrived while this read was out.
-                    if (generation !== catalogGeneration && snapshot.type === "ready")
-                        return snapshot;
-                    document = options.preferencePersistence?.read() ?? document;
-                    preferences = document.preferences;
-                    catalogAdopt(catalog);
-                    return snapshot as HappyAgentModelStoreReadySnapshot;
-                },
-                (error: unknown) => {
-                    loadPromise = undefined;
-                    if (disposed) throw modelError(error);
-                    if (snapshot.type === "ready") return snapshot;
-                    const failure = modelError(error);
-                    publish({ type: "error", error: failure });
-                    throw failure;
-                },
-            );
+            const catalogFirst =
+                current === undefined ? options.catalogRead() : Promise.resolve(current);
+            // On Happy Cloud the first catalog waits for the connections, so a
+            // picker never opens on the configuration's providers first.
+            loadPromise = Promise.all([catalogFirst, connectionsFirst])
+                .then(([catalog]) => catalog)
+                .then(
+                    (catalog) => {
+                        loadPromise = undefined;
+                        // A disposed store publishes nothing; its connection is gone.
+                        if (disposed) throw new UserError("This Happy Agent connection is closed.");
+                        // A newer catalog already arrived while this read was out.
+                        if (generation !== catalogGeneration && snapshot.type === "ready")
+                            return snapshot;
+                        document = options.preferencePersistence?.read() ?? document;
+                        preferences = document.preferences;
+                        catalogAdopt(catalog);
+                        return snapshot as HappyAgentModelStoreReadySnapshot;
+                    },
+                    (error: unknown) => {
+                        loadPromise = undefined;
+                        if (disposed) throw modelError(error);
+                        if (snapshot.type === "ready") return snapshot;
+                        const failure = modelError(error);
+                        publish({ type: "error", error: failure });
+                        throw failure;
+                    },
+                );
             return loadPromise;
         },
         catalogChanged(catalog) {

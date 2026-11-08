@@ -597,6 +597,156 @@
     width: 160px;
 }
 
+/* ---- AI providers ------------------------------------------------------ */
+
+.happy-agent-ai-providers {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.happy-agent-ai-providers__actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.happy-agent-ai-providers__group {
+    display: flex;
+    flex-direction: column;
+}
+
+.happy-agent-ai-providers__group-title {
+    margin: 0 0 4px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 16px;
+}
+
+.happy-agent-ai-providers__empty {
+    padding: 8px 0;
+    border-top: 1px solid var(--divider);
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 18px;
+}
+
+.happy-agent-ai-providers__connection {
+    display: flex;
+    flex-direction: column;
+    border-top: 1px solid var(--divider);
+}
+
+/* A connection that can't serve the reader now reads greyed, its keys too. */
+.happy-agent-ai-providers__connection[data-enabled="false"] .happy-agent-ai-providers__text {
+    opacity: 0.55;
+}
+
+.happy-agent-ai-providers__connection-head,
+.happy-agent-ai-providers__credential {
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 48px;
+    padding: 8px 0;
+}
+
+/* Credentials sit under their connection, indented past the lock glyph. */
+.happy-agent-ai-providers__credential {
+    padding-left: 12px;
+    color: var(--text-secondary);
+}
+
+.happy-agent-ai-providers__text {
+    display: flex;
+    flex: 1 1 0%;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.happy-agent-ai-providers__name {
+    overflow: hidden;
+    color: var(--text);
+    font-size: 13px;
+    line-height: 18px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-agent-ai-providers__meta {
+    overflow: hidden;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.happy-agent-provider-add {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.happy-agent-provider-add__field {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.happy-agent-provider-add__label,
+.happy-agent-provider-add__text {
+    color: var(--text);
+    font-size: 13px;
+    line-height: 18px;
+}
+
+.happy-agent-provider-add__hint,
+.happy-agent-provider-add__waiting {
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+}
+
+.happy-agent-provider-add__waiting,
+.happy-agent-provider-add__row,
+.happy-agent-provider-add__code,
+.happy-agent-provider-add__done {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.happy-agent-provider-add__choices {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.happy-agent-provider-add__user-code {
+    font-family: var(--happy-font-mono);
+    font-size: 20px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    line-height: 28px;
+    user-select: all;
+}
+
+.happy-agent-provider-add__done {
+    min-height: 52px;
+    color: var(--text);
+    font-size: 14px;
+    line-height: 20px;
+}
+
+.happy-agent-provider-add__done .happy-icon {
+    color: var(--status-connected);
+}
+
 /* ---- Nodes ------------------------------------------------------------- */
 
 /* One node reads as the same kind of card a provider does: they are both a

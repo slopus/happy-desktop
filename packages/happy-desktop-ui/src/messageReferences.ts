@@ -8,6 +8,7 @@ import {
     happyAgentFileLinkParse,
     happyShareLinkParse,
     happyShareLinksRewrite,
+    happyAgentProviderAddPageOf,
     replaceHappyLinks,
     type HappyAgentFileLink,
     type HappyLink,
@@ -170,11 +171,27 @@ function linkHere(link: HappyLink, references: MessageReferences | undefined): b
 export function messageSettingsPageFromHref(
     href: string | undefined,
     references: MessageReferences | undefined,
-): HappySettingsPage | undefined {
+): HappySettingsPage | string | undefined {
     const here = messageHrefHere(href, references);
     if (here === undefined) return undefined;
     const link = parseHappyUrl(here);
-    return link?.type === "settings" && linkHere(link, references) ? link.page : undefined;
+    if (link === undefined) return happyAgentProviderAddPageOf(here);
+    return link.type === "settings" && linkHere(link, references) ? link.page : undefined;
+}
+
+/**
+ * A provider add link as written, `[label](happy://settings/providers/add… "button")`,
+ * which happy-agent-client does not read yet. It stays a link, as any settings link does.
+ */
+const PROVIDER_ADD_LINK =
+    /^\[(?:[^\]\\]|\\.)*\]\((happy:\/\/settings\/providers\/add[^\s)]*)(?:\s+"button")?\)$/u;
+
+function providerAddLink(match: HappyLinkMatch): string | undefined {
+    if (match.syntax !== "link" || match.image) return undefined;
+    const href = PROVIDER_ADD_LINK.exec(match.source)?.[1];
+    if (href === undefined || happyAgentProviderAddPageOf(href) === undefined) return undefined;
+    const label = labelEscape(match.label) || "Settings";
+    return match.display === "button" ? `[${label}](${href} "button")` : `[${label}](${href})`;
 }
 
 /**
@@ -230,11 +247,14 @@ export function messageReferencesResolve(
         (match) => {
             const link = match.link;
             if (link === undefined)
-                return match.label.trim().length > 0
-                    ? match.label
-                    : match.syntax === "legacyTag"
-                      ? "an unavailable reference"
-                      : "";
+                return (
+                    providerAddLink(match) ??
+                    (match.label.trim().length > 0
+                        ? match.label
+                        : match.syntax === "legacyTag"
+                          ? "an unavailable reference"
+                          : "")
+                );
             // What another instance holds is not read or opened here.
             if (!linkHere(link, references)) return foreignWords(match, link);
             if (link.type === "file") {

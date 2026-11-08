@@ -40,6 +40,12 @@ export function happyAgentMenusDerive(
     selection: HappyAgentSelection,
     remembered?: HappyAgentModelEffortRemembered,
 ): HappyAgentMenusSnapshot {
+    // A selection on an older ID the server answers as another provider reads
+    // as that provider.
+    const aliasOf = catalog.providers.find(
+        (provider) => provider.id === selection.providerId,
+    )?.aliasOf;
+    if (aliasOf !== undefined) selection = { ...selection, providerId: aliasOf };
     const modelOptions: HappyAgentModelOption[] = [];
     const selectedProvider = catalog.providers.find(
         (provider) => provider.id === selection.providerId,

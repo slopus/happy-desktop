@@ -120,6 +120,11 @@ import {
     type HappyAgentCredentialImportStore,
 } from "./happyAgentCredentialImportStore.js";
 import {
+    happyAgentCloudProvidersStoreCreate,
+    type HappyAgentCloudProvidersStore,
+} from "./happyAgentCloudProvidersStore.js";
+import type { HappyAgentCloudProvidersApi } from "./happyAgentCloudProviders.js";
+import {
     happyAgentMembersStoreCreate,
     type HappyAgentMembersStore,
 } from "./happyAgentMembersStore.js";
@@ -237,6 +242,11 @@ export interface HappyAgentWorkspaceClient {
      * has one; elsewhere this is undefined.
      */
     credentialImport(): HappyAgentCredentialImportStore | undefined;
+    /**
+     * Settings › AI providers on Happy Cloud: what conversations run on, and
+     * adding keys and sign-ins to it. Undefined anywhere but Happy Cloud.
+     */
+    cloudProviders(): HappyAgentCloudProvidersStore | undefined;
     /**
      * Settings › Members: who is on a Happy Cloud server, their roles and
      * invites. Undefined anywhere but a Happy Cloud server.
@@ -456,6 +466,12 @@ export interface HappyAgentWorkspaceClientDeps {
     readonly providerCredentials?: HappyAgentProviderCredentialsApi;
     /** The desktop shell's credential import, for a Happy Cloud server. */
     readonly credentialImportHost?: HappyAgentCredentialImportHost;
+    /**
+     * Happy Cloud's provider routes, on every Happy Cloud connection, in the
+     * desktop and on the web. Its connections replace the configuration's
+     * providers in the model pickers.
+     */
+    readonly cloudProviders?: HappyAgentCloudProvidersApi;
     /** A Happy Cloud server's own routes, and how this window drops the server. */
     readonly cloudServer?: {
         readonly serverName: string;
@@ -617,6 +633,7 @@ export function happyAgentWorkspaceClientCreate(
             return config === undefined ? undefined : happyAgentModelCatalogProject(config);
         },
         sync: deps.connection.sync,
+        ...(deps.cloudProviders ? { connectionsRead: deps.cloudProviders.connectionsRead } : {}),
         ...(deps.modelPreferencePersistence
             ? { preferencePersistence: deps.modelPreferencePersistence }
             : {}),
@@ -641,6 +658,7 @@ export function happyAgentWorkspaceClientCreate(
     let profileStore: HappyAgentProfileStore | undefined;
     let providersStore: HappyAgentProvidersStore | undefined;
     let credentialImportStore: HappyAgentCredentialImportStore | undefined;
+    let cloudProvidersStore: HappyAgentCloudProvidersStore | undefined;
     let membersStore: HappyAgentMembersStore | undefined;
     let computesStore: HappyAgentComputesStore | undefined;
     let voiceSettingsStore: HappyAgentVoiceSettingsStore | undefined;
@@ -1020,6 +1038,16 @@ export function happyAgentWorkspaceClientCreate(
             });
             return credentialImportStore;
         },
+        cloudProviders() {
+            if (disposed) throw new Error("The Happy Agent client is disposed.");
+            const api = deps.cloudProviders;
+            if (!api) return undefined;
+            cloudProvidersStore ??= happyAgentCloudProvidersStoreCreate({
+                api,
+                sync: deps.connection.sync,
+            });
+            return cloudProvidersStore;
+        },
         members() {
             if (disposed) throw new Error("The Happy Agent client is disposed.");
             const cloud = deps.cloudServer;
@@ -1228,6 +1256,8 @@ export function happyAgentWorkspaceClientCreate(
             providersStore = undefined;
             credentialImportStore?.[Symbol.dispose]();
             credentialImportStore = undefined;
+            cloudProvidersStore?.[Symbol.dispose]();
+            cloudProvidersStore = undefined;
             membersStore?.[Symbol.dispose]();
             membersStore = undefined;
             computesStore?.[Symbol.dispose]();

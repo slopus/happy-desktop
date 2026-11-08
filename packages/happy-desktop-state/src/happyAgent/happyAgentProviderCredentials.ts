@@ -256,6 +256,7 @@ function providerCliRead(value: unknown): HappyAgentProviderCli | undefined {
  */
 const KEYED_TYPES: ReadonlySet<string> = new Set([
     "openai",
+    "anthropic",
     "grok",
     "bedrock",
     "openai_compatible",
@@ -414,15 +415,19 @@ export function happyCloudRequestCreate(options: {
         const answer = (await response.json().catch(() => undefined)) as
             | { readonly error?: unknown; readonly code?: unknown }
             | undefined;
+        // Happy Cloud answers `{ error: { code, message } }`; older routes
+        // answer `{ error: message, code }`.
+        const envelope =
+            typeof answer?.error === "object" && answer.error !== null
+                ? (answer.error as { readonly code?: unknown; readonly message?: unknown })
+                : undefined;
+        const message = envelope ? envelope.message : answer?.error;
+        const code = envelope ? envelope.code : answer?.code;
         throw new UserError(
-            typeof answer?.error === "string" && answer.error.length > 0
-                ? answer.error
+            typeof message === "string" && message.length > 0
+                ? message
                 : `The server answered ${String(response.status)}.`,
-            response.status === 404
-                ? "not_found"
-                : typeof answer?.code === "string"
-                  ? answer.code
-                  : undefined,
+            response.status === 404 ? "not_found" : typeof code === "string" ? code : undefined,
         );
     };
 }
@@ -467,7 +472,9 @@ export function happyAgentProviderCredentialsApiCreate(options: {
                 // answers that it doesn't support one.
                 if (
                     error instanceof UserError &&
-                    (error.code === "not_found" || error.code === "unsupported")
+                    (error.code === "not_found" ||
+                        error.code === "unsupported" ||
+                        error.code === "machine_local")
                 )
                     return null;
                 throw error;

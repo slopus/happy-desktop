@@ -316,6 +316,12 @@ export interface HappyAgentModelProvider {
      * for an account that is not a pool, and from a daemon too old to say.
      */
     readonly poolMembers?: readonly string[];
+    /**
+     * Happy Cloud: an older ID the server still answers as the provider named
+     * here, such as a bare `openai` meaning Happy (free). Never listed; a
+     * conversation on it reads as that provider.
+     */
+    readonly aliasOf?: string;
     readonly disabledReason?: "not_authenticated" | "not_enabled" | "no_models";
 }
 

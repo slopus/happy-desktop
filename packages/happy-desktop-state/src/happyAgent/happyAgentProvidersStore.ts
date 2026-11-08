@@ -426,7 +426,9 @@ export function happyAgentProvidersStoreCreate(
     /** Replaces the open dialog's state, unless it has closed or moved to another provider. */
     const editorUpdate = (
         providerId: string | undefined,
-        next: (editor: HappyAgentCustomProviderEditor) => HappyAgentCustomProviderEditor | undefined,
+        next: (
+            editor: HappyAgentCustomProviderEditor,
+        ) => HappyAgentCustomProviderEditor | undefined,
     ): void => {
         const editor = store.getState().customProviderEditor;
         if (disposed || !editor || editor.providerId !== providerId) return;

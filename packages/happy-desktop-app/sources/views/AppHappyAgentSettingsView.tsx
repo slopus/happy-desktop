@@ -15,6 +15,8 @@ import type {
     HappyAgentSecret,
     HappyAgentModelKey,
     HappyAgentCustomProviderEditor,
+    HappyAgentCloudConnection,
+    HappyAgentCloudProvidersSnapshot,
     HappyAgentProviderEntry,
     HappyAgentProviderSubscription,
     HappyAgentSettingsSnapshot,
@@ -55,6 +57,10 @@ import {
     type HappyAgentProviderUsageStore,
     happyAgentProvidersStoreNoop,
     happyAgentCredentialImportStoreNoop,
+    happyAgentCloudProvidersStoreNoop,
+    happyAgentCloudConnectionName,
+    happyAgentProviderAddLinkParse,
+    type HappyAgentCloudProvidersStore,
     happyAgentMembersStoreNoop,
     type HappyAgentMembersSnapshot,
     type HappyAgentCredentialImportSnapshot,
@@ -87,6 +93,9 @@ import {
     type HappyAgentCustomProviderDialogProps,
     HappyAgentProviderSettings,
     HappyAgentCredentialImport,
+    HappyAgentAiProviders,
+    type HappyAgentAiProviderConnectionRow,
+    type HappyAgentProviderAddDialogProps,
     HappyAgentMembersSettings,
     Banner,
     type HappyAgentCredentialImportRow,
@@ -168,8 +177,35 @@ export const HAPPY_AGENT_SETTINGS_MOVED_CATEGORIES: Readonly<Record<string, stri
  * this window has no such page. Import lives on the Providers page.
  */
 export function happyAgentSettingsSectionOf(page: string): string | undefined {
-    const section = page === "providers/import" ? "providers" : page;
+    const section =
+        page === "providers/import" || happyAgentProviderAddLinkParse(page) !== undefined
+            ? "providers"
+            : page;
     return happyAgentSettingsCategoryExists(section) ? section : undefined;
+}
+
+/**
+ * Opens what a settings page names beyond its category: Import's scan on a
+ * desktop, or an AI provider's add dialog. Where there is no scan, as on the
+ * web, the import page opens the add dialog's choices instead.
+ */
+export function happyAgentSettingsPageOpen(
+    session:
+        | {
+              readonly credentialImport?: () => { dialogOpen(): void } | undefined;
+              readonly cloudProviders?: () => HappyAgentCloudProvidersStore | undefined;
+          }
+        | undefined,
+    page: string,
+): void {
+    if (page === "providers/import") {
+        const scan = session?.credentialImport?.();
+        if (scan) scan.dialogOpen();
+        else session?.cloudProviders?.()?.addOpen();
+        return;
+    }
+    const add = happyAgentProviderAddLinkParse(page);
+    if (add) session?.cloudProviders?.()?.addOpen(add);
 }
 
 /** True when `section` addresses a category this window actually has. */
@@ -773,6 +809,15 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
         (membersShown ?? happyAgentMembersStoreNoop).subscribe,
         (membersShown ?? happyAgentMembersStoreNoop).get,
         (membersShown ?? happyAgentMembersStoreNoop).get,
+    );
+    // AI providers exist only on Happy Cloud; the list is followed while
+    // Providers is on screen.
+    const cloudProvidersStore =
+        section === "providers" ? host?.session?.cloudProviders?.() : undefined;
+    const cloudProviders = useSyncExternalStore(
+        (cloudProvidersStore ?? happyAgentCloudProvidersStoreNoop).subscribe,
+        (cloudProvidersStore ?? happyAgentCloudProvidersStoreNoop).get,
+        (cloudProvidersStore ?? happyAgentCloudProvidersStoreNoop).get,
     );
     const credentialImport = useSyncExternalStore(
         (credentialImportStore ?? happyAgentCredentialImportStoreNoop).subscribe,
@@ -1403,6 +1448,39 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                 />
             ) : section === "providers" ? (
                 <>
+                    {cloudProvidersStore ? (
+                        <HappyAgentAiProviders
+                            connections={cloudProviders.connections.map(cloudConnectionRow)}
+                            loading={cloudProviders.loading}
+                            {...(cloudProviders.error
+                                ? { error: cloudProviders.error.message }
+                                : {})}
+                            {...(cloudProviders.saveError
+                                ? { saveError: cloudProviders.saveError.message }
+                                : {})}
+                            teamManageable={cloudProviders.teamAllowed}
+                            {...(cloudProviders.add
+                                ? {
+                                      add: providerAddProps(
+                                          cloudProviders,
+                                          cloudProvidersStore,
+                                          props.externalLinkOpen,
+                                      ),
+                                  }
+                                : {})}
+                            onAdd={() => cloudProvidersStore.addOpen()}
+                            onCredentialEnabledChange={(connectionId, credentialId, enabled) =>
+                                cloudProvidersStore.credentialEnabledUpdate(
+                                    connectionId,
+                                    credentialId,
+                                    enabled,
+                                )
+                            }
+                            onCredentialRemove={(connectionId, credentialId) =>
+                                cloudProvidersStore.credentialRemove(connectionId, credentialId)
+                            }
+                        />
+                    ) : null}
                     {credentialImportStore ? (
                         <HappyAgentCredentialImport
                             open={credentialImport.open}
@@ -1483,7 +1561,12 @@ export function AppHappyAgentSettingsView(props: AppHappyAgentSettingsViewProps)
                                   },
                               }
                             : {})}
-                        providers={providerRows(providers.providers, settings, selection)}
+                        providers={providerRows(
+                            providers.providers,
+                            settings,
+                            selection,
+                            cloudProvidersStore !== undefined,
+                        )}
                         {...(providers.error ? { error: providers.error.message } : {})}
                         {...(providers.saveError ? { saveError: providers.saveError.message } : {})}
                         {...(unavailable === undefined ? {} : { unavailable })}
@@ -2107,12 +2190,36 @@ function documentLoading(
     );
 }
 
+/**
+ * The vendors whose keys and sign-ins AI providers adds and lists on Happy
+ * Cloud; their cards below show only models. Grok's and Bedrock's keys are
+ * still added on their own cards.
+ */
+const AI_PROVIDERS_VENDORS: ReadonlySet<string> = new Set(["openai", "anthropic"]);
+
 function providerRows(
     providers: readonly HappyAgentProviderEntry[],
     settings: HappyAgentSettingsSnapshot,
     selection: { readonly providerId: string; readonly modelId: string } | undefined,
+    aiProviders: boolean,
 ): readonly HappyAgentProviderRow[] {
-    return providers.map((provider) => ({
+    return providers.map((entry) => {
+        const provider: HappyAgentProviderEntry = aiProviders
+            ? (({ subscription: _subscription, credentials, ...rest }) => ({
+                  ...rest,
+                  ...(credentials && !AI_PROVIDERS_VENDORS.has(entry.type) ? { credentials } : {}),
+              }))(entry)
+            : entry;
+        return providerRow(provider, settings, selection);
+    });
+}
+
+function providerRow(
+    provider: HappyAgentProviderEntry,
+    settings: HappyAgentSettingsSnapshot,
+    selection: { readonly providerId: string; readonly modelId: string } | undefined,
+): HappyAgentProviderRow {
+    return {
         enabled: provider.enabled,
         id: provider.id,
         models: provider.models.map((model) => ({
@@ -2165,7 +2272,104 @@ function providerRows(
                   },
               }
             : {}),
-    }));
+    };
+}
+
+const CLOUD_VENDOR_NAMES: Readonly<Record<string, string>> = {
+    openai: "OpenAI",
+    anthropic: "Anthropic",
+    codex: "ChatGPT",
+    "claude-code": "Claude",
+    grok: "Grok",
+    bedrock: "Amazon Bedrock",
+};
+
+const CLOUD_KIND_NAMES = {
+    api_key: "API key",
+    aws_keys: "AWS keys",
+    oauth: "Subscription",
+    oauth_token: "Setup token",
+} as const;
+
+function cloudVendorName(vendor: string): string {
+    return CLOUD_VENDOR_NAMES[vendor] ?? vendor;
+}
+
+/** One AI provider connection as Settings lists it. */
+function cloudConnectionRow(
+    connection: HappyAgentCloudConnection,
+): HappyAgentAiProviderConnectionRow {
+    const models = connection.models.length;
+    return {
+        id: connection.id,
+        name: happyAgentCloudConnectionName(connection),
+        group:
+            connection.source === "operator"
+                ? "included"
+                : connection.scope === "team"
+                  ? "team"
+                  : "private",
+        meta: connection.enabled
+            ? [
+                  [...new Set(connection.vendors.map(cloudVendorName))].join(", "),
+                  models === 1 ? "1 model" : `${String(models)} models`,
+              ]
+                  .filter(Boolean)
+                  .join(" · ")
+            : "Add a key or sign in to use it",
+        enabled: connection.enabled,
+        ...(connection.credentials
+            ? {
+                  credentials: connection.credentials.map((credential) => ({
+                      id: credential.id,
+                      label: credential.label,
+                      meta:
+                          credential.reason === "signin_missing"
+                              ? `${cloudVendorName(credential.vendor)} · Sign in again`
+                              : `${cloudVendorName(credential.vendor)} · ${CLOUD_KIND_NAMES[credential.kind]}`,
+                      enabled: credential.enabled,
+                      state: credential.state,
+                      ...(credential.coolingUntil === null
+                          ? {}
+                          : {
+                                coolingUntil: new Date(credential.coolingUntil).toLocaleTimeString(
+                                    [],
+                                    { hour: "numeric", minute: "2-digit" },
+                                ),
+                            }),
+                  })),
+              }
+            : {}),
+    };
+}
+
+/** The add dialog's props from the AI providers store. */
+function providerAddProps(
+    snapshot: HappyAgentCloudProvidersSnapshot,
+    store: HappyAgentCloudProvidersStore,
+    externalLinkOpen: ((url: string) => void) | undefined,
+): HappyAgentProviderAddDialogProps {
+    const add = snapshot.add!;
+    return {
+        flow: add.flow,
+        to: add.to,
+        destinationChoice: snapshot.privateAllowed && snapshot.teamAllowed,
+        phase: add.phase,
+        ...(add.signIn ? { signIn: add.signIn } : {}),
+        ...(add.done === undefined ? {} : { done: add.done }),
+        ...(add.error ? { error: add.error } : {}),
+        chatgptAvailable: snapshot.signIns.has("codex"),
+        claudeAvailable: snapshot.signIns.has("claude"),
+        onFlowSelect: (flow) => store.addFlowSelect(flow),
+        onBack: () => store.addBack(),
+        onClose: () => store.addClose(),
+        onDestinationChange: (to) => store.addDestinationUpdate(to),
+        onApiKeySubmit: (secret) => store.apiKeySubmit(secret),
+        onSetupTokenSubmit: (token) => store.setupTokenSubmit(token),
+        onSignInStart: () => store.signInStart(),
+        onSignInCodeSubmit: (code) => store.signInCodeSubmit(code),
+        ...(externalLinkOpen ? { onExternalOpen: externalLinkOpen } : {}),
+    };
 }
 
 /** The open provider dialog's state, as the dialog takes it. */
@@ -2282,6 +2486,7 @@ function credentialImportRows(
         return {
             ...base,
             use: "import",
+            subscription: entry.use.subscription,
             ...(entry.masked === undefined ? {} : { masked: entry.masked }),
             ...(picked === undefined ? {} : { picked }),
             ...(result === undefined

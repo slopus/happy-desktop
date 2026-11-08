@@ -14,7 +14,11 @@ import { happyAgentHistoryCreate, type HappyAgentRouterHistory } from "./happyAg
 import { happyAgentRoutePathParse } from "./happyAgentRoute";
 import { useSyncExternalStore } from "react";
 import { HappyAgentOnboardingBoundary } from "../components/HappyAgentOnboardingBoundary";
-import { happyAgentFileLinkParse, parseHappyUrl } from "happy-desktop-state";
+import {
+    happyAgentFileLinkParse,
+    happyAgentProviderAddPageOf,
+    parseHappyUrl,
+} from "happy-desktop-state";
 import type {
     AppearanceStore,
     HappyAgentArtifactId,
@@ -65,6 +69,7 @@ import {
     type AppCloudWebSession,
     HAPPY_AGENT_SETTINGS_DEFAULT_CATEGORY,
     happyAgentSettingsCategoryExists,
+    happyAgentSettingsPageOpen,
     happyAgentSettingsSectionOf,
     HAPPY_AGENT_SETTINGS_MOVED_CATEGORIES,
     type AppHappyAgentDaemonStore,
@@ -1002,7 +1007,12 @@ export function happyAgentRouterHappyLinkOpen(
     const target = directory?.happyAgents.find((entry) => entry.id === happyAgentId);
     const session = target?.session;
     if (context === undefined || happyAgentId === undefined || session === undefined) return;
-    const link = parseHappyUrl(url);
+    // A provider add link is a settings page happy-agent-client doesn't read yet.
+    const providerAddPage = happyAgentProviderAddPageOf(url);
+    const link =
+        providerAddPage === undefined
+            ? parseHappyUrl(url)
+            : { type: "settings" as const, page: providerAddPage, instanceId: undefined };
     if (link === undefined) return;
     if (link.instanceId !== undefined && link.instanceId !== target?.instanceId) return;
     if (link.type === "file") {
@@ -1014,7 +1024,7 @@ export function happyAgentRouterHappyLinkOpen(
         const section = happyAgentSettingsSectionOf(link.page);
         if (section === undefined) return;
         void router.navigate({ params: { section }, to: "/settings/$section" });
-        if (link.page === "providers/import") session.credentialImport?.()?.dialogOpen();
+        happyAgentSettingsPageOpen(session, link.page);
         return;
     }
     const reference = link.reference;

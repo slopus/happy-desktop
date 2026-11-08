@@ -5,6 +5,7 @@ import {
     HappyAgentClient,
     happyAgentWorkspaceClientCreate,
     happyAgentProviderCredentialsApiCreate,
+    happyAgentCloudProvidersApiCreate,
     happyCloudRequestCreate,
     happyAgentClockStoreCreate,
     gptLiveRuntimeCreate,
@@ -149,6 +150,9 @@ export interface HappyAgentSession {
     readonly providers: HappyAgentProvidersStore;
     readonly members: () => import("happy-desktop-state").HappyAgentMembersStore | undefined;
     readonly computes: () => import("happy-desktop-state").HappyAgentComputesStore | undefined;
+    readonly cloudProviders: () =>
+        | import("happy-desktop-state").HappyAgentCloudProvidersStore
+        | undefined;
     readonly credentialImport: () =>
         | import("happy-desktop-state").HappyAgentCredentialImportStore
         | undefined;
@@ -395,6 +399,8 @@ export function happyAgentConnectionOpen(input: {
     readonly credentialImportHost?: HappyAgentCredentialImportHost;
     /** Drops this Happy Cloud server from the window, after leaving or deleting it. */
     readonly cloudServer?: { readonly name: string; readonly forget: () => Promise<void> };
+    /** Whether this is a Happy Cloud server, in the desktop or on the web. */
+    readonly happyCloud?: boolean;
     /**
      * The window's appearance right now, read again for every terminal this
      * connection opens. A terminal is started in it and keeps it afterwards.
@@ -487,6 +493,16 @@ export function happyAgentConnectionOpen(input: {
             token: "happy-local-capability",
         }),
         ...(input.credentialImportHost ? { credentialImportHost: input.credentialImportHost } : {}),
+        ...(input.happyCloud
+            ? {
+                  cloudProviders: happyAgentCloudProvidersApiCreate(
+                      happyCloudRequestCreate({
+                          endpoint: directClient.endpoint,
+                          token: "happy-local-capability",
+                      }),
+                  ),
+              }
+            : {}),
         ...(input.cloudServer
             ? {
                   cloudServer: {
@@ -645,6 +661,7 @@ export function happyAgentConnectionOpen(input: {
                     providerUsage: client.providerUsage(),
                     providers: client.providers(),
                     credentialImport: () => client.credentialImport(),
+                    cloudProviders: () => client.cloudProviders(),
                     members: () => client.members(),
                     computes: () => client.computes(),
                     voiceSettings: client.voiceSettings(),

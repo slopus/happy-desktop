@@ -11,6 +11,9 @@ import {
     HappyAgentProviderSettings,
     HappyAgentCustomProviderDialog,
     HappyAgentCredentialImport,
+    HappyAgentAiProviders,
+    type HappyAgentAiProviderConnectionRow,
+    type HappyAgentProviderAddDialogProps,
     HappyAgentMembersSettings,
     type HappyAgentCredentialImportRow,
     HappyAgentProfilerSettings,
@@ -639,24 +642,27 @@ const credentialImportRows: readonly HappyAgentCredentialImportRow[] = [
         label: "OpenAI API key",
         source: "$OPENAI_API_KEY",
         use: "import",
+        subscription: false,
         masked: "••••3f9a",
-        picked: "team",
-    },
-    {
-        id: "bedrock-aws",
-        vendorName: "Amazon Bedrock",
-        label: "AWS access keys · default",
-        source: "~/.aws/credentials",
-        use: "import",
-        masked: "••••7QXA",
         picked: "private",
     },
     {
-        id: "claude-token",
-        vendorName: "Claude",
-        label: "Claude Code token",
-        source: "~/Happy/Config/happy.toml",
+        id: "codex-sub",
+        vendorName: "ChatGPT",
+        label: "ChatGPT subscription",
+        source: "~/.codex/auth.json",
+        account: "ada@example.com · Pro",
         use: "import",
+        subscription: true,
+        picked: "team",
+    },
+    {
+        id: "anthropic-env",
+        vendorName: "Anthropic",
+        label: "Anthropic API key",
+        source: "$ANTHROPIC_API_KEY",
+        use: "import",
+        subscription: false,
         masked: "••••k2Lw",
         result: { ok: true, duplicate: false },
     },
@@ -666,17 +672,18 @@ const credentialImportRows: readonly HappyAgentCredentialImportRow[] = [
         label: "Grok API key",
         source: "~/.grok/auth.json",
         use: "import",
+        subscription: false,
         masked: "••••09cd",
         result: { ok: false, message: "xAI refused this key: it has been revoked." },
     },
     {
-        id: "codex-sub",
-        vendorName: "ChatGPT",
-        label: "ChatGPT subscription",
-        source: "~/.codex/auth.json",
-        account: "ada@example.com · Pro",
-        use: "signIn",
-        signInAvailable: true,
+        id: "claude-sub",
+        vendorName: "Claude",
+        label: "Claude subscription",
+        source: "Keychain · Claude Code",
+        account: "Max",
+        use: "import",
+        subscription: true,
     },
     {
         id: "aws-session",
@@ -687,6 +694,112 @@ const credentialImportRows: readonly HappyAgentCredentialImportRow[] = [
         reason: "Temporary AWS keys expire. Use an IAM user's keys or a Bedrock API key.",
     },
 ];
+
+const aiProviderConnections: readonly HappyAgentAiProviderConnectionRow[] = [
+    {
+        id: "operator:openai",
+        name: "Happy (free)",
+        group: "included",
+        meta: "OpenAI · 2 models",
+        enabled: true,
+    },
+    {
+        id: "operator:anthropic",
+        name: "Happy (free)",
+        group: "included",
+        meta: "Anthropic · 3 models",
+        enabled: true,
+    },
+    {
+        id: "anthropic",
+        name: "Anthropic",
+        group: "team",
+        meta: "Anthropic · 3 models",
+        enabled: true,
+        credentials: [
+            {
+                id: "k1",
+                label: "Team key",
+                meta: "Anthropic · API key",
+                enabled: true,
+                state: "ready",
+            },
+        ],
+    },
+    {
+        id: "private",
+        name: "My account",
+        group: "private",
+        meta: "ChatGPT · 2 models",
+        enabled: true,
+        credentials: [
+            {
+                id: "k2",
+                label: "ChatGPT Pro (ada@example.com)",
+                meta: "ChatGPT · Subscription",
+                enabled: true,
+                state: "ready",
+            },
+            {
+                id: "k3",
+                label: "OpenAI API key",
+                meta: "OpenAI · API key",
+                enabled: true,
+                state: "invalid",
+            },
+        ],
+    },
+];
+
+/** AI providers wired to local state, so the dialog's choices answer. */
+function AiProvidersSpecimen(props: {
+    readonly add?: Pick<
+        HappyAgentProviderAddDialogProps,
+        "flow" | "phase" | "signIn" | "done" | "error"
+    >;
+}) {
+    const [add, addSet] = useState(props.add);
+    const [to, toSet] = useState<"private" | "team">("private");
+    return (
+        <div style={{ display: "flex", transform: "translateZ(0)" }}>
+            <HappyAgentSettingsShell
+                activeCategoryId="providers"
+                categories={categories}
+                description="Every model provider this server knows about"
+                onCategorySelect={noop}
+                onClose={noop}
+                title="Providers"
+            >
+                <HappyAgentAiProviders
+                    connections={aiProviderConnections}
+                    teamManageable
+                    {...(add
+                        ? {
+                              add: {
+                                  ...add,
+                                  to,
+                                  destinationChoice: true,
+                                  chatgptAvailable: true,
+                                  claudeAvailable: true,
+                                  onFlowSelect: (flow) => addSet({ flow, phase: "idle" }),
+                                  onBack: () => addSet({ flow: { kind: "choose" }, phase: "idle" }),
+                                  onClose: () => addSet(undefined),
+                                  onDestinationChange: toSet,
+                                  onApiKeySubmit: noop,
+                                  onSetupTokenSubmit: noop,
+                                  onSignInStart: noop,
+                                  onSignInCodeSubmit: noop,
+                              },
+                          }
+                        : {})}
+                    onAdd={() => addSet({ flow: { kind: "choose" }, phase: "idle" })}
+                    onCredentialEnabledChange={noop}
+                    onCredentialRemove={noop}
+                />
+            </HappyAgentSettingsShell>
+        </div>
+    );
+}
 
 function FileTierSettingsSpecimen(props: {
     detail: string;
@@ -1501,7 +1614,7 @@ export function HappyAgentSettingsBlueprintPage() {
                 </div>
             </FullScreenSpecimen>
             <FullScreenSpecimen
-                detail="Import from this computer: picked keys for the team and for one person, an imported key, a refused one, a subscription to sign in on the server, and one the server can't use"
+                detail="Import from this computer: a key for my account, a ChatGPT sign-in picked for the team with the take-over warning, an imported key, a refused one, an unpicked Claude sign-in, and one the server can't use"
                 label="Happy Agent settings — providers import"
                 number="03d"
                 screen="providers-import"
@@ -1537,6 +1650,94 @@ export function HappyAgentSettingsBlueprintPage() {
                         providers={cloudProviders}
                     />
                 </HappyAgentSettingsShell>
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="AI providers on Happy Cloud: Happy (free), the team's Anthropic key, and my ChatGPT sign-in beside a key that needs attention"
+                label="Happy Agent settings — AI providers"
+                number="03h"
+                screen="ai-providers"
+            >
+                <AiProvidersSpecimen />
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="Adding an AI provider: the choices, with Save to for someone who may add for the team"
+                label="Happy Agent settings — add an AI provider"
+                number="03i"
+                screen="ai-providers-add"
+            >
+                <AiProvidersSpecimen add={{ flow: { kind: "choose" }, phase: "idle" }} />
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="An Anthropic API key the vendor refused"
+                label="Happy Agent settings — add an API key"
+                number="03j"
+                screen="ai-providers-add-key"
+            >
+                <AiProvidersSpecimen
+                    add={{
+                        flow: { kind: "apiKey", vendor: "anthropic" },
+                        phase: "idle",
+                        error: {
+                            title: "Couldn't add the key",
+                            message: "The vendor rejected the credential.",
+                        },
+                    }}
+                />
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="ChatGPT's device sign-in, waiting for the code to be entered at OpenAI"
+                label="Happy Agent settings — sign in with ChatGPT"
+                number="03k"
+                screen="ai-providers-add-chatgpt"
+            >
+                <AiProvidersSpecimen
+                    add={{
+                        flow: { kind: "chatgpt" },
+                        phase: "waiting",
+                        signIn: {
+                            url: "https://auth.openai.com/codex/device",
+                            userCode: "ABCD-1234",
+                            acceptsCode: false,
+                        },
+                    }}
+                />
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="Claude's sign-in, waiting for the code Claude's page shows"
+                label="Happy Agent settings — sign in with Claude"
+                number="03l"
+                screen="ai-providers-add-claude"
+            >
+                <AiProvidersSpecimen
+                    add={{
+                        flow: { kind: "claude", setupToken: false },
+                        phase: "waiting",
+                        signIn: {
+                            url: "https://claude.com/cai/oauth/authorize",
+                            acceptsCode: true,
+                        },
+                    }}
+                />
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="A Claude setup token pasted instead of signing in, and the dialog once it is added"
+                label="Happy Agent settings — Claude setup token"
+                number="03m"
+                screen="ai-providers-add-token"
+            >
+                <AiProvidersSpecimen
+                    add={{ flow: { kind: "claude", setupToken: true }, phase: "idle" }}
+                />
+            </FullScreenSpecimen>
+            <FullScreenSpecimen
+                detail="Added: the dialog says what was connected"
+                label="Happy Agent settings — AI provider added"
+                number="03n"
+                screen="ai-providers-add-done"
+            >
+                <AiProvidersSpecimen
+                    add={{ flow: { kind: "chatgpt" }, phase: "done", done: "ChatGPT connected" }}
+                />
             </FullScreenSpecimen>
             <FullScreenSpecimen
                 detail="Happy Cloud members, seen by an owner: roles to change, an invite code shown once, a pending invite, and leaving or deleting the server"

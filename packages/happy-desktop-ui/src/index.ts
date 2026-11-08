@@ -1121,6 +1121,18 @@ export {
     type HappyAgentCredentialImportScope,
 } from "./pages/settings/HappyAgentCredentialImport";
 export {
+    HappyAgentAiProviders,
+    type HappyAgentAiProviderConnectionRow,
+    type HappyAgentAiProviderCredentialRow,
+    type HappyAgentAiProviderCredentialState,
+    type HappyAgentAiProvidersProps,
+} from "./pages/settings/HappyAgentAiProviders";
+export {
+    HappyAgentProviderAddDialog,
+    type HappyAgentProviderAddDialogProps,
+    type HappyAgentProviderAddFlow,
+} from "./pages/settings/HappyAgentProviderAddDialog";
+export {
     HappyAgentFileTierSettings,
     type HappyAgentFileTierMoveDirection,
     type HappyAgentFileTierRow,
