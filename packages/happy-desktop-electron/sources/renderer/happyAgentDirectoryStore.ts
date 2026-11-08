@@ -495,7 +495,12 @@ export function happyAgentDirectoryStoreCreate(
             happyAgents: [happyAgent.entry, ...orderedRemotes],
             reordering: membership?.reordering,
             reorderError: membership?.reorderError,
-            ...(roster?.get().error ? { error: roster.get().error } : {}),
+            // The web app has one connection and no list to choose from, so
+            // a failure to read the list is no news: its server, which refuses
+            // everything until a member is admitted, says why on its own screens.
+            ...(roster?.get().error && !happyAgent.entry.happyCloud
+                ? { error: roster.get().error }
+                : {}),
         };
         for (const listener of listeners) listener();
     };

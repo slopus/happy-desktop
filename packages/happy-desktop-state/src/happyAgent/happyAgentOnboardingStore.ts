@@ -1,4 +1,4 @@
-import type { HappyAgentClient } from "@slopus/happy-agent-client";
+import { HappyAgentApiError, type HappyAgentClient } from "@slopus/happy-agent-client";
 import type { HappyAgentSync } from "../happyAgentConnection/happyAgentSync.js";
 import { happyAgentSyncRead } from "../happyAgentConnection/happyAgentSyncRead.js";
 import type { HappyAgentMobileConnectorStore } from "./happyAgentMobileConnectorStore.js";
@@ -6,6 +6,18 @@ import {
     happyMobileOnboardingStoreCreate,
     type HappyMobileOnboardingStore,
 } from "../onboarding/happyMobileOnboardingStore.js";
+
+/**
+ * What the setup screens say about a failed read. A Happy Cloud server that
+ * refuses a member with no saved profile is answered by the profile step
+ * itself, so its refusal is no error to show beside it.
+ */
+function onboardingErrorOf(error: unknown): string | undefined {
+    for (let current = error; current instanceof Error; current = current.cause)
+        if (current instanceof HappyAgentApiError && current.code === "profile_required")
+            return undefined;
+    return error instanceof Error ? error.message : String(error);
+}
 
 /** Happy Cloud's Chief of Staff: `done` once its name is confirmed in its chat. */
 export interface HappyAgentOnboardingChiefOfStaff {
@@ -302,22 +314,28 @@ export function happyAgentOnboardingStoreCreate(
                     } else if (input.kind === "reconcile" || input.update.kind === "event")
                         await reconcile(active.signal);
                 } catch (error) {
-                    if (!active.signal.aborted)
+                    if (!active.signal.aborted) {
+                        const { error: _previous, ...rest } = snapshot;
+                        const message = onboardingErrorOf(error);
                         publish({
-                            ...snapshot,
+                            ...rest,
                             available: false,
-                            error: error instanceof Error ? error.message : String(error),
+                            ...(message === undefined ? {} : { error: message }),
                         });
+                    }
                 }
             }
         })()
             .catch((error: unknown) => {
-                if (!active.signal.aborted)
+                if (!active.signal.aborted) {
+                    const { error: _previous, ...rest } = snapshot;
+                    const message = onboardingErrorOf(error);
                     publish({
-                        ...snapshot,
+                        ...rest,
                         available: false,
-                        error: error instanceof Error ? error.message : String(error),
+                        ...(message === undefined ? {} : { error: message }),
                     });
+                }
             })
             .finally(() => {
                 if (controller === active) controller = undefined;
