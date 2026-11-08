@@ -50,6 +50,8 @@ export interface HappyAgentInviteCreated {
     readonly code: string;
     readonly roleId: string;
     readonly expiresAt: number;
+    /** The name a teammate types with the code to join, as the server answered it. */
+    readonly serverName: string;
 }
 
 export interface HappyAgentMembersSnapshot {
@@ -406,6 +408,10 @@ export function happyAgentMembersStoreCreate(
                                     code: invite.code,
                                     roleId: String(invite.role ?? roleId),
                                     expiresAt: timeOf(invite.expiresAt),
+                                    serverName:
+                                        typeof invite.serverName === "string"
+                                            ? invite.serverName
+                                            : deps.serverName,
                                 },
                             },
                             false,

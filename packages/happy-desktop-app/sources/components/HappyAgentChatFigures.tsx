@@ -229,7 +229,7 @@ function HappyAgentChatInvite(props: {
                       created: {
                           code: created.code,
                           detail: [
-                              `Joins ${members.serverName} as ${membersRoleName(members, created.roleId)}`,
+                              `Joins ${created.serverName} as ${membersRoleName(members, created.roleId)}`,
                               membersExpiresText(created.expiresAt),
                               "Shown only here",
                           ].join(" · "),
