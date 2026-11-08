@@ -2,6 +2,7 @@ import {
     HappyAgentApiError,
     type HappyAgentClient,
     type ProviderCli,
+    type ProviderCliSignInRequest,
 } from "@slopus/happy-agent-client";
 import { createStore } from "zustand/vanilla";
 import { cuid2Create } from "../utils/cuid2Create.js";
@@ -30,12 +31,29 @@ export type HappyAgentProviderClisSnapshot = {
     readonly errors: ReadonlyMap<string, string>;
 };
 
+/**
+ * Whose connection a sign-in makes on a team server, as a provider CLI figure's
+ * `data-target` names it: the team's, or the caller's own. Absent, the server
+ * decides; a team server then signs the caller in privately.
+ */
+export type HappyAgentProviderCliTarget = "team" | "private";
+
+/**
+ * Where a team server keeps a sign-in (API.md "Provider CLIs"): the team's
+ * provider by its ID, or the caller's own. Not in the client's request type yet.
+ */
+type ProviderCliSignInPlace = { readonly providerId: string } | { readonly scope: "private" };
+
 export interface HappyAgentProviderClisStore {
     get(): HappyAgentProviderClisSnapshot;
     subscribe(listener: () => void): () => void;
     /** Runs the vendor's official installer; the server signs in after it on its own. */
     cliInstall(cliId: string): void;
-    cliSignIn(cliId: string): void;
+    /**
+     * Starts the vendor's sign-in, made where `target` says exactly as the
+     * figure carried it. Every caller passes it, so none drops it by omission.
+     */
+    cliSignIn(cliId: string, target: HappyAgentProviderCliTarget | undefined): void;
     /** Hands a waiting sign-in the code its page showed. The code is not kept. */
     cliSignInCodeSend(cliId: string, code: string): void;
     cliCancel(cliId: string): void;
@@ -250,10 +268,28 @@ export function happyAgentProviderClisStoreCreate(
             const mutationId = mutationIdNext();
             request(cliId, () => deps.client.installProviderCli(cliId, { mutationId }));
         },
-        cliSignIn(cliId) {
+        cliSignIn(cliId, target) {
+            let place: ProviderCliSignInPlace | undefined;
+            if (target === "private") place = { scope: "private" };
+            else if (target === "team") {
+                const providerId = store.getState().clis.get(cliId)?.providerId;
+                // A team sign-in names the team's provider. Without one it is
+                // refused here rather than sent to land somewhere else.
+                if (providerId == null) {
+                    const errors = new Map(store.getState().errors);
+                    errors.set(cliId, "This server didn't say which team provider to connect.");
+                    set({ errors });
+                    return;
+                }
+                place = { providerId };
+            }
             signingIn.add(cliId);
             const mutationId = mutationIdNext();
-            request(cliId, () => deps.client.signInProviderCli(cliId, { mutationId }));
+            const body: ProviderCliSignInRequest & { readonly target?: ProviderCliSignInPlace } = {
+                mutationId,
+                ...(place === undefined ? {} : { target: place }),
+            };
+            request(cliId, () => deps.client.signInProviderCli(cliId, body));
         },
         cliSignInCodeSend(cliId, code) {
             const mutationId = mutationIdNext();

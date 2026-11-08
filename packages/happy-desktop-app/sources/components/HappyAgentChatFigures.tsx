@@ -6,6 +6,7 @@ import {
     type HappyAgentDefaultModelStore,
     type HappyAgentMobileConnectorStore,
     type HappyAgentProviderClisStore,
+    type HappyAgentProviderCliTarget,
 } from "happy-desktop-state";
 import {
     ChatDefaultModelFigure,
@@ -68,7 +69,7 @@ export function happyAgentConversationExtras(
                 ? {
                       providerCli: (
                           cliId: string,
-                          _target: "team" | "private" | undefined,
+                          target: HappyAgentProviderCliTarget | undefined,
                           live: boolean,
                       ) => (
                           <HappyAgentChatProviderCli
@@ -76,6 +77,7 @@ export function happyAgentConversationExtras(
                               linkOpen={options.linkOpen}
                               live={live}
                               store={providerClis}
+                              target={target}
                           />
                       ),
                   }
@@ -144,6 +146,8 @@ function HappyAgentChatPhonePairing(props: {
 function HappyAgentChatProviderCli(props: {
     readonly store: HappyAgentProviderClisStore;
     readonly cliId: string;
+    /** Whose connection its sign-in makes, exactly as the figure named it. */
+    readonly target: HappyAgentProviderCliTarget | undefined;
     readonly live: boolean;
     /** Opens a vendor's sign-in page in the person's browser. */
     readonly linkOpen: (url: string) => void;
@@ -164,7 +168,7 @@ function HappyAgentChatProviderCli(props: {
                       onCodeSend: (code: string) => store.cliSignInCodeSend(cliId, code),
                       onInstall: () => store.cliInstall(cliId),
                       onPageOpen: props.linkOpen,
-                      onSignIn: () => store.cliSignIn(cliId),
+                      onSignIn: () => store.cliSignIn(cliId, props.target),
                   }
                 : {})}
             requesting={clis.pending.has(cliId)}

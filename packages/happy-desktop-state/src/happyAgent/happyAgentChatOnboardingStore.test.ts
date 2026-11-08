@@ -1,6 +1,10 @@
 import type { OnboardingFlow, OnboardingState } from "@slopus/happy-agent-client";
 import { describe, expect, it, vi } from "vitest";
-import type { HappyAgentHealth, HappyAgentSync } from "../happyAgentConnection/happyAgentSync.js";
+import type {
+    HappyAgentHealth,
+    HappyAgentSync,
+    HappyAgentSyncInput,
+} from "../happyAgentConnection/happyAgentSync.js";
 import {
     happyAgentChatOnboardingStoreCreate,
     type HappyAgentChatOnboardingStoreDeps,
@@ -24,13 +28,26 @@ function flowOf(overrides: Partial<OnboardingFlow>): OnboardingFlow {
     };
 }
 
-/** A team server that runs onboarding as a conversation, with nothing on its stream. */
-function serverOf(options: { readonly read: OnboardingFlow; readonly started?: OnboardingFlow }) {
+/**
+ * A team server that runs onboarding as a conversation. `read` is what it
+ * answers now; `reconcile` tells the store to read it again.
+ */
+function serverOf(options: { read: OnboardingFlow; started?: OnboardingFlow }) {
+    const queue: HappyAgentSyncInput[] = [];
+    let wake: (() => void) | undefined;
     const sync: HappyAgentSync = {
         async *follow({ signal }) {
-            await new Promise<void>((resume) =>
-                signal.addEventListener("abort", () => resume(), { once: true }),
-            );
+            while (!signal.aborted) {
+                const next = queue.shift();
+                if (next) {
+                    yield next;
+                    continue;
+                }
+                await new Promise<void>((resume) => {
+                    wake = resume;
+                    signal.addEventListener("abort", () => resume(), { once: true });
+                });
+            }
         },
         health: () => ({ capabilities: { chatOnboarding: true } }) as HappyAgentHealth,
     };
@@ -48,7 +65,11 @@ function serverOf(options: { readonly read: OnboardingFlow; readonly started?: O
         sync,
         conversationOpen,
     };
-    return { deps, startOnboardingFlow, conversationOpen };
+    const reconcile = (): void => {
+        queue.push({ kind: "reconcile" });
+        wake?.();
+    };
+    return { deps, startOnboardingFlow, conversationOpen, options, reconcile };
 }
 
 describe("happyAgentChatOnboardingStore", () => {
@@ -92,6 +113,70 @@ describe("happyAgentChatOnboardingStore", () => {
         await new Promise((resolve) => setTimeout(resolve, 20));
         expect(server.startOnboardingFlow).not.toHaveBeenCalled();
         expect(server.conversationOpen).not.toHaveBeenCalled();
+        stop();
+        store[Symbol.dispose]();
+    });
+
+    it("takes a flow of another recipe that replaces the one it had, though its version starts over", async () => {
+        const team = flowOf({
+            version: "0190a000-0000-7000-8000-000000000009",
+            recipe: "teamOwner",
+            status: "running",
+            agentId: "chief-of-staff",
+        });
+        const server = serverOf({ read: team });
+        const store = happyAgentChatOnboardingStoreCreate(server.deps);
+        const stop = store.subscribe(() => undefined);
+        store.begin();
+        await vi.waitFor(() =>
+            expect(server.conversationOpen).toHaveBeenCalledWith("chief-of-staff"),
+        );
+
+        // The member can no longer run the team's setup: their own Welcome replaces it.
+        server.options.read = flowOf({
+            version: "00000000-0000-7000-8000-000000000000",
+            recipe: "teammate",
+            status: "not_started",
+        });
+        server.options.started = flowOf({
+            version: "0190a000-0000-7000-8000-000000000003",
+            recipe: "teammate",
+            status: "running",
+            agentId: WELCOME_TASK,
+        });
+        server.reconcile();
+
+        await vi.waitFor(() => expect(server.conversationOpen).toHaveBeenCalledWith(WELCOME_TASK));
+        expect(store.get().flow?.recipe).toBe("teammate");
+        expect(server.startOnboardingFlow).toHaveBeenCalledTimes(1);
+        stop();
+        store[Symbol.dispose]();
+    });
+
+    it("keeps the greater version of one flow when an older answer arrives late", async () => {
+        const newer = flowOf({
+            version: "0190a000-0000-7000-8000-000000000005",
+            recipe: "teamOwner",
+            status: "running",
+            agentId: "chief-of-staff",
+            step: "invite",
+        });
+        const server = serverOf({ read: newer });
+        const store = happyAgentChatOnboardingStoreCreate(server.deps);
+        const stop = store.subscribe(() => undefined);
+        await vi.waitFor(() => expect(store.get().flow?.step).toBe("invite"));
+
+        server.options.read = flowOf({
+            version: "0190a000-0000-7000-8000-000000000004",
+            recipe: "teamOwner",
+            status: "running",
+            agentId: "chief-of-staff",
+            step: "name",
+        });
+        server.reconcile();
+        await new Promise((resolve) => setTimeout(resolve, 30));
+
+        expect(store.get().flow?.step).toBe("invite");
         stop();
         store[Symbol.dispose]();
     });
