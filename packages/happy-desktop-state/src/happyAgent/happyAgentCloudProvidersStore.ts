@@ -2,6 +2,7 @@ import { createStore } from "zustand/vanilla";
 import type { HappyAgentSync } from "../happyAgentConnection/happyAgentSync.js";
 import type { UserError } from "../types.js";
 import type {
+    HappyAgentCloudCapabilities,
     HappyAgentCloudConnection,
     HappyAgentCloudKeyVendor,
     HappyAgentCloudProvidersApi,
@@ -64,6 +65,8 @@ export interface HappyAgentCloudProvidersSnapshot {
     readonly teamAllowed: boolean;
     /** The subscriptions this server signs in to now. */
     readonly signIns: ReadonlySet<HappyAgentCloudSignInCli>;
+    /** Whether this server takes a Claude setup token. */
+    readonly setupToken: boolean;
     /** Credentials whose change the server hasn't answered. */
     readonly credentialsSaving: ReadonlySet<string>;
     readonly add?: HappyAgentCloudProviderAdd;
@@ -147,8 +150,13 @@ export function happyAgentCloudProvidersStoreCreate(
         privateAllowed: true,
         teamAllowed: false,
         signIns: NO_SIGN_INS,
+        setupToken: false,
         credentialsSaving: NO_SAVING,
     }));
+    /** The sign-ins `/v0/provider-clis` lists, before the server's capabilities narrow them. */
+    let listedSignIns: ReadonlySet<HappyAgentCloudSignInCli> = NO_SIGN_INS;
+    /** What the server says it can add; absent on servers that don't say. */
+    let capabilities: HappyAgentCloudCapabilities | undefined;
     const listeners = new Set<() => void>();
     let disposed = false;
     let follow: AbortController | undefined;
@@ -179,9 +187,11 @@ export function happyAgentCloudProvidersStoreCreate(
     const listRead = (): void => {
         if (disposed) return;
         const ticket = ++generation;
-        void deps.api.connectionsRead().then(
-            (connections) => {
+        void deps.api.providersRead().then(
+            ({ connections, capabilities: said }) => {
                 if (disposed || ticket !== generation) return;
+                capabilities = said;
+                offersPublish();
                 const current = store.getState();
                 const { error: _cleared, ...rest } = current;
                 store.setState(
@@ -235,12 +245,34 @@ export function happyAgentCloudProvidersStoreCreate(
         void deps.api.signInsRead().then(
             (signIns) => {
                 if (disposed) return;
-                store.setState({ signIns }, false);
-                const add = store.getState().add;
-                if (add) addUpdate({ flow: flowOffered(add.flow) });
+                listedSignIns = signIns;
+                offersPublish();
             },
             () => undefined,
         );
+    };
+
+    /**
+     * Publishes what may be added: a sign-in the server lists and, where it
+     * says, can do; a setup token only where it says it takes one.
+     */
+    const offersPublish = (): void => {
+        const signIns =
+            capabilities?.claudeSignIn === false && listedSignIns.has("claude")
+                ? new Set([...listedSignIns].filter((cli) => cli !== "claude"))
+                : listedSignIns;
+        const setupToken = capabilities?.claudeSetupToken === true;
+        const current = store.getState();
+        const same =
+            current.setupToken === setupToken &&
+            current.signIns.size === signIns.size &&
+            [...signIns].every((cli) => current.signIns.has(cli));
+        if (!same) store.setState({ signIns, setupToken }, false);
+        const add = store.getState().add;
+        if (add) {
+            const flow = flowOffered(add.flow);
+            if (flow !== add.flow) addUpdate({ flow, to: destinationOf(add.to, flow) });
+        }
     };
 
     /** The destination asked for, where the reader may add to it and the flow may be kept. */
@@ -257,12 +289,16 @@ export function happyAgentCloudProvidersStoreCreate(
 
     /** The flow asked for, where this server offers it. */
     const flowOffered = (flow: HappyAgentCloudProviderAddFlow): HappyAgentCloudProviderAddFlow => {
-        const { signIns, teamAllowed } = store.getState();
+        const { signIns, setupToken, teamAllowed } = store.getState();
         if (flow.kind === "chatgpt" && !signIns.has("codex")) return { kind: "choose" };
         if (happyAgentCloudProviderAddTeamOnly(flow) && !teamAllowed)
             return { kind: "apiKey", vendor: "openai" };
-        if (flow.kind === "claude" && !flow.setupToken && !signIns.has("claude"))
-            return { kind: "claude", setupToken: true };
+        if (flow.kind === "claude") {
+            const signIn = signIns.has("claude");
+            if (flow.setupToken ? setupToken : signIn) return flow;
+            if (signIn || setupToken) return { kind: "claude", setupToken };
+            return { kind: "choose" };
+        }
         return flow;
     };
 
@@ -609,6 +645,7 @@ const INERT_SNAPSHOT: HappyAgentCloudProvidersSnapshot = {
     privateAllowed: false,
     teamAllowed: false,
     signIns: NO_SIGN_INS,
+    setupToken: false,
     credentialsSaving: NO_SAVING,
 };
 

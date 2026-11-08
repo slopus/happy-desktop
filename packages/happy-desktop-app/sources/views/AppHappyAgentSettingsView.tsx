@@ -2355,6 +2355,7 @@ function providerAddProps(
         teamRoutingEditable: snapshot.teamAllowed,
         chatgptAvailable: snapshot.signIns.has("codex"),
         claudeAvailable: snapshot.signIns.has("claude"),
+        setupTokenAvailable: snapshot.setupToken,
         onFlowSelect: (flow) => store.addFlowSelect(flow),
         onBack: () => store.addBack(),
         onClose: () => store.addClose(),

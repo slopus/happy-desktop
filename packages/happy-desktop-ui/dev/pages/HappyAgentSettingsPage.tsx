@@ -715,6 +715,7 @@ function AiProvidersSpecimen(props: {
                                   teamRoutingEditable: true,
                                   chatgptAvailable: true,
                                   claudeAvailable: true,
+                                  setupTokenAvailable: true,
                                   onFlowSelect: (flow) => addSet({ flow, phase: "idle" }),
                                   onBack: () => addSet({ flow: { kind: "choose" }, phase: "idle" }),
                                   onClose: () => addSet(undefined),

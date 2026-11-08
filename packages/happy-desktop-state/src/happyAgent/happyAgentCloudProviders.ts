@@ -50,6 +50,13 @@ export interface HappyAgentCloudConnection {
 }
 
 /** The vendors a person adds an API key for by hand; Bedrock also takes AWS access keys. */
+/** What the server can add, from `GET /v0/cloud/providers`, on servers that say. */
+export interface HappyAgentCloudCapabilities {
+    /** Whether a Claude setup token (`oauth_token`) is accepted. */
+    readonly claudeSetupToken: boolean;
+    readonly claudeSignIn: boolean;
+}
+
 export type HappyAgentCloudKeyVendor = "openai" | "anthropic" | "grok" | "bedrock";
 
 /** Where a credential added by hand or a sign-in is kept. */
@@ -85,6 +92,11 @@ export interface HappyAgentCloudSignIn {
 /** Happy Cloud's provider routes, over the connection's own transport. */
 export interface HappyAgentCloudProvidersApi {
     connectionsRead(): Promise<readonly HappyAgentCloudConnection[]>;
+    /** The connections, and what the server can add to them where it says. */
+    providersRead(): Promise<{
+        readonly connections: readonly HappyAgentCloudConnection[];
+        readonly capabilities?: HappyAgentCloudCapabilities;
+    }>;
     /** Checks and stores a credential; `duplicate` when it was already there. */
     credentialAdd(
         connectionId: string,
@@ -252,15 +264,26 @@ export function happyAgentCloudProvidersApiCreate(
     const credentials = (connectionId: string): string =>
         `v0/cloud/providers/${encodeURIComponent(connectionId)}/credentials`;
     const cli = (id: HappyAgentCloudSignInCli): string => `v0/provider-clis/${id}`;
-    return {
-        connectionsRead: async () => {
+    const api: HappyAgentCloudProvidersApi = {
+        connectionsRead: async () => (await api.providersRead()).connections,
+        providersRead: async () => {
             const answer = recordOf(await request("GET", "v0/cloud/providers"));
-            return Array.isArray(answer?.providers)
+            const connections = Array.isArray(answer?.providers)
                 ? answer.providers.flatMap((value: unknown) => {
                       const read = connectionRead(value);
                       return read ? [read] : [];
                   })
                 : [];
+            const capabilities = recordOf(answer?.capabilities);
+            return capabilities
+                ? {
+                      connections,
+                      capabilities: {
+                          claudeSetupToken: capabilities.claudeSetupToken === true,
+                          claudeSignIn: capabilities.claudeSignIn === true,
+                      },
+                  }
+                : { connections };
         },
         credentialAdd: async (connectionId, input) => {
             const answer = recordOf(
@@ -322,6 +345,7 @@ export function happyAgentCloudProvidersApiCreate(
             await request("POST", `${cli(id)}/cancel`, { mutationId });
         },
     };
+    return api;
 }
 
 /** What a connection is called on screen: Happy (free), My account, or its own name. */

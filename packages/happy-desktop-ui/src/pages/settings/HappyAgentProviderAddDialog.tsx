@@ -48,8 +48,10 @@ export interface HappyAgentProviderAddDialogProps {
     readonly teamRoutingEditable: boolean;
     /** Whether this server signs in to ChatGPT itself. */
     readonly chatgptAvailable: boolean;
-    /** Whether this server signs in to Claude itself; a setup token works either way. */
+    /** Whether this server signs in to Claude itself. */
     readonly claudeAvailable: boolean;
+    /** Whether this server takes a Claude setup token. */
+    readonly setupTokenAvailable: boolean;
     onFlowSelect: (flow: HappyAgentProviderAddFlow) => void;
     onBack: () => void;
     onClose: () => void;
@@ -274,19 +276,21 @@ export function HappyAgentProviderAddDialog(props: HappyAgentProviderAddDialogPr
                                             Sign in with ChatGPT
                                         </Button>
                                     ) : null}
-                                    <Button
-                                        onClick={() =>
-                                            flowSelect({
-                                                kind: "claude",
-                                                setupToken: !props.claudeAvailable,
-                                            })
-                                        }
-                                        variant="secondary"
-                                    >
-                                        {props.claudeAvailable
-                                            ? "Sign in with Claude"
-                                            : "Use a Claude setup token"}
-                                    </Button>
+                                    {props.claudeAvailable || props.setupTokenAvailable ? (
+                                        <Button
+                                            onClick={() =>
+                                                flowSelect({
+                                                    kind: "claude",
+                                                    setupToken: !props.claudeAvailable,
+                                                })
+                                            }
+                                            variant="secondary"
+                                        >
+                                            {props.claudeAvailable
+                                                ? "Sign in with Claude"
+                                                : "Use a Claude setup token"}
+                                        </Button>
+                                    ) : null}
                                     <Button
                                         onClick={() =>
                                             flowSelect({ kind: "apiKey", vendor: "openai" })
@@ -447,18 +451,20 @@ export function HappyAgentProviderAddDialog(props: HappyAgentProviderAddDialogPr
                                             />
                                         </>
                                     ) : null}
-                                    <Box className="happy-agent-provider-add__row">
-                                        <Button
-                                            disabled={busy}
-                                            onClick={() =>
-                                                flowSelect({ kind: "claude", setupToken: true })
-                                            }
-                                            size="small"
-                                            variant="ghost"
-                                        >
-                                            Use a setup token instead
-                                        </Button>
-                                    </Box>
+                                    {props.setupTokenAvailable ? (
+                                        <Box className="happy-agent-provider-add__row">
+                                            <Button
+                                                disabled={busy}
+                                                onClick={() =>
+                                                    flowSelect({ kind: "claude", setupToken: true })
+                                                }
+                                                size="small"
+                                                variant="ghost"
+                                            >
+                                                Use a setup token instead
+                                            </Button>
+                                        </Box>
+                                    ) : null}
                                 </>
                             ) : props.phase === "waiting" && props.signIn ? (
                                 <>
