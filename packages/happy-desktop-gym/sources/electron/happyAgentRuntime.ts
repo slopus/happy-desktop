@@ -18,10 +18,17 @@ export interface StartedHappyAgentRuntime extends HappyAgentRuntime {
     readonly client: GymHappyAgentClient;
 }
 
+/**
+ * Starts the run's isolated Happy Agent. `daemonSecrets` reach only the started
+ * daemon's own environment, such as a provider's sign-in token: they are not
+ * written to the run's profile, not in `environment` (which the app is launched
+ * with), and not given to any other command.
+ */
 export async function happyAgentRuntimeCreate(
     paths: GymRunPaths,
     inference: GymInferenceServer | undefined,
     liveConfiguration?: string,
+    daemonSecrets: Readonly<Record<string, string>> = {},
 ): Promise<StartedHappyAgentRuntime> {
     if (inference === undefined && liveConfiguration === undefined)
         throw new Error("Live inference requires an explicit run-owned provider configuration.");
@@ -68,7 +75,13 @@ export async function happyAgentRuntimeCreate(
         windowsHide: true,
     }).catch(() => undefined);
     await unlink(paths.socketPath).catch(() => undefined);
-    const runtime = new LocalHappyAgentRuntime(paths, command, environment, inference);
+    const runtime = new LocalHappyAgentRuntime(
+        paths,
+        command,
+        environment,
+        daemonSecrets,
+        inference,
+    );
     await runtime.start();
     return runtime;
 }
@@ -77,6 +90,7 @@ class LocalHappyAgentRuntime implements StartedHappyAgentRuntime {
     readonly #paths: GymRunPaths;
     readonly #inference: GymInferenceServer | undefined;
     readonly #environment: Record<string, string>;
+    readonly #daemonSecrets: Readonly<Record<string, string>>;
     readonly #command: string;
     #token = "";
     #client: GymHappyAgentClient | undefined;
@@ -85,11 +99,13 @@ class LocalHappyAgentRuntime implements StartedHappyAgentRuntime {
         paths: GymRunPaths,
         command: string,
         environment: Record<string, string>,
+        daemonSecrets: Readonly<Record<string, string>>,
         inference: GymInferenceServer | undefined,
     ) {
         this.#paths = paths;
         this.#command = command;
         this.#environment = environment;
+        this.#daemonSecrets = daemonSecrets;
         this.#inference = inference;
     }
 
@@ -122,7 +138,7 @@ class LocalHappyAgentRuntime implements StartedHappyAgentRuntime {
     async start(): Promise<void> {
         await execFileAsync(this.#command, ["start"], {
             cwd: this.#paths.root,
-            env: this.#environment,
+            env: { ...this.#environment, ...this.#daemonSecrets },
             timeout: 75_000,
             maxBuffer: 2 * 1024 * 1024,
             windowsHide: true,

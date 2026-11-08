@@ -77,6 +77,11 @@ export class GymHappyAgentClient {
         return await this.#client.getHealth();
     }
 
+    /** The onboarding flow, on a daemon with `chatOnboarding`. */
+    async onboardingFlow(): Promise<happyAgentProtocol.OnboardingFlow> {
+        return (await this.#client.getOnboardingFlow()).flow;
+    }
+
     async projects(): Promise<{ readonly projects: readonly HappyAgentProject[] }> {
         const response = await this.#client.listProjects();
         return { projects: response.projects.map(projectProject) };

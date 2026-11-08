@@ -24,10 +24,16 @@ export interface GymPersona {
 export const GYM_PERSONA_NEW_USER: GymPersona = {
     name: "Alex Rivera",
     email: "alex@example.com",
-    prefers: [/^Claude/u, /^Codex|^ChatGPT/u, /^Continue|^Next|^Let's go|^Get started/u, /^Skip/u],
+    prefers: [
+        /^Claude/u,
+        /^Codex|^ChatGPT/u,
+        /^Continue|^Next|^Let's go|^Get started/u,
+        /^Skip/u,
+        /^Later|^Not now|^Maybe later/u,
+    ],
     avoids: [/sign-in page/iu, /^Cancel$/u],
     answers: [
-        { when: /name/iu, text: "I'm Alex Rivera, alex@example.com" },
+        { when: /name|call you|email/iu, text: "I'm Alex Rivera, alex@example.com" },
         { when: /project/iu, text: "Let's skip the project for now." },
         { when: /phone/iu, text: "Not now, thanks." },
     ],
@@ -147,10 +153,10 @@ export type GymChatOffer =
     | { readonly kind: "composer"; readonly composer: Locator; readonly prompt: string }
     | { readonly kind: "none" };
 
+/** A table is drawn inside its checklist, so the checklist stands for both. */
 const LIVE_BLOCK = [
     '[data-happy-desktop-ui="chat-action-buttons"]:not([data-locked])',
     '[data-happy-desktop-ui="chat-action-checklist"]:not([data-locked])',
-    '[data-happy-desktop-ui="chat-action-table"]:not([data-locked])',
     '[data-happy-desktop-ui="chat-action-code"]:not([data-locked])',
 ].join(", ");
 
@@ -169,8 +175,7 @@ export async function gymChatOfferRead(page: Page, persona: GymPersona): Promise
         const enabled = block.locator("button:not([disabled])");
         if ((await enabled.count()) === 0 && kind !== "chat-action-code") continue;
         if (kind === "chat-action-code") return { kind: "code", block };
-        if (kind === "chat-action-checklist" || kind === "chat-action-table")
-            return { kind: "checklist", block };
+        if (kind === "chat-action-checklist") return { kind: "checklist", block };
         return { kind: "buttons", block, labels: await enabled.allInnerTexts() };
     }
     const composer = page.locator('[data-happy-desktop-ui="composer-textarea"]').first();
@@ -233,11 +238,12 @@ export async function gymPersonaTurn(
             return true;
         }
         case "checklist": {
+            // What is ticked already is what this person wants; the submit is
+            // the first button under the options.
             await driver.read(await offer.block.innerText());
-            const submit = offer.block.locator(
-                'button[type="submit"]:not([disabled]), button:not([disabled])',
+            await driver.press(
+                offer.block.locator(".happy-chat-action__buttons button:not([disabled])").first(),
             );
-            await driver.press(submit.first());
             return true;
         }
         case "code":
