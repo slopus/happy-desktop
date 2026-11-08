@@ -8,6 +8,7 @@ import {
 } from "happy-desktop-state/testing";
 import {
     HappyAgentApiError,
+    welcomeStoreCreate,
     type ComposerSnapshot,
     type HappyAgentSessionId,
     type HappyAgentProjectId,
@@ -85,6 +86,7 @@ async function fixture(
         host: { applicationMenuOpen: () => {}, directoryPick: async () => undefined },
         modelPreferencePersistence: { read: () => undefined, write: () => {} },
         terminalColorScheme: () => "light",
+        welcome: welcomeStoreCreate(),
     });
     handles.push(handle);
     await vi.waitFor(() => expect(handle.get()).toBeDefined());

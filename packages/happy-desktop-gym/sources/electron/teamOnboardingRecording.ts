@@ -267,22 +267,13 @@ async function devSignIn(authorization: string, login: string, password: string)
 }
 
 /**
- * Takes the server's own first screens: its welcome, then the profile it asks
- * a new member for, when it asks.
+ * Takes the profile the server asks a new member for, when it asks. The
+ * window's welcome was already read, so the server never shows its own.
  */
 async function profileSave(page: Page, driver: GymPersonaDriver, persona: GymPersona) {
-    const welcome = page.locator('[data-happy-desktop-ui="welcome-screen"]');
     const profile = page.locator('[data-testid="profile-setup-screen"]');
-    const first = await Promise.race([
-        welcome.waitFor({ state: "visible", timeout: 30_000 }).then(() => "welcome" as const),
-        profile.waitFor({ state: "visible", timeout: 30_000 }).then(() => "profile" as const),
-    ]).catch(() => undefined);
-    if (first === "welcome") {
-        await driver.read(await welcome.innerText());
-        await driver.press(welcome.locator(".happy-welcome-screen__action").first());
-    }
     const shown = await profile
-        .waitFor({ state: "visible", timeout: 15_000 })
+        .waitFor({ state: "visible", timeout: 30_000 })
         .then(() => true)
         .catch(() => false);
     if (!shown) return;

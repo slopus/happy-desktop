@@ -23,7 +23,6 @@ import {
     type HappyAgentDefaultModelStore,
     type HappyAgentProviderClisStore,
     type HappyAgentSessionId,
-    welcomeStoreCreate,
     type WelcomeStore,
     type HappyAgentOnboardingStore,
     HappyAgentApiError,
@@ -65,7 +64,6 @@ import {
 } from "happy-desktop-state";
 import { imageCropOpen } from "happy-desktop-ui";
 import { desktopViewPreferencesPersistence } from "./desktopViewPreferences";
-import { desktopWelcomePersistence } from "./desktopWelcome";
 import {
     desktopHappyMobileOnboardingSkip,
     desktopHappyMobileOnboardingSkipped,
@@ -406,6 +404,11 @@ export function happyAgentConnectionOpen(input: {
     readonly modelPreferencePersistence: HappyAgentModelPreferencePersistence;
     readonly happyAgentId: string;
     /**
+     * The window's welcome. It introduces the person to Happy once, whichever
+     * machine or team they connect to afterwards, so every connection shares it.
+     */
+    readonly welcome: WelcomeStore;
+    /**
      * Where the daemon answers. The proxy forwards the daemon's own `/v0`
      * namespace as it stands, so this one origin serves the protocol client,
      * the catalog, and the desktop-local host routes alike.
@@ -500,7 +503,7 @@ export function happyAgentConnectionOpen(input: {
         input.happyAgentHttpUrl,
         { deviceBridges: input.deviceBridges ?? false },
     );
-    const welcome = welcomeStoreCreate(desktopWelcomePersistence(input.happyAgentId));
+    const welcome = input.welcome;
     // One clock and one mobile connector per Happy Agent: onboarding and
     // Settings show the same pairing, and both count its codes down.
     const clock = happyAgentClockStoreCreate();
@@ -522,6 +525,17 @@ export function happyAgentConnectionOpen(input: {
     const onboarding = pairingObserve
         ? { ...onboardingStore, mobile: pairingObserve.onboarding(onboardingStore.mobile) }
         : onboardingStore;
+    // A server opened before the window's welcome was read begins its setup
+    // when it is: the welcome it would otherwise show is the one just read.
+    // The machine's own Happy Agent begins with the window's first-run setup.
+    let welcomeUnsubscribe: (() => void) | undefined;
+    if (input.happyAgentId !== "local" && !welcome.get().welcomeAcknowledged)
+        welcomeUnsubscribe = welcome.subscribe(() => {
+            if (!welcome.get().welcomeAcknowledged) return;
+            welcomeUnsubscribe?.();
+            welcomeUnsubscribe = undefined;
+            onboarding.onboardingBegin();
+        });
     /** The conversation onboarding asked to open, until the workspace can say where it is. */
     let chatOnboardingAgent: { readonly agentId: string; attempts: number } | undefined;
     let chatOnboardingRetry: ReturnType<typeof setTimeout> | undefined;
@@ -850,6 +864,7 @@ export function happyAgentConnectionOpen(input: {
                 source: "connection",
             });
             disposed = true;
+            welcomeUnsubscribe?.();
             if (retry) clearTimeout(retry);
             if (chatOnboardingRetry) clearTimeout(chatOnboardingRetry);
             workspaceKeepWarm?.();
