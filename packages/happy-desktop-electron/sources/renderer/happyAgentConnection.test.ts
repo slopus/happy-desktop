@@ -1,6 +1,11 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { welcomeStoreCreate, type WelcomeStore } from "happy-desktop-state";
+import {
+    experimentsStoreCreate,
+    welcomeStoreCreate,
+    type HappyAgentChatOnboardingGate,
+    type WelcomeStore,
+} from "happy-desktop-state";
 import { fakeHappyAgentDaemonCreate } from "happy-desktop-state/testing";
 import type {
     DesktopRuntimeSnapshot,
@@ -50,7 +55,11 @@ afterEach(() => {
 
 function connectionOpen(
     daemon: ReturnType<typeof fakeHappyAgentDaemonCreate>,
-    options: { readonly local: boolean; readonly welcome?: WelcomeStore },
+    options: {
+        readonly local: boolean;
+        readonly welcome?: WelcomeStore;
+        readonly chatOnboardingGate?: HappyAgentChatOnboardingGate;
+    },
 ): HappyAgentConnectionHandle {
     const handle = happyAgentConnectionOpen({
         client: daemon.client,
@@ -75,6 +84,7 @@ function connectionOpen(
         modelPreferencePersistence: { read: () => undefined, write: () => undefined },
         terminalColorScheme: () => "light",
         welcome: options.welcome ?? welcomeStoreCreate(),
+        ...(options.chatOnboardingGate ? { chatOnboardingGate: options.chatOnboardingGate } : {}),
     });
     handles.push(handle);
     return handle;
@@ -153,6 +163,60 @@ it("begins a team server's setup when the window's welcome is read after it open
 
     welcome.welcomeAcknowledge();
     await vi.waitFor(() => expect(completeOnboarding).toHaveBeenCalledTimes(1));
+});
+
+/** The "Experimental onboarding" switch as the window builds it, on or off for this build. */
+function onboardingGateOf(offered: boolean) {
+    const experiments = experimentsStoreCreate(undefined, undefined, { onboarding: offered });
+    return {
+        experiments,
+        gate: { get: () => experiments.get().onboarding, subscribe: experiments.subscribe },
+    };
+}
+
+it("keeps the window's own setup and never starts the daemon's flow with experimental onboarding off", async () => {
+    const daemon = fakeHappyAgentDaemonCreate();
+    daemon.onboardingSet(freshMachineOnboarding);
+    daemon.healthSet({ chatOnboarding: true });
+    const { gate } = onboardingGateOf(false);
+    const handle = connectionOpen(daemon, { local: true, chatOnboardingGate: gate });
+    const setup = handle.setup!;
+    const chatOnboarding = setup.chatOnboarding!;
+    unsubscribes.push(setup.onboarding.subscribe(() => undefined));
+    unsubscribes.push(chatOnboarding.subscribe(() => undefined));
+
+    await vi.waitFor(() => expect(handle.get()).toBeDefined());
+    await vi.waitFor(() => expect(setup.onboarding.get().available).toBe(true));
+    chatOnboarding.begin();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(setup.onboarding.get().chatOnboarding).toBe(false);
+    expect(chatOnboarding.get().status).toBe("unsupported");
+    expect(daemon.callCount("getOnboardingFlow")).toBe(0);
+    expect(daemon.callCount("startOnboardingFlow")).toBe(0);
+});
+
+it("hands setup to the daemon's conversation with experimental onboarding on", async () => {
+    const daemon = fakeHappyAgentDaemonCreate();
+    daemon.onboardingSet(freshMachineOnboarding);
+    daemon.healthSet({ chatOnboarding: true });
+    const { gate, experiments } = onboardingGateOf(true);
+    const handle = connectionOpen(daemon, { local: true, chatOnboardingGate: gate });
+    const setup = handle.setup!;
+    const chatOnboarding = setup.chatOnboarding!;
+    unsubscribes.push(setup.onboarding.subscribe(() => undefined));
+    unsubscribes.push(chatOnboarding.subscribe(() => undefined));
+
+    await vi.waitFor(() => expect(handle.get()).toBeDefined());
+    await vi.waitFor(() => expect(chatOnboarding.get().status).toBe("available"));
+    expect(setup.onboarding.get().chatOnboarding).toBe(true);
+    chatOnboarding.begin();
+    await vi.waitFor(() => expect(daemon.callCount("startOnboardingFlow")).toBe(1));
+    await vi.waitFor(() => expect(chatOnboarding.get().flow?.status).toBe("running"));
+
+    // Turned off in Settings, the window takes its own setup back.
+    experiments.featureUpdate("onboarding", false, "experiments");
+    expect(chatOnboarding.get().status).toBe("unsupported");
+    expect(setup.onboarding.get().chatOnboarding).toBe(false);
 });
 
 it("loads the workspace without reading health, onboarding, profile, or config apart", async () => {

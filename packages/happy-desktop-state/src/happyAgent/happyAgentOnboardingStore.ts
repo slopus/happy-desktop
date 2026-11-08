@@ -2,6 +2,7 @@ import { HappyAgentApiError, type HappyAgentClient } from "@slopus/happy-agent-c
 import type { HappyAgentSync } from "../happyAgentConnection/happyAgentSync.js";
 import { happyAgentSyncRead } from "../happyAgentConnection/happyAgentSyncRead.js";
 import type { HappyAgentMobileConnectorStore } from "./happyAgentMobileConnectorStore.js";
+import type { HappyAgentChatOnboardingGate } from "./happyAgentChatOnboardingStore.js";
 import {
     happyMobileOnboardingStoreCreate,
     type HappyMobileOnboardingStore,
@@ -162,6 +163,11 @@ export function happyAgentOnboardingStoreCreate(
         readonly guidedMobileSetup?: boolean;
         /** The connection's direct connector, offered beside the relay code. */
         readonly mobileConnector?: HappyAgentMobileConnectorStore;
+        /**
+         * Whether this window takes onboarding the server runs as a
+         * conversation; absent, it does wherever the server offers it.
+         */
+        readonly chatOnboardingGate?: HappyAgentChatOnboardingGate;
     } = {},
 ): HappyAgentOnboardingStore {
     let snapshot: HappyAgentOnboardingSnapshot = {
@@ -178,6 +184,7 @@ export function happyAgentOnboardingStoreCreate(
     let completion: AbortController | undefined;
     let completionRetry: ReturnType<typeof setTimeout> | undefined;
     let mobileUnsubscribe: (() => void) | undefined;
+    let gateStop: (() => void) | undefined;
     const mobile = happyMobileOnboardingStoreCreate({
         client,
         sync,
@@ -192,7 +199,9 @@ export function happyAgentOnboardingStoreCreate(
             : next.state;
         // Health is read before anything it admits is published, so every
         // publish carries what this server said about itself.
-        const chatOnboarding = sync.health()?.capabilities?.chatOnboarding === true;
+        const chatOnboarding =
+            sync.health()?.capabilities?.chatOnboarding === true &&
+            (options.chatOnboardingGate?.get() ?? true);
         if (
             state === snapshot.state &&
             chatOnboarding === snapshot.chatOnboarding &&
@@ -286,6 +295,11 @@ export function happyAgentOnboardingStoreCreate(
         if (controller || disposed || !listeners.size) return;
         const active = new AbortController();
         controller = active;
+        // Turning conversation onboarding off hands setup back to this window.
+        gateStop ??= options.chatOnboardingGate?.subscribe(() => {
+            publish({ ...snapshot });
+            setupSynchronize();
+        });
         void (async () => {
             for await (const input of sync.follow({
                 signal: active.signal,
@@ -357,6 +371,8 @@ export function happyAgentOnboardingStoreCreate(
             });
     };
     const stop = (): void => {
+        gateStop?.();
+        gateStop = undefined;
         controller?.abort();
         controller = undefined;
         completion?.abort();

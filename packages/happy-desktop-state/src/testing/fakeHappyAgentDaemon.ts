@@ -20,6 +20,7 @@ import {
     type FailureResolutionResponse,
     type HappyAgentEvent,
     type HistoryRun,
+    type OnboardingFlow,
     type Message,
     type MessageFailureResolution,
     type MessageHistoryQuery,
@@ -186,6 +187,11 @@ export interface FakeHappyAgentDaemon {
         ready?: boolean;
         protocol?: number;
         desktopLiveControl?: boolean;
+        /**
+         * Health reports `capabilities.chatOnboarding`: the daemon runs
+         * onboarding as a conversation, in Chief of Staff's chat.
+         */
+        chatOnboarding?: boolean;
     }): void;
     /** Replace what `getOnboarding` and the desktop bootstrap report. */
     onboardingSet(state: {
@@ -431,6 +437,20 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
     /** Every event this process journaled; a replacement starts with none. */
     let journal: HappyAgentEvent[] = [];
     let desktopLiveControl: boolean | undefined;
+    let chatOnboarding = false;
+    /** The onboarding flow, which a start moves from not started to running in Chief of Staff's chat. */
+    let onboardingFlow: OnboardingFlow = {
+        version: "0190a000-0000-7000-8000-000000000001",
+        recipe: "local",
+        status: "not_started",
+        step: null,
+        agentId: null,
+        composer: "disabled",
+        composerPlaceholder: null,
+        restartRequired: false,
+        onboardingVersion: 1,
+        completedVersion: null,
+    };
     const liveSessions = new Map<string, LiveSession>();
     const liveUrls = new HappyAgentClient({ endpoint: "http://fake-happy-agent.test/" });
     let protocol = HAPPY_AGENT_PROTOCOL_VERSION;
@@ -696,6 +716,7 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
             ...(desktopLiveControl === undefined ? {} : { desktopLiveControl }),
             ...(feed === undefined ? {} : { feed: true }),
             ...(feedSubjectFilter ? { feedSubjectFilter: true } : {}),
+            ...(chatOnboarding ? { chatOnboarding: true } : {}),
         };
         return {
             healthy: true,
@@ -860,6 +881,23 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
         async getOnboarding(...args: unknown[]) {
             await record("getOnboarding", args);
             return onboarding;
+        },
+        async getOnboardingFlow(...args: unknown[]) {
+            await record("getOnboardingFlow", args);
+            if (!chatOnboarding) throw new HappyAgentApiError(404, "Not found.", "not_found", null);
+            return { flow: onboardingFlow };
+        },
+        async startOnboardingFlow(...args: unknown[]) {
+            await record("startOnboardingFlow", args);
+            if (!chatOnboarding) throw new HappyAgentApiError(404, "Not found.", "not_found", null);
+            if (onboardingFlow.status === "not_started")
+                onboardingFlow = {
+                    ...onboardingFlow,
+                    version: "0190a000-0000-7000-8000-000000000002",
+                    status: "running",
+                    agentId: "chief-of-staff",
+                };
+            return { flow: onboardingFlow };
         },
         async getProfile(...args: unknown[]) {
             await record("getProfile", args);
@@ -1627,6 +1665,7 @@ export function fakeHappyAgentDaemonCreate(): FakeHappyAgentDaemon {
             if (options.daemon !== undefined) daemonVersion = options.daemon;
             if (options.desktopLiveControl !== undefined)
                 desktopLiveControl = options.desktopLiveControl;
+            if (options.chatOnboarding !== undefined) chatOnboarding = options.chatOnboarding;
         },
         liveSessionSet(session) {
             liveSessions.set(session.id, session);
