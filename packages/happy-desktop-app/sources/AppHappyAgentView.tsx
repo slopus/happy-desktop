@@ -27,6 +27,7 @@ import {
     happyAgentSidebarTree,
     happyAgentTabsOrdered,
     happyAgentTodoHeading,
+    type ChatActionInvocation,
     type ConversationFileDiff,
     type GptLiveVoiceFocus,
     type HappyAgentSidebarProject,
@@ -35,6 +36,7 @@ import {
     type HappyAgentRepositoriesStore,
     type TaskRepository,
     happyAgentComputesStoreNoop,
+    happyAgentChatOnboardingComposer,
     happyAgentRepositoriesStoreNoop,
 } from "happy-desktop-state";
 import { AppGptLivePhone } from "./gptLive/AppGptLivePhone";
@@ -380,6 +382,10 @@ import {
     type CommandPaletteTab,
 } from "./commandPaletteResults";
 import { openExternalLink } from "./externalLink";
+import {
+    HappyAgentConversationExtrasContext,
+    happyAgentConversationExtras,
+} from "./components/HappyAgentChatFigures";
 import { changedFileRenderedDiffOffered } from "./changedFileRenderedDiff";
 import { fileDownload } from "./fileDownload";
 import { imageCopy } from "./imageCopy";
@@ -646,6 +652,8 @@ export type AppHappyAgentSignIn =
 export interface AppHappyAgentSetup {
     readonly welcome: import("happy-desktop-state").WelcomeStore;
     readonly onboarding: import("happy-desktop-state").HappyAgentOnboardingStore;
+    /** Onboarding the server runs as a conversation, where it does. */
+    readonly chatOnboarding?: import("happy-desktop-state").HappyAgentChatOnboardingStore;
     readonly profile: HappyAgentProfileStore;
     /** Counts pairing codes down during setup, before the session's stores load. */
     readonly clock: HappyAgentClockStore;
@@ -655,6 +663,15 @@ export interface AppHappyAgentSetup {
 export interface AppHappyAgentSession {
     readonly welcome?: import("happy-desktop-state").WelcomeStore;
     readonly onboarding?: import("happy-desktop-state").HappyAgentOnboardingStore;
+    /**
+     * Onboarding the server runs as a conversation: its conversation's
+     * composer follows the flow. Absent on a host that offers none.
+     */
+    readonly chatOnboarding?: import("happy-desktop-state").HappyAgentChatOnboardingStore;
+    /** The assistants' own programs on the server's machine, for a reply's figure. */
+    readonly providerClis?: () => import("happy-desktop-state").HappyAgentProviderClisStore;
+    /** The default model for new conversations, for a reply's figure. */
+    readonly defaultModel?: () => import("happy-desktop-state").HappyAgentDefaultModelStore;
     readonly clock: HappyAgentClockStore;
     readonly connection: HappyAgentConnectionStore;
     /** This Happy Agent installation's WorkOS account. */
@@ -4978,69 +4995,78 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
               },
           }
         : undefined;
+    // Read once per connection: the session and its stores keep one identity
+    // for its lifetime, so every conversation surface keeps its figures too.
+    const conversationExtras = happyAgentConversationExtras(active?.session, {
+        teamServer: active?.happyCloud === true,
+        linkOpen: props.onExternalLinkOpen ?? openExternalLink,
+    });
     return (
         <HappyAgentVersionProvider lastKnownVersion={active?.version}>
             <MessageSettingsLinksContext.Provider value={settingsLinks}>
-                <ComputesContext.Provider value={active?.session?.computes?.()}>
-                    <LinkCopyContext.Provider value={linkCopy}>
-                        {/* Window chrome has one lifetime. Happy Agent workspaces keep their own
+                <HappyAgentConversationExtrasContext.Provider value={conversationExtras}>
+                    <ComputesContext.Provider value={active?.session?.computes?.()}>
+                        <LinkCopyContext.Provider value={linkCopy}>
+                            {/* Window chrome has one lifetime. Happy Agent workspaces keep their own
                 keyed lifetimes inside its content region, so changing machines
                 resets machine-owned UI without rebuilding this sidebar's DOM,
                 focus, width, collapsed state, or scroll position. */}
-                        <AppShell
-                            sidebarCollapsible
-                            {...(props.sidebarVisibility
-                                ? {
-                                      sidebarCollapsed: sidebarVisibility.hidden,
-                                      onSidebarCollapsedChange:
-                                          sidebarVisibilityStore.sidebarHiddenUpdate,
-                                      sidebarDefaultWidth: sidebarVisibility.width,
-                                      onSidebarWidthChange:
-                                          sidebarVisibilityStore.sidebarWidthUpdate,
-                                  }
-                                : {})}
-                            sidebarShortcut
-                            windowControls={desktop}
-                            windowFullScreen={windowState.fullScreen}
-                            windowTrafficLights={windowState.trafficLights}
-                            connectionRail={windowState.connectionRail}
-                            sidebar={sidebar}
-                            // One band holds the sidebar toggle and the tabs; the
-                            // surface header is gone.
-                            navigationChrome="integrated"
-                            sidebarCollapsedLayout="overlay"
-                            {...(taskCreateTarget !== undefined
-                                ? {
-                                      sidebarCollapsedAction: {
-                                          label: "New task",
-                                          shortcut: APP_SHORTCUTS.taskCreate,
-                                          onClick: () => props.onTaskCreateOpen?.(taskCreateTarget),
-                                      },
-                                  }
-                                : {})}
-                            // The open sidebar's New task row is the one Create on
-                            // screen; the header offers it only while the sidebar hides.
-                            sidebarOwnsCreate={sidebarTaskCreateHappyAgent !== undefined}
-                        >
-                            {routeContent()}
-                        </AppShell>
-                        {storiesStore ? (
-                            <AppStoryViewer
-                                store={storiesStore}
-                                poster={storyPoster}
-                                now={() => active?.session?.clock.get() ?? 0}
-                                onChatOpen={(id) => {
-                                    const target =
-                                        active?.tasks?.find(
-                                            (task) => task.conversation.id === id,
-                                        ) ?? active?.bots.find((bot) => bot.conversation.id === id);
-                                    storiesStore.viewerClose();
-                                    if (active)
-                                        props.onChatSelect(active.id, target?.workspaceId, id);
-                                }}
-                            />
-                        ) : null}
-                        {/* Command-K belongs to the window rather than to a workspace: it is
+                            <AppShell
+                                sidebarCollapsible
+                                {...(props.sidebarVisibility
+                                    ? {
+                                          sidebarCollapsed: sidebarVisibility.hidden,
+                                          onSidebarCollapsedChange:
+                                              sidebarVisibilityStore.sidebarHiddenUpdate,
+                                          sidebarDefaultWidth: sidebarVisibility.width,
+                                          onSidebarWidthChange:
+                                              sidebarVisibilityStore.sidebarWidthUpdate,
+                                      }
+                                    : {})}
+                                sidebarShortcut
+                                windowControls={desktop}
+                                windowFullScreen={windowState.fullScreen}
+                                windowTrafficLights={windowState.trafficLights}
+                                connectionRail={windowState.connectionRail}
+                                sidebar={sidebar}
+                                // One band holds the sidebar toggle and the tabs; the
+                                // surface header is gone.
+                                navigationChrome="integrated"
+                                sidebarCollapsedLayout="overlay"
+                                {...(taskCreateTarget !== undefined
+                                    ? {
+                                          sidebarCollapsedAction: {
+                                              label: "New task",
+                                              shortcut: APP_SHORTCUTS.taskCreate,
+                                              onClick: () =>
+                                                  props.onTaskCreateOpen?.(taskCreateTarget),
+                                          },
+                                      }
+                                    : {})}
+                                // The open sidebar's New task row is the one Create on
+                                // screen; the header offers it only while the sidebar hides.
+                                sidebarOwnsCreate={sidebarTaskCreateHappyAgent !== undefined}
+                            >
+                                {routeContent()}
+                            </AppShell>
+                            {storiesStore ? (
+                                <AppStoryViewer
+                                    store={storiesStore}
+                                    poster={storyPoster}
+                                    now={() => active?.session?.clock.get() ?? 0}
+                                    onChatOpen={(id) => {
+                                        const target =
+                                            active?.tasks?.find(
+                                                (task) => task.conversation.id === id,
+                                            ) ??
+                                            active?.bots.find((bot) => bot.conversation.id === id);
+                                        storiesStore.viewerClose();
+                                        if (active)
+                                            props.onChatSelect(active.id, target?.workspaceId, id);
+                                    }}
+                                />
+                            ) : null}
+                            {/* Command-K belongs to the window rather than to a workspace: it is
                 offered on every route, including the ones no machine is behind.
                 It only opens. The dispatcher stands down while any dialog is
                 showing, so the palette's own key closes it from inside the card
@@ -5049,94 +5075,95 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                 A host that keeps no palette binds nothing: swallowing the chord
                 to do nothing with it is worse than leaving it to whatever else
                 the reader has bound Command-K to. */}
-                        {props.commandPalette ? (
-                            <WindowShortcuts
-                                actions={[
-                                    {
-                                        run: () => commandPaletteStore.paletteOpen(),
-                                        shortcut: APP_SHORTCUTS.paletteOpen,
-                                    },
-                                ]}
-                            />
-                        ) : null}
-                        {/* Cmd-N belongs to the window too: a task is made from wherever
+                            {props.commandPalette ? (
+                                <WindowShortcuts
+                                    actions={[
+                                        {
+                                            run: () => commandPaletteStore.paletteOpen(),
+                                            shortcut: APP_SHORTCUTS.paletteOpen,
+                                        },
+                                    ]}
+                                />
+                            ) : null}
+                            {/* Cmd-N belongs to the window too: a task is made from wherever
                 the reader is, as the New task row under Search makes one. Bound only
                 while the machine on screen can make one, so an older Happy
                 Agent leaves the chord to do nothing at all. */}
-                        {taskCreateTarget !== undefined ? (
-                            <WindowShortcuts
-                                actions={[
-                                    {
-                                        run: () => props.onTaskCreateOpen?.(taskCreateTarget),
-                                        shortcut: APP_SHORTCUTS.taskCreate,
-                                    },
-                                ]}
-                            />
-                        ) : null}
-                        {/* The window's own dialogs, mounted once beside whatever screen is
+                            {taskCreateTarget !== undefined ? (
+                                <WindowShortcuts
+                                    actions={[
+                                        {
+                                            run: () => props.onTaskCreateOpen?.(taskCreateTarget),
+                                            shortcut: APP_SHORTCUTS.taskCreate,
+                                        },
+                                    ]}
+                                />
+                            ) : null}
+                            {/* The window's own dialogs, mounted once beside whatever screen is
                 showing rather than inside one of them. Naming a row belongs to
                 the sidebar, and Create belongs to the window: both are reached
                 from chrome that is on every route, so a cog or a Create that
                 answered on the workspace and did nothing on the inbox would not
                 be a control. Being outside the screen is also what lets a task
                 being written survive the route notifications underneath it. */}
-                        {active?.session?.workspace ? (
-                            <HappyAgentWindowDialogs
-                                projects={active.projects}
-                                happyAgentOnline={activeHappyAgentOnline}
-                                onTaskOpen={(task) => {
-                                    active.session?.workspace.taskBrowseClose();
-                                    props.onChatSelect(
-                                        active.id,
-                                        task.workspaceId,
-                                        task.conversation.id,
-                                    );
-                                }}
-                                workspace={active.session.workspace}
-                                {...(activeAvailability?.refusal === undefined
-                                    ? {}
-                                    : { unavailable: activeAvailability.refusal })}
-                            />
-                        ) : null}
-                        {/* Making a Surface is the sidebar's, so it belongs to the window
+                            {active?.session?.workspace ? (
+                                <HappyAgentWindowDialogs
+                                    projects={active.projects}
+                                    happyAgentOnline={activeHappyAgentOnline}
+                                    onTaskOpen={(task) => {
+                                        active.session?.workspace.taskBrowseClose();
+                                        props.onChatSelect(
+                                            active.id,
+                                            task.workspaceId,
+                                            task.conversation.id,
+                                        );
+                                    }}
+                                    workspace={active.session.workspace}
+                                    {...(activeAvailability?.refusal === undefined
+                                        ? {}
+                                        : { unavailable: activeAvailability.refusal })}
+                                />
+                            ) : null}
+                            {/* Making a Surface is the sidebar's, so it belongs to the window
                 like the dialogs above, on whatever route is showing. */}
-                        {active && surfaceCatalog.create.phase === "open" ? (
-                            <HappyAgentSurfaceCreateDialog
-                                kind={surfaceCatalog.create.kind}
-                                onClose={surfaceCatalogStore.createClose}
-                                onSubmit={(input) => {
-                                    // The list exists the moment it is asked for, so it is
-                                    // opened at once; the Happy Agent hears in the background.
-                                    const surfaceId = surfaceCatalogStore.surfaceCreate(input);
-                                    if (surfaceId === undefined) return;
-                                    props.onSurfaceOpen?.(active.id, surfaceId);
-                                }}
-                            />
-                        ) : null}
-                        {/* The palette is mounted only while it is open and for the moment
+                            {active && surfaceCatalog.create.phase === "open" ? (
+                                <HappyAgentSurfaceCreateDialog
+                                    kind={surfaceCatalog.create.kind}
+                                    onClose={surfaceCatalogStore.createClose}
+                                    onSubmit={(input) => {
+                                        // The list exists the moment it is asked for, so it is
+                                        // opened at once; the Happy Agent hears in the background.
+                                        const surfaceId = surfaceCatalogStore.surfaceCreate(input);
+                                        if (surfaceId === undefined) return;
+                                        props.onSurfaceOpen?.(active.id, surfaceId);
+                                    }}
+                                />
+                            ) : null}
+                            {/* The palette is mounted only while it is open and for the moment
                 it takes to leave, so nothing in the window pays for a surface
                 nobody has asked for, and its own subscriptions — the workspace
                 above all — start and end with it. It belongs to the window, so
                 its dim covers the whole window, the connection rail included. */}
-                        <WindowCover>
-                            <ModalOverlayPresence open={commandPaletteOpen}>
-                                {active?.session?.workspace ? (
-                                    <HappyAgentCommandPaletteSurface
-                                        {...paletteSubject}
-                                        workspace={active.session.workspace}
-                                        {...paletteActions}
-                                    />
-                                ) : (
-                                    <HappyAgentCommandPalette
-                                        {...paletteSubject}
-                                        {...paletteActions}
-                                        facts={PALETTE_WORKSPACE_ABSENT}
-                                    />
-                                )}
-                            </ModalOverlayPresence>
-                        </WindowCover>
-                    </LinkCopyContext.Provider>
-                </ComputesContext.Provider>
+                            <WindowCover>
+                                <ModalOverlayPresence open={commandPaletteOpen}>
+                                    {active?.session?.workspace ? (
+                                        <HappyAgentCommandPaletteSurface
+                                            {...paletteSubject}
+                                            workspace={active.session.workspace}
+                                            {...paletteActions}
+                                        />
+                                    ) : (
+                                        <HappyAgentCommandPalette
+                                            {...paletteSubject}
+                                            {...paletteActions}
+                                            facts={PALETTE_WORKSPACE_ABSENT}
+                                        />
+                                    )}
+                                </ModalOverlayPresence>
+                            </WindowCover>
+                        </LinkCopyContext.Provider>
+                    </ComputesContext.Provider>
+                </HappyAgentConversationExtrasContext.Provider>
             </MessageSettingsLinksContext.Provider>
         </HappyAgentVersionProvider>
     );
@@ -9979,6 +10006,14 @@ function HappyAgentConversationSurface(props: {
     workspace: HappyAgentWorkspaceStore;
 }) {
     const { conversation, workspace } = props;
+    // The figures replies on this connection may hold, and the onboarding it
+    // may be running here.
+    const extras = use(HappyAgentConversationExtrasContext);
+    const chatOnboarding = useSyncExternalStore(
+        extras.chatOnboarding.subscribe,
+        extras.chatOnboarding.get,
+        extras.chatOnboarding.get,
+    );
     // The one subscription the transcript's references read through: every
     // reference row fans out from this snapshot rather than subscribing itself.
     const titlesStore = props.artifacts?.titles() ?? artifactTitlesStoreNoop;
@@ -10045,7 +10080,15 @@ function HappyAgentConversationSurface(props: {
     const modelsNotConfigured =
         conversation.menus?.modelOptions.length === 0 &&
         conversation.menus.currentAccount !== "hidden";
-    const composerDisabled = props.readOnly || modelsNotConfigured;
+    // While onboarding runs in this conversation its flow decides whether the
+    // box takes typing, and says what it holds; no AI being connected yet is
+    // what onboarding is there to fix, not a reason to lock it.
+    const onboardingComposer = happyAgentChatOnboardingComposer(
+        chatOnboarding,
+        conversation.conversationId,
+    );
+    const composerDisabled =
+        props.readOnly || (onboardingComposer ? onboardingComposer.disabled : modelsNotConfigured);
     const configurable = !composerDisabled && sendRefusal === undefined;
     const activeActivity = happyAgentActiveActivityCounts(conversation);
     const activityTotal = activeActivity.agents + activeActivity.terminals;
@@ -10137,7 +10180,7 @@ function HappyAgentConversationSurface(props: {
                 <HappyAgentComposerDock
                     composer={conversation.composer}
                     disabled={composerDisabled}
-                    {...(!props.readOnly && modelsNotConfigured
+                    {...(!props.readOnly && !onboardingComposer && modelsNotConfigured
                         ? { disabledNote: MODELS_NOT_CONFIGURED_NOTE }
                         : {})}
                     submitDisabled={sendRefusal !== undefined || props.restarting === true}
@@ -10164,8 +10207,9 @@ function HappyAgentConversationSurface(props: {
                     composerPlaceholder={
                         props.readOnly
                             ? (props.readOnlyReason ?? composerPlaceholder(props.groupName))
-                            : // The tab already names the chat.
-                              composerPlaceholder(undefined)
+                            : (onboardingComposer?.placeholder ??
+                              // The tab already names the chat.
+                              composerPlaceholder(undefined))
                     }
                     composerControls={
                         <>{modelControl ? <ComposerModelControl {...modelControl} /> : null}</>
@@ -10377,6 +10421,21 @@ function HappyAgentConversationSurface(props: {
                               : undefined,
                   }
                 : {})}
+            /* A press is the reader's own message, so it goes where one may: not
+               into a chat that is read-only to them. A composer held for any
+               other reason, such as onboarding's own steps, still takes it. */
+            actionsPressable={conversation.actionsPressable}
+            actionPending={conversation.actionPending}
+            {...(props.readOnly ||
+            props.writeRefusal !== undefined ||
+            props.unavailable !== undefined
+                ? {}
+                : {
+                      onActionPress: (invocation: ChatActionInvocation) => {
+                          if (props.happyAgentOnline()) workspace.actionPress(invocation);
+                      },
+                  })}
+            {...(extras.figures ? { actionFigures: extras.figures } : {})}
             expandedTurnIds={conversation.expandedTurnIds}
             expandedMessageIds={conversation.expandedMessageIds}
             onMessageExpandedChange={(messageId, expanded) =>

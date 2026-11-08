@@ -256,6 +256,13 @@ export interface HappyAgentDirectoryDeps {
      * so this is read once per shell rather than followed.
      */
     readonly terminalColorScheme: () => TerminalColorScheme;
+    /** Opens a web page in the person's browser, such as a vendor's sign-in page. */
+    readonly externalLinkOpen?: (url: string) => void;
+    /**
+     * Drains and restarts this machine's own Happy Agent. Absent on a host with
+     * no managed daemon, which leaves a restart onboarding asks for to the person.
+     */
+    readonly localRestart?: () => Promise<void>;
     /**
      * Keeps one Happy Agent's mute, hide, and completion-sound choices in that
      * daemon's user settings for as long as its connection is open, through
@@ -781,6 +788,16 @@ export function happyAgentDirectoryStoreCreate(
             happyAgentHttpUrl,
             modelPreferencePersistence: deps.modelPreferencePersistence(happyAgent.entry.id),
             terminalColorScheme: deps.terminalColorScheme,
+            ...(deps.externalLinkOpen ? { linkOpen: deps.externalLinkOpen } : {}),
+            // Only this machine's own Happy Agent is restarted from here, and
+            // when onboarding begins there is the window's first-run setup's
+            // call. Any other server's begins once its workspace loads, which
+            // for a team member is after their profile.
+            ...(happyAgent.entry.id === LOCAL_HAPPY_AGENT_ID && !deps.localHappyCloud
+                ? deps.localRestart
+                    ? { serverRestart: deps.localRestart }
+                    : {}
+                : { chatOnboardingBeginOnLoad: true }),
             deps: {
                 conversationOpen: (location) =>
                     deps.conversationOpen(happyAgent.entry.id, location),

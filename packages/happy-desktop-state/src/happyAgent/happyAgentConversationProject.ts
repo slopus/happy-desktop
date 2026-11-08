@@ -12,6 +12,7 @@ import {
     type ConversationRequestEntry,
     type ConversationToolCall,
 } from "../conversation/conversationEntry.js";
+import { conversationTextPlain } from "../chatActions/chatActions.js";
 import { inlineImageSize } from "../conversation/inlineImageSize.js";
 import { happyAgentArtifactTypeProject } from "../artifacts/artifactProject.js";
 import type { HappyAgentArtifactId } from "../artifacts/artifactTypes.js";
@@ -849,6 +850,7 @@ function happyAgentConnectGroupProject(
                     }),
                     messageId: element.messageId,
                     runId: element.runId,
+                    ...(element.actions ? { actions: element.actions } : {}),
                 });
                 break;
             }
@@ -1149,8 +1151,12 @@ function happyAgentConnectGroupProject(
     const finalAgent = finalAgentIndex < 0 ? undefined : entries[finalAgentIndex];
     if (finalAgent?.kind === "message") {
         const status = entries[statusIndex];
-        if (status?.kind === "turnStatus" && finalAgent.message.text.trim().length > 0)
-            entries[statusIndex] = { ...status, copyText: finalAgent.message.text };
+        // A copy is pasted somewhere that cannot press, so its action blocks go.
+        const copyText = finalAgent.actions
+            ? conversationTextPlain(finalAgent.message.text)
+            : finalAgent.message.text;
+        if (status?.kind === "turnStatus" && copyText.trim().length > 0)
+            entries[statusIndex] = { ...status, copyText };
     }
 
     /*

@@ -1,3 +1,4 @@
+import { conversationActionBlockCount, type ChatActionChoice } from "../chatActions/chatActions.js";
 import { gitSnapshotProject, type GitSnapshotState } from "./gitSnapshotState.js";
 import { mediaLayoutProject, mediaScaleProject } from "./mediaLayoutProject.js";
 import type {
@@ -411,18 +412,36 @@ export function projectElements(input: SessionProjectionInput): readonly ChatEle
             questionAsked = true;
         elements.push(element);
     };
+    /* An agent message's inline actions stay live until a person's message is
+       recorded after it; one still waiting for a run is not recorded yet. */
+    let lastUserMessage: Message | undefined;
+    for (const run of input.runs) {
+        const messages = messagesByRun.get(run.id);
+        if (messages === undefined) continue;
+        // Messages arrive in order and a run holds a handful of them.
+        // Confirming that order costs one comparison each; entering the sort
+        // itself, once for every run in the transcript, cost more than
+        // everything else this loop does.
+        if (!messagesOrdered(messages)) messages.sort(compareMessages);
+        for (const entry of messages)
+            if (entry.message.role === "user") lastUserMessage = entry.message;
+    }
+    let actionsLive = lastUserMessage === undefined;
     for (const run of input.runs) {
         const messages = messagesByRun.get(run.id);
         const before = elements.length;
         if (messages !== undefined) {
-            // Messages arrive in order and a run holds a handful of them.
-            // Confirming that order costs one comparison each; entering the sort
-            // itself, once for every run in the transcript, cost more than
-            // everything else this loop does.
-            if (!messagesOrdered(messages)) messages.sort(compareMessages);
-            for (const entry of messages)
-                for (const element of projectMessage(entry, run.id, run.status, reader))
+            for (const entry of messages) {
+                for (const element of projectMessage(
+                    entry,
+                    run.id,
+                    run.status,
+                    reader,
+                    actionsLive,
+                ))
                     push(element);
+                if (entry.message === lastUserMessage) actionsLive = true;
+            }
         }
         if (run.status === "running" && !runProduced(elements, before, run.id)) {
             elements.push(projectInference(run));
@@ -437,6 +456,7 @@ export function projectElements(input: SessionProjectionInput): readonly ChatEle
             `pending:${entry.message.id}`,
             "running",
             reader,
+            true,
         ))
             push(element);
     if (question !== undefined && !questionAsked) elements.push(projectQuestionElement(question));
@@ -1566,6 +1586,7 @@ interface MessageElements {
     readonly runId: string;
     readonly runStatus: Run["status"];
     readonly reader: TranscriptReader;
+    readonly actionsLive: boolean;
     readonly elements: readonly ChatElement[];
 }
 
@@ -1594,6 +1615,7 @@ function projectMessage(
     runId: string,
     runStatus: Run["status"],
     reader: TranscriptReader,
+    actionsLive: boolean,
 ): readonly ChatElement[] {
     const cached = messageElements.get(entry.message);
     const userId = entry.message.role === "user" ? entry.message.metadata.userId : undefined;
@@ -1605,16 +1627,18 @@ function projectMessage(
         cached.own === own &&
         cached.runId === runId &&
         cached.runStatus === runStatus &&
+        cached.actionsLive === actionsLive &&
         cached.reader.agentId === reader.agentId &&
         cached.reader.agentOwned === reader.agentOwned &&
         cached.reader.parentAgentId === reader.parentAgentId
     )
         return cached.elements;
-    const elements = messageElementsProject(entry, runId, runStatus, reader);
+    const elements = messageElementsProject(entry, runId, runStatus, reader, actionsLive);
     messageElements.set(entry.message, {
         runId,
         runStatus,
         reader,
+        actionsLive,
         elements,
         profile,
         own,
@@ -1672,11 +1696,14 @@ function senderAgentOf(
     };
 }
 
+const NO_ACTION_CHOICES: Readonly<Record<string, ChatActionChoice>> = {};
+
 function messageElementsProject(
     entry: TranscriptMessage,
     runId: string,
     runStatus: Run["status"],
     reader: TranscriptReader,
+    actionsLive: boolean,
 ): readonly ChatElement[] {
     const { message } = entry;
     const elementId = message.id;
@@ -1746,12 +1773,17 @@ function messageElementsProject(
     }
 
     const elements: ChatElement[] = [];
+    /* The daemon numbers a message's action blocks across all of its text. */
+    const actionChoices = message.role === "agent" ? message.actionChoices : undefined;
+    let actionBlocks = 0;
     for (let index = 0; index < message.content.length; index += 1) {
         const block = message.content[index];
         if (block === undefined) continue;
         const id = `message:${elementId}:${String(index)}`;
         if (block.type === "text") {
             if (message.role === "agent") {
+                const blockStart = actionBlocks;
+                actionBlocks += conversationActionBlockCount(block.text);
                 elements.push({
                     ...base,
                     id,
@@ -1759,6 +1791,15 @@ function messageElementsProject(
                     messageId: message.id,
                     text: block.text,
                     complete: runStatus !== "running",
+                    ...(actionBlocks > blockStart
+                        ? {
+                              actions: {
+                                  blockStart,
+                                  choices: actionChoices ?? NO_ACTION_CHOICES,
+                                  live: actionsLive,
+                              },
+                          }
+                        : {}),
                 });
             } else if (
                 message.role === "service" &&

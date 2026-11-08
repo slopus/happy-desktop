@@ -15,6 +15,8 @@ import {
 import type { MessageReferences } from "./messageReferences";
 import {
     entryKey,
+    type ChatActionChoice,
+    type ChatActionInvocation,
     type ConversationAuthor,
     type ConversationEntry,
     type ConversationErrorAssistance,
@@ -25,6 +27,7 @@ import {
     type HappyAgentTraceViewer,
 } from "happy-desktop-state";
 import { type ActivityMotion, type ActivityTreatment } from "./AgentActivityRow";
+import { chatActionFigureTypes, type ChatActionFigures } from "./ChatActionBlock";
 import {
     AgentWorkingStatus,
     type AgentWaitStatus,
@@ -99,7 +102,7 @@ import { Spinner } from "./Spinner";
 import { toolCallStillGlyph } from "./toolCallStillGlyph";
 import { WindowOverlay } from "./WindowOverlay";
 import { conversationMediaRunRows, conversationMediaRuns } from "./conversationMediaRuns";
-import { conversationInlineLayouts } from "./conversationInlineLayouts";
+import { conversationInlineLayouts, messageLayoutMembers } from "./conversationInlineLayouts";
 import {
     mediaVideoFramesSignature,
     mediaVideoFramesSubscribe,
@@ -336,6 +339,21 @@ export type ConversationViewProps = {
      * draw them. Absent, every such call keeps its card.
      */
     inlinePages?: ConversationInlinePages;
+    /**
+     * Whether the server takes presses on the inline action blocks agents
+     * write; without it every block is drawn but inert.
+     */
+    actionsPressable?: boolean;
+    /** Presses still on their way, by `chatActionBlockKey`, each drawn as its block's choice. */
+    actionPending?: ReadonlyMap<string, ChatActionChoice>;
+    /** Presses a control of an inline action block. Absent, every block is inert. */
+    onActionPress?: (invocation: ChatActionInvocation) => void;
+    /**
+     * What the live figures agents place in replies show, drawn by the owner
+     * of their stores. A figure with nothing here stays the text it was
+     * written as. Keep one value for the surface's life.
+     */
+    actionFigures?: ChatActionFigures;
     onRequestAnswer?: (requestId: string, answers: HappyAgentUserInputAnswerMap) => void;
     /** Request-id-scoped local answer submission lifecycles. */
     requestSubmissions?: readonly ConversationRequestSubmission[];
@@ -746,7 +764,11 @@ export function ConversationView(props: ConversationViewProps) {
             setInlinePageGeneration((generation) => generation + 1);
         },
     };
-    const inlineLayouts = conversationInlineLayouts(transcript, framesAt);
+    const inlineLayouts = conversationInlineLayouts(
+        transcript,
+        framesAt,
+        chatActionFigureTypes(props.actionFigures),
+    );
     const mediaRuns = conversationMediaRuns(transcript, inlineLayouts.hidden);
     /* What a row draws because of a reply's layouts: the pictures a call gave
        up to one, or the layouts a reply draws. */
@@ -754,7 +776,21 @@ export function ConversationView(props: ConversationViewProps) {
         if (entry === undefined) return {};
         if (entry.kind === "message") {
             const layouts = inlineLayouts.messages.get(entry.message.id);
-            return layouts ? { messageLayouts: layouts } : {};
+            if (layouts === undefined) return {};
+            /* Only a reply drawing action blocks reads their state, so a press
+               re-renders that row and leaves every other one alone. */
+            const actions = [...layouts.layouts.values()].some(
+                (layout) => layout.kind === "actions",
+            );
+            return actions
+                ? {
+                      messageLayouts: layouts,
+                      ...(props.actionsPressable ? { actionsPressable: true } : {}),
+                      ...(props.actionPending ? { actionPending: props.actionPending } : {}),
+                      ...(props.onActionPress ? { onActionPress: props.onActionPress } : {}),
+                      ...(props.actionFigures ? { actionFigures: props.actionFigures } : {}),
+                  }
+                : { messageLayouts: layouts };
         }
         const placed = inlineLayouts.hidden.get(entryKey(entry));
         return placed ? { mediaPlaced: placed } : {};
@@ -1164,7 +1200,7 @@ export function ConversationView(props: ConversationViewProps) {
                                 let frames = "";
                                 for (const layout of layouts.layouts.values())
                                     frames += mediaVideoFramesSignature(
-                                        layout.members.map((member) => member.item),
+                                        messageLayoutMembers(layout).map((member) => member.item),
                                         framesAt,
                                     );
                                 return `${fold}|${layouts.signature}|${frames}`;

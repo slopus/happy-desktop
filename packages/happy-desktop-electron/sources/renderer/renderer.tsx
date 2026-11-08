@@ -89,6 +89,7 @@ import {
 import {
     CodeHighlightWorkers,
     LocalOnboardingScreen,
+    type LocalOnboardingView,
     SetupHandoff,
     SetupPage,
     ThemeScope,
@@ -188,6 +189,10 @@ import { desktopWelcomePersistence } from "./desktopWelcome";
 import { desktopNavigationOrderPersistence } from "./desktopNavigationOrder";
 import { desktopSidebarCollapsePersistence } from "./desktopSidebarCollapse";
 import { DesktopBootGate, desktopBootSkip } from "./DesktopBootGate";
+import {
+    desktopChatOnboardingStoreCreate,
+    type DesktopChatOnboardingStore,
+} from "./desktopChatOnboarding";
 import { desktopAnalyticsCreate } from "./desktopAnalytics";
 import { desktopAgentUpdateStoreCreate } from "./desktopAgentUpdateStore";
 import {
@@ -539,9 +544,32 @@ function HappyAgentBoundary(props: {
  * install, or a Happy Agent that disappeared resumes here rather than in a remembered
  * position.
  */
+/**
+ * The setup screens a conversation the Happy Agent runs takes the place of:
+ * the assistants, the phone, finishing, and a reconnect once it has begun.
+ * Installing, starting, reaching, and sandboxing the Happy Agent stay the
+ * window's own, because without them there is no conversation to show.
+ */
+function chatOnboardingCarries(kind: LocalOnboardingView["kind"]): boolean {
+    switch (kind) {
+        case "provider-authentication":
+        case "agent-ready":
+        case "happy-mobile-checking":
+        case "happy-mobile-desktop":
+        case "happy-mobile-offer":
+        case "happy-mobile-pairing":
+        case "finishing":
+        case "connecting":
+            return true;
+        default:
+            return false;
+    }
+}
+
 function DesktopOnboardingGate(props: {
     appearance: AppearanceStore;
     bridge: HappyDesktopBridge;
+    chat: DesktopChatOnboardingStore;
     children: ReactNode;
     clock: HappyAgentClockStore;
     mobilePairingMethod: MobilePairingMethodStore;
@@ -549,6 +577,7 @@ function DesktopOnboardingGate(props: {
     store: LocalOnboardingStore;
 }) {
     const snapshot = useSyncExternalStore(props.store.subscribe, props.store.get, props.store.get);
+    const chat = useSyncExternalStore(props.chat.subscribe, props.chat.get, props.chat.get);
     const appearance = useSyncExternalStore(
         props.appearance.subscribe,
         props.appearance.get,
@@ -592,18 +621,26 @@ function DesktopOnboardingGate(props: {
     // that time on the welcome.
     if (!snapshot.onboarding) return null;
     const reached = localOnboardingReachedStage(snapshot);
+    const carried = view !== undefined && chatOnboardingCarries(view.kind);
+    // The Happy Agent has not said yet whether it runs setup as a conversation,
+    // so neither its conversation nor the window's own steps are drawn.
+    if (carried && chat === "checking") return null;
     // The interface is the final onboarding step. Keep the sidebar (+) usable
     // while Chief of Staff's unsent draft is being prepared in the background.
-    if (!view || view.kind === "finishing")
+    // Setup the Happy Agent runs as a conversation shows the interface the
+    // same way, in the same element, so finishing it remounts nothing.
+    if (!view || view.kind === "finishing" || (carried && chat === "chat")) {
+        const finishing = view?.kind === "finishing" ? view : undefined;
         return (
             <SetupHandoff
-                error={view?.message}
-                busy={view?.busy}
+                error={finishing?.message}
+                busy={finishing?.busy}
                 onRetry={() => props.store.chiefOfStaffSetup()}
             >
                 {props.children}
             </SetupHandoff>
         );
+    }
     return (
         <LocalOnboardingScreen
             appearance={appearance.mode}
@@ -668,6 +705,8 @@ interface DesktopRendererProps {
     performance?: LivePerformanceStore;
     profiler: AppHappyAgentProfilerStore;
     onboarding: LocalOnboardingStore;
+    /** Whether this machine's own Happy Agent runs first-run setup as a conversation. */
+    chatOnboarding: DesktopChatOnboardingStore;
     browserContent?: BrowserContentRenderer;
     htmlPreview?: HtmlPreviewRenderer;
     artifactPage?: HtmlPreviewRenderer;
@@ -977,6 +1016,7 @@ function DesktopLocalScreens(props: DesktopRendererProps) {
             <DesktopOnboardingGate
                 appearance={props.appearance}
                 bridge={props.bridge}
+                chat={props.chatOnboarding}
                 clock={onboardingClock}
                 mobilePairingMethod={props.mobilePairingMethod}
                 platform={props.platform}
@@ -1734,6 +1774,19 @@ if (mediaPreviewBridge) {
             // the remotes off the rail the instant the daemon reports an empty
             // registry on its way back up.
             ...(daemon ? { localRestarting: () => daemon.get().install.phase !== "idle" } : {}),
+            // A provider chosen in onboarding that needs a restart gets the
+            // ordinary drain and restart, which Settings shows as it happens.
+            ...(daemon
+                ? {
+                      localRestart: () => {
+                          daemon.daemonRestart();
+                          return Promise.resolve();
+                      },
+                  }
+                : {}),
+            externalLinkOpen: browserLocal
+                ? (url: string) => void window.open(url, "_blank", "noopener,noreferrer")
+                : desktopExternalLinkOpen(desktopBridge),
             // A shell is told which background it is drawing on when it starts and
             // never hears about it again, so every terminal takes the appearance
             // showing at the moment it is opened and keeps it.
@@ -1866,6 +1919,8 @@ if (mediaPreviewBridge) {
                     ?.router ?? happyAgentRouter
             );
         }
+        // Created right after setup, which it follows; read by setup's last step.
+        let chatOnboarding: DesktopChatOnboardingStore | undefined;
         // Native first-run setup retains its lifetime, while mobile pairing uses
         // the same local connection store and transport as the workspace.
         const onboardingStore = localOnboardingStoreCreate(desktopBridge, {
@@ -1880,6 +1935,9 @@ if (mediaPreviewBridge) {
                 subscribe: happyAgents.subscribe,
             },
             chiefOfStaffPrepare: async () => {
+                // The conversation the Happy Agent ran is already open and
+                // says what comes next, so nothing is drafted over it.
+                if (chatOnboarding?.get() === "chat") return () => undefined;
                 const session = happyAgents
                     .get()
                     .happyAgents.find((entry) => entry.id === LOCAL_HAPPY_AGENT_ID)?.session;
@@ -1920,6 +1978,22 @@ if (mediaPreviewBridge) {
                 subscribe: happyAgents.subscribe,
             },
         });
+        const localEntry = () =>
+            happyAgents.get().happyAgents.find((entry) => entry.id === LOCAL_HAPPY_AGENT_ID);
+        const createdChatOnboarding = desktopChatOnboardingStoreCreate({
+            welcome,
+            onboarding: onboardingStore,
+            local: {
+                get: () => {
+                    const entry = localEntry();
+                    const store = entry?.setup?.chatOnboarding;
+                    return store ? { store, failed: entry.status === "error" } : undefined;
+                },
+                subscribe: happyAgents.subscribe,
+            },
+        });
+        chatOnboarding = createdChatOnboarding;
+        appDisposers.push(() => createdChatOnboarding[Symbol.dispose]());
         const uisReconcile = (): void => {
             const entries = happyAgents.get().happyAgents;
             for (const entry of entries) {
@@ -2084,6 +2158,7 @@ if (mediaPreviewBridge) {
                         {...(livePerformance ? { performance: livePerformance } : {})}
                         profiler={profiler}
                         onboarding={analytics.onboardingObserve(onboardingStore, welcome)}
+                        chatOnboarding={createdChatOnboarding}
                         browserContent={browserLocal ? undefined : desktopBrowserContentRender}
                         htmlPreview={browserLocal ? undefined : desktopHtmlPreviewRender}
                         artifactPage={browserLocal ? undefined : desktopArtifactPageRender}

@@ -35,6 +35,7 @@ const labelOffsets: Record<Engine, Record<ButtonSize, string>> = {
 const labelTolerances: Record<ButtonVariant, number> = {
     primary: 0.75,
     secondary: 0.75,
+    outline: 0.4,
     ghost: 0.4,
     danger: 0.4,
     success: 0.75,
@@ -60,6 +61,11 @@ const variantStyles: Record<
         borderColor: "rgb(234, 234, 234)",
         color: "rgb(0, 0, 0)",
     },
+    outline: {
+        background: "rgba(0, 0, 0, 0)",
+        borderColor: "color(srgb 0 0 0 / 0.22)",
+        color: "rgb(0, 0, 0)",
+    },
     ghost: {
         background: "rgba(0, 0, 0, 0)",
         borderColor: "rgba(0, 0, 0, 0)",
@@ -81,6 +87,7 @@ const variantStyles: Record<
 const variantLabels: Record<ButtonVariant, string> = {
     primary: "Approve & merge",
     secondary: "Request changes",
+    outline: "Not yet",
     ghost: "Dismiss",
     danger: "Delete run",
     success: "Review diff",

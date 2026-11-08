@@ -3,6 +3,7 @@ import type {
     HappyAgentArtifactId,
     HappyAgentArtifactType,
 } from "../artifacts/artifactTypes.js";
+import type { ChatActionChoice } from "../chatActions/chatActions.js";
 import type { AgentTurnTraceSummary, UserError } from "../types.js";
 import type { ConversationAuthor } from "./conversationAuthor.js";
 
@@ -621,6 +622,25 @@ export interface ConversationMessageEntry {
     readonly messageId?: string;
     /** The run that produced it, when the Happy Agent served it. */
     readonly runId?: string;
+    /** The inline action blocks an agent's text holds, when the Happy Agent served it. */
+    readonly actions?: ConversationMessageActions;
+}
+
+/**
+ * Where an agent text's inline action blocks stand in their message, and what
+ * the daemon recorded about them.
+ */
+export interface ConversationMessageActions {
+    /** The block index of the text's first block, counted across the whole message. */
+    readonly blockStart: number;
+    /** Each answered block's recorded choice, by block index; an answered block is locked. */
+    readonly choices: Readonly<Record<string, ChatActionChoice>>;
+    /**
+     * Whether its unanswered blocks still take a press: no message from the
+     * person has come after this one. Once anyone writes or presses anywhere
+     * later, every older block is inert.
+     */
+    readonly live: boolean;
 }
 
 export interface ConversationActivityEntry {

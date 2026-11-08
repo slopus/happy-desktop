@@ -591,6 +591,21 @@ export {
 export { Switch, type SwitchProps, type SwitchSize } from "./Switch";
 export { Checkbox, type CheckboxProps } from "./Checkbox";
 export {
+    ChatActionBlock,
+    chatActionFigureTypes,
+    type ChatActionBlockPress,
+    type ChatActionBlockProps,
+    type ChatActionFigures,
+} from "./ChatActionBlock";
+export {
+    ChatDefaultModelFigure,
+    ChatProviderCliFigure,
+    ChatSettingsFigure,
+    type ChatDefaultModelFigureProps,
+    type ChatProviderCliFigureProps,
+    type ChatSettingsFigureType,
+} from "./ChatActionFigures";
+export {
     SegmentedControl,
     type SegmentedControlProps,
     type SegmentedControlSegment,

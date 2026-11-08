@@ -30,6 +30,7 @@ import {
     type Question,
     type Run,
     type SendMessageRequest,
+    type SendActionMessageRequest,
     type SendMessageResponse,
     type SlashCommand,
     type Task,
@@ -4265,6 +4266,32 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
         }
     };
 
+    const sendActionWithRetry = async (
+        sessionId: string,
+        request: SendActionMessageRequest,
+    ): Promise<SendMessageResponse> => {
+        let retryMs = INITIAL_SEND_RETRY_MS;
+        for (let attempt = 1; ; attempt += 1) {
+            try {
+                return await client.sendMessage(sessionId, request, { signal: deadlineSignal() });
+            } catch (error) {
+                if (drainingRefusal(error)) {
+                    admittingSet(false);
+                    throw error;
+                }
+                const retryable =
+                    !(error instanceof HappyAgentApiError) ||
+                    error.status === 408 ||
+                    error.status === 429 ||
+                    error.status >= 500;
+                if (rootController.signal.aborted || !retryable || attempt >= SEND_ATTEMPTS)
+                    throw error;
+                await wait(retryMs, rootController.signal);
+                retryMs = Math.min(retryMs * 2, MAXIMUM_RECONNECT_MS);
+            }
+        }
+    };
+
     const mutation = <T>(
         action: MutationAction,
         mutationId: string,
@@ -5683,6 +5710,65 @@ export function connectHappyAgent(options: ConnectHappyAgentOptions): HappyAgent
                 // A human answer must not wait behind unrelated agent work.
             );
         },
+        sendAction(sessionId, press) {
+            const mutationId = nextId();
+            if (config === undefined) {
+                reportMutationFailure(
+                    "send_action",
+                    mutationId,
+                    new Error("The agent is not loaded."),
+                    sessionId,
+                );
+                return mutationId;
+            }
+            const mode = modeOf(
+                config,
+                agentDrafts.get(sessionId),
+                agentModes.get(sessionId),
+                intendedModes.get(sessionId),
+            );
+            /* One identity across every attempt: a repeat returns the message
+               the daemon already took. The values travel only in this request. */
+            const request: SendActionMessageRequest = {
+                id: mutationId,
+                content: [
+                    {
+                        type: "action",
+                        messageId: press.messageId,
+                        blockIndex: press.blockIndex,
+                        controlIndex: press.controlIndex,
+                        actionId: press.action.id,
+                        params: { ...press.action.params },
+                        ...(press.values.length === 0 ? {} : { values: [...press.values] }),
+                    },
+                ],
+                mode,
+            };
+            return mutation(
+                "send_action",
+                mutationId,
+                async () => {
+                    const response = await sendActionWithRetry(sessionId, request);
+                    await ensureMessageUsers([response.message]);
+                    return response.message;
+                },
+                (message) => updateMessage(sessionId, message, message.runId),
+                (error) => {
+                    // Another press took the block, or the conversation moved on:
+                    // the pressed message as it now stands shows what won. The
+                    // press itself still failed, so it is reported.
+                    const pressed =
+                        error instanceof HappyAgentApiError && error.status === 409
+                            ? conflictMessageOf(error)
+                            : undefined;
+                    if (pressed !== undefined && pressed.id === press.messageId) {
+                        const runId = sessions.get(sessionId)?.messages.get(pressed.id)?.runId;
+                        updateMessage(sessionId, pressed, runId ?? null);
+                    }
+                },
+                sessionId,
+            );
+        },
         setSessionArchived(sessionId, archived) {
             const mutationId = nextId();
             const request = () =>
@@ -6593,4 +6679,12 @@ function teammateCurrent(
         name: profile.name,
         ...(profile.avatar === null ? {} : { imageUrl: profile.avatar.url }),
     };
+}
+
+/** The pressed message a 409 refusal of a press carries, when it carries one. */
+function conflictMessageOf(error: HappyAgentApiError): Message | undefined {
+    const message = (error.body as { message?: unknown } | null)?.message;
+    return typeof message === "object" && message !== null && "id" in message && "role" in message
+        ? (message as Message)
+        : undefined;
 }

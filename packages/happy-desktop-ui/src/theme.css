@@ -391,6 +391,8 @@
        a strip's +, a row's own control) wears exactly this. */
     --happy-hover-radius: var(--happy-radius-sm);
     --happy-hover-fill: var(--surface-ripple);
+    /* An outline button's hairline: the ink, thinned, so it reads on any surface. */
+    --happy-button-outline: color-mix(in srgb, var(--text) 22%, transparent);
     /* The one content column of the main lane. A chat's transcript and
        composer, and every page that takes the lane — the feed, artifacts and
        an artifact's page, the inbox, settings, a Surface — read down a column
@@ -695,6 +697,7 @@
     /* Declared again so it resolves against this scope's own ripple: inherited
        from a light :root it would stay the light theme's black wash. */
     --happy-hover-fill: var(--surface-ripple);
+    --happy-button-outline: color-mix(in srgb, var(--text) 22%, transparent);
     --happy-brand-logo-source: url("./assets/brand/logo-white.png");
     --happy-wordmark-source: url("./assets/brand/happy-engineering-stacked-dark.svg");
     --happy-todo-backdrop-source: url("./assets/backdrops/todo-ginkgo-dark.jpg");

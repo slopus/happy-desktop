@@ -72,6 +72,12 @@ export interface HappyAgentOnboardingState {
 
 export interface HappyAgentOnboardingSnapshot {
     readonly state?: HappyAgentOnboardingState;
+    /**
+     * The server runs onboarding itself, as a conversation
+     * (`capabilities.chatOnboarding`). Everything after a team's required
+     * profile then happens there, and this window never completes onboarding.
+     */
+    readonly chatOnboarding: boolean;
     readonly pending: boolean;
     /** Authenticated setup endpoints are ready even before protected sync starts. */
     readonly available: boolean;
@@ -160,6 +166,7 @@ export function happyAgentOnboardingStoreCreate(
 ): HappyAgentOnboardingStore {
     let snapshot: HappyAgentOnboardingSnapshot = {
         available: false,
+        chatOnboarding: false,
         pending: false,
     };
     const listeners = new Set<() => void>();
@@ -183,14 +190,18 @@ export function happyAgentOnboardingStoreCreate(
         const state = onboardingStatesEqual(snapshot.state, next.state)
             ? snapshot.state
             : next.state;
+        // Health is read before anything it admits is published, so every
+        // publish carries what this server said about itself.
+        const chatOnboarding = sync.health()?.capabilities?.chatOnboarding === true;
         if (
             state === snapshot.state &&
+            chatOnboarding === snapshot.chatOnboarding &&
             next.available === snapshot.available &&
             next.pending === snapshot.pending &&
             next.error === snapshot.error
         )
             return;
-        snapshot = { ...next, state };
+        snapshot = { ...next, state, chatOnboarding };
         for (const listener of listeners) listener();
     };
     const reconcile = async (signal: AbortSignal): Promise<void> => {
@@ -222,6 +233,8 @@ export function happyAgentOnboardingStoreCreate(
         )
             return;
         if (!snapshot.state.steps.profile.done) return;
+        // The conversation the server runs carries the rest, and finishes it.
+        if (snapshot.chatOnboarding) return;
         // Happy Cloud completes on its own once the Chief of Staff is named in
         // its chat, and refuses an earlier completion. Its members need nothing
         // after their profile.

@@ -1,4 +1,9 @@
 import { createStore } from "zustand/vanilla";
+import {
+    chatActionBlockKey,
+    type ChatActionChoice,
+    type ChatActionInvocation,
+} from "../chatActions/chatActions.js";
 import { entriesMerge } from "../conversation/conversationEntries.js";
 import type { Loadable } from "../conversation/loadable.js";
 import {
@@ -685,6 +690,19 @@ export interface HappyAgentChatSnapshot {
      * offered Retry instead.
      */
     readonly failureSwitchSupported: boolean;
+    /**
+     * Whether inline action blocks take presses here: the Happy Agent serves
+     * them (`capabilities.inlineActions`). Without it every block is drawn
+     * but inert.
+     */
+    readonly actionsPressable: boolean;
+    /**
+     * Presses made here and not yet recorded on their message, by
+     * `chatActionBlockKey`. The message's recorded choice draws over them once
+     * it arrives; a press the daemon refused is dropped, so its block shows
+     * what the message says.
+     */
+    readonly actionPending: ReadonlyMap<string, ChatActionChoice>;
 }
 
 export type HappyAgentChatOutput =
@@ -741,6 +759,12 @@ export interface HappyAgentChatStore {
      */
     subagentsAbort(): Promise<void>;
     answerInput(input: HappyAgentUserInputAnswers): Promise<void>;
+    /**
+     * Presses a control in one of the conversation's inline action blocks.
+     * The block shows chosen at once; a refusal drops that and says why in
+     * the conversation. A block already pressed here takes nothing more.
+     */
+    actionPress(invocation: ChatActionInvocation): void;
     requestSelectionUpdate(
         requestId: string,
         answers: Readonly<Record<string, readonly string[]>>,
@@ -809,6 +833,7 @@ export interface HappyAgentChatDeps {
     readonly connectActions: Pick<
         HappyAgentConnection,
         | "answerUserInput"
+        | "sendAction"
         | "compactSession"
         | "invokeSlashCommand"
         | "retryFailedTurn"
@@ -843,6 +868,8 @@ export interface HappyAgentChatDeps {
     readonly agentIdentities?: HappyAgentAgentIdentitySource;
     /** The protocol the connection's daemon last reported in its health, once heard. */
     readonly daemonProtocol?: () => number | undefined;
+    /** Whether the connection's Happy Agent takes inline action presses, as its health says. */
+    readonly inlineActions?: () => boolean;
 }
 
 /** Protocol 32 validates a failure switch against the live catalog, not a stored list. */
@@ -908,6 +935,8 @@ export function happyAgentChatStoreCreate(
         usageLoading: false,
         activityPanelOpen: false,
         failureSwitchSupported: false,
+        actionsPressable: false,
+        actionPending: new Map(),
     }));
 
     const listeners = new Set<() => void>();
@@ -1041,6 +1070,9 @@ export function happyAgentChatStoreCreate(
     let openImageRef: HappyAgentImageRef | undefined;
     const requestSubmissions = new Map<string, ConversationRequestSubmission>();
     const requestMutationIds = new Map<string, string>();
+    /* Presses on their way, by block key, and the mutation carrying each. */
+    let actionPending: ReadonlyMap<string, ChatActionChoice> = new Map();
+    const actionMutationIds = new Map<string, string>();
     const requestSelections = new Map<string, Readonly<Record<string, readonly string[]>>>();
     /* Sends made before the conversation's first full read, waiting for it.
        Until it lands nothing here knows the session's mode or its open
@@ -1239,6 +1271,8 @@ export function happyAgentChatStoreCreate(
                   }),
             failureSwitchSupported:
                 (deps.daemonProtocol?.() ?? 0) >= HAPPY_AGENT_FAILURE_SWITCH_PROTOCOL_VERSION,
+            actionsPressable: deps.inlineActions?.() === true,
+            actionPending,
         };
         /* The transcript answers for itself: `entriesMerge` returns the very
            list it was given when nothing moved, so a new one is a change and
@@ -1247,7 +1281,11 @@ export function happyAgentChatStoreCreate(
            settles the transcript on one reference rather than walking it.
            Message choices are immutable sets, whose changed identity must
            publish too: the record comparison below does not inspect sets. */
-        if (entries !== previous.entries || expandedMessageIds !== previous.expandedMessageIds) {
+        if (
+            entries !== previous.entries ||
+            expandedMessageIds !== previous.expandedMessageIds ||
+            actionPending !== previous.actionPending
+        ) {
             store.setState(next, true);
             return;
         }
@@ -1376,6 +1414,13 @@ export function happyAgentChatStoreCreate(
 
     const unsubscribeMutationRejections = deps.connectMutationSubscribe((rejection) => {
         if (!pendingMutationIds.delete(rejection.mutationId)) return;
+        const blockKey = actionMutationIds.get(rejection.mutationId);
+        if (blockKey !== undefined) {
+            actionMutationIds.delete(rejection.mutationId);
+            const next = new Map(actionPending);
+            next.delete(blockKey);
+            actionPending = next;
+        }
         const requestId = requestMutationIds.get(rejection.mutationId);
         if (requestId !== undefined) {
             requestMutationIds.delete(rejection.mutationId);
@@ -1678,6 +1723,34 @@ export function happyAgentChatStoreCreate(
                 output({ type: "subagentsAborted", sessionId });
             }),
         answerInput: answerInputRun,
+        actionPress(invocation) {
+            if (disposed || deps.inlineActions?.() !== true) return;
+            const blockKey = chatActionBlockKey(invocation.messageId, invocation.blockIndex);
+            if (actionPending.has(blockKey)) return;
+            actionPending = new Map(actionPending).set(blockKey, invocation.choice);
+            try {
+                const mutationId = deps.connectActions.sendAction(sessionId, {
+                    messageId: invocation.messageId,
+                    blockIndex: invocation.blockIndex,
+                    controlIndex: invocation.controlIndex,
+                    action: invocation.action,
+                    values: invocation.values,
+                });
+                actionMutationIds.set(mutationId, blockKey);
+                connectMutationTrack(mutationId);
+            } catch (error) {
+                const next = new Map(actionPending);
+                next.delete(blockKey);
+                actionPending = next;
+                mutationRejection = {
+                    type: "mutation_rejected",
+                    action: "send_action",
+                    mutationId: blockKey,
+                    message: happyAgentUserError(error).message,
+                };
+            }
+            commit();
+        },
         requestSelectionUpdate(requestId, answers) {
             requestSelections.set(requestId, answers);
             commit();

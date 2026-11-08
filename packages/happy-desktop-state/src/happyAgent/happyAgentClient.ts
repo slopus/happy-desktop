@@ -1173,6 +1173,8 @@ export function happyAgentWorkspaceClientCreate(
                         // Health is heard while the connection is admitted, before
                         // any transcript it carries, so every projection can read it.
                         daemonProtocol: () => deps.connection.sync.health()?.version.protocol,
+                        inlineActions: () =>
+                            deps.connection.sync.health()?.capabilities?.inlineActions === true,
                         // A conversation is opened through the workspace that
                         // already lists everything, so the list is there to
                         // name whoever writes into it.

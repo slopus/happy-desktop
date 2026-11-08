@@ -9,6 +9,7 @@ export type {
 export * as happyAgentProtocol from "@slopus/happy-agent-client";
 export * from "./happyAgentConnection/index.js";
 export { type DeepReadonly } from "./deepReadonly.js";
+export * from "./chatActions/chatActions.js";
 export * from "./conversation/conversationAuthor.js";
 export * from "./conversation/conversationEntries.js";
 export * from "./conversation/conversationEntry.js";
@@ -263,6 +264,9 @@ export * from "./happyAgent/happyAgentVoiceSettingsStore.js";
 export * from "./happyAgent/happyAgentSecurityPolicyStore.js";
 export * from "./happyAgent/happyAgentSecretsStore.js";
 export * from "./happyAgent/happyAgentGlobalSkillsStore.js";
+export * from "./happyAgent/happyAgentChatOnboardingStore.js";
+export * from "./happyAgent/happyAgentProviderClisStore.js";
+export * from "./happyAgent/happyAgentDefaultModelStore.js";
 export * from "./happyAgent/happyAgentSessionListStore.js";
 export * from "./happyAgent/happyAgentSettingsStore.js";
 export * from "./happyAgent/happyAgentModelPreferences.js";
