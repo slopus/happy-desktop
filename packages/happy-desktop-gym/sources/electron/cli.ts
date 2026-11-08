@@ -12,7 +12,13 @@ import {
     GYM_PERSONA_WORKER,
     type GymPersona,
 } from "./persona.js";
-import { gymTeamOnboardingRecord } from "./teamOnboardingRecording.js";
+import {
+    GYM_PERSONA_TEAM_ADMIN,
+    GYM_PERSONA_TEAM_OWNER,
+    GYM_PERSONA_TEAMMATE,
+    GYM_PERSONA_VIEWER,
+    gymTeamOnboardingRecord,
+} from "./teamOnboardingRecording.js";
 import type { GymProfile, GymWorkloadName } from "./types.js";
 import { writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
@@ -24,6 +30,14 @@ const GYM_PERSONAS: Readonly<Record<string, GymPersona>> = {
     worker: GYM_PERSONA_WORKER,
     recovers: GYM_PERSONA_RECOVERS,
     typist: GYM_PERSONA_TYPIST,
+};
+
+/** The people a team recording can follow, by the name `--persona` takes. */
+const GYM_TEAM_PERSONAS: Readonly<Record<string, GymPersona>> = {
+    owner: GYM_PERSONA_TEAM_OWNER,
+    admin: GYM_PERSONA_TEAM_ADMIN,
+    teammate: GYM_PERSONA_TEAMMATE,
+    viewer: GYM_PERSONA_VIEWER,
 };
 
 const workloads: readonly GymWorkloadName[] = [
@@ -120,8 +134,14 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
             throw new Error(
                 "Set HAPPY_GYM_TEAM_LOGIN and HAPPY_GYM_TEAM_PASSWORD for the server's sign-in.",
             );
+        const persona = flags.persona === undefined ? undefined : GYM_TEAM_PERSONAS[flags.persona];
+        if (flags.persona !== undefined && persona === undefined)
+            throw new Error(
+                `--persona is one of ${Object.keys(GYM_TEAM_PERSONAS).join(", ")}; got ${flags.persona}.`,
+            );
         const recording = await gymTeamOnboardingRecord({
             out: resolve(flags.out),
+            ...(persona ? { persona } : {}),
             serverUrl: flags.server,
             serverName: flags.serverName ?? "Acme",
             login,
@@ -315,6 +335,7 @@ Commands:
                     [--persona new-user|worker|recovers|typist] [--machine fresh|worked]
                     [--relaunch-after TURNS]
   record-team-onboarding --out PATH.mkv --server URL [--server-name NAME]
+                         [--persona owner|admin|teammate|viewer]
                          [--invite ROLE]... [--invites-out PATH.json]
   clean --root PATH
 

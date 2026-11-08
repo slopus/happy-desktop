@@ -218,6 +218,12 @@ export type GymChatOffer =
     | { readonly kind: "composer"; readonly composer: Locator; readonly prompt: string }
     | { readonly kind: "none" };
 
+/**
+ * The composer on screen. A window with several setups keeps the others'
+ * conversations mounted out of sight, each with its own composer.
+ */
+const COMPOSER = '[data-happy-desktop-ui="composer-textarea"]:visible';
+
 /** A table is drawn inside its checklist, so the checklist stands for both. */
 const LIVE_BLOCK = [
     '[data-happy-desktop-ui="chat-action-buttons"]:not([data-locked])',
@@ -260,7 +266,7 @@ async function composerOffer(
     persona: GymPersona,
     answers: GymPersonaAnswers,
 ): Promise<GymChatOffer | undefined> {
-    const composer = page.locator('[data-happy-desktop-ui="composer-textarea"]').first();
+    const composer = page.locator(COMPOSER).first();
     if (
         !(await composer.isVisible().catch(() => false)) ||
         !(await composer.isEnabled().catch(() => false))
@@ -277,7 +283,7 @@ async function composerOffer(
             .catch(() => false)
     )
         return undefined;
-    const replies = page.locator('[data-happy-desktop-ui="message"]:not([data-own])');
+    const replies = page.locator('[data-happy-desktop-ui="message"]:not([data-own]):visible');
     const last = (await replies.count()) > 0 ? await replies.last().innerText() : "";
     if (persona.answers.some((answer) => answer.when.test(last) && !answers.typed.has(answer.text)))
         return { kind: "composer", composer, prompt: last };
@@ -302,6 +308,8 @@ export type GymPersonaAnswers = {
     checklists: number;
     /** Whether a person who types first has already found the composer closed. */
     composerTried: boolean;
+    /** How many buttons they have singled out to press, for naming the next. */
+    pins: number;
 };
 
 export function gymPersonaAnswersCreate(): GymPersonaAnswers {
@@ -311,6 +319,7 @@ export function gymPersonaAnswersCreate(): GymPersonaAnswers {
         invites: [],
         checklists: 0,
         composerTried: false,
+        pins: 0,
     };
 }
 
@@ -388,7 +397,7 @@ export async function gymPersonaTurn(
     const offer = await gymChatOfferRead(page, persona, answers);
     if (persona.typesFirst && !answers.composerTried && offer.kind !== "none") {
         // They try to type first; a closed composer says why, and they press.
-        const composer = page.locator('[data-happy-desktop-ui="composer-textarea"]').first();
+        const composer = page.locator(COMPOSER).first();
         if (
             offer.kind !== "composer" &&
             (await composer.isVisible().catch(() => false)) &&
@@ -415,9 +424,18 @@ export async function gymPersonaTurn(
             );
             if (choice === undefined) return false;
             const label = (offer.labels[choice] ?? "").trim();
-            answers.presses.set(label, (answers.presses.get(label) ?? 0) + 1);
+            // The button is pinned before they read: a newer reply arriving
+            // meanwhile shifts which block is the newest live one, and may
+            // retire this one, in which case they read on instead of pressing.
+            const pin = String((answers.pins += 1));
+            await buttons
+                .nth(choice)
+                .evaluate((element, value) => element.setAttribute("data-gym-pin", value), pin);
             await driver.read(await offer.block.locator("xpath=..").innerText());
-            await driver.press(offer.block.locator("button:not([disabled])").nth(choice));
+            const target = page.locator(`[data-gym-pin="${pin}"]`);
+            if (!(await target.isEnabled().catch(() => false))) return false;
+            answers.presses.set(label, (answers.presses.get(label) ?? 0) + 1);
+            await driver.press(target);
             return true;
         }
         case "checklist": {
