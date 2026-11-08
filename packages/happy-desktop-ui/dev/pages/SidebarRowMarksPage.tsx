@@ -39,7 +39,13 @@ const SECTIONS: readonly SidebarSection[] = [
         id: "bots",
         label: "Bots",
         items: [
-            { id: "chief", kind: "agent", label: "Chief of Staff", placeholderSeed: "chief" },
+            {
+                id: "chief",
+                kind: "agent",
+                label: "Olga’s Chief of Staff",
+                placeholderSeed: "chief",
+                private: true,
+            },
             { id: "notes", kind: "agent", label: "Release notes", placeholderSeed: "notes" },
         ],
     },
