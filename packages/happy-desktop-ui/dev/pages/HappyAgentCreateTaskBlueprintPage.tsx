@@ -196,6 +196,14 @@ export function HappyAgentCreateTaskBlueprintPage() {
                     ),
                 )}
             </Specimen>
+            <Specimen
+                detail="on Happy Cloud · the task names itself from its first message, so no name is asked · Create makes it without saying anything yet"
+                label="Self-named"
+                number="05"
+                stage="app"
+            >
+                {region(taskCreationSpecimen(<HappyAgentCreateTaskPage {...HANDLERS} />, WORK))}
+            </Specimen>
         </ComponentPage>
     );
 }

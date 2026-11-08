@@ -4,15 +4,18 @@ import { Button } from "./Button";
 import { TextField } from "./TextField";
 
 export type HappyAgentCreateTaskPageProps = {
-    /** The chosen name. Blank, the host names the task from its first message. */
-    name: string;
+    /**
+     * The chosen name. Blank, the host names the task from its first message.
+     * Absent, there is no name to choose: the task names itself, as on Happy Cloud.
+     */
+    name?: string;
     /** True while the task is being made: the surface stays up and inert. */
     submitting?: boolean;
     /** A refused creation, stated here rather than thrown away. */
     error?: string;
     /** Why the task cannot currently be made on its Happy Agent. */
     submitDisabledReason?: string;
-    onNameChange: (name: string) => void;
+    onNameChange?: (name: string) => void;
     /** Makes the task without saying anything to it. */
     onSubmit: () => void;
     className?: string;
@@ -77,18 +80,21 @@ export function HappyAgentCreateTaskPage(props: HappyAgentCreateTaskPageProps) {
                 <div
                     className="happy-agent-create-task__row"
                     data-happy-desktop-ui="happy-agent-create-task-row"
+                    data-named={props.name === undefined ? "false" : undefined}
                 >
-                    <TextField
-                        aria-label="Name"
-                        className="happy-agent-create-task__name"
-                        data-testid="happy-agent-create-task-name"
-                        disabled={submitting}
-                        fullWidth
-                        onSubmit={submit}
-                        onValueChange={props.onNameChange}
-                        placeholder="Name, generated if left blank"
-                        value={props.name}
-                    />
+                    {props.name === undefined ? null : (
+                        <TextField
+                            aria-label="Name"
+                            className="happy-agent-create-task__name"
+                            data-testid="happy-agent-create-task-name"
+                            disabled={submitting}
+                            fullWidth
+                            onSubmit={submit}
+                            onValueChange={props.onNameChange}
+                            placeholder="Name, generated if left blank"
+                            value={props.name}
+                        />
+                    )}
                     <Button
                         className="happy-agent-create-task__create"
                         disabled={!submittable}

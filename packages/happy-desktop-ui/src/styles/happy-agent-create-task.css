@@ -77,6 +77,11 @@
     gap: 8px;
 }
 
+/* With no name to choose, Create stands alone under the lede. */
+.happy-agent-create-task__row[data-named="false"] {
+    justify-content: center;
+}
+
 .happy-agent-create-task__name {
     flex: 1 1 auto;
     min-width: 0;

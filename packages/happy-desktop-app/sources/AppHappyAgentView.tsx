@@ -4652,6 +4652,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                         happyAgentOnline={activeHappyAgentOnline}
                         providerUsage={active.session.providerUsage}
                         workspace={active.session.workspace}
+                        {...(active.happyCloud ? { selfNamed: true } : {})}
                         {...(activeAvailability?.refusal === undefined
                             ? {}
                             : { unavailable: activeAvailability.refusal })}
@@ -11012,6 +11013,8 @@ function HappyAgentCreateBotSurface(props: {
 function HappyAgentCreateTaskSurface(props: {
     happyAgentOnline: () => boolean;
     providerUsage?: HappyAgentProviderUsageStore;
+    /** On Happy Cloud a task names itself from its first message, so no name is asked. */
+    selfNamed?: true;
     unavailable?: string;
     workspace: HappyAgentWorkspaceStore;
 }) {
@@ -11092,12 +11095,17 @@ function HappyAgentCreateTaskSurface(props: {
             emptyContent={
                 <HappyAgentCreateTaskPage
                     {...(taskCreate.error === undefined ? {} : { error: taskCreate.error })}
-                    name={taskCreate.name}
-                    // Controlled, so the value reaches React inside its event,
-                    // as the bot's name does.
-                    onNameChange={(name) =>
-                        reactFrameInputUpdate(store, () => store.taskCreateNameUpdate(name))
-                    }
+                    {...(props.selfNamed
+                        ? {}
+                        : {
+                              name: taskCreate.name,
+                              // Controlled, so the value reaches React inside its event,
+                              // as the bot's name does.
+                              onNameChange: (name: string) =>
+                                  reactFrameInputUpdate(store, () =>
+                                      store.taskCreateNameUpdate(name),
+                                  ),
+                          })}
                     onSubmit={() => {
                         if (props.happyAgentOnline())
                             void store.taskCreateSubmit().catch(() => undefined);
