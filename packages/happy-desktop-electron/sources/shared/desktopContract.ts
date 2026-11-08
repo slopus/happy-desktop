@@ -46,10 +46,11 @@ export type DesktopCredentialVendor =
     | "moonshot";
 
 /**
- * How a credential that can be copied signs in: a key, an AWS key pair, or
- * Claude Code's long-lived setup token.
+ * How a credential that can be copied signs in: a key, an AWS key pair,
+ * Claude Code's long-lived setup token, or a subscription's own sign-in
+ * (ChatGPT's or Claude's tokens, as their tools keep them).
  */
-export type DesktopCredentialKind = "api_key" | "aws_keys" | "oauth_token";
+export type DesktopCredentialKind = "api_key" | "aws_keys" | "oauth_token" | "oauth";
 
 /**
  * What can be done with a found credential.

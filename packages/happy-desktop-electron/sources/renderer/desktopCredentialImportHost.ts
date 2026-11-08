@@ -22,7 +22,7 @@ export function desktopCredentialImportHostCreate(
                 vendorName: entry.vendorName,
                 use:
                     entry.use.kind === "import"
-                        ? { kind: "import" }
+                        ? { kind: "import", subscription: entry.use.credential === "oauth" }
                         : entry.use.kind === "signIn"
                           ? { kind: "signIn", providerId: entry.use.providerId }
                           : { kind: "unsupported", reason: entry.use.reason },

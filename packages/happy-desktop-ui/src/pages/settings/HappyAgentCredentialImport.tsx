@@ -27,6 +27,11 @@ interface HappyAgentCredentialImportRowBase {
 export type HappyAgentCredentialImportRow =
     | (HappyAgentCredentialImportRowBase & {
           readonly use: "import";
+          /**
+           * A sign-in the server takes over; the copy on this computer may
+           * stop working once it is imported.
+           */
+          readonly subscription: boolean;
           /** The last four characters behind dots. */
           readonly masked?: string;
           /** Where it goes when picked; absent when not picked. */
@@ -67,19 +72,19 @@ export interface HappyAgentCredentialImportProps {
 
 /**
  * Settings › Providers › Import: a row that opens a dialog listing the model
- * provider keys already on this computer, and which of them to copy to the
- * server. A subscription's sign-in is never copied — the server signs in on
- * its own.
+ * provider keys and sign-ins already on this computer, and which of them to
+ * copy to the account. A sign-in is never picked for the person: the server
+ * takes it over, so signing in from Happy is the better way.
  */
 export function HappyAgentCredentialImport(props: HappyAgentCredentialImportProps) {
     return (
         <HappyAgentSettingsSection
-            description="Copies model provider keys already on this computer to this server. Nothing is sent until you pick what to import."
+            description="Copies API keys and sign-ins already on this computer to your account. Nothing is sent until you pick what to import."
             title="Import from this computer"
         >
             <Box className="happy-agent-credential-import__actions">
                 <Button onClick={props.onOpen} size="small" variant="secondary">
-                    Import keys…
+                    Import…
                 </Button>
             </Box>
             {props.open ? <HappyAgentCredentialImportDialog {...props} /> : null}
@@ -90,6 +95,9 @@ export function HappyAgentCredentialImport(props: HappyAgentCredentialImportProp
 function HappyAgentCredentialImportDialog(props: HappyAgentCredentialImportProps) {
     const busy = props.phase === "scanning" || props.phase === "importing";
     const pickedCount = props.rows.filter((row) => row.use === "import" && row.picked).length;
+    const takeoverPicked = props.rows.some(
+        (row) => row.use === "import" && row.subscription && row.picked !== undefined,
+    );
     return (
         <ModalOverlay
             onDismiss={() => {
@@ -111,18 +119,14 @@ function HappyAgentCredentialImportDialog(props: HappyAgentCredentialImportProps
                             loading={props.phase === "importing"}
                             onClick={props.onImport}
                         >
-                            {pickedCount === 1
-                                ? "Import 1 key"
-                                : pickedCount === 0
-                                  ? "Import"
-                                  : `Import ${String(pickedCount)} keys`}
+                            {pickedCount <= 1 ? "Import" : `Import ${String(pickedCount)}`}
                         </Button>
                     </>
                 }
                 icon="lock"
                 onClose={props.phase === "importing" ? undefined : props.onClose}
                 size="large"
-                title="Import keys from this computer"
+                title="Import from this computer"
             >
                 <Box
                     className="happy-agent-credential-import"
@@ -133,10 +137,17 @@ function HappyAgentCredentialImportDialog(props: HappyAgentCredentialImportProps
                             {props.error}
                         </Banner>
                     ) : null}
+                    {takeoverPicked ? (
+                        <Banner tone="warning" title="Signing in from Happy is better">
+                            Happy Cloud will take over this sign-in. The copy on this computer may
+                            stop working, and you may need to sign in to Codex or Claude Code here
+                            again.
+                        </Banner>
+                    ) : null}
                     {props.phase === "scanning" && props.rows.length === 0 ? (
                         <Box className="happy-agent-credential-import__pending">
                             <Spinner size={16} />
-                            <span>Looking for keys on this computer…</span>
+                            <span>Looking on this computer…</span>
                         </Box>
                     ) : (
                         <Box
@@ -156,7 +167,7 @@ function HappyAgentCredentialImportDialog(props: HappyAgentCredentialImportProps
                             ))}
                             {props.rows.length === 0 ? (
                                 <span className="happy-agent-credential-import__empty">
-                                    No model provider keys on this computer.
+                                    No API keys or sign-ins on this computer.
                                 </span>
                             ) : null}
                         </Box>
@@ -230,7 +241,7 @@ function HappyAgentCredentialImportRowView(props: {
                     label={row.result.duplicate ? "Already here" : "Imported"}
                     variant="success"
                 />
-            ) : row.use === "import" && row.picked !== undefined ? (
+            ) : row.use === "import" && row.picked !== undefined && props.teamAllowed ? (
                 <SegmentedControl
                     aria-label={`Who can use ${row.vendorName} · ${row.label}`}
                     className="happy-agent-credential-import__scope"
@@ -239,15 +250,8 @@ function HappyAgentCredentialImportRowView(props: {
                         props.onPickScopeChange(row.id, scope === "team" ? "team" : "private")
                     }
                     segments={[
-                        {
-                            value: "team",
-                            label: "Team",
-                            disabled: !props.teamAllowed,
-                            ...(props.teamAllowed
-                                ? {}
-                                : { title: "Only owners and admins add keys for the team" }),
-                        },
-                        { value: "private", label: "Only me" },
+                        { value: "private", label: "My account" },
+                        { value: "team", label: "Team" },
                     ]}
                     size="compact"
                     value={row.picked}

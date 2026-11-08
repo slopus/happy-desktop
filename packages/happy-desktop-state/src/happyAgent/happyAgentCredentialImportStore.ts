@@ -9,13 +9,14 @@ export type HappyAgentCredentialImportScope = "team" | "private";
 /**
  * What can be done with a credential found on this computer.
  *
- * - `import`: copied to the server as it is.
+ * - `import`: copied to the server as it is. A `subscription` is a sign-in the
+ *   server takes over: the copy on this computer may stop working.
  * - `signIn`: a subscription's sign-in, which can't be copied without signing
  *   this computer out; the server's built-in `providerId` signs in on its own.
  * - `unsupported`: the server can't use it; `reason` says why.
  */
 export type HappyAgentCredentialFoundUse =
-    | { readonly kind: "import" }
+    | { readonly kind: "import"; readonly subscription: boolean }
     | { readonly kind: "signIn"; readonly providerId: string }
     | { readonly kind: "unsupported"; readonly reason: string };
 
@@ -137,12 +138,7 @@ export function happyAgentCredentialImportStoreCreate(
         void deps.credentials.permissionsRead().then(
             (granted) => {
                 if (disposed || !granted.has("providers.manage")) return;
-                const current = store.getState();
-                // Picks made before the answer move to the team, which is
-                // where the person would have put them had they been offered it.
-                const picked = new Map(current.picked);
-                for (const id of picked.keys()) picked.set(id, "team");
-                store.setState({ teamAllowed: true, picked }, false);
+                store.setState({ teamAllowed: true }, false);
             },
             () => {
                 // Not knowing leaves imports private, which every member may make.
@@ -150,9 +146,6 @@ export function happyAgentCredentialImportStoreCreate(
             },
         );
     };
-
-    const scopeDefault = (): HappyAgentCredentialImportScope =>
-        store.getState().teamAllowed ? "team" : "private";
 
     const actions: HappyAgentCredentialImportStore = {
         get: () => store.getState(),
@@ -176,15 +169,19 @@ export function happyAgentCredentialImportStoreCreate(
             void deps.host.scan(options).then(
                 (found) => {
                     if (disposed || ticket !== scan) return;
-                    const scope = scopeDefault();
                     store.setState(
                         {
                             phase: "ready",
                             found,
                             picked: new Map(
+                                // A subscription waits to be picked: signing in
+                                // from Happy keeps this computer's copy working.
                                 found
-                                    .filter((entry) => entry.use.kind === "import")
-                                    .map((entry) => [entry.id, scope]),
+                                    .filter(
+                                        (entry) =>
+                                            entry.use.kind === "import" && !entry.use.subscription,
+                                    )
+                                    .map((entry) => [entry.id, "private" as const]),
                             ),
                             results: NO_RESULTS,
                             shellScanned: options.shell,
@@ -211,7 +208,7 @@ export function happyAgentCredentialImportStoreCreate(
             if (entry?.use.kind !== "import" || current.results.get(id)?.ok === true) return;
             const picked = new Map(current.picked);
             if (picked.has(id)) picked.delete(id);
-            else picked.set(id, scopeDefault());
+            else picked.set(id, "private");
             store.setState({ picked }, false);
         },
         pickScopeUpdate(id, scope) {

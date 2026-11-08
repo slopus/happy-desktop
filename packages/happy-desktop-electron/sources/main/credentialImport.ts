@@ -32,14 +32,12 @@ const HOLD_MS = 10 * 60_000;
 /** How long the login shell may take to print its environment. */
 const SHELL_TIMEOUT_MS = 10_000;
 
-/**
- * The vendors Happy Cloud takes each kind of credential for. A Claude Code
- * token is not among them: Claude is used on a server through its own sign-in.
- */
+/** The vendors Happy Cloud takes each kind of credential for. */
 const IMPORTABLE: Readonly<Record<DesktopCredentialKind, readonly DesktopCredentialVendor[]>> = {
-    api_key: ["openai", "grok", "bedrock"],
+    api_key: ["openai", "anthropic", "grok", "bedrock"],
     aws_keys: ["bedrock"],
-    oauth_token: [],
+    oauth_token: ["claude-code"],
+    oauth: ["codex", "claude-code"],
 };
 
 const VENDOR_NAMES: Readonly<Record<DesktopCredentialVendor, string>> = {
@@ -127,11 +125,6 @@ export function credentialMask(secret: string): string {
 /** What Happy Cloud can do with one copyable credential. */
 function useOf(vendor: DesktopCredentialVendor, kind: DesktopCredentialKind): DesktopCredentialUse {
     if (IMPORTABLE[kind].includes(vendor)) return { kind: "import", credential: kind };
-    if (kind === "oauth_token")
-        return {
-            kind: "unsupported",
-            reason: `A ${VENDOR_NAMES[vendor]} token can't be shared. Sign in to ${VENDOR_NAMES[vendor]} on the server instead.`,
-        };
     return {
         kind: "unsupported",
         reason: `Happy Cloud can't use ${VENDOR_NAMES[vendor]} keys yet.`,
@@ -238,11 +231,14 @@ function awsSecret(input: {
     });
 }
 
-/** Whether a program finished successfully. Its output is never read. */
-function succeeds(file: string, args: readonly string[]): Promise<boolean> {
+/** What a program printed, or nothing when it failed. Never logged. */
+function output(file: string, args: readonly string[]): Promise<string | undefined> {
     return new Promise((resolve) => {
-        execFile(file, [...args], { timeout: 10_000, maxBuffer: MAX_FILE_BYTES }, (error) =>
-            resolve(!error),
+        execFile(
+            file,
+            [...args],
+            { timeout: 10_000, maxBuffer: MAX_FILE_BYTES, encoding: "utf8" },
+            (error, stdout) => resolve(error ? undefined : stdout),
         );
     });
 }
@@ -311,10 +307,10 @@ async function happyProvidersRead(
  * AWS's shared credentials file. Nothing is started, no daemon is asked, and
  * nothing is written.
  *
- * A subscription's sign-in is only noticed, never read: its refresh token
- * rotates, so a copy would sign this computer out. Secrets that can be
- * copied are held in memory for a few minutes so the person can upload what
- * they pick; the renderer sees only masked entries.
+ * A subscription's sign-in (ChatGPT's or Claude's) is read only so the
+ * person can move it to their account; it is never shown, only named by its
+ * account. Every secret is held in memory for a few minutes so the person can
+ * upload what they pick; the renderer sees only masked entries.
  */
 export function credentialImportCreate(options: { readonly home?: string } = {}) {
     let held = new Map<string, CredentialHeld>();
@@ -339,8 +335,10 @@ export function credentialImportCreate(options: { readonly home?: string } = {})
             const key = `${entry.vendor}\u0000${secret ?? entry.source}`;
             if (seen.has(key)) return;
             seen.add(key);
+            // A sign-in's tokens have no tail worth showing; its account names it.
             const masked =
-                secret === undefined
+                secret === undefined ||
+                (entry.use.kind === "import" && entry.use.credential === "oauth")
                     ? undefined
                     : credentialMask(stringOf(jsonRead(secret)?.accessKeyId) ?? secret);
             found.push({
@@ -424,7 +422,8 @@ export function credentialImportCreate(options: { readonly home?: string } = {})
 
         const codexHome = stringOf(process.env.CODEX_HOME) ?? join(home, ".codex");
         const codexPath = join(codexHome, "auth.json");
-        const codex = jsonRead(await fileRead(codexPath));
+        const codexText = await fileRead(codexPath);
+        const codex = jsonRead(codexText);
         if (codex) {
             const apiKey = stringOf(codex.OPENAI_API_KEY);
             if (apiKey)
@@ -436,13 +435,18 @@ export function credentialImportCreate(options: { readonly home?: string } = {})
                 const account = [stringOf(claims?.email), planOf(auth?.chatgpt_plan_type)]
                     .filter(Boolean)
                     .join(" · ");
-                add({
-                    vendor: "codex",
-                    use: { kind: "signIn", providerId: "codex" },
-                    source: homeShort(codexPath, home),
-                    label: "ChatGPT subscription",
-                    ...(account ? { account } : {}),
-                });
+                // Codex's own file, verbatim: the server reads the tokens it
+                // needs and refreshes them from then on.
+                add(
+                    {
+                        vendor: "codex",
+                        use: useOf("codex", "oauth"),
+                        source: homeShort(codexPath, home),
+                        label: "ChatGPT subscription",
+                        ...(account ? { account } : {}),
+                    },
+                    codexText!,
+                );
             }
         }
 
@@ -466,36 +470,45 @@ export function credentialImportCreate(options: { readonly home?: string } = {})
                     });
             }
 
-        // Claude Code's sign-in: its account comes from Claude Code's settings,
-        // and the sign-in itself is only checked for, never read.
+        // Claude Code's sign-in, from its credentials file or, on a Mac, its
+        // Keychain item; its account comes from Claude Code's settings.
         const claudeHome = stringOf(process.env.CLAUDE_CONFIG_DIR);
         const claudeDir = claudeHome ?? join(home, ".claude");
         const claudeSettings = jsonRead(await fileRead(join(claudeHome ?? home, ".claude.json")));
         const claudeFile = join(claudeDir, ".credentials.json");
-        const claudeOauth = recordOf(jsonRead(await fileRead(claudeFile))?.claudeAiOauth);
-        const claudeSignedIn =
-            stringOf(claudeOauth?.refreshToken) !== undefined ||
-            (claudeHome === undefined &&
-                process.platform === "darwin" &&
-                (await succeeds("/usr/bin/security", [
-                    "find-generic-password",
-                    "-s",
-                    "Claude Code-credentials",
-                ])));
-        if (claudeSignedIn) {
+        const claudeText = await fileRead(claudeFile);
+        const claudeOauth = recordOf(jsonRead(claudeText)?.claudeAiOauth);
+        const fromFile = stringOf(claudeOauth?.refreshToken) !== undefined;
+        const keychainText =
+            !fromFile && claudeHome === undefined && process.platform === "darwin"
+                ? (
+                      await output("/usr/bin/security", [
+                          "find-generic-password",
+                          "-s",
+                          "Claude Code-credentials",
+                          "-w",
+                      ])
+                  )?.trim()
+                : undefined;
+        const claudeSignInText = fromFile ? claudeText : keychainText;
+        const claudeSignIn = recordOf(jsonRead(claudeSignInText)?.claudeAiOauth);
+        if (claudeSignInText && claudeSignIn && stringOf(claudeSignIn.refreshToken)) {
             const account = [
                 stringOf(recordOf(claudeSettings?.oauthAccount)?.emailAddress),
-                planOf(claudeOauth?.subscriptionType),
+                planOf(claudeSignIn.subscriptionType),
             ]
                 .filter(Boolean)
                 .join(" · ");
-            add({
-                vendor: "claude-code",
-                use: { kind: "signIn", providerId: "claude-code" },
-                source: claudeOauth ? homeShort(claudeFile, home) : "Keychain · Claude Code",
-                label: "Claude subscription",
-                ...(account ? { account } : {}),
-            });
+            add(
+                {
+                    vendor: "claude-code",
+                    use: useOf("claude-code", "oauth"),
+                    source: fromFile ? homeShort(claudeFile, home) : "Keychain · Claude Code",
+                    label: "Claude subscription",
+                    ...(account ? { account } : {}),
+                },
+                claudeSignInText,
+            );
         }
 
         const awsPath =
@@ -693,10 +706,11 @@ async function importPost(
                 code: "unavailable",
                 message: "This server can't import credentials yet.",
             };
+        const error = recordOf(json?.error);
         return {
             ok: false,
-            code: stringOf(json?.code) ?? "failed",
-            message: stringOf(json?.error) ?? "Importing didn't work.",
+            code: stringOf(json?.code) ?? stringOf(error?.code) ?? "failed",
+            message: stringOf(json?.error) ?? stringOf(error?.message) ?? "Importing didn't work.",
         };
     }
     return { ok: false, code: "sign_in_required", message: "Sign in to this server to import." };
