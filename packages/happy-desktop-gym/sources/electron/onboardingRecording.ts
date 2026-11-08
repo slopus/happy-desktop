@@ -11,6 +11,7 @@ import {
 import { electronEntrypointResolve, gymRunPathsCreate } from "./paths.js";
 import {
     GYM_PERSONA_NEW_USER,
+    gymPersonaAnswersCreate,
     gymPersonaDriverCreate,
     gymPersonaTurn,
     type GymPersona,
@@ -153,7 +154,7 @@ export async function gymOnboardingRecord(options: {
                 await driver.press(welcome.locator(".happy-welcome-screen__action").first());
                 const pressedAt = Date.now();
                 watchTimeline(page, pressedAt, timeline);
-                const answered = new Set<string>();
+                const answers = gymPersonaAnswersCreate();
                 let idleSince = Date.now();
                 while (Date.now() - started < limitMs) {
                     if (await flowFinished()) {
@@ -163,7 +164,7 @@ export async function gymOnboardingRecord(options: {
                         await driver.pause(FINISHED_WATCH_MS, FINISHED_WATCH_MS + 1_000);
                         break;
                     }
-                    if (await gymPersonaTurn(page, persona, driver, answered)) {
+                    if (await gymPersonaTurn(page, persona, driver, answers)) {
                         turns += 1;
                         idleSince = Date.now();
                         // What the press brought, once it has had a moment to arrive.

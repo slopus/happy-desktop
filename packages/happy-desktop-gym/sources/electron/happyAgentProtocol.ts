@@ -67,10 +67,42 @@ export function happyAgentClientCreate(socketPath: string, token: string): Happy
  */
 export class GymHappyAgentClient {
     readonly #client: HappyAgentClient;
+    readonly #socketPath: string;
+    readonly #token: string;
     readonly #runCursors = new Map<string, string>();
 
     constructor(socketPath: string, token: string) {
         this.#client = happyAgentClientCreate(socketPath, token);
+        this.#socketPath = socketPath;
+        this.#token = token;
+    }
+
+    /** Names the standalone owner, which counts this install as already set up. */
+    async profileNameSet(name: string): Promise<void> {
+        const { profile } = await this.#client.getProfile();
+        await this.#client.updateProfile({ name }, { ifMatch: profile.version });
+    }
+
+    /**
+     * `POST /v0/connections/servers`: lists a team server by URL in the roster,
+     * as the Chief of Staff's admin tool would. The client wraps no call for it.
+     */
+    async serverAdd(url: string, name: string): Promise<void> {
+        const response = await unixSocketFetch(this.#socketPath)(
+            "http://happy-agent.local/v0/connections/servers",
+            {
+                method: "POST",
+                headers: {
+                    authorization: `Bearer ${this.#token}`,
+                    "content-type": "application/json",
+                },
+                body: JSON.stringify({ url, name }),
+            },
+        );
+        if (!response.ok)
+            throw new Error(
+                `Adding ${url} failed: ${String(response.status)} ${await response.text()}`,
+            );
     }
 
     async health(): Promise<happyAgentProtocol.HealthResponse> {
