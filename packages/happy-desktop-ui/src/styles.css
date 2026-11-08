@@ -173,6 +173,8 @@
 @import "./styles/cloud-sign-in-notice.css";
 @import "./styles/happy-link-notice.css";
 @import "./styles/cloud-connect.css";
+@import "./styles/team-setup.css";
+@import "./styles/focus-chat-header.css";
 @import "./styles/cloud-web-sign-in.css";
 @import "./styles/reordering-list.css";
 @import "./styles/happy-agent-surfaces.css";

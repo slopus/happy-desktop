@@ -122,6 +122,8 @@ export interface HappyAgentDirectoryEntry {
      * of Staff, so nothing offers to.
      */
     readonly happyCloud?: true;
+    /** A Happy Cloud team's handle, said as `@name`. */
+    readonly teamName?: string;
     /** This Happy Agent runs no workspaces, so it has no projects to offer. */
     readonly workspacesUnavailable?: true;
     /**
@@ -1137,7 +1139,10 @@ export function happyAgentDirectoryStoreCreate(
                             ...(item.url === undefined ? {} : { serverUrl: item.url }),
                             ...(happyCloudServerNameOf(item.remoteId) === undefined
                                 ? {}
-                                : { happyCloud: true as const }),
+                                : {
+                                      happyCloud: true as const,
+                                      teamName: happyCloudServerNameOf(item.remoteId),
+                                  }),
                             label: item.name,
                             bots: [],
                             botsCreating: [],

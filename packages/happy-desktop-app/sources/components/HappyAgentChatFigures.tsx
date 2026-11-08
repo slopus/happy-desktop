@@ -21,6 +21,7 @@ import {
 } from "happy-desktop-ui";
 import {
     membersExpiresText,
+    membersInviteMessage,
     membersJoinedText,
     membersRoleName,
     membersUsesText,
@@ -228,6 +229,7 @@ function HappyAgentChatInvite(props: {
                 ? {
                       created: {
                           code: created.code,
+                          message: membersInviteMessage(created),
                           detail: [
                               `Joins ${created.serverName} as ${membersRoleName(members, created.roleId)}`,
                               membersExpiresText(created.expiresAt),

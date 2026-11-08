@@ -104,18 +104,21 @@ export function WelcomeScreenPage() {
             </Specimen>
 
             <Specimen
-                detail="a quieter second way in under the primary action · ghost button 8px below it · offered when this shell can connect to Happy Cloud without setting up this computer"
-                label="Second way in"
+                detail="creating and joining a team, side by side under the primary action · ghost buttons in one row 8px below it · offered where Happy Cloud is"
+                label="Team ways in"
                 number="01b"
                 stage="surface"
             >
                 <WindowFrame>
                     <WelcomeScreen
-                        actionLabel="Get started"
                         appearance="system"
+                        backdrop={{ kind: "sky" }}
                         onAction={noop}
                         onAppearanceChange={noop}
-                        secondaryAction={{ label: "Connect to Happy Cloud", onAction: noop }}
+                        secondaryActions={[
+                            { label: "Create a team", onAction: noop },
+                            { label: "Join a team", onAction: noop },
+                        ]}
                         slides={[brand, agents, build, clear]}
                     />
                 </WindowFrame>

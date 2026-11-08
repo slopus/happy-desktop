@@ -1062,3 +1062,60 @@
     bottom: 0;
     left: 0;
 }
+
+/* Focus: the workspace alone under one band. The band takes the tab band's
+   place over the whole window; the tabs, the panel and its toggle keep their
+   boxes beneath it, hidden, so nothing below the band moves as focus ends. */
+.happy-desktop-app-shell__focus {
+    position: absolute;
+    z-index: 6;
+    top: 0;
+    right: var(--happy-desktop-app-shell-caption-inset, 0px);
+    left: 0;
+    box-sizing: border-box;
+    display: flex;
+    align-items: stretch;
+    height: var(--happy-integrated-band-height, 40px);
+    padding-left: var(--happy-integrated-leading-inset, var(--happy-panel-inset));
+    background: var(--groupped-background);
+    box-shadow: inset 0 -1px var(--divider);
+    -webkit-app-region: drag;
+    app-region: drag;
+}
+
+.happy-desktop-app-shell[data-focus]
+    .happy-desktop-app-shell__workspace
+    > .happy-tabbed-pane
+    > .happy-tabbed-pane__bar,
+.happy-desktop-app-shell[data-focus] .happy-desktop-app-shell__panel-controls {
+    visibility: hidden;
+}
+
+.happy-desktop-app-shell[data-focus] .happy-desktop-app-shell__panel {
+    display: none;
+}
+
+/* Leaving focus, the sidebar opens from nothing to its width once. Its list
+   keeps that width while the lane opens, so the rows slide in whole rather
+   than reflowing. */
+.happy-desktop-app-shell__sidebar[data-travel][data-sliding] {
+    overflow: hidden;
+    transition: width 250ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+.happy-desktop-app-shell__sidebar[data-travel][data-sliding] > .happy-sidebar {
+    flex: none;
+    min-width: var(--happy-app-shell-sidebar-width);
+}
+
+/* The hairline at the sidebar's edge waits for the sidebar to get there. */
+.happy-desktop-app-shell[data-sidebar-sliding] .happy-desktop-app-shell__sidebar-controls-rule {
+    visibility: hidden;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    /* Still a transition, so the slide ends the way it always does. */
+    .happy-desktop-app-shell__sidebar[data-travel][data-sliding] {
+        transition-duration: 1ms;
+    }
+}

@@ -26,7 +26,7 @@ const windows = [
 const pitch: readonly WelcomeSlide[] = [
     {
         art: { kind: "logo" },
-        copy: "Happy integrates models, teams, and compute into one secure, open-source harness—accessible from terminal, desktop, and mobile, deployable anywhere, and adaptable to your team.",
+        copy: "Happy integrates models, teams, and compute into one secure, open-source harness. Use it from the terminal, desktop, or mobile, deploy it anywhere, and adapt it to your team.",
         id: "happy",
         title: "Any team. Any model. One harness.",
     },

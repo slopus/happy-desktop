@@ -661,6 +661,35 @@ export function happyAgentConnectionOpen(input: {
           }
         : undefined;
 
+    // Experimental onboarding asks a new team member only for what their
+    // account didn't give: a name and email it gave are saved as offered,
+    // once. A refused save leaves the form, with the reason, to the person.
+    let profileFromAccountSent = false;
+    const profileFromAccountSave = (): void => {
+        const state = onboarding.get().state;
+        const offered = profileStore?.get();
+        if (
+            disposed ||
+            profileFromAccountSent ||
+            !profileStore ||
+            !offered ||
+            !input.memberProfileRequired ||
+            input.chatOnboardingGate?.get() !== true ||
+            !state ||
+            state.completed ||
+            state.steps.profile.done ||
+            offered.loading ||
+            offered.dirty ||
+            offered.saving ||
+            offered.saveError !== undefined ||
+            offered.name.trim() === "" ||
+            !offered.email.includes("@")
+        )
+            return;
+        profileFromAccountSent = true;
+        void profileStore.profileSave();
+    };
+
     let workspace: HappyAgentWorkspaceStore | undefined;
     let workspaceKeepWarm: (() => void) | undefined;
     let modelsLoading = false;
@@ -844,8 +873,12 @@ export function happyAgentConnectionOpen(input: {
         onboarding.subscribe(() => {
             if (!retry) modelsLoad();
             if (!session) input.deps.changed();
+            profileFromAccountSave();
         }),
-        ...(profileStore ? [profileStore.subscribe(() => undefined)] : []),
+        ...(profileStore ? [profileStore.subscribe(profileFromAccountSave)] : []),
+        ...(input.chatOnboardingGate
+            ? [input.chatOnboardingGate.subscribe(profileFromAccountSave)]
+            : []),
         // Following from before bootstrap, the stories setting arrives with it and is not read again.
         client.storiesSettings().subscribe(() => undefined),
         // So does the feed itself, with its media fetched ahead before the row is drawn.

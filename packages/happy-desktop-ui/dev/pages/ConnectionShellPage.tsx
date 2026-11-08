@@ -11,6 +11,17 @@ import { ComponentPage, Specimen } from "../kit";
 
 export const componentNumber = "C-280";
 /** An 8 × 8 fixture picture and a ThumbHash placeholder, so nothing loads over the network. */
+/** The rail's "+": every way to add a setup, while this Mac isn't set up. */
+const RAIL_ADD = {
+    label: "Add a team or this Mac",
+    items: [
+        { id: "create", label: "Create a team" },
+        { id: "join", label: "Join a team" },
+        { id: "local", label: "Set up this Mac" },
+    ],
+    onSelect: () => undefined,
+} as const;
+
 const FIXTURE_AVATAR = {
     url: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAT0lEQVR4nGPorvk+ufrTrOp3i6perqx8srHiwY6K2wfKrzNgFT1edokBq+j5srMMWEWvlZ5kwCp6r+QIA1bRp8X7GbCKvi3ezYBV9EvRNgD7aoNVazUeBQAAAABJRU5ErkJggg==",
     thumbhash: "HAgGXxBVauaQSKZWmNmKFmhmhjAoCYMC",
@@ -154,7 +165,7 @@ export function ConnectionShellPage() {
                             items={[items[0]!]}
                             selectedId="local"
                             onSelect={() => undefined}
-                            add={{ label: "Connect to Happy Cloud", onAdd: () => undefined }}
+                            add={RAIL_ADD}
                         >
                             <p>Home alone.</p>
                         </ConnectionShell>
@@ -164,7 +175,7 @@ export function ConnectionShellPage() {
                             items={items.slice(0, 3)}
                             selectedId="local"
                             onSelect={() => undefined}
-                            add={{ label: "Connect to Happy Cloud", onAdd: () => undefined }}
+                            add={RAIL_ADD}
                         >
                             <p>After the remotes.</p>
                         </ConnectionShell>

@@ -124,6 +124,15 @@
     min-width: 240px;
 }
 
+/* Creating and joining a team: one row under the primary action, never stacked. */
+.happy-welcome-screen__secondaries {
+    display: flex;
+    flex: none;
+    flex-direction: row;
+    justify-content: center;
+    gap: 8px;
+}
+
 .happy-welcome-screen__secondary {
     flex: none;
 }

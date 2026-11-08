@@ -7,20 +7,16 @@ import {
     type HappyAgentOnboardingStore,
     type HappyAgentProfileStore,
     type MobilePairingMethodStore,
-    type WelcomeStore,
 } from "happy-desktop-state";
 import {
     LocalOnboardingScreen,
     ProfileSetupScreen,
-    WelcomeScreen,
     type LocalOnboardingView,
 } from "happy-desktop-ui";
-import { happyAgentWelcomeSlides } from "../onboarding/happyAgentWelcomeSlides";
 import { appMobileRelayFromOnboarding, useAppMobilePairingOptions } from "./AppMobilePairing";
 
 export function HappyAgentOnboardingBoundary(props: {
     readonly store: HappyAgentOnboardingStore;
-    readonly welcome: WelcomeStore;
     readonly appearance: AppearanceStore;
     readonly profile: HappyAgentProfileStore;
     readonly clock: HappyAgentClockStore;
@@ -29,14 +25,14 @@ export function HappyAgentOnboardingBoundary(props: {
     readonly mobilePairingMethod?: MobilePairingMethodStore;
     readonly onRetry: () => void;
     readonly onExternalOpen?: (url: string) => void;
+    /**
+     * Experimental onboarding: a team member is asked only for what their
+     * account didn't give. The name and email it gave are saved as offered.
+     */
+    readonly profileFromAccount?: boolean;
     readonly children: ReactNode;
 }) {
     const snapshot = useSyncExternalStore(props.store.subscribe, props.store.get, props.store.get);
-    const welcome = useSyncExternalStore(
-        props.welcome.subscribe,
-        props.welcome.get,
-        props.welcome.get,
-    );
     const appearance = useSyncExternalStore(
         props.appearance.subscribe,
         props.appearance.get,
@@ -87,26 +83,20 @@ export function HappyAgentOnboardingBoundary(props: {
     // setup, naming its Chief of Staff, happens in that bot's chat.
     if (!snapshot.state || snapshot.state.completed || snapshot.state.member?.completed)
         return props.children;
-    if (!welcome.welcomeAcknowledged)
-        return (
-            <WelcomeScreen
-                appearance={appearance.mode}
-                backdrop={{ kind: "sky" }}
-                onAction={() => {
-                    props.welcome.welcomeAcknowledge();
-                    props.store.onboardingBegin();
-                }}
-                onAppearanceChange={props.appearance.appearanceSelect}
-                slides={happyAgentWelcomeSlides}
-            />
-        );
     // A remote Happy Agent admits a new team member only once their profile
     // exists. Local setup never asks for one.
     if (!snapshot.state.steps.profile.done) {
         const message = profile.saveError || snapshot.error;
+        const offered = profile.name.trim() !== "" && profile.email.includes("@");
+        // The account gave both and they are being saved: the connection's
+        // own splash stays until the server lets the member in.
+        if (props.profileFromAccount && offered && !message) return props.children;
         return (
             <ProfileSetupScreen
                 appearance={appearance.mode}
+                {...(props.profileFromAccount && profile.storedEmail.includes("@")
+                    ? { ask: "name" as const }
+                    : {})}
                 // A Happy Cloud server is not online until this profile exists,
                 // and its profile route answers regardless, so the button
                 // waits only on the profile itself; a save that can't reach

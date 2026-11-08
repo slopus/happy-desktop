@@ -37,7 +37,12 @@ import {
     type TaskRepository,
     happyAgentComputesStoreNoop,
     happyAgentChatOnboardingComposer,
+    happyAgentChatOnboardingStoreNoop,
+    happyAgentOnboardingFocused,
+    happyAgentOnboardingFocusStoreNoop,
     happyAgentRepositoriesStoreNoop,
+    type HappyAgentOnboardingFocusStore,
+    type HappyAgentOnboardingSnapshot,
 } from "happy-desktop-state";
 import { AppGptLivePhone } from "./gptLive/AppGptLivePhone";
 import { conversationInlinePagesCreate, inlineArtifactsStoreNoop } from "./conversationInlinePages";
@@ -337,6 +342,7 @@ import {
     type HappyAgentArtifactLabels,
     type HappyAgentArtifactSourceChoice,
     TabbedPane,
+    FocusChatHeader,
     TextField,
     TerminalPanel,
     ToolCallPreview,
@@ -568,6 +574,8 @@ export interface AppHappyAgentEntry {
      * of Staff, so nothing here offers to.
      */
     readonly happyCloud?: true;
+    /** A Happy Cloud team's handle, said as `@name`. */
+    readonly teamName?: string;
     /** This Happy Agent runs no workspaces, so it has no projects to offer. */
     readonly workspacesUnavailable?: true;
     readonly projects: readonly HappyAgentProjectGroup[];
@@ -890,6 +898,12 @@ export interface AppHappyAgentViewProps {
      */
     experiments?: ExperimentsStore;
     /**
+     * Which setups the person let go of during experimental onboarding. While
+     * a setup's onboarding runs and it hasn't been let go, the window shows it
+     * alone (focus chat). A host that supplies none keeps the app layout.
+     */
+    onboardingFocus?: HappyAgentOnboardingFocusStore;
+    /**
      * Whether the sidebar leaves every Projects section out. A host that
      * remembers no such choice supplies none, and the projects stay listed.
      */
@@ -1167,6 +1181,14 @@ function botCreatingSidebarItem(
         lifecycleLabel: "creating",
     };
 }
+
+const ONBOARDING_NONE: HappyAgentOnboardingSnapshot = {
+    chatOnboarding: false,
+    pending: false,
+    available: false,
+};
+const onboardingNone = (): HappyAgentOnboardingSnapshot => ONBOARDING_NONE;
+const onboardingSubscribeNone = (): (() => void) => () => undefined;
 
 const STORIES_OFF: HappyAgentStoriesSnapshot = { mode: "off" };
 const storiesNone = { get: () => STORIES_OFF, subscribe: () => () => {} };
@@ -3370,7 +3392,11 @@ function happyAgentProjectsEmptyDescription(happyAgent: AppHappyAgentEntry): str
  * signing in, offered again after a failure; while the browser is already open
  * it is cancelling that sign-in instead.
  */
-export function happyAgentSignInEmpty(signIn: AppHappyAgentSignIn): {
+export function happyAgentSignInEmpty(
+    signIn: AppHappyAgentSignIn,
+    /** What the person calls it: a Happy Cloud team is a `team` in experimental onboarding. */
+    noun: "server" | "team" = "server",
+): {
     readonly actionLabel?: string;
     readonly description: string;
     readonly icon: "lock";
@@ -3381,13 +3407,13 @@ export function happyAgentSignInEmpty(signIn: AppHappyAgentSignIn): {
             return signIn.reason === "first"
                 ? {
                       actionLabel: "Sign in",
-                      description: "Sign in to this server to see its work.",
+                      description: `Sign in to this ${noun} to see its work.`,
                       icon: "lock",
-                      title: "Sign in to this server",
+                      title: `Sign in to this ${noun}`,
                   }
                 : {
                       actionLabel: "Sign in again",
-                      description: "Your sign-in to this server ended. Sign in to see its work.",
+                      description: `Your sign-in to this ${noun} ended. Sign in to see its work.`,
                       icon: "lock",
                       title: "Sign in required",
                   };
@@ -3597,6 +3623,45 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
         directory.happyAgents.find((happyAgent) => happyAgent.id === props.happyAgentId) ??
         directory.happyAgents[0] ??
         undefined;
+    // Experimental onboarding: while this setup's onboarding runs and the
+    // person hasn't let it go, the window shows its conversation alone.
+    const onboardingFocusStore = props.onboardingFocus ?? happyAgentOnboardingFocusStoreNoop;
+    const onboardingFocus = useSyncExternalStore(
+        onboardingFocusStore.subscribe,
+        onboardingFocusStore.get,
+        onboardingFocusStore.get,
+    );
+    const setupOnboardingStore = active?.setup?.onboarding;
+    const setupOnboarding = useSyncExternalStore(
+        setupOnboardingStore?.subscribe ?? onboardingSubscribeNone,
+        setupOnboardingStore?.get ?? onboardingNone,
+        setupOnboardingStore?.get ?? onboardingNone,
+    );
+    const setupChatOnboardingStore =
+        active?.setup?.chatOnboarding ?? happyAgentChatOnboardingStoreNoop;
+    const setupChatOnboarding = useSyncExternalStore(
+        setupChatOnboardingStore.subscribe,
+        setupChatOnboardingStore.get,
+        setupChatOnboardingStore.get,
+    );
+    const focusBot =
+        setupChatOnboarding.flow?.agentId === undefined
+            ? undefined
+            : active?.bots.find((bot) => bot.conversation.id === setupChatOnboarding.flow?.agentId);
+    const focusHeader =
+        active &&
+        experimental.onboarding &&
+        happyAgentOnboardingFocused({
+            onboarding: setupOnboarding,
+            chatOnboarding: setupChatOnboarding,
+            released: onboardingFocus.released.has(active.id),
+        }) ? (
+            <FocusChatHeader
+                {...(focusBot ? { name: focusBot.name, face: botFace(focusBot) } : {})}
+                onSkip={() => onboardingFocusStore.focusRelease(active.id)}
+                setup={active.teamName === undefined ? active.label : `@${active.teamName}`}
+            />
+        ) : undefined;
     const viewerId = happyAgentOwnerAuthor.id;
     const activeAvailability = active ? happyAgentEntryAvailability(active) : undefined;
     const addressedProject =
@@ -5031,6 +5096,7 @@ export function AppHappyAgentView(props: AppHappyAgentViewProps) {
                                 windowTrafficLights={windowState.trafficLights}
                                 connectionRail={windowState.connectionRail}
                                 sidebar={sidebar}
+                                {...(focusHeader ? { focus: focusHeader } : {})}
                                 // One band holds the sidebar toggle and the tabs; the
                                 // surface header is gone.
                                 navigationChrome="integrated"

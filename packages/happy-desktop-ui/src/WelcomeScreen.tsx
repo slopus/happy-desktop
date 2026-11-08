@@ -36,8 +36,11 @@ export interface WelcomeScreenProps {
     /** Optional decorative scenery behind the welcome deck. */
     readonly backdrop?: WelcomeScreenBackdrop;
     onAction(): void;
-    /** A quieter second way in, under the primary action. */
-    readonly secondaryAction?: { readonly label: string; onAction(): void };
+    /**
+     * Quieter ways in, side by side under the primary action, such as
+     * creating or joining a team.
+     */
+    readonly secondaryActions?: readonly { readonly label: string; onAction(): void }[];
     /** Which appearance this window is on. */
     readonly appearance: HappyAgentAppearanceChoice;
     onAppearanceChange(appearance: HappyAgentAppearanceChoice): void;
@@ -101,7 +104,7 @@ export function WelcomeScreen(props: WelcomeScreenProps) {
         "actionLabel",
         "backdrop",
         "onAction",
-        "secondaryAction",
+        "secondaryActions",
         "appearance",
         "onAppearanceChange",
     ]);
@@ -152,14 +155,19 @@ export function WelcomeScreen(props: WelcomeScreenProps) {
                         >
                             {local.actionLabel ?? "Go Happy"}
                         </Button>
-                        {local.secondaryAction ? (
-                            <Button
-                                className="happy-welcome-screen__secondary"
-                                onClick={local.secondaryAction.onAction}
-                                variant="ghost"
-                            >
-                                {local.secondaryAction.label}
-                            </Button>
+                        {local.secondaryActions && local.secondaryActions.length > 0 ? (
+                            <div className="happy-welcome-screen__secondaries">
+                                {local.secondaryActions.map((action) => (
+                                    <Button
+                                        className="happy-welcome-screen__secondary"
+                                        key={action.label}
+                                        onClick={action.onAction}
+                                        variant="ghost"
+                                    >
+                                        {action.label}
+                                    </Button>
+                                ))}
+                            </div>
                         ) : null}
                     </div>
                 </div>

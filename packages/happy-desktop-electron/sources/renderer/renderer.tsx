@@ -43,6 +43,9 @@ import {
     type KeepAwakeStore,
     commandPaletteStoreCreate,
     experimentsStoreCreate,
+    happyAgentOnboardingFocused,
+    happyAgentOnboardingFocusStoreCreate,
+    happyAgentChatOnboardingStoreNoop,
     mobilePairingMethodStoreOwnedCreate,
     projectsVisibilityStoreOwnedCreate,
     statusBarStoreCreate,
@@ -71,6 +74,8 @@ import {
     type HappyAgentCompletionSound,
     type CommandPaletteStore,
     type ExperimentsStore,
+    type HappyAgentOnboardingFocusStore,
+    type HappyAgentOnboardingSnapshot,
     type MobilePairingMethodStore,
     type ProjectsVisibilityStore,
     type StatusBarStore,
@@ -98,6 +103,7 @@ import {
     ZoomIndicator,
     ConnectionShell,
     CloudConnectScreen,
+    TeamSetupScreen,
     CloudSignInNoticeDialog,
     HappyLinkNoticeDialog,
     ConnectionSurface,
@@ -164,6 +170,7 @@ import {
     desktopCloudConnectStoreCreate,
     type DesktopCloudConnectStore,
 } from "./desktopCloudConnectStore";
+import { desktopTeamSetupStoreCreate, type DesktopTeamSetupStore } from "./desktopTeamSetupStore";
 import {
     desktopCloudSignInNoticeStoreCreate,
     type DesktopCloudSignInNoticeStore,
@@ -188,7 +195,11 @@ import { desktopAvatarsAnimated } from "./desktopAvatarsAnimated";
 import { desktopPowerSavingCreate, type DesktopPowerSaving } from "./desktopPowerSaving";
 import { desktopGptLivePersistence } from "./desktopGptLive";
 import { desktopGptLiveRuntimeCreate } from "./desktopGptLiveRuntime";
-import { desktopWelcomePersistence } from "./desktopWelcome";
+import {
+    desktopOnboardingFocusPersistence,
+    desktopTeamSetupPersistence,
+    desktopWelcomePersistence,
+} from "./desktopWelcome";
 import { desktopNavigationOrderPersistence } from "./desktopNavigationOrder";
 import { desktopSidebarCollapsePersistence } from "./desktopSidebarCollapse";
 import { DesktopBootGate, desktopBootSkip } from "./DesktopBootGate";
@@ -304,6 +315,12 @@ const CLOUD_SERVER_MENU_ITEMS: readonly MenuItem[] = [
     { kind: "item", id: CLOUD_SIGN_OUT_ACTION, label: "Sign out of Happy Cloud" },
     { kind: "item", id: CLOUD_REMOVE_ACTION, label: "Remove from Happy", danger: true },
 ];
+/** The same, for experimental onboarding, which calls a Happy Cloud server a team. */
+const CLOUD_TEAM_MENU_ITEMS: readonly MenuItem[] = CLOUD_SERVER_MENU_ITEMS.map((item) =>
+    item.kind === "item" && item.id === CLOUD_SERVER_SIGN_OUT_ACTION
+        ? { ...item, label: "Sign out of this team" }
+        : item,
+);
 
 /** The Happy Cloud connection a rail entry stands for, by its entry ID. */
 function cloudServerConnectionOf(id: string): string | undefined {
@@ -458,6 +475,7 @@ function HappyAgentBoundary(props: {
     artifactPage?: HtmlPreviewRenderer;
     mediaWindow?: MediaWindowOpener;
     experiments: ExperimentsStore;
+    onboardingFocus?: HappyAgentOnboardingFocusStore;
     mobilePairingMethod: MobilePairingMethodStore;
     projectsVisibility: ProjectsVisibilityStore;
     statusBar: StatusBarStore;
@@ -515,6 +533,7 @@ function HappyAgentBoundary(props: {
                       }
                     : {}),
                 experiments: props.experiments,
+                ...(props.onboardingFocus ? { onboardingFocus: props.onboardingFocus } : {}),
                 mobilePairingMethod: props.mobilePairingMethod,
                 projectsVisibility: props.projectsVisibility,
                 statusBar: props.statusBar,
@@ -717,6 +736,8 @@ interface DesktopRendererProps {
     mediaWindow?: MediaWindowOpener;
     bridge: HappyDesktopBridge;
     experiments: ExperimentsStore;
+    /** The setups let go of during experimental onboarding, by Happy Agent ID. */
+    onboardingFocus?: HappyAgentOnboardingFocusStore;
     mobilePairingMethod: MobilePairingMethodStore;
     projectsVisibility: ProjectsVisibilityStore;
     statusBar: StatusBarStore;
@@ -726,6 +747,11 @@ interface DesktopRendererProps {
     servers?: AppServers;
     /** The sidebar's "+" to Happy Cloud; absent on a shell that cannot sign in to servers. */
     cloudConnect?: DesktopCloudConnectStore;
+    /**
+     * Creating or joining a team, with experimental onboarding: the welcome's
+     * fork and the rail's "+" menu. Absent on a shell that cannot sign in to servers.
+     */
+    teamSetup?: DesktopTeamSetupStore;
     keepAwake: KeepAwakeStore;
     navigationOrder: HappyAgentNavigationOrderStore;
     sidebarCollapse: HappyAgentSidebarCollapseStore;
@@ -771,6 +797,12 @@ function DesktopRenderer(props: DesktopRendererProps) {
         props.appearance.get,
         props.appearance.get,
     );
+    const experiments = useSyncExternalStore(
+        props.experiments.subscribe,
+        props.experiments.get,
+        props.experiments.get,
+    );
+    const teamSetup = experiments.onboarding ? props.teamSetup : undefined;
     // A first launch opens on the welcome itself. It needs nothing from the
     // machine, so it is not held behind the boot cover while the main process
     // works out what this machine still owes. Entering setup acknowledges it and
@@ -787,19 +819,37 @@ function DesktopRenderer(props: DesktopRendererProps) {
                 }}
                 onAppearanceChange={(mode) => props.appearance.appearanceSelect(mode)}
                 // Someone who only uses Happy Cloud goes straight there and
-                // this computer is never set up to run a Happy Agent.
-                {...(props.cloudConnect
+                // this computer is never set up to run a Happy Agent. With
+                // experimental onboarding, creating and joining a team are two
+                // ways in from the first screen; the welcome counts as read once
+                // Happy Cloud's sign-in lands, so Back returns here until then.
+                {...(teamSetup
                     ? {
-                          secondaryAction: {
-                              label: "Connect to Happy Cloud",
-                              onAction: () => {
-                                  desktopBootSkip();
-                                  props.welcome.welcomeAcknowledge();
-                                  props.cloudConnect?.connectOpen();
+                          secondaryActions: [
+                              {
+                                  label: "Create a team",
+                                  onAction: () => teamSetup.connectOpen("create", "window"),
                               },
-                          },
+                              {
+                                  label: "Join a team",
+                                  onAction: () => teamSetup.connectOpen("join", "window"),
+                              },
+                          ],
                       }
-                    : {})}
+                    : props.cloudConnect
+                      ? {
+                            secondaryActions: [
+                                {
+                                    label: "Connect to Happy Cloud",
+                                    onAction: () => {
+                                        desktopBootSkip();
+                                        props.welcome.welcomeAcknowledge();
+                                        props.cloudConnect?.connectOpen();
+                                    },
+                                },
+                            ],
+                        }
+                      : {})}
                 slides={happyAgentWelcomeSlides}
             />
         );
@@ -845,8 +895,51 @@ function DesktopScreens(props: DesktopRendererProps) {
         () => props.gptLive.get().voiceFocus?.target.connectionId,
         () => props.gptLive.get().voiceFocus?.target.connectionId,
     );
+    const experiments = useSyncExternalStore(
+        props.experiments.subscribe,
+        props.experiments.get,
+        props.experiments.get,
+    );
+    const runtime = useSyncExternalStore(props.store.subscribe, props.store.get, props.store.get);
     const main = props.connectionUis.get(LOCAL_HAPPY_AGENT_ID);
     const surfaceWindowState = props.surfaceWindowState;
+    const teamSetup = experiments.onboarding ? props.teamSetup : undefined;
+    // This computer is listed once it runs a Happy Agent; until then it is a
+    // way in from "+", beside the teams.
+    const localOff = runtime?.phase === "off";
+    const localHidden =
+        teamSetup !== undefined &&
+        localOff &&
+        directory.happyAgents.some((entry) => entry.id !== LOCAL_HAPPY_AGENT_ID);
+    // The rail steps aside while the setup on screen is onboarding, until it
+    // finishes or the person lets it go.
+    const activeId = directory.activeHappyAgentId ?? LOCAL_HAPPY_AGENT_ID;
+    const activeSetup = directory.happyAgents.find((entry) => entry.id === activeId)?.setup;
+    const focusStore = props.onboardingFocus;
+    const focus = useSyncExternalStore(
+        focusStore?.subscribe ?? onboardingSubscribeNone,
+        focusStore?.get ?? focusNone,
+        focusStore?.get ?? focusNone,
+    );
+    const activeOnboarding = useSyncExternalStore(
+        activeSetup?.onboarding.subscribe ?? onboardingSubscribeNone,
+        activeSetup?.onboarding.get ?? onboardingNone,
+        activeSetup?.onboarding.get ?? onboardingNone,
+    );
+    const activeChatOnboardingStore =
+        activeSetup?.chatOnboarding ?? happyAgentChatOnboardingStoreNoop;
+    const activeChatOnboarding = useSyncExternalStore(
+        activeChatOnboardingStore.subscribe,
+        activeChatOnboardingStore.get,
+        activeChatOnboardingStore.get,
+    );
+    const railHidden =
+        experiments.onboarding &&
+        happyAgentOnboardingFocused({
+            onboarding: activeOnboarding,
+            chatOnboarding: activeChatOnboarding,
+            released: focus?.released.has(activeId) ?? false,
+        });
     // An update of the local daemon does not take the window: the shell stays
     // usable, and the update is told on a card in the local sidebar's footer.
     // A local Happy Agent that is broken does take it: every machine reaches
@@ -854,40 +947,48 @@ function DesktopScreens(props: DesktopRendererProps) {
     return (
         <DesktopAgentBrokenGate store={props.agentBroken}>
             <ConnectionShell
-                items={directory.happyAgents.map((entry) => {
-                    // Muted bots remain listed and working; hidden bots leave this set.
-                    const listed = happyAgentListedConversations(
-                        entry,
-                        projectsVisibility,
-                        attention,
-                    );
-                    return {
-                        id: entry.id,
-                        // The rail names a machine the way its own daemon does. The
-                        // host's roster name stands in until that daemon has answered.
-                        label: entry.node?.name ?? entry.label,
-                        local: entry.id === LOCAL_HAPPY_AGENT_ID,
-                        status: entry.status,
-                        working: listed.some((conversation) => conversation.activity === "running"),
-                        unread:
-                            happyAgentEntryUnreadCount(entry, projectsVisibility, attention) > 0,
-                        ...(entry.node?.avatar ? { avatar: entry.node.avatar } : {}),
-                        // A call pointing into a machine not on screen is said on its
-                        // rail button, the one place that machine is visible.
-                        ...(voiceFocusConnectionId === entry.id &&
-                        entry.id !== (directory.activeHappyAgentId ?? LOCAL_HAPPY_AGENT_ID)
-                            ? { voiceFocus: true }
-                            : {}),
-                    };
-                })}
+                items={directory.happyAgents
+                    .filter((entry) => !localHidden || entry.id !== LOCAL_HAPPY_AGENT_ID)
+                    .map((entry) => {
+                        // Muted bots remain listed and working; hidden bots leave this set.
+                        const listed = happyAgentListedConversations(
+                            entry,
+                            projectsVisibility,
+                            attention,
+                        );
+                        return {
+                            id: entry.id,
+                            // The rail names a machine the way its own daemon does. The
+                            // host's roster name stands in until that daemon has answered.
+                            label: entry.node?.name ?? entry.label,
+                            local: entry.id === LOCAL_HAPPY_AGENT_ID,
+                            status: entry.status,
+                            working: listed.some(
+                                (conversation) => conversation.activity === "running",
+                            ),
+                            unread:
+                                happyAgentEntryUnreadCount(entry, projectsVisibility, attention) >
+                                0,
+                            ...(entry.node?.avatar ? { avatar: entry.node.avatar } : {}),
+                            // A call pointing into a machine not on screen is said on its
+                            // rail button, the one place that machine is visible.
+                            ...(voiceFocusConnectionId === entry.id &&
+                            entry.id !== (directory.activeHappyAgentId ?? LOCAL_HAPPY_AGENT_ID)
+                                ? { voiceFocus: true }
+                                : {}),
+                        };
+                    })}
                 selectedId={directory.activeHappyAgentId ?? LOCAL_HAPPY_AGENT_ID}
                 onSelect={props.happyAgents.happyAgentActivate}
                 itemMenuItems={(item) => [
                     ...completionSoundMenuItems(
                         happyAgentAttentionConnection(attention, item.id).completionSound,
                     ),
-                    ...(props.cloudConnect && cloudServerConnectionOf(item.id) !== undefined
-                        ? CLOUD_SERVER_MENU_ITEMS
+                    ...((props.cloudConnect || teamSetup) &&
+                    cloudServerConnectionOf(item.id) !== undefined
+                        ? teamSetup
+                            ? CLOUD_TEAM_MENU_ITEMS
+                            : CLOUD_SERVER_MENU_ITEMS
                         : []),
                 ]}
                 onItemMenuSelect={(id, actionId) => {
@@ -921,15 +1022,36 @@ function DesktopScreens(props: DesktopRendererProps) {
                 reorderError={directory.reorderError}
                 windowControls={props.platform === "desktop"}
                 collapsed={sidebarVisibility.hidden}
+                railHidden={railHidden}
                 error={directory.error}
-                {...(props.cloudConnect
+                {...(teamSetup
                     ? {
                           add: {
-                              label: "Connect to Happy Cloud",
-                              onAdd: props.cloudConnect.connectOpen,
+                              label: "Add a team",
+                              items: [
+                                  { id: "create", label: "Create a team" },
+                                  { id: "join", label: "Join a team" },
+                                  ...(localOff
+                                      ? [{ id: "local", label: `Set up ${thisComputer}` }]
+                                      : []),
+                              ],
+                              onSelect: (id: string) => {
+                                  if (id === "create" || id === "join")
+                                      teamSetup.connectOpen(id, "dialog");
+                                  if (id !== "local") return;
+                                  props.happyAgents.happyAgentActivate(LOCAL_HAPPY_AGENT_ID);
+                                  props.onboarding.agentSetupBegin();
+                              },
                           },
                       }
-                    : {})}
+                    : props.cloudConnect
+                      ? {
+                            add: {
+                                label: "Connect to Happy Cloud",
+                                onAdd: props.cloudConnect.connectOpen,
+                            },
+                        }
+                      : {})}
             >
                 <ConnectionSurface
                     key={LOCAL_HAPPY_AGENT_ID}
@@ -962,6 +1084,9 @@ function DesktopScreens(props: DesktopRendererProps) {
                                     commandPalette={ui.commandPalette}
                                     connectionOnboarding
                                     experiments={props.experiments}
+                                    {...(props.onboardingFocus
+                                        ? { onboardingFocus: props.onboardingFocus }
+                                        : {})}
                                     mobilePairingMethod={props.mobilePairingMethod}
                                     projectsVisibility={props.projectsVisibility}
                                     statusBar={props.statusBar}
@@ -1245,6 +1370,7 @@ function DesktopRuntimeContent(
             artifactPage={props.artifactPage}
             mediaWindow={props.mediaWindow}
             experiments={props.experiments}
+            {...(props.onboardingFocus ? { onboardingFocus: props.onboardingFocus } : {})}
             mobilePairingMethod={props.mobilePairingMethod}
             projectsVisibility={props.projectsVisibility}
             statusBar={props.statusBar}
@@ -1374,6 +1500,60 @@ function DesktopCloudConnect(props: {
         />
     );
 }
+/** Creating or joining a team: the first run's own pages, or a dialog over the app. */
+function DesktopTeamSetup(props: {
+    store: DesktopTeamSetupStore;
+    appearance: AppearanceStore;
+    experiments: ExperimentsStore;
+}): ReactNode {
+    const snapshot = useSyncExternalStore(props.store.subscribe, props.store.get, props.store.get);
+    const appearance = useSyncExternalStore(
+        props.appearance.subscribe,
+        props.appearance.get,
+        props.appearance.get,
+    );
+    const experiments = useSyncExternalStore(
+        props.experiments.subscribe,
+        props.experiments.get,
+        props.experiments.get,
+    );
+    if (!snapshot || !experiments.onboarding) return null;
+    return (
+        <TeamSetupScreen
+            appearance={appearance.mode}
+            onClose={props.store.connectClose}
+            onCreate={props.store.teamCreate}
+            onCreateNameChange={props.store.createNameUpdate}
+            onJoin={props.store.teamJoin}
+            onJoinCodeChange={props.store.joinCodeUpdate}
+            onJoinNameChange={props.store.joinNameUpdate}
+            onOpenBack={props.store.openBack}
+            onOpenRetry={props.store.openRetry}
+            onPathChange={props.store.pathChange}
+            onPicturePress={props.store.picturePress}
+            onSignInAgain={props.store.signInAgain}
+            onTeamOpen={props.store.teamOpen}
+            onTestLoginChange={props.store.testLoginUpdate}
+            onTestPasswordChange={props.store.testPasswordUpdate}
+            onTestSignIn={props.store.testSignIn}
+            presentation={snapshot.presentation}
+            view={snapshot.view}
+        />
+    );
+}
+
+/** What the rail's "+" calls this machine. */
+const ONBOARDING_NONE: HappyAgentOnboardingSnapshot = {
+    chatOnboarding: false,
+    pending: false,
+    available: false,
+};
+const onboardingNone = (): HappyAgentOnboardingSnapshot => ONBOARDING_NONE;
+const focusNone = () => undefined;
+const onboardingSubscribeNone = (): (() => void) => () => undefined;
+
+const thisComputer = /Mac/u.test(navigator.platform) ? "this Mac" : "this computer";
+
 /** Why a Happy link from outside was not opened, centered over everything else. */
 function DesktopHappyLinkNotice(props: {
     store: HappyLinkInboxStore;
@@ -1628,6 +1808,10 @@ if (mediaPreviewBridge) {
             get: () => experiments.get().onboarding,
             subscribe: experiments.subscribe,
         };
+        // The setups let go of with "Skip setup", which keep the app layout.
+        const onboardingFocus = happyAgentOnboardingFocusStoreCreate(
+            desktopOnboardingFocusPersistence(),
+        );
         // Which way a phone pairs first: the person's pick, else what the
         // direct-connection rollout says once PostHog answers (Relay until then).
         const { store: mobilePairingMethod, defaultMethodReceived: mobilePairingDefaultReceived } =
@@ -1861,6 +2045,24 @@ if (mediaPreviewBridge) {
                       connect: cloudConnectAction,
                   })
                 : undefined;
+        const teamSetup =
+            cloudConnectAction && desktopBridge.happyCloud
+                ? desktopTeamSetupStoreCreate({
+                      cloud: desktopBridge.happyCloud,
+                      bridge: desktopBridge,
+                      connect: cloudConnectAction,
+                      // Happy Cloud's sign-in is the first lasting step a team
+                      // way in takes, so the welcome counts as read from here.
+                      signedIn: () => {
+                          if (welcome.get().welcomeAcknowledged) return;
+                          desktopBootSkip();
+                          welcome.welcomeAcknowledge();
+                      },
+                      persistence: desktopTeamSetupPersistence(),
+                  })
+                : undefined;
+        // A relaunch returns to the team page the first run left open.
+        if (teamSetup && experiments.get().onboarding) teamSetup.connectResume();
         // What this window reports about how it is used, read from the same
         // directory the sidebar reads. Development windows send nothing.
         const analytics = desktopAnalyticsCreate({
@@ -2152,6 +2354,13 @@ if (mediaPreviewBridge) {
                 {cloudConnect ? (
                     <DesktopCloudConnect appearance={appearance} store={cloudConnect} />
                 ) : null}
+                {teamSetup ? (
+                    <DesktopTeamSetup
+                        appearance={appearance}
+                        experiments={experiments}
+                        store={teamSetup}
+                    />
+                ) : null}
                 <DesktopHappyLinkNotice
                     store={happyLinkInbox}
                     {...(servers
@@ -2186,6 +2395,7 @@ if (mediaPreviewBridge) {
                             browserLocal ? undefined : desktopMediaWindowOpen(desktopBridge)
                         }
                         experiments={experiments}
+                        onboardingFocus={onboardingFocus}
                         mobilePairingMethod={mobilePairingMethod}
                         projectsVisibility={projectsVisibility}
                         statusBar={statusBar}
@@ -2193,6 +2403,7 @@ if (mediaPreviewBridge) {
                         usageAnalytics={analytics.preference}
                         {...(servers ? { servers } : {})}
                         {...(cloudConnect ? { cloudConnect } : {})}
+                        {...(teamSetup ? { teamSetup } : {})}
                         keepAwake={keepAwake}
                         navigationOrder={navigationOrder}
                         sidebarCollapse={sidebarCollapse}
