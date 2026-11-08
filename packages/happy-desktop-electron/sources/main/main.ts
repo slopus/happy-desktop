@@ -30,6 +30,7 @@ import { happyAgentDaemonPathsResolve } from "./happyAgentDaemonClient";
 import { HappyAgentDaemonClient } from "./happyAgentDaemonClient";
 import { ServerSessionError, serverSessionsCreate } from "./serverSessions";
 import { happyCloudCreate } from "./happyCloud";
+import { happyCloudEndpointsRead } from "./happyCloudEndpoints";
 import { happyCloudVaultCreate } from "./happyCloudVault";
 import { happyCloudServerNameOf } from "../shared/happyCloud";
 import { browserPermissionsInstall } from "./browserPermissions";
@@ -503,6 +504,9 @@ const happyCloud =
                   path: join(app.getPath("userData"), "happy-cloud-sessions.bin"),
                   cipher: safeStorage,
               }),
+              // A development run may point at a local stack; a packaged
+              // build never reads these and always reaches Happy Cloud.
+              endpoints: happyCloudEndpointsRead({ packaged: app.isPackaged, env: process.env }),
           })
         : undefined;
 const serverSessions = serverSessionsCreate({
